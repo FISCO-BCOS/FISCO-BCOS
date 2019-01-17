@@ -98,7 +98,7 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         u256 nonce = u256(utcTime());
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
         tx.setBlockLimit(250);
-        sec = KeyPair::create().secret();
+        // sec = KeyPair::create().secret();
         Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         txs.push_back(tx);
@@ -108,11 +108,16 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
 }
 
 void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier)
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
 {
     Block userAddBlock;
+    userAddBlock.header().setNumber(_parentBlockInfo.number + 1);
+    userAddBlock.header().setParentHash(_parentBlockInfo.hash);
+
     genTxUserAddBlock(userAddBlock, _userNum);
-    _blockVerifier->executeBlock(userAddBlock, _parentBlockInfo);
+    auto exeCtx = _blockVerifier->executeBlock(userAddBlock, _parentBlockInfo);
+    _blockChain->commitBlock(userAddBlock, exeCtx);
 }
 
 void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
@@ -135,7 +140,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         u256 nonce = u256(utcTime());
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
         tx.setBlockLimit(250);
-        sec = KeyPair::create().secret();
+        // sec = KeyPair::create().secret();
         Signature sig = sign(sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         txs.push_back(tx);
@@ -163,7 +168,11 @@ static void startExecute()
     auto blockVerifier = ledgerManager->blockVerifier(1);
 
     std::cout << "Creating user..." << std::endl;
-    initUser(10, parentBlockInfo, blockVerifier);
+    initUser(10, parentBlockInfo, blockVerifier, blockChain);
+
+    parentBlock = blockChain->getBlockByNumber(height + 1);
+    parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
+        parentBlock->header().stateRoot()};
 
     /// serial execution
     {
@@ -202,6 +211,16 @@ static void startExecute()
         genTxUserTransfer(block, 10, 10000);
         std::cout << "parallel concurrent queue executing txs..." << std::endl;
         blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
+        std::cout << "Executed" << std::endl;
+    }
+
+    /// parallel level DAG execution
+    {
+        std::cout << "Generating transfer txs..." << std::endl;
+        Block block;
+        genTxUserTransfer(block, 10, 10000);
+        std::cout << "parallel level DAG executing txs..." << std::endl;
+        blockVerifier->parallelLevelExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
     }
 

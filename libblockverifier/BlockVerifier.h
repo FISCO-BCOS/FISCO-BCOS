@@ -73,6 +73,8 @@ public:
         dev::eth::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr parallelCqExecuteBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelLevelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr parallelOmpExecuteBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 

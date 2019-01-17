@@ -67,6 +67,11 @@ public:
     {
         return nullptr;
     };
+    virtual ExecutiveContext::Ptr parallelLevelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo)
+    {
+        return nullptr;
+    };
     virtual ExecutiveContext::Ptr parallelOmpExecuteBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo)
     {

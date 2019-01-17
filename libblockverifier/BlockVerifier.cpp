@@ -22,6 +22,7 @@
 #include "ExecutiveContext.h"
 #include "TxCqDAG.h"
 #include "TxDAG.h"
+#include "TxLevelDAG.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -238,6 +239,121 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     return executiveContext;
 }
 
+
+ExecutiveContext::Ptr BlockVerifier::parallelLevelExecuteBlock(
+    Block& block, BlockInfo const& parentBlockInfo)
+{
+    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
+                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("num", block.blockHeader().number())
+                            << LOG_KV("parentHash", parentBlockInfo.hash)
+                            << LOG_KV("parentNum", parentBlockInfo.number)
+                            << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
+
+    uint64_t startTime = utcTime();
+
+    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    try
+    {
+        m_executiveContextFactory->initExecutiveContext(
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
+    }
+    catch (exception& e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[#executeBlock] Error during initExecutiveContext")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
+
+        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
+                              << errinfo_comment("Error during initExecutiveContext"));
+    }
+
+    BlockHeader tmpHeader = block.blockHeader();
+    block.clearAllReceipts();
+    block.resizeTransactionReceipt(block.transactions().size());
+    ///*
+    shared_ptr<TxLevelDAG> txDag = make_shared<TxLevelDAG>();
+    txDag->init(executiveContext, block.transactions());
+
+    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, _tr, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(_txId, resultReceipt.second);
+        executiveContext->getState()->commit();
+        return true;
+    });
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
+                             << LOG_DESC("Init DAG takes")
+                             << LOG_KV("time(ms)", utcTime() - startTime)
+                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("num", block.blockHeader().number());
+    uint64_t pastTime = utcTime();
+
+    if (m_paraTxExecutor != nullptr)
+    {
+        shared_ptr<IDs> levelp = nullptr;
+        while (true)
+        {
+            levelp = txDag->getDAGLevel();
+            if (levelp == nullptr)
+                break;
+            IDs const& level = *levelp;
+#pragma omp parallel for
+            for (size_t i = 0; i < level.size(); i++)
+            {
+                txDag->executeByID(level[i]);
+            }
+        }
+    }
+    else
+    {
+        shared_ptr<IDs> levelp = nullptr;
+        while (true)
+        {
+            levelp = txDag->getDAGLevel();
+            if (levelp == nullptr)
+                break;
+            IDs const& level = *levelp;
+            for (size_t i = 0; i < level.size(); i++)
+            {
+                txDag->executeByID(level[i]);
+            }
+        }
+    }
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
+                             << LOG_DESC("Run para level DAG tx takes")
+                             << LOG_KV("time(ms)", utcTime() - pastTime)
+                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("num", block.blockHeader().number());
+    pastTime = utcTime();
+
+    h256 stateRoot = executiveContext->getState()->rootHash();
+    // set stateRoot in receipts
+    block.setStateRootToAllReceipt(stateRoot);
+    block.updateSequenceReceiptGas();
+    block.calReceiptRoot();
+    block.header().setStateRoot(stateRoot);
+
+    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    {
+        if (tmpHeader != block.blockHeader())
+        {
+            BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
+                                      "Invalid Block with bad stateRoot or ReciptRoot"));
+        }
+    }
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
+                             << LOG_DESC("Execute block takes")
+                             << LOG_KV("time(ms)", utcTime() - startTime)
+                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("num", block.blockHeader().number())
+                             << LOG_KV("blockHash", block.headerHash())
+                             << LOG_KV("stateRoot", block.header().stateRoot())
+                             << LOG_KV("transactionRoot", block.transactionRoot())
+                             << LOG_KV("receiptRoot", block.receiptRoot());
+    return executiveContext;
+}
 
 ExecutiveContext::Ptr BlockVerifier::parallelOmpExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
