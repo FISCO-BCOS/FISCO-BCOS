@@ -128,6 +128,6 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     e.finalize();
 
     return make_pair(res,
-        TransactionReceipt(executiveContext->getState()->rootHash(), startGasUsed + e.gasUsed(),
+        TransactionReceipt(executiveContext->getState()->rootHash(false), startGasUsed + e.gasUsed(),
             e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
 }

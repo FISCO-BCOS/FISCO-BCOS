@@ -108,7 +108,7 @@ public:
 
     virtual u256 getNonce(Address const& _addr) const override;
 
-    virtual h256 rootHash() const override;
+    virtual h256 rootHash(bool needCalculate = true) const override;
 
     virtual void commit() override;
 

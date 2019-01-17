@@ -140,8 +140,9 @@ u256 MPTState::getNonce(Address const& _addr) const
     return m_state.getNonce(_addr);
 }
 
-h256 MPTState::rootHash() const
+h256 MPTState::rootHash(bool needCalculate) const
 {
+    (void)needCalculate;
     return m_state.rootHash();
 }
 
