@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/concurrent_queue.h>
 #include <libdevcore/easylog.h>
@@ -46,7 +47,7 @@ namespace consensus
 {
 namespace raft
 {
-using NodeIndex = dev::u256;
+using NodeIndex = dev::consensus::IDXTYPE;
 }  // namespace raft
 
 enum RaftPacketType : byte
