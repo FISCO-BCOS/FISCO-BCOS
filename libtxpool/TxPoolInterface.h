@@ -93,7 +93,9 @@ public:
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
     /// Set transaction is known by a node
-    virtual void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId){};
+    /// param1: tx hash
+    /// param2: node id
+    virtual void setTransactionIsKnownBy(h256 const&, h512 const&){};
 
     /// param1: the vector of txhashes
     /// param2: the node id
