@@ -89,7 +89,7 @@ char* ascii2hex(const char* chs,int len)
 bytes dev::gmCBCEncrypt(bytesConstRef plainData,string const& keyData,int keyLen,bytesConstRef ivData)
 {
 	//LOG(DEBUG)<<"GUOMI SM4 EN TYPE......................";
-	//pkcs5Ä£Ê½Êý¾ÝÌî³ä
+	//pkcs5Ä£Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	int padding = plainData.size() % 16;
 	int nSize = 16 - padding;
 	int inDataVLen = plainData.size() + nSize;
@@ -97,7 +97,7 @@ bytes dev::gmCBCEncrypt(bytesConstRef plainData,string const& keyData,int keyLen
 	memcpy(inDataV.data(),(unsigned char*)plainData.data(),plainData.size());
 	memset(inDataV.data() + plainData.size(),nSize,nSize);
 
-	//Êý¾Ý¼ÓÃÜ
+	//ï¿½ï¿½ï¿½Ý¼ï¿½ï¿½ï¿½
 	bytes enData(inDataVLen);
 	SM4::getInstance().setKey((unsigned char*)keyData.data(),keyData.size());
 	SM4::getInstance().cbcEncrypt(inDataV.data(), enData.data(), inDataVLen, (unsigned char*)ivData.data(), 1);
@@ -111,7 +111,7 @@ bytes dev::gmCBCDecrypt(bytesConstRef cipherData,string const& keyData,int keyLe
 	bytes deData(cipherData.size());
 	SM4::getInstance().setKey((unsigned char*)keyData.data(),keyData.size());
 	SM4::getInstance().cbcEncrypt((unsigned char*)cipherData.data(), deData.data(), cipherData.size(), (unsigned char*)ivData.data(), 0);
-	int padding = deData.data()[cipherData.size() - 1];
+	int padding = deData.at(cipherData.size() - 1);
 	int deLen = cipherData.size() - padding;
 	deData.resize(deLen);
 	return deData;
