@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    LOG_KV("ret", result);
+    
     BOOST_TEST((256 - std::abs(CODE_INVALID_USER_NAME)) == result);
 
     // normal input, first add this user
