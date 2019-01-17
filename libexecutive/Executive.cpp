@@ -85,8 +85,8 @@ void Executive::initialize(Transaction const& _transaction)
     }
 }
 
-void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
-    BlockHeader const& _header, u256 const& _gasUsed) const
+void Executive::verifyTransaction(
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 

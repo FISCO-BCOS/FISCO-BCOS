@@ -20,25 +20,24 @@
  */
 #pragma once
 
-#include "MemoryTableFactory.h"
-#include "TablePrecompiled.h"
-#include <libblockverifier/ExecutiveContext.h>
-#include <libdevcrypto/Common.h>
-#include <map>
+#include "libblockverifier/Precompiled.h"
 
 namespace dev
 {
+namespace storage
+{
+class MemoryTableFactory;
+}
 namespace blockverifier
 {
+class ExecutiveContext;
 #if 0
 {
     "56004b6a": "createTable(string,string,string)",
-    "c184e0ff": "openDB(string)",
     "f23f63c9": "openTable(string)"
 }
 contract DBFactory {
-    function openDB(string) public constant returns (DB);
-    function openTable(string) public constant returns (DB);
+    function openTable(string) public constant returns (Table);
     function createTable(string, string, string) public constant returns (int);
 }
 #endif
@@ -52,20 +51,23 @@ public:
 
     virtual std::string toString(std::shared_ptr<ExecutiveContext>);
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address());
 
-    void setMemoryTableFactory(dev::storage::MemoryTableFactory::Ptr memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    dev::storage::MemoryTableFactory::Ptr getmemoryTableFactory() { return m_memoryTableFactory; }
+    std::shared_ptr<dev::storage::MemoryTableFactory> getmemoryTableFactory()
+    {
+        return m_memoryTableFactory;
+    }
 
     h256 hash();
 
 private:
-    dev::storage::MemoryTableFactory::Ptr m_memoryTableFactory;
+    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
 };
 
 }  // namespace blockverifier

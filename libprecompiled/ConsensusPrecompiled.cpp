@@ -105,7 +105,7 @@ bytes ConsensusPrecompiled::call(
                 if (entries->size() == 0u)
                 {
                     entry->setField(NODE_KEY_NODEID, nodeID);
-                    count = table->insert(PRI_KEY, entry, getOptions(origin));
+                    count = table->insert(PRI_KEY, entry, std::make_shared<AccessOptions>(origin));
                     if (count == CODE_NO_AUTHORIZED)
                     {
                         PRECOMPILED_LOG(DEBUG)
@@ -123,7 +123,8 @@ bytes ConsensusPrecompiled::call(
                 }
                 else
                 {
-                    count = table->update(PRI_KEY, entry, condition, getOptions(origin));
+                    count = table->update(
+                        PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
                     if (count == CODE_NO_AUTHORIZED)
                     {
                         PRECOMPILED_LOG(DEBUG)
@@ -173,7 +174,7 @@ bytes ConsensusPrecompiled::call(
             if (entries->size() == 0u)
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
-                count = table->insert(PRI_KEY, entry, getOptions(origin));
+                count = table->insert(PRI_KEY, entry, std::make_shared<AccessOptions>(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)
@@ -191,7 +192,8 @@ bytes ConsensusPrecompiled::call(
             }
             else if (!checkIsLastMiner(table, nodeID))
             {
-                count = table->update(PRI_KEY, entry, condition, getOptions(origin));
+                count = table->update(
+                    PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)
@@ -236,7 +238,7 @@ bytes ConsensusPrecompiled::call(
             {
                 auto condition = table->newCondition();
                 condition->EQ(NODE_KEY_NODEID, nodeID);
-                count = table->remove(PRI_KEY, condition, getOptions(origin));
+                count = table->remove(PRI_KEY, condition, std::make_shared<AccessOptions>(origin));
                 if (count == CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)

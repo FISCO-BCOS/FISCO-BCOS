@@ -74,10 +74,12 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     if (!actived())
     {
         SESSION_LOG(WARNING) << "Session inactived";
-
-        server->threadPool()->enqueue(
-            [callback] { callback(NetworkException(-1, "Session inactived"), Message::Ptr()); });
-
+        if (callback)
+        {
+            server->threadPool()->enqueue([callback] {
+                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
+            });
+        }
         return;
     }
     if (callback)
@@ -134,8 +136,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     write();
 }
 
-void Session::onWrite(
-    boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
+void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
 {
     if (!actived())
     {

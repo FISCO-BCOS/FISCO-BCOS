@@ -102,6 +102,7 @@ void RaftEngine::resetConfig()
                 "[#resetConfig]Reset config error: can't find myself in "
                 "miner list, stop sealing");
             m_cfgErr = true;
+            m_accountType = NodeAccountType::ObserverAccount;
             return;
         }
 
@@ -232,8 +233,8 @@ bool RaftEngine::getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const
     return true;
 }
 
-void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException _exception,
-    dev::p2p::P2PSession::Ptr _session, dev::p2p::P2PMessage::Ptr _message)
+void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException, dev::p2p::P2PSession::Ptr _session,
+    dev::p2p::P2PMessage::Ptr _message)
 {
     RaftMsgPacket raftMsg;
 
@@ -264,6 +265,7 @@ void RaftEngine::workLoop()
         {
             RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a miner");
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            resetConfig();
             continue;
         }
 
@@ -294,9 +296,101 @@ void RaftEngine::workLoop()
     }
 }
 
+void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
+{
+    std::unique_lock<std::mutex> ul(m_commitMutex);
+    if (bool(m_uncommittedBlock))
+    {
+        auto uncommitedBlockHash = m_uncommittedBlock.header().hash();
+        if (m_uncommittedBlockNumber == m_consensusBlockNumber)
+        {
+            if (_resp.uncommitedBlockHash != h256() &&
+                _resp.uncommitedBlockHash == uncommitedBlockHash)
+            {
+                // Collect ack from follower
+                // ensure that the block has been transfered to most of followers
+                m_commitFingerPrint[uncommitedBlockHash].insert(_resp.idx);
+                if (m_commitFingerPrint[uncommitedBlockHash].size() + 1 >=
+                    static_cast<uint64_t>(m_nodeNum - m_f))
+                {
+                    if (m_waitingForCommitting)
+                    {
+                        RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                            "[#tryCommitUncommitedBlock]Some thread waiting on "
+                            "commitCV, commit by other thread");
+
+                        m_commitReady = true;
+                        ul.unlock();
+                        m_commitCV.notify_all();
+                    }
+                    else
+                    {
+                        RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                            "[#tryCommitUncommitedBlock]No thread waiting on "
+                            "commitCV, commit by meself");
+
+                        checkAndExecute(m_uncommittedBlock);
+                        ul.unlock();
+                        reportBlock(m_uncommittedBlock);
+                    }
+                }
+            }
+            else
+            {
+                if (_resp.uncommitedBlockHash == h256())
+                {
+                    // I'm the only one in miner list, commit block without any ack
+                    if (m_waitingForCommitting)
+                    {
+                        RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                            "[#tryCommitUncommitedBlock]Some thread waiting on "
+                            "commitCV, commit by other thread");
+
+                        m_commitReady = true;
+                        ul.unlock();
+                        m_commitCV.notify_all();
+                    }
+                    else
+                    {
+                        RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                            "[#tryCommitUncommitedBlock]No thread waiting on "
+                            "commitCV, commit by meself");
+
+                        checkAndExecute(m_uncommittedBlock);
+                        ul.unlock();
+                        reportBlock(m_uncommittedBlock);
+                    }
+                }
+                else
+                {
+                    // Stale or illegal ack message receieved
+                    RAFTENGINE_LOG(DEBUG)
+                        << LOG_DESC("[#tryCommitUncommitedBlock]Uneuqal fingerprint")
+                        << LOG_KV("ackFingerprint", _resp.uncommitedBlockHash)
+                        << LOG_KV("myFingerprint", uncommitedBlockHash);
+                }
+            }
+        }
+        else
+        {
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#tryCommitUncommitedBlock]Give up uncommited block")
+                                  << LOG_KV("uncommittedBlockNumber", m_uncommittedBlockNumber)
+                                  << LOG_KV("myHeight", m_highestBlock.number());
+
+            m_uncommittedBlock = Block();
+            m_uncommittedBlockNumber = 0;
+        }
+    }
+    else
+    {
+        RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#tryCommitUncommitedBlock]No uncommited block");
+        ul.unlock();
+    }
+}
+
 bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartbeatLog)
 {
-    if (m_state != RaftRole::EN_STATE_LEADER)
+    if (m_state != RaftRole::EN_STATE_LEADER || m_accountType != NodeAccountType::MinerAccount)
     {
         return false;
     }
@@ -307,7 +401,7 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeaderImp]Heartbeat Timeout");
         for (auto& i : memberHeartbeatLog)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeader]Heartbeat Log")
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeaderImp]Heartbeat Log")
                                   << LOG_KV("node", i.first.hex().substr(0, 5))
                                   << LOG_KV("hbLog", i.second);
         }
@@ -315,16 +409,17 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
         return false;
     }
 
-    broadcastHeartbeat();
-
-    std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
-
-    if (!ret.first)
+    if (m_nodeNum > 1)
     {
-        return true;
-    }
-    else
-    {
+        broadcastHeartbeat();
+
+        std::pair<bool, RaftMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+
+        if (!ret.first)
+        {
+            return true;
+        }
+
         switch (ret.second.packetType)
         {
         case RaftPacketType::RaftVoteReqPacket:
@@ -417,66 +512,7 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
                 }
             }
 
-            {
-                std::unique_lock<std::mutex> ul(m_commitMutex);
-                if (bool(m_uncommittedBlock))
-                {
-                    if (m_uncommittedBlockNumber == m_consensusBlockNumber)
-                    {
-                        h256 uncommitedBlockHash = m_uncommittedBlock.header().hash();
-                        if (resp.uncommitedBlockHash == uncommitedBlockHash)
-                        {
-                            m_commitFingerPrint[uncommitedBlockHash].insert(ret.second.nodeId);
-                            if (m_commitFingerPrint[uncommitedBlockHash].size() + 1 >=
-                                static_cast<uint64_t>(m_nodeNum - m_f))
-                            {
-                                if (m_waitingForCommitting)
-                                {
-                                    RAFTENGINE_LOG(DEBUG) << LOG_DESC(
-                                        "[#runAsLeaderImp]Some thread waiting on "
-                                        "commitCV, commit by other thread");
-
-                                    m_commitReady = true;
-                                    ul.unlock();
-                                    m_commitCV.notify_all();
-                                }
-                                else
-                                {
-                                    RAFTENGINE_LOG(DEBUG) << LOG_DESC(
-                                        "[#runAsLeaderImp]No thread waiting on "
-                                        "commitCV, commit by meself");
-
-                                    checkAndExecute(m_uncommittedBlock);
-                                    ul.unlock();
-                                    reportBlock(m_uncommittedBlock);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            RAFTENGINE_LOG(DEBUG)
-                                << LOG_DESC("[#runAsLeaderImp]Uneuqal fingerprint")
-                                << LOG_KV("ackFingerprint", resp.uncommitedBlockHash)
-                                << LOG_KV("myFingerprint", uncommitedBlockHash);
-                        }
-                    }
-                    else
-                    {
-                        RAFTENGINE_LOG(DEBUG)
-                            << LOG_DESC("[#runAsLeaderImp]Give up uncommited block")
-                            << LOG_KV("uncommittedBlockNumber", m_uncommittedBlockNumber)
-                            << LOG_KV("myHeight", m_highestBlock.number());
-
-                        m_uncommittedBlock = Block();
-                        m_uncommittedBlockNumber = 0;
-                    }
-                }
-                else
-                {
-                    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsLeaderImp]No uncommited block");
-                    ul.unlock();
-                }
-            }
+            tryCommitUncommitedBlock(resp);
             return true;
         }
         default:
@@ -484,6 +520,12 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
             return true;
         }
         }
+    }
+    else
+    {
+        RaftHeartBeatResp resp;
+        tryCommitUncommitedBlock(resp);
+        return true;
     }
 }
 
@@ -501,6 +543,11 @@ void RaftEngine::runAsLeader()
 
 bool RaftEngine::runAsCandidateImp(VoteState& _voteState)
 {
+    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::MinerAccount)
+    {
+        return false;
+    }
+
     if (checkElectTimeout())
     {
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsCandidateImp]VoteState")
@@ -601,7 +648,7 @@ bool RaftEngine::runAsCandidateImp(VoteState& _voteState)
 
 void RaftEngine::runAsCandidate()
 {
-    if (m_state != EN_STATE_CANDIDATE)
+    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::MinerAccount)
     {
         return;
     }
@@ -629,12 +676,12 @@ void RaftEngine::runAsCandidate()
 
 bool RaftEngine::runAsFollowerImp()
 {
-    if (m_state != EN_STATE_FOLLOWER)
+    if (m_state != RaftRole::EN_STATE_FOLLOWER || m_accountType != NodeAccountType::MinerAccount)
     {
         return false;
     }
 
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsFollower]") << LOG_KV("currentLeader", m_leader);
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#runAsFollowerImp]") << LOG_KV("currentLeader", m_leader);
 
     if (checkElectTimeout())
     {
@@ -729,6 +776,7 @@ P2PMessage::Ptr RaftEngine::generateHeartbeat()
 
             m_uncommittedBlock.encode(hb.uncommitedBlock);
             hb.uncommitedBlockNumber = m_consensusBlockNumber;
+            m_commitFingerPrint[m_uncommittedBlock.header().hash()].insert(m_idx);
 
             RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#generateHeartbeat]")
                                   << LOG_KV("nextBlockNumber", hb.uncommitedBlockNumber);
@@ -1139,6 +1187,7 @@ void RaftEngine::switchToFollower(raft::NodeIndex const& _leader)
 
 void RaftEngine::switchToCandidate()
 {
+    resetConfig();
     {
         Guard guard(m_mutex);
         m_term++;
@@ -1458,8 +1507,6 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
         // m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         m_txPool->handleBadBlock(_sealing.block);
     }
-
-    resetConfig();
 }
 
 bool RaftEngine::reachBlockIntervalTime()

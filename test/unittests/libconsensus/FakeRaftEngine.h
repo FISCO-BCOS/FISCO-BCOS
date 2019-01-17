@@ -1,4 +1,29 @@
+/*
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+
+/**
+ * @brief:
+ * @file: FakeRaftEngine.cpp
+ * @author: catli
+ * @date: 2019-01-16
+ */
 #include <libconsensus/raft/RaftEngine.h>
+#include <chrono>
+#include <thread>
 
 namespace dev
 {
@@ -59,19 +84,21 @@ public:
     }
 
     void setState(dev::consensus::RaftRole _role) { m_state = _role; }
-
     void setTerm(size_t _term) { m_term = _term; }
-
     void setVote(dev::consensus::raft::NodeIndex _vote)
     {
         dev::consensus::RaftEngine::setVote(_vote);
     }
-
     void setFirstVote(dev::consensus::raft::NodeIndex _firstVote) { m_firstVote = _firstVote; }
-
     void setLastLeaderTerm(size_t _term) { m_lastLeaderTerm = _term; }
-
     void setUncommitedBlock(dev::eth::Block const& _block) { m_uncommittedBlock = _block; }
+    void setUncommitedNumber(int64_t _number) { m_uncommittedBlockNumber = _number; }
+    void setConsensusBlockNumber(int64_t _number) { m_consensusBlockNumber = _number; }
+    void setLeader(dev::consensus::raft::NodeIndex _leader)
+    {
+        dev::consensus::RaftEngine::setLeader(_leader);
+    }
+
 
     dev::eth::Block& getUncommitedBlock() { return m_uncommittedBlock; }
 
@@ -133,6 +160,35 @@ public:
     }
 
     void workLoop() override {}
+
+    void fakeLeader()
+    {
+        while (true)
+        {
+            std::unique_lock<std::mutex> ul(m_commitMutex);
+            if (m_waitingForCommitting)
+            {
+                RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                    "[#tryCommitUncommitedBlock]Some thread waiting on "
+                    "commitCV, commit by other thread");
+
+                m_commitReady = true;
+                ul.unlock();
+                m_commitCV.notify_all();
+                break;
+            }
+            else
+            {
+                ul.unlock();
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
+    void tryCommitUncommitedBlock(dev::consensus::RaftHeartBeatResp& _resp)
+    {
+        dev::consensus::RaftEngine::tryCommitUncommitedBlock(_resp);
+    }
 
     bool heartbeatTimeout = false;
     bool electTimeout = false;

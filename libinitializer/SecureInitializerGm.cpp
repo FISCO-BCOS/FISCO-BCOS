@@ -107,7 +107,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM* p) {});
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
 
     std::shared_ptr<char> privateKeyData(
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
@@ -240,7 +240,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM* p) {});
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
 
     std::shared_ptr<char> privateKeyData(
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });

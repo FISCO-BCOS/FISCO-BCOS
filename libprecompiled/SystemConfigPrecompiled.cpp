@@ -86,7 +86,7 @@ bytes SystemConfigPrecompiled::call(
 
         if (entries->size() == 0u)
         {
-            count = table->insert(configKey, entry, getOptions(origin));
+            count = table->insert(configKey, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
@@ -104,7 +104,8 @@ bytes SystemConfigPrecompiled::call(
         }
         else
         {
-            count = table->update(configKey, entry, condition, getOptions(origin));
+            count =
+                table->update(configKey, entry, condition, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)

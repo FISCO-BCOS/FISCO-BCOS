@@ -51,9 +51,6 @@ public:
         bytesConstRef param, Address const& origin = Address());
 
 protected:
-    std::shared_ptr<storage::Table> openTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        const std::string& tableName);
     void addPrefixToUserTable(std::string& tableName);
 };
 

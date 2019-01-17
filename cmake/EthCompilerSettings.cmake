@@ -42,32 +42,31 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-Wall)
     add_compile_options(-pedantic)
     add_compile_options(-Wextra)
-    add_compile_options(-Wno-unused-parameter)
-    add_compile_options(-Wno-unused-variable)
+    # add_compile_options(-Wno-unused-variable)
+    # add_compile_options(-Wno-unused-parameter)
     # add_compile_options(-Wno-unused-function)
     # add_compile_options(-Wno-missing-field-initializers)
+    # Disable warnings about unknown pragmas (which is enabled by -Wall).
+    add_compile_options(-Wno-unknown-pragmas)
+    add_compile_options(-fno-omit-frame-pointer)
     # for boost json spirit
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for easy log
     add_compile_options(-DELPP_THREAD_SAFE)
     add_compile_options(-DELPP_NO_DEFAULT_LOG_FILE)
-    add_compile_options(-Wa,-march=generic64)
-    # Disable warnings about unknown pragmas (which is enabled by -Wall).
-    add_compile_options(-Wno-unknown-pragmas)
-    add_compile_options(-fno-omit-frame-pointer)
     
     if(STATIC_BUILD)
-        SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-        SET(BUILD_SHARED_LIBRARIES OFF)
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+    SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    SET(BUILD_SHARED_LIBRARIES OFF)
+    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
-
+    
 	# Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
     set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
     set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread")
-
+    
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)
         execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
@@ -76,10 +75,11 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif ()
     endif ()
-
+    
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-
+    
+        add_compile_options(-Wa,-march=generic64)
         # Check that we've got GCC 4.7 or newer.
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)

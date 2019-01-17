@@ -572,7 +572,7 @@ bool PBFTEngine::checkBlock(Block const& block)
     return true;
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
 {
     auto start_exec_time = utcTime();
     Block working_block(req.block);
@@ -622,7 +622,7 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
  * @param message: message constructed from data received from the network
  */
 void PBFTEngine::onRecvPBFTMessage(
-    NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
+    NetworkException, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
     if (nodeIdx() == MAXIDX)
     {
