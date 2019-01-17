@@ -136,7 +136,8 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
     return "DagTransfer";
 }
 
-Table::Ptr DagTransferPrecompiled::openTable(ExecutiveContext::Ptr context, const string& tableName)
+Table::Ptr DagTransferPrecompiled::openTable(
+    dev::blockverifier::ExecutiveContext::Ptr context, const string& tableName)
 {
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                            << LOG_KV("tableName", tableName);
