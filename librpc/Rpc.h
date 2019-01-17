@@ -67,6 +67,7 @@ public:
     virtual Json::Value getPeers() override;
     virtual Json::Value getGroupPeers(int _groupID) override;
     virtual Json::Value getGroupList() override;
+    virtual Json::Value getNodeIDList() override;
 
     // block part
     virtual Json::Value getBlockByHash(

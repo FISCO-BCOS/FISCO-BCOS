@@ -42,6 +42,8 @@ class P2PInterface
 public:
     virtual ~P2PInterface(){};
 
+    virtual NodeID id() const = 0;
+
     virtual std::shared_ptr<P2PMessage> sendMessageByNodeID(
         NodeID nodeID, std::shared_ptr<P2PMessage> message) = 0;
 
