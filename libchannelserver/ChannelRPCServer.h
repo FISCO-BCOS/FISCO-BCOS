@@ -116,7 +116,7 @@ public:
 
     virtual std::string newSeq();
 
-    void setCallbackSetter(std::function<void(std::function<void()>*)> callbackSetter)
+    void setCallbackSetter(std::function<void(std::function<void(const std::string &receiptContext)>*)> callbackSetter)
     {
         m_callbackSetter = callbackSetter;
     };
@@ -151,7 +151,7 @@ private:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
-    std::function<void(std::function<void()>*)> m_callbackSetter;
+    std::function<void(std::function<void(const std::string &receiptContext)>*)> m_callbackSetter;
 };
 
 }  // namespace dev

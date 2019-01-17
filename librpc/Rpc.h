@@ -93,7 +93,7 @@ public:
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
-    void setCurrentTransactionCallback(std::function<void()>* callback)
+    void setCurrentTransactionCallback(std::function<void(const std::string &receiptContext)>* callback)
     {
         m_currentTransactionCallback.reset(callback);
     }
@@ -111,7 +111,7 @@ private:
     bool isValidSystemConfig(std::string const& key);
     std::function<std::function<void>()> setTransactionCallbackFactory();
 
-    boost::thread_specific_ptr<std::function<void()> > m_currentTransactionCallback;
+    boost::thread_specific_ptr<std::function<void(const std::string &receiptContext)> > m_currentTransactionCallback;
 };
 
 }  // namespace rpc

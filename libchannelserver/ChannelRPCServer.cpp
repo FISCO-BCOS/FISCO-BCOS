@@ -309,7 +309,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
             auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
 
             auto function = new std::function<void()>();
-            m_callbackSetter(new std::function<void()>([serverRef, sessionRef, seq]() {
+            m_callbackSetter(new std::function<void(const std::string &receiptContext)>([serverRef, sessionRef, seq](const std::string &receiptContext) {
                 auto server = serverRef.lock();
                 auto session = sessionRef.lock();
                 if (server && session)
@@ -318,6 +318,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
                     channelMessage->setType(0x1000);
                     channelMessage->setSeq(seq);
                     channelMessage->setResult(0);
+                    channelMessage->setData((const byte*)receiptContext.c_str(), receiptContext.size());
 
                     LOG(TRACE) << "Push transaction notify: " << seq;
                     session->asyncSendMessage(channelMessage,
