@@ -531,6 +531,12 @@ void SyncMaster::maintainPeersConnection()
         _p->isMiner = (minerSet.find(_p->nodeId) != minerSet.end());
         return true;
     });
+
+    // If myself is not in group, ignore receive packet checking from all peers
+    if (memberSet.find(m_nodeId) == memberSet.end())
+        m_msgEngine->needCheckPacketInGroup = false;
+    else
+        m_msgEngine->needCheckPacketInGroup = true;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
