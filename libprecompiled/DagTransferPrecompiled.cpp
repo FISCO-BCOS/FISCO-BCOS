@@ -32,7 +32,7 @@ using namespace dev::precompiled;
 
 /*
 contract DagTransfer{
-    function userAdd(string user, uint256 balance) public returns(uint256);
+    function userAdd(string user, uint256 balance) public returns();
     function userSave(string user, uint256 balance) public returns(uint256);
     function userDraw(string user, uint256 balance) public returns(uint256);
     function userBalance(string user) public constant returns(uint256,uint256);
@@ -136,8 +136,8 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
     return "DagTransfer";
 }
 
-Table::Ptr DagTransferPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const s
+Table::Ptr DagTransferPrecompiled::openTable(ExecutiveContext::Ptr context, const string& tableName)
+{
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                            << LOG_KV("tableName", tableName);
 
