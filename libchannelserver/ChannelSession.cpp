@@ -350,8 +350,7 @@ void ChannelSession::writeBuffer(std::shared_ptr<bytes> buffer)
     }
 }
 
-void ChannelSession::onWrite(
-    const boost::system::error_code& error, std::shared_ptr<bytes> buffer, size_t bytesTransferred)
+void ChannelSession::onWrite(const boost::system::error_code& error, std::shared_ptr<bytes>, size_t)
 {
     try
     {
