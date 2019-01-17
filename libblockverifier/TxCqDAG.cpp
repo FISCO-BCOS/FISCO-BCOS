@@ -54,11 +54,10 @@ void TxCqDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
         // Add edge between critical transaction
         for (string const& c : criticals)
         {
-            shared_ptr<IDs> pIds = latestCriticals.get(c);
-            if (pIds != nullptr)
+            ID pIds = latestCriticals.get(c);
+            if (pIds != INVALID_ID)
             {
-                for (ID prev : *pIds)
-                    m_dag.addEdge(prev, id);  // add DAG edge
+                m_dag.addEdge(pIds, id);  // add DAG edge
             }
         }
 

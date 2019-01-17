@@ -113,23 +113,18 @@ template <typename T>
 class CriticalField
 {
 public:
-    std::shared_ptr<IDs> get(T const& _c)
+    ID get(T const& _c)
     {
         auto it = m_criticals.find(_c);
         if (it == m_criticals.end())
-            return nullptr;
+            return INVALID_ID;
         return it->second;
     }
 
-    void update(T const& _c, ID _txId)
-    {
-        if (m_criticals[_c] == nullptr)
-            m_criticals[_c] = std::make_shared<IDs>();
-        m_criticals[_c]->emplace_back(_txId);
-    }
+    void update(T const& _c, ID _txId) { m_criticals[_c] = _txId; }
 
 private:
-    std::map<T, std::shared_ptr<IDs>> m_criticals;
+    std::map<T, ID> m_criticals;
 };
 
 }  // namespace blockverifier
