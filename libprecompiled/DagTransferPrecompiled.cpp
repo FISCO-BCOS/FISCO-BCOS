@@ -32,11 +32,11 @@ using namespace dev::precompiled;
 
 /*
 contract DagTransfer{
-    function userAdd(string user, uint256 balance) public returns(int256);
-    function userSave(string user, uint256 balance) public returns(int256);
-    function userDraw(string user, uint256 balance) public returns(int256);
-    function userBalance(string user) public constant returns(int256,uint256);
-    function userTransfer(string user_a, string user_b, uint256 amount) public returns(int256);
+    function userAdd(string user, uint256 balance) public returns(uint256);
+    function userSave(string user, uint256 balance) public returns(uint256);
+    function userDraw(string user, uint256 balance) public returns(uint256);
+    function userBalance(string user) public constant returns(uint256,uint256);
+    function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
 
@@ -137,8 +137,7 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
 }
 
 Table::Ptr DagTransferPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
+    ExecutiveContext::Ptr context, const s
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                            << LOG_KV("tableName", tableName);
 
@@ -554,7 +553,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         if (toUserBalance + amount < toUserBalance)
         {
             strErrorMsg = "to user balance overflow.";
-            ret = CODE_INVALID_INSUFFICIENT_BALANCE;
+            ret = CODE_INVALID_BALANCE_OVERFLOW;
             break;
         }
 
