@@ -97,7 +97,7 @@ public:
     void setTransactionReceipts(TransactionReceipts const& transReceipt)
     {
         m_transactionReceipts = transReceipt;
-        noteChange();
+        noteReceiptChange();
     }
     /// append a single transaction to m_transactions
     void appendTransaction(Transaction const& _trans)
@@ -149,6 +149,7 @@ public:
         m_sigList.clear();
         m_txsCache.clear();
         noteChange();
+        noteReceiptChange();
     }
 
     void setEmptyBlock()
@@ -157,18 +158,19 @@ public:
         m_blockHeader.setGasUsed(u256(0));
         m_blockHeader.setSealer(u256(0));
         noteChange();
+        noteReceiptChange();
     }
 
     void appendTransactionReceipt(TransactionReceipt const& _tran)
     {
         m_transactionReceipts.push_back(_tran);
-        noteChange();
+        noteReceiptChange();
     }
 
     void clearAllReceipts()
     {
         m_transactionReceipts.clear();
-        noteChange();
+        noteReceiptChange();
     }
 
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
@@ -193,17 +195,20 @@ public:
         {
             m_transactions[index].forceSender(sender);
         }
-        noteChange();
     }
 
 private:
-    /// callback this function when transaction has changed
+    /// callback this function when transaction has been changed
     void noteChange()
     {
-        /// RecursiveGuard l(m_txsCacheLock);
-        WriteGuard l_receipt(x_txReceiptsCache);
         WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
+    }
+
+    /// callback this function when transaction receipt has been changed
+    void noteReceiptChange()
+    {
+        WriteGuard l_receipt(x_txReceiptsCache);
         m_tReceiptsCache = bytes();
     }
 

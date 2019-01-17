@@ -623,44 +623,41 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
 
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss)
 {
-    Block working_block;
     /// no need to decode the local generated prepare packet
     if (req.pBlock)
     {
-        working_block = *req.pBlock;
+        sealing.block = *req.pBlock;
     }
     /// decode the network received prepare packet
     else
     {
-        working_block.decode(ref(req.block), CheckTransaction::None);
+        sealing.block.decode(ref(req.block), CheckTransaction::None);
     }
     /// return directly if it's an empty block
-    if (working_block.getTransactionSize() == 0 && m_omitEmptyBlock)
+    if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
         sealing.p_execContext = nullptr;
-        sealing.block = std::move(working_block);
         return;
     }
 
-    checkBlockValid(working_block);
+    checkBlockValid(sealing.block);
 
     /// notify the next leader seal a new block
-    notifySealing(working_block);
-    m_blockSync->noteSealingBlockNumber(working_block.header().number());
+    notifySealing(sealing.block);
+    m_blockSync->noteSealingBlockNumber(sealing.block.header().number());
 
     /// ignore the signature verification of the transactions have already been verified in
     /// transation pool
     /// the transactions that has not been verified by the txpool should be verified
-    m_txPool->verifyAndSetSenderForBlock(working_block);
+    m_txPool->verifyAndSetSenderForBlock(sealing.block);
 
     auto start_exec_time = utcTime();
-    sealing.p_execContext = executeBlock(working_block);
-    sealing.block = std::move(working_block);
+    sealing.p_execContext = executeBlock(sealing.block);
     auto time_cost = utcTime() - start_exec_time;
     PBFTENGINE_LOG(TRACE) << LOG_DESC("execBlock")
-                          << LOG_KV("blkNum", working_block.header().number())
+                          << LOG_KV("blkNum", sealing.block.header().number())
                           << LOG_KV("idx", req.idx)
-                          << LOG_KV("hash", working_block.header().hash().abridged())
+                          << LOG_KV("hash", sealing.block.header().hash().abridged())
                           << LOG_KV("myIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged())
                           << LOG_KV("timecost", time_cost)

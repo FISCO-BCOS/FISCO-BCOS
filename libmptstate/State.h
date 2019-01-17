@@ -306,7 +306,13 @@ public:
     u256 getNonce(Address const& _addr) const;
 
     /// The hash of the root of our state tree.
-    h256 rootHash(bool _needCal = true) const { return m_state.root(); }
+    h256 rootHash(bool _needCal = true) const
+    {
+        if (_needCal)
+        {
+            return m_state.root();
+        }
+    }
 
     /// Commit all changes waiting in the address cache to the DB. Remove empty account
     void commit();
