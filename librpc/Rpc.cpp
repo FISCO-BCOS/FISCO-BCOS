@@ -1014,8 +1014,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
                 transactionCallback(receiptContent);
             });
-
-            m_currentTransactionCallback.reset(NULL);
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 

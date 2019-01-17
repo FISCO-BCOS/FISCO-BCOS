@@ -308,7 +308,6 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
             auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
             auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
 
-            auto function = new std::function<void()>();
             m_callbackSetter(new std::function<void(const std::string &receiptContext)>([serverRef, sessionRef, seq](const std::string &receiptContext) {
                 auto server = serverRef.lock();
                 auto session = sessionRef.lock();
