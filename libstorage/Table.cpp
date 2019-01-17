@@ -31,7 +31,6 @@
 #include "Table.h"
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
-#include <map>
 
 using namespace dev::storage;
 
@@ -70,7 +69,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     m_dirty = true;
 }
 
-std::map<std::string, std::string>* Entry::fields()
+std::unordered_map<std::string, std::string>* Entry::fields()
 {
     return &m_fields;
 }
@@ -192,7 +191,7 @@ void Condition::limit(size_t offset, size_t count)
     m_count = count;
 }
 
-std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
+std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
 }

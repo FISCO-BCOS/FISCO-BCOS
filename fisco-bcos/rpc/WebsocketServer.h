@@ -179,7 +179,7 @@ public:
         if (ec)
             fail(ec, "read");
 
-        LOG(INFO) << boost::beast::buffers(m_buffer.data()) << std::endl;
+        LOG(INFO) << boost::beast::buffers(m_buffer.data());
 
         Json::Value resultJson;
         resultJson["jsonrpc"] = "2.0";

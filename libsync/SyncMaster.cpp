@@ -32,7 +32,7 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
-static unsigned const c_maxSendTransactions = 128;
+static unsigned const c_maxSendTransactions = 1000;
 
 void SyncMaster::printSyncInfo()
 {
@@ -179,6 +179,7 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 {
     WriteGuard l(x_currentSealingNumber);
     m_currentSealingNumber = _number;
+    m_signalled.notify_all();
 }
 
 bool SyncMaster::isSyncing() const
@@ -190,18 +191,13 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts =
-        m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
-            bool unsent = !m_txPool->isTransactionKnownBy(_tx.sha3(), m_nodeId);
-            return unsent;
-        });
-
+    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
     auto txSize = ts.size();
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
-
+    UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (size_t i = 0; i < ts.size(); ++i)
     {
         auto const& t = ts[i];
@@ -213,17 +209,16 @@ void SyncMaster::maintainTransactions()
             bool isMiner = _p->isMiner;
             return isMiner && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
-
+        if (0 == peers.size())
+            return;
+        UpgradeGuard ul(l);
+        m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->transactionIsKnownBy(t.sha3(), p);
+            m_txPool->setTransactionIsKnownBy(t.sha3(), p);
         }
-
-        if (0 != peers.size())
-            m_txPool->transactionIsKnownBy(t.sha3(), m_nodeId);
     }
-
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         bytes txRLPs;
@@ -305,7 +300,6 @@ void SyncMaster::maintainPeersStatus()
                             << LOG_KV("currentNumber", currentNumber)
                             << LOG_KV("currentSealingNumber", m_currentSealingNumber)
                             << LOG_KV("maxPeerNumber", maxPeerNumber);
-
             return;  // no need to sync
         }
     }

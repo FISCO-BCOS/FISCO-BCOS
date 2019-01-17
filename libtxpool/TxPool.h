@@ -56,7 +56,7 @@ public:
 };
 struct transactionCompare
 {
-    bool operator()(Transaction const& _first, Transaction const& _second) const
+    bool operator()(dev::eth::Transaction const& _first, dev::eth::Transaction const& _second) const
     {
         return _first.importTime() <= _second.importTime();
     }
@@ -89,7 +89,7 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address> : maps from transaction hash to contract address
      */
-    std::pair<h256, Address> submit(Transaction& _tx) override;
+    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override;
 
     /**
      * @brief Remove transaction from the queue
@@ -106,14 +106,14 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual Transactions topTransactions(uint64_t const& _limit) override;
-    virtual Transactions topTransactions(
+    dev::eth::Transactions topTransactions(uint64_t const& _limit) override;
+    dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
-    virtual Transactions topTransactionsCondition(uint64_t const& _limit,
-        std::function<bool(Transaction const&)> const& _condition = nullptr) override;
+    dev::eth::Transactions topTransactionsCondition(
+        uint64_t const& _limit, dev::h512 const& _nodeId) override;
 
     /// get all transactions(maybe blocksync module need this interface)
-    Transactions pendingList() const override;
+    dev::eth::Transactions pendingList() const override;
     /// get current transaction num
     size_t pendingSize() override;
 
@@ -125,13 +125,24 @@ public:
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
 
     /// Set transaction is known by a node
-    virtual void transactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
+    void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
 
     /// Is the transaction is known by the node ?
-    virtual bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
-
+    bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override
+    {
+        auto p = m_transactionKnownBy.find(_txHash);
+        if (p == m_transactionKnownBy.end())
+            return false;
+        return p->second.find(_nodeId) != p->second.end();
+    }
+    void setTransactionsAreKnownBy(
+        std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
     /// Is the transaction is known by someone
-    virtual bool isTransactionKnownBySomeone(h256 const& _txHash) override;
+    bool isTransactionKnownBySomeone(h256 const& _txHash) override;
+    SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
+
+    /// verify and set the sender of known transactions of sepcified block
+    void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
 
 protected:
     /**
@@ -142,25 +153,27 @@ protected:
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
-    ImportResult import(Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
+    ImportResult import(dev::eth::Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// verify transcation
     virtual ImportResult verify(
-        Transaction const& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
+        Transaction& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
     /// check nonce
-    virtual bool isBlockLimitOrNonceOk(Transaction const& _ts, bool _needinsert) const;
+    virtual bool isBlockLimitOrNonceOk(dev::eth::Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check
     virtual u256 filterCheck(const Transaction&) const { return u256(0); };
     void clear();
-    bool dropTransactions(Block const& block, bool needNotify = false);
+    bool dropTransactions(dev::eth::Block const& block, bool needNotify = false);
+    bool removeBlockKnowTrans(dev::eth::Block const& block);
 
 private:
-    dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(Transaction const& tx,
-        dev::eth::TransactionReceipt const& receipt, Block const& block, unsigned index);
+    dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(
+        dev::eth::Transaction const& tx, dev::eth::TransactionReceipt const& receipt,
+        dev::eth::Block const& block, unsigned index);
 
     bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
         dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
-    bool insert(Transaction const& _tx);
+    bool insert(dev::eth::Transaction const& _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction const& tx)
     {
@@ -189,14 +202,11 @@ private:
     using TransactionQueue = std::set<dev::eth::Transaction, transactionCompare>;
     TransactionQueue m_txsQueue;
     std::unordered_map<h256, TransactionQueue::iterator> m_txsHash;
-    /// hash of imported transactions
-    h256Hash m_known;
     /// hash of dropped transactions
     h256Hash m_dropped;
-
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
-    std::unordered_map<h256, std::set<h512>> m_transactionKnownBy;
+    std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 };
 }  // namespace txpool
 }  // namespace dev

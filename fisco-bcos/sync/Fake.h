@@ -109,7 +109,7 @@ public:
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();
 
-        SYNC_LOG(TRACE) << LOG_BADGE("Commit") << LOG_DESC("Conencus block commit: ")
+        SYNC_LOG(TRACE) << LOG_BADGE("Commit") << LOG_DESC("Consensus block commit: ")
                         << LOG_KV("blockNumber", currentNumber + 1)
                         << LOG_KV("txNumber", txs.size())
                         << LOG_KV("totalTxCommitThisNode", m_totalTxCommit)

@@ -49,7 +49,6 @@ public:
     /// init the ledger(called by initializer)
     bool initLedger() override
     {
-        std::cout << "##### callbaci initLedger for FakeLedgerForTest" << std::endl;
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain

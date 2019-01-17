@@ -66,10 +66,10 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 
     /// test addFuturePrepareCache
     req_cache.addFuturePrepareCache(prepare_req);
-    checkPBFTMsg(req_cache.futurePrepareCache(), key_pair, prepare_req.height, prepare_req.view,
-        prepare_req.idx, req_cache.futurePrepareCache().timestamp, prepare_req.block_hash);
-    req_cache.resetFuturePrepare();
-    checkPBFTMsg(req_cache.futurePrepareCache());
+    auto p_future = req_cache.futurePrepareCache(prepare_req.height);
+    checkPBFTMsg(*(p_future), key_pair, prepare_req.height, prepare_req.view, prepare_req.idx,
+        p_future->timestamp, prepare_req.block_hash);
+    req_cache.eraseHandledFutureReq(prepare_req.height);
 }
 /// test generateAndSetSigList
 BOOST_AUTO_TEST_CASE(testSigListSetting)
