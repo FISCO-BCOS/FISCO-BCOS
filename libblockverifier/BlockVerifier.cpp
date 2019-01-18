@@ -35,7 +35,23 @@ using namespace std;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
-
+//*
+#define TxExeFunc(_TX, _TXID)                                          \
+    {                                                                  \
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);        \
+        envInfo.setPrecompiledEngine(executiveContext);                \
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt = \
+            execute(envInfo, _TX, OnOpFunc(), executiveContext);       \
+        block.setTransactionReceipt(_TXID, resultReceipt.second);      \
+        executiveContext->getState()->commit();                        \
+    }
+//*/
+/*
+#define TxExeFunc(_TX, _TXID)                            \
+    {                                                    \
+        this_thread::sleep_for(chrono::milliseconds(2)); \
+    }
+//*/
 ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -71,12 +87,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, _tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(_tr, _txId);
         return true;
     });
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -173,12 +184,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, _tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(_tr, _txId);
         return true;
     });
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -275,12 +281,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelLevelExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, _tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(_tr, _txId);
         return true;
     });
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -299,7 +300,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelLevelExecuteBlock(
             if (levelp == nullptr)
                 break;
             IDs const& level = *levelp;
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 1)
             for (size_t i = 0; i < level.size(); i++)
             {
                 txDag->executeByID(level[i]);
@@ -394,17 +395,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelOmpExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 1)
     for (size_t i = 0; i < block.transactions().size(); i++)
     // for (Transaction const& tr : block.transactions())
     {
         auto& tr = block.transactions()[i];
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(i, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(tr, i);
     }
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -477,12 +473,7 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, _tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(_txId, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(_tr, _txId);
         return true;
     });
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
@@ -588,12 +579,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     // for (Transaction const& tr : block.transactions())
     {
         auto& tr = block.transactions()[i];
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(i, resultReceipt.second);
-        executiveContext->getState()->commit();
+        TxExeFunc(tr, i);
     }
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
