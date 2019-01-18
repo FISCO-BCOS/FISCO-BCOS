@@ -69,7 +69,7 @@ ID DAG::pop()
     if (m_topLevel.empty())
         return INVALID_ID;
 
-    ID top = m_topLevel.front();
+    ID top = std::move(m_topLevel.front());
     m_topLevel.pop();
     return top;
 }
@@ -85,7 +85,7 @@ ID DAG::waitPop()
             cv_topLevel.wait(ul);
     }
 
-    ID top = m_topLevel.front();
+    ID top = std::move(m_topLevel.front());
     m_topLevel.pop();
     return top;
 }
@@ -110,14 +110,16 @@ ID DAG::consume(ID _id)
             }
             else
             {
-                Guard l(x_topLevel);
-                m_topLevel.push(id);
+                {
+                    Guard l(x_topLevel);
+                    m_topLevel.push(id);
+                }
                 cv_topLevel.notify_one();  // await other thread
             }
         }
     }
 
-    Guard l(x_topLevel);
+    Guard l(x_totalConsume);
     m_totalConsume += 1;
     if (m_totalConsume >= m_totalVtxs)
         cv_topLevel.notify_all();  // If DAG reach the end, awake all waitPop thread to exit

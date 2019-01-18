@@ -84,6 +84,7 @@ private:
 private:
     void printVtx(ID _id);
     mutable std::mutex x_topLevel;
+    mutable std::mutex x_totalConsume;
     std::condition_variable cv_topLevel;
 };
 
