@@ -71,6 +71,7 @@ void RaftEngine::initRaftEnv()
         m_heartbeatTimeout = m_minElectTimeout;
         m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
         m_increaseTime = (m_maxElectTimeout - m_minElectTimeout) / 4;
+        m_connectedNode = m_nodeNum;
     }
 
     resetElectTimeout();
@@ -894,6 +895,7 @@ P2PMessage::Ptr RaftEngine::transDataToMessage(
 void RaftEngine::broadcastMsg(P2PMessage::Ptr _data)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
         if (getIndexByMiner(session.nodeID) < 0)

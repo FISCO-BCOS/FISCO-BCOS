@@ -48,7 +48,8 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
+        dev::h512s const& _minerList = dev::h512s())
       : Worker("ConsensusEngineBase", 0),
         m_service(_service),
         m_txPool(_txPool),
@@ -57,6 +58,7 @@ public:
         m_blockVerifier(_blockVerifier),
         m_consensusBlockNumber(0),
         m_protocolId(_protocolId),
+        m_keyPair(_keyPair),
         m_minerList(_minerList)
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
@@ -107,6 +109,10 @@ public:
         status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
+        status_obj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
+        status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
+        status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
+        status_obj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
         int i = 0;
         std::string miner_list = "";
         {
@@ -260,6 +266,7 @@ protected:
     /// index of this node
     IDXTYPE m_idx = 0;
     mutable SharedMutex m_idxMutex;
+    KeyPair m_keyPair;
     /// miner list
     mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
@@ -269,6 +276,10 @@ protected:
 
     /// node list record when P2P last update
     std::string m_lastNodeList;
+    IDXTYPE m_connectedNode;
+    /// whether to omit empty block
+    bool m_omitEmptyBlock = true;
+    bool m_cfgErr = false;
 };
 }  // namespace consensus
 }  // namespace dev
