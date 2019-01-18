@@ -432,6 +432,11 @@ u256 State::getNonce(Address const& _addr) const
         return m_accountStartNonce;
 }
 
+h256 State::rootHash(bool) const
+{
+    return m_state.root();
+}
+
 /// modify here to enable account storage cache
 u256 State::storage(Address const& _id, u256 const& _key)
 {
