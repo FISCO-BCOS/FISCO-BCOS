@@ -150,7 +150,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         bytes output;
         bool success;
         tie(success, output) =
-            m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data);
+            m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
     }

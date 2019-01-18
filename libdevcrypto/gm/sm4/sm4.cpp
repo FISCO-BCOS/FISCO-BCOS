@@ -22,9 +22,7 @@
  */
 
 #include "sm4.h"
-#include <string.h>
-
-using namespace std;
+#include <cstring>
 
 int SM4::setKey(const unsigned char* userKey, size_t length)
 {
@@ -45,7 +43,7 @@ void SM4::cbcEncrypt(
     const unsigned char* in, unsigned char* out, size_t length, unsigned char* ivec, const int enc)
 {
     unsigned char* iv = (unsigned char*)malloc(16);
-    memcpy(iv, ivec, 16);
+    std::memcpy(iv, ivec, 16);
     ::SM4_cbc_encrypt(in, out, length, &key, iv, enc);
     free(iv);
 }
