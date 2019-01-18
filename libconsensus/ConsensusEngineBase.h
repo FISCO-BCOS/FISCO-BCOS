@@ -109,7 +109,6 @@ public:
         status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
-        status_obj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
         status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
         status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
         status_obj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
