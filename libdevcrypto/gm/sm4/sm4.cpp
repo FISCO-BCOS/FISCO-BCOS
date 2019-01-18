@@ -21,9 +21,10 @@
  * @date: 2018
  */
 
-#include <string.h>
-using namespace std;
 #include "sm4.h"
+#include <string.h>
+
+using namespace std;
 
 int SM4::setKey(const unsigned char* userKey, size_t length)
 {
