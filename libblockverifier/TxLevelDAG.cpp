@@ -65,6 +65,12 @@ void TxLevelDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
             latestCriticals.update(c, currTxLevel);
         }
     }
+
+    size_t maxLevelSize = 0;
+    for (auto& level : m_levels)
+        maxLevelSize = max(maxLevelSize, level->size());
+    PARA_LOG(DEBUG) << LOG_BADGE("LevelDAG") << LOG_DESC("level info")
+                    << LOG_KV("levels", m_levels.size()) << LOG_KV("maxLevelSize", maxLevelSize);
 }
 
 // Set transaction execution function
