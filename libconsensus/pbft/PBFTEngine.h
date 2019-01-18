@@ -56,11 +56,10 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
         h512s const& _minerList = h512s())
-      : ConsensusEngineBase(
-            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
-        m_keyPair(_key_pair),
+      : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+            _keyPair, _minerList),
         m_baseDir(_baseDir)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
@@ -439,16 +438,11 @@ protected:
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
-    IDXTYPE m_connectedNode;
-    KeyPair m_keyPair;
     std::string m_baseDir;
-    bool m_cfgErr = false;
     bool m_leaderFailed = false;
 
     dev::storage::Storage::Ptr m_storage;
 
-    /// whether to omit empty block
-    bool m_omitEmptyBlock = true;
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
