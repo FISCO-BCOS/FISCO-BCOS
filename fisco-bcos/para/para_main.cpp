@@ -81,10 +81,11 @@ static Transactions createTxs(std::shared_ptr<LedgerManager> ledgerManager)
     return txs;
 }
 */
+static Secret sec = KeyPair::create().secret();
+
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
     Transactions txs;
-    Secret sec = KeyPair::create().secret();
     for (size_t i = 0; i < _userNum; i++)
     {
         u256 value = 0;
@@ -94,7 +95,8 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         string user = to_string(i);
         u256 money = 1000000000;
         dev::eth::ContractABI abi;
-        bytes data = abi.abiIn("userAdd(string,uint256)", user, money);  // add 1000000000 to user i
+        bytes data =
+            abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime());
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
         tx.setBlockLimit(250);
@@ -105,6 +107,8 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
     }
 
     _block.setTransactions(txs);
+    for (auto& tx : _block.transactions())
+        tx.sender();
 }
 
 void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
@@ -123,7 +127,6 @@ void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
 void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 {
     Transactions txs;
-    Secret sec = KeyPair::create().secret();
     srand(utcTime());
     for (size_t i = 0; i < _txNum; i++)
     {
@@ -131,8 +134,11 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         u256 gasPrice = 0;
         u256 gas = 10000000;
         Address dest = Address(0xffff);
-        string userFrom = to_string(rand() % _userNum);
+        /*string userFrom = to_string(rand() % _userNum);
         string userTo = to_string(rand() % _userNum);
+        */
+        string userFrom = to_string(i);
+        string userTo = to_string(_txNum + i);
         u256 money = 1;
         dev::eth::ContractABI abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
@@ -147,6 +153,8 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
     }
 
     _block.setTransactions(txs);
+    for (auto& tx : _block.transactions())
+        tx.sender();
 }
 
 
@@ -250,15 +258,18 @@ static void startExecute(int _totalUser, int _totalTxs)
 }
 
 int main(int argc, const char* argv[])
-{
-    if (argc != 3)
-    {
-        std::cout << "Usage:   mini-para <total user> <total txs>" << std::endl;
-        std::cout << "Example: mini-para 1000 10000" << std::endl;
-        return 0;
-    }
-    int totalUser = atoi(argv[1]);
-    int totalTxs = atoi(argv[2]);
+{ /*
+     if (argc != 3)
+     {
+         std::cout << "Usage:   mini-para <total user> <total txs>" << std::endl;
+         std::cout << "Example: mini-para 1000 10000" << std::endl;
+         return 0;
+     }
+     int totalUser = atoi(argv[1]);
+     int totalTxs = atoi(argv[2]);
+     */
+    int totalTxs = atoi(argv[1]);
+    int totalUser = totalTxs * 2;
     startExecute(totalUser, totalTxs);
     return 0;
 }
