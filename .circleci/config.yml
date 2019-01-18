@@ -96,7 +96,7 @@ jobs:
           destination: fisco-static.tar.gz
 
   deploy_guomi:
-    working_directory: /root/FISCO-BCOS
+    working_directory: /root/FISCO-BCOS-gm
     docker:
       - image: ubuntu:16.04
     steps:
@@ -133,6 +133,8 @@ workflows:
     jobs:
       - build_static_test
       - build_test_guomi
+  deploy:
+    jobs:
       - deploy_static:
           filters:
             branches:

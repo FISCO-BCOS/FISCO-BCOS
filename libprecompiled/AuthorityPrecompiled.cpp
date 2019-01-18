@@ -184,8 +184,8 @@ bytes AuthorityPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }

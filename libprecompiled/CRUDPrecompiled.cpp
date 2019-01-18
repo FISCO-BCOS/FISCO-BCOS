@@ -69,5 +69,10 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, 
             out = abi.abiIn("", newAddress);
         }
     }
+    else
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
+    }
     return out;
 }

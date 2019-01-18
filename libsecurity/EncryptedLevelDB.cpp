@@ -110,12 +110,11 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     m_openStatus = leveldb::DB::Open(_options, _name, &db);
 
     if (!m_openStatus.ok())
-        LOG(ERROR) << "Database open error" << endl;
-    assert(db);
+    {
+        LOG(ERROR) << "Database open error";
+        BOOST_THROW_EXCEPTION(std::runtime_error("open LevelDB failed"));
+    }
     m_db.reset(db);
-
-    if (!m_openStatus.ok())
-        return;
 
     // Determin open type
     OpenDBStatus type = checkOpenDBStatus();
@@ -130,7 +129,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
                 << LOG_BADGE("Open")
                 << LOG_DESC(
                        " Database key ERROR! Please set cipherDataKey when enable disk encryption!")
-                << LOG_KV("name", _name) << endl;
+                << LOG_KV("name", _name);
             errorExit(exitInfo);
         }
         setCipherDataKey(m_cipherDataKey);
