@@ -144,10 +144,10 @@ ExternalProject_Add(cryptopp
         -DCMAKE_CXX_FLAGS=-march=x86-64 -mtune=generic
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    # LOG_CONFIGURE 1
+    LOG_CONFIGURE 1
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
-    # LOG_BUILD 1
+    LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
 )
