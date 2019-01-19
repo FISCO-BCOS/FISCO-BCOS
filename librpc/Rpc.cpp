@@ -55,12 +55,25 @@ bool Rpc::isValidSystemConfig(std::string const& key)
     return (key == "tx_count_limit" || key == "tx_gas_limit");
 }
 
+bool Rpc::isValidRequest(int _groupID)
+{
+    auto _nodeList = service()->getNodeListByGroupID(_groupID);
+    auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
+    return it != _nodeList.end();
+}
+
 std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
+
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
         {
@@ -91,6 +104,11 @@ std::string Rpc::getBlockNumber(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getBlockNumber") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
             BOOST_THROW_EXCEPTION(
@@ -117,6 +135,11 @@ std::string Rpc::getPbftView(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPbftView") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
         if (!ledgerParam)
         {
@@ -165,6 +188,11 @@ Json::Value Rpc::getMinerList(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getMinerList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
         {
@@ -200,6 +228,11 @@ Json::Value Rpc::getObserverList(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getObserverList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
             BOOST_THROW_EXCEPTION(
@@ -232,6 +265,11 @@ Json::Value Rpc::getConsensusStatus(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getConsensusStatus") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
             BOOST_THROW_EXCEPTION(
@@ -264,6 +302,11 @@ Json::Value Rpc::getSyncStatus(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getSyncStatus") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto sync = ledgerManager()->sync(_groupID);
         if (!sync)
             BOOST_THROW_EXCEPTION(
@@ -324,12 +367,17 @@ Json::Value Rpc::getClientVersion()
     return Json::Value();
 }
 
-Json::Value Rpc::getPeers()
+Json::Value Rpc::getPeers(int _groupID)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response = Json::Value(Json::arrayValue);
 
         auto sessions = service()->sessionInfos();
@@ -359,12 +407,17 @@ Json::Value Rpc::getPeers()
     return Json::Value();
 }
 
-Json::Value Rpc::getNodeIDList()
+Json::Value Rpc::getNodeIDList(int _groupID)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response = Json::Value(Json::arrayValue);
 
         response.append(service()->id().hex());
@@ -394,6 +447,11 @@ Json::Value Rpc::getGroupPeers(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getGroupPeers") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response = Json::Value(Json::arrayValue);
 
         auto _nodeList = service()->getNodeListByGroupID(_groupID);
@@ -418,12 +476,17 @@ Json::Value Rpc::getGroupPeers(int _groupID)
     return Json::Value();
 }
 
-Json::Value Rpc::getGroupList()
+Json::Value Rpc::getGroupList(int _groupID)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getGroupList") << LOG_DESC("request");
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response = Json::Value(Json::arrayValue);
 
         auto groupList = ledgerManager()->getGrouplList();
@@ -431,6 +494,10 @@ Json::Value Rpc::getGroupList()
             response.append(id);
 
         return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
     }
     catch (std::exception& e)
     {
@@ -449,6 +516,11 @@ Json::Value Rpc::getBlockByHash(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
                       << LOG_KV("includeTransaction", _includeTransactions);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -511,6 +583,11 @@ Json::Value Rpc::getBlockByNumber(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("includeTransaction", _includeTransactions);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
@@ -569,6 +646,11 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
         RPC_LOG(INFO) << LOG_BADGE("getBlockHashByNumber") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
             BOOST_THROW_EXCEPTION(
@@ -596,6 +678,11 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHash") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
         auto blockchain = ledgerManager()->blockChain(_groupID);
         if (!blockchain)
@@ -642,6 +729,11 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
                       << LOG_KV("transactionIndex", _transactionIndex);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -697,6 +789,11 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("transactionIndex", _transactionIndex);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -750,6 +847,11 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByBlockHashAndIndex") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -806,6 +908,11 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPendingTransactions") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
@@ -850,6 +957,11 @@ std::string Rpc::getPendingTxSize(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPendingTxSize") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto txPool = ledgerManager()->txPool(_groupID);
         if (!txPool)
             BOOST_THROW_EXCEPTION(
@@ -875,6 +987,11 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
         RPC_LOG(INFO) << LOG_BADGE("getCode") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
                       << LOG_KV("address", _address);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockChain = ledgerManager()->blockChain(_groupID);
         if (!blockChain)
             BOOST_THROW_EXCEPTION(
@@ -900,6 +1017,11 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getTotalTransactionCount") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto blockChain = ledgerManager()->blockChain(_groupID);
         if (!blockChain)
             BOOST_THROW_EXCEPTION(
@@ -929,6 +1051,11 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
         RPC_LOG(INFO) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
                       << LOG_KV("callParams", request.toStyledString());
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         if (request["from"].empty() || request["from"].asString().empty())
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::CallFrom, RPCMsg[RPCExceptionType::CallFrom]));
@@ -975,6 +1102,11 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         RPC_LOG(INFO) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 
+        if (!isValidRequest(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidRequest, RPCMsg[RPCExceptionType::InvalidRequest]));
+        }
         auto txPool = ledgerManager()->txPool(_groupID);
         if (!txPool)
             BOOST_THROW_EXCEPTION(

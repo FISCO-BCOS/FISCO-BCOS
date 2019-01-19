@@ -58,17 +58,17 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getClientVersionI);
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getGroupPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, NULL),
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getGroupListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, NULL),
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getNodeIDListI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
@@ -163,21 +163,21 @@ public:
     {
         response = this->getClientVersion();
     }
-    inline virtual void getPeersI(const Json::Value&, Json::Value& response)
+    inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPeers();
+        response = this->getPeers(request[0u].asInt());
     }
     inline virtual void getGroupPeersI(const Json::Value& request, Json::Value& response)
     {
         response = this->getGroupPeers(request[0u].asInt());
     }
-    inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
+    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getGroupList();
+        response = this->getGroupList(request[0u].asInt());
     }
-    inline virtual void getNodeIDListI(const Json::Value&, Json::Value& response)
+    inline virtual void getNodeIDListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getNodeIDList();
+        response = this->getNodeIDList(request[0u].asInt());
     }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
@@ -255,10 +255,10 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() = 0;
-    virtual Json::Value getPeers() = 0;
+    virtual Json::Value getPeers(int param1) = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
-    virtual Json::Value getGroupList() = 0;
-    virtual Json::Value getNodeIDList() = 0;
+    virtual Json::Value getGroupList(int param1) = 0;
+    virtual Json::Value getNodeIDList(int param1) = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;
