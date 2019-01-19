@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(GM_testP2pPart)
     BOOST_CHECK(response[0]["Topic"][0].asString() == "Topic1");
 
     response = rpc->getGroupPeers(groupId);
-    BOOST_CHECK(response.size() == 0);
+    BOOST_CHECK(response.size() == 1);
 
     response = rpc->getGroupList(groupId);
     BOOST_CHECK(response.size() == 1);
