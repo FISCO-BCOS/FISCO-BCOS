@@ -71,8 +71,8 @@ public:
         m_groupID2NodeList[1] = nodeList;
     }
 
-    virtual P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
-    virtual NodeID id() const override
+    P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
+    NodeID id() const override
     {
         return h512(
             "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
@@ -83,10 +83,7 @@ public:
     void clearSessionInfo() { m_sessionInfos.clear(); }
     P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
 
-    virtual h512s getNodeListByGroupID(GROUP_ID groupID) override
-    {
-        return m_groupID2NodeList[groupID];
-    }
+    h512s getNodeListByGroupID(GROUP_ID groupID) override { return m_groupID2NodeList[groupID]; }
 
     void asyncSendMessageByNodeID(
         NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override

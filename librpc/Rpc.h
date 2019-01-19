@@ -103,7 +103,7 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
-    bool isValidRequest(int _groupID);
+    void checkRequest(int _groupID);
 };
 
 }  // namespace rpc
