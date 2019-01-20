@@ -359,6 +359,34 @@ Json::Value Rpc::getPeers()
     return Json::Value();
 }
 
+Json::Value Rpc::getNodeIDList()
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
+
+        Json::Value response = Json::Value(Json::arrayValue);
+
+        response.append(service()->id().hex());
+        auto sessions = service()->sessionInfos();
+        for (auto it = sessions.begin(); it != sessions.end(); ++it)
+        {
+            response.append(it->nodeID.hex());
+        }
+
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
 Json::Value Rpc::getGroupPeers(int _groupID)
 {
     try

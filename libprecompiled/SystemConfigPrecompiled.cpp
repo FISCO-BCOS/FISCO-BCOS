@@ -124,8 +124,8 @@ bytes SystemConfigPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }

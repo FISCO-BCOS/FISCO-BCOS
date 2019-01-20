@@ -44,17 +44,17 @@ Usage:
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
-    -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
+    -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
     -s <State type>                     Default mpt. if set -s, use storage 
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
+    -g <Generate guomi nodes>           Default no
+    -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -z <Generate tar packet>            Default no
-    -g <Generate guomi nodes>           Default no
+    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -h Help
 e.g 
-    build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
+    $0 -l "127.0.0.1:4"
 EOF
 
 exit 0

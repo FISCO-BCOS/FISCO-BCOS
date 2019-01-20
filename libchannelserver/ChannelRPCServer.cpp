@@ -499,8 +499,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
             m_service->asyncSendMessageByTopic(topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
-                    std::shared_ptr<dev::p2p::P2PSession> p2pSession,
-                    dev::p2p::P2PMessage::Ptr response) {
+                    std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
                     {
                         LOG(ERROR) << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
