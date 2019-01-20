@@ -42,6 +42,7 @@ public:
 
     void stop()
     {
+        /// stop channel first
         if (m_channelRPCHttpServer)
         {
             m_channelRPCHttpServer->StopListening();

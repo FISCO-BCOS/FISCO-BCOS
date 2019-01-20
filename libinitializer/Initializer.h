@@ -48,12 +48,12 @@ public:
     virtual ~Initializer()
     {
         /// modify the destructure order to ensure that the log is destructed at last
+        /// stop rpc
+        m_rpcInitializer->stop();
         /// stop the ledger
         m_ledgerInitializer->stopAll();
         /// stop p2p
         m_p2pInitializer->stop();
-        /// stop rpc
-        m_rpcInitializer->stop();
         /// stop log
         m_logInitializer->stopLogging();
     }
