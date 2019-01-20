@@ -51,13 +51,13 @@ using boost::lexical_cast;
 
 std::shared_ptr<Block> BlockCache::add(Block& _block)
 {
-    LOG(DEBUG) << LOG_DESC("[#add]Add block to block cache")
-               << LOG_KV("blockHash", _block.header().hash());
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[add]Add block to block cache")
+                          << LOG_KV("blockHash", _block.header().hash());
     {
         WriteGuard guard(m_sharedMutex);
         if (m_blockCache.size() > c_blockCacheSize)
         {
-            LOG(DEBUG) << LOG_DESC("[#add]Block cache full, start to remove old item...");
+            BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[add]Block cache full, start to remove old item...");
 
             auto firstHash = m_blockCacheFIFO.front();
             m_blockCacheFIFO.pop_front();
@@ -83,7 +83,8 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
 
 std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
 {
-    LOG(DEBUG) << LOG_DESC("[#get]Read block from block cache") << LOG_KV("blockHash", _hash);
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[get]Read block from block cache")
+                          << LOG_KV("blockHash", _hash);
     {
         ReadGuard guard(m_sharedMutex);
 

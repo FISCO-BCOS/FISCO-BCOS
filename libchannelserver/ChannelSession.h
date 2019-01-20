@@ -47,7 +47,7 @@ class ChannelSession : public std::enable_shared_from_this<ChannelSession>
 {
 public:
     ChannelSession();
-    virtual ~ChannelSession() { LOG(TRACE) << "Session exit"; };
+    virtual ~ChannelSession() { CHANNEL_LOG(TRACE) << "ChannelSession exit"; };
 
     typedef std::shared_ptr<ChannelSession> Ptr;
     typedef std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
