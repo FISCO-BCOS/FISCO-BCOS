@@ -80,7 +80,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DCMAKE_BUILD_TYPE=Debug .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -96,7 +96,7 @@ jobs:
           destination: fisco-static.tar.gz
 
   deploy_guomi:
-    working_directory: /root/FISCO-BCOS-gm
+    working_directory: /root/FISCO-BCOS
     docker:
       - image: ubuntu:16.04
     steps:
@@ -112,7 +112,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON -DCMAKE_BUILD_TYPE=Debug .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}

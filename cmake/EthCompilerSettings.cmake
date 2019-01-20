@@ -61,7 +61,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
     
-	# Configuration-specific compiler settings.
+    # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
     set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
     set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread")
@@ -98,6 +98,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         endif()
     # Additional Clang-specific compiler settings.
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
+            set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -pthread -DETH_DEBUG")
+        endif()
         add_compile_options(-fstack-protector)
         # Some Linux-specific Clang settings.  We don't want these for OS X.
         if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
