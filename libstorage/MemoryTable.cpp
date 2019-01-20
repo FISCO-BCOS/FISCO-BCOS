@@ -119,7 +119,7 @@ inline int dev::storage::MemoryTable::update(
             STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
             return 0;
         }
-        checkFiled(entry);
+        checkField(entry);
         auto indexes = processEntries(entries, condition);
         std::vector<Change::Record> records;
 
@@ -178,7 +178,7 @@ inline int dev::storage::MemoryTable::insert(
         {
             entries = it->second;
         }
-        checkFiled(entry);
+        checkField(entry);
         Change::Record record(entries->size() + 1u);
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
@@ -446,7 +446,7 @@ void MemoryTable::setTableInfo(TableInfo::Ptr _tableInfo)
     m_tableInfo = _tableInfo;
 }
 
-inline void MemoryTable::checkFiled(Entry::Ptr entry)
+inline void MemoryTable::checkField(Entry::Ptr entry)
 {
     for (auto& it : *(entry->fields()))
     {

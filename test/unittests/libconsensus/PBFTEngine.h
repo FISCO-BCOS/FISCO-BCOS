@@ -510,8 +510,8 @@ static void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq co
     {
         /// test inconsistent with the prepareCache
         fake_pbft.consensus()->reqCache()->clearAll();
-        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == false);
         /// test is the future block
+        FakeValidNodeNum(fake_pbft, 4);
         SignReq copiedReq = signReq;
         copiedReq.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == false);

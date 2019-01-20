@@ -38,8 +38,11 @@ class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>
 public:
     typedef std::shared_ptr<RPCInitializer> Ptr;
 
-    virtual ~RPCInitializer()
+    virtual ~RPCInitializer() { stop(); }
+
+    void stop()
     {
+        /// stop channel first
         if (m_channelRPCHttpServer)
         {
             m_channelRPCHttpServer->StopListening();
@@ -50,7 +53,7 @@ public:
             m_jsonrpcHttpServer->StopListening();
             INITIALIZER_LOG(INFO) << "JsonrpcHttpServer stoped.";
         }
-    };
+    }
 
     void initConfig(boost::property_tree::ptree const& _pt);
     void setP2PService(std::shared_ptr<p2p::P2PInterface> _p2pService)
