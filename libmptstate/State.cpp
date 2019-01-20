@@ -432,6 +432,12 @@ u256 State::getNonce(Address const& _addr) const
         return m_accountStartNonce;
 }
 
+/// The hash of the root of our state tree.
+h256 State::rootHash(bool) const
+{
+    return m_state.root();
+}
+
 u256 State::storage(Address const& _id, u256 const& _key) const
 {
     if (Account const* a = account(_id))
