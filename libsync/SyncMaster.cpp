@@ -311,6 +311,7 @@ void SyncMaster::maintainPeersStatus()
     }
 
     // Skip downloading if last if not timeout
+    /*
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {
@@ -320,7 +321,7 @@ void SyncMaster::maintainPeersStatus()
                         << LOG_KV("maxPeerNumber", maxPeerNumber);
         return;  // no need to sync
     }
-    m_lastDownloadingRequestTime = currentTime;
+    m_lastDownloadingRequestTime = currentTime;*/
 
     // Start download
     noteDownloadingBegin();

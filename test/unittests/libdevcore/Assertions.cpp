@@ -87,16 +87,13 @@ BOOST_AUTO_TEST_CASE(testAssertEqualAux)
 {
     unsigned int a = 0xffffffff;
     unsigned b = -1;
-    int c = -1;
     const char* aStr = "(signed)(-1)";
     const char* bStr = "(unsigned)(-1)";
     unsigned line = 11;
     char const* file = "test/unittests/Assertions.cpp";
     char const* func = "testAssertEqualAux_BOOST_AUTO_TEST_CASE";
     BOOST_CHECK(assertEqualAux(a, b, aStr, bStr, line, file, func) == false);
-    BOOST_CHECK(assertEqualAux(a, c, aStr, aStr, line, file, func) == false);
     BOOST_CHECK(assertEqualAux(a, b, aStr, bStr, __LINE__, __FILE__, ETH_FUNC) == false);
-    BOOST_CHECK(assertEqualAux(a, c, aStr, aStr, __LINE__, __FILE__, ETH_FUNC) == false);
 }
 
 /// test micro "assertThrow"

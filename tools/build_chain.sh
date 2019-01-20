@@ -575,8 +575,6 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ;the max number of transactions of a block
     max_trans_num=1000
-    ;the ttl of broadcasted pbft message
-    ;ttl=2
     ;the node id of leaders
     ${node_list}
 
@@ -597,6 +595,10 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
+
+; the ttl for broadcasting pbft message
+[consensus]
+    ;ttl=2
 ;sync period time
 [sync]
     idle_wait_ms=200

@@ -221,7 +221,7 @@ void ChannelRPCServer::onDisconnect(
         {
             if (it.second == session)
             {
-                auto c = _sessions.erase(it.first);
+                _sessions.erase(it.first);
                 CHANNEL_LOG(DEBUG) << "sessions removed";
                 break;
             }
@@ -231,7 +231,7 @@ void ChannelRPCServer::onDisconnect(
         {
             if (it.second == session)
             {
-                auto c = _seq2session.erase(it.first);
+                _seq2session.erase(it.first);
                 CHANNEL_LOG(DEBUG) << "seq2session removed";
                 break;
             }

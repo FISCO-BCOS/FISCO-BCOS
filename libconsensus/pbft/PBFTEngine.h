@@ -356,11 +356,9 @@ protected:
     template <class T>
     inline bool hasConsensused(T const& req) const
     {
-        if (req.height < m_consensusBlockNumber || req.view < m_view)
+        if (req.height < m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view < m_view))
         {
-            PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
-                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
-                                  << "/" << m_view << std::endl;
             return true;
         }
         return false;
@@ -369,12 +367,22 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
-        if (req.height > m_consensusBlockNumber ||
-            (req.height == m_consensusBlockNumber && req.view > m_view))
+        if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock") << LOG_KV("height", req.height)
                                   << LOG_KV("consNum", m_consensusBlockNumber)
                                   << LOG_KV("reqView", req.view) << LOG_KV("view", m_view);
+            return true;
+        }
+        return false;
+    }
+
+    template <typename T>
+    inline bool isFuturePrepare(T const& req) const
+    {
+        if (req.height > m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view > m_view))
+        {
             return true;
         }
         return false;

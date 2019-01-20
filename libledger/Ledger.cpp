@@ -123,6 +123,9 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         initTxPoolConfig(pt);
         /// init params related to sync
         initSyncConfig(pt);
+
+        /// init params releated to consensus(ttl)
+        initConsensusIniConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -147,6 +150,15 @@ void Ledger::initTxPoolConfig(ptree const& pt)
     }
 }
 
+
+void Ledger::initConsensusIniConfig(ptree const& pt)
+{
+    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
+                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
+}
+
+
 /// init consensus configurations:
 /// 1. consensusType: current support pbft only (default is pbft)
 /// 2. maxTransNum: max number of transactions can be sealed into a block
@@ -159,7 +171,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<uint64_t>("consensus.max_trans_num", 1000);
-    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+
 
     m_param->mutableConsensusParam().minElectTime =
         pt.get<uint64_t>("consensus.min_elect_time", 1000);
@@ -168,8 +180,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
                       << LOG_KV("type", m_param->mutableConsensusParam().consensusType)
-                      << LOG_KV("maxTxNum", m_param->mutableConsensusParam().maxTransactions)
-                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
+                      << LOG_KV("maxTxNum", m_param->mutableConsensusParam().maxTransactions);
     std::stringstream nodeListMark;
     try
     {
