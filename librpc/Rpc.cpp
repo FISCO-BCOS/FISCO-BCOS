@@ -58,6 +58,11 @@ bool Rpc::isValidSystemConfig(std::string const& key)
 void Rpc::checkRequest(int _groupID)
 {
     auto _nodeList = service()->getNodeListByGroupID(_groupID);
+    if (_nodeList.size() == 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+    }
     auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
     if (it == _nodeList.end())
     {
@@ -76,11 +81,6 @@ std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-        }
         if (!isValidSystemConfig(key))
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidSystemConfig,
@@ -107,10 +107,6 @@ std::string Rpc::getBlockNumber(int _groupID)
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-
         return toJS(blockchain->number());
     }
     catch (JsonRpcException& e)
@@ -134,11 +130,6 @@ std::string Rpc::getPbftView(int _groupID)
 
         checkRequest(_groupID);
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
-        if (!ledgerParam)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-        }
         auto consensusParam = ledgerParam->mutableConsensusParam();
         std::string consensusType = consensusParam.consensusType;
         if (consensusType != "pbft")
@@ -183,12 +174,6 @@ Json::Value Rpc::getMinerList(int _groupID)
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-        }
-
         auto miners = blockchain->minerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
@@ -219,10 +204,6 @@ Json::Value Rpc::getObserverList(int _groupID)
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-
         auto observers = blockchain->observerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
@@ -252,9 +233,6 @@ Json::Value Rpc::getConsensusStatus(int _groupID)
 
         checkRequest(_groupID);
         auto consensus = ledgerManager()->consensus(_groupID);
-        if (!consensus)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         std::string status = consensus->consensusStatus();
         Json::Reader reader;
@@ -285,9 +263,6 @@ Json::Value Rpc::getSyncStatus(int _groupID)
 
         checkRequest(_groupID);
         auto sync = ledgerManager()->sync(_groupID);
-        if (!sync)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         std::string status = sync->syncInfo();
         Json::Reader reader;
@@ -482,10 +457,6 @@ Json::Value Rpc::getBlockByHash(
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
 
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
-
         h256 hash = jsToFixed<32>(_blockHash);
         auto block = blockchain->getBlockByHash(hash);
         if (!block)
@@ -545,9 +516,6 @@ Json::Value Rpc::getBlockByNumber(
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
@@ -601,9 +569,6 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         h256 blockHash = blockchain->numberHash(number);
@@ -630,9 +595,6 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
         checkRequest(_groupID);
         Json::Value response;
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getLocalisedTxByHash(hash);
@@ -678,9 +640,6 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         h256 hash = jsToFixed<32>(_blockHash);
         auto block = blockchain->getBlockByHash(hash);
@@ -734,9 +693,6 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         auto block = blockchain->getBlockByNumber(number);
@@ -788,9 +744,6 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         Json::Value response;
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        if (!blockchain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
@@ -845,9 +798,6 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
         Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
-        if (!txPool)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         response = Json::Value(Json::arrayValue);
         Transactions transactions = txPool->pendingList();
@@ -888,9 +838,6 @@ std::string Rpc::getPendingTxSize(int _groupID)
 
         checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
-        if (!txPool)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         return toJS(txPool->status().current);
     }
@@ -914,9 +861,6 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
 
         checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
-        if (!blockChain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         return toJS(blockChain->getCode(jsToAddress(_address)));
     }
@@ -940,9 +884,6 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 
         checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
-        if (!blockChain)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         Json::Value response;
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
@@ -975,9 +916,6 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto blockverfier = ledgerManager()->blockVerifier(_groupID);
-        if (!blockchain || !blockverfier)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         BlockNumber blockNumber = blockchain->number();
         auto block = blockchain->getBlockByNumber(blockNumber);
@@ -1017,9 +955,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
         checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
-        if (!txPool)
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         std::pair<h256, Address> ret = txPool->submit(tx);
