@@ -933,7 +933,7 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
     }
     CheckResult result = checkReq(req, oss);
     if (result == CheckResult::FUTURE &&
-        m_reqCache->getSigCacheSize(req.block_hash) == (size_t)(minValidNodes() - 1))
+        m_reqCache->getSigCacheSize(req.block_hash) < (size_t)(minValidNodes() - 1))
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());
