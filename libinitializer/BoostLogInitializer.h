@@ -46,7 +46,9 @@ public:
     LogInitializer() {}
     void initLog(boost::property_tree::ptree const& _pt,
         std::string const& channel = dev::FileLogger, std::string const& logType = "log");
+
     void stopLogging();
+
     unsigned getLogLevel(std::string const& levelStr);
     static void inline logRotateByTime(){};
     static int m_currentHour;

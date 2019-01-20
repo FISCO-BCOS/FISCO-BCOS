@@ -58,7 +58,7 @@ private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
     bool isHashField(const std::string& _key);
-    void checkFiled(Entry::Ptr entry);
+    void checkField(Entry::Ptr entry);
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     std::map<std::string, Entries::Ptr> m_cache;
