@@ -1277,8 +1277,6 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
-    /// get connected node
     statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
     /// get the current view
     statusObj.push_back(json_spirit::Pair("currentView", m_view));
@@ -1286,8 +1284,6 @@ const std::string PBFTEngine::consensusStatus() const
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
-    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
-    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
     status.push_back(statusObj);
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);

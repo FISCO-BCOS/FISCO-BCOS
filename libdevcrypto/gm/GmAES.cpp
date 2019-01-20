@@ -56,7 +56,7 @@ bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key)
     SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
     SM4::getInstance().cbcEncrypt((unsigned char*)_cypherData.data(), deData.data(),
         _cypherData.size(), (unsigned char*)ivData.data(), 0);
-    int padding = deData.data()[_cypherData.size() - 1];
+    int padding = deData.at(_cypherData.size() - 1);
     int deLen = _cypherData.size() - padding;
     deData.resize(deLen);
     return deData;
