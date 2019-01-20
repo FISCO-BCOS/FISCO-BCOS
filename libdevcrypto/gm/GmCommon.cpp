@@ -301,15 +301,10 @@ Secret Nonce::next()
 bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 {
     string signData = toHex(_s.asBytes());
-    // LOG(DEBUG)<<"verify signData:"<<signData;
-    // LOG(DEBUG)<<"_hash:"<<toHex(_hash.asBytes());
     string pub = toHex(_p.asBytes());
     pub = "04" + pub;
-    // LOG(DEBUG)<<"verify pub:"<<pub;
     bool lresult = SM2::getInstance().verify(
         signData, signData.length(), (const char*)_hash.data(), h256::size, pub);
-    // LOG(DEBUG)<<"verify lresult:"<<lresult;
-    // assert(lresult);
     return lresult;
 }
 

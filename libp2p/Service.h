@@ -52,7 +52,7 @@ public:
     virtual void heartBeat();
 
     virtual bool actived() { return m_run; }
-    virtual NodeID id() const { return m_alias.pub(); }
+    virtual NodeID id() const override { return m_alias.pub(); }
 
     virtual void onConnect(dev::network::NetworkException e, NodeID nodeID,
         std::shared_ptr<dev::network::SessionFace> session);

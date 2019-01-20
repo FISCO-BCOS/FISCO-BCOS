@@ -67,6 +67,7 @@ public:
     }
 
     virtual P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
+    virtual NodeID id() const override { return h512(101); }
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }

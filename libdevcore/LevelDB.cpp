@@ -79,7 +79,10 @@ LevelDB::LevelDB(boost::filesystem::path const& _path, leveldb::ReadOptions _rea
     status = BasicLevelDB::Open(_dbOptions, _path.string(), &db);
     checkStatus(status, _path);
 
-    assert(db);
+    if (!status.ok())
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("open LevelDB failed"));
+    }
     m_db.reset(db);
 }
 
