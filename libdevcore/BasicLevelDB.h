@@ -87,18 +87,6 @@ protected:
     std::string m_name;
 };
 
-#define DBErrorExit DBErrorExitHandler()
-
-class DBErrorExitHandler
-{
-    template <typename T>
-    void operator<<(T _errorInfo)
-    {
-        LOG(ERROR) << "[DB] ERROR: " << _errorInfo;
-        assert(false);
-    }
-};
-
 inline void errorExit(std::stringstream& _exitInfo)
 {
     LOG(ERROR) << _exitInfo.str();

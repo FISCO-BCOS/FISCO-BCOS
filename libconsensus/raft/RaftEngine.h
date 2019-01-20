@@ -58,9 +58,8 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
         dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
-      : ConsensusEngineBase(
-            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
-        m_keyPair(_keyPair),
+      : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+            _keyPair, _minerList),
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
         m_uncommittedBlock(dev::eth::Block()),
@@ -108,6 +107,7 @@ public:
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
     void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
+    const std::string consensusStatus() const override;
 
 protected:
     void initRaftEnv();
@@ -187,7 +187,6 @@ protected:
     void checkAndSave(Sealing& _sealing);
 
     mutable Mutex m_mutex;
-    dev::KeyPair m_keyPair;
 
     unsigned m_electTimeout;
     unsigned m_minElectTimeout;
@@ -229,7 +228,6 @@ protected:
     std::unordered_map<h512, BlockRef> m_memberBlock;  // <node_id, BlockRef>
     static const unsigned c_PopWaitSeconds = 5;
 
-    bool m_cfgErr = false;
     dev::storage::Storage::Ptr m_storage;
     // the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
