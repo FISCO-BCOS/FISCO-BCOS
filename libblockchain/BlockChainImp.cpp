@@ -881,7 +881,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     catch (OpenSysTableFailed&)
     {
-        commitMutex.unlock();
         BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
             "[#commitBlock]System meets error when try to write block to storage");
         throw;
