@@ -112,12 +112,16 @@ public:
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
         std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
+    void asyncBroadcastChannelMessage(std::string topic,
+        dev::channel::Message::Ptr message);
+
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message);
 
     virtual std::string newSeq();
 
-    void setCallbackSetter(std::function<void(std::function<void(const std::string &receiptContext)>*)> callbackSetter)
+    void setCallbackSetter(
+        std::function<void(std::function<void(const std::string& receiptContext)>*)> callbackSetter)
     {
         m_callbackSetter = callbackSetter;
     };
@@ -152,7 +156,7 @@ private:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
-    std::function<void(std::function<void(const std::string &receiptContext)>*)> m_callbackSetter;
+    std::function<void(std::function<void(const std::string& receiptContext)>*)> m_callbackSetter;
 };
 
 }  // namespace dev

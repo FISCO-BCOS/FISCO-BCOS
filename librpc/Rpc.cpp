@@ -983,32 +983,32 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         {
             auto transactionCallback = *m_currentTransactionCallback;
             tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
-            	Json::Value response;
+                Json::Value response;
 
-				response["transactionHash"] = toJS(receipt->hash());
-				response["transactionIndex"] = toJS(receipt->transactionIndex());
-				response["blockNumber"] = toJS(receipt->blockNumber());
-				response["blockHash"] = toJS(receipt->blockHash());
-				response["from"] = toJS(receipt->from());
-				response["to"] = toJS(receipt->to());
-				response["gasUsed"] = toJS(receipt->gasUsed());
-				response["contractAddress"] = toJS(receipt->contractAddress());
-				response["logs"] = Json::Value(Json::arrayValue);
-				for (unsigned int i = 0; i < receipt->log().size(); ++i)
-				{
-					Json::Value log;
-					log["address"] = toJS(receipt->log()[i].address);
-					log["topics"] = Json::Value(Json::arrayValue);
-					for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-						log["topics"].append(toJS(receipt->log()[i].topics[j]));
-					log["data"] = toJS(receipt->log()[i].data);
-					response["logs"].append(log);
-				}
-				response["logsBloom"] = toJS(receipt->bloom());
-				response["status"] = toJS(receipt->status());
-				response["output"] = toJS(receipt->outputBytes());
+                response["transactionHash"] = toJS(receipt->hash());
+                response["transactionIndex"] = toJS(receipt->transactionIndex());
+                response["blockNumber"] = toJS(receipt->blockNumber());
+                response["blockHash"] = toJS(receipt->blockHash());
+                response["from"] = toJS(receipt->from());
+                response["to"] = toJS(receipt->to());
+                response["gasUsed"] = toJS(receipt->gasUsed());
+                response["contractAddress"] = toJS(receipt->contractAddress());
+                response["logs"] = Json::Value(Json::arrayValue);
+                for (unsigned int i = 0; i < receipt->log().size(); ++i)
+                {
+                    Json::Value log;
+                    log["address"] = toJS(receipt->log()[i].address);
+                    log["topics"] = Json::Value(Json::arrayValue);
+                    for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                        log["topics"].append(toJS(receipt->log()[i].topics[j]));
+                    log["data"] = toJS(receipt->log()[i].data);
+                    response["logs"].append(log);
+                }
+                response["logsBloom"] = toJS(receipt->bloom());
+                response["status"] = toJS(receipt->status());
+                response["output"] = toJS(receipt->outputBytes());
 
-				auto receiptContent = response.toStyledString();
+                auto receiptContent = response.toStyledString();
 
                 transactionCallback(receiptContent);
             });

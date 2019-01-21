@@ -856,40 +856,33 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                 << LOG_KV("committedParentHash", block.blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
-    if (commitMutex.try_lock())
-    {
-        try
-        {
-            writeBlockInfo(block, context);
 
-            writeNumber(block, context);
-            writeTotalTransactionCount(block, context);
-            writeTxToBlock(block, context);
-            context->dbCommit(block);
-            commitMutex.unlock();
-            m_blockCache.add(block);
-            {
-                WriteGuard l(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
-            }
-            m_onReady();
-            return CommitResult::OK;
-        }
-        catch (OpenSysTableFailed)
-        {
-            commitMutex.unlock();
-            BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-                "[#commitBlock]System meets error when try to write block to storage");
-            throw;
-        }
-    }
-    else
-    {
-        BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#commitBlock]Try lock commitMutex fail")
-                             << LOG_KV("blockNumber", block.blockHeader().number())
-                             << LOG_KV("blockParentHash", block.blockHeader().parentHash())
-                             << LOG_KV("parentHash", parentHash);
+	try
+	{
+		int64_t m_blockNumber = 0;
+		{
+			std::lock_guard<std::mutex> l(commitMutex);
 
-        return CommitResult::ERROR_COMMITTING;
-    }
+			writeBlockInfo(block, context);
+
+			writeNumber(block, context);
+			writeTotalTransactionCount(block, context);
+			writeTxToBlock(block, context);
+			context->dbCommit(block);
+			m_blockCache.add(block);
+
+			WriteGuard ll(m_blockNumberMutex);
+			m_blockNumber = block.blockHeader().number();
+		}
+
+		m_onReady(m_blockNumber);
+		return CommitResult::OK;
+	}
+	catch (OpenSysTableFailed&)
+	{
+		commitMutex.unlock();
+		BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
+			"[#commitBlock]System meets error when try to write block to storage");
+		throw;
+	}
 }
