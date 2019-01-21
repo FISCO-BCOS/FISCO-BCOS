@@ -100,8 +100,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
         }
         addSeqCallback(message->seq(), handler);
     }
-    SESSION_LOG(TRACE) << "Session asyncSendMessage"
-                       << "seq2Callback.size=" << m_seq2Callback->size();
+    SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+                       << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     message.reset();
@@ -423,7 +423,7 @@ void Session::doRead()
                     {
                         /// SESSION_LOG(TRACE) << "Decode success: " << result;
                         NetworkException e(P2PExceptionType::Success, "Success");
-                        s->onMessage(e, s, message);
+                        s->onMessage(e, message);
                         s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
                     }
                     else if (result == 0)
@@ -436,7 +436,7 @@ void Session::doRead()
                         SESSION_LOG(ERROR)
                             << LOG_DESC("Decode message error") << LOG_KV("result", result);
                         s->onMessage(
-                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"), s,
+                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                             message);
                         break;
                     }
@@ -472,8 +472,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-void Session::onMessage(
-    NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message)
+void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
@@ -508,11 +507,10 @@ void Session::onMessage(
         }
         else
         {
-            SESSION_LOG(TRACE) << "onMessage can't found callback, call messageHandler: "
-                               << LOG_KV("message.seq", message->seq());
-
             if (m_messageHandler)
             {
+                SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
+                                   << LOG_KV("message.seq", message->seq());
                 auto session = shared_from_this();
                 auto handler = m_messageHandler;
 
@@ -521,7 +519,7 @@ void Session::onMessage(
             }
             else
             {
-                SESSION_LOG(WARNING) << "MessageHandler not found";
+                SESSION_LOG(WARNING) << "onMessage can't find callback and default messageHandler";
             }
         }
     }

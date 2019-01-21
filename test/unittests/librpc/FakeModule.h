@@ -64,13 +64,26 @@ public:
         std::string topic = "Topic1";
         topics.insert(topic);
         m_sessionInfos.push_back(P2PSessionInfo(nodeID, m_endpoint, topics));
+        h512s nodeList;
+        nodeList.push_back(
+            h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
+                 "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
+        m_groupID2NodeList[1] = nodeList;
     }
 
-    virtual P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
+    P2PSessionInfos sessionInfos() override { return m_sessionInfos; }
+    NodeID id() const override
+    {
+        return h512(
+            "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
+            "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61");
+    }
     void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
+
+    h512s getNodeListByGroupID(GROUP_ID groupID) override { return m_groupID2NodeList[groupID]; }
 
     void asyncSendMessageByNodeID(
         NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
@@ -103,6 +116,7 @@ private:
     P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
     std::map<NodeID, dev::network::Message::Ptr> m_asyncSendMsgs;
+    std::map<GROUP_ID, h512s> m_groupID2NodeList;
     bool m_connected;
 };
 

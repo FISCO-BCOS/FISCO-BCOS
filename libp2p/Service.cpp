@@ -141,7 +141,7 @@ void Service::heartBeat()
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
-            SERVICE_LOG(TRACE) << "timer canceled" << error;
+            SERVICE_LOG(TRACE) << "timer canceled" << LOG_KV("errorCode", error);
             return;
         }
         auto service = self.lock();
@@ -324,8 +324,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
 
             SessionCallback() { mutex.lock(); }
 
-            void onResponse(dev::network::NetworkException _error,
-                std::shared_ptr<P2PSession> session, P2PMessage::Ptr _message)
+            void onResponse(dev::network::NetworkException _error, std::shared_ptr<P2PSession>,
+                P2PMessage::Ptr _message)
             {
                 error = _error;
                 response = _message;
@@ -450,8 +450,8 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
 
             SessionCallback() { mutex.lock(); }
 
-            void onResponse(dev::network::NetworkException _error,
-                std::shared_ptr<P2PSession> session, P2PMessage::Ptr _message)
+            void onResponse(dev::network::NetworkException _error, std::shared_ptr<P2PSession>,
+                P2PMessage::Ptr _message)
             {
                 error = _error;
                 response = _message;
@@ -629,8 +629,7 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Optio
 
         for (auto s : sessions)
         {
-            asyncSendMessageByNodeID(
-                s.first, message, CallbackFuncWithSession(), dev::network::Options());
+            asyncSendMessageByNodeID(s.first, message, CallbackFuncWithSession(), options);
         }
     }
     catch (std::exception& e)

@@ -94,15 +94,15 @@ BOOST_AUTO_TEST_CASE(GM_testP2pPart)
     Json::Value version = rpc->getClientVersion();
     BOOST_CHECK(version.size() != 0);
 
-    Json::Value response = rpc->getPeers();
+    Json::Value response = rpc->getPeers(groupId);
     BOOST_CHECK(response[0]["NodeID"].asString() != "");
     BOOST_CHECK(response[0]["IPAndPort"].asString() == "127.0.0.1:30310");
     BOOST_CHECK(response[0]["Topic"][0].asString() == "Topic1");
 
     response = rpc->getGroupPeers(groupId);
-    BOOST_CHECK(response.size() == 0);
+    BOOST_CHECK(response.size() == 1);
 
-    response = rpc->getGroupList();
+    response = rpc->getGroupList(groupId);
     BOOST_CHECK(response.size() == 1);
 }
 
@@ -416,16 +416,19 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
     Json::Value version = rpc->getClientVersion();
     BOOST_CHECK(version.size() != 0);
 
-    Json::Value response = rpc->getPeers();
+    Json::Value response = rpc->getPeers(groupId);
     BOOST_CHECK(response[0]["NodeID"].asString() != "");
     BOOST_CHECK(response[0]["IPAndPort"].asString() == "127.0.0.1:30310");
     BOOST_CHECK(response[0]["Topic"][0].asString() == "Topic1");
 
     response = rpc->getGroupPeers(groupId);
-    BOOST_CHECK(response.size() == 0);
-
-    response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
+
+    response = rpc->getGroupList(groupId);
+    BOOST_CHECK(response.size() == 1);
+
+    response = rpc->getNodeIDList(groupId);
+    BOOST_CHECK(response.size() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(testGetBlockByHash)

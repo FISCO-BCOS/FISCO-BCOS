@@ -80,7 +80,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DCMAKE_BUILD_TYPE=Debug .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -112,7 +112,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON -DCMAKE_BUILD_TYPE=Debug .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -133,6 +133,8 @@ workflows:
     jobs:
       - build_static_test
       - build_test_guomi
+  deploy:
+    jobs:
       - deploy_static:
           filters:
             branches:

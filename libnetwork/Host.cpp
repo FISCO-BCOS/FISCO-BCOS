@@ -244,8 +244,9 @@ void Host::handshakeServer(const boost::system::error_code& error,
  *              now include protocolVersion, clientVersion, caps and listenPort
  * @param _s : connected socket(used to init session object)
  */
+// TODO: asyncConnect pass handle to startPeerSession, make use of it
 void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket,
-    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler)
+    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
     std::shared_ptr<SessionFace> ps =
@@ -299,7 +300,7 @@ void Host::start()
                 asioInterface()->reset();
             }
 
-            HOST_LOG(WARNING) << "Host exit";
+            HOST_LOG(INFO) << "Host exit";
         });
     }
 }

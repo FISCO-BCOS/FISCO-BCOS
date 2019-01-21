@@ -463,7 +463,7 @@ bool PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) 
         return false;
     }
 
-    if (isFutureBlock(req))
+    if (isFuturePrepare(req))
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
         m_reqCache->addFuturePrepareCache(req);
@@ -829,7 +829,6 @@ void PBFTEngine::checkAndSave()
                 m_txPool->handleBadBlock(*p_block);
             }
             /// clear caches to in case of repeated commit
-            m_reqCache->clearAllExceptCommitCache();
             m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
@@ -869,7 +868,6 @@ void PBFTEngine::reportBlock(Block const& block)
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
         resetConfig();
-        m_reqCache->clearAllExceptCommitCache();
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^Report:") << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("idx", m_highestBlock.sealer())
@@ -927,8 +925,15 @@ bool PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) con
                               << LOG_KV("INFO", oss.str());
         return false;
     }
+    if (hasConsensused(req))
+    {
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
+                              << LOG_KV("INFO", oss.str());
+        return false;
+    }
     CheckResult result = checkReq(req, oss);
-    if (result == CheckResult::FUTURE)
+    if (result == CheckResult::FUTURE &&
+        m_reqCache->getSigCacheSize(req.block_hash) < (size_t)(minValidNodes() - 1))
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());
@@ -984,6 +989,11 @@ bool PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss)
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: Duplicated")
                               << LOG_KV("INFO", oss.str());
+        return false;
+    }
+    if (hasConsensused(req))
+    {
+        LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued") << LOG_KV("INFO", oss.str());
         return false;
     }
     CheckResult result = checkReq(req, oss);
@@ -1277,8 +1287,6 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
-    /// get connected node
     statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
     /// get the current view
     statusObj.push_back(json_spirit::Pair("currentView", m_view));
@@ -1286,8 +1294,6 @@ const std::string PBFTEngine::consensusStatus() const
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
-    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
-    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
     status.push_back(statusObj);
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);
