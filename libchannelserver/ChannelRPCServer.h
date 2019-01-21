@@ -106,6 +106,7 @@ public:
 
     void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext);
 
+    std::shared_ptr<dev::channel::ChannelServer> channelServer() { return _server; }
     void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
 
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,

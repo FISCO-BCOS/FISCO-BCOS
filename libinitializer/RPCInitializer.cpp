@@ -72,6 +72,28 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_channelRPCServer->setCallbackSetter(
             std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
 
+        for(auto it: m_ledgerManager->getGrouplList()) {
+        	auto groupID = it;
+        	auto blockChain = std::weak_ptr<dev::blockchain::BlockChainInterface>(m_ledgerManager->blockChain(it));
+        	auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+        	m_ledgerManager->blockChain(it)->onReady([groupID, channelRPCServer, blockChain]() {
+        		auto b = blockChain.lock();
+        		auto c = channelRPCServer.lock();
+
+        		if(b && c) {
+					std::string topic = "_block_notify_" + boost::lexical_cast<std::string>(groupID);
+					std::string content = boost::lexical_cast<std::string>(groupID) + "," + boost::lexical_cast<std::string>(b->number());
+
+					auto message = c->channelServer()->messageFactory()->buildMessage();
+					message->setType(0x1001);
+					message->setSeq(std::string(32, '0'));
+					message->setResult(0);
+					message->setData((const byte*)content.data(), content.size());
+					c->asyncPushChannelMessage(topic, message, [](dev::channel::ChannelException, dev::channel::Message::Ptr) {});
+        		}
+        	});
+        }
+
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.
         m_safeHttpServer.reset(
