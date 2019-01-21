@@ -446,41 +446,6 @@ EOF
     echo "build $node node cert successful!"
 }
 
-read_password() {
-    read -se -p "Enter password for keystore:" pass1
-    echo
-    read -se -p "Verify password for keystore:" pass2
-    echo
-    [[ "$pass1" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    [ "$pass1" != "$pass2" ] && {
-        echo "Verify password failure!"
-        exit $EXIT_CODE
-    }
-    jks_passwd=$pass1
-}
-
-gen_sdk_cert() {
-    agency="$2"
-    sdkpath="$3"
-    sdk=$(getname "$sdkpath")
-    dir_must_exists "$agency"
-    file_must_exists "$agency/agency.key"
-    dir_must_not_exists "$sdkpath"
-    check_name sdk "$sdk"
-
-    mkdir -p $sdkpath
-    gen_cert_secp256k1 "$agency" "$sdkpath" "$sdk" sdk
-    cp $agency/ca-agency.crt $sdkpath/ca.crt
-    
-    read_password
-    openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-
-    echo "build $sdk sdk cert successful!"
-}
-
 generate_config_ini()
 {
     local output=${1}

@@ -49,13 +49,25 @@ public:
     {
         /// modify the destructure order to ensure that the log is destructed at last
         /// stop rpc
-        m_rpcInitializer->stop();
+        if (m_rpcInitializer)
+        {
+            m_rpcInitializer->stop();
+        }
         /// stop the ledger
-        m_ledgerInitializer->stopAll();
+        if (m_ledgerInitializer)
+        {
+            m_ledgerInitializer->stopAll();
+        }
         /// stop p2p
-        m_p2pInitializer->stop();
+        if (m_p2pInitializer)
+        {
+            m_p2pInitializer->stop();
+        }
         /// stop log
-        m_logInitializer->stopLogging();
+        if (m_logInitializer)
+        {
+            m_logInitializer->stopLogging();
+        }
     }
     void init(std::string const& _path);
 
