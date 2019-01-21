@@ -673,7 +673,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(ERROR) << "no session use topic" << LOG_KV("topic", _topic);
+                    CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", _topic);
                     throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                 }
 
@@ -728,10 +728,14 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             std::make_shared<Callback>(topic, message, shared_from_this(), callback);
         pushCallback->sendMessage();
     }
+    catch (dev::channel::ChannelException &ex) {
+    	callback(ex, dev::channel::Message::Ptr());
+    }
     catch (exception& e)
     {
         CHANNEL_LOG(ERROR) << "asyncPushChannelMessage error"
                            << LOG_KV("what", boost::diagnostic_information(e));
+
     }
 }
 
