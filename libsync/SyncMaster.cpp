@@ -496,7 +496,7 @@ void SyncMaster::maintainPeersConnection()
 
     // member set is [(miner || observer) && activePeer && not myself]
     set<NodeID> memberSet;
-    for (auto member : minerOrObserver)
+    for (auto const& member : minerOrObserver)
     {
         if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
             memberSet.insert(member);
@@ -546,10 +546,10 @@ void SyncMaster::maintainPeersConnection()
     });
 
     // If myself is not in group, ignore receive packet checking from all peers
-    bool hasMyself = false;
-    for (auto const& mo : minerOrObserver)
-        hasMyself |= (mo == m_nodeId);
-    m_msgEngine->needCheckPacketInGroup = hasMyself;
+    if (find(minerOrObserver.begin(), minerOrObserver.end(), m_nodeId) == minerOrObserver.end())
+        m_msgEngine->needCheckPacketInGroup = false;
+    else
+        m_msgEngine->needCheckPacketInGroup = true;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
