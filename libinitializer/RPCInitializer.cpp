@@ -78,13 +78,13 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             auto blockChain = m_ledgerManager->blockChain(it);
             auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
             auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
-            	LOG(TRACE) << "Push block notify: " << groupID << "-" << number;
+            	LOG(TRACE) << "Push block notify: " << (int)groupID << "-" << number;
                 auto c = channelRPCServer.lock();
 
                 if (c)
                 {
                     std::string topic =
-                        "_block_notify_" + boost::lexical_cast<std::string>(groupID);
+                        "_block_notify_" + boost::lexical_cast<std::string>((int)groupID);
                     std::string content = boost::lexical_cast<std::string>(groupID) + "," +
                                           boost::lexical_cast<std::string>(number);
 
