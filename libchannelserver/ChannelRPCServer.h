@@ -31,6 +31,7 @@
 #include "ChannelServer.h"
 #include "ChannelSession.h"
 #include "libdevcore/ThreadPool.h"
+#include <libethcore/Common.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
 #include <libp2p/Service.h>
@@ -126,6 +127,10 @@ public:
         m_callbackSetter = callbackSetter;
     };
 
+    void addHandler(const dev::eth::Handler<int64_t> &handler) {
+    	m_handlers.push_back(handler);
+    }
+
 private:
     void initSSLContext();
 
@@ -157,6 +162,7 @@ private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
     std::function<void(std::function<void(const std::string& receiptContext)>*)> m_callbackSetter;
+    std::vector<dev::eth::Handler<int64_t> > m_handlers;
 };
 
 }  // namespace dev
