@@ -76,7 +76,6 @@ bool PBFTEngine::shouldSeal()
     {
         return false;
     }
-    /// fast view change
     if (ret.second != nodeIdx())
     {
         /// if current node is the next leader
@@ -897,6 +896,8 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
                     << LOG_KV("time_cost", utcTime() - start_commit_time);
+                /// report right now
+                reportBlockWithoutLock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
             }
             else
             {
@@ -911,8 +912,6 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(*p_block);
             }
-            /// clear caches to in case of repeated commit
-            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
         {
@@ -927,15 +926,19 @@ void PBFTEngine::checkAndSave()
     }
 }
 
+void PBFTEngine::reportBlock(Block const& block)
+{
+    Guard l(m_mutex);
+    reportBlockWithoutLock(block);
+}
 /// update the context of PBFT after commit a block into the block-chain
 /// 1. update the highest to new-committed blockHeader
 /// 2. update m_view/m_toView/m_leaderFailed/m_lastConsensusTime/m_consensusBlockNumber
 /// 3. delete invalid view-change requests according to new highestBlock
 /// 4. recalculate the m_nodeNum/m_f according to newer MinerList
 /// 5. clear all caches related to prepareReq and signReq
-void PBFTEngine::reportBlock(Block const& block)
+void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
-    Guard l(m_mutex);
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
         /// update the highest block

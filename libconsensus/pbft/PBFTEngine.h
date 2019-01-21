@@ -150,6 +150,7 @@ public:
     }
 
 protected:
+    void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();
     void collectGarbage();
