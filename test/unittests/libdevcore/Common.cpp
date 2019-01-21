@@ -34,10 +34,6 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(DevcoreCommonTest, TestOutputHelperFixture)
-BOOST_AUTO_TEST_CASE(testIgnoreExceptions)
-{
-    BOOST_REQUIRE_NO_THROW(DEV_IGNORE_EXCEPTIONS(10 / 0));
-}
 /// test Arith Calculations
 BOOST_AUTO_TEST_CASE(testArithCal)
 {

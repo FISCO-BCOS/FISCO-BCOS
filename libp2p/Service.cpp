@@ -141,7 +141,7 @@ void Service::heartBeat()
     m_timer->async_wait([self](const boost::system::error_code& error) {
         if (error)
         {
-            SERVICE_LOG(TRACE) << "timer canceled" << error;
+            SERVICE_LOG(TRACE) << "timer canceled" << LOG_KV("errorCode", error);
             return;
         }
         auto service = self.lock();

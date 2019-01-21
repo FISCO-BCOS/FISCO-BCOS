@@ -256,7 +256,7 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     BOOST_CHECK(fromEvmC(result.tx_gas_price) == fake_ext_vm.gasPrice());
     BOOST_CHECK(fromEvmC(result.tx_origin) == fake_ext_vm.origin());
     BOOST_CHECK(result.block_number == fake_ext_vm.envInfo().number());
-    BOOST_CHECK(result.block_timestamp == fake_ext_vm.envInfo().timestamp());
+    BOOST_CHECK((uint64_t)result.block_timestamp == fake_ext_vm.envInfo().timestamp());
     BOOST_CHECK(result.block_gas_limit == static_cast<int64_t>(fake_ext_vm.envInfo().gasLimit()));
     ///========== test getBlockHash =====================
     evmc_uint256be block_hash;

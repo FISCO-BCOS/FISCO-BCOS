@@ -37,7 +37,9 @@ class P2PInitializer : public std::enable_shared_from_this<P2PInitializer>
 public:
     typedef std::shared_ptr<P2PInitializer> Ptr;
 
-    ~P2PInitializer()
+    ~P2PInitializer() { stop(); }
+
+    void stop()
     {
         if (m_p2pService)
         {
