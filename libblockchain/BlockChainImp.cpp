@@ -859,7 +859,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
 	try
 	{
-		int64_t m_blockNumber = 0;
 		{
 			std::lock_guard<std::mutex> l(commitMutex);
 
@@ -869,8 +868,10 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 			writeTotalTransactionCount(block, context);
 			writeTxToBlock(block, context);
 			context->dbCommit(block);
-			m_blockCache.add(block);
+		}
+		m_blockCache.add(block);
 
+		{
 			WriteGuard ll(m_blockNumberMutex);
 			m_blockNumber = block.blockHeader().number();
 		}
