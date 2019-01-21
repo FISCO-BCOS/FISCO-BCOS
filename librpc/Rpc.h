@@ -64,10 +64,10 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() override;
-    virtual Json::Value getPeers() override;
+    virtual Json::Value getPeers(int _groupID) override;
     virtual Json::Value getGroupPeers(int _groupID) override;
-    virtual Json::Value getGroupList() override;
-    virtual Json::Value getNodeIDList() override;
+    virtual Json::Value getGroupList(int _groupID) override;
+    virtual Json::Value getNodeIDList(int _groupID) override;
 
     // block part
     virtual Json::Value getBlockByHash(
@@ -103,6 +103,7 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+    void checkRequest(int _groupID);
 };
 
 }  // namespace rpc
