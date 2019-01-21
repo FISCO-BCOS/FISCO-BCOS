@@ -31,9 +31,9 @@
 #include "ChannelServer.h"
 #include "ChannelSession.h"
 #include "libdevcore/ThreadPool.h"
-#include <libethcore/Common.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Common.h>
 #include <libp2p/Service.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -113,8 +113,7 @@ public:
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
         std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
-    void asyncBroadcastChannelMessage(std::string topic,
-        dev::channel::Message::Ptr message);
+    void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
 
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message);
@@ -127,9 +126,7 @@ public:
         m_callbackSetter = callbackSetter;
     };
 
-    void addHandler(const dev::eth::Handler<int64_t> &handler) {
-    	m_handlers.push_back(handler);
-    }
+    void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
     void initSSLContext();

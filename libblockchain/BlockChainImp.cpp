@@ -857,33 +857,33 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         return CommitResult::ERROR_PARENT_HASH;
     }
 
-	try
-	{
-		{
-			std::lock_guard<std::mutex> l(commitMutex);
+    try
+    {
+        {
+            std::lock_guard<std::mutex> l(commitMutex);
 
-			writeBlockInfo(block, context);
+            writeBlockInfo(block, context);
 
-			writeNumber(block, context);
-			writeTotalTransactionCount(block, context);
-			writeTxToBlock(block, context);
-			context->dbCommit(block);
-		}
-		m_blockCache.add(block);
+            writeNumber(block, context);
+            writeTotalTransactionCount(block, context);
+            writeTxToBlock(block, context);
+            context->dbCommit(block);
+        }
+        m_blockCache.add(block);
 
-		{
-			WriteGuard ll(m_blockNumberMutex);
-			m_blockNumber = block.blockHeader().number();
-		}
+        {
+            WriteGuard ll(m_blockNumberMutex);
+            m_blockNumber = block.blockHeader().number();
+        }
 
-		m_onReady(m_blockNumber);
-		return CommitResult::OK;
-	}
-	catch (OpenSysTableFailed&)
-	{
-		commitMutex.unlock();
-		BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-			"[#commitBlock]System meets error when try to write block to storage");
-		throw;
-	}
+        m_onReady(m_blockNumber);
+        return CommitResult::OK;
+    }
+    catch (OpenSysTableFailed&)
+    {
+        commitMutex.unlock();
+        BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
+            "[#commitBlock]System meets error when try to write block to storage");
+        throw;
+    }
 }

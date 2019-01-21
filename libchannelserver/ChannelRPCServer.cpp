@@ -741,22 +741,24 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     }
 }
 
-void ChannelRPCServer::asyncBroadcastChannelMessage(std::string topic,
-    dev::channel::Message::Ptr message) {
-	std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
-	if (activedSessions.empty())
-	{
-		CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
-		return;
-	}
+void ChannelRPCServer::asyncBroadcastChannelMessage(
+    std::string topic, dev::channel::Message::Ptr message)
+{
+    std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
+    if (activedSessions.empty())
+    {
+        CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
+        return;
+    }
 
-	for(auto session: activedSessions) {
-		session->asyncSendMessage(message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+    for (auto session : activedSessions)
+    {
+        session->asyncSendMessage(
+            message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
-		CHANNEL_LOG(INFO) << "Push channel message" << message->seq() << "to session"
-			  << session->host() << ":" << session->port() << " success";
-	}
-
+        CHANNEL_LOG(INFO) << "Push channel message" << message->seq() << "to session"
+                          << session->host() << ":" << session->port() << " success";
+    }
 }
 
 dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(

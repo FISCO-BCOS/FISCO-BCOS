@@ -78,7 +78,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             auto blockChain = m_ledgerManager->blockChain(it);
             auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
             auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
-            	LOG(TRACE) << "Push block notify: " << (int)groupID << "-" << number;
+                LOG(TRACE) << "Push block notify: " << (int)groupID << "-" << number;
                 auto c = channelRPCServer.lock();
 
                 if (c)
