@@ -300,7 +300,7 @@ void Host::start()
                 asioInterface()->reset();
             }
 
-            HOST_LOG(WARNING) << "Host exit";
+            HOST_LOG(INFO) << "Host exit";
         });
     }
 }

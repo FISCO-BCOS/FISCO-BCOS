@@ -100,8 +100,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
         }
         addSeqCallback(message->seq(), handler);
     }
-    SESSION_LOG(TRACE) << "Session asyncSendMessage"
-                       << "seq2Callback.size=" << m_seq2Callback->size();
+    SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+                       << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     message.reset();
@@ -507,11 +507,10 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
         }
         else
         {
-            SESSION_LOG(TRACE) << "onMessage can't found callback, call messageHandler: "
-                               << LOG_KV("message.seq", message->seq());
-
             if (m_messageHandler)
             {
+                SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
+                                   << LOG_KV("message.seq", message->seq());
                 auto session = shared_from_this();
                 auto handler = m_messageHandler;
 
@@ -520,7 +519,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
             else
             {
-                SESSION_LOG(WARNING) << "MessageHandler not found";
+                SESSION_LOG(WARNING) << "onMessage can't find callback and default messageHandler";
             }
         }
     }
