@@ -308,22 +308,24 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
             auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
             auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
 
-            m_callbackSetter(new std::function<void(const std::string &receiptContext)>([serverRef, sessionRef, seq](const std::string &receiptContext) {
-                auto server = serverRef.lock();
-                auto session = sessionRef.lock();
-                if (server && session)
-                {
-                    auto channelMessage = server->messageFactory()->buildMessage();
-                    channelMessage->setType(0x1000);
-                    channelMessage->setSeq(seq);
-                    channelMessage->setResult(0);
-                    channelMessage->setData((const byte*)receiptContext.c_str(), receiptContext.size());
+            m_callbackSetter(new std::function<void(const std::string& receiptContext)>(
+                [serverRef, sessionRef, seq](const std::string& receiptContext) {
+                    auto server = serverRef.lock();
+                    auto session = sessionRef.lock();
+                    if (server && session)
+                    {
+                        auto channelMessage = server->messageFactory()->buildMessage();
+                        channelMessage->setType(0x1000);
+                        channelMessage->setSeq(seq);
+                        channelMessage->setResult(0);
+                        channelMessage->setData(
+                            (const byte*)receiptContext.c_str(), receiptContext.size());
 
-                    LOG(TRACE) << "Push transaction notify: " << seq;
-                    session->asyncSendMessage(channelMessage,
-                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
-                }
-            }));
+                        LOG(TRACE) << "Push transaction notify: " << seq;
+                        session->asyncSendMessage(channelMessage,
+                            std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                    }
+                }));
         }
     }
 
@@ -728,14 +730,14 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             std::make_shared<Callback>(topic, message, shared_from_this(), callback);
         pushCallback->sendMessage();
     }
-    catch (dev::channel::ChannelException &ex) {
-    	callback(ex, dev::channel::Message::Ptr());
+    catch (dev::channel::ChannelException& ex)
+    {
+        callback(ex, dev::channel::Message::Ptr());
     }
     catch (exception& e)
     {
         CHANNEL_LOG(ERROR) << "asyncPushChannelMessage error"
                            << LOG_KV("what", boost::diagnostic_information(e));
-
     }
 }
 
