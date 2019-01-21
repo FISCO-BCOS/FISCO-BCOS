@@ -1023,7 +1023,7 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
                               << LOG_KV("INFO", oss.str());
-        return return CheckResult::INVALID;
+        return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
     /// to ensure that the collected signature size is equal to minValidNodes
@@ -1093,7 +1093,8 @@ CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstrea
     }
     if (hasConsensused(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued") << LOG_KV("INFO", oss.str());
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued")
+                              << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
