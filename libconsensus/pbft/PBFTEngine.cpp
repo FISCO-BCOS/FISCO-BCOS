@@ -896,8 +896,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
                     << LOG_KV("time_cost", utcTime() - start_commit_time);
-                /// report right now
-                reportBlockWithoutLock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+                m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else
             {
@@ -962,7 +961,6 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("myIdx", nodeIdx());
     }
-    m_signalled.notify_all();
 }
 
 /**
