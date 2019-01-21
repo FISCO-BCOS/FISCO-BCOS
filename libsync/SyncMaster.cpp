@@ -478,13 +478,28 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
+    // Get active peers
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    set<NodeID> activePeers;
+    for (auto const& session : sessions)
+        activePeers.insert(session.nodeID);
+
+    // Get miners and observer
     NodeIDs miners = m_blockChain->minerList();
-    NodeIDs groupMembers = miners + m_blockChain->observerList();
+    NodeIDs minerOrObserver = miners + m_blockChain->observerList();
+
+    // member set is [(miner || observer) && activePeer && not myself]
+    set<NodeID> memberSet;
+    bool hasMyself = false;
+    for (auto const& member : minerOrObserver)
+    {
+        if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+            memberSet.insert(member);
+
+        hasMyself |= (member == m_nodeId);
+    }
 
     // Delete uncorrelated peers
-    set<NodeID> memberSet;
-    for (auto member : groupMembers)
-        memberSet.insert(member);
     NodeIDs nodeIds = m_syncStatus->peers();
     for (NodeID const& id : nodeIds)
     {
@@ -495,7 +510,7 @@ void SyncMaster::maintainPeersConnection()
     // Add new peers
     int64_t currentNumber = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
-    for (auto const& member : groupMembers)
+    for (auto const& member : memberSet)
     {
         if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
@@ -528,10 +543,7 @@ void SyncMaster::maintainPeersConnection()
     });
 
     // If myself is not in group, ignore receive packet checking from all peers
-    if (memberSet.find(m_nodeId) == memberSet.end())
-        m_msgEngine->needCheckPacketInGroup = false;
-    else
-        m_msgEngine->needCheckPacketInGroup = true;
+    m_msgEngine->needCheckPacketInGroup = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
