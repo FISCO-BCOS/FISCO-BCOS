@@ -41,7 +41,7 @@
 #include <memory>
 #include <mutex>
 
-#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
+#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKCHAIN")
 
 namespace dev
 {
