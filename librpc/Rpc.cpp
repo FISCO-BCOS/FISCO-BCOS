@@ -57,12 +57,13 @@ bool Rpc::isValidSystemConfig(std::string const& key)
 
 void Rpc::checkRequest(int _groupID)
 {
-    auto _nodeList = service()->getNodeListByGroupID(_groupID);
-    if (_nodeList.size() == 0)
+    auto blockchain = ledgerManager()->blockChain(_groupID);
+    if (!blockchain)
     {
         BOOST_THROW_EXCEPTION(
             JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
     }
+    auto _nodeList = blockchain->minerList() + blockchain->observerList();
     auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
     if (it == _nodeList.end())
     {
