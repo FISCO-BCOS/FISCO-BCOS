@@ -105,6 +105,11 @@ bytes TableFactoryPrecompiled::call(
         int createTableCode = m_memoryTableFactory->getCreateTableCode();
         out = abi.abiIn("", createTableCode);
     }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("TableFactoryPrecompiled")
+                           << LOG_DESC("call undefined function!");
+    }
     return out;
 }
 

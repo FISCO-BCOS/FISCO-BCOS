@@ -49,8 +49,8 @@
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
-#define HOST_LOG(LEVEL) LOG(LEVEL) << "[LIBNETWORK][HOST]"
-#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[LIBNETWORK][SESSION]"
+#define HOST_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][Host]"
+#define SESSION_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][Seeion]"
 
 namespace dev
 {

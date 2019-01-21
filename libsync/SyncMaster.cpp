@@ -305,6 +305,7 @@ void SyncMaster::maintainPeersStatus()
     }
 
     // Skip downloading if last if not timeout
+
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {

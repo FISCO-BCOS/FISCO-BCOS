@@ -338,9 +338,10 @@ u256 StorageState::getNonce(Address const& _address) const
     return m_accountStartNonce;
 }
 
-h256 StorageState::rootHash(bool _needCal) const
+
+h256 StorageState::rootHash(bool needCalculate) const
 {
-    if (_needCal)
+    if (needCalculate)
     {
         return m_memoryTableFactory->hash();
     }

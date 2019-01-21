@@ -1021,8 +1021,9 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
     }
     if (hasConsensused(req))
     {
-        LOG(TRACE) << "[#InvalidSignReq] has consensused: [INFO]: " << oss.str();
-        return CheckResult::INVALID;
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
+                              << LOG_KV("INFO", oss.str());
+        return return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
     /// to ensure that the collected signature size is equal to minValidNodes
@@ -1092,7 +1093,7 @@ CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstrea
     }
     if (hasConsensused(req))
     {
-        LOG(TRACE) << "[#InvalidCommitReq] has consensused: [INFO]: " << oss.str();
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued") << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
@@ -1403,8 +1404,6 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
-    /// get connected node
     statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
     /// get the current view
     statusObj.push_back(json_spirit::Pair("currentView", m_view));
@@ -1412,8 +1411,6 @@ const std::string PBFTEngine::consensusStatus() const
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
-    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
-    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
     status.push_back(statusObj);
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);

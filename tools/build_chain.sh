@@ -44,17 +44,17 @@ Usage:
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300
-    -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
+    -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
     -s <State type>                     Default mpt. if set -s, use storage 
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
+    -g <Generate guomi nodes>           Default no
+    -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -z <Generate tar packet>            Default no
-    -g <Generate guomi nodes>           Default no
+    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -h Help
 e.g 
-    build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
+    $0 -l "127.0.0.1:4"
 EOF
 
 exit 0
@@ -575,8 +575,6 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ;the max number of transactions of a block
     max_trans_num=1000
-    ;the ttl of broadcasted pbft message
-    ;ttl=2
     ;the node id of leaders
     ${node_list}
 
@@ -597,6 +595,10 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
+
+; the ttl for broadcasting pbft message
+[consensus]
+    ;ttl=2
 ;sync period time
 [sync]
     idle_wait_ms=200
