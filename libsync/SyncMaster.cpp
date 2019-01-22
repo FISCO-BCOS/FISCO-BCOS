@@ -136,7 +136,7 @@ void SyncMaster::doWork()
     if (!isSyncing())
     {
         // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        if (m_newTransactions)
+        if (m_needMaintainTransactions && m_newTransactions)
         {
             m_newTransactions = false;
             maintainTransactions();
@@ -569,6 +569,9 @@ void SyncMaster::maintainPeersConnection()
 
     // If myself is not in group, no need to maintain blocks(send status to peers)
     m_needMaintainBlocks = hasMyself;
+
+    // If myself is not in group, no need to maintain transactions(send transactions to peers)
+    m_needMaintainTransactions = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
