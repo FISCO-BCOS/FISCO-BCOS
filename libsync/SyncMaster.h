@@ -176,6 +176,7 @@ private:
     bool m_newTransactions = false;
     bool m_newBlocks = false;
     uint64_t m_maintainBlocksTimeout = 0;
+    bool m_needMaintainBlocks = false;
 
 
     // settings
