@@ -134,7 +134,6 @@ void Service::heartBeat()
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
-        connectedCount++;
     }
     SERVICE_LOG(INFO) << LOG_DESC("heartBeat connected count") << LOG_KV("size", connectedCount);
     auto self = std::weak_ptr<Service>(shared_from_this());
