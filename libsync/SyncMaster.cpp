@@ -43,7 +43,7 @@ void SyncMaster::printSyncInfo()
     {
         peer_str += peer.abridged() + "/";
     }
-    SYNC_LOG(TRACE) << "[Sync Info] --------------------------------------------\n"
+    SYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
                     << "            IsSyncing:    " << isSyncing() << "\n"
                     << "            Block number: " << m_blockChain->number() << "\n"
                     << "            Block hash:   "
