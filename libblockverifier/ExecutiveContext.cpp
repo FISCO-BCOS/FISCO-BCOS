@@ -123,7 +123,7 @@ bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
     return m_precompiledContract.count(_a);
 }
 
-std::pair<bool, bytes> ExecutiveContext::executeOrginPrecompiled(
+std::pair<bool, bytes> ExecutiveContext::executeOriginPrecompiled(
     Address const& _a, bytesConstRef _in) const
 {
     return m_precompiledContract.at(_a).execute(_in);

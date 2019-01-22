@@ -139,7 +139,7 @@ public:
     virtual u256 getNonce(Address const& _address) const override;
 
     /// The hash of the root of our state tree.
-    virtual h256 rootHash(bool _needCal = true) const override;
+    virtual h256 rootHash(bool needCalculate = true) const override;
 
     /// Commit all changes waiting in the address cache to the DB.
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.

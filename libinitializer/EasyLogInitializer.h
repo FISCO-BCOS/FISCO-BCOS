@@ -62,6 +62,8 @@ public:
         }
     }
 
+    void stopLogging() {}
+
 private:
     static const std::chrono::seconds wakeUpDelta;
     static std::chrono::system_clock::time_point nextWakeUp;

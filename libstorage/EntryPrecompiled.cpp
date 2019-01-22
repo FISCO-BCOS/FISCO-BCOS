@@ -119,5 +119,9 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
         dev::string32 s32 = dev::eth::toString32(value);
         out = abi.abiIn("", s32);
     }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("EntryPrecompiled") << LOG_DESC("call undefined function!");
+    }
     return out;
 }

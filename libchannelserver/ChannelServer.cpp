@@ -59,15 +59,14 @@ void dev::channel::ChannelServer::run()
             {
                 CHANNEL_LOG(ERROR) << LOG_DESC("IO thread error")
                                    << LOG_KV("what", boost::diagnostic_information(e));
-                ;
             }
 
-            CHANNEL_LOG(ERROR) << LOG_DESC("Try restart io_service");
 
             sleep(1);
 
-            if (_ioService->stopped())
+            if (_acceptor->is_open() && _ioService->stopped())
             {
+                CHANNEL_LOG(WARNING) << LOG_DESC("io_service reset");
                 _ioService->reset();
             }
         }

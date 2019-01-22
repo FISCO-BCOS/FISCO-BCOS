@@ -71,5 +71,10 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
 
         out = abi.abiIn("", c);
     }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("EntriesPrecompiled")
+                           << LOG_DESC("call undefined function!");
+    }
     return out;
 }

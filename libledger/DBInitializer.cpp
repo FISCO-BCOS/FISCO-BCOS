@@ -99,7 +99,6 @@ void DBInitializer::initLevelDBStorage()
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());
         std::shared_ptr<LevelDBStorage> leveldb_storage = std::make_shared<LevelDBStorage>();
-        assert(leveldb_storage);
         std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
             std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
         leveldb_storage->setDB(leveldb_handler);

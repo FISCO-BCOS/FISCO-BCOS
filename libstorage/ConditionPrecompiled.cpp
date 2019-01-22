@@ -154,5 +154,10 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
 
         m_condition->limit(offset.convert_to<size_t>(), size.convert_to<size_t>());
     }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("ConditionPrecompiled")
+                           << LOG_DESC("call undefined function!");
+    }
     return out;
 }

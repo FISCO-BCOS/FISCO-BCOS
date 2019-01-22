@@ -130,7 +130,6 @@ public:
 
     /// The hash of the root of our state tree.
     virtual h256 rootHash(bool _needCal = true) const = 0;
-
     /// Commit all changes waiting in the address cache to the DB.
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.
     virtual void commit() = 0;

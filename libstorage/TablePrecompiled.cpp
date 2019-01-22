@@ -148,6 +148,10 @@ bytes TablePrecompiled::call(
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
     }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call undefined function!");
+    }
     return out;
 }
 
