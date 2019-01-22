@@ -54,5 +54,23 @@ git clang-format -f       # to reformat the changes in the working directory
 git clang-format <commit> # to reformat commits between specified commit and HEAD
 ```
 
+## 持续集成（CI）
+
+持续集成框架
+
+* travis-ci: [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg?branch=master)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS) （检查常规UT）
+
+* circleci: [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master.svg?style=svg)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master)（检查静态编译和国密）
+
+代码覆盖率检查
+
+* codecov:  [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS)
+
+代码质量
+
+* CodeFactor: [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos/badge)](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos)
+
+* Codacy: [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/lab-bcos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/lab-bcos&amp;utm_campaign=Badge_Grade) 
+
 
 
