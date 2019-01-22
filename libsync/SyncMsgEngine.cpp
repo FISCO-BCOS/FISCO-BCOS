@@ -155,7 +155,7 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
                         << LOG_KV("peer", info.nodeId.abridged())
                         << LOG_KV("peerNumber", info.number)
-                        << LOG_KV("genesisHash", info.genesisHash)
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
                         << LOG_KV("latestHash", info.latestHash);
         m_syncStatus->newSyncPeerStatus(info);
     }
@@ -202,7 +202,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                        "Import peer transaction into txPool DUPLICATED from peer")
                                 << LOG_KV("reason", int(importResult))
                                 << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3()));
+                                << LOG_KV("peer", move(tx.sha3().abridged()));
             }
             else
             {
@@ -210,7 +210,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                 << LOG_DESC("Import peer transaction into txPool FAILED from peer")
                                 << LOG_KV("reason", int(importResult))
                                 << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3()));
+                                << LOG_KV("peer", move(tx.sha3().abridged()));
             }
 
             m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
