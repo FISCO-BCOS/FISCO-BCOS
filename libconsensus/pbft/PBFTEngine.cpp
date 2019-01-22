@@ -643,7 +643,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
 
     /// notify the next leader seal a new block
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
-    if (req.idx != idx())
+    if (req.idx != nodeIdx())
     {
         notifySealing(sealing.block);
     }
