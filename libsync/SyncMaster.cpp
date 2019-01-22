@@ -59,7 +59,6 @@ void SyncMaster::printSyncInfo()
 
 SyncStatus SyncMaster::status() const
 {
-    ReadGuard l(x_sync);
     SyncStatus res;
     res.state = m_syncStatus->state;
     res.protocolId = m_protocolId;
