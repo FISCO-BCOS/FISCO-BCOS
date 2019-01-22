@@ -117,8 +117,6 @@ private:
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
 
-    boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
-        m_currentTransactionCallback;
     void checkRequest(int _groupID);
 };
 
