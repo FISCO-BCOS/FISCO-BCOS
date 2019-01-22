@@ -409,9 +409,6 @@ void Session::doRead()
                     SESSION_LOG(WARNING) << LOG_DESC("doRead error")
                                          << LOG_KV("endpoint", s->nodeIPEndpoint().name())
                                          << LOG_KV("message", ec.message());
-                    /// update the staticNode
-                    NetworkException e(P2PExceptionType::ConnectError, "ConnectError");
-                    s->onMessage(e, nullptr);
                     s->drop(TCPError);
                     return;
                 }
