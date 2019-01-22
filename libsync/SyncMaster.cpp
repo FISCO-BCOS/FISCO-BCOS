@@ -36,22 +36,25 @@ static unsigned const c_maxSendTransactions = 128;
 
 void SyncMaster::printSyncInfo()
 {
-    SYNC_LOG(TRACE) << "[Sync Info] --------------------------------------------";
-    SYNC_LOG(TRACE) << "            IsSyncing:    " << isSyncing();
-    SYNC_LOG(TRACE) << "            Block number: " << m_blockChain->number();
-    SYNC_LOG(TRACE) << "            Block hash:   "
-                    << m_blockChain->numberHash(m_blockChain->number());
-    SYNC_LOG(TRACE) << "            Genesis hash: " << m_syncStatus->genesisHash.abridged();
     auto pendingSize = m_txPool->pendingSize();
-    SYNC_LOG(TRACE) << "            TxPool size:  " << pendingSize;
-    SYNC_LOG(TRACE) << "            Peers size:   " << m_syncStatus->peers().size();
-    SYNC_LOG(TRACE) << "[Peer Info] --------------------------------------------";
-    SYNC_LOG(TRACE) << "    Host: " << m_nodeId.abridged();
-
     NodeIDs peers = m_syncStatus->peers();
+    std::string peer_str;
     for (auto& peer : peers)
-        SYNC_LOG(TRACE) << "    Peer: " << peer.abridged();
-    SYNC_LOG(TRACE) << "            --------------------------------------------";
+    {
+        peer_str += peer.abridged() + "/";
+    }
+    SYNC_LOG(TRACE) << "[Sync Info] --------------------------------------------\n"
+                    << "            IsSyncing:    " << isSyncing() << "\n"
+                    << "            Block number: " << m_blockChain->number() << "\n"
+                    << "            Block hash:   "
+                    << m_blockChain->numberHash(m_blockChain->number()) << "\n"
+                    << "            Genesis hash: " << m_syncStatus->genesisHash.abridged() << "\n"
+                    << "            TxPool size:  " << pendingSize << "\n"
+                    << "            Peers size:   " << m_syncStatus->peers().size() << "\n"
+                    << "[Peer Info] --------------------------------------------\n"
+                    << "    Host: " << m_nodeId.abridged() << "\n"
+                    << "    Peer: " << peer_str << "\n"
+                    << "            --------------------------------------------";
 }
 
 SyncStatus SyncMaster::status() const
