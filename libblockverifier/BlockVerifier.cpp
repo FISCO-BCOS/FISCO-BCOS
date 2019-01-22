@@ -126,6 +126,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     if (!e.execute())
         e.go(onOp);
     e.finalize();
+
     /// mptstate calculates every transactions
     /// storagestate ignore hash calculation
     return make_pair(res, TransactionReceipt(executiveContext->getState()->rootHash(false),

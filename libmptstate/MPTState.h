@@ -109,7 +109,6 @@ public:
     virtual u256 getNonce(Address const& _addr) const override;
 
     virtual h256 rootHash(bool _needCal = true) const override;
-
     virtual void commit() override;
 
     virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override;

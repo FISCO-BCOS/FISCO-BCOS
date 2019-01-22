@@ -65,10 +65,10 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() override;
-    virtual Json::Value getPeers() override;
+    virtual Json::Value getPeers(int _groupID) override;
     virtual Json::Value getGroupPeers(int _groupID) override;
-    virtual Json::Value getGroupList() override;
-    virtual Json::Value getNodeIDList() override;
+    virtual Json::Value getGroupList(int _groupID) override;
+    virtual Json::Value getNodeIDList(int _groupID) override;
 
     // block part
     virtual Json::Value getBlockByHash(
@@ -94,7 +94,8 @@ public:
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
-    void setCurrentTransactionCallback(std::function<void(const std::string &receiptContext)>* callback)
+    void setCurrentTransactionCallback(
+        std::function<void(const std::string& receiptContext)>* callback)
     {
         m_currentTransactionCallback.reset(callback);
     }
@@ -110,9 +111,13 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
-    std::function<std::function<void>()> setTransactionCallbackFactory();
 
-    boost::thread_specific_ptr<std::function<void(const std::string &receiptContext)> > m_currentTransactionCallback;
+    /// transaction callback related
+    std::function<std::function<void>()> setTransactionCallbackFactory();
+    boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
+        m_currentTransactionCallback;
+
+    void checkRequest(int _groupID);
 };
 
 }  // namespace rpc

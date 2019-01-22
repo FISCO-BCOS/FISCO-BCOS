@@ -76,7 +76,6 @@ bool PBFTEngine::shouldSeal()
     {
         return false;
     }
-    /// fast view change
     if (ret.second != nodeIdx())
     {
         /// if current node is the next leader
@@ -897,6 +896,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
                     << LOG_KV("time_cost", utcTime() - start_commit_time);
+                m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else
             {
@@ -911,8 +911,6 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(*p_block);
             }
-            /// clear caches to in case of repeated commit
-            m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
         }
         else
         {
@@ -927,15 +925,19 @@ void PBFTEngine::checkAndSave()
     }
 }
 
+void PBFTEngine::reportBlock(Block const& block)
+{
+    Guard l(m_mutex);
+    reportBlockWithoutLock(block);
+}
 /// update the context of PBFT after commit a block into the block-chain
 /// 1. update the highest to new-committed blockHeader
 /// 2. update m_view/m_toView/m_leaderFailed/m_lastConsensusTime/m_consensusBlockNumber
 /// 3. delete invalid view-change requests according to new highestBlock
 /// 4. recalculate the m_nodeNum/m_f according to newer MinerList
 /// 5. clear all caches related to prepareReq and signReq
-void PBFTEngine::reportBlock(Block const& block)
+void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
-    Guard l(m_mutex);
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
         /// update the highest block
@@ -959,7 +961,6 @@ void PBFTEngine::reportBlock(Block const& block)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("myIdx", nodeIdx());
     }
-    m_signalled.notify_all();
 }
 
 /**
@@ -1021,7 +1022,8 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
     }
     if (hasConsensused(req))
     {
-        LOG(TRACE) << "[#InvalidSignReq] has consensused: [INFO]: " << oss.str();
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
+                              << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
@@ -1092,7 +1094,8 @@ CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstrea
     }
     if (hasConsensused(req))
     {
-        LOG(TRACE) << "[#InvalidCommitReq] has consensused: [INFO]: " << oss.str();
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued")
+                              << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
     CheckResult result = checkReq(req, oss);
@@ -1403,8 +1406,6 @@ const std::string PBFTEngine::consensusStatus() const
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
-    /// get connected node
     statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
     /// get the current view
     statusObj.push_back(json_spirit::Pair("currentView", m_view));
@@ -1412,8 +1413,6 @@ const std::string PBFTEngine::consensusStatus() const
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
-    statusObj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
-    statusObj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
     status.push_back(statusObj);
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);

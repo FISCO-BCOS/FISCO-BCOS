@@ -510,6 +510,7 @@ static void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq co
     {
         fake_pbft.consensus()->reqCache()->clearAll();
         /// test is the future block
+        FakeValidNodeNum(fake_pbft, 4);
         SignReq copiedReq = signReq;
         copiedReq.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
         FakeValidNodeNum(fake_pbft, 4);
