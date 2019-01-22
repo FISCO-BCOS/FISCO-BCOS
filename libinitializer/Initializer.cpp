@@ -67,9 +67,9 @@ void Initializer::init(std::string const& _path)
     }
     catch (std::exception& e)
     {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("Initializer") << LOG_DESC("Init failed!!!")
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("Initializer") << LOG_DESC("Init failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        ERROR_OUTPUT << LOG_BADGE("Initializer") << LOG_DESC("Init failed!!!")
+        ERROR_OUTPUT << LOG_BADGE("Initializer") << LOG_DESC("Init failed")
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         BOOST_THROW_EXCEPTION(e);
     }
