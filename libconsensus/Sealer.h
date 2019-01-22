@@ -83,6 +83,7 @@ public:
     virtual void onBlockChanged()
     {
         m_syncBlock = true;
+        m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
 
