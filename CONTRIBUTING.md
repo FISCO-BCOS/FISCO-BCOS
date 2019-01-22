@@ -68,7 +68,7 @@ git clang-format <commit> # to reformat commits between specified commit and HEA
 
 * travis-ci: [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg?branch=master)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS) (check unitest)
 
-* circleci: [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master.svg?style=svg)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master)(check static complie and guomi version)
+* circleci: [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master.svg?style=svg)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master) (check static complie and guomi version)
 
 **Coverage**
 
