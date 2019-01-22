@@ -69,6 +69,7 @@ git clang-format <commit> # to reformat commits between specified commit and HEA
 代码质量
 
 * CodeFactor: [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos/badge)](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos)
+
 * Codacy: [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/lab-bcos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/lab-bcos&amp;utm_campaign=Badge_Grade) 
 
 
