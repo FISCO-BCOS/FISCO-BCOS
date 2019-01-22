@@ -66,7 +66,7 @@ void dev::channel::ChannelServer::run()
 
             if (_acceptor->is_open() && _ioService->stopped())
             {
-                CHANNEL_LOG(ERROR) << LOG_DESC("io_service reset");
+                CHANNEL_LOG(WARNING) << LOG_DESC("io_service reset");
                 _ioService->reset();
             }
         }

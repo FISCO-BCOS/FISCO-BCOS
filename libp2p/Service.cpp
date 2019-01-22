@@ -407,23 +407,11 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
         }
-        /// ignore the node self
-        else if (nodeID != id())
+        else
         {
             SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeID", nodeID.abridged());
-
-            BOOST_THROW_EXCEPTION(NetworkException(dev::network::Disconnect, "Disconnect"));
         }
     }
-#if 0
-    catch (NetworkException &e) {
-        SERVICE_LOG(ERROR) << "NetworkException:" << boost::diagnostic_information(e);
-
-        m_host->threadPool()->enqueue([callback, e] {
-            callback(e, P2PSession::Ptr(), P2PMessage::Ptr());
-        });
-    }
-#endif
     catch (std::exception& e)
     {
         SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeID", nodeID.abridged())

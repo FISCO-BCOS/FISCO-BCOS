@@ -446,41 +446,6 @@ EOF
     echo "build $node node cert successful!"
 }
 
-read_password() {
-    read -se -p "Enter password for keystore:" pass1
-    echo
-    read -se -p "Verify password for keystore:" pass2
-    echo
-    [[ "$pass1" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    [ "$pass1" != "$pass2" ] && {
-        echo "Verify password failure!"
-        exit $EXIT_CODE
-    }
-    jks_passwd=$pass1
-}
-
-gen_sdk_cert() {
-    agency="$2"
-    sdkpath="$3"
-    sdk=$(getname "$sdkpath")
-    dir_must_exists "$agency"
-    file_must_exists "$agency/agency.key"
-    dir_must_not_exists "$sdkpath"
-    check_name sdk "$sdk"
-
-    mkdir -p $sdkpath
-    gen_cert_secp256k1 "$agency" "$sdkpath" "$sdk" sdk
-    cp $agency/ca-agency.crt $sdkpath/ca.crt
-    
-    read_password
-    openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-
-    echo "build $sdk sdk cert successful!"
-}
-
 generate_config_ini()
 {
     local output=${1}
@@ -832,8 +797,9 @@ block_limit()
 send_a_tx()
 {
     limit=\$(block_limit \$1)
+    random_id="\$(date +%s)\$(printf "%09d" \${RANDOM})"
     if [ \${#limit} -gt 4 ];then echo "blockLimit exceed 0xffff, this scripts is unavailable!"; exit 0;fi
-    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s\`00000000085174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\${random_id}85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
     #echo \$txBytes
     curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1
 }
