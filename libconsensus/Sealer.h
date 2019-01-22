@@ -65,7 +65,7 @@ public:
             m_syncTxPool = true;
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
-        m_blockSubmitted = m_blockChain->onReady([=]() { this->onBlockChanged(); });
+        m_blockSubmitted = m_blockChain->onReady([=](int64_t) { this->onBlockChanged(); });
     }
 
     virtual ~Sealer() noexcept { stop(); }
@@ -200,7 +200,7 @@ protected:
 
     /// handler
     Handler<> m_tqReady;
-    Handler<> m_blockSubmitted;
+    Handler<int64_t> m_blockSubmitted;
 };
 }  // namespace consensus
 }  // namespace dev
