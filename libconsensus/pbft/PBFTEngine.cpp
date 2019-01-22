@@ -642,7 +642,12 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     checkBlockValid(sealing.block);
 
     /// notify the next leader seal a new block
-    notifySealing(sealing.block);
+    /// this if condition to in case of dead-lock when generate local prepare and notifySealing
+    if (req.idx != idx())
+    {
+        notifySealing(sealing.block);
+    }
+
     m_blockSync->noteSealingBlockNumber(sealing.block.header().number());
 
     /// ignore the signature verification of the transactions have already been verified in

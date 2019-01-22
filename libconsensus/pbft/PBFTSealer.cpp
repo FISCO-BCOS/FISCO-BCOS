@@ -41,16 +41,7 @@ namespace consensus
 {
 void PBFTSealer::handleBlock()
 {
-    PBFTSEALER_LOG(INFO) << LOG_DESC("####before Generating seal on")
-                         << LOG_KV("blkNum", m_sealing.block.header().number())
-                         << LOG_KV("tx", m_sealing.block.getTransactionSize())
-                         << LOG_KV("myIdx", m_pbftEngine->nodeIdx())
-                         << LOG_KV("hash", m_sealing.block.header().hash().abridged());
-    {
-        DEV_WRITE_GUARDED(x_sealing)
-        setBlock();
-    }
-
+    setBlock();
     PBFTSEALER_LOG(INFO) << LOG_DESC("++++Generating seal on")
                          << LOG_KV("blkNum", m_sealing.block.header().number())
                          << LOG_KV("tx", m_sealing.block.getTransactionSize())
