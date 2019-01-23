@@ -148,6 +148,7 @@ public:
         m_transactionReceipts.clear();
         m_sigList.clear();
         m_txsCache.clear();
+        m_tReceiptsCache.clear();
         noteChange();
         noteReceiptChange();
     }
