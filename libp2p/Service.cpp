@@ -96,16 +96,12 @@ void Service::heartBeat()
         return;
     }
     std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes;
-    std::unordered_map<NodeID, P2PSession::Ptr> sessions;
-
     {
         RecursiveGuard l(x_sessions);
-        sessions = m_sessions;
         staticNodes = m_staticNodes;
     }
 
     // Reconnect all nodes
-    size_t connectedCount = 0;
     for (auto& it : staticNodes)
     {
         /// exclude myself
@@ -118,7 +114,6 @@ void Service::heartBeat()
         }
         if (it.second != NodeID() && isConnected(it.second))
         {
-            ++connectedCount;
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore connected")
                                << LOG_KV("endpoint", it.first.name())
                                << LOG_KV("nodeID", it.second.abridged());
@@ -135,7 +130,12 @@ void Service::heartBeat()
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
     }
-    SERVICE_LOG(INFO) << LOG_DESC("heartBeat connected count") << LOG_KV("size", connectedCount);
+    {
+        RecursiveGuard l(x_sessions);
+        SERVICE_LOG(INFO) << LOG_DESC("heartBeat connected count")
+                          << LOG_KV("size", m_sessions.size());
+    }
+
     auto self = std::weak_ptr<Service>(shared_from_this());
     m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
     m_timer->async_wait([self](const boost::system::error_code& error) {
