@@ -162,8 +162,6 @@ private:
     int64_t m_currentSealingNumber = 0;
 
     // Internal coding variable
-    /// mutex
-    mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
     /// mutex to protect m_currentSealingNumber
