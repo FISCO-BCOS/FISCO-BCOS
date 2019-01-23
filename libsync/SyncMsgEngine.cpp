@@ -156,7 +156,7 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
                         << LOG_KV("peer", info.nodeId.abridged())
                         << LOG_KV("peerNumber", info.number)
                         << LOG_KV("genesisHash", info.genesisHash.abridged())
-                        << LOG_KV("latestHash", info.latestHash);
+                        << LOG_KV("latestHash", info.latestHash.abridged());
         m_syncStatus->newSyncPeerStatus(info);
     }
     else
@@ -164,8 +164,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from peer")
                         << LOG_KV("peerNodeId", info.nodeId.abridged())
                         << LOG_KV("peerNumber", info.number)
-                        << LOG_KV("genesisHash", info.genesisHash)
-                        << LOG_KV("latestHash", info.latestHash);
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
+                        << LOG_KV("latestHash", info.latestHash.abridged());
         status->update(info);
     }
 }
