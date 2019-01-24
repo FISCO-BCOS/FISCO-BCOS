@@ -52,7 +52,7 @@ public:
 
     h256 hash();
     size_t savepoint() const { return m_changeLog.size(); };
-    void rollback(size_t _savepoint);
+    // void rollback(size_t _savepoint);
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
 

@@ -51,8 +51,10 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
+        /*
         STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("table already open")
                            << LOG_KV("table name", tableName);
+                           */
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -67,9 +69,11 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
+            /*
             STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory")
                                << LOG_DESC("table doesn't exist in _sys_tables_")
                                << LOG_KV("table name", tableName);
+                               */
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -198,6 +202,7 @@ h256 MemoryTableFactory::hash()
     return m_hash;
 }
 
+/*
 void MemoryTableFactory::rollback(size_t _savepoint)
 {
     while (_savepoint < m_changeLog.size())
@@ -247,6 +252,7 @@ void MemoryTableFactory::rollback(size_t _savepoint)
         m_changeLog.pop_back();
     }
 }
+*/
 
 void MemoryTableFactory::commit() {}
 

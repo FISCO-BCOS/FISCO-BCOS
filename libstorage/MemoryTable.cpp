@@ -46,7 +46,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
 
         CacheItr it;
         {
-            ReadGuard l(x_cache);
+            // ReadGuard l(x_cache);
             it = m_cache.find(key);
         }
         if (it == m_cache.end())
@@ -55,7 +55,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 {
-                    WriteGuard l(x_cache);
+                    // WriteGuard l(x_cache);
                     m_cache.insert(std::make_pair(key, entries));
                 }
                 // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
@@ -107,7 +107,7 @@ int dev::storage::MemoryTable::update(
 
         CacheItr it;
         {
-            ReadGuard l(x_cache);
+            // ReadGuard l(x_cache);
             it = m_cache.find(key);
         }
         if (it == m_cache.end())
@@ -116,7 +116,7 @@ int dev::storage::MemoryTable::update(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 {
-                    WriteGuard l(x_cache);
+                    // WriteGuard l(x_cache);
                     m_cache.insert(std::make_pair(key, entries));
                 }
                 // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
@@ -180,7 +180,7 @@ int dev::storage::MemoryTable::insert(
 
         CacheItr it;
         {
-            ReadGuard l(x_cache);
+            // ReadGuard l(x_cache);
             it = m_cache.find(key);
         }
         if (it == m_cache.end())
@@ -189,7 +189,7 @@ int dev::storage::MemoryTable::insert(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 {
-                    WriteGuard l(x_cache);
+                    // WriteGuard l(x_cache);
                     m_cache.insert(std::make_pair(key, entries));
                 }
                 // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
@@ -208,7 +208,7 @@ int dev::storage::MemoryTable::insert(
         {
             entries->addEntry(entry);
             {
-                WriteGuard l(x_cache);
+                // WriteGuard l(x_cache);
                 m_cache.insert(std::make_pair(key, entries));
             }
             return 1;
@@ -243,7 +243,7 @@ int dev::storage::MemoryTable::remove(
 
     CacheItr it;
     {
-        ReadGuard l(x_cache);
+        // ReadGuard l(x_cache);
         it = m_cache.find(key);
     }
     if (it == m_cache.end())
@@ -252,7 +252,7 @@ int dev::storage::MemoryTable::remove(
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
             {
-                WriteGuard l(x_cache);
+                // WriteGuard l(x_cache);
                 m_cache.insert(std::make_pair(key, entries));
             }
             // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
@@ -331,12 +331,12 @@ h256 dev::storage::MemoryTable::hash()
 void dev::storage::MemoryTable::clear()
 {
     {
-        WriteGuard l(x_cache);
+        // WriteGuard l(x_cache);
         m_cache.clear();
     }
 }
 
-std::map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
+tbb::concurrent_unordered_map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
 {
     return &m_cache;
 }

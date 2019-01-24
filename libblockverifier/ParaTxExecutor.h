@@ -41,7 +41,7 @@ namespace blockverifier
 class CountDownLatch
 {
 public:
-    CountDownLatch(int _count) : m_count(_count) {}
+    CountDownLatch(int _count) : m_count(_count), m_init(_count) {}
     CountDownLatch(const CountDownLatch&) = delete;
 
     void wait()
@@ -50,15 +50,17 @@ public:
         m_cv.wait(ul, [this]() { return m_count == 0; });
     }
 
-    void countDown()
+    bool countDown()
     {
         std::unique_lock<std::mutex> ul(m_mutex);
+        auto ret = (m_init == m_count);
         --m_count;
         if (m_count == 0)
         {
             ul.unlock();
             m_cv.notify_all();
         }
+        return ret;
     }
 
     int getCount()
@@ -71,6 +73,7 @@ private:
     std::mutex m_mutex;
     std::condition_variable m_cv;
     int m_count;
+    int m_init;
 };
 
 class WakeupNotifier
@@ -141,7 +144,7 @@ class ParaTxExecutor
 public:
     ParaTxExecutor() { m_wakeupNotifier = std::make_shared<WakeupNotifier>(); }
     // Initialize thread pool when fisco-bcos process started
-    void initialize(unsigned _threadNum = std::thread::hardware_concurrency());
+    void initialize(unsigned _threadNum = std::thread::hardware_concurrency() - 1);
     // Start to execute DAG, block the calller until the execution of DAG is finished
     void start(std::shared_ptr<TxDAGFace> _txDAG);
     // Count of the worker threads;

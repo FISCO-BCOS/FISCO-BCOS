@@ -35,7 +35,6 @@ void ParaTxWorker::doWork()
     {
         return;
     }
-
     assert(m_txDAG != nullptr && m_countDownLatch != nullptr);
 
     while (!m_txDAG->hasFinished())
@@ -43,7 +42,10 @@ void ParaTxWorker::doWork()
         m_txDAG->executeUnit();
     }
     m_txDAG.reset();
-    m_countDownLatch->countDown();
+    if (m_countDownLatch->countDown())
+    {
+        m_wakeupNotifier->reset();
+    }
 }
 
 void ParaTxWorker::workLoop()
@@ -76,6 +78,12 @@ void ParaTxExecutor::start(shared_ptr<TxDAGFace> _txDAG)
     }
 
     m_wakeupNotifier->notify();
+
+    while (!_txDAG->hasFinished())
+    {
+        _txDAG->executeUnit();
+    }
+
     countDownLatch->wait();
-    m_wakeupNotifier->reset();
+    // m_wakeupNotifier->reset();
 }

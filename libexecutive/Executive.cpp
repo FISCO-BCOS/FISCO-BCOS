@@ -104,12 +104,13 @@ bool Executive::execute()
     // Entry point for a user-executed transaction.
 
     // Pay...
-    LOG(TRACE) << "Paying " << m_gasCost << " from sender for gas (" << m_t.gas() << " gas at "
-               << m_t.gasPrice() << ")";
+
+    // LOG(TRACE) << "Paying " << m_gasCost << " from sender for gas (" << m_t.gas() << " gas at "
+    //           << m_t.gasPrice() << ")";
     // m_s.subBalance(m_t.sender(), m_gasCost);
 
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    LOG(TRACE) << "Practical limitation of tx gas: " << txGasLimit;
+    // LOG(TRACE) << "Practical limitation of tx gas: " << txGasLimit;
 
     assert(txGasLimit >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
@@ -405,7 +406,7 @@ void Executive::revert()
 
     // Set result address to the null one.
     m_newAddress = {};
-    m_s->rollback(m_savepoint);
+    // m_s->rollback(m_savepoint);
     auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
-    memoryTableFactory->rollback(m_tableFactorySavepoint);
+    // memoryTableFactory->rollback(m_tableFactorySavepoint);
 }

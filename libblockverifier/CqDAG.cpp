@@ -79,10 +79,11 @@ ID CqDAG::pop()
 
 ID CqDAG::waitPop()
 {
-    auto top = m_topLevel.tryPop(30);
-    if (top.first)
+    ID top;
+    auto ret = m_topLevel.try_pop(top);
+    if (ret)
     {
-        return top.second;
+        return top;
     }
     else
     {

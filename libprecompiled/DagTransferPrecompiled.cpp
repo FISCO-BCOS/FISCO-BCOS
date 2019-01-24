@@ -151,8 +151,8 @@ Table::Ptr DagTransferPrecompiled::openTable(
 bytes DagTransferPrecompiled::call(
     dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
+    // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
+    //                       << LOG_KV("param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -182,12 +182,12 @@ bytes DagTransferPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("error func")
+        //                       << LOG_KV("func", func);
     }
 
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
-                           << LOG_DESC("end");
+    // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
+    //                       << LOG_DESC("end");
 
     return out;
 }
@@ -238,14 +238,14 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
 
     if (result)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount);
+        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount);
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount)
-                               << LOG_DESC(strErrorMsg);
+        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
+        //                       << LOG_DESC(strErrorMsg);
     }
 
 
@@ -328,15 +328,15 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
 
     if (result)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount)
-                               << LOG_KV("balance", balance);
+        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
+        //                       << LOG_KV("balance", balance);
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount)
-                               << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
+        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
+        //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
     }
 
     out = abi.abiIn("", result);
@@ -402,15 +402,15 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
 
     if (result)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount)
-                               << LOG_KV("balance", balance);
+        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
+        //                       << LOG_KV("balance", balance);
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
-                               << LOG_KV("user", user) << LOG_KV("amount", amount)
-                               << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
+        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
+        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
+        //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
     }
 
     out = abi.abiIn("", result);
@@ -451,14 +451,16 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
 
     if (result)
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userBalanceCall")
-                               << LOG_KV("user", user) << LOG_KV("balance", balance);
+        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") <<
+        // LOG_DESC("userBalanceCall")
+        //                       << LOG_KV("user", user) << LOG_KV("balance", balance);
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userBalanceCall")
-                               << LOG_KV("user", user) << LOG_KV("balance", balance)
-                               << LOG_DESC(strErrorMsg);
+        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") <<
+        // LOG_DESC("userBalanceCall")
+        //                       << LOG_KV("user", user) << LOG_KV("balance", balance)
+        //                       << LOG_DESC(strErrorMsg);
     }
 
     out = abi.abiIn("", result, balance);
@@ -557,6 +559,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
 
     if (result)
     {
+        /*
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled")
                                << LOG_DESC("userTransferCall") << LOG_KV("fromUser", fromUser)
                                << LOG_KV("toUser", toUser) << LOG_KV("amount", amount)
@@ -564,9 +567,11 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
                                << LOG_KV("toUserBalance", toUserBalance)
                                << LOG_KV("newFromUserBalance", newFromUserBalance)
                                << LOG_KV("newToUserBalance", newToUserBalance);
+                               */
     }
     else
     {
+        /*
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
                                << LOG_DESC("userTransferCall") << LOG_KV("fromUser", fromUser)
                                << LOG_KV("toUser", toUser) << LOG_KV("amount", amount)
@@ -575,6 +580,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
                                << LOG_KV("newFromUserBalance", newFromUserBalance)
                                << LOG_KV("newToUserBalance", newToUserBalance)
                                << LOG_DESC(strErrorMsg);
+                               */
     }
 
     out = abi.abiIn("", result);

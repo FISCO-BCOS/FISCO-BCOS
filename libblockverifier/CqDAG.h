@@ -26,6 +26,7 @@
 #include "DAG.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/concurrent_queue.h>
+#include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>
 #include <queue>
@@ -73,7 +74,7 @@ public:
 
 private:
     std::vector<std::shared_ptr<CqVertex>> m_vtxs;
-    concurrent_queue<ID> m_topLevel;
+    tbb::concurrent_queue<ID> m_topLevel;
 
     ID m_totalVtxs = 0;
     ID m_totalConsume = 0;
