@@ -221,10 +221,10 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
 #ifdef FISCO_GM
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("1017fb86b218c0eb089f6a5bbc3fea962d0cd86bc0ee7ed6a5c1f8643815d664"));
+        h256("cec7b81608663f41fd87cc1159528409665e7ca843f644a72d67fb7d1a655e49"));
 #else
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("0xcd1eb2555fe7812ab17f47acd1043c2674312b05ad6e1bd4f8b1951b62fe7d21"));
+        h256("0x88f55f09b1b525abbd579649b7b20e0769162a3603160ba396c6bab6d4d65cc8"));
 #endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
