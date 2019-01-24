@@ -100,10 +100,7 @@ BOOST_AUTO_TEST_CASE(GM_testNonce)
 BOOST_AUTO_TEST_CASE(GM_testEcdh)
 {
     auto sec = Secret{sha3("ecdhAgree")};
-    // auto pub = toPublic(sec);
     Secret sharedSec;
-    // BOOST_CHECK(dev::crypto::ecdh::agree(sec, pub, sharedSec));
-    // BOOST_CHECK(sharedSec);
     auto expectedSharedSec = "0000000000000000000000000000000000000000000000000000000000000000";
     BOOST_CHECK_EQUAL(sharedSec.makeInsecure().hex(), expectedSharedSec);
 }
