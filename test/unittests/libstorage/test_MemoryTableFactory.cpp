@@ -42,7 +42,7 @@ public:
         return entries;
     }
 
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256) override
+    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256 const&) override
     {
         return 0;
     }

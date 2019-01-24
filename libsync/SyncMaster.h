@@ -70,7 +70,7 @@ public:
 
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
-        m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
+        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
@@ -179,7 +179,7 @@ private:
 
     // settings
     dev::eth::Handler<> m_tqReady;
-    dev::eth::Handler<> m_blockSubmitted;
+    dev::eth::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;

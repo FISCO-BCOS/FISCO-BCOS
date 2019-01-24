@@ -291,7 +291,6 @@ Json::Value Rpc::getClientVersion()
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
-
         Json::Value version;
 
 #ifdef FISCO_GM
@@ -422,7 +421,6 @@ Json::Value Rpc::getGroupList(int _groupID)
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getGroupList") << LOG_DESC("request");
-
         checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
 
@@ -473,7 +471,7 @@ Json::Value Rpc::getBlockByHash(
         response["sealer"] = toJS(block->header().sealer());
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
-        for (auto data : datas)
+        for (auto const& data : datas)
             response["extraData"].append(toJS(data));
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());
@@ -532,7 +530,7 @@ Json::Value Rpc::getBlockByNumber(
         response["sealer"] = toJS(block->header().sealer());
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
-        for (auto data : datas)
+        for (auto const& data : datas)
             response["extraData"].append(toJS(data));
         response["gasLimit"] = toJS(block->header().gasLimit());
         response["gasUsed"] = toJS(block->header().gasUsed());
@@ -958,6 +956,40 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         auto txPool = ledgerManager()->txPool(_groupID);
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        if (m_currentTransactionCallback.get())
+        {
+            auto transactionCallback = *m_currentTransactionCallback;
+            tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
+                Json::Value response;
+
+                response["transactionHash"] = toJS(receipt->hash());
+                response["transactionIndex"] = toJS(receipt->transactionIndex());
+                response["blockNumber"] = toJS(receipt->blockNumber());
+                response["blockHash"] = toJS(receipt->blockHash());
+                response["from"] = toJS(receipt->from());
+                response["to"] = toJS(receipt->to());
+                response["gasUsed"] = toJS(receipt->gasUsed());
+                response["contractAddress"] = toJS(receipt->contractAddress());
+                response["logs"] = Json::Value(Json::arrayValue);
+                for (unsigned int i = 0; i < receipt->log().size(); ++i)
+                {
+                    Json::Value log;
+                    log["address"] = toJS(receipt->log()[i].address);
+                    log["topics"] = Json::Value(Json::arrayValue);
+                    for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                        log["topics"].append(toJS(receipt->log()[i].topics[j]));
+                    log["data"] = toJS(receipt->log()[i].data);
+                    response["logs"].append(log);
+                }
+                response["logsBloom"] = toJS(receipt->bloom());
+                response["status"] = toJS(receipt->status());
+                response["output"] = toJS(receipt->outputBytes());
+
+                auto receiptContent = response.toStyledString();
+
+                transactionCallback(receiptContent);
+            });
+        }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
         return toJS(ret.first);

@@ -128,7 +128,7 @@ public:
                 m_blockNumber = block.blockHeader().number() + 1;
                 m_totalTransactionCount += block.transactions().size();
             }
-            m_onReady();
+            m_onReady(m_blockNumber);
         }
         return CommitResult::OK;
     }

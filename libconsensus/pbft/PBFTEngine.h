@@ -89,7 +89,32 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        /// the block is sealed by the next leader, and can execute after the last block has been
+        /// consensused
+        if (m_notifyNextLeaderSeal)
+        {
+            /// represent that the latest block has been consensused
+            if (getNextLeader() == nodeIdx())
+            {
+                return false;
+            }
+            return true;
+        }
+        /// the block is sealed by the current leader
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+    }
+
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    /// when sealing for the next leader,  return true only if the last block has been consensused
+    /// even if the maxTransNum condition has been meeted
+    bool canHandleBlockForNextLeader()
+    {
+        if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
+        {
+            return false;
+        }
+        return true;
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
@@ -98,6 +123,11 @@ public:
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
+    {
+        m_onNotifyNextLeaderReset = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
@@ -108,7 +138,19 @@ public:
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
+    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
+
+    inline std::pair<bool, IDXTYPE> getLeader() const
+    {
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+        {
+            return std::make_pair(false, MAXIDX);
+        }
+        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
+    }
+
 protected:
+    void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();
     void collectGarbage();
@@ -141,16 +183,16 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
+    bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
-    void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
-    void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
-    void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
-    void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+    bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
+    bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
+    bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
@@ -284,7 +326,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    bool isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -347,8 +389,8 @@ protected:
         return CheckResult::VALID;
     }
 
-    bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
-    bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
         ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 
@@ -362,15 +404,16 @@ protected:
         }
         return false;
     }
-
+    /**
+     * @brief : decide the sign or commit request is the future request or not
+     *          1. the block number is no smalller than the current consensused block number
+     *          2. or the view is no smaller than the current consensused block number
+     */
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
         if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock") << LOG_KV("height", req.height)
-                                  << LOG_KV("consNum", m_consensusBlockNumber)
-                                  << LOG_KV("reqView", req.view) << LOG_KV("view", m_view);
             return true;
         }
         return false;
@@ -424,20 +467,18 @@ protected:
         return true;
     }
 
-    inline std::pair<bool, IDXTYPE> getLeader() const
-    {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
-        {
-            return std::make_pair(false, MAXIDX);
-        }
-        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
-    }
     void checkMinerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-
-    void changeViewForEmptyBlock();
+    void changeViewForEmptyBlock()
+    {
+        m_timeManager.changeView();
+        m_timeManager.m_changeCycle = 0;
+        m_emptyBlockViewChange = true;
+        m_signalled.notify_all();
+    }
+    void notifySealing(dev::eth::Block const& block);
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
@@ -448,6 +489,7 @@ protected:
     VIEWTYPE m_toView = 0;
     std::string m_baseDir;
     bool m_leaderFailed = false;
+    bool m_notifyNextLeaderSeal = false;
 
     dev::storage::Storage::Ptr m_storage;
 
@@ -469,6 +511,7 @@ protected:
     Mutex x_signalled;
 
     std::function<void()> m_onViewChange;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
     bool m_emptyBlockViewChange = false;
 

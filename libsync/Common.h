@@ -42,7 +42,6 @@ namespace dev
 namespace sync
 {
 DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
-
 // Every c_downloadingRequestTimeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;

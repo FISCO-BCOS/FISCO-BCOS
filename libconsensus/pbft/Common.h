@@ -298,6 +298,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         block = req.block;
+        pBlock = req.pBlock;
         p_execContext = nullptr;
     }
 
@@ -319,6 +320,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         blockStruct.encode(block);
+        pBlock = std::make_shared<dev::eth::Block>(std::move(blockStruct));
         p_execContext = nullptr;
     }
 
@@ -341,7 +343,7 @@ struct PrepareReq : public PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
-                   << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
+                   << timestamp << " , block_hash: " << block_hash.abridged();
     }
 
     bool operator==(PrepareReq const& req) const

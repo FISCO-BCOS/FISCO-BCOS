@@ -42,10 +42,10 @@ void Sealer::start()
 {
     if (m_startConsensus)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been started]" << std::endl;
+        SEAL_LOG(WARNING) << "[#Sealer module has already been started]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Start sealer module]" << std::endl;
+    SEAL_LOG(INFO) << "[#Start sealer module]";
     resetSealingBlock();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_syncBlock = false;
@@ -83,7 +83,8 @@ void Sealer::reportNewBlock()
             if (shouldResetSealing())
             {
                 SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
-                                << m_blockChain->number();
+                                << m_blockChain->number()
+                                << ", sealing number:" << m_sealing.block.blockHeader().number();
                 resetSealingBlock();
             }
             /// update m_maxBlockTransactions stored in sealer when reporting a new block
@@ -110,14 +111,16 @@ void Sealer::doWork(bool wait)
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
-            if (m_txPool->status().current > 0)
+
+            /// add this to in case of unlimited-loop
+            if (m_txPool->status().current == 0)
             {
-                m_syncTxPool = true;
-                m_signalled.notify_all();
-                m_blockSignalled.notify_all();
+                m_syncTxPool = false;
             }
             else
-                m_syncTxPool = false;
+            {
+                m_syncTxPool = true;
+            }
             /// load transaction from transaction queue
             if (m_syncTxPool == true && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);
@@ -129,7 +132,8 @@ void Sealer::doWork(bool wait)
                 m_signalled.wait_for(l, std::chrono::milliseconds(1));
                 return;
             }
-            handleBlock();
+            if (shouldHandleBlock())
+                handleBlock();
         }
     }
     if (shouldWait(wait))
@@ -146,7 +150,6 @@ void Sealer::doWork(bool wait)
 void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
-    SEAL_LOG(DEBUG) << "[#loadTransactions] [transToFetch]: " << transToFetch;
     m_sealing.block.appendTransactions(
         m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
@@ -158,18 +161,62 @@ bool Sealer::isBlockSyncing()
     return (state.state != SyncState::Idle);
 }
 
-void Sealer::resetSealingBlock(Sealing& sealing)
+/**
+ * @brief : reset specified sealing block by generating an empty block
+ *
+ * @param sealing :  the block should be resetted
+ * @param filter : the tx hashes of transactions that should't be packeted into sealing block when
+ * loadTransactions(used to set m_transactionSet)
+ * @param resetNextLeader : reset realing for the next leader or not ? default is false.
+ *                          true: reset sealing for the next leader; the block number of the sealing
+ * header should be reset to the current block number add 2 false: reset sealing for the current
+ * leader; the sealing header should be populated from the current block
+ */
+void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool resetNextLeader)
 {
-    resetBlock(sealing.block);
-    sealing.m_transactionSet.clear();
+    resetBlock(sealing.block, resetNextLeader);
+    sealing.m_transactionSet = filter;
     sealing.p_execContext = nullptr;
 }
 
-void Sealer::resetBlock(Block& block)
+/**
+ * @brief : reset specified block according to 'resetNextLeader' option
+ *
+ * @param block : the block that should be resetted
+ * @param resetNextLeader: reset the block for the next leader or not ? default is false.
+ *                         true: reset block for the next leader; the block number of the block
+ * header should be reset to the current block number add 2 false: reset block for the current
+ * leader; the block header should be populated from the current block
+ */
+void Sealer::resetBlock(Block& block, bool resetNextLeader)
 {
-    block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    /// reset block for the next leader:
+    /// 1. clear the block; 2. set the block number to current block number add 2
+    if (resetNextLeader)
+    {
+        SEAL_LOG(DEBUG) << "reset nextleader number to:" << (m_blockChain->number() + 2);
+        block.resetCurrentBlock();
+        block.header().setNumber(m_blockChain->number() + 2);
+    }
+    /// reset block for current leader:
+    /// 1. clear the block; 2. populate header from the highest block
+    else
+    {
+        block.resetCurrentBlock(
+            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+    }
 }
 
+/**
+ * @brief : set some important fields for specified block header (called by PBFTSealer after load
+ * transactions finished)
+ *
+ * @param header : the block header should be setted
+ * the resetted fields including to:
+ * 1. block import time;
+ * 2. sealer list: reset to current leader list
+ * 3. sealer: reset to the idx of the block generator
+ */
 void Sealer::resetSealingHeader(BlockHeader& header)
 {
     /// import block
@@ -186,10 +233,10 @@ void Sealer::stop()
 {
     if (m_startConsensus == false)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]" << std::endl;
+        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Stop sealer module...]" << std::endl;
+    SEAL_LOG(INFO) << "[#Stop sealer module...]";
     m_startConsensus = false;
     doneWorking();
     if (isWorking())

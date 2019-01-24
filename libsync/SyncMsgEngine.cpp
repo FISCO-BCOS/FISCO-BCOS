@@ -36,7 +36,6 @@ void SyncMsgEngine::messageHandler(
 {
     SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());
-
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
@@ -184,7 +183,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     unsigned itemCount = rlps.itemCount();
 
     size_t successCnt = 0;
-
+    std::vector<dev::h256> knownTxHash;
     for (unsigned i = 0; i < itemCount; ++i)
     {
         try
@@ -212,8 +211,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                 << LOG_KV("txHash", _packet.nodeId.abridged())
                                 << LOG_KV("peer", move(tx.sha3().abridged()));
             }
-
-            m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
+            knownTxHash.push_back(tx.sha3());
         }
         catch (std::exception& e)
         {
@@ -221,6 +219,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                               << LOG_KV("reason", e.what())
                               << LOG_KV("rlp", toHex(rlps[i].toBytes()));
             continue;
+        }
+        if (knownTxHash.size() > 0)
+        {
+            m_txPool->setTransactionsAreKnownBy(knownTxHash, _packet.nodeId);
         }
     }
 

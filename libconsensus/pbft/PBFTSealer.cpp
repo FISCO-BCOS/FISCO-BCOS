@@ -47,6 +47,7 @@ void PBFTSealer::handleBlock()
                          << LOG_KV("tx", m_sealing.block.getTransactionSize())
                          << LOG_KV("myIdx", m_pbftEngine->nodeIdx())
                          << LOG_KV("hash", m_sealing.block.header().hash().abridged());
+
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
     if (!succ)
     {
@@ -64,6 +65,8 @@ void PBFTSealer::handleBlock()
 }
 void PBFTSealer::setBlock()
 {
+    m_sealing.block.header().populateFromParent(
+        m_blockChain->getBlockByNumber(m_blockChain->number())->header());
     resetSealingHeader(m_sealing.block.header());
     m_sealing.block.calTransactionRoot();
 }

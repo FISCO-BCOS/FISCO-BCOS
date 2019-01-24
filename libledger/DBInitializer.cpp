@@ -66,8 +66,8 @@ void DBInitializer::initLevelDBStorage()
     {
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         ldb_option.create_if_missing = true;
-        ldb_option.max_open_files = 100;
-
+        ldb_option.max_open_files = 1000;
+        ldb_option.compression = leveldb::kNoCompression;
         leveldb::Status status;
 
         if (g_BCOSConfig.diskEncryption.enable)

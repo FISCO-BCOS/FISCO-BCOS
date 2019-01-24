@@ -301,12 +301,49 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
     {
         std::lock_guard<std::mutex> lock(_seqMutex);
         _seq2session.insert(std::make_pair(message->seq(), session));
+
+        if (m_callbackSetter)
+        {
+            auto seq = message->seq();
+            auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+            auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+
+            m_callbackSetter(new std::function<void(const std::string& receiptContext)>(
+                [serverRef, sessionRef, seq](const std::string& receiptContext) {
+                    auto server = serverRef.lock();
+                    auto session = sessionRef.lock();
+                    if (server && session)
+                    {
+                        auto channelMessage = server->messageFactory()->buildMessage();
+                        channelMessage->setType(0x1000);
+                        channelMessage->setSeq(seq);
+                        channelMessage->setResult(0);
+                        channelMessage->setData(
+                            (const byte*)receiptContext.c_str(), receiptContext.size());
+
+                        LOG(TRACE) << "Push transaction notify: " << seq;
+                        session->asyncSendMessage(channelMessage,
+                            std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                    }
+                }));
+        }
     }
 
     std::string* addInfo = new std::string(message->seq());
 
-    OnRequest(body, addInfo);
-    // TODO:txpool regist callback
+    try
+    {
+        OnRequest(body, addInfo);
+    }
+    catch (std::exception& e)
+    {
+        LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
+    }
+
+    if (m_callbackSetter)
+    {
+        m_callbackSetter(NULL);
+    }
 }
 
 void dev::ChannelRPCServer::onNodeChannelRequest(
@@ -638,7 +675,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(ERROR) << "no session use topic" << LOG_KV("topic", _topic);
+                    CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", _topic);
                     throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                 }
 
@@ -693,10 +730,34 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             std::make_shared<Callback>(topic, message, shared_from_this(), callback);
         pushCallback->sendMessage();
     }
+    catch (dev::channel::ChannelException& ex)
+    {
+        callback(ex, dev::channel::Message::Ptr());
+    }
     catch (exception& e)
     {
         CHANNEL_LOG(ERROR) << "asyncPushChannelMessage error"
                            << LOG_KV("what", boost::diagnostic_information(e));
+    }
+}
+
+void ChannelRPCServer::asyncBroadcastChannelMessage(
+    std::string topic, dev::channel::Message::Ptr message)
+{
+    std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
+    if (activedSessions.empty())
+    {
+        CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
+        return;
+    }
+
+    for (auto session : activedSessions)
+    {
+        session->asyncSendMessage(
+            message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+
+        CHANNEL_LOG(INFO) << "Push channel message" << message->seq() << "to session"
+                          << session->host() << ":" << session->port() << " success";
     }
 }
 

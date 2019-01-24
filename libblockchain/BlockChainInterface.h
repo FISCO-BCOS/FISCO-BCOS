@@ -88,7 +88,7 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    dev::eth::Handler<> onReady(T const& _t)
+    dev::eth::Handler<int64_t> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
@@ -96,7 +96,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    dev::eth::Signal<> m_onReady;
+    dev::eth::Signal<int64_t> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace dev

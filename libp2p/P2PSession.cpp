@@ -151,9 +151,8 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                 auto session = self.lock();
                                 if (session)
                                 {
-                                    SESSION_LOG(INFO)
-                                        << LOG_DESC("Received topic") << LOG_KV("topic", s)
-                                        << LOG_KV("from", session->nodeID().hex());
+                                    SESSION_LOG(INFO) << "Received topic: [" << s << "] from "
+                                                      << session->nodeID().hex();
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;

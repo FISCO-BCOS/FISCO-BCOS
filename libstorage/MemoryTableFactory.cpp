@@ -50,8 +50,6 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("table already open")
-                           << LOG_KV("table name", tableName);
         return it->second;
     }
     auto tableInfo = make_shared<storage::TableInfo>();
@@ -246,7 +244,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
     vector<dev::storage::TableData::Ptr> datas;
 
-    for (auto dbIt : m_name2Table)
+    for (auto& dbIt : m_name2Table)
     {
         auto table = dbIt.second;
 
