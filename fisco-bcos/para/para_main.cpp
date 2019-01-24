@@ -20,11 +20,15 @@
  * @author: catli
  * @date 2019-01-15
  */
+#include <libblockchain/BlockChainImp.h>
+#include <libblockverifier/BlockVerifier.h>
+#include <libblockverifier/ParaTxExecutor.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
+#include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <omp.h>
 #include <unistd.h>
@@ -38,6 +42,7 @@ using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
+using namespace dev::blockchain;
 INITIALIZE_EASYLOGGINGPP
 /*
 static Transactions createTxs(std::shared_ptr<LedgerManager> ledgerManager)
@@ -161,19 +166,54 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 static void startExecute(int _totalUser, int _totalTxs)
 {
     auto start = chrono::system_clock::now();
-    ///< initialize component
+
+    boost::property_tree::ptree pt;
+    LogInitializer log;
+    log.initLog(pt);
+
+    std::shared_ptr<LedgerParamInterface> params = std::make_shared<LedgerParam>();
+
+    /// init the basic config
+    /// set storage db related param
+    params->mutableStorageParam().type = "LevelDB";
+    params->mutableStorageParam().path = "data/block";
+    /// set state db related param
+    params->mutableStateParam().type = "storage";
+
+
+    auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
+    dbInitializer->initStorageDB();
+    std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+    blockChain->setStateStorage(dbInitializer->storage());
+
+    GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
+        "stateType", 5000, 300000000};
+    bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
+
+    dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
+    dbInitializer->initStateDB(genesisHash);
+
+    std::shared_ptr<ParaTxExecutor> executor = std::make_shared<ParaTxExecutor>();
+    executor->initialize();
+
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
+    /// set params for blockverifier
+    blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
+    std::shared_ptr<BlockChainImp> _blockChain =
+        std::dynamic_pointer_cast<BlockChainImp>(blockChain);
+    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
+
+    /*///< initialize component
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
 
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
 
-    auto blockChain = ledgerManager->blockChain(1);
+    auto blockChain = ledgerManager->blockChain(1);*/
     auto height = blockChain->number();
     auto parentBlock = blockChain->getBlockByNumber(height);
     BlockInfo parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
         parentBlock->header().stateRoot()};
-
-    auto blockVerifier = ledgerManager->blockVerifier(1);
 
     std::cout << "Creating user..." << std::endl;
     initUser(_totalUser, parentBlockInfo, blockVerifier, blockChain);
@@ -255,6 +295,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
+    exit(0);
 }
 
 int main(int argc, const char* argv[])
