@@ -88,9 +88,6 @@ bool ExecutiveContext::isPrecompiled(Address address) const
 
 Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
 {
-    LOG(TRACE) << LOG_DESC("[#getPrecompiled]")
-               << LOG_KV("addressSize", m_address2Precompiled.size());
-
     auto itPrecompiled = m_address2Precompiled.find(address);
 
     if (itPrecompiled != m_address2Precompiled.end())
@@ -98,6 +95,8 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
         return itPrecompiled->second;
     }
 
+    LOG(WARNING) << LOG_DESC("[getPrecompiled] can't find precompiled")
+                 << LOG_KV("address", address);
     return Precompiled::Ptr();
 }
 

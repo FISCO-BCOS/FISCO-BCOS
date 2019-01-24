@@ -52,8 +52,8 @@ inline Entries::Ptr dev::storage::MemoryTable::select(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -63,7 +63,8 @@ inline Entries::Ptr dev::storage::MemoryTable::select(
 
         if (!entries)
         {
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
+            STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data")
+                               << LOG_KV("key", key);
             return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
@@ -94,7 +95,8 @@ inline int dev::storage::MemoryTable::update(
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key", key);
+        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
+        // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -105,8 +107,8 @@ inline int dev::storage::MemoryTable::update(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -158,7 +160,8 @@ inline int dev::storage::MemoryTable::insert(
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key", key);
+        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
+        // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
@@ -170,8 +173,8 @@ inline int dev::storage::MemoryTable::insert(
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                 m_cache.insert(std::make_pair(key, entries));
-                STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                                   << LOG_KV("key", key) << LOG_KV("records", entries->size());
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -212,7 +215,7 @@ inline int dev::storage::MemoryTable::remove(
                              << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
         return CODE_NO_AUTHORIZED;
     }
-    STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
+    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -223,8 +226,8 @@ inline int dev::storage::MemoryTable::remove(
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
             m_cache.insert(std::make_pair(key, entries));
-            STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                               << LOG_KV("key", key) << LOG_KV("records", entries->size());
+            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+            //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
         }
     }
     else

@@ -1000,7 +1000,6 @@ for line in ${ip_array[*]};do
             break;
         done
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
-        cat ${output_dir}/cert/ca.crt >> ${node_dir}/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
             cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
@@ -1049,7 +1048,8 @@ for line in ${ip_array[*]};do
     sdk_path="$output_dir/${ip}/sdk"
     if [ ! -d ${sdk_path} ];then
         gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
-        rm node.json node.param node.private node.ca node.pubkey
+        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
+        rm node.json node.param node.private node.ca node.pubkey node.serial
         mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
         openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
