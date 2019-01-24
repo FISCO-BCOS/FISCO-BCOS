@@ -61,6 +61,7 @@ BlockHeader::BlockHeader(BlockHeader const& _other)
     m_stateRoot(_other.stateRoot()),
     m_transactionsRoot(_other.transactionsRoot()),
     m_receiptsRoot(_other.receiptsRoot()),
+    m_dbHash(_other.dbHash()),
     m_logBloom(_other.logBloom()),
     m_number(_other.number()),
     m_gasLimit(_other.gasLimit()),
@@ -83,6 +84,7 @@ BlockHeader& BlockHeader::operator=(BlockHeader const& _other)
     m_stateRoot = _other.stateRoot();
     m_transactionsRoot = _other.transactionsRoot();
     m_receiptsRoot = _other.receiptsRoot();
+    m_dbHash = _other.dbHash();
     m_logBloom = _other.logBloom();
     m_number = _other.number();
     m_gasLimit = _other.gasLimit();
@@ -110,6 +112,7 @@ void BlockHeader::clear()
     m_stateRoot = EmptyTrie;
     m_transactionsRoot = EmptyTrie;
     m_receiptsRoot = EmptyTrie;
+    m_dbHash = h256();
     m_logBloom = LogBloom();
     m_number = 0;
     m_gasLimit = 0;

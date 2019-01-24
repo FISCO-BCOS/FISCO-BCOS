@@ -282,9 +282,9 @@ private:  /// private data fields
     /// -------structure of block header------
     h256 m_parentHash;
     mutable h256 m_stateRoot;  // from state
-    h256 m_dbHash;             // from MemoryTableFactory
     mutable h256 m_transactionsRoot;
     mutable h256 m_receiptsRoot;
+    h256 m_dbHash;  // from MemoryTableFactory
     LogBloom m_logBloom;
     int64_t m_number = 0;
     u256 m_gasLimit;
