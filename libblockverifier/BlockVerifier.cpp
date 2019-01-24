@@ -72,6 +72,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     }
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
+    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())

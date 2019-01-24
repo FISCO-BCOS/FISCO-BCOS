@@ -137,14 +137,15 @@ h256 BlockHeader::hash() const
 void BlockHeader::encode(bytes& _header) const
 {
     RLPStream _s;
-    unsigned basicFieldsCnt = BlockHeader::BasicFields;
+    unsigned basicFieldsCnt = BasicFields;
     _s.appendList(basicFieldsCnt);
     BlockHeader::streamRLPFields(_s);
     _s.swapOut(_header);
 }
 void BlockHeader::streamRLPFields(RLPStream& _s) const
 {
-    _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_logBloom;
+    _s << m_parentHash << m_stateRoot << m_transactionsRoot << m_receiptsRoot << m_dbHash
+       << m_logBloom;
     _s.append(bigint(m_number));
     _s << m_gasLimit << m_gasUsed;
     _s.append(bigint(m_timestamp));
@@ -210,14 +211,15 @@ void BlockHeader::populate(RLP const& _header)
         m_stateRoot = _header[field = 1].toHash<h256>(RLP::VeryStrict);
         m_transactionsRoot = _header[field = 2].toHash<h256>(RLP::VeryStrict);
         m_receiptsRoot = _header[field = 3].toHash<h256>(RLP::VeryStrict);
-        m_logBloom = _header[field = 4].toHash<LogBloom>(RLP::VeryStrict);
-        m_number = _header[field = 5].toPositiveInt64();
-        m_gasLimit = _header[field = 6].toInt<u256>();
-        m_gasUsed = _header[field = 7].toInt<u256>();
-        m_timestamp = uint64_t(_header[field = 8]);
-        m_extraData = _header[field = 9].toVector<bytes>();
-        m_sealer = _header[field = 10].toInt<u256>();
-        m_sealerList = _header[field = 11].toVector<h512>();
+        m_dbHash = _header[field = 4].toHash<h256>(RLP::VeryStrict);
+        m_logBloom = _header[field = 5].toHash<LogBloom>(RLP::VeryStrict);
+        m_number = _header[field = 6].toPositiveInt64();
+        m_gasLimit = _header[field = 7].toInt<u256>();
+        m_gasUsed = _header[field = 8].toInt<u256>();
+        m_timestamp = uint64_t(_header[field = 9]);
+        m_extraData = _header[field = 10].toVector<bytes>();
+        m_sealer = _header[field = 11].toInt<u256>();
+        m_sealerList = _header[field = 12].toVector<h512>();
     }
     catch (Exception const& _e)
     {
