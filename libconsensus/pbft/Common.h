@@ -170,8 +170,8 @@ struct PBFTMsg
 
     bool operator==(PBFTMsg const& req) const
     {
-        return height == req.height && view == req.view && timestamp == req.timestamp &&
-               block_hash == req.block_hash && sig == req.sig && sig2 == req.sig2;
+        return height == req.height && view == req.view && block_hash == req.block_hash &&
+               sig == req.sig && sig2 == req.sig2;
     }
 
     bool operator!=(PBFTMsg const& req) const { return !operator==(req); }
