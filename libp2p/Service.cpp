@@ -40,7 +40,6 @@ Service::Service()
     m_protocolID2Handler =
         std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
     m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::vector<std::string>>();
 }
 
 void Service::start()
@@ -674,8 +673,8 @@ P2PSessionInfos Service::sessionInfos()
         auto s = m_sessions;
         for (auto const& i : s)
         {
-            infos.push_back(P2PSessionInfo(
-                i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
+            infos.push_back(
+                P2PSessionInfo(i.first, i.second->session()->nodeIPEndpoint(), i.second->topics()));
         }
     }
     catch (std::exception& e)
@@ -712,7 +711,7 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(
-                    i.first, i.second->session()->nodeIPEndpoint(), *(i.second->topics())));
+                    i.first, i.second->session()->nodeIPEndpoint(), i.second->topics()));
             }
         }
     }
@@ -733,7 +732,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         auto s = m_sessions;
         for (auto const& it : s)
         {
-            for (auto j : *(it.second->topics()))
+            for (auto j : it.second->topics())
             {
                 if (j == topic)
                 {

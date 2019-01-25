@@ -157,7 +157,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList = std::make_shared<std::set<std::string> >();
+                                    std::set<std::string> topicList;
                                     for (uint32_t i = 0; i < topics.size(); ++i)
                                     {
                                         if (i == 0)
@@ -166,7 +166,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                         }
                                         else
                                         {
-                                            topicList->insert(topics[i]);
+                                            topicList.insert(topics[i]);
                                         }
                                     }
 
@@ -197,7 +197,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                 if (service)
                 {
                     std::string s = boost::lexical_cast<std::string>(service->topicSeq());
-                    for (auto& it : *service->topics())
+                    for (auto& it : service->topics())
                     {
                         s.append("\t");
                         s.append(it);

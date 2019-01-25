@@ -31,10 +31,7 @@
 
 using namespace dev::channel;
 
-ChannelSession::ChannelSession()
-{
-    _topics = std::make_shared<std::set<std::string> >();
-}
+ChannelSession::ChannelSession() {}
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 {

@@ -38,7 +38,7 @@ class P2PSession : public std::enable_shared_from_this<P2PSession>
 public:
     typedef std::shared_ptr<P2PSession> Ptr;
 
-    P2PSession() { m_topics = std::make_shared<std::set<std::string> >(); }
+    P2PSession() {}
 
     virtual ~P2PSession(){};
 
@@ -56,14 +56,18 @@ public:
     virtual NodeID nodeID() { return m_nodeID; }
     virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
-    virtual std::shared_ptr<std::set<std::string> > topics() { return m_topics; }
+    virtual std::set<std::string> topics()
+    {
+        std::lock_guard<std::mutex> lock(x_topic);
+        return m_topics;
+    }
 
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
 
     virtual void onTopicMessage(std::shared_ptr<P2PMessage> message);
 
-    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics)
+    virtual void setTopics(uint32_t seq, std::set<std::string> const& topics)
     {
         std::lock_guard<std::mutex> lock(x_topic);
 
@@ -77,7 +81,7 @@ private:
 
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;
-    std::shared_ptr<std::set<std::string> > m_topics;
+    std::set<std::string> m_topics;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;

@@ -24,16 +24,16 @@
 #pragma once
 
 #include <arpa/inet.h>
-#include <libdevcore/easylog.h>
-#include <queue>
-#include <string>
-#include <thread>
-
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Guards.h>
+#include <libdevcore/easylog.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/stream.hpp>
+#include <queue>
+#include <string>
+#include <thread>
 
 #include "ChannelException.h"
 #include "Message.h"
@@ -92,8 +92,16 @@ public:
         _ioService = IOService;
     };
 
-    std::shared_ptr<std::set<std::string> > topics() { return _topics; };
-    void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
+    std::set<std::string> topics()
+    {
+        dev::ReadGuard l(x_topics);
+        return _topics;
+    };
+    void setTopics(std::set<std::string> topics)
+    {
+        dev::WriteGuard l(x_topics);
+        _topics = topics;
+    };
 
     void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
 
@@ -155,7 +163,8 @@ private:
 
     std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
-    std::shared_ptr<std::set<std::string> > _topics;
+    mutable dev::SharedMutex x_topics;
+    std::set<std::string> _topics;
     ThreadPool::Ptr _threadPool;
 
     size_t _idleTime = 30000;
