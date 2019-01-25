@@ -49,7 +49,7 @@ async function sleep(timeout) {
 while(1){
     console.log("--------------------------------------------------------------");
     console.log("current blocknumber "+await web3sync.getBlockNumber());
-    console.log("the number of connected nodes："+ await getPeerCount() );
+    //console.log("the number of connected nodes："+ await getPeerCount() );
 
     
     
@@ -63,6 +63,7 @@ while(1){
       peers=JSON.parse(peers);
       if( peers.result )
       {
+        console.log("the number of connected nodes："+ peers.result.length );
         for( var i=0;i<peers.result.length;i++){
           console.log("...........Node "+i+".........");
           console.log("NodeId:"+peers.result[i].id);
