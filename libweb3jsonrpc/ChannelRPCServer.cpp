@@ -373,8 +373,13 @@ void dev::ChannelRPCServer::onClientEthereumRequest(dev::channel::ChannelSession
 
 	std::string *addInfo = new std::string(message->seq());
 
+	try {
 	OnRequest(body, addInfo);
 	RPCallback::getInstance().parseAndSaveSession(body, message->seq(), session);
+	}
+	catch(std::exception &e) {
+		LOG(ERROR) << "RPC onRequest exception: " << e.what();
+	}
 }
 
 void dev::ChannelRPCServer::onClientTopicRequest(dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message) {
