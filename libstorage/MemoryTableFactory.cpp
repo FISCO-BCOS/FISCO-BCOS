@@ -43,7 +43,6 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_CNS);
     m_sysTables.push_back(SYS_CONFIG);
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
-    m_sysTables.push_back(DAG_TRANSFER);
 }
 
 Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
@@ -337,11 +336,6 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     {
         tableInfo->key = "number";
         tableInfo->fields = std::vector<std::string>{SYS_VALUE};
-    }
-    else if (tableName == DAG_TRANSFER)
-    {
-        tableInfo->key = "user_name";
-        tableInfo->fields = std::vector<std::string>{"user_balance"};
     }
     return tableInfo;
 }

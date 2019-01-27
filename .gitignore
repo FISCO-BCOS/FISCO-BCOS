@@ -49,3 +49,4 @@ deps/**
 
 # macOS
 .DS_Store
+fisco.sdf

@@ -30,6 +30,7 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
+// interface of DagTransferPrecompiled
 /*
 contract DagTransfer{
     function userAdd(string user, uint256 balance) public returns();
@@ -39,12 +40,15 @@ contract DagTransfer{
     function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
-
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_TRS_STR2_UINT = "userTransfer(string,string,uint256)";
 const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
+
+// fields of table '_dag_transfer_'
+const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
+const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
 DagTransferPrecompiled::DagTransferPrecompiled()
 {
@@ -137,15 +141,22 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
 }
 
 Table::Ptr DagTransferPrecompiled::openTable(
-    dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName)
+    dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
+    auto table = tableFactoryPrecompiled->getmemoryTableFactory()->openTable(DAG_TRANSFER);
+    if (!table)
+    {  //__dat_transfer__ is not exist, then create it first.
+        table = tableFactoryPrecompiled->getmemoryTableFactory()->createTable(
+            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, true, origin);
+
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
+                               << LOG_DESC(" create __dag_transfer__ table. ");
+    }
+
+    return table;
 }
 
 bytes DagTransferPrecompiled::call(
@@ -212,7 +223,14 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMeg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (entries.get() && (0u != entries->size()))
         {
@@ -284,7 +302,14 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMeg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -378,7 +403,14 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMeg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -449,7 +481,14 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMeg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -510,8 +549,14 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             break;
         }
 
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMeg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(fromUser, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
