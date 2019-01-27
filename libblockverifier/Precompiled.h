@@ -48,6 +48,13 @@ public:
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) = 0;
 
+    // is this precompiled need parallel processing, default false.
+    virtual bool isDagPrecompiled() { return false; }
+    virtual std::vector<std::string> getDagTag(bytesConstRef param)
+    {
+        return std::vector<std::string>();
+    }
+
     virtual uint32_t getParamFunc(bytesConstRef param)
     {
         auto funcBytes = param.cropped(0, 4);
