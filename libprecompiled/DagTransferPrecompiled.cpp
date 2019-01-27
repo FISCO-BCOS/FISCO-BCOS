@@ -226,7 +226,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
-            strErrorMeg = "openTable failed.";
+            strErrorMsg = "openTable failed.";
             ret = CODE_INVALID_OPENTALBLE_FAILED;
             break;
         }
@@ -305,7 +305,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
-            strErrorMeg = "openTable failed.";
+            strErrorMsg = "openTable failed.";
             ret = CODE_INVALID_OPENTALBLE_FAILED;
             break;
         }
@@ -406,7 +406,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
-            strErrorMeg = "openTable failed.";
+            strErrorMsg = "openTable failed.";
             ret = CODE_INVALID_OPENTALBLE_FAILED;
             break;
         }
@@ -484,7 +484,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
-            strErrorMeg = "openTable failed.";
+            strErrorMsg = "openTable failed.";
             ret = CODE_INVALID_OPENTALBLE_FAILED;
             break;
         }
@@ -552,7 +552,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
-            strErrorMeg = "openTable failed.";
+            strErrorMsg = "openTable failed.";
             ret = CODE_INVALID_OPENTALBLE_FAILED;
             break;
         }
