@@ -97,10 +97,10 @@ public:
         dev::ReadGuard l(x_topics);
         return m_topics;
     };
-    void setTopics(std::set<std::string> topics)
+    void setTopics(std::set<std::string> const& topics)
     {
         dev::WriteGuard l(x_topics);
-        m_topics = topics;
+        m_topics = std::move(topics);
     };
 
     void setThreadPool(ThreadPool::Ptr threadPool) { m_threadPool = threadPool; }

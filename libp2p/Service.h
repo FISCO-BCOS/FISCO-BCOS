@@ -122,7 +122,7 @@ public:
     virtual void setTopics(std::vector<std::string> const& _topics) override
     {
         RecursiveGuard l(x_topics);
-        m_topics = _topics;
+        m_topics = std::move(_topics);
         ++m_topicSeq;
     }
 
