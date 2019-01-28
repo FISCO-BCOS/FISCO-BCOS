@@ -95,15 +95,15 @@ public:
     std::set<std::string> topics()
     {
         dev::ReadGuard l(x_topics);
-        return _topics;
+        return m_topics;
     };
     void setTopics(std::set<std::string> topics)
     {
         dev::WriteGuard l(x_topics);
-        _topics = topics;
+        m_topics = topics;
     };
 
-    void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
+    void setThreadPool(ThreadPool::Ptr threadPool) { m_threadPool = threadPool; }
 
     MessageFactory::Ptr messageFactory() { return _messageFactory; }
     void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
@@ -164,8 +164,8 @@ private:
     std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
     mutable dev::SharedMutex x_topics;
-    std::set<std::string> _topics;
-    ThreadPool::Ptr _threadPool;
+    std::set<std::string> m_topics;
+    ThreadPool::Ptr m_threadPool;
 
     size_t _idleTime = 30000;
 };
