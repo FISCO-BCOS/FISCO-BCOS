@@ -233,7 +233,7 @@ void Sealer::stop()
 {
     if (m_startConsensus == false)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been stopped]";
+        SEAL_LOG(DEBUG) << "[#Sealer module has already been stopped]";
         return;
     }
     SEAL_LOG(INFO) << "[#Stop sealer module...]";

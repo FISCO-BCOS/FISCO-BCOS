@@ -3,7 +3,7 @@
 org=FISCO-BCOS
 repo=FISCO-BCOS
 branch=release-2.0.1
-output_dir=bin
+output_dir=bin/
 download_gm=
 
 help() {
@@ -50,9 +50,10 @@ download_artifact()
     fi
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
     cd ${output_dir} && curl -LO ${link} && tar -zxf *.tar.gz
+    result=$?
+    if [[ "${result}" != "0" ]];then echo  -e "\033[31mDownload failed, please try again\033[0m" && exit 1;fi 
     echo -e "\033[32mFinished. Please check ${output_dir}\033[0m"
 
-# echo ${link} |xargs -P4 -I % wget %?circle-token=
 }
 
 parse_params $@
