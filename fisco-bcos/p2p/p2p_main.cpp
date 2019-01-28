@@ -44,10 +44,10 @@ int main()
     uint32_t counter = 0;
     while (true)
     {
-        std::shared_ptr<std::vector<std::string>> topics = p2pService->topics();
+        std::vector<std::string> topics = p2pService->topics();
         std::string topic = "Topic" + to_string(counter++);
-        topics->push_back(topic);
-        P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << topics->size() - 1
+        topics.push_back(topic);
+        P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << topics.size() - 1
                           << "]:" << topic;
         p2pService->setTopics(topics);
         LogInitializer::logRotateByTime();
