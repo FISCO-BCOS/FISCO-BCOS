@@ -86,6 +86,10 @@ u256 StorageState::balance(Address const& _address) const
 
 void StorageState::addBalance(Address const& _address, u256 const& _amount)
 {
+    if (_amount == 0)
+    {
+        return;
+    }
     auto table = getTable(_address);
     if (table)
     {

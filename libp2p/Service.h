@@ -114,7 +114,11 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    virtual std::shared_ptr<std::vector<std::string>> topics() override { return m_topics; }
+    virtual std::vector<std::string> topics() override
+    {
+        RecursiveGuard l(x_topics);
+        return *m_topics;
+    }
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
     {
         RecursiveGuard l(x_topics);
