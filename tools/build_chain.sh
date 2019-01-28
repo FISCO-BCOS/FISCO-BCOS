@@ -570,7 +570,7 @@ function generate_group_ini()
 
 ;txpool limit
 [tx_pool]
-    limit=1000
+    limit=10000
 EOF
 }
 
