@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(GM_testP2pPart)
     response = rpc->getGroupPeers(groupId);
     BOOST_CHECK(response.size() == 1);
 
-    response = rpc->getGroupList(groupId);
+    response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
 }
 
@@ -424,7 +424,7 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
     response = rpc->getGroupPeers(groupId);
     BOOST_CHECK(response.size() == 1);
 
-    response = rpc->getGroupList(groupId);
+    response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 1);
 
     response = rpc->getNodeIDList(groupId);
