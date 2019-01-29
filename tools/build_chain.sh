@@ -11,8 +11,8 @@ ip_param=
 use_ip_param=
 ip_array=
 output_dir=nodes
-port_start=30300 
-state_type=mpt 
+port_start=(30300 20200 8545)
+state_type=storage 
 storage_type=LevelDB
 conf_path="conf"
 bin_path=
@@ -84,7 +84,9 @@ while getopts "f:l:o:p:e:P:t:icszhgT" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
-    p) port_start=$OPTARG;;
+    p) port_start=(${OPTARG//,/ })
+    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. eg: 30300,20200,8545" && exit 1;fi
+    ;;
     e) bin_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
        [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
@@ -92,7 +94,7 @@ while getopts "f:l:o:p:e:P:t:icszhgT" option;do
         exit $EXIT_CODE
     }
     ;;
-    s) state_type=storage;;
+    s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     T) debug_log="true"
@@ -111,8 +113,8 @@ echo "=============================================================="
 LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-LOG_INFO "Start Port        : $port_start"
-LOG_INFO "Server IP         : ${ip_array[@]}"
+LOG_INFO "Start Port        : ${port_start[*]}"
+LOG_INFO "Server IP         : ${ip_array[*]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
 [ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
@@ -134,7 +136,6 @@ EXIT_CODE=-1
 check_env() {
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         echo "please install openssl 1.0.2k-fips!"
-        #echo "please install openssl 1.0.2 series!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
@@ -163,7 +164,6 @@ check_and_install_tassl()
 
     OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
 }
-
 
 getname() {
     local name="$1"
@@ -288,31 +288,13 @@ gen_node_cert() {
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
-    openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
+    # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(cat node.nodeid | head)
-    serial=$(cat node.serial | head)
-    cat >node.json <<EOF
-{
- "id":"$nodeid",
- "name":"$node",
- "agency":"$agency",
- "caHash":"$serial"
-}
-EOF
-    cat >node.ca <<EOF
-{
- "serial":"$serial",
- "pubkey":"$nodeid",
- "name":"$node"
-}
-EOF
 
     echo "build $node node cert successful!"
 }
-
 
 generate_gmsm2_param()
 {
@@ -425,23 +407,6 @@ gen_node_cert_gm() {
     cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(head gmnode.nodeid)
-    serial=$(head gmnode.serial)
-    cat >gmnode.json <<EOF
-{
- "id":"$nodeid",
- "name":"$node",
- "agency":"$agency",
- "caHash":"$serial"
-}
-EOF
-    cat >gmnode.ca <<EOF
-{
- "serial":"$serial",
- "pubkey":"$nodeid",
- "name":"$node"
-}
-EOF
 
     echo "build $node node cert successful!"
 }
@@ -450,7 +415,7 @@ generate_config_ini()
 {
     local output=${1}
     local ip=${2}
-    local begin_port=${start_ports[${ip//./}]}
+    local offset=${ip_node_counts[${ip//./}]}
     local node_groups=(${3//,/ })
     local prefix=""
     if [ -n "$guomi_mode" ]; then
@@ -461,19 +426,19 @@ generate_config_ini()
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    channel_listen_port=$(( begin_port + 1))
+    channel_listen_port=$(( offset + port_start[1] ))
     ;jsonrpc listen port
-    jsonrpc_listen_port=$(( begin_port + 2))
+    jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( begin_port ))
+    listen_port=$(( offset + port_start[0] ))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
 [crl]		
-    ;crl should be nodeid, nodeid's length is 128 
+    ;crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
 ;group configurations
@@ -769,7 +734,7 @@ genTransTest()
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
 
-ip_port=http://127.0.0.1:$(( port_start + 2 ))
+ip_port=http://127.0.0.1:$(( port_start[2] ))
 trans_num=1
 if [ \$# -eq 1 ];then
     trans_num=\$1
@@ -937,7 +902,6 @@ ip_list=""
 count=0
 server_count=0
 groups=
-start_ports=
 ip_node_counts=
 groups_count=
 for line in ${ip_array[*]};do
@@ -949,7 +913,6 @@ for line in ${ip_array[*]};do
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
@@ -960,7 +923,7 @@ for line in ${ip_array[*]};do
         do
             gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.json node.param node.private node.ca node.pubkey
+            rm node.param node.private node.pubkey
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -976,7 +939,6 @@ for line in ${ip_array[*]};do
             if [ -n "$guomi_mode" ]; then
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency ${node_dir} >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
-                rm gmnode.json gmnode.ca
                 mv ./*.* ${gm_conf_path}/
 
                 #private key should not start with 00
@@ -1000,7 +962,6 @@ for line in ${ip_array[*]};do
             #move origin conf to gm conf
             rm ${node_dir}/${conf_path}/agency.crt
             rm ${node_dir}/${conf_path}/node.nodeid
-            rm ${node_dir}/${conf_path}/node.serial
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
 
@@ -1031,9 +992,8 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${start_ports[${ip//./}]} ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${ip_node_counts[${ip//./}]} + port_start[0] ))"
     "
-        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} +  3 ))
         ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
         ((++count))
     done
@@ -1041,7 +1001,7 @@ for line in ${ip_array[*]};do
     if [ ! -d ${sdk_path} ];then
         gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
-        rm node.json node.param node.private node.ca node.pubkey node.serial
+        rm node.param node.private node.pubkey
         mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
         openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
@@ -1051,7 +1011,6 @@ for line in ${ip_array[*]};do
 done 
 cd ..
 
-start_ports=()
 ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
@@ -1062,7 +1021,6 @@ for line in ${ip_array[*]};do
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
-    [ -z "${start_ports[${ip//./}]}" ] && start_ports[${ip//./}]=${port_start}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
@@ -1079,7 +1037,6 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
-        start_ports[${ip//./}]=$(( ${start_ports[${ip//./}]} + 3 ))
         ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
     done
     generate_server_scripts "$output_dir/${ip}"
