@@ -76,7 +76,7 @@ public:
 
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
 
-    virtual std::shared_ptr<std::vector<std::string>> topics() = 0;
+    virtual std::vector<std::string> topics() = 0;
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
