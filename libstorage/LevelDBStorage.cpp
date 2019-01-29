@@ -121,6 +121,10 @@ size_t LevelDBStorage::commit(
 
                 batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
+                ssOut.seekg(0, std::ios::end);
+                STORAGE_LEVELDB_LOG(TRACE)
+                    << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt.second->size())
+                    << LOG_KV("len", ssOut.tellg());
             }
         }
 
