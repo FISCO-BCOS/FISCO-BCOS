@@ -155,7 +155,7 @@ public:
     virtual void reportBlock(dev::eth::Block const&) override {}
 
     /// obtain maxBlockTransactions
-    virtual uint64_t maxBlockTransactions() override
+    uint64_t maxBlockTransactions() override
     {
         ReadGuard l(x_maxblockTransactions);
         return m_maxBlockTransactions;
