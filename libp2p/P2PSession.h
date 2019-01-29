@@ -56,7 +56,11 @@ public:
     virtual NodeID nodeID() { return m_nodeID; }
     virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
-    virtual std::shared_ptr<std::set<std::string> > topics() { return m_topics; }
+    virtual std::set<std::string> topics()
+    {
+        std::lock_guard<std::mutex> lock(x_topic);
+        return *m_topics;
+    }
 
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
@@ -66,7 +70,6 @@ public:
     virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics)
     {
         std::lock_guard<std::mutex> lock(x_topic);
-
         m_topicSeq = seq;
         m_topics = topics;
     }
