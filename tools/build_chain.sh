@@ -517,14 +517,9 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
-
 ; the ttl for broadcasting pbft message
 [consensus]
     ;ttl=2
-;sync period time
-[sync]
-    idle_wait_ms=200
-
 ;txpool limit
 [tx_pool]
     limit=10000

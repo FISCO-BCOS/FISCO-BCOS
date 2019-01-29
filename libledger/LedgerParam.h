@@ -56,7 +56,7 @@ struct AMDBParam
     int maxRetry = 0;
 };
 
-#define SYNC_IDLE_WAIT_DEFAULT 30
+#define SYNC_IDLE_WAIT_DEFAULT 200
 struct SyncParam
 {
     /// TODO: syncParam related
