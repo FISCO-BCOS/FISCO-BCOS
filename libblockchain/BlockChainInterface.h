@@ -75,6 +75,7 @@ public:
     virtual dev::bytes getCode(dev::Address _address) = 0;
     virtual void getNonces(
         std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) = 0;
+    virtual u256 getTxGasLimit() = 0;
 
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.

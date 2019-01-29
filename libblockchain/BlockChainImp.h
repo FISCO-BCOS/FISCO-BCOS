@@ -95,6 +95,7 @@ public:
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
+    dev::u256 getTxGasLimit() override { return m_txGasLimit; }
 
     dev::h512s minerList() override;
     dev::h512s observerList() override;
@@ -129,7 +130,6 @@ private:
     mutable SharedMutex m_nodeListMutex;
     dev::h512s m_minerList;
     dev::h512s m_observerList;
-    dev::u256 m_gasLimit;
     int64_t m_cacheNumByMiner = -1;
     int64_t m_cacheNumByObserver = -1;
 
@@ -147,6 +147,7 @@ private:
     /// cache the block number
     mutable SharedMutex m_blockNumberMutex;
     int64_t m_blockNumber = -1;
+    dev::u256 m_txGasLimit = 0;
 };
 }  // namespace blockchain
 }  // namespace dev

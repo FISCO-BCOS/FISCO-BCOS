@@ -73,6 +73,12 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    u256 gasUsed = 0;
+    if (block.transactionReceipts().size() != 0)
+    {
+        gasUsed = block.transactionReceipts().back().gasUsed();
+    }
+    block.header().setGasUsed(gasUsed);
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())

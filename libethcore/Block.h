@@ -121,17 +121,6 @@ public:
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
-    u256 gasUsed()
-    {
-        if (m_transactionReceipts.size() != 0)
-        {
-            return m_transactionReceipts.back().gasUsed();
-        }
-        else
-        {
-            return 0;
-        }
-    }
     bool isSealed() const { return (m_blockHeader.sealer() != Invalid256); }
     size_t getTransactionSize() const { return m_transactions.size(); }
 

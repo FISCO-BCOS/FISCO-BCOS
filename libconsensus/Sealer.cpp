@@ -108,7 +108,9 @@ void Sealer::doWork(bool wait)
         DEV_WRITE_GUARDED(x_sealing)
         {
             /// get current transaction num
-            uint64_t tx_num = m_sealing.block.getTransactionSize();
+            uint64_t txNum = m_sealing.block.getTransactionSize();
+            u256 gasLimit = txNum * m_blockChain->getTxGasLimit();
+            m_sealing.block.header().setGasLimit(gasLimit);
             /// obtain the transaction num should be packed
             uint64_t max_blockCanSeal = calculateMaxPackTxNum();
 
@@ -123,7 +125,7 @@ void Sealer::doWork(bool wait)
             }
             /// load transaction from transaction queue
             if (m_syncTxPool == true && !reachBlockIntervalTime())
-                loadTransactions(max_blockCanSeal - tx_num);
+                loadTransactions(max_blockCanSeal - txNum);
             /// check enough or reach block interval
             if (!checkTxsEnough(max_blockCanSeal))
             {

@@ -331,7 +331,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
                 SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txGasLimit));
             entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
             tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
-            m_gasLimit = initParam.txGasLimit;
+            m_txGasLimit = initParam.txGasLimit;
         }
 
         tb = mtb->openTable(SYS_MINERS);
@@ -857,9 +857,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                 << LOG_KV("committedParentHash", block.blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
-
-    block.header().setGasLimit(m_gasLimit);
-    block.header().setGasUsed(block.gasUsed());
 
     try
     {
