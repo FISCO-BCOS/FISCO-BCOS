@@ -50,17 +50,15 @@ public:
         m_cv.wait(ul, [this]() { return m_count == 0; });
     }
 
-    bool countDown()
+    void countDown()
     {
         std::unique_lock<std::mutex> ul(m_mutex);
-        auto ret = (m_init == m_count);
         --m_count;
         if (m_count == 0)
         {
             ul.unlock();
             m_cv.notify_all();
         }
-        return ret;
     }
 
     int getCount()
@@ -118,7 +116,7 @@ private:
 class ParaTxWorker : dev::Worker
 {
 public:
-    ParaTxWorker(std::shared_ptr<WakeupNotifier> _wakeupNotifier, std::string const& _name = "anon",
+    ParaTxWorker(WakeupNotifier& _wakeupNotifier, std::string const& _name = "anon",
         unsigned _idleWaitMs = 30)
       : dev::Worker(_name, _idleWaitMs),
         m_txDAG(nullptr),
@@ -135,14 +133,14 @@ protected:
 
 private:
     std::shared_ptr<TxDAGFace> m_txDAG;
-    std::shared_ptr<WakeupNotifier> m_wakeupNotifier;
+    WakeupNotifier& m_wakeupNotifier;
     std::shared_ptr<CountDownLatch> m_countDownLatch;
 };
 
 class ParaTxExecutor
 {
 public:
-    ParaTxExecutor() { m_wakeupNotifier = std::make_shared<WakeupNotifier>(); }
+    ParaTxExecutor() {}
     // Initialize thread pool when fisco-bcos process started
     void initialize(unsigned _threadNum = std::thread::hardware_concurrency() - 1);
     // Start to execute DAG, block the calller until the execution of DAG is finished
@@ -152,7 +150,7 @@ public:
 
 private:
     std::vector<ParaTxWorker> m_workers;
-    std::shared_ptr<WakeupNotifier> m_wakeupNotifier;
+    std::vector<std::shared_ptr<WakeupNotifier>> m_notifiers;
 };
 }  // namespace blockverifier
 }  // namespace dev
