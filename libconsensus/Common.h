@@ -44,9 +44,11 @@ static const IDXTYPE MAXIDX = UINT16_MAX;
 static const VIEWTYPE MAXVIEW = INT64_MAX;
 static const uint8_t MAXTTL = 2;
 DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
+DEV_SIMPLE_EXCEPTION(OverThresTransNum);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
 DEV_SIMPLE_EXCEPTION(ExistedBlock);
 DEV_SIMPLE_EXCEPTION(ParentNoneExist);
+DEV_SIMPLE_EXCEPTION(WrongParentHash);
 DEV_SIMPLE_EXCEPTION(BlockMinerListWrong);
 
 enum NodeAccountType

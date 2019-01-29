@@ -87,13 +87,6 @@ public:
         m_blockSignalled.notify_all();
     }
 
-    /// set the max number of transactions in a block
-    void setMaxBlockTransactions(uint64_t const& _maxBlockTransactions)
-    {
-        m_maxBlockTransactions = _maxBlockTransactions;
-    }
-    /// get the max number of transactions in a block
-    uint64_t maxBlockTransactions() const { return m_maxBlockTransactions; }
     void setExtraData(std::vector<bytes> const& _extra) { m_extraData = _extra; }
     std::vector<bytes> const& extraData() const { return m_extraData; }
 
@@ -121,7 +114,7 @@ protected:
     virtual bool shouldWait(bool const& wait) const;
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
-    virtual uint64_t calculateMaxPackTxNum() { return m_maxBlockTransactions; }
+    virtual uint64_t calculateMaxPackTxNum() { return m_consensusEngine->maxBlockTransactions(); }
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
@@ -175,7 +168,6 @@ protected:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<dev::consensus::ConsensusInterface> m_consensusEngine;
 
-    uint64_t m_maxBlockTransactions = 1000;
     /// current sealing block(include block, transaction set of block and execute context)
     Sealing m_sealing;
     /// lock on m_sealing

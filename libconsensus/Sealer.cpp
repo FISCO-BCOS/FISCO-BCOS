@@ -87,10 +87,6 @@ void Sealer::reportNewBlock()
                                 << ", sealing number:" << m_sealing.block.blockHeader().number();
                 resetSealingBlock();
             }
-            /// update m_maxBlockTransactions stored in sealer when reporting a new block
-            std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
-            setMaxBlockTransactions(boost::lexical_cast<uint64_t>(ret));
-            SEAL_LOG(DEBUG) << "[#reportNewBlock] upate txCountLimit:" << m_maxBlockTransactions;
         }
     }
 }

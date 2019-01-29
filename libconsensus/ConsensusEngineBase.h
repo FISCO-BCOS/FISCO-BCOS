@@ -154,6 +154,13 @@ public:
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const&) override {}
 
+    /// obtain maxBlockTransactions
+    virtual uint64_t maxBlockTransactions() override
+    {
+        ReadGuard l(x_maxblockTransactions);
+        return m_maxBlockTransactions;
+    }
+
 protected:
     virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
@@ -229,6 +236,19 @@ protected:
     virtual void updateConsensusNodeList();
     virtual void updateNodeListInP2P();
 
+    /// set the max number of transactions in a block
+    virtual void updateMaxBlockTransactions()
+    {
+        /// update m_maxBlockTransactions stored in sealer when reporting a new block
+        std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
+        {
+            WriteGuard l(x_maxblockTransactions);
+            m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
+        }
+        ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
+                          << LOG_KV("txCountLimit", m_maxBlockTransactions);
+    }
+
 private:
     bool blockExists(h256 const& blockHash)
     {
@@ -238,6 +258,9 @@ private:
     }
 
 protected:
+    /// max transaction num of a block
+    mutable SharedMutex x_maxblockTransactions;
+    uint64_t m_maxBlockTransactions = 1000;
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
