@@ -145,6 +145,7 @@ public:
     };
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
+    dev::u256 getTxGasLimit() override { return 0; }
 
 private:
     std::map<h256, uint64_t> m_blockHash;

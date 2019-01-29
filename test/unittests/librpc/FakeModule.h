@@ -257,6 +257,7 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
+    dev::u256 getTxGasLimit() override { return 0; }
 
     BlockHeader blockHeader;
     Transactions transactions;
