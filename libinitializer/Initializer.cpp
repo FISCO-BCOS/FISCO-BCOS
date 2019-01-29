@@ -49,7 +49,7 @@ void Initializer::init(std::string const& _path)
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
         m_p2pInitializer->setSSLContext(
-            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForP2p));
+            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForP2P));
         m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
 
@@ -61,7 +61,7 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer = std::make_shared<RPCInitializer>();
         m_rpcInitializer->setP2PService(m_p2pInitializer->p2pService());
         m_rpcInitializer->setSSLContext(
-            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForRpc));
+            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
         m_ledgerInitializer->startAll();
