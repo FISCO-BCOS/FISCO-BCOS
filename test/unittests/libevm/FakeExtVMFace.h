@@ -121,7 +121,7 @@ public:
 class FakeExtVM : public ExtVMFace
 {
 public:
-    virtual evmc_result call(CallParameters& param) override
+    evmc_result call(CallParameters& param) override
     {
         fake_result = "fake call";
         bytes fake_result_bytes(fake_result.begin(), fake_result.end());
