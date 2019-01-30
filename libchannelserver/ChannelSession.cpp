@@ -33,7 +33,7 @@ using namespace dev::channel;
 
 ChannelSession::ChannelSession()
 {
-    _topics = std::make_shared<std::set<std::string> >();
+    m_topics = std::make_shared<std::set<std::string> >();
 }
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
@@ -403,7 +403,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
 
             if (it->second->callback)
             {
-                _threadPool->enqueue([=]() {
+                m_threadPool->enqueue([=]() {
                     it->second->callback(e, message);
                     _responseCallbacks.erase(it);
                 });
@@ -420,7 +420,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             if (_messageHandler)
             {
                 auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
-                _threadPool->enqueue([session, message]() {
+                m_threadPool->enqueue([session, message]() {
                     auto s = session.lock();
                     if (s && s->_messageHandler)
                     {
@@ -535,7 +535,8 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
 
                         if (it.second->callback)
                         {
-                            _threadPool->enqueue([=]() { it.second->callback(e, Message::Ptr()); });
+                            m_threadPool->enqueue(
+                                [=]() { it.second->callback(e, Message::Ptr()); });
                         }
                         else
                         {
