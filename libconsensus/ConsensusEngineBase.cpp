@@ -48,7 +48,7 @@ void ConsensusEngineBase::stop()
 {
     if (m_startConsensusEngine == false)
     {
-        ENGINE_LOG(WARNING) << " [#ConsensusEngineBase has already been stopped]";
+        ENGINE_LOG(DEBUG) << " [#ConsensusEngineBase has already been stopped]";
         return;
     }
     ENGINE_LOG(INFO) << "[#Stop ConsensusEngineBase]";
