@@ -1522,13 +1522,11 @@ BOOST_AUTO_TEST_CASE(TypedConfigurationsTestNonExistentFileCreation)
     c.setGlobally(ConfigurationType::Filename, "/tmp/logs/el.gtest.log");
     c.set(Level::Info, ConfigurationType::ToFile, "true");
     c.set(Level::Error, ConfigurationType::ToFile, "true");
-    c.set(Level::Info, ConfigurationType::Filename, "/a/file/not/possible/to/create/log.log");
     c.set(Level::Error, ConfigurationType::Filename, "/tmp/logs/el.gtest.log");
     TypedConfigurations tConf(&c, ELPP->registeredLoggers()->logStreamsReference());
     BOOST_CHECK(tConf.toFile(Level::Global));
-    BOOST_CHECK(!tConf.toFile(Level::Info));
+    BOOST_CHECK(tConf.toFile(Level::Info));
     BOOST_CHECK(tConf.toFile(Level::Error));
-    BOOST_CHECK(nullptr == tConf.fileStream(Level::Info));   // nullptr
     BOOST_CHECK(nullptr != tConf.fileStream(Level::Error));  // Not null
 }
 
