@@ -416,12 +416,12 @@ Json::Value Rpc::getGroupPeers(int _groupID)
     return Json::Value();
 }
 
-Json::Value Rpc::getGroupList(int _groupID)
+Json::Value Rpc::getGroupList()
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getGroupList") << LOG_DESC("request");
-        checkRequest(_groupID);
+
         Json::Value response = Json::Value(Json::arrayValue);
 
         auto groupList = ledgerManager()->getGrouplList();
