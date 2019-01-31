@@ -61,7 +61,7 @@ void LogInitializer::initLog(
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
     /// set rotation size
-    uint64_t rotation_size = pt.get<uint64_t>(logType + ".MaxLogFileSize", 209715200 * 8);
+    uint64_t rotation_size = pt.get<uint64_t>(logType + ".MaxLogFileSize", 209715200);
     sink->locked_backend()->set_rotation_size(rotation_size);
     /// set file format
     sink->set_formatter(

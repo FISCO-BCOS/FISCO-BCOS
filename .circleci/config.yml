@@ -51,7 +51,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON -DEASYLOG=ON ..
             make -j2
       - run:
           name: Unit test

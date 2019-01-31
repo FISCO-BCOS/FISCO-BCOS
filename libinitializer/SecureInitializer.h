@@ -46,8 +46,8 @@ public:
     enum class Usage
     {
         Default,
-        ForP2p,
-        ForRpc
+        ForP2P,
+        ForRPC
     };
 
     void initConfig(const boost::property_tree::ptree& _pt);

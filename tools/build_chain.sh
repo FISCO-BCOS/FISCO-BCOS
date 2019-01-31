@@ -462,24 +462,12 @@ generate_config_ini()
 [log]
     ;the directory of the log
     LOG_PATH=./log
-    GLOBAL-ENABLED=true
-    GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
-    GLOBAL-MILLISECONDS_WIDTH=3
-    GLOBAL-PERFORMANCE_TRACKING=false
-    GLOBAL-MAX_LOG_FILE_SIZE=209715200
-    GLOBAL-LOG_FLUSH_THRESHOLD=100
-
-    ;log level configuration, enable(true)/disable(false) corresponding level log
-    FATAL-ENABLED=true
-    ERROR-ENABLED=true
-    WARNING-ENABLED=true
-    INFO-ENABLED=true
-    DEBUG-ENABLED=${debug_log}
-    TRACE-ENABLED=false
-    VERBOSE-ENABLED=false
-    ;log level for boost log
+    ;log level INFO DEBUG TRACE
     Level=${log_level}
-    MaxLogFileSize=1677721600
+    MaxLogFileSize=209715200
+    ;easylog config
+    FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
+    LOG_FLUSH_THRESHOLD=100
 EOF
 }
 
