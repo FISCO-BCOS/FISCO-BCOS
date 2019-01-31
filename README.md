@@ -1,6 +1,8 @@
 
 ### [FISCO BCOS Documentation(English)](https://fisco-bcos-documentation-en.readthedocs.io/en/latest)
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/dd9e37050042460ba82d72dfc6b7ed54)](https://app.codacy.com/app/fisco/FISCO-BCOS?utm_source=github.com&utm_medium=referral&utm_content=FISCO-BCOS/FISCO-BCOS&utm_campaign=Badge_Grade_Dashboard)
+
 ## 项目介绍
 
 FISCO BCOS平台是金融区块链合作联盟（深圳）（以下简称：金链盟）开源工作组以金融业务实践为参考样本，在BCOS开源平台基础上进行模块升级与功能重塑，深度定制的安全可控、适用于金融行业且完全开源的区块链底层平台。  
