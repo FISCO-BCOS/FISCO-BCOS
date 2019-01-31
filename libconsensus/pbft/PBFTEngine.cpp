@@ -122,6 +122,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
 void PBFTEngine::resetConfig()
 {
+    updateMaxBlockTransactions();
     auto node_idx = MAXIDX;
     updateConsensusNodeList();
     {
@@ -525,7 +526,6 @@ bool PBFTEngine::checkBlock(Block const& block)
 {
     ReadGuard l(m_minerListMutex);
     /// ignore the genesis block
-
     if (block.blockHeader().number() == 0)
     {
         return true;
@@ -580,13 +580,10 @@ bool PBFTEngine::checkBlock(Block const& block)
     }  /// end of check sign
 
     /// Check whether the number of transactions in block exceeds the limit
-    std::string ret =
-        m_blockChain->getSystemConfigByKey("tx_count_limit", block.blockHeader().number());
-    if (block.transactions().size() > boost::lexical_cast<uint64_t>(ret))
+    if (block.transactions().size() > maxBlockTransactions())
     {
         return false;
     }
-
     return true;
 }
 

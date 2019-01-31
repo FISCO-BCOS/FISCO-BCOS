@@ -82,6 +82,7 @@ void RaftEngine::initRaftEnv()
 
 void RaftEngine::resetConfig()
 {
+    updateMaxBlockTransactions();
     updateConsensusNodeList();
 
     auto shouldSwitchToFollower = false;
