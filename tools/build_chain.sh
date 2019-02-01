@@ -43,10 +43,10 @@ Usage:
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
-    -p <Start Port>                     Default 30300
+    -p <Start Port>                     Default (30300 20200 8545), e.g: 30300,20200,8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
-    -s <State type>                     Default mpt. if set -s, use storage 
+    -s <State type>                     Default storage. if set -s, use mpt 
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -85,7 +85,7 @@ while getopts "f:l:o:p:e:P:t:icszhgT" option;do
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
     p) port_start=(${OPTARG//,/ })
-    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. eg: 30300,20200,8545" && exit 1;fi
+    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
     P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
