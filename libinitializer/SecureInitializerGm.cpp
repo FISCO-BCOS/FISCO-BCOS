@@ -330,10 +330,10 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;
-        m_sslContexts[Usage::ForP2p] = gmConfig.sslContext;
+        m_sslContexts[Usage::ForP2P] = gmConfig.sslContext;
 
         ConfigResult originConfig = initOriginConfig(pt);
-        m_sslContexts[Usage::ForRpc] = originConfig.sslContext;
+        m_sslContexts[Usage::ForRPC] = originConfig.sslContext;
     }
     catch (Exception& e)
     {

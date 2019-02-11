@@ -21,6 +21,7 @@
  * @date 2018-11-07
  */
 #include "EasyLogInitializer.h"
+#include <boost/filesystem.hpp>
 using namespace dev::initializer;
 
 const std::chrono::seconds LogInitializer::wakeUpDelta = std::chrono::seconds(20);
@@ -43,6 +44,21 @@ static void inline rolloutHandler(const char* filename, std::size_t)
     boost::filesystem::rename(filename, stream.str().c_str());
 }
 
+EasyLogLevel LogInitializer::getLogLevel(std::string const& levelStr)
+{
+    if (dev::stringCmpIgnoreCase(levelStr, "trace") == 0)
+        return EasyLogLevel::TRACE;
+    if (dev::stringCmpIgnoreCase(levelStr, "debug") == 0)
+        return EasyLogLevel::DEBUG;
+    if (dev::stringCmpIgnoreCase(levelStr, "warning") == 0)
+        return EasyLogLevel::WARNNING;
+    if (dev::stringCmpIgnoreCase(levelStr, "error") == 0)
+        return EasyLogLevel::ERROR;
+    if (dev::stringCmpIgnoreCase(levelStr, "fatal") == 0)
+        return EasyLogLevel::FATAL;
+    return EasyLogLevel::INFO;
+}
+
 /// set easylog with default setting
 void LogInitializer::initLog(boost::property_tree::ptree const& pt)
 {
@@ -58,49 +74,50 @@ void LogInitializer::initLog(boost::property_tree::ptree const& pt)
     /// init the defaultConf
     /// init global configurations
     defaultConf.set(el::Level::Global, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.GLOBAL-ENABLED", "true"));
+        pt.get<std::string>("log.ENABLED", "true"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToFile, "true");
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, "false");
     defaultConf.set(el::Level::Global, el::ConfigurationType::Format,
-        pt.get<std::string>("log.GLOBAL-FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"));
+        pt.get<std::string>("log.FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MillisecondsWidth,
-        pt.get<std::string>("log.GLOBAL-MILLISECONDS_WIDTH", "3"));
+        pt.get<std::string>("log.MILLISECONDS_WIDTH", "3"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
-        pt.get<std::string>("log.GLOBAL-PERFORMANCE_TRACKING", "false"));
+        pt.get<std::string>("log.PERFORMANCE_TRACKING", "false"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
-        pt.get<std::string>("log.GLOBAL-MAX_LOG_FILE_SIZE", "209715200"));
+        pt.get<std::string>("log.MaxLogFileSize", "209715200"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
-        pt.get<std::string>("log.GLOBAL-LOG_FLUSH_THRESHOLD", "100"));
+        pt.get<std::string>("log.LOG_FLUSH_THRESHOLD", "100"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
 
     /// init level log
+    auto log_level = getLogLevel(pt.get<std::string>("log.Level", "info"));
     defaultConf.set(el::Level::Info, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.INFO-ENABLED", "true"));
-
     defaultConf.set(el::Level::Warning, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Warning, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.WARNING-ENABLED", "true"));
-
     defaultConf.set(el::Level::Error, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Error, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.ERROR-ENABLED", "true"));
-
     defaultConf.set(el::Level::Debug, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Debug, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.DEBUG-ENABLED", "false"));
-
     defaultConf.set(el::Level::Trace, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Trace, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.TRACE-ENABLED", "false"));
-
     defaultConf.set(el::Level::Fatal, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Fatal, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.FATAL-ENABLED", "true"));
-
     defaultConf.set(el::Level::Verbose, el::ConfigurationType::ToFile, "false");
-    defaultConf.set(el::Level::Verbose, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.VERBOSE-ENABLED", "false"));
+    defaultConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "false");
+    defaultConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "false");
+    defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled, "false");
+    defaultConf.set(el::Level::Warning, el::ConfigurationType::Enabled, "false");
+    switch (log_level)
+    {
+    case EasyLogLevel::TRACE:
+        defaultConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "true");
+    case EasyLogLevel::DEBUG:
+        defaultConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "true");
+    case EasyLogLevel::INFO:
+        defaultConf.set(el::Level::Info, el::ConfigurationType::Enabled, "true");
+    case EasyLogLevel::WARNNING:
+        defaultConf.set(el::Level::Warning, el::ConfigurationType::Enabled, "true");
+    case EasyLogLevel::ERROR:
+        defaultConf.set(el::Level::Error, el::ConfigurationType::Enabled, "true");
+    case EasyLogLevel::FATAL:
+        defaultConf.set(el::Level::Fatal, el::ConfigurationType::Enabled, "true");
+    }
+    defaultConf.set(el::Level::Verbose, el::ConfigurationType::Enabled, "false");
 
     /// set allConf for globalLog
     el::Configurations allConf;

@@ -121,7 +121,7 @@ public:
 class FakeExtVM : public ExtVMFace
 {
 public:
-    virtual evmc_result call(CallParameters& param)
+    evmc_result call(CallParameters& param) override
     {
         fake_result = "fake call";
         bytes fake_result_bytes(fake_result.begin(), fake_result.end());
@@ -137,8 +137,8 @@ public:
         return result;
     }
 
-    evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
-        u256 _salt, OnOpFunc const& _onOp)
+    evmc_result create(
+        u256 const&, u256& io_gas, bytesConstRef, Instruction, u256, OnOpFunc const&) override
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(sha3(rlpList(myAddress(), nonce)));
@@ -220,7 +220,7 @@ public:
         return h256{};
     }
     /// Read address's code.
-    bytes const codeAt(Address const& contract_addr) override { return code(); }
+    bytes const codeAt(Address const&) override { return code(); }
 
     h256 blockHash(int64_t number) override { return sha3(toString(number)); }
 

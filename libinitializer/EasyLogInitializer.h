@@ -28,6 +28,16 @@ namespace dev
 {
 namespace initializer
 {
+enum class EasyLogLevel
+{
+    TRACE,
+    DEBUG,
+    INFO,
+    WARNNING,
+    ERROR,
+    FATAL
+};
+
 class LogInitializer
 {
 public:
@@ -63,6 +73,7 @@ public:
     }
 
     void stopLogging() {}
+    EasyLogLevel getLogLevel(std::string const& levelStr);
 
 private:
     static const std::chrono::seconds wakeUpDelta;
