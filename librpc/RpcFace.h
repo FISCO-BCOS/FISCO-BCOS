@@ -65,7 +65,7 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getGroupPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+                                   jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getGroupListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
@@ -171,9 +171,9 @@ public:
     {
         response = this->getGroupPeers(request[0u].asInt());
     }
-    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
     {
-        response = this->getGroupList(request[0u].asInt());
+        response = this->getGroupList();
     }
     inline virtual void getNodeIDListI(const Json::Value& request, Json::Value& response)
     {
@@ -257,7 +257,7 @@ public:
     virtual Json::Value getClientVersion() = 0;
     virtual Json::Value getPeers(int param1) = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
-    virtual Json::Value getGroupList(int param1) = 0;
+    virtual Json::Value getGroupList() = 0;
     virtual Json::Value getNodeIDList(int param1) = 0;
 
     // block part

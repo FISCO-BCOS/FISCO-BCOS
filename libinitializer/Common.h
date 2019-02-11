@@ -39,9 +39,9 @@ DEV_SIMPLE_EXCEPTION(InvalidConfig);
 DEV_SIMPLE_EXCEPTION(InitFailed);
 namespace initializer
 {
-static inline bool isValidPort(int port)
+inline bool isValidPort(int port)
 {
-    if (port < 0 || port > 65535)
+    if (port <= 1024 || port > 65535)
         return false;
     return true;
 }
