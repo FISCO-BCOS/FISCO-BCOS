@@ -8,53 +8,12 @@
 
 ## 快速入门
 
-### 搭建区块链
+参考[快速入门](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/docs/quick_start.html).
 
-FISCO BCOS提供了搭链脚本 [`build_chain.sh`](tools/build_chain.sh) ，方便用户快速搭建区块链。例如，在本机（`127.0.0.1`）上生成一条有4个节点的区块链：
+## 文档
 
-```bash
-curl -LO https://raw.githubusercontent.com/FISCO-BCOS/lab-bcos/dev/tools/build_chain.sh
-bash build_chain.sh -l "127.0.0.1:4"
-```
-
-节点生成后，启动所有节点，一条FISCO BCOS区块链即可运行起来。
-
-```bash
-cd ./nodes
-bash start_all.sh
-```
-
-更多的节点部署架构，可参考 XXX.
-
-### 使用区块链
-
-区块链是智能合约的载体，要使用区块链，可参考：智能的部署和使用XXX。
-
-## 源码编译部署
-
-下载代码
-
-```bash
-git clone https://github.com/FISCO-BCOS/lab-bcos.git
-```
-
-安装依赖
-
-```bash
-# Ubuntu
-sudo apt install cmake libssl-dev libleveldb-dev openssl
-# CentOS
-sudo yum install cmake3 gcc-c++ openssl-devel leveldb-devel openssl
-```
-
-编译部署
-
-```bash
-cd lab-bcos
-$ mkdir build && cd build
-$ cmake -DTESTS=ON  ..
-$ make -j$(nproc)
-```
+- [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
+- [Eng](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/)
 
 ## 贡献代码
 
@@ -77,7 +36,6 @@ FISCO BCOS 提供了完整的文档：[Read the Doc](https://fisco-bcos-document
 * **可用**：合约开发框架（web3sdk），搭链工具，监控统计
 * **稳定**：在生产环境持续稳定运行，并不断迭代更新
 
-
 ### 落地应用案例
 
 FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地应用案例](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf)。
@@ -88,15 +46,11 @@ FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地
 
 - 微信群：[![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
 
-
 - Gitter：[![Gitter](https://img.shields.io/badge/style-on_gitter-green.svg?logo=gitter&longCache=false&style=social&label=Chat)](https://gitter.im/fisco-bcos/Lobby) 
-
 
 - Twitter：[![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
 
-
 - e-mail：[![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
-
 
 ## License
 
