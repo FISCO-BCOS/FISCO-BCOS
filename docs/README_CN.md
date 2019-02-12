@@ -2,13 +2,13 @@
 
 ![](./images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS**平台是金融区块链合作联盟（深圳）（以下简称：金链盟）开源工作组以金融业务实践为参考样本，在BCOS开源平台基础上进行模块升级与功能重塑，深度定制的安全可控、适用于金融行业且完全开源的区块链底层平台。FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行业的分布式商业需求，从业务适当性、性能、安全、正常、技术可行性、运维与治理、成本等多个维度进行综合考虑，打造金融版本的区块链解决方案。
+**FISCO BCOS**平台是金融区块链合作联盟(深圳)(以下简称：金链盟)开源工作组以金融业务实践为参考样本，在BCOS开源平台基础上进行模块升级与功能重塑，深度定制的安全可控、适用于金融行业且完全开源的区块链底层平台。FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行业的分布式商业需求，从业务适当性、性能、安全、正常、技术可行性、运维与治理、成本等多个维度进行综合考虑，打造金融版本的区块链解决方案。
 
 [![Build Status](https://travis-ci.org/FISCO-BCOS/lab-bcos.svg)](https://travis-ci.org/FISCO-BCOS/lab-bcos)  [![codecov](https://codecov.io/gh/FISCO-BCOS/lab-bcos/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/lab-bcos) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/lab-bcos/badge)](https://www.codefactor.io/repository/github/fisco-bcos/lab-bcos) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/lab-bcos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/lab-bcos&amp;utm_campaign=Badge_Grade) [![](https://img.shields.io/github/issues-pr/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/pulls) [![GitHub issues](https://img.shields.io/github/issues/FISCO-BCOS/lab-bcos.svg)](https://github.com/FISCO-BCOS/lab-bcos/issues) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/lab-bcos/total.svg)](https://github.com/FISCO-BCOS/lab-bcos) 
 
 ## 快速入门
 
-参考[快速入门](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/docs/quick_start.html).
+参考[快速入门](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/docs/quick_start.html)
 
 ## 文档
 
@@ -28,7 +28,7 @@
 
 * **安全**：机构证书准入、秘钥管理。
 * **隐私**：零知识证明、同态加密、群签名、环签名。
-* **性能**：多链跨链、PBFT。
+* **性能**：并行计算、高效共识。
 * **可用**：合约开发框架(web3sdk)、搭链工具、监控统计。
 * **稳定**：在生产环境持续稳定运行、并不断迭代更新。
 
@@ -38,7 +38,7 @@ FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地
 
 ## 社区生态
 
-**金链盟**开源工作组，获得金链盟成员机构的广泛认可，并由专注于区块链底层技术研发的成员机构及开发者牵头开展工作。其中首批成员包括以下单位（排名不分先后）：博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、越秀金科。
+**金链盟**开源工作组，获得金链盟成员机构的广泛认可，并由专注于区块链底层技术研发的成员机构及开发者牵头开展工作。其中首批成员包括以下单位(排名不分先后): 博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、越秀金科。
 
 - 微信群：[![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
 
