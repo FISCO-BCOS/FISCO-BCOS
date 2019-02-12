@@ -13,28 +13,24 @@
 ## 文档
 
 - [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
-- [Eng](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/)
+- [English](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/)
 
 ## 贡献代码
 
 要参与进来，很简单，你可以：
 
 * 点亮我们的小星星！  
-* 提交代码（Pull requests），我们有 [代码贡献流程](CONTRIBUTING.md) 和 [编码规范](CODING_STYLE.md)。
-* 也可以[提问](https://github.com/FISCO-BCOS/lab-bcos/issues) 和 [提交BUG](https://github.com/FISCO-BCOS/lab-bcos/issues)。
-* 或者可以在[微信群](docs/images/WeChatQR.jpeg) 和 [Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
-
-## 更多参考
-
-FISCO BCOS 提供了完整的文档：[Read the Doc](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/)。
+* 提交代码(Pull requests)，我们有[代码贡献流程](CONTRIBUTING.md)和[编码规范](CODING_STYLE.md)。
+* 也可以[提问](https://github.com/FISCO-BCOS/lab-bcos/issues)和[提交BUG](https://github.com/FISCO-BCOS/lab-bcos/issues)。
+* 或者可以在[微信群](docs/images/WeChatQR.jpeg)和[Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
 
 ### 关键特性
 
-* **安全**：机构证书准入，秘钥管理
-* **隐私**：零知识证明，同态加密，群签名，环签名
-* **性能**：多链跨链，PBFT
-* **可用**：合约开发框架（web3sdk），搭链工具，监控统计
-* **稳定**：在生产环境持续稳定运行，并不断迭代更新
+* **安全**：机构证书准入、秘钥管理。
+* **隐私**：零知识证明、同态加密、群签名、环签名。
+* **性能**：多链跨链、PBFT。
+* **可用**：合约开发框架(web3sdk)、搭链工具、监控统计。
+* **稳定**：在生产环境持续稳定运行、并不断迭代更新。
 
 ### 落地应用案例
 
@@ -56,4 +52,4 @@ FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地
 
 [![](https://img.shields.io/github/license/FISCO-BCOS/lab-bcos.svg)](LICENSE)
 
-FISCO BCOS的开源协议为 [GPL 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)。详情参见[LICENSE](LICENSE)。  
+FISCO BCOS的开源协议为[GPL 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)。详情参见[LICENSE](LICENSE)。  
