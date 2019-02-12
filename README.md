@@ -26,11 +26,11 @@ Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/fea
 
 ### Features
 
-* **Security**: Comprehensive security coverage includes certificate authorities and key management
-* **Privacy**: Role-based access control, zero-knowledge proof, homomorphic encryption, group signature, ring signature
-* **Performance**: Parallel computation, efficient consensus mechanism
-* **Usability**: Contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
-* **Reliability**: Several applications in production environment work stability
+- **Security**: Comprehensive security coverage includes certificate authorities and key management
+- **Privacy**: Role-based access control, zero-knowledge proof, homomorphic encryption, group signature, ring signature
+- **Performance**: Parallel computation, efficient consensus mechanism
+- **Usability**: Contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
+- **Reliability**: Several applications in production environment work stability
 
 ### Featured Cases
 
