@@ -16,7 +16,6 @@ state_type=storage
 storage_type=LevelDB
 conf_path="conf"
 bin_path=
-pkcs12_passwd=""
 make_tar=
 debug_log="false"
 log_level="INFO"
@@ -43,7 +42,7 @@ Usage:
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
-    -p <Start Port>                     Default (30300 20200 8545), e.g: 30300,20200,8545
+    -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
     -s <State type>                     Default storage. if set -s, use mpt 
@@ -51,7 +50,6 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -74,7 +72,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:icszhgT" option;do
+while getopts "f:l:o:p:e:t:icszhgT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -88,12 +86,6 @@ while getopts "f:l:o:p:e:P:t:icszhgT" option;do
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
-       [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    ;;
     s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
@@ -910,7 +902,7 @@ for line in ${ip_array[*]};do
         do
             gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.param node.private node.pubkey
+            rm node.param node.private node.pubkey agency.crt
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -988,9 +980,7 @@ for line in ${ip_array[*]};do
     if [ ! -d ${sdk_path} ];then
         gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
-        rm node.param node.private node.pubkey
-        mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
+        rm node.param node.private node.pubkey node.nodeid agency.crt
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
         cd $output_dir
     fi
