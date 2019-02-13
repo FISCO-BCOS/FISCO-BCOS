@@ -31,7 +31,8 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
+template <bool IsPara>
+MemoryTableFactory<IsPara>::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
@@ -46,7 +47,9 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(DAG_TRANSFER);
 }
 
-Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
+template <bool IsPara>
+Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
+    const string& tableName, bool authorityFlag)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -112,20 +115,30 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
-                                 vector<Change::Record>& _records) {
-        return;  // XXX ignore it for testing
-        dev::WriteGuard l(x_changeLog);
-        m_changeLog.emplace_back(_table, _kind, _key, _records);
-    });
+    if (m_isPara)
+    {
+        memoryTable->setRecorder(
+            [](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {})
+    }
+    else
+    {
+        memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
+                                     vector<Change::Record>& _records) {
+            return;  // XXX ignore it for testing
+            dev::WriteGuard l(x_changeLog);
+            m_changeLog.emplace_back(_table, _kind, _key, _records);
+        });
+    }
 
     memoryTable->init(tableName);
     m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
-    const std::string& valueField, bool authorigytFlag, Address const& _origin)
+template <bool IsPara>
+Table<IsPara>::Ptr MemoryTableFactory<IsPara>::createTable(const string& tableName,
+    const string& keyField, const std::string& valueField, bool authorigytFlag,
+    Address const& _origin)
 {
     /*
     STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("create table")
@@ -161,17 +174,20 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     return openTable(tableName);
 }
 
-void MemoryTableFactory::setBlockHash(h256 blockHash)
+template <bool IsPara>
+void MemoryTableFactory<IsPara>::setBlockHash(h256 blockHash)
 {
     m_blockHash = blockHash;
 }
 
-void MemoryTableFactory::setBlockNum(int64_t blockNum)
+template <bool IsPara>
+void MemoryTableFactory<IsPara>::setBlockNum(int64_t blockNum)
 {
     m_blockNum = blockNum;
 }
 
-h256 MemoryTableFactory::hash()
+template <bool IsPara>
+h256 MemoryTableFactory<IsPara>::hash()
 {
     bytes data;
     for (auto& it : m_name2Table)
@@ -197,9 +213,8 @@ h256 MemoryTableFactory::hash()
     // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("allTableHash") << LOG_KV("stateRoot", m_hash);
     return m_hash;
 }
-
-/*
-void MemoryTableFactory::rollback(size_t _savepoint)
+template <bool IsPara>
+void MemoryTableFactory<false>::rollback(size_t _savepoint)
 {
     while (_savepoint < m_changeLog.size())
     {
@@ -248,11 +263,12 @@ void MemoryTableFactory::rollback(size_t _savepoint)
         m_changeLog.pop_back();
     }
 }
-*/
 
-void MemoryTableFactory::commit() {}
+template <bool IsPara>
+void MemoryTableFactory<IsPara>::commit() {}
 
-void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+template <bool IsPara>
+void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
     vector<dev::storage::TableData::Ptr> datas;
 
@@ -291,7 +307,8 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     m_changeLog.clear();
 }
 
-storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
+template <bool IsPara>
+storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::string& tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
@@ -353,7 +370,8 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
     return tableInfo;
 }
 
-void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
+template <bool IsPara>
+void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
     Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)

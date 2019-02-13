@@ -87,12 +87,13 @@ public:
 
     void dbCommit(dev::eth::Block& block);
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory)
+    void setMemoryTableFactory(
+        std::shared_ptr<dev::storage::MemoryTableFactory<>> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory()
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> getMemoryTableFactory()
     {
         return m_memoryTableFactory;
     }
@@ -106,7 +107,7 @@ private:
     BlockInfo m_blockInfo;
     std::shared_ptr<dev::executive::StateFace> m_stateFace;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
 };
 

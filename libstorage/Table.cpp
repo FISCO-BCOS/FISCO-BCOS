@@ -71,7 +71,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     m_dirty = true;
 }
 
-typename Entry::FieldsMap* Entry::fields()
+std::map<std::string, std::string>* Entry::fields()
 {
     return &m_fields;
 }
@@ -116,9 +116,15 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
-Entry::Ptr Entries::get(size_t i)
+template<bool IsPara>
+size_t Entries<IsPara>::size() const
 {
-    // dev::ReadGuard l(x_entries);
+    return m_entries.size();
+}
+
+template<bool IsPara>
+Entry<IsPara>::Ptr Entries<IsPara>::get(size_t i)
+{
     if (m_entries.size() <= i)
     {
         throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
@@ -129,31 +135,27 @@ Entry::Ptr Entries::get(size_t i)
     return m_entries[i];
 }
 
-size_t Entries::size() const
+template<bool IsPara>
+void Entries<IsPara>::addEntry(Entry::Ptr entry)
 {
-    // dev::ReadGuard l(x_entries);
-    return m_entries.size();
-}
-
-void Entries::addEntry(Entry::Ptr entry)
-{
-    // dev::WriteGuard l(x_entries);
     m_entries.push_back(entry);
     m_dirty = true;
 }
 
-void Entries::removeEntry(size_t /*index*/)
+template<bool IsPara>
+void Entries<false>::removeEntry(size_t index)
 {
-    // dev::WriteGuard l(x_entries);
-    // m_entries.erase(m_entries.begin() + index);
+    m_entries.erase(m_entries.begin() + index);
 }
 
-bool Entries::dirty() const
+template<bool IsPara>
+bool Entries<IsPara>::dirty() const
 {
     return m_dirty;
 }
 
-void Entries::setDirty(bool dirty)
+template<bool IsPara>
+void Entries<IsPara>::setDirty(bool dirty)
 {
     m_dirty = dirty;
 }
@@ -204,11 +206,11 @@ std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Conditi
     return &m_conditions;
 }
 
-Entry::Ptr Table::newEntry()
+Entry::Ptr TableBase::newEntry()
 {
     return std::make_shared<Entry>();
 }
-Condition::Ptr Table::newCondition()
+Condition::Ptr TableBase::newCondition()
 {
     return std::make_shared<Condition>();
 }

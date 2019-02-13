@@ -97,6 +97,7 @@ DEV_SIMPLE_EXCEPTION(InitLedgerConfigFailed);
 DEV_SIMPLE_EXCEPTION(InvalidConsensusType);
 DEV_SIMPLE_EXCEPTION(OpenLevelDBFailed);
 DEV_SIMPLE_EXCEPTION(LevelDBNotOpened);
+DEV_SIMPLE_EXCEPTION(UnsupportedInParallelMode);
 /**
  * @brief : error information to be added to exceptions
  */

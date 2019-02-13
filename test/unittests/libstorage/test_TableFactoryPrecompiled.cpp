@@ -32,7 +32,7 @@ using namespace dev::storage;
 
 namespace test_TableFactoryPrecompiled
 {
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public dev::storage::MemoryTableFactory<>
 {
 public:
     virtual ~MockMemoryTableFactory(){};

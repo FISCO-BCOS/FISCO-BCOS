@@ -318,7 +318,7 @@ void dev::storage::MemoryTable::clear()
     }
 }
 
-tbb::concurrent_unordered_map<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
+ConcurrentUnorderedMap<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
 {
     return &m_cache;
 }

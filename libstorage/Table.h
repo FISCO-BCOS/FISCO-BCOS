@@ -21,10 +21,11 @@
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include "tbb/concurrent_unordered_map.h"
-#include "tbb/concurrent_vector.h"
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
 #include <map>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace dev
@@ -65,7 +66,6 @@ public:
         static bool equal(const std::string& x, const std::string& y) { return x == y; }
     };
 
-    using FieldsMap = tbb::concurrent_unordered_map<std::string, std::string>;
     typedef std::shared_ptr<Entry> Ptr;
 
     enum Status
@@ -79,7 +79,7 @@ public:
 
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
-    virtual FieldsMap* fields();
+    virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();
     virtual void setStatus(int status);
@@ -88,36 +88,29 @@ public:
     void setDirty(bool dirty);
 
 private:
-    /// std::map<std::string, std::string> m_fields;
-    FieldsMap m_fields;
-
+    std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
-
-    // mutable dev::SharedMutex x_fields;
 };
 
-class Entries : public std::enable_shared_from_this<Entries>
+template <bool IsPara = false>
+class Entries : public std::enable_shared_from_this<Entries<IsPara>>
 {
 public:
-    typedef std::shared_ptr<Entries> Ptr;
+    typedef std::shared_ptr<Entries<IsPara>> Ptr;
+    typedef typename std::conditional<IsPara, tbb::concurrent_vector<Ptr>, std::vector<Ptr>>::type
+        EntriesContainerType;
 
-    virtual ~Entries() {}
-
-    virtual Entry::Ptr get(size_t i);
-
-    virtual size_t size() const;
-
-    virtual void addEntry(Entry::Ptr entry);
-    virtual void removeEntry(size_t index);
-
+    Ptr get(size_t i);
+    size_t size() const;
+    void addEntry(Entry::Ptr entry);
     bool dirty() const;
     void setDirty(bool dirty);
 
+    typename std::enable_if<!IsPara, void>::type removeEntry(size_t index);
+
 private:
-    // std::vector<Entry::Ptr> m_entries;
-    tbb::concurrent_vector<Entry::Ptr> m_entries;
+    EntriesContainerType m_entries;
     bool m_dirty = false;
-    // mutable dev::SharedMutex x_entries;
 };
 
 class Condition : public std::enable_shared_from_this<Condition>
@@ -149,15 +142,24 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::unordered_map<std::string, std::pair<Op, std::string> >* getConditions();
+    virtual std::unordered_map<std::string, std::pair<Op, std::string>>* getConditions();
 
 private:
-    std::unordered_map<std::string, std::pair<Op, std::string> > m_conditions;
+    std::unordered_map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
 };
 
+// Construction of transaction execution
+class TableBase
+{
+public:
+    virtual ~TableBase() {}
+};
+
+template <bool IsPara = false>
 class Table;
+
 struct Change
 {
     enum Kind : int
@@ -169,7 +171,7 @@ struct Change
         Remove,
         Select
     };
-    std::shared_ptr<Table> table;
+    std::shared_ptr<Table<>> table;
     Kind kind;  ///< The kind of the change.
     std::string key;
     struct Record
@@ -183,57 +185,67 @@ struct Change
         {}
     };
     std::vector<Record> value;
-    Change(std::shared_ptr<Table> _table, Kind _kind, std::string const& _key,
+    Change(std::shared_ptr<Table<>> _table, Kind _kind, std::string const& _key,
         std::vector<Record>& _value)
       : table(_table), kind(_kind), key(_key), value(std::move(_value))
     {}
 };
 
 // Construction of transaction execution
-class Table : public std::enable_shared_from_this<Table>
+template <bool IsPara>
+class Table : public std::enable_shared_from_this<Table<IsPara>>
 {
 public:
-    typedef std::shared_ptr<Table> Ptr;
+    typedef std::shared_ptr<Table<IsPara>> Ptr;
+    typedef Entries<IsPara> EntriesType;
+    typedef typename std::conditional<IsPara,
+        tbb::concurrent_unordered_map<std::string, typename EntriesType::Ptr>,
+        std::unordered_map<std::string, typename EntriesType::Ptr>>::type DataType;
 
-    virtual ~Table() {}
+    virtual ~Table() = default;
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
+    virtual typename EntriesType::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual bool checkAuthority(Address const& _origin) const = 0;
 
     virtual Entry::Ptr newEntry();
     virtual Condition::Ptr newCondition();
-    virtual void setRecorder(
+    virtual h256 hash() = 0;
+    virtual void clear() = 0;
+
+    typename std::enable_if<!IsPara, void>::type setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
             _recorder)
     {
         m_recorder = _recorder;
     }
-    virtual h256 hash() = 0;
-    virtual void clear() = 0;
-    virtual tbb::concurrent_unordered_map<std::string, Entries::Ptr>* data() { return NULL; }
-    virtual bool checkAuthority(Address const& _origin) const = 0;
+
+    DataType* data() { return nullptr; }
 
 protected:
-    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        m_recorder;
+    typename std::enable_if<!IsPara, std::function<void(Ptr, Change::Kind, std::string const&,
+                                         std::vector<Change::Record>&)>>::type m_recorder;
 };
 
 // Block execution time construction
-class StateDBFactory : public std::enable_shared_from_this<StateDBFactory>
+template <bool IsPara = false>
+class StateDBFactory : public std::enable_shared_from_this<StateDBFactory<IsPara>>
 {
 public:
     typedef std::shared_ptr<StateDBFactory> Ptr;
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(const std::string& table, bool authorityFlag = true) = 0;
-    virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag, Address const& _origin = Address()) = 0;
+    virtual typename Table<IsPara>::Ptr openTable(
+        const std::string& table, bool authorityFlag = true) = 0;
+    virtual typename Table<IsPara>::Ptr createTable(const std::string& tableName,
+        const std::string& keyField, const std::string& valueField, bool authorigytFlag,
+        Address const& _origin = Address()) = 0;
 };
 
 }  // namespace storage

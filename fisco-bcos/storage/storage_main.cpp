@@ -121,8 +121,8 @@ int main(int argc, const char* argv[])
     auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
     auto storage = std::make_shared<dev::storage::LevelDBStorage>();
     storage->setDB(storageDB);
-    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory>();
+    dev::storage::MemoryTableFactory<>::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory<>>();
     memoryTableFactory->setStateStorage(storage);
     memoryTableFactory->setBlockHash(h256(0));
     memoryTableFactory->setBlockNum(0);

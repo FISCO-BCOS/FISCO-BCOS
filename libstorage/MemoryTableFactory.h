@@ -23,6 +23,8 @@
 #include "Storage.h"
 #include "Table.h"
 #include <libdevcore/Guards.h>
+#include <memory>
+#include <type_traits>
 
 namespace dev
 {
@@ -32,16 +34,18 @@ class ExecutiveContext;
 }
 namespace storage
 {
-class MemoryTableFactory : public StateDBFactory
+template <bool IsPara = false>
+class MemoryTableFactory : public StateDBFactory<IsPara>
 {
 public:
-    typedef std::shared_ptr<MemoryTableFactory> Ptr;
+    typedef std::shared_ptr<MemoryTableFactory<IsPara>> Ptr;
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
 
-    Table::Ptr openTable(const std::string& table, bool authorityFlag = true) override;
-    Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag,
+    typename Table<IsPara>::Ptr openTable(
+        const std::string& table, bool authorityFlag = true) override;
+    typename Table<IsPara>::Ptr createTable(const std::string& tableName,
+        const std::string& keyField, const std::string& valueField, bool authorigytFlag,
         Address const& _origin = Address()) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
@@ -51,11 +55,10 @@ public:
     void setBlockNum(int64_t blockNum);
 
     h256 hash();
-    size_t savepoint() const { return m_changeLog.size(); };
-    // void rollback(size_t _savepoint);
+    typename std::enable_if<!IsPara, size_t>::type savepoint() const { return m_changeLog.size(); };
+    typename std::enable_if<!IsPara, void>::type rollback(size_t _savepoint);
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
-
     int getCreateTableCode() { return createTableCode; }
 
 private:
@@ -64,13 +67,11 @@ private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
-    std::unordered_map<std::string, Table::Ptr> m_name2Table;
-    std::vector<Change> m_changeLog;
+    std::unordered_map<std::string, typename Table<IsPara>::Ptr> m_name2Table;
+    typename std::enable_if<!IsPara, std::vector<Change>>::type m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;
-
-    mutable dev::SharedMutex x_changeLog;
 };
 
 }  // namespace storage

@@ -135,7 +135,7 @@ public:
     std::unordered_map<std::string, std::unordered_map<std::string, Entry::Ptr>> m_fakeStorage;
 };
 
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public dev::storage::MemoryTableFactory<>
 {
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
@@ -152,16 +152,16 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory() override
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> getMemoryTableFactory() override
     {
         return m_memoryTableFactory;
     }
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> _m)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory<>> _m)
     {
         m_memoryTableFactory = _m;
     }
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> m_memoryTableFactory;
 };
 
 class MockState : public StorageState

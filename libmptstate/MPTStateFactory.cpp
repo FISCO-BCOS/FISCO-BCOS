@@ -29,7 +29,7 @@ using namespace dev::eth;
 using namespace dev::executive;
 
 std::shared_ptr<StateFace> MPTStateFactory::getState(
-    h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory>)
+    h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory<>>)
 {
     if (_root == dev::h256())
     {

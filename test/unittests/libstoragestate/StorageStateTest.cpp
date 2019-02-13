@@ -36,7 +36,7 @@ struct StorageStateFixture
     StorageStateFixture() : m_state(dev::u256(0))
     {
         auto storage = std::make_shared<dev::storage::MemoryStorage>();
-        auto tableFactory = std::make_shared<dev::storage::MemoryTableFactory>();
+        auto tableFactory = std::make_shared<dev::storage::MemoryTableFactory<>>();
         tableFactory->setStateStorage(storage);
         m_state.setMemoryTableFactory(tableFactory);
     }

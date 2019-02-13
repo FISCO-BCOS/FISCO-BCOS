@@ -23,7 +23,6 @@
 #include "Storage.h"
 #include "Table.h"
 #include <libdevcore/Guards.h>
-#include <tbb/concurrent_unordered_map.h>
 
 namespace dev
 {
@@ -47,7 +46,7 @@ public:
 
     virtual h256 hash() override;
     virtual void clear() override;
-    virtual tbb::concurrent_unordered_map<std::string, Entries::Ptr>* data() override;
+    virtual std::unordered_map<std::string, Entries::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);
     void setBlockHash(h256 blockHash);
@@ -58,7 +57,7 @@ public:
 
 private:
     // typedef std::map<std::string, Entries::Ptr>::iterator CacheItr;
-    using CacheItr = tbb::concurrent_unordered_map<std::string, Entries::Ptr>::iterator;
+    using CacheItr = std::unordered_map<std::string, Entries::Ptr>::iterator;
 
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
@@ -67,7 +66,7 @@ private:
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     // std::map<std::string, Entries::Ptr> m_cache;
-    tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_cache;
+    std::unordered_map<std::string, Entries::Ptr> m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
 

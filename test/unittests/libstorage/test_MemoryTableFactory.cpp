@@ -56,13 +56,13 @@ struct MemoryTableFactoryFixture
     {
         std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
-        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory>();
+        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory<>>();
         memoryDBFactory->setStateStorage(mockAMOPDB);
 
         BOOST_TEST_TRUE(memoryDBFactory->stateStorage() == mockAMOPDB);
     }
 
-    dev::storage::MemoryTableFactory::Ptr memoryDBFactory;
+    dev::storage::MemoryTableFactory<>::Ptr memoryDBFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)
@@ -89,12 +89,12 @@ BOOST_AUTO_TEST_CASE(open_Table)
     entry->setField("key", "balance");
     entry->setField("value", "500");
     table->insert("balance", entry);
-    //auto savePoint = memoryDBFactory->savepoint();
+    // auto savePoint = memoryDBFactory->savepoint();
     auto condition = table->newCondition();
     condition->EQ("key", "name");
     condition->NE("value", "name");
     table->remove("name", condition);
-    //memoryDBFactory->rollback(savePoint);
+    // memoryDBFactory->rollback(savePoint);
     condition = table->newCondition();
     condition->EQ("key", "balance");
     condition->GT("value", "404");

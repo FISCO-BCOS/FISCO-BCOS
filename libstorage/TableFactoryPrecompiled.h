@@ -54,12 +54,13 @@ public:
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address());
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory)
+    void setMemoryTableFactory(
+        std::shared_ptr<dev::storage::MemoryTableFactory<>> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::MemoryTableFactory> getmemoryTableFactory()
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> getmemoryTableFactory()
     {
         return m_memoryTableFactory;
     }
@@ -67,7 +68,7 @@ public:
     h256 hash();
 
 private:
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::MemoryTableFactory<>> m_memoryTableFactory;
 };
 
 }  // namespace blockverifier
