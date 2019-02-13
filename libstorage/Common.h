@@ -35,7 +35,7 @@ const char* const SYS_TABLES = "_sys_tables_";
 const char* const SYS_MINERS = "_sys_miners_";
 const char* const SYS_CURRENT_STATE = "_sys_current_state_";
 const char* const SYS_KEY_CURRENT_NUMBER = "current_number";
-const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_current_transaction_count";
+const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 const char* const SYS_VALUE = "value";
 const char* const SYS_KEY = "key";
 const char* const SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
@@ -46,6 +46,7 @@ const char* const SYS_CONFIG = "_sys_config_";
 const char* const SYS_ACCESS_TABLE = "_sys_table_access_";
 const char* const USER_TABLE_PREFIX = "_user_";
 const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
+const std::string DAG_TRANSFER = "_dag_transfer_";
 
 }  // namespace storage
 }  // namespace dev

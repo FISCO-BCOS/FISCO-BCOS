@@ -22,6 +22,8 @@
 
 #include "Storage.h"
 #include "Table.h"
+#include <libdevcore/Guards.h>
+#include <tbb/concurrent_unordered_map.h>
 
 namespace dev
 {
@@ -45,7 +47,7 @@ public:
 
     virtual h256 hash() override;
     virtual void clear() override;
-    virtual std::unordered_map<std::string, Entries::Ptr>* data() override;
+    virtual tbb::concurrent_unordered_map<std::string, Entries::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);
     void setBlockHash(h256 blockHash);
@@ -55,15 +57,22 @@ public:
     bool checkAuthority(Address const& _origin) const override;
 
 private:
+    // typedef std::map<std::string, Entries::Ptr>::iterator CacheItr;
+    using CacheItr = tbb::concurrent_unordered_map<std::string, Entries::Ptr>::iterator;
+
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
     bool isHashField(const std::string& _key);
     void checkField(Entry::Ptr entry);
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
-    std::unordered_map<std::string, Entries::Ptr> m_cache;
+    // std::map<std::string, Entries::Ptr> m_cache;
+    tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
+
+    mutable dev::SharedMutex x_tableInfo;
+    // mutable dev::SharedMutex x_cache;
 };
 
 }  // namespace storage

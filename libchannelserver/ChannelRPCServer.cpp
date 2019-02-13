@@ -50,6 +50,8 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::channel;
 
+static const int c_seqAbridgedLen = 8;
+
 ChannelRPCServer::~ChannelRPCServer()
 {
     StopListening();
@@ -144,8 +146,9 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (it != _seq2session.end())
     {
-        CHANNEL_LOG(INFO) << "send ethereum resp seq" << LOG_KV("seq", it->first)
-                          << LOG_KV("response", _response);
+        CHANNEL_LOG(DEBUG) << "send ethereum resp seq"
+                           << LOG_KV("seq", it->first.substr(0, c_seqAbridgedLen))
+                           << LOG_KV("response", _response);
 
         std::shared_ptr<bytes> resp(new bytes());
 
@@ -247,7 +250,8 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
     if (e.errorCode() == 0)
     {
         CHANNEL_LOG(INFO) << "receive sdk message" << LOG_KV("length", message->length())
-                          << LOG_KV("type", message->type()) << LOG_KV("sessionID", message->seq());
+                          << LOG_KV("type", message->type())
+                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
 
         switch (message->type())
         {
@@ -294,7 +298,8 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "client ethereum request" << LOG_KV("seq", message->seq())
+    CHANNEL_LOG(DEBUG) << "client ethereum request"
+                       << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                        << LOG_KV("ethereum request",
                               std::string((char*)message->data(), message->dataSize()));
 
@@ -463,7 +468,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "SDK topic message" << LOG_KV("seq", message->seq())
+    CHANNEL_LOG(DEBUG) << "SDK topic message"
+                       << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                        << LOG_KV("message", body);
 
     try
@@ -519,7 +525,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
     {
         try
         {
-            CHANNEL_LOG(DEBUG) << "channel2 request" << LOG_KV("seq", message->seq());
+            CHANNEL_LOG(DEBUG) << "channel2 request"
+                               << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
 
             auto buffer = std::make_shared<bytes>();
             message->encode(*buffer);
@@ -711,8 +718,9 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         std::placeholders::_2);
                 session->asyncSendMessage(_message, fp, 5000);
 
-                CHANNEL_LOG(INFO) << "Push channel message" << _message->seq() << "to session"
-                                  << session->host() << ":" << session->port() << " success";
+                CHANNEL_LOG(INFO) << "Push channel message success"
+                                  << LOG_KV("seq", _message->seq().substr(0, c_seqAbridgedLen))
+                                  << LOG_KV("session", session->host()) << ":" << session->port();
                 _currentSession = session;
             }
 
@@ -756,8 +764,9 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
-        CHANNEL_LOG(INFO) << "Push channel message" << message->seq() << "to session"
-                          << session->host() << ":" << session->port() << " success";
+        CHANNEL_LOG(INFO) << "Push channel message success"
+                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
+                          << LOG_KV("session", session->host()) << ":" << session->port();
     }
 }
 
@@ -769,7 +778,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         std::string topic = message->topic();
 
         CHANNEL_LOG(DEBUG) << "Push to SDK" << LOG_KV("topic", topic)
-                           << LOG_KV("seq", message->seq());
+                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
         std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
 
         if (activedSessions.empty())

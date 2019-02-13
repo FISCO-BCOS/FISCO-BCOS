@@ -16,7 +16,6 @@ state_type=storage
 storage_type=LevelDB
 conf_path="conf"
 bin_path=
-pkcs12_passwd=""
 make_tar=
 debug_log="false"
 log_level="INFO"
@@ -43,15 +42,14 @@ Usage:
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
     -e <FISCO-BCOS binary path>         Default download from GitHub
     -o <Output Dir>                     Default ./nodes/
-    -p <Start Port>                     Default 30300
+    -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use raft
-    -s <State type>                     Default mpt. if set -s, use storage 
+    -s <State type>                     Default storage. if set -s, use mpt 
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -74,7 +72,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:icszhgT" option;do
+while getopts "f:l:o:p:e:t:icszhgT" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -85,15 +83,9 @@ while getopts "f:l:o:p:e:P:t:icszhgT" option;do
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
     p) port_start=(${OPTARG//,/ })
-    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. eg: 30300,20200,8545" && exit 1;fi
+    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
-       [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    ;;
     s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
@@ -719,13 +711,17 @@ genTransTest()
 
 ip_port=http://127.0.0.1:$(( port_start[2] ))
 trans_num=1
-if [ \$# -eq 1 ];then
+target_group=1
+if [ \$# -ge 1 ];then
     trans_num=\$1
+fi
+if [ \$# -ge 2 ];then
+    target_group=\$2
 fi
 
 block_limit()
 {
-    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":[1],"id":83}' \$1\`
+    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \$1\`
     if [ \`echo \${result} | grep -i failed | wc -l\` -gt 0 ] || [ -z \${result} ];then
         echo "getBlockNumber error!"
         exit 1
@@ -741,7 +737,7 @@ send_a_tx()
     if [ \${#limit} -gt 4 ];then echo "blockLimit exceed 0xffff, this scripts is unavailable!"; exit 0;fi
     txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\${random_id}85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1
+    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \$1
 }
 
 send_many_tx()
@@ -906,7 +902,7 @@ for line in ${ip_array[*]};do
         do
             gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.param node.private node.pubkey
+            rm node.param node.private node.pubkey agency.crt
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -984,9 +980,7 @@ for line in ${ip_array[*]};do
     if [ ! -d ${sdk_path} ];then
         gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
-        rm node.param node.private node.pubkey
-        mkdir -p ${sdk_path}/data/ && mv ${sdk_path}/*.* ${sdk_path}/data/
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${sdk_path}/data/node.crt" -inkey "${sdk_path}/data/node.key" -out "$output_dir/${ip}/sdk/keystore.p12"
+        rm node.param node.private node.pubkey node.nodeid agency.crt
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
         cd $output_dir
     fi

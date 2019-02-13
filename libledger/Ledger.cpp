@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libblockverifier/ParaTxExecutor.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
@@ -114,7 +115,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     try
     {
         Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
-                         << LOG_DESC("initTxPoolConfig/initSyncConfig")
+                         << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                          << LOG_KV("configFile", iniConfigFileName);
         ptree pt;
         /// read the configuration file for a specified group
@@ -123,6 +124,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         initTxPoolConfig(pt);
         /// init params related to sync
         initSyncConfig(pt);
+        initTxExecuteConfig(pt);
 
         /// init params releated to consensus(ttl)
         initConsensusIniConfig(pt);
@@ -132,6 +134,13 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
+}
+
+void Ledger::initTxExecuteConfig(ptree const& pt)
+{
+    m_param->mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+    Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
+                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 void Ledger::initTxPoolConfig(ptree const& pt)
@@ -297,7 +306,13 @@ bool Ledger::initBlockVerifier()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
         return false;
     }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
+    std::shared_ptr<ParaTxExecutor> executor = nullptr;
+    if (m_param->mutableTxParam().enableParallel)
+    {
+        executor = std::make_shared<ParaTxExecutor>();
+        executor->initialize();
+    }
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =

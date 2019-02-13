@@ -21,6 +21,7 @@
 #pragma once
 
 #include <libdevcore/Address.h>
+#include <libstorage/Table.h>
 #include <map>
 #include <memory>
 
@@ -46,6 +47,13 @@ public:
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) = 0;
 
+    // is this precompiled need parallel processing, default false.
+    virtual bool isDagPrecompiled() { return false; }
+    virtual std::vector<std::string> getDagTag(bytesConstRef /*param*/)
+    {
+        return std::vector<std::string>();
+    }
+
     virtual uint32_t getParamFunc(bytesConstRef param)
     {
         auto funcBytes = param.cropped(0, 4);
@@ -63,6 +71,10 @@ protected:
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         const std::string& tableName);
+    virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
+    {
+        return std::make_shared<dev::storage::AccessOptions>(origin);
+    }
 };
 
 }  // namespace blockverifier

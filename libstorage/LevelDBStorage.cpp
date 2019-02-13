@@ -33,10 +33,13 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
 {
     try
     {
-        std::string entryKey = table + "_" + key;
+        std::string entryKey = table;
+        entryKey.append("_").append(key);
+
         std::string value;
-        ReadGuard l(m_remoteDBMutex);
+        // ReadGuard l(m_remoteDBMutex);
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+        // l.unlock();
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_LEVELDB_LOG(ERROR)
@@ -130,8 +133,9 @@ size_t LevelDBStorage::commit(
 
         leveldb::WriteOptions writeOptions;
         writeOptions.sync = false;
-        WriteGuard l(m_remoteDBMutex);
+        // WriteGuard l(m_remoteDBMutex);
         auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
+        // l.unlock();
         if (!s.ok())
         {
             STORAGE_LEVELDB_LOG(ERROR)

@@ -20,6 +20,10 @@
 #include "Common.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Guards.h>
+#include "tbb/concurrent_unordered_map.h"
+#include "tbb/concurrent_vector.h"
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -48,6 +52,20 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
+    struct MyHashCompare
+    {
+        static size_t hash(const std::string& x)
+        {
+            size_t h = 0;
+            for (const char* s = x.c_str(); *s; ++s)
+                h = (h * 17) ^ *s;
+            return h;
+        }
+        //! True if strings are equal
+        static bool equal(const std::string& x, const std::string& y) { return x == y; }
+    };
+
+    using FieldsMap = tbb::concurrent_unordered_map<std::string, std::string>;
     typedef std::shared_ptr<Entry> Ptr;
 
     enum Status
@@ -61,7 +79,7 @@ public:
 
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
-    virtual std::unordered_map<std::string, std::string>* fields();
+    virtual FieldsMap* fields();
 
     virtual uint32_t getStatus();
     virtual void setStatus(int status);
@@ -70,8 +88,12 @@ public:
     void setDirty(bool dirty);
 
 private:
-    std::unordered_map<std::string, std::string> m_fields;
+    /// std::map<std::string, std::string> m_fields;
+    FieldsMap m_fields;
+
     bool m_dirty = false;
+
+    // mutable dev::SharedMutex x_fields;
 };
 
 class Entries : public std::enable_shared_from_this<Entries>
@@ -92,8 +114,10 @@ public:
     void setDirty(bool dirty);
 
 private:
-    std::vector<Entry::Ptr> m_entries;
+    // std::vector<Entry::Ptr> m_entries;
+    tbb::concurrent_vector<Entry::Ptr> m_entries;
     bool m_dirty = false;
+    // mutable dev::SharedMutex x_entries;
 };
 
 class Condition : public std::enable_shared_from_this<Condition>
@@ -191,7 +215,7 @@ public:
     }
     virtual h256 hash() = 0;
     virtual void clear() = 0;
-    virtual std::unordered_map<std::string, Entries::Ptr>* data() { return NULL; }
+    virtual tbb::concurrent_unordered_map<std::string, Entries::Ptr>* data() { return NULL; }
     virtual bool checkAuthority(Address const& _origin) const = 0;
 
 protected:
