@@ -25,6 +25,7 @@ namespace dev
 {
 namespace storage
 {
+template <bool IsPara>
 class Table;
 }
 
