@@ -51,6 +51,10 @@ void ParaTxWorker::workLoop()
     while (workerState() == WorkerState::Started)
     {
         m_wakeupNotifier.wait();
+        if (workerState() != WorkerState::Started)
+        {
+            break;
+        }
         doWork();
     }
 }
@@ -61,7 +65,8 @@ void ParaTxExecutor::initialize(unsigned _threadNum)
     for (auto i = _threadNum; i > 0; --i)
     {
         m_notifiers.push_back(make_shared<WakeupNotifier>());
-        m_workers.push_back(ParaTxWorker(*(m_notifiers.back()), "ParaTxExecutor_" + std::to_string(i)));
+        m_workers.push_back(
+            ParaTxWorker(*(m_notifiers.back()), "ParaTxExecutor_" + std::to_string(i)));
         m_workers.back().start();
     }
 }
@@ -70,7 +75,7 @@ void ParaTxExecutor::start(shared_ptr<TxDAGFace> _txDAG)
 {
     auto countDownLatch = make_shared<CountDownLatch>(threadNum());
 
-    for(unsigned int i = 0; i < threadNum(); ++i)
+    for (unsigned int i = 0; i < threadNum(); ++i)
     {
         m_workers[i].setDAG(_txDAG);
         m_workers[i].setCountDownLatch(countDownLatch);
