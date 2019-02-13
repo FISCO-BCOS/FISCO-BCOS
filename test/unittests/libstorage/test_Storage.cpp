@@ -30,7 +30,7 @@ struct StorageFixture
     StorageFixture()
     {
         entry = std::make_shared<Entry>();
-        entries = std::make_shared<Entries>();
+        entries = std::make_shared<Entries<>>();
         condition = std::make_shared<Condition>();
     }
 

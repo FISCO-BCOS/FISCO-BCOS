@@ -86,7 +86,7 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
 
-    MemoryTable<>::Ptr memoryTable = std::make_shared<MemoryTable>();
+    MemoryTable<IsPara>::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
@@ -115,20 +115,12 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    if (m_isPara)
-    {
-        memoryTable->setRecorder(
-            [](Table<>::Ptr, Change::Kind, string const&, vector<Change::Record>&) {})
-    }
-    else
-    {
-        memoryTable->setRecorder([&](Table<>::Ptr _table, Change::Kind _kind, string const& _key,
-                                     vector<Change::Record>& _records) {
-            return;  // XXX ignore it for testing
-            dev::WriteGuard l(x_changeLog);
-            m_changeLog.emplace_back(_table, _kind, _key, _records);
-        });
-    }
+    memoryTable->setRecorder([&](Table<IsPara>::Ptr _table, Change::Kind _kind, string const& _key,
+                                 vector<Change::Record>& _records) {
+        return;  // XXX ignore it for testing
+        dev::WriteGuard l(x_changeLog);
+        m_changeLog.emplace_back(_table, _kind, _key, _records);
+    });
 
     memoryTable->init(tableName);
     m_name2Table.insert({tableName, memoryTable});
@@ -271,13 +263,14 @@ void MemoryTableFactory<IsPara>::commit()
 template <bool IsPara>
 void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
-    vector<dev::storage::Table<> ata::Ptr> datas;
+    vector<dev::storage::Table<IsPara> ata::Ptr> datas;
 
     for (auto& dbIt : m_name2Table)
     {
         auto table = dbIt.second;
 
-        dev::storage::Table<> ata::Ptr tableData = make_shared<dev::storage::Table<> ata>();
+        dev::storage::Table<IsPara> ata::Ptr tableData =
+            make_shared<dev::storage::Table<IsPara> ata>();
         tableData->tableName = dbIt.first;
 
         bool dirtyTable = false;
@@ -374,7 +367,7 @@ storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::s
 template <bool IsPara>
 void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    Table<>::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    Table<IsPara>::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

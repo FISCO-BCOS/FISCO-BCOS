@@ -189,7 +189,7 @@ struct LevelDBFixture
     }
     Entries<>::Ptr getEntries()
     {
-        Entries<>::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries<>>();
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("Name", "LiSi");
         entry->setField("id", "1");
