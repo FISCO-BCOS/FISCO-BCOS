@@ -70,7 +70,7 @@ typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
             return std::make_shared<Entries<>>();
         }
         auto indexes = processEntries(entries, condition);
-        Entries<IsPara>::Ptr resultEntries = std::make_shared<Entries<>>();
+        typename Entries<IsPara>::Ptr resultEntries = std::make_shared<Entries<>>();
         for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
@@ -171,7 +171,7 @@ inline int dev::storage::MemoryTable<IsPara>::insert(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
         // key);
 
-        Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
+        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
         Condition::Ptr condition = std::make_shared<Condition>();
 
         CacheItr it;

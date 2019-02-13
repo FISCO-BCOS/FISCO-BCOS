@@ -48,7 +48,7 @@ MemoryTableFactory<IsPara>::MemoryTableFactory() : m_blockHash(h256(0)), m_block
 }
 
 template <bool IsPara>
-Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
+typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     const string& tableName, bool authorityFlag)
 {
     auto it = m_name2Table.find(tableName);
@@ -128,7 +128,7 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
 }
 
 template <bool IsPara>
-Table<IsPara>::Ptr MemoryTableFactory<IsPara>::createTable(const string& tableName,
+typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::createTable(const string& tableName,
     const string& keyField, const std::string& valueField, bool authorigytFlag,
     Address const& _origin)
 {
