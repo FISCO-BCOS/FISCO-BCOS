@@ -45,7 +45,7 @@ struct EntriesPrecompiledFixture
     ~EntriesPrecompiledFixture() {}
 
     dev::storage::Entry::Ptr entry;
-    dev::storage::Entries::Ptr entries;
+    dev::storage::Entries<>::Ptr entries;
     dev::blockverifier::ExecutiveContext::Ptr precompiledContext;
     dev::blockverifier::EntriesPrecompiled::Ptr entriesPrecompiled;
 };

@@ -100,7 +100,7 @@ public:
     typedef typename std::conditional<IsPara, tbb::concurrent_vector<Ptr>, std::vector<Ptr>>::type
         EntriesContainerType;
 
-    Ptr get(size_t i);
+    Entry::Ptr get(size_t i);
     size_t size() const;
     void addEntry(Entry::Ptr entry);
     bool dirty() const;
