@@ -128,11 +128,9 @@ public:
     void start() { startWorking(); }
     void stop()
     {
-        doneWorking();
-        if (isWorking())
-        {
-            stopWorking();
-        }
+        workerState() = WorkerState::Stopping;
+        m_wakeupNotifier.notify();
+        terminate();
     }
 
 protected:

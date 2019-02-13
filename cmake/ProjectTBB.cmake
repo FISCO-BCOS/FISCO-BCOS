@@ -10,12 +10,14 @@ ExternalProject_Add(tbb
     LOG_INSTALL 0
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
-    INSTALL_COMMAND bash -c "cp ./build/*_release/*.so* ${CMAKE_SOURCE_DIR}/deps/lib && export LD_LIBRARY_PATH=${CMAKE_SOURCE_DIR}/deps/lib:$LD_LIBRARY_PATH"
+    INSTALL_COMMAND bash -c "cp ./build/*_release/*.so* ${CMAKE_SOURCE_DIR}/deps/lib"
+                            " && cp -r ./include/tbb ${CMAKE_SOURCE_DIR}/deps/include/tbb"
+                            " && export LD_LIBRARY_PATH=${CMAKE_SOURCE_DIR}/deps/lib:$LD_LIBRARY_PATH"
 )
 
 ExternalProject_Get_Property(tbb SOURCE_DIR)
 add_library(TBB STATIC IMPORTED)
-set(TBB_INCLUDE_DIR ${SOURCE_DIR}/include/)
+set(TBB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/deps/include)
 set(TBB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.so)
 
 set_property(TARGET TBB PROPERTY IMPORTED_LOCATION ${TBB_LIBRARY})
