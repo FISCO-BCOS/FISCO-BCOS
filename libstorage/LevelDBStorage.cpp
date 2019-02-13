@@ -29,7 +29,7 @@
 using namespace dev;
 using namespace dev::storage;
 
-Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
+Entries<>::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
 {
     try
     {
@@ -48,7 +48,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
         }
 
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
             // parse json
@@ -86,7 +86,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
         BOOST_THROW_EXCEPTION(e);
     }
 
-    return Entries::Ptr();
+    return Entries<>::Ptr();
 }
 
 size_t LevelDBStorage::commit(

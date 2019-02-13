@@ -36,7 +36,7 @@ public:
 
     virtual ~MemoryStorage(){};
 
-    virtual Entries::Ptr select(
+    virtual Entries<>::Ptr select(
         h256, int, const std::string& table, const std::string& key) override
     {
         auto search = data.find(table);

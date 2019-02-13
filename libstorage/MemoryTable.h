@@ -36,7 +36,7 @@ public:
     virtual ~MemoryTable(){};
 
     virtual void init(const std::string& tableName);
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
+    virtual Entries<>::Ptr select(const std::string& key, Condition::Ptr condition) override;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
     virtual int insert(const std::string& key, Entry::Ptr entry,
@@ -46,7 +46,7 @@ public:
 
     virtual h256 hash() override;
     virtual void clear() override;
-    virtual std::unordered_map<std::string, Entries::Ptr>* data() override;
+    virtual std::unordered_map<std::string, Entries<>::Ptr>* data() override;
 
     void setStateStorage(Storage::Ptr amopDB);
     void setBlockHash(h256 blockHash);
@@ -56,17 +56,17 @@ public:
     bool checkAuthority(Address const& _origin) const override;
 
 private:
-    // typedef std::map<std::string, Entries::Ptr>::iterator CacheItr;
-    using CacheItr = std::unordered_map<std::string, Entries::Ptr>::iterator;
+    // typedef std::map<std::string, Entries<>::Ptr>::iterator CacheItr;
+    using CacheItr = std::unordered_map<std::string, Entries<>::Ptr>::iterator;
 
-    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
+    std::vector<size_t> processEntries(Entries<>::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
     bool isHashField(const std::string& _key);
     void checkField(Entry::Ptr entry);
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
-    // std::map<std::string, Entries::Ptr> m_cache;
-    std::unordered_map<std::string, Entries::Ptr> m_cache;
+    // std::map<std::string, Entries<>::Ptr> m_cache;
+    std::unordered_map<std::string, Entries<>::Ptr> m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
 

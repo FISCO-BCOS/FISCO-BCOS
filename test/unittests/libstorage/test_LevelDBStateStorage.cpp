@@ -187,9 +187,9 @@ struct LevelDBFixture
         std::shared_ptr<MockLevelDB> mockLevelDB = std::make_shared<MockLevelDB>();
         levelDB->setDB(mockLevelDB);
     }
-    Entries::Ptr getEntries()
+    Entries<>::Ptr getEntries()
     {
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("Name", "LiSi");
         entry->setField("id", "1");
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
     int num = 1;
     std::string table("t_test");
     std::string key("id");
-    Entries::Ptr entries = levelDB->select(h, num, table, key);
+    Entries<>::Ptr entries = levelDB->select(h, num, table, key);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(commit)
     std::vector<dev::storage::Table<> ata::Ptr> datas;
     dev::storage::Table<> ata::Ptr tableData = std::make_shared<dev::storage::Table<> ata>();
     tableData->tableName = "t_test";
-    Entries::Ptr entries = getEntries();
+    Entries<>::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("LiSi"), entries));
     if (!tableData->data.empty())
     {
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(exception)
     std::vector<dev::storage::Table<> ata::Ptr> datas;
     dev::storage::Table<> ata::Ptr tableData = std::make_shared<dev::storage::Table<> ata>();
     tableData->tableName = "e";
-    Entries::Ptr entries = getEntries();
+    Entries<>::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("Exception"), entries));
     datas.push_back(tableData);
     BOOST_CHECK_THROW(levelDB->commit(h, num, datas, blockHash), boost::exception);

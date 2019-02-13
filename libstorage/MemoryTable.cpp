@@ -38,12 +38,12 @@ void dev::storage::MemoryTable::init(const std::string& tableName)
                        << LOG_KV("tableName", tableName);
 }
 
-inline Entries::Ptr dev::storage::MemoryTable::select(
+inline Entries<>::Ptr dev::storage::MemoryTable::select(
     const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
         {
@@ -71,7 +71,7 @@ inline Entries::Ptr dev::storage::MemoryTable::select(
             return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
-        Entries::Ptr resultEntries = std::make_shared<Entries>();
+        Entries<>::Ptr resultEntries = std::make_shared<Entries>();
         for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
@@ -101,7 +101,7 @@ inline int dev::storage::MemoryTable::update(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
         // key);
 
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
         {
@@ -170,7 +170,7 @@ inline int dev::storage::MemoryTable::insert(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
         // key);
 
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries<>::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
 
         CacheItr it;
@@ -231,7 +231,7 @@ inline int dev::storage::MemoryTable::remove(
     }
     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
-    Entries::Ptr entries = std::make_shared<Entries>();
+    Entries<>::Ptr entries = std::make_shared<Entries>();
 
     CacheItr it;
     {
@@ -318,7 +318,7 @@ void dev::storage::MemoryTable::clear()
     }
 }
 
-ConcurrentUnorderedMap<std::string, Entries::Ptr>* dev::storage::MemoryTable::data()
+ConcurrentUnorderedMap<std::string, Entries<>::Ptr>* dev::storage::MemoryTable::data()
 {
     return &m_cache;
 }
@@ -328,7 +328,7 @@ void dev::storage::MemoryTable::setStateStorage(Storage::Ptr amopDB)
     m_remoteDB = amopDB;
 }
 
-std::vector<size_t> MemoryTable::processEntries(Entries::Ptr entries, Condition::Ptr condition)
+std::vector<size_t> MemoryTable::processEntries(Entries<>::Ptr entries, Condition::Ptr condition)
 {
     std::vector<size_t> indexes;
     indexes.reserve(entries->size());
