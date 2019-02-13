@@ -86,7 +86,7 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
 
-    MemoryTable<IsPara>::Ptr memoryTable = std::make_shared<MemoryTable>();
+    typename MemoryTable<IsPara>::Ptr memoryTable = std::make_shared<MemoryTable<IsPara>>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);

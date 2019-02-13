@@ -141,7 +141,7 @@ int dev::storage::MemoryTable<IsPara>::update(
                 updateEntry->setField(it.first, it.second);
             }
         }
-        m_recorder(shared_from_this(), Change::Update, key, records);
+        m_recorder(this->shared_from_this(), Change::Update, key, records);
 
         entries->setDirty(true);
 
@@ -196,7 +196,7 @@ inline int dev::storage::MemoryTable<IsPara>::insert(
         checkField(entry);
         Change::Record record(entries->size() + 1u);
         std::vector<Change::Record> value{record};
-        m_recorder(shared_from_this(), Change::Insert, key, value);
+        m_recorder(this->shared_from_this(), Change::Insert, key, value);
         if (entries->size() == 0)
         {
             entries->addEntry(entry);
@@ -265,7 +265,7 @@ inline int dev::storage::MemoryTable<IsPara>::remove(
         removeEntry->setStatus(1);
         records.emplace_back(i);
     }
-    m_recorder(shared_from_this(), Change::Remove, key, records);
+    m_recorder(this->shared_from_this(), Change::Remove, key, records);
 
     entries->setDirty(true);
 
