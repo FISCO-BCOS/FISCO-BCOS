@@ -39,8 +39,8 @@ class TransactionReceipt
 public:
     TransactionReceipt(){};
     TransactionReceipt(bytesConstRef _rlp);
-    TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log, u256 _status,
-        bytes _bytes, Address const& _contractAddress = Address());
+    TransactionReceipt(h256 const& _root, u256 const& _gasUsed, LogEntries const& _log,
+        u256 _status, bytes _bytes, Address const& _contractAddress = Address());
     TransactionReceipt(TransactionReceipt const& _other);
     h256 const& stateRoot() const { return m_stateRoot; }
     void setStateRoot(h256 const& _stateRoot) { m_stateRoot = _stateRoot; }

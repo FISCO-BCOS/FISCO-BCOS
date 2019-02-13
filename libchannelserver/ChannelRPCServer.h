@@ -33,6 +33,7 @@
 #include "libdevcore/ThreadPool.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Common.h>
 #include <libp2p/Service.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -99,22 +100,33 @@ public:
 
     void CloseConnection(int _socket);
 
-    void onNodeChannelRequest(
-        dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>, p2p::P2PMessage::Ptr);
+    void onNodeChannelRequest(dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>,
+        std::shared_ptr<p2p::P2PMessage>);
 
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
 
     void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext);
 
+    std::shared_ptr<dev::channel::ChannelServer> channelServer() { return _server; }
     void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
 
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
         std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
+    void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
+
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message);
 
     virtual std::string newSeq();
+
+    void setCallbackSetter(
+        std::function<void(std::function<void(const std::string& receiptContext)>*)> callbackSetter)
+    {
+        m_callbackSetter = callbackSetter;
+    };
+
+    void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
     void initSSLContext();
@@ -145,6 +157,9 @@ private:
     int _sessionCount = 1;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+
+    std::function<void(std::function<void(const std::string& receiptContext)>*)> m_callbackSetter;
+    std::vector<dev::eth::Handler<int64_t> > m_handlers;
 };
 
 }  // namespace dev

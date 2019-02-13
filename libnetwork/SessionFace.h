@@ -27,13 +27,14 @@
  */
 
 #pragma once
-#include "SocketFace.h"
+#include "Common.h"
 #include <memory>
 
 namespace dev
 {
 namespace network
 {
+class SocketFace;
 #define CallbackFunc std::function<void(dev::network::NetworkException, dev::network::Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
@@ -53,12 +54,12 @@ public:
     typedef std::shared_ptr<SessionFace> Ptr;
 
     virtual void start() = 0;
-    virtual void disconnect(DisconnectReason _reason) = 0;
+    virtual void disconnect(DisconnectReason) = 0;
 
     virtual bool isConnected() const = 0;
 
-    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) = 0;
+    virtual void asyncSendMessage(
+        Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) = 0;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;

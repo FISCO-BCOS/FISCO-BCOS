@@ -27,9 +27,6 @@ using namespace std;
 using namespace dev;
 using namespace dev::network;
 
-unsigned dev::network::c_defaultIPPort = 16789;
-bool dev::network::NodeIPEndpoint::test_allowLocal = false;
-
 namespace dev
 {
 std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _ep)

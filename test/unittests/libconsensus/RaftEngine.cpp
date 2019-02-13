@@ -31,7 +31,9 @@
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <thread>
 
 using namespace std;
 using namespace dev;
@@ -54,16 +56,14 @@ public:
     }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
-    void disconnect(dev::network::DisconnectReason _reason) override {}
+    void disconnect(dev::network::DisconnectReason) override {}
 
     bool isConnected() const override { return true; }
 
-    void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override
+    void asyncSendMessage(Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
-            messageHandler) override
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>) override
     {}
     bool actived() const override { return true; }
     std::shared_ptr<SocketFace> socket() override { return nullptr; }
@@ -85,7 +85,7 @@ public:
 
     void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason reason) { m_run = false; }
+    void stop(dev::network::DisconnectReason) override { m_run = false; }
 
     NodeID nodeID() override { return m_id; }
 
@@ -188,6 +188,36 @@ BOOST_AUTO_TEST_CASE(testVoteState)
     voteState.firstVote = 4;
     voteState.discardedVote = 5;
     BOOST_CHECK(voteState.totalVoteCount() == 15);
+}
+
+BOOST_AUTO_TEST_CASE(testGenerateMsg)
+{
+    raftEngine->setUncommitedBlock(fakeBlock.m_block);
+    raftEngine->setUncommitedNumber(10);
+    raftEngine->setConsensusBlockNumber(10);
+
+    auto hbMsg = raftEngine->generateHeartbeat();
+    BOOST_CHECK(hbMsg->protocolID() == raftEngine->protocolId());
+
+    RaftMsgPacket packet;
+    auto data = *(hbMsg->buffer());
+    packet.decode(ref(data));
+
+    RaftHeartBeat hb;
+    hb.populate(RLP(ref(packet.data))[0]);
+    BOOST_CHECK(hb.leader == raftEngine->nodeIdx());
+    BOOST_CHECK(hb.uncommitedBlockNumber == 10);
+
+    auto vrMsg = raftEngine->generateVoteReq();
+    BOOST_CHECK(vrMsg->protocolID() == raftEngine->protocolId());
+
+    data = *(vrMsg->buffer());
+    packet.decode(ref(data));
+
+    RaftVoteReq vr;
+    vr.populate(RLP(ref(packet.data))[0]);
+    BOOST_CHECK(vr.candidate == raftEngine->nodeIdx());
+    BOOST_CHECK(vr.lastBlockNumber == raftEngine->getBlockChain()->number() + 1);
 }
 
 BOOST_AUTO_TEST_CASE(testHandleHeartbeatMsg)
@@ -598,10 +628,33 @@ BOOST_AUTO_TEST_CASE(testRunAsCandidate)
     BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
 }
 
+BOOST_AUTO_TEST_CASE(testTryCommitUncommitedBlock)
+{
+    raftEngine->setUncommitedBlock(Block());
+    RaftHeartBeatResp resp;
+    BOOST_CHECK_NO_THROW(raftEngine->tryCommitUncommitedBlock(resp));
+}
+
 BOOST_AUTO_TEST_CASE(testShouldSeal)
 {
     raftEngine->setState(RaftRole::EN_STATE_FOLLOWER);
     BOOST_CHECK(raftEngine->shouldSeal() == false);
+}
+
+BOOST_AUTO_TEST_CASE(testCommitBlock)
+{
+    raftEngine->setState(RaftRole::EN_STATE_LEADER);
+    auto t = std::thread(std::bind(&FakeRaftEngine::fakeLeader, raftEngine.get()));
+    auto flag = false;
+    auto block = fakeBlock.m_block;
+    auto number = raftEngine->getBlockChain()->number();
+    block.header().setNumber(number + 1);
+    auto parent = raftEngine->getBlockChain()->getBlockByNumber(number);
+    block.header().setParentHash(parent->header().hash());
+    block.header().setSealerList(fakeMinerList);
+    BOOST_CHECK_NO_THROW(flag = raftEngine->commit(block));
+    BOOST_CHECK(flag == true);
+    t.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

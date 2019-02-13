@@ -78,7 +78,7 @@ struct PBFTMsgPacket
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
-               data == msg.data && timestamp == msg.timestamp;
+               data == msg.data;
     }
     bool operator!=(PBFTMsgPacket const& msg) { return !operator==(msg); }
     /**
@@ -166,11 +166,12 @@ struct PBFTMsg
         sig = signHash(block_hash, _keyPair);
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
+    virtual ~PBFTMsg() = default;
 
     bool operator==(PBFTMsg const& req) const
     {
-        return height == req.height && view == req.view && timestamp == req.timestamp &&
-               block_hash == req.block_hash && sig == req.sig && sig2 == req.sig2;
+        return height == req.height && view == req.view && block_hash == req.block_hash &&
+               sig == req.sig && sig2 == req.sig2;
     }
 
     bool operator!=(PBFTMsg const& req) const { return !operator==(req); }
@@ -297,6 +298,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         block = req.block;
+        pBlock = req.pBlock;
         p_execContext = nullptr;
     }
 
@@ -318,6 +320,7 @@ struct PrepareReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         blockStruct.encode(block);
+        pBlock = std::make_shared<dev::eth::Block>(std::move(blockStruct));
         p_execContext = nullptr;
     }
 
@@ -340,7 +343,7 @@ struct PrepareReq : public PBFTMsg
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
         pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
-                   << timestamp << " , block_hash: " << toHex(block_hash) << std::endl;
+                   << timestamp << " , block_hash: " << block_hash.abridged();
     }
 
     bool operator==(PrepareReq const& req) const

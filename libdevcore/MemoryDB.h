@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "Common.h"
 #include "RLP.h"
 #include <unordered_map>
 

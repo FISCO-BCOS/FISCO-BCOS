@@ -50,7 +50,7 @@ public:
     }
 
     void initParams(boost::program_options::variables_map const& vm,
-        boost::program_options::options_description const& option)
+        boost::program_options::options_description const&)
     {
         if (vm.count("txSpeed") || vm.count("t"))
             m_txSpeed = vm["txSpeed"].as<float>();

@@ -21,18 +21,17 @@
 #pragma once
 
 #include <libdevcore/Address.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Hash.h>
 #include <libstorage/Table.h>
+#include <map>
 #include <memory>
-#include <unordered_map>
 
 namespace dev
 {
 namespace storage
 {
 class Table;
-}
+}  // namespace storage
+
 namespace blockverifier
 {
 class ExecutiveContext;
@@ -50,7 +49,7 @@ public:
 
     // is this precompiled need parallel processing, default false.
     virtual bool isDagPrecompiled() { return false; }
-    virtual std::vector<std::string> getDagTag(bytesConstRef param)
+    virtual std::vector<std::string> getDagTag(bytesConstRef /*param*/)
     {
         return std::vector<std::string>();
     }
@@ -64,16 +63,14 @@ public:
                ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
     }
 
-    virtual uint32_t getFuncSelector(std::string const& _functionName)
-    {
-        uint32_t func = *(uint32_t*)(sha3(_functionName).ref().cropped(0, 4).data());
-        return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
-               ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
-    }
+    virtual uint32_t getFuncSelector(std::string const& _functionName);
     virtual bytesConstRef getParamData(bytesConstRef param) { return param.cropped(4); }
 
 protected:
-    std::unordered_map<std::string, uint32_t> name2Selector;
+    std::map<std::string, uint32_t> name2Selector;
+    std::shared_ptr<dev::storage::Table> openTable(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        const std::string& tableName);
     virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
     {
         return std::make_shared<dev::storage::AccessOptions>(origin);

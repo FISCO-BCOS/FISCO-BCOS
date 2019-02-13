@@ -58,8 +58,8 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getClientVersionI);
-        this->bindAndAddMethod(
-            jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
+        this->bindAndAddMethod(jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
@@ -67,6 +67,9 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getGroupListI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getNodeIDListI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
@@ -103,6 +106,9 @@ public:
             jsonrpc::Procedure("getPendingTransactions", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPendingTransactionsI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getPendingTxSize", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getPendingTxSizeI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("call", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                 jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
@@ -153,21 +159,25 @@ public:
         response = this->getSyncStatus(request[0u].asInt());
     }
 
-    inline virtual void getClientVersionI(const Json::Value& request, Json::Value& response)
+    inline virtual void getClientVersionI(const Json::Value&, Json::Value& response)
     {
         response = this->getClientVersion();
     }
     inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPeers();
+        response = this->getPeers(request[0u].asInt());
     }
     inline virtual void getGroupPeersI(const Json::Value& request, Json::Value& response)
     {
         response = this->getGroupPeers(request[0u].asInt());
     }
-    inline virtual void getGroupListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
     {
         response = this->getGroupList();
+    }
+    inline virtual void getNodeIDListI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getNodeIDList(request[0u].asInt());
     }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
@@ -209,6 +219,10 @@ public:
     {
         response = this->getPendingTransactions(request[0u].asInt());
     }
+    inline virtual void getPendingTxSizeI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getPendingTxSize(request[0u].asInt());
+    }
     inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
     {
         response = this->getCode(request[0u].asInt(), request[1u].asString());
@@ -241,9 +255,10 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() = 0;
-    virtual Json::Value getPeers() = 0;
+    virtual Json::Value getPeers(int param1) = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
     virtual Json::Value getGroupList() = 0;
+    virtual Json::Value getNodeIDList(int param1) = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;
@@ -262,8 +277,10 @@ public:
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(int param1, const std::string& param2) = 0;
-    /// @return information about getPendingTransactions.
+    /// @return information about PendingTransactions.
     virtual Json::Value getPendingTransactions(int param1) = 0;
+    /// @return size about PendingTransactions.
+    virtual std::string getPendingTxSize(int param1) = 0;
     /// Returns code at a given address.
     virtual std::string getCode(int param1, const std::string& param2) = 0;
     /// Returns the count of transactions and blocknumber.

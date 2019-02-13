@@ -21,10 +21,8 @@
 
 #pragma once
 
-#include "Common.h"
 #include "MemoryDB.h"
-#include "db.h"
-#include "easylog.h"
+#include "dbfwd.h"
 #include <memory>
 
 namespace dev

@@ -24,6 +24,7 @@
 
 #include "libnetwork/Common.h"
 #include "libp2p/Common.h"
+#include <libdevcore/CommonIO.h>
 
 #include <libdevcore/Assertions.h>
 #include <libp2p/P2PMessage.h>
@@ -124,7 +125,6 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
     /// test default construct
     dev::network::NodeIPEndpoint m_endpoint;
-    BOOST_CHECK(NodeIPEndpoint::test_allowLocal == false);
     BOOST_CHECK(m_endpoint.address.to_string() == "0.0.0.0");
     BOOST_CHECK(m_endpoint.udpPort == 0);
     BOOST_CHECK(m_endpoint.tcpPort == 0);
@@ -135,7 +135,6 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     /// "0.0.0.0" not the public address
     m_endpoint.address = bi::address::from_string("0.0.0.0");
     /// "0.0.0.0" is not the specified address
-    NodeIPEndpoint::test_allowLocal = true;
     m_endpoint.address = bi::address::from_string("10.0.0.0");
     /// test construct: NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
     uint16_t port = 30303;
@@ -171,7 +170,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     std::map<NodeIPEndpoint, bool> m_endpoint_map;
     m_endpoint_map[m_endpoint] = true;
     BOOST_CHECK(m_endpoint_map.size() == 1);
-    m_endpoint_map[m_endpoint2] == false;
+    m_endpoint_map[m_endpoint2] = false;
     BOOST_CHECK(m_endpoint_map.size() == 2);
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == false);
     m_endpoint_map[NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port)] = true;

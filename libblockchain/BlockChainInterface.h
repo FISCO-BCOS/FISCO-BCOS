@@ -73,8 +73,8 @@ public:
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;
-    virtual void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
-    {}
+    virtual void getNonces(
+        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) = 0;
 
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.
@@ -88,7 +88,7 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    dev::eth::Handler<> onReady(T const& _t)
+    dev::eth::Handler<int64_t> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
@@ -96,7 +96,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    dev::eth::Signal<> m_onReady;
+    dev::eth::Signal<int64_t> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace dev

@@ -126,6 +126,14 @@ public:
     void setDAG(std::shared_ptr<TxDAGFace> _txDAG) { m_txDAG = _txDAG; }
     void setCountDownLatch(std::shared_ptr<CountDownLatch> _latch) { m_countDownLatch = _latch; }
     void start() { startWorking(); }
+    void stop()
+    {
+        doneWorking();
+        if (isWorking())
+        {
+            stopWorking();
+        }
+    }
 
 protected:
     void workLoop() override;
@@ -147,6 +155,18 @@ public:
     void start(std::shared_ptr<TxDAGFace> _txDAG);
     // Count of the worker threads;
     unsigned threadNum() { return m_workers.size(); }
+    ~ParaTxExecutor()
+    {
+        for (auto& worker : m_workers)
+        {
+            worker.stop();
+        }
+
+        for (auto& notifier : m_notifiers)
+        {
+            notifier->notify();
+        }
+    }
 
 private:
     std::vector<ParaTxWorker> m_workers;

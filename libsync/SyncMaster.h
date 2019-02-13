@@ -63,13 +63,14 @@ public:
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
     {
-        m_syncStatus = std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash);
+        m_syncStatus =
+            std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
         m_msgEngine = std::make_shared<SyncMsgEngine>(
             _service, _txPool, _blockChain, m_syncStatus, _protocolId, _nodeId, _genesisHash);
 
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
-        m_blockSubmitted = m_blockChain->onReady([&]() { this->noteNewBlocks(); });
+        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
@@ -161,8 +162,6 @@ private:
     int64_t m_currentSealingNumber = 0;
 
     // Internal coding variable
-    /// mutex
-    mutable SharedMutex x_sync;
     /// mutex to access m_signalled
     Mutex x_signalled;
     /// mutex to protect m_currentSealingNumber
@@ -175,11 +174,12 @@ private:
     bool m_newTransactions = false;
     bool m_newBlocks = false;
     uint64_t m_maintainBlocksTimeout = 0;
+    bool m_needMaintainTransactions = false;
 
 
     // settings
     dev::eth::Handler<> m_tqReady;
-    dev::eth::Handler<> m_blockSubmitted;
+    dev::eth::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;

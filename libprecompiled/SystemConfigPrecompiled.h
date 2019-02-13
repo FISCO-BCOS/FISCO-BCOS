@@ -20,8 +20,6 @@
  */
 #pragma once
 #include "Common.h"
-#include "libblockverifier/ExecutiveContext.h"
-#include "libprecompiled/CRUDPrecompiled.h"
 namespace dev
 {
 namespace precompiled
@@ -45,15 +43,15 @@ contract SystemConfigTable
 }
 #endif
 
-class SystemConfigPrecompiled : public CRUDPrecompiled
+class SystemConfigPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<SystemConfigPrecompiled> Ptr;
     SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
-    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address());
 
 private:
     bool checkValueValid(std::string const& key, std::string const& value);

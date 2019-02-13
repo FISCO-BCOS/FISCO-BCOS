@@ -50,6 +50,7 @@ include(EthCompilerSettings)
 include(EthDependencies)
 
 # install dependencies
+include(ProjectTBB)
 include(ProjectMHD)
 include(ProjectCryptopp)
 include(ProjectSecp256k1)

@@ -63,19 +63,6 @@ void Executive::initialize(Transaction const& _transaction)
 
     if (!m_t.hasZeroSignature())
     {
-        // Avoid invalid transactions.
-        Address sender;
-        try
-        {
-            sender = m_t.sender();
-        }
-        catch (InvalidSignature const&)
-        {
-            LOG(WARNING) << "Invalid Signature";
-            m_excepted = TransactionException::InvalidSignature;
-            throw;
-        }
-
         // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
@@ -85,8 +72,8 @@ void Executive::initialize(Transaction const& _transaction)
     }
 }
 
-void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
-    BlockHeader const& _header, u256 const& _gasUsed) const
+void Executive::verifyTransaction(
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
@@ -101,18 +88,8 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
 
 bool Executive::execute()
 {
-    // Entry point for a user-executed transaction.
-
-    // Pay...
-
-    // LOG(TRACE) << "Paying " << m_gasCost << " from sender for gas (" << m_t.gas() << " gas at "
-    //           << m_t.gasPrice() << ")";
-    // m_s.subBalance(m_t.sender(), m_gasCost);
-
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    // LOG(TRACE) << "Practical limitation of tx gas: " << txGasLimit;
-
-    assert(txGasLimit >= (u256)m_baseGasRequired);
+    assert(m_t.gas() >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
@@ -151,7 +128,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         bytes output;
         bool success;
         tie(success, output) =
-            m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data);
+            m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
     }

@@ -23,7 +23,7 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/GlobalConfigure.h>
+#include <libconfig/GlobalConfigure.h>
 
 namespace dev
 {

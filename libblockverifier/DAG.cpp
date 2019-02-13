@@ -65,15 +65,32 @@ void DAG::generate()
 
 ID DAG::pop()
 {
+    /*
     Guard l(x_topLevel);
     if (m_topLevel.empty())
         return INVALID_ID;
 
-    ID top = std::move(m_topLevel.front());
+    ID top = m_topLevel.front();
     m_topLevel.pop();
     return top;
+    */
+    return 0;
 }
 
+ID DAG::waitPop()
+{
+    ID top;
+    auto ret = m_topLevel.try_pop(top);
+    if (ret)
+    {
+        return top;
+    }
+    else
+    {
+        return INVALID_ID;
+    }
+}
+/*
 ID DAG::waitPop()
 {
     std::unique_lock<std::mutex> ul(x_topLevel);
@@ -85,11 +102,11 @@ ID DAG::waitPop()
             cv_topLevel.wait(ul);
     }
 
-    ID top = std::move(m_topLevel.front());
+    ID top = m_topLevel.front();
     m_topLevel.pop();
     return top;
 }
-
+*/
 ID DAG::consume(ID _id)
 {
     ID producedNum = 0;
@@ -98,31 +115,19 @@ ID DAG::consume(ID _id)
     {
         auto vtx = m_vtxs[id];
         {
-            WriteGuard l(vtx->vtxLock);
             vtx->inDegree -= 1;
         }
         if (vtx->inDegree == 0)
         {
             producedNum++;
-            if (producedNum == 1)
-            {
+            if (producedNum == 0)
                 nextId = id;
-            }
             else
             {
-                {
-                    Guard l(x_topLevel);
-                    m_topLevel.push(id);
-                }
-                cv_topLevel.notify_one();  // await other thread
+                m_topLevel.push(id);
             }
         }
     }
-
-    Guard l(x_totalConsume);
-    m_totalConsume += 1;
-    if (m_totalConsume >= m_totalVtxs)
-        cv_topLevel.notify_all();  // If DAG reach the end, awake all waitPop thread to exit
 
     // PARA_LOG(TRACE) << LOG_BADGE("DAG") << LOG_DESC("consumed")
     //                << LOG_KV("queueSize", m_topLevel.size());
@@ -134,8 +139,7 @@ ID DAG::consume(ID _id)
 void DAG::clear()
 {
     m_vtxs = std::vector<std::shared_ptr<Vertex>>();
-    Guard l(x_topLevel);
-    m_topLevel = queue<ID>();
+    // XXXX m_topLevel.clear();
 }
 
 void DAG::printVtx(ID _id)

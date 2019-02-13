@@ -23,7 +23,9 @@
 
 #pragma once
 #include "Common.h"
+#include "DAG.h"
 #include <libdevcore/Guards.h>
+#include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>
 #include <queue>
@@ -40,9 +42,8 @@ static const ID INVALID_ID = (ID(0) - 1);
 
 struct Vertex
 {
-    ID inDegree;
+    std::atomic<ID> inDegree;
     std::vector<ID> outEdge;
-    mutable dev::SharedMutex vtxLock;
 };
 
 class DAG
@@ -76,7 +77,7 @@ public:
 
 private:
     std::vector<std::shared_ptr<Vertex>> m_vtxs;
-    std::queue<ID> m_topLevel;
+    tbb::concurrent_queue<ID> m_topLevel;
 
     ID m_totalVtxs = 0;
     ID m_totalConsume = 0;
@@ -84,7 +85,6 @@ private:
 private:
     void printVtx(ID _id);
     mutable std::mutex x_topLevel;
-    mutable std::mutex x_totalConsume;
     std::condition_variable cv_topLevel;
 };
 

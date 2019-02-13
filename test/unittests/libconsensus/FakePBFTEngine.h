@@ -89,7 +89,7 @@ public:
     }
 
     IDXTYPE const& f() { return m_f; }
-    void resetConfig() { PBFTEngine::resetConfig(); }
+    void resetConfig() override { PBFTEngine::resetConfig(); }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
         NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
@@ -139,34 +139,34 @@ public:
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
-    bool isValidPrepare(PrepareReq const& req) const
+    CheckResult isValidPrepare(PrepareReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
-    void handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
+    bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
-    void handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+    bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
-    bool isValidSignReq(SignReq const& req) const
+    CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidSignReq(req, oss);
     }
-    bool isValidCommitReq(CommitReq const& req) const
+    CheckResult isValidCommitReq(CommitReq const& req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidCommitReq(req, oss);
     }
 
-    void handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    bool handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleCommitMsg(commit_req, pbftMsg);
     }

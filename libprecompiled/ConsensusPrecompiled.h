@@ -19,9 +19,7 @@
  *  @date 20180921
  */
 #pragma once
-#include "CRUDPrecompiled.h"
 #include "Common.h"
-#include "libblockverifier/ExecutiveContext.h"
 namespace dev
 {
 namespace precompiled
@@ -46,19 +44,19 @@ const char* const NODE_KEY_ENABLENUM = "enable_num";
 const char* const PRI_COLUMN = "name";
 const char* const PRI_KEY = "node";
 
-class ConsensusPrecompiled : public CRUDPrecompiled
+class ConsensusPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
     ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address());
 
 private:
-    void showConsensusTable(dev::blockverifier::ExecutiveContext::Ptr context);
-    bool checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID);
+    void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    bool checkIsLastMiner(std::shared_ptr<storage::Table> table, std::string const& nodeID);
 };
 
 }  // namespace precompiled

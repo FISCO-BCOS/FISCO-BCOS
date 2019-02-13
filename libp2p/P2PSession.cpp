@@ -20,6 +20,7 @@
  */
 
 #include "P2PSession.h"
+#include "P2PMessage.h"
 #include "Service.h"
 #include <libdevcore/Common.h>
 #include <libnetwork/Common.h>
@@ -54,7 +55,8 @@ void P2PSession::stop(dev::network::DisconnectReason reason)
 
 void P2PSession::heartBeat()
 {
-    SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat") << LOG_KV("m_nodeID", m_nodeID)
+    SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
+                       << LOG_KV("m_nodeID", m_nodeID.abridged())
                        << LOG_KV("name", m_session->nodeIPEndpoint().name());
     auto service = m_service.lock();
     if (service && service->actived())
@@ -149,9 +151,8 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                 auto session = self.lock();
                                 if (session)
                                 {
-                                    SESSION_LOG(INFO)
-                                        << LOG_DESC("Received topic") << LOG_KV("topic", s)
-                                        << LOG_KV("from", session->nodeID().hex());
+                                    SESSION_LOG(INFO) << "Received topic: [" << s << "] from "
+                                                      << session->nodeID().hex();
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
@@ -195,7 +196,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                 if (service)
                 {
                     std::string s = boost::lexical_cast<std::string>(service->topicSeq());
-                    for (auto it : *service->topics())
+                    for (auto& it : service->topics())
                     {
                         s.append("\t");
                         s.append(it);

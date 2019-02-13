@@ -31,6 +31,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -47,7 +48,8 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
+        dev::h512s const& _minerList = dev::h512s())
       : Worker("ConsensusEngineBase", 0),
         m_service(_service),
         m_txPool(_txPool),
@@ -56,6 +58,7 @@ public:
         m_blockVerifier(_blockVerifier),
         m_consensusBlockNumber(0),
         m_protocolId(_protocolId),
+        m_keyPair(_keyPair),
         m_minerList(_minerList)
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
@@ -106,6 +109,9 @@ public:
         status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
+        status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
+        status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
+        status_obj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
         int i = 0;
         std::string miner_list = "";
         {
@@ -146,7 +152,14 @@ public:
 
     IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const& block) override {}
+    virtual void reportBlock(dev::eth::Block const&) override {}
+
+    /// obtain maxBlockTransactions
+    uint64_t maxBlockTransactions() override
+    {
+        ReadGuard l(x_maxblockTransactions);
+        return m_maxBlockTransactions;
+    }
 
 protected:
     virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
@@ -162,8 +175,8 @@ protected:
         return h512();
     }
 
-    virtual bool isValidReq(dev::p2p::P2PMessage::Ptr message,
-        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex)
+    virtual bool isValidReq(
+        std::shared_ptr<dev::p2p::P2PMessage>, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
     {
         return false;
     }
@@ -179,8 +192,8 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(
-        T& req, dev::p2p::P2PMessage::Ptr message, std::shared_ptr<dev::p2p::P2PSession> session)
+    inline bool decodeToRequests(T& req, std::shared_ptr<dev::p2p::P2PMessage> message,
+        std::shared_ptr<dev::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);
@@ -223,6 +236,19 @@ protected:
     virtual void updateConsensusNodeList();
     virtual void updateNodeListInP2P();
 
+    /// set the max number of transactions in a block
+    virtual void updateMaxBlockTransactions()
+    {
+        /// update m_maxBlockTransactions stored in sealer when reporting a new block
+        std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
+        {
+            WriteGuard l(x_maxblockTransactions);
+            m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
+        }
+        ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
+                          << LOG_KV("txCountLimit", m_maxBlockTransactions);
+    }
+
 private:
     bool blockExists(h256 const& blockHash)
     {
@@ -232,6 +258,9 @@ private:
     }
 
 protected:
+    /// max transaction num of a block
+    mutable SharedMutex x_maxblockTransactions;
+    uint64_t m_maxBlockTransactions = 1000;
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
@@ -259,6 +288,7 @@ protected:
     /// index of this node
     IDXTYPE m_idx = 0;
     mutable SharedMutex m_idxMutex;
+    KeyPair m_keyPair;
     /// miner list
     mutable SharedMutex m_minerListMutex;
     dev::h512s m_minerList;
@@ -268,6 +298,10 @@ protected:
 
     /// node list record when P2P last update
     std::string m_lastNodeList;
+    IDXTYPE m_connectedNode;
+    /// whether to omit empty block
+    bool m_omitEmptyBlock = true;
+    bool m_cfgErr = false;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -29,14 +29,14 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data)
+Block::Block(bytesConstRef _data, CheckTransaction const option)
 {
-    decode(_data);
+    decode(_data, option);
 }
 
-Block::Block(bytes const& _data)
+Block::Block(bytes const& _data, CheckTransaction const option)
 {
-    decode(ref(_data));
+    decode(ref(_data), option);
 }
 
 Block::Block(Block const& _block)
@@ -44,10 +44,11 @@ Block::Block(Block const& _block)
     m_transactions(_block.transactions()),
     m_transactionReceipts(_block.transactionReceipts()),
     m_sigList(_block.sigList()),
-    m_txsCache(_block.m_txsCache)
-{
-    noteChange();
-}
+    m_txsCache(_block.m_txsCache),
+    m_tReceiptsCache(_block.m_tReceiptsCache),
+    m_transRootCache(_block.m_transRootCache),
+    m_receiptRootCache(_block.m_receiptRootCache)
+{}
 
 Block& Block::operator=(Block const& _block)
 {
@@ -59,7 +60,9 @@ Block& Block::operator=(Block const& _block)
     /// init sigList
     m_sigList = _block.sigList();
     m_txsCache = _block.m_txsCache;
-    noteChange();
+    m_tReceiptsCache = _block.m_tReceiptsCache;
+    m_transRootCache = _block.m_transRootCache;
+    m_receiptRootCache = _block.m_receiptRootCache;
     return *this;
 }
 
@@ -117,7 +120,9 @@ void Block::calTransactionRoot(bool update) const
         m_transRootCache = hash256(txsMapCache);
     }
     if (update == true)
+    {
         m_blockHeader.setTransactionsRoot(m_transRootCache);
+    }
 }
 
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
@@ -151,7 +156,7 @@ void Block::calReceiptRoot(bool update) const
  * @brief : decode specified data of block into Block class
  * @param _block : the specified data of block
  */
-void Block::decode(bytesConstRef _block_bytes)
+void Block::decode(bytesConstRef _block_bytes, CheckTransaction const option)
 {
     /// no try-catch to throw exceptions directly
     /// get RLP of block
@@ -160,11 +165,16 @@ void Block::decode(bytesConstRef _block_bytes)
     m_blockHeader.populate(block_rlp[0]);
     /// get transaction list
     RLP transactions_rlp = block_rlp[1];
+
     m_transactions.resize(transactions_rlp.itemCount());
     for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
-        m_transactions[i].decode(transactions_rlp[i]);
+        m_transactions[i].decode(transactions_rlp[i], option);
     }
+
+    /// get txsCache
+    m_txsCache = transactions_rlp.data().toBytes();
+
     /// get transactionReceipt list
     RLP transactionReceipts_rlp = block_rlp[2];
     m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
@@ -180,7 +190,6 @@ void Block::decode(bytesConstRef _block_bytes)
     }
     /// get sig_list
     m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
-    noteChange();
 }
 }  // namespace eth
 }  // namespace dev

@@ -36,13 +36,13 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries::Ptr select(h256, int, const std::string&, const std::string& key) override
+    virtual Entries::Ptr select(h256, int, const std::string&, const std::string&) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256) override
+    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256 const&) override
     {
         return 0;
     }
@@ -70,7 +70,6 @@ BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)
 BOOST_AUTO_TEST_CASE(open_Table)
 {
     h256 blockHash(0x0101);
-    int num = 1;
     std::string tableName("t_test");
     std::string keyField("key");
     std::string valueField("value");
@@ -90,12 +89,12 @@ BOOST_AUTO_TEST_CASE(open_Table)
     entry->setField("key", "balance");
     entry->setField("value", "500");
     table->insert("balance", entry);
-    auto savePoint = memoryDBFactory->savepoint();
+    //auto savePoint = memoryDBFactory->savepoint();
     auto condition = table->newCondition();
     condition->EQ("key", "name");
     condition->NE("value", "name");
     table->remove("name", condition);
-    memoryDBFactory->rollback(savePoint);
+    //memoryDBFactory->rollback(savePoint);
     condition = table->newCondition();
     condition->EQ("key", "balance");
     condition->GT("value", "404");

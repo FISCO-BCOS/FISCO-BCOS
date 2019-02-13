@@ -25,7 +25,6 @@
 #include <libethcore/Protocol.h>
 namespace dev
 {
-class ConsensusStatus;
 namespace consensus
 {
 class ConsensusInterface
@@ -57,6 +56,7 @@ public:
     virtual IDXTYPE nodeIdx() const = 0;
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block) = 0;
+    virtual uint64_t maxBlockTransactions() { return 1000; }
 };
 }  // namespace consensus
 }  // namespace dev

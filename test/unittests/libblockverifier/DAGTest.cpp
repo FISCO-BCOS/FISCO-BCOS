@@ -54,16 +54,20 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     dag.addEdge(6, 7);
     // single 8 vertex
 
-    BOOST_CHECK(dag.isQueueEmpty());
+    // BOOST_CHECK(dag.isQueueEmpty());
 
     dag.generate();
-    BOOST_CHECK(!dag.isQueueEmpty());
+    // BOOST_CHECK(!dag.isQueueEmpty());
 
     set<ID> topSet;
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 3);
     BOOST_CHECK(have(topSet, 0));
@@ -76,8 +80,12 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 3);
     BOOST_CHECK(have(topSet, 1));
@@ -90,8 +98,12 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 2));
@@ -100,8 +112,12 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 4));
@@ -110,8 +126,12 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 5));
@@ -120,8 +140,12 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
     for (int i = 0; i < 9; i++)
     {
-        if (!dag.isQueueEmpty())
-            topSet.insert(dag.pop());
+        auto id = dag.waitPop();
+        if (id == INVALID_ID)
+        {
+            break;
+        }
+        topSet.insert(id);
     }
     BOOST_CHECK_EQUAL(topSet.size(), 0);
 }

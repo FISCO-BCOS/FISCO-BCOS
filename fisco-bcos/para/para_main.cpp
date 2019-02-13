@@ -1,4 +1,4 @@
-/**
+    /**
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -129,7 +129,7 @@ void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
     _blockChain->commitBlock(userAddBlock, exeCtx);
 }
 
-void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
+void genTxUserTransfer(Block& _block, size_t /*_userNum*/, size_t _txNum)
 {
     Transactions txs;
     srand(utcTime());
@@ -189,6 +189,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
         "stateType", 5000, 300000000};
     bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
+    assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initStateDB(genesisHash);
@@ -232,17 +233,8 @@ static void startExecute(int _totalUser, int _totalTxs)
         std::cout << "Executed" << std::endl;
     }
 
-    /// serial queue transaction
-    {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "serial queue executing txs..." << std::endl;
-        blockVerifier->queueExecuteBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
-    }
-
     /// parallel execution
+    /*
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
@@ -251,8 +243,10 @@ static void startExecute(int _totalUser, int _totalTxs)
         blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
     }
+    */
 
     /// parallel concurrent queue execution
+    /*
     {
         std::cout << "Generating transfer txs..." << std::endl;
         Block block;
@@ -261,44 +255,15 @@ static void startExecute(int _totalUser, int _totalTxs)
         blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
         std::cout << "Executed" << std::endl;
     }
-
-    /// parallel level DAG execution
-    {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "parallel level DAG executing txs..." << std::endl;
-        blockVerifier->parallelLevelExecuteBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
-    }
-
-    /// parallel openmp execution
-    {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "parallel openmp executing txs..." << std::endl;
-        blockVerifier->parallelOmpExecuteBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
-    }
-
-    /// serial execution
-    {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "serial executing txs..." << std::endl;
-        blockVerifier->executeBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
-    }
-
+    */
+    
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
     exit(0);
 }
 
-int main(int argc, const char* argv[])
+int main(int /*argc*/, const char* argv[])
 { /*
      if (argc != 3)
      {

@@ -31,7 +31,6 @@
 #include "Table.h"
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
-#include <map>
 
 using namespace dev::storage;
 
@@ -143,7 +142,7 @@ void Entries::addEntry(Entry::Ptr entry)
     m_dirty = true;
 }
 
-void Entries::removeEntry(size_t index)
+void Entries::removeEntry(size_t /*index*/)
 {
     // dev::WriteGuard l(x_entries);
     // m_entries.erase(m_entries.begin() + index);
@@ -200,7 +199,7 @@ void Condition::limit(size_t offset, size_t count)
     m_count = count;
 }
 
-std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
+std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
 }

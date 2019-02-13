@@ -66,7 +66,7 @@ public:
         }
         catch (std::exception& e)
         {
-            EVMC_LOG(WARNING) << "[EvmParams/deploy section has not been set]" << std::endl;
+            EVMC_LOG(WARNING) << "[EvmParams/deploy section has not been set]";
             return;
         }
     }
@@ -84,7 +84,7 @@ public:
                     boost::split(s, it.first, boost::is_any_of("."), boost::token_compress_on);
                     if (s.size() != 2)
                     {
-                        EVMC_LOG(WARNING) << "[EvmParams/Invalid Key] " << it.first << std::endl;
+                        EVMC_LOG(WARNING) << "[EvmParams/Invalid Key] " << it.first;
                         continue;
                     }
                     std::string call_key = "call." + s[1];
@@ -128,8 +128,8 @@ public:
                 }
                 catch (std::exception& e)
                 {
-                    EVMC_LOG(WARNING) << "[EvmParams/Parse Key Failed] "
-                                      << boost::diagnostic_information(e) << std::endl;
+                    EVMC_LOG(WARNING)
+                        << "[EvmParams/Parse Key Failed] " << boost::diagnostic_information(e);
                     continue;
                 }
             }
@@ -137,7 +137,7 @@ public:
         catch (std::exception& e)
         {
             EVMC_LOG(WARNING) << "[EvmParams/call section]  has not been set, "
-                              << boost::diagnostic_information(e) << std::endl;
+                              << boost::diagnostic_information(e);
         }
     }
 

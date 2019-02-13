@@ -41,7 +41,7 @@
 #include <memory>
 #include <mutex>
 
-#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
+#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKCHAIN")
 
 namespace dev
 {
@@ -62,13 +62,12 @@ class BlockCache
 {
 public:
     BlockCache(){};
-    std::shared_ptr<dev::eth::Block> add(dev::eth::Block& _block);
+    std::shared_ptr<dev::eth::Block> add(dev::eth::Block const& _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
 
 private:
     mutable boost::shared_mutex m_sharedMutex;
-    mutable std::map<dev::h256, std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> >
-        m_blockCache;
+    mutable std::map<dev::h256, std::shared_ptr<dev::eth::Block>> m_blockCache;
     mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
     const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
 };

@@ -86,6 +86,10 @@ u256 StorageState::balance(Address const& _address) const
 
 void StorageState::addBalance(Address const& _address, u256 const& _amount)
 {
+    if (_amount == 0)
+    {
+        return;
+    }
     auto table = getTable(_address);
     if (table)
     {
@@ -168,7 +172,7 @@ h256 StorageState::storageRoot(Address const& _address) const
     return h256();
 }
 
-u256 StorageState::storage(Address const& _address, u256 const& _key) const
+u256 StorageState::storage(Address const& _address, u256 const& _key)
 {
     auto table = getTable(_address);
     if (table)
@@ -205,7 +209,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
     }
 }
 
-void StorageState::clearStorage(Address const& _address) {}
+void StorageState::clearStorage(Address const&) {}
 
 void StorageState::setCode(Address const& _address, bytes&& _code)
 {
@@ -338,9 +342,14 @@ u256 StorageState::getNonce(Address const& _address) const
     return m_accountStartNonce;
 }
 
-h256 StorageState::rootHash() const
+
+h256 StorageState::rootHash(bool needCalculate) const
 {
-    return m_memoryTableFactory->hash();
+    if (needCalculate)
+    {
+        return m_memoryTableFactory->hash();
+    }
+    return h256();
 }
 
 void StorageState::commit()
@@ -348,13 +357,13 @@ void StorageState::commit()
     m_memoryTableFactory->commit();
 }
 
-void StorageState::dbCommit(h256 const& _blockHash, int64_t _blockNumber)
+void StorageState::dbCommit(h256 const&, int64_t)
 {
     // ExecutiveContext will commit
     // m_memoryTableFactory->commitDB(_blockHash, _blockNumber);
 }
 
-void StorageState::setRoot(h256 const& _root) {}
+void StorageState::setRoot(h256 const&) {}
 
 u256 const& StorageState::accountStartNonce() const
 {
@@ -381,7 +390,7 @@ size_t StorageState::savepoint() const
     return m_memoryTableFactory->savepoint();
 }
 
-void StorageState::rollback(size_t _savepoint)
+void StorageState::rollback(size_t /*_savepoint*/)
 {
     // m_memoryTableFactory->rollback(_savepoint);
 }

@@ -50,27 +50,67 @@ public:
         m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
             _blockVerifier, _protocolId, _baseDir, _key_pair, _minerList);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
-        m_pbftEngine->onViewChange([this]() {
-            DEV_WRITE_GUARDED(x_sealing)
-            {
-                if (shouldResetSealing())
-                {
-                    resetSealingBlock();
-                }
-                m_signalled.notify_all();
-                m_blockSignalled.notify_all();
-            }
-        });
+        /// called by viewchange procedure to reset block when timeout
+        m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
+        /// called by the next leader to reset block when it receives the prepare block
+        m_pbftEngine->onNotifyNextLeaderReset(
+            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
     }
+
     void start() override;
     void stop() override;
+    /// can reset the sealing block or not?
+    bool shouldResetSealing() override
+    {
+        /// only the leader need reset sealing in PBFT
+        return Sealer::shouldResetSealing() &&
+               (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
+    }
 
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
-    bool reachBlockIntervalTime() override { return m_pbftEngine->reachBlockIntervalTime(); }
+    // only the leader can generate the latest block
+    bool shouldHandleBlock() override
+    {
+        return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1) &&
+               (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
+    }
+
+    bool reachBlockIntervalTime() override
+    {
+        return m_pbftEngine->reachBlockIntervalTime() || m_sealing.block.getTransactionSize() > 0;
+    }
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    bool canHandleBlockForNextLeader() override
+    {
+        return m_pbftEngine->canHandleBlockForNextLeader();
+    }
 
 private:
+    /// reset block when view changes
+    void resetBlockForViewChange()
+    {
+        {
+            DEV_WRITE_GUARDED(x_sealing)
+            resetSealingBlock();
+        }
+        m_signalled.notify_all();
+        m_blockSignalled.notify_all();
+    }
+
+    /// reset block for the next leader
+    void resetBlockForNextLeader(dev::h256Hash const& filter)
+    {
+        {
+            DEV_WRITE_GUARDED(x_sealing)
+            resetSealingBlock(filter, true);
+        }
+        m_signalled.notify_all();
+        m_blockSignalled.notify_all();
+    }
+
     void setBlock();
 
 protected:

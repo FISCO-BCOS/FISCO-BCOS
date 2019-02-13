@@ -44,7 +44,7 @@ public:
 
     virtual void start() override {}
 
-    virtual void disconnect(dev::network::DisconnectReason _reason) override {}
+    virtual void disconnect(dev::network::DisconnectReason) override {}
 
     virtual bool isConnected() const override { return m_connected; }
 

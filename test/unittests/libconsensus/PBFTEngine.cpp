@@ -62,10 +62,6 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     /// check reloadMsg: empty committedPrepareCache
     checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check m_timeManager
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastExecFinishTime > 0);
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastExecFinishTime <= utcTime());
-    BOOST_CHECK((fake_pbft.consensus()->timeManager().m_lastExecFinishTime) ==
-                (fake_pbft.consensus()->timeManager().m_lastConsensusTime));
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_viewTimeout ==
                 fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_changeCycle == 0);
@@ -594,7 +590,6 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_minerList[i]);
     }
-    int64_t block_number = obtainBlockNumber(fake_pbft);
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
     testReHandleCommitPrepareCache(fake_pbft, prepareReq);
 
@@ -625,7 +620,8 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 
     /// can trigger collectGarbage
     fake_pbft.consensus()->mutableTimeManager().m_lastGarbageCollection =
-        std::chrono::system_clock::now() - std::chrono::seconds(TimeManager::CollectInterval + 10);
+        std::chrono::system_clock::now() -
+        std::chrono::seconds(fake_pbft.consensus()->timeManager().CollectInterval + 10);
     fake_pbft.consensus()->collectGarbage();
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(highest.hash()) == 0);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(highest.hash()) == 0);
@@ -639,10 +635,13 @@ BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
     prepareReq.height = fake_pbft.consensus()->mutableConsensusNumber();
     prepareReq.view = fake_pbft.consensus()->view();
     fake_pbft.consensus()->reqCache()->addFuturePrepareCache(prepareReq);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->futurePrepareCache().block_hash != h256());
+    BOOST_CHECK(
+        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height)->block_hash !=
+        h256());
     fake_pbft.consensus()->handleFutureBlock();
     /// check the functurePrepareCache has been cleared
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->futurePrepareCache().block_hash == h256());
+    BOOST_CHECK(
+        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height) == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

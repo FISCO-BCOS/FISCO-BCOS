@@ -20,15 +20,9 @@
  */
 #pragma once
 #include "Common.h"
-#include <libblockverifier/ExecutiveContext.h>
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-}
-
 const std::string SYS_CNS_FIELD_NAME = "name";
 const std::string SYS_CNS_FIELD_VERSION = "version";
 const std::string SYS_CNS_FIELD_ADDRESS = "address";
@@ -43,14 +37,10 @@ public:
     CNSPrecompiled();
     virtual ~CNSPrecompiled(){};
 
-    std::string toString(dev::blockverifier::ExecutiveContext::Ptr) override;
+    std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>) override;
 
-    bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;
-
-protected:
-    std::shared_ptr<storage::Table> openTable(
-        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
 };
 
 }  // namespace precompiled

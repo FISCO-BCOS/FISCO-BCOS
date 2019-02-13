@@ -54,7 +54,6 @@ BOOST_AUTO_TEST_CASE(testHex)
         }
         hexStr = toHex(hexVec);
         hexStrWithPrefix = toHex(hexVec);
-        std::cout << "hexStr:" << hexStr << std::endl;
         BOOST_CHECK(fromHex(hexStr) == hexVec);
         BOOST_CHECK(fromHex(hexStrWithPrefix) == hexVec);
     }
@@ -97,7 +96,6 @@ BOOST_AUTO_TEST_CASE(testStringTrans)
         tmp_str = asString(tmp_bytes);
         tmp_str_from_ref = asString(ref(tmp_bytes));
         BOOST_CHECK(tmp_str == tmp_str_from_ref);
-        std::cout << "Hexized transed string:" << toHex(tmp_str) << std::endl;
         BOOST_CHECK(asBytes(tmp_str) == tmp_bytes);
     }
 }
@@ -112,8 +110,6 @@ BOOST_AUTO_TEST_CASE(testBigEndian)
     // check u256
     u256 number("9832989324908234742342343243243234324324243432432234324");
     u160 number_u160("983298932");
-    std::cout << "Hexized toBigEndianString:" << toHex(toBigEndianString(number)) << std::endl;
-    std::cout << "Hexized toBigEndianString:" << toHex(toBigEndianString(number_u160)) << std::endl;
     bytes big_endian_bytes = toBigEndian(number);
     BOOST_CHECK(fromBigEndian<u256>(big_endian_bytes) == number);
     BOOST_CHECK(fromBigEndian<u160>(toBigEndian(number_u160)) == number_u160);

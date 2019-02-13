@@ -136,7 +136,7 @@ public:
         m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
-            block_hash = sha3(toString("block " + i));
+            block_hash = sha3("block " + std::to_string(i));
             sig = sign(m_sec, block_hash);
             m_sigList.push_back(std::make_pair(u256(block_hash), sig));
         }

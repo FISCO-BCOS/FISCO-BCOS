@@ -23,6 +23,7 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
@@ -65,8 +66,8 @@ void DBInitializer::initLevelDBStorage()
     {
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         ldb_option.create_if_missing = true;
-        ldb_option.max_open_files = 100;
-
+        ldb_option.max_open_files = 1000;
+        ldb_option.compression = leveldb::kNoCompression;
         leveldb::Status status;
 
         if (g_BCOSConfig.diskEncryption.enable)
@@ -98,7 +99,6 @@ void DBInitializer::initLevelDBStorage()
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());
         std::shared_ptr<LevelDBStorage> leveldb_storage = std::make_shared<LevelDBStorage>();
-        assert(leveldb_storage);
         std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
             std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
         leveldb_storage->setDB(leveldb_handler);

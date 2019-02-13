@@ -24,21 +24,22 @@
 
 #pragma once
 
+#include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/concurrent_queue.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
 
-#define RAFTENGINE_LOG(LEVEL)                                               \
-    LOG(LEVEL) << "[g:" << m_groupId << "]"                                 \
-               << "[p:" << m_protocolId << "]" << LOG_BADGE("LIBCONSENSUS") \
+#define RAFTENGINE_LOG(LEVEL)                                                            \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "]"                              \
+               << "[p:" << std::to_string(m_protocolId) << "]" << LOG_BADGE("CONSENSUS") \
                << LOG_BADGE("RAFTENGINE")
 
-#define RAFTSEALER_LOG(LEVEL)                                                             \
-    LOG(LEVEL) << "[g:" << m_raftEngine->groupId() << "]"                                 \
-               << "[p:" << m_raftEngine->protocolId() << "]" << LOG_BADGE("LIBCONSENSUS") \
-               << LOG_BADGE("RAFTSEALER")
+#define RAFTSEALER_LOG(LEVEL)                                                \
+    LOG(LEVEL) << "[g:" << std::to_string(m_raftEngine->groupId()) << "]"    \
+               << "[p:" << std::to_string(m_raftEngine->protocolId()) << "]" \
+               << LOG_BADGE("CONSENSUS") << LOG_BADGE("RAFTSEALER")
 
 namespace dev
 {
@@ -46,7 +47,7 @@ namespace consensus
 {
 namespace raft
 {
-using NodeIndex = dev::u256;
+using NodeIndex = dev::consensus::IDXTYPE;
 }  // namespace raft
 
 enum RaftPacketType : byte
@@ -151,7 +152,7 @@ struct RaftMsg
     size_t term;
     int64_t height;
     h256 blockHash;
-
+    virtual ~RaftMsg() = default;
     virtual void streamRLPFields(RLPStream& _s) const { _s << idx << term << height << blockHash; }
     virtual void populate(RLP const& _rlp)
     {

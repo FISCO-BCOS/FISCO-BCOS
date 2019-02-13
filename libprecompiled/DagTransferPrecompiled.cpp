@@ -417,7 +417,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
 }
 
 void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& origin, bytes& out)
+    bytesConstRef data, Address const& /*origin*/, bytes& out)
 {
     std::string user;
     dev::eth::ContractABI abi;

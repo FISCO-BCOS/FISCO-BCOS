@@ -38,7 +38,8 @@ void dev::storage::MemoryTable::init(const std::string& tableName)
                        << LOG_KV("tableName", tableName);
 }
 
-Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition::Ptr condition)
+inline Entries::Ptr dev::storage::MemoryTable::select(
+    const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -54,12 +55,9 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                {
-                    // WriteGuard l(x_cache);
-                    m_cache.insert(std::make_pair(key, entries));
-                }
-                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                //<< LOG_KV("records", entries->size());
+                m_cache.insert(std::make_pair(key, entries));
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -74,7 +72,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
         }
         auto indexes = processEntries(entries, condition);
         Entries::Ptr resultEntries = std::make_shared<Entries>();
-        for (auto i : indexes)
+        for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
         }
@@ -89,7 +87,7 @@ Entries::Ptr dev::storage::MemoryTable::select(const std::string& key, Condition
     return std::make_shared<Entries>();
 }
 
-int dev::storage::MemoryTable::update(
+inline int dev::storage::MemoryTable::update(
     const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
@@ -100,7 +98,7 @@ int dev::storage::MemoryTable::update(
             //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
+        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
         // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -115,12 +113,9 @@ int dev::storage::MemoryTable::update(
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                {
-                    // WriteGuard l(x_cache);
-                    m_cache.insert(std::make_pair(key, entries));
-                }
-                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                //                   << LOG_KV("records", entries->size());
+                m_cache.insert(std::make_pair(key, entries));
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
@@ -133,14 +128,14 @@ int dev::storage::MemoryTable::update(
             // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
             return 0;
         }
-        checkFiled(entry);
+        checkField(entry);
         auto indexes = processEntries(entries, condition);
         std::vector<Change::Record> records;
 
-        for (auto i : indexes)
+        for (auto& i : indexes)
         {
             Entry::Ptr updateEntry = entries->get(i);
-            for (auto it : *(entry->fields()))
+            for (auto& it : *(entry->fields()))
             {
                 records.emplace_back(i, it.first, updateEntry->getField(it.first));
                 updateEntry->setField(it.first, it.second);
@@ -161,7 +156,7 @@ int dev::storage::MemoryTable::update(
     return 0;
 }
 
-int dev::storage::MemoryTable::insert(
+inline int dev::storage::MemoryTable::insert(
     const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options)
 {
     try
@@ -172,7 +167,7 @@ int dev::storage::MemoryTable::insert(
             //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return CODE_NO_AUTHORIZED;
         }
-        // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
+        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
         // key);
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -188,19 +183,16 @@ int dev::storage::MemoryTable::insert(
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                {
-                    // WriteGuard l(x_cache);
-                    m_cache.insert(std::make_pair(key, entries));
-                }
-                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                //                   << LOG_KV("records", entries->size());
+                m_cache.insert(std::make_pair(key, entries));
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
         }
         else
         {
             entries = it->second;
         }
-        checkFiled(entry);
+        checkField(entry);
         Change::Record record(entries->size() + 1u);
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
@@ -228,7 +220,7 @@ int dev::storage::MemoryTable::insert(
     return 1;
 }
 
-int dev::storage::MemoryTable::remove(
+inline int dev::storage::MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     if (!checkAuthority(options->origin))
@@ -237,7 +229,7 @@ int dev::storage::MemoryTable::remove(
         //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
         return CODE_NO_AUTHORIZED;
     }
-    // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
+    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
     Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -251,12 +243,9 @@ int dev::storage::MemoryTable::remove(
         if (m_remoteDB)
         {
             entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-            {
-                // WriteGuard l(x_cache);
-                m_cache.insert(std::make_pair(key, entries));
-            }
-            // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-            //                   << LOG_KV("records", entries->size());
+            m_cache.insert(std::make_pair(key, entries));
+            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+            //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
         }
     }
     else
@@ -267,7 +256,7 @@ int dev::storage::MemoryTable::remove(
     auto indexes = processEntries(entries, condition);
 
     std::vector<Change::Record> records;
-    for (auto i : indexes)
+    for (auto& i : indexes)
     {
         Entry::Ptr removeEntry = entries->get(i);
 
@@ -284,9 +273,7 @@ int dev::storage::MemoryTable::remove(
 h256 dev::storage::MemoryTable::hash()
 {
     bytes data;
-
-    // Table
-    for (auto it : m_cache)
+    for (auto& it : m_cache)
     {
         if (it.second->dirty())
         {
@@ -297,9 +284,7 @@ h256 dev::storage::MemoryTable::hash()
             {
                 if (it.second->get(i)->dirty())
                 {
-                    // Entry = map<name, fields>
-                    // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entry") << LOG_KV("id", i);
-                    for (auto fieldIt : *(it.second->get(i)->fields()))
+                    for (auto& fieldIt : *(it.second->get(i)->fields()))
                     {
                         // Field
                         // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Field")
@@ -319,9 +304,6 @@ h256 dev::storage::MemoryTable::hash()
     {
         return h256();
     }
-
-    std::string str(data.begin(), data.end());
-
     bytesConstRef bR(data.data(), data.size());
     h256 hash = dev::sha256(bR);
 
@@ -373,7 +355,7 @@ bool dev::storage::MemoryTable::processCondition(Entry::Ptr entry, Condition::Pt
 {
     try
     {
-        for (auto it : *condition->getConditions())
+        for (auto& it : *condition->getConditions())
         {
             if (entry->getStatus() == Entry::Status::DELETED)
             {
@@ -490,7 +472,7 @@ void MemoryTable::setTableInfo(TableInfo::Ptr _tableInfo)
     m_tableInfo = _tableInfo;
 }
 
-inline void MemoryTable::checkFiled(Entry::Ptr entry)
+inline void MemoryTable::checkField(Entry::Ptr entry)
 {
     for (auto& it : *(entry->fields()))
     {

@@ -136,7 +136,7 @@ public:
         auto p2pInitializer = initialize->p2pInitializer();
         auto p2pService = p2pInitializer->p2pService();
 
-        auto rpc = new dev::rpc::Rpc(ledgerManager, p2pService);
+        // auto rpc = new dev::rpc::Rpc(ledgerManager, p2pService);
 
         m_rpcFace = std::make_shared<dev::rpc::Rpc>(ledgerManager, p2pService);
 
@@ -179,7 +179,7 @@ public:
         if (ec)
             fail(ec, "read");
 
-        LOG(INFO) << boost::beast::buffers(m_buffer.data()) << std::endl;
+        LOG(INFO) << boost::beast::buffers(m_buffer.data());
 
         Json::Value resultJson;
         resultJson["jsonrpc"] = "2.0";

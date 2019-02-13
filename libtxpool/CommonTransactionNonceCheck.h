@@ -28,7 +28,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
-#include <set>
+#include <unordered_set>
 namespace dev
 {
 namespace txpool
@@ -52,7 +52,7 @@ protected:
     dev::PROTOCOL_ID m_protocolId;
     dev::GROUP_ID m_groupId;
     mutable SharedMutex m_lock;
-    std::set<dev::eth::NonceKeyType> m_cache;
+    std::unordered_set<dev::eth::NonceKeyType> m_cache;
 };
 }  // namespace txpool
 }  // namespace dev

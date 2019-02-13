@@ -214,9 +214,9 @@ evmc_context_fn_table const fnTable = {
 };
 }  // namespace
 
-ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin,
-    u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash,
-    unsigned _depth, bool _isCreate, bool _staticCall)
+ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+    Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+    bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
   : evmc_context{&fnTable},
     m_envInfo(_envInfo),
     m_myAddress(_myAddress),

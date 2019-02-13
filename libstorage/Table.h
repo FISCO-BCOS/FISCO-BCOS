@@ -21,8 +21,8 @@
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <tbb/concurrent_unordered_map.h>
-#include <tbb/concurrent_vector.h>
+#include "tbb/concurrent_unordered_map.h"
+#include "tbb/concurrent_vector.h"
 #include <map>
 #include <memory>
 #include <vector>
@@ -149,10 +149,10 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
+    virtual std::unordered_map<std::string, std::pair<Op, std::string> >* getConditions();
 
 private:
-    std::map<std::string, std::pair<Op, std::string> > m_conditions;
+    std::unordered_map<std::string, std::pair<Op, std::string> > m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
 };

@@ -42,7 +42,7 @@ std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<Exe
 }
 
 bytes dev::blockverifier::EntriesPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const&)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("EntriesPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
@@ -70,6 +70,11 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
         u256 c = m_entries->size();
 
         out = abi.abiIn("", c);
+    }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("EntriesPrecompiled")
+                           << LOG_DESC("call undefined function!");
     }
     return out;
 }

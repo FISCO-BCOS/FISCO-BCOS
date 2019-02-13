@@ -24,7 +24,7 @@
 #include <string>
 
 #define INVALIDNUMBER -1
-#define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC] "
+#define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC]"
 
 namespace dev
 {
@@ -39,12 +39,17 @@ enum RPCExceptionType
     BlockHash,
     BlockNumberT,
     TransactionIndex,
-    CallFrom
+    CallFrom,
+    NoView,
+    InvalidSystemConfig,
+    InvalidRequest
 };
 
 const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response json parse error",
     "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range",
-    "Call needs a 'from' field"};
+    "Call needs a 'from' field", "Only pbft consensus supports the view property",
+    "Invalid System Config",
+    "Don't send requests to this group, the node doesn't belong to the group"};
 
 }  // namespace rpc
 }  // namespace dev

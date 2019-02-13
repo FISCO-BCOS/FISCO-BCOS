@@ -79,7 +79,7 @@ public:
 
     virtual bool isOrginPrecompiled(Address const& _a) const;
 
-    virtual std::pair<bool, bytes> executeOrginPrecompiled(
+    virtual std::pair<bool, bytes> executeOriginPrecompiled(
         Address const& _a, bytesConstRef _in) const;
 
     void setPrecompiledContract(

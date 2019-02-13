@@ -38,8 +38,8 @@ TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
         m_log.emplace_back(i);
 }
 
-TransactionReceipt::TransactionReceipt(h256 _root, u256 _gasUsed, LogEntries const& _log,
-    u256 _status, bytes _bytes, Address const& _contractAddress)
+TransactionReceipt::TransactionReceipt(h256 const& _root, u256 const& _gasUsed,
+    LogEntries const& _log, u256 _status, bytes _bytes, Address const& _contractAddress)
 {
     m_stateRoot = (_root);
     m_gasUsed = (_gasUsed);

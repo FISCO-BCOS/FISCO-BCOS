@@ -24,6 +24,7 @@
 
 using namespace dev;
 using namespace dev::initializer;
+using namespace dev::p2p;
 
 void Initializer::init(std::string const& _path)
 {
@@ -48,7 +49,7 @@ void Initializer::init(std::string const& _path)
 
         m_p2pInitializer = std::make_shared<P2PInitializer>();
         m_p2pInitializer->setSSLContext(
-            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForP2p));
+            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForP2P));
         m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
 
@@ -60,16 +61,16 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer = std::make_shared<RPCInitializer>();
         m_rpcInitializer->setP2PService(m_p2pInitializer->p2pService());
         m_rpcInitializer->setSSLContext(
-            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForRpc));
+            m_secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
         m_ledgerInitializer->startAll();
     }
     catch (std::exception& e)
     {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("Initializer") << LOG_DESC("load configuration failed")
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("Initializer") << LOG_DESC("Init failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        ERROR_OUTPUT << LOG_BADGE("Initializer") << LOG_DESC("load configuration failed")
+        ERROR_OUTPUT << LOG_BADGE("Initializer") << LOG_DESC("Init failed")
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         BOOST_THROW_EXCEPTION(e);
     }

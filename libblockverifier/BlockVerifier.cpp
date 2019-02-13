@@ -20,9 +20,9 @@
  */
 #include "BlockVerifier.h"
 #include "ExecutiveContext.h"
-#include "TxCqDAG.h"
+//#include "TxCqDAG.h"
 #include "TxDAG.h"
-#include "TxLevelDAG.h"
+//#include "TxLevelDAG.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -52,6 +52,8 @@ using namespace dev::executive;
         this_thread::sleep_for(chrono::milliseconds(2)); \
     }
 //*/
+
+/*
 ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -101,12 +103,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     if (m_paraTxExecutor != nullptr)
     {
         m_paraTxExecutor->start(txDag);
-        /*#pragma omp for
-                for (int i = 0; i < 8; i++)
-                {
-                    while (!txDag->hasFinished())
-                        txDag->executeUnit();
-                }*/
     }
     else
     {
@@ -147,8 +143,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
 }
+*/
 
-
+/*
 ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -179,7 +176,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions().size());
-    ///*
     shared_ptr<TxCqDAG> txDag = make_shared<TxCqDAG>();
     txDag->init(executiveContext, block.transactions());
 
@@ -198,12 +194,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
     if (m_paraTxExecutor != nullptr)
     {
         m_paraTxExecutor->start(txDag);
-        /*#pragma omp for
-                for (int i = 0; i < 8; i++)
-                {
-                    while (!txDag->hasFinished())
-                        txDag->executeUnit();
-                }*/
     }
     else
     {
@@ -244,8 +234,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelCqExecuteBlock(
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
 }
+*/
 
-
+/*
 ExecutiveContext::Ptr BlockVerifier::parallelLevelExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -276,7 +267,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelLevelExecuteBlock(
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions().size());
-    ///*
+    //
     shared_ptr<TxLevelDAG> txDag = make_shared<TxLevelDAG>();
     txDag->init(executiveContext, block.transactions());
 
@@ -436,8 +427,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelOmpExecuteBlock(
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
 }
+*/
 
-
+/*
 ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -484,17 +476,6 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-    // if (m_paraTxExecutor != nullptr)
-    //{
-    //  m_paraTxExecutor->start(txDag);
-    /*#pragma omp for
-            for (int i = 0; i < 8; i++)
-            {
-                while (!txDag->hasFinished())
-                    txDag->executeUnit();
-            }*/
-    //}
-    // else
     {
         while (!txDag->hasFinished())
             txDag->executeUnit();
@@ -533,6 +514,7 @@ ExecutiveContext::Ptr BlockVerifier::queueExecuteBlock(
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
 }
+*/
 
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
@@ -594,8 +576,8 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     block.setStateRootToAllReceipt(stateRoot);
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
-    block.header().setStateRoot(stateRoot);
-
+    block.header().setStateRoot(executiveContext->getState()->rootHash());
+    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
@@ -660,6 +642,9 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
         e.go(onOp);
     e.finalize();
 
-    return make_pair(res, TransactionReceipt(EmptySHA3, startGasUsed + e.gasUsed(), e.logs(),
-                              e.status(), e.takeOutput().takeBytes(), e.newAddress()));
+    /// mptstate calculates every transactions
+    /// storagestate ignore hash calculation
+    return make_pair(res, TransactionReceipt(executiveContext->getState()->rootHash(false),
+                              startGasUsed + e.gasUsed(), e.logs(), e.status(),
+                              e.takeOutput().takeBytes(), e.newAddress()));
 }

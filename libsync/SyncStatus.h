@@ -53,15 +53,15 @@ struct SyncStatus
 class SyncPeerStatus
 {
 public:
-    SyncPeerStatus(PROTOCOL_ID _protocolId, NodeID const& _nodeId, int64_t _number,
-        h256 const& _genesisHash, h256 const& _latestHash)
+    SyncPeerStatus(PROTOCOL_ID, NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash,
+        h256 const& _latestHash)
       : nodeId(_nodeId),
         number(_number),
         genesisHash(_genesisHash),
         latestHash(_latestHash),
         reqQueue(_nodeId)
     {}
-    SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID _protocolId)
+    SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID)
       : nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
@@ -90,12 +90,13 @@ class SyncMasterStatus
 {
 public:
     SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, h256 const& _genesisHash)
+        PROTOCOL_ID const& _protocolId, h256 const& _genesisHash, NodeID const& _nodeId)
       : genesisHash(_genesisHash),
         knownHighestNumber(0),
         knownLatestHash(_genesisHash),
         m_protocolId(_protocolId),
-        m_downloadingBlockQueue(_blockChain, _protocolId)
+        m_nodeId(_nodeId),
+        m_downloadingBlockQueue(_blockChain, _protocolId, _nodeId)
     {
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
@@ -105,7 +106,8 @@ public:
         knownHighestNumber(0),
         knownLatestHash(_genesisHash),
         m_protocolId(0),
-        m_downloadingBlockQueue(nullptr, 0)
+        m_nodeId(0),
+        m_downloadingBlockQueue(nullptr, 0, NodeID())
     {}
 
     bool hasPeer(NodeID const& _id);
@@ -141,6 +143,7 @@ public:
 
 private:
     PROTOCOL_ID m_protocolId;
+    NodeID m_nodeId;
     GROUP_ID m_groupId;
     mutable SharedMutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;

@@ -58,9 +58,8 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
         dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
-      : ConsensusEngineBase(
-            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
-        m_keyPair(_keyPair),
+      : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+            _keyPair, _minerList),
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
         m_uncommittedBlock(dev::eth::Block()),
@@ -69,8 +68,7 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
-        m_blockSync->registerConsensusVerifyHandler(
-            [](dev::eth::Block const& block) { return true; });
+        m_blockSync->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
     }
 
     raft::NodeIndex getNodeIdx() const
@@ -108,6 +106,8 @@ public:
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
+    void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
+    const std::string consensusStatus() const override;
 
 protected:
     void initRaftEnv();
@@ -142,7 +142,6 @@ protected:
 
     void workLoop() override;
     void resetConfig() override;
-    void updateMinerList();
 
     void runAsLeader();
     bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& _memberHeartbeatLog);
@@ -151,6 +150,7 @@ protected:
     void runAsCandidate();
     bool runAsCandidateImp(dev::consensus::VoteState& _voteState);
 
+    void tryCommitUncommitedBlock(dev::consensus::RaftHeartBeatResp& _resp);
     virtual bool checkHeartbeatTimeout();
     virtual bool checkElectTimeout();
     ssize_t getIndexByMiner(dev::h512 const& _nodeId);
@@ -187,7 +187,6 @@ protected:
     void checkAndSave(Sealing& _sealing);
 
     mutable Mutex m_mutex;
-    dev::KeyPair m_keyPair;
 
     unsigned m_electTimeout;
     unsigned m_minElectTimeout;
@@ -229,7 +228,6 @@ protected:
     std::unordered_map<h512, BlockRef> m_memberBlock;  // <node_id, BlockRef>
     static const unsigned c_PopWaitSeconds = 5;
 
-    bool m_cfgErr = false;
     dev::storage::Storage::Ptr m_storage;
     // the block number that update the miner list
     int64_t m_lastObtainMinerNum = 0;
@@ -242,7 +240,7 @@ protected:
     std::condition_variable m_commitCV;
     bool m_commitReady;
     bool m_waitingForCommitting;
-    std::unordered_map<h256, std::unordered_set<dev::Public>> m_commitFingerPrint;
+    std::unordered_map<h256, std::unordered_set<dev::consensus::IDXTYPE>> m_commitFingerPrint;
 
 private:
     static typename raft::NodeIndex InvalidIndex;
