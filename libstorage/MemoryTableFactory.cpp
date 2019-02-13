@@ -86,7 +86,7 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
 
-    MemoryTable::Ptr memoryTable = std::make_shared<MemoryTable>();
+    MemoryTable<>::Ptr memoryTable = std::make_shared<MemoryTable>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
@@ -118,11 +118,11 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     if (m_isPara)
     {
         memoryTable->setRecorder(
-            [](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {})
+            [](Table<>::Ptr, Change::Kind, string const&, vector<Change::Record>&) {})
     }
     else
     {
-        memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
+        memoryTable->setRecorder([&](Table<>::Ptr _table, Change::Kind _kind, string const& _key,
                                      vector<Change::Record>& _records) {
             return;  // XXX ignore it for testing
             dev::WriteGuard l(x_changeLog);
@@ -374,7 +374,7 @@ storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::s
 template <bool IsPara>
 void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    Table<>::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

@@ -136,7 +136,7 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
     return "DagTransfer";
 }
 
-Table::Ptr DagTransferPrecompiled::openTable(
+Table<>::Ptr DagTransferPrecompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
     // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
@@ -211,7 +211,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table<>::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(user, table->newCondition());
         if (entries.get() && (0u != entries->size()))
         {
@@ -279,7 +279,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table<>::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -368,7 +368,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table<>::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -435,7 +435,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table<>::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -489,7 +489,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         }
 
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table<>::Ptr table = openTable(context, DAG_TRANSFER);
         auto entries = table->select(fromUser, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
