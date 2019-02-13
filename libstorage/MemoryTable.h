@@ -61,8 +61,8 @@ public:
 
 private:
     using CacheType = typename std::conditional<IsPara,
-        tbb::concurrent_unordered_map<std::string, Entries<true>::Ptr>,
-        std::unordered_map<std::string, Entries<false>::Ptr>>::type;
+        tbb::concurrent_unordered_map<std::string, typename Entries<true>::Ptr>,
+        std::unordered_map<std::string, typename Entries<false>::Ptr>>::type;
     using CacheItr = typename CacheType::iterator;
 
     std::vector<size_t> processEntries(

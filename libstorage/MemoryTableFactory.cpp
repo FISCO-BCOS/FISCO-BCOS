@@ -115,10 +115,8 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](Table<IsPara>::Ptr _table, Change::Kind _kind, string const& _key,
-                                 vector<Change::Record>& _records) {
-        return;  // XXX ignore it for testing
-        dev::WriteGuard l(x_changeLog);
+    memoryTable->setRecorder([&](typename Table<IsPara>::Ptr _table, Change::Kind _kind,
+                                 string const& _key, vector<Change::Record>& _records) {
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
 
