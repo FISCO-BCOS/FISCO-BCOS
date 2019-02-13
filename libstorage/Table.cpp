@@ -123,7 +123,7 @@ size_t Entries<IsPara>::size() const
 }
 
 template<bool IsPara>
-Entry<IsPara>::Ptr Entries<IsPara>::get(size_t i)
+Entry::Ptr Entries<IsPara>::get(size_t i)
 {
     if (m_entries.size() <= i)
     {

@@ -40,7 +40,7 @@ void dev::storage::MemoryTable<IsPara>::init(const std::string& tableName)
 }
 
 template <bool IsPara>
-inline Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
+typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
     const std::string& key, Condition::Ptr condition)
 {
     try
@@ -101,7 +101,7 @@ int dev::storage::MemoryTable<IsPara>::update(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
         // key);
 
-        Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
+        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<IsPara>>();
 
         CacheItr it;
         {
@@ -323,7 +323,7 @@ void dev::storage::MemoryTable<IsPara>::clear()
 }
 
 template <bool IsPara>
-typename dev::storage::MemoryTable<IsPara>::DataType* dev::storage::MemoryTable<IsPara>::data()
+typename dev::storage::Table<IsPara>::DataType* dev::storage::MemoryTable<IsPara>::data()
 {
     return &m_cache;
 }
@@ -336,7 +336,7 @@ void dev::storage::MemoryTable<IsPara>::setStateStorage(Storage::Ptr amopDB)
 
 template <bool IsPara>
 std::vector<size_t> MemoryTable<IsPara>::processEntries(
-    Entries<IsPara>::Ptr entries, Condition::Ptr condition)
+    typename Entries<IsPara>::Ptr entries, Condition::Ptr condition)
 {
     std::vector<size_t> indexes;
     indexes.reserve(entries->size());
