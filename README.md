@@ -14,7 +14,7 @@ Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/fea
 
 ## Documentation
 
-- [English](https://fisco-bcos-documentation-en.readthedocs.io/en/latest/)
+- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/))
 - [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
 
 ## Developing & Contributing
@@ -26,10 +26,10 @@ Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/fea
 
 ### Features
 
-- **Security**: Comprehensive security coverage includes certificate authorities and key management
-- **Privacy**: Role-based access control, zero-knowledge proof, homomorphic encryption, group signature, ring signature
+- **Security**: Comprehensive security coverage includes role-based access control, certificate authorities and key management
+- **Privacy**: Authority management, guomi algorithm, zero-knowledge proof, homomorphic encryption, group signature, ring signature
 - **Performance**: Parallel computation, efficient consensus mechanism
-- **Usability**: Contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
+- **Usability**: More convenient to deploy and manage your consortium blockchain, including contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
 - **Reliability**: Several applications in production environment work stability
 
 ### Featured Cases
