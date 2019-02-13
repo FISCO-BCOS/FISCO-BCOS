@@ -22,9 +22,8 @@
 # generate executable binary fisco-bcos
 add_subdirectory(main)
 
-    add_subdirectory(para)
-
 if (TESTS)
+    add_subdirectory(para)
     add_subdirectory(p2p)
     add_subdirectory(consensus)
     add_subdirectory(blockverifier)
