@@ -265,7 +265,8 @@ void MemoryTableFactory<false>::rollback(size_t _savepoint)
 }
 
 template <bool IsPara>
-void MemoryTableFactory<IsPara>::commit() {}
+void MemoryTableFactory<IsPara>::commit()
+{}
 
 template <bool IsPara>
 void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _blockNumber)
