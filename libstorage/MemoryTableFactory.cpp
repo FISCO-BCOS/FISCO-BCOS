@@ -56,7 +56,7 @@ Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     {
         return it->second;
     }
-    auto tableInfo = make_shared<storage::Table<> nfo>();
+    auto tableInfo = make_shared<storage::TableInfo>();
 
     if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
     {
@@ -309,9 +309,9 @@ void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _block
 }
 
 template <bool IsPara>
-storage::Table<> nfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::string& tableName)
+storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::string& tableName)
 {
-    auto tableInfo = make_shared<storage::Table<> nfo>();
+    auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
     if (tableName == SYS_MINERS)
     {
@@ -372,7 +372,7 @@ storage::Table<> nfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std:
 }
 
 template <bool IsPara>
-void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::Table<> nfo::Ptr _tableInfo)
+void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
     Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)

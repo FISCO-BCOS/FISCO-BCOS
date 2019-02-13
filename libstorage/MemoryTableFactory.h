@@ -62,8 +62,8 @@ public:
     int getCreateTableCode() { return createTableCode; }
 
 private:
-    storage::Table<> nfo::Ptr getSysTableInfo(const std::string& tableName);
-    void setAuthorizedAddress(storage::Table<> nfo::Ptr _tableInfo);
+    storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
+    void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
