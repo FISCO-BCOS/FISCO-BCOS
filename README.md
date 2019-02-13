@@ -14,7 +14,7 @@ Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/fea
 
 ## Documentation
 
-- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/))
+- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
 - [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
 
 ## Developing & Contributing

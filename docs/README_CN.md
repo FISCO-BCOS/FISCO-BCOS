@@ -13,7 +13,7 @@
 ## 文档
 
 - [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
-- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/))
+- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
 
 ## 贡献代码
 
