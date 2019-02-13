@@ -439,7 +439,7 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     table->insert(ACCOUNT_ALIVE, entry);
 }
 
-inline storage::Table<> : Ptr StorageState::getTable(Address const& _address) const
+inline storage::Table<>::Ptr StorageState::getTable(Address const& _address) const
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
     return m_memoryTableFactory->openTable(tableName);
