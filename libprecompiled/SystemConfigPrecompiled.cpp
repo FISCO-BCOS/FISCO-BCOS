@@ -74,7 +74,7 @@ bytes SystemConfigPrecompiled::call(
             return out;
         }
 
-        storage::Table::Ptr table = openTable(context, SYS_CONFIG);
+        storage::Table<> : Ptr table = openTable(context, SYS_CONFIG);
 
         auto condition = table->newCondition();
         auto entries = table->select(configKey, condition);

@@ -59,7 +59,7 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, 
     {  // select(string,string)
         std::string tableName, key;
         abi.abiOut(data, tableName, key);
-        storage::Table::Ptr table = openTable(context, tableName);
+        storage::Table<> : Ptr table = openTable(context, tableName);
         if (table.get())
         {
             auto entries = table->select(key, table->newCondition());
