@@ -116,13 +116,13 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
-template<bool IsPara>
+template <bool IsPara>
 size_t Entries<IsPara>::size() const
 {
     return m_entries.size();
 }
 
-template<bool IsPara>
+template <bool IsPara>
 Entry::Ptr Entries<IsPara>::get(size_t i)
 {
     if (m_entries.size() <= i)
@@ -135,26 +135,26 @@ Entry::Ptr Entries<IsPara>::get(size_t i)
     return m_entries[i];
 }
 
-template<bool IsPara>
+template <bool IsPara>
 void Entries<IsPara>::addEntry(Entry::Ptr entry)
 {
     m_entries.push_back(entry);
     m_dirty = true;
 }
 
-template<bool IsPara>
+template <bool IsPara>
 void Entries<false>::removeEntry(size_t index)
 {
     m_entries.erase(m_entries.begin() + index);
 }
 
-template<bool IsPara>
+template <bool IsPara>
 bool Entries<IsPara>::dirty() const
 {
     return m_dirty;
 }
 
-template<bool IsPara>
+template <bool IsPara>
 void Entries<IsPara>::setDirty(bool dirty)
 {
     m_dirty = dirty;
@@ -206,11 +206,13 @@ std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Conditi
     return &m_conditions;
 }
 
-Entry::Ptr TableBase::newEntry()
+template <bool IsPara>
+Entry::Ptr Table<IsPara>::newEntry()
 {
     return std::make_shared<Entry>();
 }
-Condition::Ptr TableBase::newCondition()
+template <bool IsPara>
+Condition::Ptr Table<IsPara>::newCondition()
 {
     return std::make_shared<Condition>();
 }

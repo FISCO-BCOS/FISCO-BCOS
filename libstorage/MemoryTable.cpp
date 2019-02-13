@@ -45,7 +45,7 @@ typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
 {
     try
     {
-        Entries<IsPara>::Ptr entries = std::make_shared<Entries<IsPara>>();
+        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<IsPara>>();
 
         CacheItr it;
         it = m_cache.find(key);
@@ -233,7 +233,7 @@ inline int dev::storage::MemoryTable<IsPara>::remove(
     }
     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
-    Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
+    typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
 
     CacheItr it;
     {
