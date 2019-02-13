@@ -51,6 +51,7 @@ class ExecutiveContext;
 }  // namespace blockverifier
 namespace storage
 {
+template <bool IsPara>
 class MemoryTableFactory;
 }
 

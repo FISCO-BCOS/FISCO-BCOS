@@ -26,6 +26,7 @@ namespace dev
 {
 namespace storage
 {
+template <bool IsPara>
 class MemoryTableFactory;
 }
 namespace blockverifier

@@ -64,7 +64,7 @@ public:
     h256 hash();
 
 private:
-    std::shared_ptr<storage::Table> m_table;
+    std::shared_ptr<storage::Table<>> m_table;
 };
 
 }  // namespace blockverifier
