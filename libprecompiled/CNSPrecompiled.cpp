@@ -68,7 +68,7 @@ bytes CNSPrecompiled::call(
         // insert(name, version, address, abi), 4 fields in table, the key of table is name field
         std::string contractName, contractVersion, contractAddress, contractAbi;
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
-        Table<>::Ptr table = openTable(context, SYS_CNS);
+        Table::Ptr table = openTable(context, SYS_CNS);
 
         // check exist or not
         bool exist = false;
@@ -124,7 +124,7 @@ bytes CNSPrecompiled::call(
         // Cursor is not considered.
         std::string contractName;
         abi.abiOut(data, contractName);
-        Table<>::Ptr table = openTable(context, SYS_CNS);
+        Table::Ptr table = openTable(context, SYS_CNS);
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
@@ -155,7 +155,7 @@ bytes CNSPrecompiled::call(
         // selectByNameAndVersion(string,string) returns(string)
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
-        Table<>::Ptr table = openTable(context, SYS_CNS);
+        Table::Ptr table = openTable(context, SYS_CNS);
 
         json_spirit::Array CNSInfos;
         auto entries = table->select(contractName, table->newCondition());

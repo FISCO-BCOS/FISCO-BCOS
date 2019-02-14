@@ -58,13 +58,13 @@ public:
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;
 
-    std::shared_ptr<dev::storage::Table<>> getTable() { return m_table; }
-    void setTable(std::shared_ptr<dev::storage::Table<>> table) { m_table = table; }
+    std::shared_ptr<dev::storage::Table> getTable() { return m_table; }
+    void setTable(std::shared_ptr<dev::storage::Table> table) { m_table = table; }
 
     h256 hash();
 
 private:
-    std::shared_ptr<storage::Table<>> m_table;
+    std::shared_ptr<storage::Table> m_table;
 };
 
 }  // namespace blockverifier

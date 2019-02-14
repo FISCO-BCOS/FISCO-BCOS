@@ -38,10 +38,14 @@ namespace dev
 namespace storage
 {
 template <typename Mode = Serial>
-class MemoryTable : public Table<Mode>
+class MemoryTable : public Table
 {
 public:
-    typedef std::shared_ptr<MemoryTable<Mode>> Ptr;
+    using CacheType = typename std::conditional<Mode::value,
+        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
+        std::unordered_map<std::string, Entries::Ptr>>::type;
+    using CacheItr = typename CacheType::iterator;
+    using Ptr = std::shared_ptr<MemoryTable<Mode>>;
 
     virtual ~MemoryTable(){};
 
@@ -351,11 +355,6 @@ public:
     }
 
 private:
-    using CacheType = typename std::conditional<Mode::value,
-        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
-        std::unordered_map<std::string, Entries::Ptr>>::type;
-    using CacheItr = typename CacheType::iterator;
-
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
@@ -501,13 +500,93 @@ private:
         }
     }
 
+    virtual void setRecorder(
+        std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+            _recorder) override;
+
+    virtual bool dump(TableData::Ptr _data) override
+    {
+        bool dirtyTable = false;
+        for (auto it : m_cache)
+        {
+            _tableData->data.insert(make_pair(it.first, it.second));
+
+            if (it.second->dirty())
+            {
+                dirtyTable = true;
+            }
+        }
+        return dirtyTable;
+    }
+    virtual void rollback(const Change& _change) override;
+
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     CacheType m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
+    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        m_recorder;
 };
 
-}  // namespace storage
+template <>
+inline void MemoryTable<Serial>::setRecorder(
+    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        _recorder)
+{
+    m_recorder = _recorder;
+}
 
+template <>
+inline void MemoryTable<Parallel>::setRecorder(
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
+{
+    m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
+}
+
+template <>
+inline void MemoryTable<Serial>::rollback(const Change& _change)
+{
+    // Public MemoryTable API cannot be used here because it will add another
+    // change log entry.
+    switch (_change.kind)
+    {
+    case Change::Insert:
+    {
+        auto entries = m_cache[_change.key];
+        entries->removeEntry(_change.value[0].index);
+        // if (entries->size() == 0u)
+        //    data->erase(_change.key);
+        break;
+    }
+    case Change::Update:
+    {
+        auto entries = m_cache[_change.key];
+        for (auto& record : _change.value)
+        {
+            auto entry = entries->get(record.index);
+            entry->setField(record.key, record.oldValue);
+        }
+        break;
+    }
+    case Change::Remove:
+    {
+        auto entries = m_cache[_change.key];
+        for (auto& record : _change.value)
+        {
+            auto entry = entries->get(record.index);
+            entry->setStatus(0);
+        }
+        break;
+    }
+    case Change::Select:
+
+    default:
+        break;
+    }
+}
+template <>
+inline void MemoryTable<Parallel>::rollback(const Change& _change)
+{}
+}  // namespace storage
 }  // namespace dev

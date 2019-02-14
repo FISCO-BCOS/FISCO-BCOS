@@ -107,7 +107,7 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     return Precompiled::Ptr();
 }
 
-std::shared_ptr<storage::Table<>> ExecutiveContext::getTable(const Address& address)
+std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
 {
     std::string tableName = "_contract_data_" + address.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =

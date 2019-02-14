@@ -32,7 +32,6 @@ class ExecutiveContext;
 
 namespace storage
 {
-template <typename Mode>
 class Table;
 }
 
