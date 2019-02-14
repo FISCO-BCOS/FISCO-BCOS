@@ -88,6 +88,9 @@ void Host::startAccept(boost::system::error_code boost_error)
                 if (ec || !m_run)
                 {
                     socket->close();
+
+                    startAccept();
+
                     return;
                 }
 
