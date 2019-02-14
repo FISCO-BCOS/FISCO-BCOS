@@ -109,8 +109,8 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
 
 shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
 {
-    dev::storage::MemoryTableFactory<>::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory<>>();
+    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
     return memoryTableFactory;
 }

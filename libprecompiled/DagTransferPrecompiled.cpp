@@ -145,7 +145,7 @@ Table<>::Ptr DagTransferPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
+    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
 }
 
 bytes DagTransferPrecompiled::call(

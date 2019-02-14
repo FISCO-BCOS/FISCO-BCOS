@@ -30,14 +30,14 @@ struct StorageFixture
     StorageFixture()
     {
         entry = std::make_shared<Entry>();
-        entries = std::make_shared<Entries<>>();
+        entries = std::make_shared<Entrie>();
         condition = std::make_shared<Condition>();
     }
 
     ~StorageFixture() {}
 
     dev::storage::Entry::Ptr entry;
-    dev::storage::Entries<>::Ptr entries;
+    dev::storage::Entries::Ptr entries;
     dev::storage::Condition::Ptr condition;
     dev::storage::Table<>::Ptr stateDB;
 };

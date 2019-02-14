@@ -36,7 +36,7 @@ struct EntriesPrecompiledFixture
     EntriesPrecompiledFixture()
     {
         entry = std::make_shared<Entry>();
-        entries = std::make_shared<Entries<>>();
+        entries = std::make_shared<Entrie>();
         precompiledContext = std::make_shared<dev::blockverifier::ExecutiveContext>();
         entriesPrecompiled = std::make_shared<dev::blockverifier::EntriesPrecompiled>();
 
@@ -45,7 +45,7 @@ struct EntriesPrecompiledFixture
     ~EntriesPrecompiledFixture() {}
 
     dev::storage::Entry::Ptr entry;
-    dev::storage::Entries<>::Ptr entries;
+    dev::storage::Entries::Ptr entries;
     dev::blockverifier::ExecutiveContext::Ptr precompiledContext;
     dev::blockverifier::EntriesPrecompiled::Ptr entriesPrecompiled;
 };

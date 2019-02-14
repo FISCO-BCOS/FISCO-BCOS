@@ -32,7 +32,7 @@ class ExecutiveContext;
 
 namespace storage
 {
-template <bool IsPara>
+template <typename Mode>
 class Table;
 }
 

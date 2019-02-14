@@ -45,7 +45,7 @@ public:
     };
     virtual ~MPTStateFactory(){};
     virtual std::shared_ptr<dev::executive::StateFace> getState(
-        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory<>> _factory) override;
+        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) override;
 
 private:
     dev::OverlayDB m_db;

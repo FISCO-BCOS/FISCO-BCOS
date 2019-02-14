@@ -36,9 +36,9 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries<>::Ptr select(h256, int, const std::string&, const std::string&) override
+    virtual Entries::Ptr select(h256, int, const std::string&, const std::string&) override
     {
-        Entries<>::Ptr entries = std::make_shared<Entries<>>();
+        Entries::Ptr entries = std::make_shared<Entrie>();
         return entries;
     }
 
@@ -56,13 +56,13 @@ struct MemoryTableFactoryFixture
     {
         std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
-        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory<>>();
+        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory>();
         memoryDBFactory->setStateStorage(mockAMOPDB);
 
         BOOST_TEST_TRUE(memoryDBFactory->stateStorage() == mockAMOPDB);
     }
 
-    dev::storage::MemoryTableFactory<>::Ptr memoryDBFactory;
+    dev::storage::MemoryTableFactory::Ptr memoryDBFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)

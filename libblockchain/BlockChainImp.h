@@ -51,7 +51,6 @@ class ExecutiveContext;
 }  // namespace blockverifier
 namespace storage
 {
-template <bool IsPara>
 class MemoryTableFactory;
 }
 
@@ -92,7 +91,7 @@ public:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
-    virtual std::shared_ptr<dev::storage::MemoryTableFactory<>> getMemoryTableFactory();
+    virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;

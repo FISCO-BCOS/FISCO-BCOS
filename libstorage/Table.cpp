@@ -116,14 +116,12 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
-template <bool IsPara>
-size_t Entries<IsPara>::size() const
+size_t Entries::size() const
 {
     return m_entries.size();
 }
 
-template <bool IsPara>
-Entry::Ptr Entries<IsPara>::get(size_t i)
+Entry::Ptr Entries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
@@ -135,27 +133,23 @@ Entry::Ptr Entries<IsPara>::get(size_t i)
     return m_entries[i];
 }
 
-template <bool IsPara>
-void Entries<IsPara>::addEntry(Entry::Ptr entry)
+void Entries::addEntry(Entry::Ptr entry)
 {
     m_entries.push_back(entry);
     m_dirty = true;
 }
 
-template <bool IsPara>
-void Entries<false>::removeEntry(size_t index)
+void Entries::removeEntry(size_t index)
 {
     m_entries.erase(m_entries.begin() + index);
 }
 
-template <bool IsPara>
-bool Entries<IsPara>::dirty() const
+bool Entries::dirty() const
 {
     return m_dirty;
 }
 
-template <bool IsPara>
-void Entries<IsPara>::setDirty(bool dirty)
+void Entries::setDirty(bool dirty)
 {
     m_dirty = dirty;
 }
@@ -206,13 +200,18 @@ std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Conditi
     return &m_conditions;
 }
 
-template <bool IsPara>
-Entry::Ptr Table<IsPara>::newEntry()
+template <>
+void Table<Serial>::setRecorder(
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        _recorder)
 {
-    return std::make_shared<Entry>();
+    m_recorder = _recorder;
 }
-template <bool IsPara>
-Condition::Ptr Table<IsPara>::newCondition()
+
+template <>
+void Table<Parallel>::setRecorder(
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        _recorder)
 {
-    return std::make_shared<Condition>();
+    m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {}
 }

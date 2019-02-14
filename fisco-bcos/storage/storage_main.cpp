@@ -76,7 +76,7 @@ void help()
     std::cout << main_options << std::endl;
 }
 
-void printEntries(Entries<>::Ptr entries)
+void printEntries(Entries::Ptr entries)
 {
     if (entries->size() == 0)
     {
@@ -121,8 +121,8 @@ int main(int argc, const char* argv[])
     auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
     auto storage = std::make_shared<dev::storage::LevelDBStorage>();
     storage->setDB(storageDB);
-    dev::storage::MemoryTableFactory<>::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory<>>();
+    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(storage);
     memoryTableFactory->setBlockHash(h256(0));
     memoryTableFactory->setBlockNum(0);

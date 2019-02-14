@@ -38,8 +38,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
 {
     // DBFactoryPrecompiled
-    dev::storage::MemoryTableFactory<>::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory<>>();
+    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
     memoryTableFactory->setBlockHash(blockInfo.hash);
     memoryTableFactory->setBlockNum(blockInfo.number);

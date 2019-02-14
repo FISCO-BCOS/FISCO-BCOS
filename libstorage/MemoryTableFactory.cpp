@@ -31,8 +31,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-template <bool IsPara>
-MemoryTableFactory<IsPara>::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
@@ -47,9 +46,8 @@ MemoryTableFactory<IsPara>::MemoryTableFactory() : m_blockHash(h256(0)), m_block
     m_sysTables.push_back(DAG_TRANSFER);
 }
 
-template <bool IsPara>
-typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
-    const string& tableName, bool authorityFlag)
+template <typename Mode>
+typename Table<Mode>::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -86,7 +84,7 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
 
-    typename MemoryTable<IsPara>::Ptr memoryTable = std::make_shared<MemoryTable<IsPara>>();
+    typename MemoryTable<Mode>::Ptr memoryTable = std::make_shared<MemoryTable<Mode>>();
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
@@ -115,7 +113,7 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](typename Table<IsPara>::Ptr _table, Change::Kind _kind,
+    memoryTable->setRecorder([&](typename Table<Mode>::Ptr _table, Change::Kind _kind,
                                  string const& _key, vector<Change::Record>& _records) {
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
@@ -125,16 +123,11 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::openTable(
     return memoryTable;
 }
 
-template <bool IsPara>
-typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::createTable(const string& tableName,
+template <typename Mode>
+typename Table<Mode>::Ptr MemoryTableFactory::createTable(const string& tableName,
     const string& keyField, const std::string& valueField, bool authorigytFlag,
     Address const& _origin)
 {
-    /*
-    STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("create table")
-                       << LOG_KV("table name", tableName) << LOG_KV("blockHash", m_blockHash)
-                       << LOG_KV("blockNum", m_blockNum);
-*/
     auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 
     // To make sure the table exists
@@ -164,20 +157,17 @@ typename Table<IsPara>::Ptr MemoryTableFactory<IsPara>::createTable(const string
     return openTable(tableName);
 }
 
-template <bool IsPara>
-void MemoryTableFactory<IsPara>::setBlockHash(h256 blockHash)
+void MemoryTableFactory::setBlockHash(h256 blockHash)
 {
     m_blockHash = blockHash;
 }
 
-template <bool IsPara>
-void MemoryTableFactory<IsPara>::setBlockNum(int64_t blockNum)
+void MemoryTableFactory::setBlockNum(int64_t blockNum)
 {
     m_blockNum = blockNum;
 }
 
-template <bool IsPara>
-h256 MemoryTableFactory<IsPara>::hash()
+h256 MemoryTableFactory::hash()
 {
     bytes data;
     for (auto& it : m_name2Table)
@@ -203,8 +193,8 @@ h256 MemoryTableFactory<IsPara>::hash()
     // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("allTableHash") << LOG_KV("stateRoot", m_hash);
     return m_hash;
 }
-template <bool IsPara>
-void MemoryTableFactory<false>::rollback(size_t _savepoint)
+
+void MemoryTableFactory::rollback(size_t _savepoint)
 {
     while (_savepoint < m_changeLog.size())
     {
@@ -254,12 +244,9 @@ void MemoryTableFactory<false>::rollback(size_t _savepoint)
     }
 }
 
-template <bool IsPara>
-void MemoryTableFactory<IsPara>::commit()
-{}
+void MemoryTableFactory::commit() {}
 
-template <bool IsPara>
-void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
     vector<dev::storage::TableData::Ptr> datas;
 
@@ -297,8 +284,7 @@ void MemoryTableFactory<IsPara>::commitDB(h256 const& _blockHash, int64_t _block
     m_changeLog.clear();
 }
 
-template <bool IsPara>
-storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::string& tableName)
+storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
@@ -360,10 +346,10 @@ storage::TableInfo::Ptr MemoryTableFactory<IsPara>::getSysTableInfo(const std::s
     return tableInfo;
 }
 
-template <bool IsPara>
-void MemoryTableFactory<IsPara>::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
+
+void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    typename Table<IsPara>::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

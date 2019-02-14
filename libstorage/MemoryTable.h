@@ -30,17 +30,16 @@ namespace dev
 {
 namespace storage
 {
-template <bool IsPara = false>
-class MemoryTable : public Table<IsPara>
+template <typename Mode = Serial>
+class MemoryTable : public Table<Mode>
 {
 public:
-    typedef std::shared_ptr<MemoryTable<IsPara>> Ptr;
+    typedef std::shared_ptr<MemoryTable<Mode>> Ptr;
 
     virtual ~MemoryTable(){};
 
     virtual void init(const std::string& tableName);
-    virtual typename Entries<IsPara>::Ptr select(
-        const std::string& key, Condition::Ptr condition) override;
+    virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
     virtual int insert(const std::string& key, Entry::Ptr entry,
@@ -49,24 +48,23 @@ public:
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
     virtual h256 hash() override;
-    virtual void clear() override;
-    virtual typename Table<IsPara>::DataType* data() override;
+    virtual void clear() override { m_cache.clear(); }
+    virtual typename Table<IsPara>::DataType* data() { return &m_cache; }
 
-    void setStateStorage(Storage::Ptr amopDB);
-    void setBlockHash(h256 blockHash);
-    void setBlockNum(int blockNum);
-    void setTableInfo(TableInfo::Ptr tableInfo);
+    void setStateStorage(Storage::Ptr amopDB) { m_remoteDB = amopDB; }
+    void setBlockHash(h256 blockHash) { m_blockHash = blockHash; }
+    void setBlockNum(int blockNum) { m_blockNum = blockNum; }
+    void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = _tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override;
 
 private:
-    using CacheType = typename std::conditional<IsPara,
-        tbb::concurrent_unordered_map<std::string, typename Entries<true>::Ptr>,
-        std::unordered_map<std::string, typename Entries<false>::Ptr>>::type;
+    using CacheType = typename std::conditional<Mode::type,
+        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
+        std::unordered_map<std::string, Entries::Ptr>>::type;
     using CacheItr = typename CacheType::iterator;
 
-    std::vector<size_t> processEntries(
-        typename Entries<IsPara>::Ptr entries, Condition::Ptr condition);
+    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
     bool isHashField(const std::string& _key);
     void checkField(Entry::Ptr entry);

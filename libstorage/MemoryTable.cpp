@@ -32,20 +32,20 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-template <bool IsPara>
-void dev::storage::MemoryTable<IsPara>::init(const std::string& tableName)
+template <typename Mode>
+void dev::storage::MemoryTable<Mode>::init(const std::string& tableName)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("init")
                        << LOG_KV("tableName", tableName);
 }
 
-template <bool IsPara>
-typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
+template <typename Mode>
+typename Entries::Ptr dev::storage::MemoryTable<Mode>::select(
     const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<IsPara>>();
+        typename Entries::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
         it = m_cache.find(key);
@@ -67,10 +67,10 @@ typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
         if (!entries)
         {
             // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
-            return std::make_shared<Entries<>>();
+            return std::make_shared<Entrie>();
         }
         auto indexes = processEntries(entries, condition);
-        typename Entries<IsPara>::Ptr resultEntries = std::make_shared<Entries<>>();
+        typename Entries::Ptr resultEntries = std::make_shared<Entrie>();
         for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
@@ -83,11 +83,11 @@ typename Entries<IsPara>::Ptr dev::storage::MemoryTable<IsPara>::select(
         //                   << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
-    return std::make_shared<Entries<IsPara>>();
+    return std::make_shared<Entries>();
 }
 
-template <bool IsPara>
-int dev::storage::MemoryTable<IsPara>::update(
+template <typename Mode>
+int dev::storage::MemoryTable<Mode>::update(
     const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
@@ -101,7 +101,7 @@ int dev::storage::MemoryTable<IsPara>::update(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
         // key);
 
-        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<IsPara>>();
+        typename Entries::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
         {
@@ -156,8 +156,8 @@ int dev::storage::MemoryTable<IsPara>::update(
     return 0;
 }
 
-template <bool IsPara>
-inline int dev::storage::MemoryTable<IsPara>::insert(
+template <typename Mode>
+inline int dev::storage::MemoryTable<Mode>::insert(
     const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options)
 {
     try
@@ -171,7 +171,7 @@ inline int dev::storage::MemoryTable<IsPara>::insert(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
         // key);
 
-        typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
+        typename Entries::Ptr entries = std::make_shared<Entrie>();
         Condition::Ptr condition = std::make_shared<Condition>();
 
         CacheItr it;
@@ -221,8 +221,8 @@ inline int dev::storage::MemoryTable<IsPara>::insert(
     return 1;
 }
 
-template <bool IsPara>
-inline int dev::storage::MemoryTable<IsPara>::remove(
+template <typename Mode>
+int dev::storage::MemoryTable<Mode>::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     if (!checkAuthority(options->origin))
@@ -233,7 +233,7 @@ inline int dev::storage::MemoryTable<IsPara>::remove(
     }
     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
-    typename Entries<IsPara>::Ptr entries = std::make_shared<Entries<>>();
+    typename Entries::Ptr entries = std::make_shared<Entrie>();
 
     CacheItr it;
     {
@@ -272,8 +272,8 @@ inline int dev::storage::MemoryTable<IsPara>::remove(
     return indexes.size();
 }
 
-template <bool IsPara>
-h256 dev::storage::MemoryTable<IsPara>::hash()
+template <typename Mode>
+h256 dev::storage::MemoryTable<Mode>::hash()
 {
     bytes data;
     for (auto& it : m_cache)
@@ -313,30 +313,9 @@ h256 dev::storage::MemoryTable<IsPara>::hash()
     return hash;
 }
 
-template <bool IsPara>
-void dev::storage::MemoryTable<IsPara>::clear()
-{
-    {
-        // WriteGuard l(x_cache);
-        m_cache.clear();
-    }
-}
-
-template <bool IsPara>
-typename dev::storage::Table<IsPara>::DataType* dev::storage::MemoryTable<IsPara>::data()
-{
-    return &m_cache;
-}
-
-template <bool IsPara>
-void dev::storage::MemoryTable<IsPara>::setStateStorage(Storage::Ptr amopDB)
-{
-    m_remoteDB = amopDB;
-}
-
-template <bool IsPara>
-std::vector<size_t> MemoryTable<IsPara>::processEntries(
-    typename Entries<IsPara>::Ptr entries, Condition::Ptr condition)
+template <typename Mode>
+std::vector<size_t> MemoryTable<Mode>::processEntries(
+    typename Entries::Ptr entries, Condition::Ptr condition)
 {
     std::vector<size_t> indexes;
     indexes.reserve(entries->size());
@@ -359,8 +338,8 @@ std::vector<size_t> MemoryTable<IsPara>::processEntries(
     return indexes;
 }
 
-template <bool IsPara>
-bool dev::storage::MemoryTable<IsPara>::processCondition(Entry::Ptr entry, Condition::Ptr condition)
+template <typename Mode>
+bool dev::storage::MemoryTable<Mode>::processCondition(Entry::Ptr entry, Condition::Ptr condition)
 {
     try
     {
@@ -455,20 +434,8 @@ bool dev::storage::MemoryTable<IsPara>::processCondition(Entry::Ptr entry, Condi
     return true;
 }
 
-template <bool IsPara>
-void MemoryTable<IsPara>::setBlockHash(h256 blockHash)
-{
-    m_blockHash = blockHash;
-}
-
-template <bool IsPara>
-void MemoryTable<IsPara>::setBlockNum(int blockNum)
-{
-    m_blockNum = blockNum;
-}
-
-template <bool IsPara>
-bool MemoryTable<IsPara>::isHashField(const std::string& _key)
+template <typename Mode>
+bool MemoryTable<Mode>::isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {
@@ -479,14 +446,8 @@ bool MemoryTable<IsPara>::isHashField(const std::string& _key)
     return false;
 }
 
-template <bool IsPara>
-void MemoryTable<IsPara>::setTableInfo(TableInfo::Ptr _tableInfo)
-{
-    m_tableInfo = _tableInfo;
-}
-
-template <bool IsPara>
-inline void MemoryTable<IsPara>::checkField(Entry::Ptr entry)
+template <typename Mode>
+inline void MemoryTable<Mode>::checkField(Entry::Ptr entry)
 {
     for (auto& it : *(entry->fields()))
     {
@@ -501,8 +462,8 @@ inline void MemoryTable<IsPara>::checkField(Entry::Ptr entry)
     }
 }
 
-template <bool IsPara>
-inline bool MemoryTable<IsPara>::checkAuthority(Address const& _origin) const
+template <typename Mode>
+inline bool MemoryTable<Mode>::checkAuthority(Address const& _origin) const
 {
     if (m_tableInfo->authorizedAddress.empty())
         return true;
