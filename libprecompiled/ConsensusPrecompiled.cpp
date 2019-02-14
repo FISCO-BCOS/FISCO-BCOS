@@ -89,7 +89,7 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table<>::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
 
             auto condition = table->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -160,7 +160,7 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table<>::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
 
             auto condition = table->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -232,7 +232,7 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table<>::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_MINERS);
 
             if (!checkIsLastMiner(table, nodeID))
             {
@@ -270,7 +270,7 @@ bytes ConsensusPrecompiled::call(
 
 void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
 {
-    storage::Table<>::Ptr table = openTable(context, SYS_MINERS);
+    storage::Table::Ptr table = openTable(context, SYS_MINERS);
     auto condition = table->newCondition();
     auto entries = table->select(PRI_KEY, condition);
 
@@ -293,7 +293,7 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
                            << LOG_KV("consensusTable", s.str());
 }
 
-bool ConsensusPrecompiled::checkIsLastMiner(storage::Table<>::Ptr table, std::string const& nodeID)
+bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID)
 {
     // Check is last miner or not.
     auto condition = table->newCondition();

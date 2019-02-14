@@ -70,7 +70,7 @@ bytes AuthorityPrecompiled::call(
         addPrefixToUserTable(tableName);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        Table<>::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_ADDRESS, addr);
@@ -116,7 +116,7 @@ bytes AuthorityPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
 
-        Table<>::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_ADDRESS, addr);
@@ -158,7 +158,7 @@ bytes AuthorityPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("queryByName func")
                                << LOG_KV("tableName", tableName);
 
-        Table<>::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
         auto entries = table->select(tableName, condition);

@@ -35,7 +35,7 @@ uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
            ((func & 0xFF000000) >> 24);
 }
 
-storage::Table<>::Ptr Precompiled::openTable(
+storage::Table::Ptr Precompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =

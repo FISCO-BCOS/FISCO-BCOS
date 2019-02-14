@@ -25,7 +25,6 @@ namespace dev
 {
 namespace storage
 {
-template <typename Mode>
 class Table;
 }
 

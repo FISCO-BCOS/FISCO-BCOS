@@ -29,7 +29,6 @@ namespace dev
 {
 namespace storage
 {
-template <typename Mode>
 class Table;
 }
 
@@ -56,7 +55,7 @@ public:
     virtual std::vector<std::string> getDagTag(bytesConstRef param) override;
 
 protected:
-    std::shared_ptr<storage::Table<>> openTable(
+    std::shared_ptr<storage::Table> openTable(
         dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
 
 public:
