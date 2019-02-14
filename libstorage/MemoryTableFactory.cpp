@@ -349,7 +349,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
 
 void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    typename Table<Serial>::Ptr accessTable = openTable<Serial>(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

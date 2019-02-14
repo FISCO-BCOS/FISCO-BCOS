@@ -201,7 +201,6 @@ public:
     virtual void clear() = 0;
 };
 
-
 // Construction of transaction execution
 template <typename Mode = Serial>
 class Table : public TableBase
@@ -230,5 +229,20 @@ protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
 };
+
+template <>
+void Table<Serial>::setRecorder(
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        _recorder)
+{
+    m_recorder = _recorder;
+}
+
+template <>
+void Table<Parallel>::setRecorder(
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
+{
+    m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
+}
 }  // namespace storage
 }  // namespace dev

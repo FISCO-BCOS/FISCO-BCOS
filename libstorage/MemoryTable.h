@@ -49,12 +49,12 @@ public:
 
     virtual h256 hash() override;
     virtual void clear() override { m_cache.clear(); }
-    virtual typename Table<IsPara>::DataType* data() { return &m_cache; }
+    virtual typename Table<Mode>::DataType* data() { return &m_cache; }
 
     void setStateStorage(Storage::Ptr amopDB) { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) { m_blockHash = blockHash; }
     void setBlockNum(int blockNum) { m_blockNum = blockNum; }
-    void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = _tableInfo; }
+    void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override;
 
