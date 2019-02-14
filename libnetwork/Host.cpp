@@ -88,7 +88,6 @@ void Host::startAccept(boost::system::error_code boost_error)
                 if (ec || !m_run)
                 {
                     socket->close();
-
                     startAccept();
 
                     return;
@@ -105,6 +104,8 @@ void Host::startAccept(boost::system::error_code boost_error)
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
                     boost::bind(&Host::handshakeServer, shared_from_this(), ba::placeholders::error,
                         endpointPublicKey, socket));
+
+                startAccept();
             },
             boost_error);
     }
@@ -222,7 +223,6 @@ void Host::handshakeServer(const boost::system::error_code& error,
                           << LOG_KV("message", error.message())
                           << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
         socket->close();
-        startAccept();
         return;
     }
 
@@ -231,7 +231,6 @@ void Host::handshakeServer(const boost::system::error_code& error,
         std::string node_id_str(*endpointPublicKey);
         NodeID nodeID = NodeID(node_id_str);
         startPeerSession(nodeID, socket, m_connectionHandler);
-        startAccept();
     }
 }
 
