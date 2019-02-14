@@ -48,7 +48,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
         }
 
-        Entries::Ptr entries = std::make_shared<Entrie>();
+        Entries::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
             // parse json

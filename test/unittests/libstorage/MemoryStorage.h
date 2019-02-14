@@ -56,7 +56,7 @@ public:
                 return it->second;
             }
         }
-        return std::make_shared<Entrie>();
+        return std::make_shared<Entries>();
     }
     virtual size_t commit(
         h256, int64_t, const std::vector<TableData::Ptr>& datas, h256 const&) override

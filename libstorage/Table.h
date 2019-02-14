@@ -150,7 +150,7 @@ private:
 using Parallel = std::true_type;
 using Serial = std::false_type;
 
-template <typename Mode = Serial>
+template <typename Mode>
 class Table;
 
 struct Change
@@ -187,7 +187,7 @@ struct Change
 class TableBase : public std::enable_shared_from_this<TableBase>
 {
 public:
-    typedef std::shared_ptr<TableBase>> Ptr;
+    typedef std::shared_ptr<TableBase> Ptr;
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
@@ -227,8 +227,8 @@ public:
     DataType* data() { return nullptr; }
 
 protected:
-    typename std::enable_if<!Mode::value, std::function<void(Ptr, Change::Kind, std::string const&,
-                                              std::vector<Change::Record>&)>>::type m_recorder;
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        m_recorder;
 };
 }  // namespace storage
 }  // namespace dev

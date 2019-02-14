@@ -38,7 +38,7 @@ public:
 
     virtual Entries::Ptr select(h256, int, const std::string&, const std::string&) override
     {
-        Entries::Ptr entries = std::make_shared<Entrie>();
+        Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 

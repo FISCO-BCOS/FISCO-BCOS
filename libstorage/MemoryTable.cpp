@@ -67,10 +67,10 @@ typename Entries::Ptr dev::storage::MemoryTable<Mode>::select(
         if (!entries)
         {
             // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
-            return std::make_shared<Entrie>();
+            return std::make_shared<Entries>();
         }
         auto indexes = processEntries(entries, condition);
-        typename Entries::Ptr resultEntries = std::make_shared<Entrie>();
+        typename Entries::Ptr resultEntries = std::make_shared<Entries>();
         for (auto& i : indexes)
         {
             resultEntries->addEntry(entries->get(i));
@@ -171,7 +171,7 @@ inline int dev::storage::MemoryTable<Mode>::insert(
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
         // key);
 
-        typename Entries::Ptr entries = std::make_shared<Entrie>();
+        typename Entries::Ptr entries = std::make_shared<Entries>();
         Condition::Ptr condition = std::make_shared<Condition>();
 
         CacheItr it;
@@ -233,7 +233,7 @@ int dev::storage::MemoryTable<Mode>::remove(
     }
     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key", key);
 
-    typename Entries::Ptr entries = std::make_shared<Entrie>();
+    typename Entries::Ptr entries = std::make_shared<Entries>();
 
     CacheItr it;
     {
