@@ -140,7 +140,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
 
-    virtual Table::Ptr openTable(const std::string& _table, bool = true)
+    virtual Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
     {
         m_mockTable->m_table = _table;
         return m_mockTable;

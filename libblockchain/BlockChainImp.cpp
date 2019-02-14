@@ -367,6 +367,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             tb->insert(block->blockHeader().hash().hex(), entry);
         }
 
+        std::cout << "holy shit" << std::endl;
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
         {
             WriteGuard l(m_blockNumberMutex);
