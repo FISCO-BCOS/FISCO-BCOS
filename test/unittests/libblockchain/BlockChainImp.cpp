@@ -59,7 +59,7 @@ static std::string const c_commonHash =
     "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public dev::storage::MemoryTable
+class MockTable : public dev::storage::MemoryTable<Serial>
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;
@@ -140,7 +140,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
 
-    Table::Ptr openTable(const std::string& _table, bool = true) override
+    Table<>::Ptr openTable(const std::string& _table, bool = true)
     {
         m_mockTable->m_table = _table;
         return m_mockTable;
@@ -176,18 +176,29 @@ struct EmptyFixture
 {
     EmptyFixture()
     {
+        std::cout << "shit1" << std::endl;
         m_executiveContext = std::make_shared<ExecutiveContext>();
+        std::cout << "shit2" << std::endl;
         m_blockChainImp = std::make_shared<MockBlockChainImp>();
+        std::cout << "shit3" << std::endl;
         m_mockTable = std::make_shared<MockTable>();
+        std::cout << "shit4" << std::endl;
         mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>(m_mockTable);
+        std::cout << "shit5" << std::endl;
         m_storageStateFactory = std::make_shared<StorageStateFactory>(0x0);
+        std::cout << "shit6" << std::endl;
 
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
+        std::cout << "shit7" << std::endl;
         m_blockChainImp->setStateFactory(m_storageStateFactory);
+        std::cout << "shit8" << std::endl;
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
+        std::cout << "shit9" << std::endl;
         m_executiveContext->setState(std::make_shared<MockState>());
+        std::cout << "shit10" << std::endl;
         GenesisBlockParam initParam;
         m_blockChainImp->checkAndBuildGenesisBlock(initParam);
+        std::cout << "shit11" << std::endl;
     }
 
     std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory;
@@ -201,7 +212,9 @@ struct MemoryTableFactoryFixture : EmptyFixture
 {
     MemoryTableFactoryFixture()
     {
+        std::cout << "fuck1" << std::endl;
         m_fakeBlock = std::make_shared<FakeBlock>(5);
+        std::cout << "fuck2" << std::endl;
         m_mockTable->insertGenesisBlock(m_fakeBlock);
     }
 
@@ -214,6 +227,7 @@ BOOST_AUTO_TEST_CASE(emptyChain)
 {
     // special case
     EmptyFixture empty;
+    std::cout << "fuck" << std::endl;
 
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->number(), 0);
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);

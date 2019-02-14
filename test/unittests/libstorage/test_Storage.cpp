@@ -39,7 +39,7 @@ struct StorageFixture
     dev::storage::Entry::Ptr entry;
     dev::storage::Entries::Ptr entries;
     dev::storage::Condition::Ptr condition;
-    dev::storage::Table::Ptr stateDB;
+    dev::storage::Table<>::Ptr stateDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Storage, StorageFixture)

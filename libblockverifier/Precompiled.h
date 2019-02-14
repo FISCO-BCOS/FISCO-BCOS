@@ -29,6 +29,7 @@ namespace dev
 {
 namespace storage
 {
+template <typename Mode>
 class Table;
 }  // namespace storage
 
@@ -68,7 +69,7 @@ public:
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
-    std::shared_ptr<dev::storage::Table> openTable(
+    std::shared_ptr<dev::storage::Table<>> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         const std::string& tableName);
     virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)

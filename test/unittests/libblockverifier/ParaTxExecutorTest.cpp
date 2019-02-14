@@ -58,7 +58,6 @@ struct FakeTxDAG : TxDAG
     bool hasFinished() override
     {
         auto value = count.load();
-        std::cout << "count: " << value << std::endl;
         if (value < taskNum)
         {
             return false;
@@ -144,7 +143,6 @@ BOOST_AUTO_TEST_CASE(testParaTxExecutor)
     auto fakeDAG = std::make_shared<FakeTxDAG>();
     BOOST_CHECK(fakeDAG->count.load() == 0);
     executor.start(fakeDAG);
-    std::cout << "execution end" << std::endl;
     BOOST_CHECK(fakeDAG->count.load() == fakeDAG->taskNum);
 }
 

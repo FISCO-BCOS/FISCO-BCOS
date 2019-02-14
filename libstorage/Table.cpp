@@ -71,7 +71,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     m_dirty = true;
 }
 
-typename Entry::FieldsMap* Entry::fields()
+std::map<std::string, std::string>* Entry::fields()
 {
     return &m_fields;
 }
@@ -116,9 +116,13 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
+size_t Entries::size() const
+{
+    return m_entries.size();
+}
+
 Entry::Ptr Entries::get(size_t i)
 {
-    // dev::ReadGuard l(x_entries);
     if (m_entries.size() <= i)
     {
         throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
@@ -129,23 +133,15 @@ Entry::Ptr Entries::get(size_t i)
     return m_entries[i];
 }
 
-size_t Entries::size() const
-{
-    // dev::ReadGuard l(x_entries);
-    return m_entries.size();
-}
-
 void Entries::addEntry(Entry::Ptr entry)
 {
-    // dev::WriteGuard l(x_entries);
     m_entries.push_back(entry);
     m_dirty = true;
 }
 
-void Entries::removeEntry(size_t /*index*/)
+void Entries::removeEntry(size_t index)
 {
-    // dev::WriteGuard l(x_entries);
-    // m_entries.erase(m_entries.begin() + index);
+    m_entries.erase(m_entries.begin() + index);
 }
 
 bool Entries::dirty() const
@@ -202,13 +198,4 @@ void Condition::limit(size_t offset, size_t count)
 std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
-}
-
-Entry::Ptr Table::newEntry()
-{
-    return std::make_shared<Entry>();
-}
-Condition::Ptr Table::newCondition()
-{
-    return std::make_shared<Condition>();
 }

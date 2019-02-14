@@ -24,14 +24,10 @@
 
 #pragma once
 #include "libexecutive/StateFace.h"
+#include <libstorage/MemoryTableFactory.h>
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-class MemoryTableFactory;
-}  // namespace storage
 namespace storagestate
 {
 const char* const STORAGE_KEY = "key";
@@ -178,7 +174,8 @@ public:
 private:
     mutable std::unordered_map<Address, bytes> m_cache;
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256());
-    std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
+    std::shared_ptr<dev::storage::Table<dev::storage::Serial>> getTable(
+        Address const& _address) const;
     /// check authority by caller
     u256 m_accountStartNonce;
     std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;

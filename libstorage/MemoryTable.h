@@ -20,59 +20,492 @@
  */
 #pragma once
 
+#include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
+#include <json/json.h>
 #include <libdevcore/Guards.h>
+#include <libdevcore/easylog.h>
+#include <libdevcrypto/Hash.h>
+#include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <boost/exception/diagnostic_information.hpp>
+#include <boost/lexical_cast.hpp>
+#include <type_traits>
 
 namespace dev
 {
 namespace storage
 {
-class MemoryTable : public Table
+template <typename Mode = Serial>
+class MemoryTable : public Table<Mode>
 {
 public:
-    typedef std::shared_ptr<MemoryTable> Ptr;
+    typedef std::shared_ptr<MemoryTable<Mode>> Ptr;
 
     virtual ~MemoryTable(){};
 
-    virtual void init(const std::string& tableName);
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
+    virtual void init(const std::string& tableName)
+    {
+        STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("init")
+                           << LOG_KV("tableName", tableName);
+    }
+
+    virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
+    {
+        try
+        {
+            typename Entries::Ptr entries = std::make_shared<Entries>();
+
+            CacheItr it;
+            it = m_cache.find(key);
+            if (it == m_cache.end())
+            {
+                if (m_remoteDB)
+                {
+                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    m_cache.insert(std::make_pair(key, entries));
+                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
+                    // selects")
+                    //                    << LOG_KV("key", key) << LOG_KV("records",
+                    //                    entries->size());
+                }
+            }
+            else
+            {
+                entries = it->second;
+            }
+
+            if (!entries)
+            {
+                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
+                return std::make_shared<Entries>();
+            }
+            auto indexes = processEntries(entries, condition);
+            typename Entries::Ptr resultEntries = std::make_shared<Entries>();
+            for (auto& i : indexes)
+            {
+                resultEntries->addEntry(entries->get(i));
+            }
+            return resultEntries;
+        }
+        catch (std::exception& e)
+        {
+            // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
+            //                   << LOG_KV("msg", boost::diagnostic_information(e));
+        }
+
+        return std::make_shared<Entries>();
+    }
+
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
+    {
+        try
+        {
+            if (!checkAuthority(options->origin))
+            {
+                // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update
+                // non-authorized")
+                //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
+                //                     key);
+                return precompiled::CODE_NO_AUTHORIZED;
+            }
+            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
+            // key);
+
+            typename Entries::Ptr entries = std::make_shared<Entries>();
+
+            CacheItr it;
+            {
+                // ReadGuard l(x_cache);
+                it = m_cache.find(key);
+            }
+            if (it == m_cache.end())
+            {
+                if (m_remoteDB)
+                {
+                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    m_cache.insert(std::make_pair(key, entries));
+                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
+                    // selects")
+                    //                    << LOG_KV("key", key) << LOG_KV("records",
+                    //                    entries->size());
+                }
+            }
+            else
+            {
+                entries = it->second;
+            }
+
+            if (!entries)
+            {
+                // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
+                return 0;
+            }
+            checkField(entry);
+            auto indexes = processEntries(entries, condition);
+            std::vector<Change::Record> records;
+
+            for (auto& i : indexes)
+            {
+                Entry::Ptr updateEntry = entries->get(i);
+                for (auto& it : *(entry->fields()))
+                {
+                    records.emplace_back(i, it.first, updateEntry->getField(it.first));
+                    updateEntry->setField(it.first, it.second);
+                }
+            }
+            this->m_recorder(this->shared_from_this(), Change::Update, key, records);
+
+            entries->setDirty(true);
+
+            return indexes.size();
+        }
+        catch (std::exception& e)
+        {
+            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable")
+                               << LOG_DESC("Access MemoryTable failed for")
+                               << LOG_KV("msg", boost::diagnostic_information(e));
+        }
+
+        return 0;
+    }
+
     virtual int insert(const std::string& key, Entry::Ptr entry,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
+    {
+        try
+        {
+            if (!checkAuthority(options->origin))
+            {
+                // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert
+                // non-authorized")
+                //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
+                //                     key);
+                return precompiled::CODE_NO_AUTHORIZED;
+            }
+            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
+            // key);
+
+            typename Entries::Ptr entries = std::make_shared<Entries>();
+            Condition::Ptr condition = std::make_shared<Condition>();
+
+            CacheItr it;
+            {
+                // ReadGuard l(x_cache);
+                it = m_cache.find(key);
+            }
+            if (it == m_cache.end())
+            {
+                if (m_remoteDB)
+                {
+                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    m_cache.insert(std::make_pair(key, entries));
+                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
+                    // selects")
+                    //                    << LOG_KV("key", key) << LOG_KV("records",
+                    //                    entries->size());
+                }
+            }
+            else
+            {
+                entries = it->second;
+            }
+            checkField(entry);
+            Change::Record record(entries->size() + 1u);
+            std::vector<Change::Record> value{record};
+            this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
+            if (entries->size() == 0)
+            {
+                entries->addEntry(entry);
+                {
+                    // WriteGuard l(x_cache);
+                    m_cache.insert(std::make_pair(key, entries));
+                }
+                return 1;
+            }
+            else
+            {
+                entries->addEntry(entry);
+                return 1;
+            }
+        }
+        catch (std::exception& e)
+        {
+            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable")
+                               << LOG_DESC("Access MemoryTable failed for")
+                               << LOG_KV("msg", boost::diagnostic_information(e));
+        }
+
+        return 1;
+    }
+
     virtual int remove(const std::string& key, Condition::Ptr condition,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
+    {
+        if (!checkAuthority(options->origin))
+        {
+            // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
+            //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+            return precompiled::CODE_NO_AUTHORIZED;
+        }
+        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key",
+        // key);
 
-    virtual h256 hash() override;
-    virtual void clear() override;
-    virtual tbb::concurrent_unordered_map<std::string, Entries::Ptr>* data() override;
+        typename Entries::Ptr entries = std::make_shared<Entries>();
 
-    void setStateStorage(Storage::Ptr amopDB);
-    void setBlockHash(h256 blockHash);
-    void setBlockNum(int blockNum);
-    void setTableInfo(TableInfo::Ptr tableInfo);
+        CacheItr it;
+        {
+            // ReadGuard l(x_cache);
+            it = m_cache.find(key);
+        }
+        if (it == m_cache.end())
+        {
+            if (m_remoteDB)
+            {
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                m_cache.insert(std::make_pair(key, entries));
+                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
+                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
+            }
+        }
+        else
+        {
+            entries = it->second;
+        }
 
-    bool checkAuthority(Address const& _origin) const override;
+        auto indexes = processEntries(entries, condition);
+
+        std::vector<Change::Record> records;
+        for (auto& i : indexes)
+        {
+            Entry::Ptr removeEntry = entries->get(i);
+
+            removeEntry->setStatus(1);
+            records.emplace_back(i);
+        }
+        this->m_recorder(this->shared_from_this(), Change::Remove, key, records);
+
+        entries->setDirty(true);
+
+        return indexes.size();
+    }
+
+    virtual h256 hash() override
+    {
+        bytes data;
+        for (auto& it : m_cache)
+        {
+            if (it.second->dirty())
+            {
+                // Entries = vector<Entry>
+                // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entries") << LOG_KV(it.first,
+                // "--->");
+                data.insert(data.end(), it.first.begin(), it.first.end());
+                for (size_t i = 0; i < it.second->size(); ++i)
+                {
+                    if (it.second->get(i)->dirty())
+                    {
+                        for (auto& fieldIt : *(it.second->get(i)->fields()))
+                        {
+                            // Field
+                            // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Field")
+                            //          << LOG_KV(fieldIt.first, toHex(fieldIt.second));
+                            if (isHashField(fieldIt.first))
+                            {
+                                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                                data.insert(
+                                    data.end(), fieldIt.second.begin(), fieldIt.second.end());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (data.empty())
+        {
+            return h256();
+        }
+        bytesConstRef bR(data.data(), data.size());
+        h256 hash = dev::sha256(bR);
+
+        return hash;
+    }
+    virtual void clear() override { m_cache.clear(); }
+    virtual typename Table<Mode>::DataType* data() { return &m_cache; }
+
+    void setStateStorage(Storage::Ptr amopDB) { m_remoteDB = amopDB; }
+    void setBlockHash(h256 blockHash) { m_blockHash = blockHash; }
+    void setBlockNum(int blockNum) { m_blockNum = blockNum; }
+    void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; }
+
+    bool checkAuthority(Address const& _origin) const override
+    {
+        if (m_tableInfo->authorizedAddress.empty())
+            return true;
+        auto it = find(m_tableInfo->authorizedAddress.cbegin(),
+            m_tableInfo->authorizedAddress.cend(), _origin);
+        return it != m_tableInfo->authorizedAddress.cend();
+    }
 
 private:
-    // typedef std::map<std::string, Entries::Ptr>::iterator CacheItr;
-    using CacheItr = tbb::concurrent_unordered_map<std::string, Entries::Ptr>::iterator;
+    using CacheType = typename std::conditional<Mode::value,
+        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
+        std::unordered_map<std::string, Entries::Ptr>>::type;
+    using CacheItr = typename CacheType::iterator;
 
-    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition);
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
-    bool isHashField(const std::string& _key);
-    void checkField(Entry::Ptr entry);
+    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
+    {
+        std::vector<size_t> indexes;
+        indexes.reserve(entries->size());
+        if (condition->getConditions()->empty())
+        {
+            for (size_t i = 0; i < entries->size(); ++i)
+                indexes.emplace_back(i);
+            return indexes;
+        }
+
+        for (size_t i = 0; i < entries->size(); ++i)
+        {
+            Entry::Ptr entry = entries->get(i);
+            if (processCondition(entry, condition))
+            {
+                indexes.push_back(i);
+            }
+        }
+
+        return indexes;
+    }
+
+    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
+    {
+        try
+        {
+            for (auto& it : *condition->getConditions())
+            {
+                if (entry->getStatus() == Entry::Status::DELETED)
+                {
+                    return false;
+                }
+
+                std::string lhs = entry->getField(it.first);
+                std::string rhs = it.second.second;
+
+                if (it.second.first == Condition::Op::eq)
+                {
+                    if (lhs != rhs)
+                    {
+                        return false;
+                    }
+                }
+                else if (it.second.first == Condition::Op::ne)
+                {
+                    if (lhs == rhs)
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (lhs.empty())
+                    {
+                        lhs = "0";
+                    }
+                    if (rhs.empty())
+                    {
+                        rhs = "0";
+                    }
+
+                    int lhsNum = boost::lexical_cast<int>(lhs);
+                    int rhsNum = boost::lexical_cast<int>(rhs);
+
+                    switch (it.second.first)
+                    {
+                    case Condition::Op::eq:
+                    case Condition::Op::ne:
+                    {
+                        break;
+                    }
+                    case Condition::Op::gt:
+                    {
+                        if (lhsNum <= rhsNum)
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case Condition::Op::ge:
+                    {
+                        if (lhsNum < rhsNum)
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case Condition::Op::lt:
+                    {
+                        if (lhsNum >= rhsNum)
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case Condition::Op::le:
+                    {
+                        if (lhsNum > rhsNum)
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    }
+                }
+            }
+        }
+        catch (std::exception& e)
+        {
+            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
+                               << LOG_KV("msg", boost::diagnostic_information(e));
+            return false;
+        }
+
+        return true;
+    }
+
+    bool isHashField(const std::string& _key)
+    {
+        if (!_key.empty())
+        {
+            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
+                    (_key == STATUS));
+        }
+        // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Empty key error");
+        return false;
+    }
+
+    void checkField(Entry::Ptr entry)
+    {
+        for (auto& it : *(entry->fields()))
+        {
+            if (m_tableInfo->fields.end() ==
+                find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
+            {
+                // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not
+                // exist")
+                //                   << LOG_KV("table name", m_tableInfo->name)
+                //                   << LOG_KV("field", it.first);
+                throw std::invalid_argument("Invalid key.");
+            }
+        }
+    }
+
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
-    // std::map<std::string, Entries::Ptr> m_cache;
-    tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_cache;
+    CacheType m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;
-
-    mutable dev::SharedMutex x_tableInfo;
-    // mutable dev::SharedMutex x_cache;
 };
 
 }  // namespace storage

@@ -107,12 +107,12 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     return Precompiled::Ptr();
 }
 
-std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
+std::shared_ptr<storage::Table<>> ExecutiveContext::getTable(const Address& address)
 {
     std::string tableName = "_contract_data_" + address.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
+    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
 }
 
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()

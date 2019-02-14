@@ -390,9 +390,9 @@ size_t StorageState::savepoint() const
     return m_memoryTableFactory->savepoint();
 }
 
-void StorageState::rollback(size_t /*_savepoint*/)
+void StorageState::rollback(size_t _savepoint)
 {
-    // m_memoryTableFactory->rollback(_savepoint);
+    m_memoryTableFactory->rollback(_savepoint);
 }
 
 void StorageState::clear()
@@ -439,7 +439,7 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     table->insert(ACCOUNT_ALIVE, entry);
 }
 
-inline storage::Table::Ptr StorageState::getTable(Address const& _address) const
+inline storage::Table<>::Ptr StorageState::getTable(Address const& _address) const
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
     return m_memoryTableFactory->openTable(tableName);

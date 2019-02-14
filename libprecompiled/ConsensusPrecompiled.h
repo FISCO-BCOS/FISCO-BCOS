@@ -56,7 +56,7 @@ public:
 
 private:
     void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    bool checkIsLastMiner(std::shared_ptr<storage::Table> table, std::string const& nodeID);
+    bool checkIsLastMiner(std::shared_ptr<storage::Table<>> table, std::string const& nodeID);
 };
 
 }  // namespace precompiled
