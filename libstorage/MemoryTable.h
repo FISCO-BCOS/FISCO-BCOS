@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
 #include <libdevcore/Guards.h>
@@ -59,7 +60,7 @@ public:
     bool checkAuthority(Address const& _origin) const override;
 
 private:
-    using CacheType = typename std::conditional<Mode::type,
+    using CacheType = typename std::conditional<Mode::value,
         tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
         std::unordered_map<std::string, Entries::Ptr>>::type;
     using CacheItr = typename CacheType::iterator;

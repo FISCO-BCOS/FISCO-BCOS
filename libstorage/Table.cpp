@@ -199,19 +199,3 @@ std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Conditi
 {
     return &m_conditions;
 }
-
-template <>
-void Table<Serial>::setRecorder(
-    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        _recorder)
-{
-    m_recorder = _recorder;
-}
-
-template <>
-void Table<Parallel>::setRecorder(
-    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        _recorder)
-{
-    m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {}
-}

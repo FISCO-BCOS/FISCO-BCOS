@@ -26,6 +26,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
+#include <memory>
 
 using namespace dev;
 using namespace dev::storage;
@@ -52,7 +53,7 @@ typename Table<Mode>::Ptr MemoryTableFactory::openTable(const string& tableName,
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
-        return it->second;
+        return std::dynamic_pointer_cast<Table<Mode>>(it->second);
     }
     auto tableInfo = make_shared<storage::TableInfo>();
 
@@ -252,7 +253,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 
     for (auto& dbIt : m_name2Table)
     {
-        auto table = dbIt.second;
+        auto table = std::dynamic_pointer_cast<Table<Serial>>(dbIt.second);
 
         dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
         tableData->tableName = dbIt.first;

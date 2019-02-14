@@ -218,11 +218,7 @@ public:
 
     void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder)
-    {
-        m_recorder = _recorder;
-    }
-
+            _recorder);
     DataType* data() { return nullptr; }
 
 protected:
@@ -231,7 +227,7 @@ protected:
 };
 
 template <>
-void Table<Serial>::setRecorder(
+inline void Table<Serial>::setRecorder(
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         _recorder)
 {
@@ -239,7 +235,7 @@ void Table<Serial>::setRecorder(
 }
 
 template <>
-void Table<Parallel>::setRecorder(
+inline void Table<Parallel>::setRecorder(
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
 {
     m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
