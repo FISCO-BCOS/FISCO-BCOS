@@ -222,8 +222,8 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::Table<> ata::Ptr> datas;
-    dev::storage::Table<> ata::Ptr tableData = std::make_shared<dev::storage::Table<> ata>();
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->tableName = "t_test";
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("LiSi"), entries));
@@ -244,8 +244,8 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::Table<> ata::Ptr> datas;
-    dev::storage::Table<> ata::Ptr tableData = std::make_shared<dev::storage::Table<> ata>();
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->tableName = "e";
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("Exception"), entries));

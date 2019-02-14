@@ -27,6 +27,7 @@
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
+#include <utility>
 
 using namespace dev;
 using namespace dev::storage;
@@ -45,117 +46,6 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_CONFIG);
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
     m_sysTables.push_back(DAG_TRANSFER);
-}
-
-template <typename Mode>
-typename Table<Mode>::Ptr MemoryTableFactory::openTable(const string& tableName, bool authorityFlag)
-{
-    auto it = m_name2Table.find(tableName);
-    if (it != m_name2Table.end())
-    {
-        return std::dynamic_pointer_cast<Table<Mode>>(it->second);
-    }
-    auto tableInfo = make_shared<storage::TableInfo>();
-
-    if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
-    {
-        tableInfo = getSysTableInfo(tableName);
-    }
-    else
-    {
-        auto tempSysTable = openTable(SYS_TABLES);
-        auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
-        if (tableEntries->size() == 0u)
-        {
-            /*
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory")
-                               << LOG_DESC("table doesn't exist in _sys_tables_")
-                               << LOG_KV("table name", tableName);
-                               */
-            return nullptr;
-        }
-        auto entry = tableEntries->get(0);
-        tableInfo->name = tableName;
-        tableInfo->key = entry->getField("key_field");
-        string valueFields = entry->getField("value_field");
-        boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-    }
-    tableInfo->fields.emplace_back(STATUS);
-    tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back("_hash_");
-    tableInfo->fields.emplace_back("_num_");
-
-    typename MemoryTable<Mode>::Ptr memoryTable = std::make_shared<MemoryTable<Mode>>();
-    memoryTable->setStateStorage(m_stateStorage);
-    memoryTable->setBlockHash(m_blockHash);
-    memoryTable->setBlockNum(m_blockNum);
-
-    // authority flag
-    if (authorityFlag)
-    {
-        // set authorized address to memoryTable
-        if (tableName != string(SYS_ACCESS_TABLE))
-        {
-            setAuthorizedAddress(tableInfo);
-        }
-        else
-        {
-            memoryTable->setTableInfo(tableInfo);
-            auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
-            for (size_t i = 0; i < tableEntries->size(); ++i)
-            {
-                auto entry = tableEntries->get(i);
-                if (std::stoi(entry->getField("enable_num")) <= m_blockNum)
-                {
-                    tableInfo->authorizedAddress.emplace_back(entry->getField("address"));
-                }
-            }
-        }
-    }
-
-    memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](typename Table<Mode>::Ptr _table, Change::Kind _kind,
-                                 string const& _key, vector<Change::Record>& _records) {
-        m_changeLog.emplace_back(_table, _kind, _key, _records);
-    });
-
-    memoryTable->init(tableName);
-    m_name2Table.insert({tableName, memoryTable});
-    return memoryTable;
-}
-
-template <typename Mode>
-typename Table<Mode>::Ptr MemoryTableFactory::createTable(const string& tableName,
-    const string& keyField, const std::string& valueField, bool authorigytFlag,
-    Address const& _origin)
-{
-    auto sysTable = openTable(SYS_TABLES, authorigytFlag);
-
-    // To make sure the table exists
-    auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
-    if (tableEntries->size() != 0)
-    {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
-                           << LOG_DESC("table already exist in _sys_tables_")
-                           << LOG_KV("table name", tableName);
-        createTableCode = 0;
-        return nullptr;
-    }
-    // Write table entry
-    auto tableEntry = sysTable->newEntry();
-    tableEntry->setField("table_name", tableName);
-    tableEntry->setField("key_field", keyField);
-    tableEntry->setField("value_field", valueField);
-    createTableCode =
-        sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
-    if (createTableCode == -1)
-    {
-        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
-                             << LOG_DESC("create table non-authorized")
-                             << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
-        return nullptr;
-    }
-    return openTable(tableName);
 }
 
 void MemoryTableFactory::setBlockHash(h256 blockHash)

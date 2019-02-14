@@ -184,7 +184,7 @@ struct Change
     {}
 };
 
-class TableBase : public std::enable_shared_from_this<TableBase>
+class TableBase
 {
 public:
     typedef std::shared_ptr<TableBase> Ptr;
@@ -203,7 +203,7 @@ public:
 
 // Construction of transaction execution
 template <typename Mode = Serial>
-class Table : public TableBase
+class Table : public TableBase, public std::enable_shared_from_this<Table<Mode>>
 {
 public:
     typedef std::shared_ptr<Table<Mode>> Ptr;
