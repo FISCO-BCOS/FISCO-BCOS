@@ -37,6 +37,7 @@ void DAG::init(ID _maxSize)
     for (ID i = 0; i < _maxSize; i++)
         m_vtxs.emplace_back(make_shared<Vertex>());
     m_totalVtxs = _maxSize;
+    m_totalConsume = 0;
 }
 
 void DAG::addEdge(ID _f, ID _t)
@@ -79,57 +80,52 @@ ID DAG::pop()
 
 ID DAG::waitPop()
 {
-    ID top;
-    auto ret = m_topLevel.try_pop(top);
-    if (ret)
-    {
-        return top;
-    }
-    else
-    {
-        return INVALID_ID;
-    }
-}
-/*
-ID DAG::waitPop()
-{
     std::unique_lock<std::mutex> ul(x_topLevel);
-    while (m_topLevel.empty())
+    ID top;
+    while (m_totalConsume < m_totalVtxs)
     {
-        if (m_totalConsume >= m_totalVtxs)
-            return INVALID_ID;
+        auto has = m_topLevel.try_pop(top);
+        if (has)
+        {
+            return top;
+        }
         else
-            cv_topLevel.wait(ul);
+        {
+            cv_topLevel.wait(ul, [&]() { return m_totalConsume >= m_totalVtxs; });
+        }
     }
-
-    ID top = m_topLevel.front();
-    m_topLevel.pop();
-    return top;
+    return INVALID_ID;
 }
-*/
+
 ID DAG::consume(ID _id)
 {
     ID producedNum = 0;
     ID nextId = INVALID_ID;
+    ID lastDegree = INVALID_ID;
     for (ID id : m_vtxs[_id]->outEdge)
     {
         auto vtx = m_vtxs[id];
         {
-            vtx->inDegree -= 1;
+            lastDegree = vtx->inDegree.fetch_sub(1);
         }
-        if (vtx->inDegree == 0)
+        if (lastDegree == 1)
         {
             producedNum++;
-            if (producedNum == 0)
+            if (producedNum == 1)
                 nextId = id;
             else
             {
                 m_topLevel.push(id);
+                cv_topLevel.notify_one();
             }
         }
     }
 
-    // PARA_LOG(TRACE) << LOG_BADGE("DAG") << LOG_DESC("consumed")
+    if (m_totalConsume.fetch_add(1) + 1 == m_totalVtxs)
+    {
+        cv_topLevel.notify_all();
+    }
+    // PARA_LOG(TRACE) << LOG_BADGE("TbbCqDAG") << LOG_DESC("consumed")
     //                << LOG_KV("queueSize", m_topLevel.size());
     // for (ID id = 0; id < m_vtxs.size(); id++)
     // printVtx(id);

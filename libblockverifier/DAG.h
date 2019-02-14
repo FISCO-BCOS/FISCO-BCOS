@@ -23,7 +23,6 @@
 
 #pragma once
 #include "Common.h"
-#include "DAG.h"
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_queue.h>
 #include <condition_variable>
@@ -80,7 +79,7 @@ private:
     tbb::concurrent_queue<ID> m_topLevel;
 
     ID m_totalVtxs = 0;
-    ID m_totalConsume = 0;
+    std::atomic<ID> m_totalConsume;
 
 private:
     void printVtx(ID _id);

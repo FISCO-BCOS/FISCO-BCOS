@@ -23,7 +23,6 @@
 #pragma once
 #include "DAG.h"
 #include "ExecutiveContext.h"
-//#include "TxDAG.h"
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <memory>
@@ -33,14 +32,12 @@
 
 namespace dev
 {
-namespace blockverifier
-{
 namespace precompile
 {
 class DagTransferPrecompiled
 {
 public:
-    static bool isDagTransfer(dev::Address /*addr*/) { return true; }
+    static bool isDagTransfer(dev::Address addr) { return true; }
     static std::vector<std::string> getTransferDagTag(dev::eth::Transaction const& param)
     {
         h256 txHash = param.sha3();
@@ -54,27 +51,12 @@ public:
         return res;
     }
 };
+
 }  // namespace precompile
 
-using ExecuteTxFunc = std::function<bool(dev::eth::Transaction const&, ID)>;
-
-template <typename T>
-class CriticalField
+namespace blockverifier
 {
-public:
-    ID get(T const& _c)
-    {
-        auto it = m_criticals.find(_c);
-        if (it == m_criticals.end())
-            return INVALID_ID;
-        return it->second;
-    }
-
-    void update(T const& _c, ID _txId) { m_criticals[_c] = _txId; }
-
-private:
-    std::map<T, ID> m_criticals;
-};
+using ExecuteTxFunc = std::function<bool(dev::eth::Transaction const&, ID)>;
 
 class TxDAGFace
 {
@@ -85,6 +67,8 @@ public:
     // Execute a unit in DAG
     // This function can be parallel
     virtual int executeUnit() = 0;
+
+    virtual void getHaventRun(){};
 };
 
 class TxDAG : public TxDAGFace
@@ -125,6 +109,24 @@ private:
     ID m_totalParaTxs = 0;
 
     mutable std::mutex x_exeCnt;
+};
+
+template <typename T>
+class CriticalField
+{
+public:
+    ID get(T const& _c)
+    {
+        auto it = m_criticals.find(_c);
+        if (it == m_criticals.end())
+            return INVALID_ID;
+        return it->second;
+    }
+
+    void update(T const& _c, ID _txId) { m_criticals[_c] = _txId; }
+
+private:
+    std::map<T, ID> m_criticals;
 };
 
 }  // namespace blockverifier

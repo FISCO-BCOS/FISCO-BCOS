@@ -58,6 +58,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
             if (pIds != INVALID_ID)
             {
                 m_dag.addEdge(pIds, id);  // add DAG edge
+                // LOG(DEBUG) << "Edge: " << pIds << " <-> " << id;
             }
         }
 
@@ -90,21 +91,24 @@ int TxDAG::executeUnit()
             return 0;
     }
 
+    int exeCnt = 0;
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
     // TODO catch execute exception
     while (id != INVALID_ID)
     {
+        exeCnt += 1;
+        {
+            Guard l(x_exeCnt);
+            m_exeCnt += 1;
+        }
         f_executeTx((*m_txs)[id], id);
 
         id = m_dag.consume(id);
 
-
-        Guard l(x_exeCnt);
-        m_exeCnt += 1;
         // PARA_LOG(TRACE) << LOG_DESC("executeUnit finish") << LOG_KV("exeCnt", m_exeCnt)
         //                << LOG_KV("total", m_txs->size());
     }
-    return 1;
+    return exeCnt;
 }
 
 void TxDAG::executeSerialTxs()
