@@ -193,7 +193,7 @@ bytes AuthorityPrecompiled::call(
 void AuthorityPrecompiled::addPrefixToUserTable(std::string& table_name)
 {
     if (table_name == SYS_ACCESS_TABLE || table_name == SYS_MINERS || table_name == SYS_TABLES ||
-        table_name == SYS_CNS || table_name == SYS_CONFIG || table_name == DAG_TRANSFER)
+        table_name == SYS_CNS || table_name == SYS_CONFIG)
     {
         return;
     }

@@ -32,9 +32,6 @@ namespace storage
 class Table;
 }
 
-const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
-const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
-
 namespace precompiled
 {
 class DagTransferPrecompiled : public dev::blockverifier::Precompiled
@@ -56,7 +53,7 @@ public:
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        dev::blockverifier::ExecutiveContext::Ptr context, const std::string& tableName);
+        dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin);
 
 public:
     bool invalidUserName(const std::string& user);

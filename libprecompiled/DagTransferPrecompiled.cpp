@@ -30,21 +30,25 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
+// interface of DagTransferPrecompiled
 /*
 contract DagTransfer{
-    function userAdd(string user, uint256 balance) public returns(bool);
-    function userSave(string user, uint256 balance) public returns(bool);
-    function userDraw(string user, uint256 balance) public returns(bool);
-    function userBalance(string user) public constant returns(bool,uint256);
-    function userTransfer(string user_a, string user_b, uint256 amount) public returns(bool);
+    function userAdd(string user, uint256 balance) public returns();
+    function userSave(string user, uint256 balance) public returns(uint256);
+    function userDraw(string user, uint256 balance) public returns(uint256);
+    function userBalance(string user) public constant returns(uint256,uint256);
+    function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
-
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_TRS_STR2_UINT = "userTransfer(string,string,uint256)";
 const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
+
+// fields of table '_dag_transfer_'
+const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
+const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
 DagTransferPrecompiled::DagTransferPrecompiled()
 {
@@ -137,15 +141,23 @@ std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContex
 }
 
 Table::Ptr DagTransferPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
+    dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
-    //                       << LOG_KV("tableName", tableName);
-
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
+    auto table = tableFactoryPrecompiled->getmemoryTableFactory()->openTable(DAG_TRANSFER);
+    if (!table)
+    {  //__dat_transfer__ is not exist, then create it first.
+        table = tableFactoryPrecompiled->getmemoryTableFactory()->createTable(
+            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, true, origin);
+
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
+                               << LOG_DESC(" create __dag_transfer__ table. ");
+    }
+
+    return table;
+
 }
 
 bytes DagTransferPrecompiled::call(
@@ -201,21 +213,30 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
     dev::eth::ContractABI abi;
     abi.abiOut(data, user, amount);
 
-    bool result = false;
+    int ret;
     std::string strErrorMsg;
     do
     {
         if (invalidUserName(user))
         {
             strErrorMsg = "invalid user name";
+            ret = CODE_INVALID_USER_NAME;
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMsg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (entries.get() && (0u != entries->size()))
         {
             strErrorMsg = "user already exist";
+            ret = CODE_INVALID_USER_ALREADY_EXIST;
             break;
         }
 
@@ -228,15 +249,16 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
+            ret = CODE_NO_AUTHORIZED;
             break;
         }
 
         // end success
-        result = true;
+        ret = 0;
 
     } while (0);
 
-    if (result)
+    if (0 == ret)
     {
         // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
         //                       << LOG_KV("user", user) << LOG_KV("amount", amount);
@@ -249,7 +271,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
     }
 
 
-    out = abi.abiIn("", result);
+    out = abi.abiIn("", ret);
 }
 
 void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -260,7 +282,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
     dev::eth::ContractABI abi;
     abi.abiOut(data, user, amount);
 
-    bool result = false;
+    int ret;
     dev::u256 balance;
     std::string strErrorMsg;
 
@@ -269,6 +291,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         if (invalidUserName(user))
         {
             strErrorMsg = "invalid user name";
+            ret = CODE_INVALID_USER_NAME;
             break;
         }
 
@@ -276,10 +299,18 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         if (0 == amount)
         {
             strErrorMsg = "invalid save amount";
+            ret = CODE_INVALID_AMOUNT;
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMsg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
@@ -294,6 +325,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
+                ret = CODE_NO_AUTHORIZED;
                 break;
             }
         }
@@ -307,6 +339,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             if (new_balance < balance)
             {
                 strErrorMsg = "save overflow";
+                ret = CODE_INVALID_BALANCE_OVERFLOW;
                 break;
             }
 
@@ -318,15 +351,16 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
+                ret = CODE_NO_AUTHORIZED;
                 break;
             }
         }
 
-        result = true;
+        ret = 0;
 
     } while (0);
 
-    if (result)
+    if (0 == ret)
     {
         // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
         //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
@@ -339,7 +373,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
     }
 
-    out = abi.abiIn("", result);
+    out = abi.abiIn("", ret);
 }
 
 void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -351,7 +385,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
     abi.abiOut(data, user, amount);
 
     dev::u256 balance;
-    bool result = false;
+    int ret;
     std::string strErrorMsg;
 
     do
@@ -359,20 +393,30 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         if (invalidUserName(user))
         {
             strErrorMsg = "invalid user name";
+            ret = CODE_INVALID_USER_NAME;
             break;
         }
 
         if (amount == 0)
         {
             strErrorMsg = "draw invalid amount";
+            ret = CODE_INVALID_AMOUNT;
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMsg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
             strErrorMsg = "user not exist";
+            ret = CODE_INVALID_USER_NOT_EXIST;
             break;
         }
 
@@ -381,6 +425,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         if (balance < amount)
         {
             strErrorMsg = "insufficient balance";
+            ret = CODE_INVALID_INSUFFICIENT_BALANCE;
             break;
         }
 
@@ -393,14 +438,15 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
+            ret = CODE_NO_AUTHORIZED;
             break;
         }
 
-        result = true;
+        ret = 0;
 
     } while (0);
 
-    if (result)
+    if (0 == ret)
     {
         // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
         //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
@@ -413,7 +459,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
     }
 
-    out = abi.abiIn("", result);
+    out = abi.abiIn("", ret);
 }
 
 void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -424,32 +470,41 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
     abi.abiOut(data, user);
 
     dev::u256 balance;
-    bool result = false;
+    int ret;
     std::string strErrorMsg;
 
     do
     {
         if (invalidUserName(user))
         {
-            strErrorMsg = "invalid user name.";
+            strErrorMsg = " invalid user name";
+            ret = CODE_INVALID_USER_NAME;
             break;
         }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMsg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(user, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
-            strErrorMsg = "user not exist";
+            strErrorMsg = " user not exist";
+            ret = CODE_INVALID_USER_NOT_EXIST;
             break;
         }
 
         // only one record for every user
         balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
-        result = true;
+        ret = 0;
 
     } while (0);
 
-    if (result)
+    if (0 == ret)
     {
         // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") <<
         // LOG_DESC("userBalanceCall")
@@ -463,7 +518,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         //                       << LOG_DESC(strErrorMsg);
     }
 
-    out = abi.abiIn("", result, balance);
+    out = abi.abiIn("", ret, balance);
 }
 
 void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -478,22 +533,38 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
     dev::u256 toUserBalance, newToUserBalance;
 
     std::string strErrorMsg;
-    bool result = false;
+    int ret;
+
     do
     {
         // parameters check
-        if (invalidUserName(fromUser) || invalidUserName(toUser) || (amount == 0))
+        if (invalidUserName(fromUser) || invalidUserName(toUser))
         {
-            strErrorMsg = "invalid parameters";
+            strErrorMsg = "invalid user name";
+            ret = CODE_INVALID_USER_NAME;
             break;
         }
 
+        if (amount == 0)
+        {
+            strErrorMsg = "invalid amount";
+            ret = CODE_INVALID_AMOUNT;
+            break;
+        }
 
-        Table::Ptr table = openTable(context, DAG_TRANSFER);
+        Table::Ptr table = openTable(context, origin);
+        if (!table)
+        {
+            strErrorMsg = "openTable failed.";
+            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            break;
+        }
+
         auto entries = table->select(fromUser, table->newCondition());
         if (!entries.get() || (0u == entries->size()))
         {
             strErrorMsg = "from user not exist";
+            ret = CODE_INVALID_USER_NOT_EXIST;
             break;
         }
 
@@ -501,6 +572,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
+            ret = CODE_INVALID_INSUFFICIENT_BALANCE;
             break;
         }
 
@@ -516,6 +588,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
+                ret = CODE_NO_AUTHORIZED;
                 break;
             }
             toUserBalance = 0;
@@ -529,6 +602,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         if (toUserBalance + amount < toUserBalance)
         {
             strErrorMsg = "to user balance overflow.";
+            ret = CODE_INVALID_BALANCE_OVERFLOW;
             break;
         }
 
@@ -543,6 +617,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
+            ret = CODE_NO_AUTHORIZED;
             break;
         }
 
@@ -553,11 +628,11 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         count = table->update(toUser, entry, table->newCondition(), getOptions(origin));
 
         // end with success
-        result = true;
+        ret = 0;
 
     } while (0);
 
-    if (result)
+    if (0 == ret)
     {
         /*
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled")
@@ -583,5 +658,5 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
                                */
     }
 
-    out = abi.abiIn("", result);
+    out = abi.abiIn("", ret);
 }
