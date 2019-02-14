@@ -87,6 +87,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 /// network acception failed
                 if (ec || !m_run)
                 {
+                    HOST_LOG(ERROR) << "Error: " << ec;
                     socket->close();
                     startAccept();
 
