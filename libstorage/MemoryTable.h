@@ -49,11 +49,6 @@ public:
 
     virtual ~MemoryTable(){};
 
-    virtual void init(const std::string& tableName)
-    {
-        STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("init")
-                           << LOG_KV("tableName", tableName);
-    }
 
     virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
@@ -338,7 +333,7 @@ public:
         return hash;
     }
     virtual void clear() override { m_cache.clear(); }
-    virtual typename Table<Mode>::DataType* data() { return &m_cache; }
+    virtual bool empty() override { return m_cache.empty(); }
 
     void setStateStorage(Storage::Ptr amopDB) { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) { m_blockHash = blockHash; }
@@ -353,6 +348,26 @@ public:
             m_tableInfo->authorizedAddress.cend(), _origin);
         return it != m_tableInfo->authorizedAddress.cend();
     }
+
+    virtual void setRecorder(std::function<void(
+            Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+            _recorder) override;
+
+    virtual bool dump(TableData::Ptr _data) override
+    {
+        bool dirtyTable = false;
+        for (auto it : m_cache)
+        {
+            _data->data.insert(make_pair(it.first, it.second));
+
+            if (it.second->dirty())
+            {
+                dirtyTable = true;
+            }
+        }
+        return dirtyTable;
+    }
+    virtual void rollback(const Change& _change) override;
 
 private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
@@ -500,26 +515,6 @@ private:
         }
     }
 
-    virtual void setRecorder(
-        std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder) override;
-
-    virtual bool dump(TableData::Ptr _data) override
-    {
-        bool dirtyTable = false;
-        for (auto it : m_cache)
-        {
-            _tableData->data.insert(make_pair(it.first, it.second));
-
-            if (it.second->dirty())
-            {
-                dirtyTable = true;
-            }
-        }
-        return dirtyTable;
-    }
-    virtual void rollback(const Change& _change) override;
-
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     CacheType m_cache;
@@ -539,9 +534,9 @@ inline void MemoryTable<Serial>::setRecorder(
 
 template <>
 inline void MemoryTable<Parallel>::setRecorder(
-    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
+    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
 {
-    m_recorder = [](Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
+    m_recorder = [](Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
 }
 
 template <>
@@ -586,7 +581,7 @@ inline void MemoryTable<Serial>::rollback(const Change& _change)
     }
 }
 template <>
-inline void MemoryTable<Parallel>::rollback(const Change& _change)
+inline void MemoryTable<Parallel>::rollback(const Change&)
 {}
 }  // namespace storage
 }  // namespace dev

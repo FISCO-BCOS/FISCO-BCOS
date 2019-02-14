@@ -74,8 +74,8 @@ BOOST_AUTO_TEST_CASE(open_Table)
     std::string keyField("key");
     std::string valueField("value");
     memoryDBFactory->createTable(tableName, keyField, valueField, true);
-    MemoryTable::Ptr table =
-        std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
+    MemoryTable<Serial>::Ptr table =
+        std::dynamic_pointer_cast<MemoryTable<Serial>>(memoryDBFactory->openTable("t_test"));
     table->remove("name", table->newCondition());
     auto entry = table->newEntry();
     entry->setField("key", "name");

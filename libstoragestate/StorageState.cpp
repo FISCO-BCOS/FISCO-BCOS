@@ -36,7 +36,7 @@ using namespace dev::executive;
 bool StorageState::addressInUse(Address const& _address) const
 {
     auto table = getTable(_address);
-    if (table && !table->data()->empty())
+    if (table && !table->empty())
     {
         return true;
     }

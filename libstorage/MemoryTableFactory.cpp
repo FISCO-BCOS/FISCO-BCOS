@@ -50,7 +50,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 
 
 Table::Ptr MemoryTableFactory::openTable(
-    const std::string& tableName, bool authorityFlag = true, bool isPara = false)
+    const std::string& tableName, bool authorityFlag, bool isPara)
 {
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -130,14 +130,13 @@ Table::Ptr MemoryTableFactory::openTable(
         m_changeLog.emplace_back(_table, _kind, _key, _records);
     });
 
-    memoryTable->init(tableName);
     m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
 }
 
 Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     const std::string& keyField, const std::string& valueField, bool authorigytFlag,
-    Address const& _origin = Address())
+    Address const& _origin)
 {
     auto sysTable = openTable(SYS_TABLES, authorigytFlag);
 

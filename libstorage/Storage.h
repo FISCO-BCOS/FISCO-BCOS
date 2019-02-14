@@ -26,15 +26,6 @@ namespace dev
 {
 namespace storage
 {
-class TableData
-{
-public:
-    typedef std::shared_ptr<TableData> Ptr;
-
-    std::string tableName;
-    std::map<std::string, Entries::Ptr> data;
-};
-
 class Storage : public std::enable_shared_from_this<Storage>
 {
 public:

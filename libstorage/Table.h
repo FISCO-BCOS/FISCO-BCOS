@@ -150,6 +150,8 @@ private:
 using Parallel = std::true_type;
 using Serial = std::false_type;
 
+class Table;
+
 struct Change
 {
     enum Kind : int
@@ -181,7 +183,17 @@ struct Change
     {}
 };
 
+class TableData
+{
+public:
+    typedef std::shared_ptr<TableData> Ptr;
+
+    std::string tableName;
+    std::map<std::string, Entries::Ptr> data;
+};
+
 // Construction of transaction execution
+class Storage;
 class Table : public std::enable_shared_from_this<Table>
 {
 public:
@@ -203,10 +215,16 @@ public:
     virtual void clear() = 0;
 
     virtual bool dump(dev::storage::TableData::Ptr _data) = 0;
-    virtual bool rollback(const Change& _change) = 0;
+    virtual void rollback(const Change& _change) = 0;
+    virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
             _recorder) = 0;
+
+    virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
+    virtual void setBlockHash(h256 blockHash) = 0;
+    virtual void setBlockNum(int blockNum) = 0;
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
 };
 }  // namespace storage
 }  // namespace dev
