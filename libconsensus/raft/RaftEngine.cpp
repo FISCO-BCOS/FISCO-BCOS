@@ -385,7 +385,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
     }
     else
     {
-        RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#tryCommitUncommitedBlock]No uncommited block");
+        RAFTENGINE_LOG(TRACE) << LOG_DESC("[#tryCommitUncommitedBlock]No uncommited block");
         ul.unlock();
     }
 }

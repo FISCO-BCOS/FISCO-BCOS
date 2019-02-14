@@ -956,7 +956,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         }
         resetConfig();
         m_reqCache->delCache(m_highestBlock.hash());
-        PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^Report:") << LOG_KV("num", m_highestBlock.number())
+        PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^Report") << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("idx", m_highestBlock.sealer())
                              << LOG_KV("hash", m_highestBlock.hash().abridged())
                              << LOG_KV("next", m_consensusBlockNumber)
@@ -1149,7 +1149,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             m_signalled.notify_all();
         }
     }
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ " + oss.str());
+    PBFTENGINE_LOG(DEBUG) << oss.str();
     return true;
 }
 
