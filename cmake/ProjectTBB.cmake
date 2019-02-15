@@ -11,7 +11,6 @@ ExternalProject_Add(tbb
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
     INSTALL_COMMAND bash -c "cp ./build/*_release/*.so* ${CMAKE_SOURCE_DIR}/deps/lib"
-                            " && cp -r ./include/tbb ${CMAKE_SOURCE_DIR}/deps/include/tbb"
                             " && export LD_LIBRARY_PATH=${CMAKE_SOURCE_DIR}/deps/lib:$LD_LIBRARY_PATH"
 )
 
