@@ -363,9 +363,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
             if (ec)
             {
-                HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                                << LOG_KV("endpoint", _nodeIPEndpoint.name())
-                                << LOG_KV("message", ec.message());
+                HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
+                                  << LOG_KV("endpoint", _nodeIPEndpoint.name())
+                                  << LOG_KV("message", ec.message());
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {

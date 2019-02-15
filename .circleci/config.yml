@@ -80,7 +80,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DCMAKE_BUILD_TYPE=Debug .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -90,6 +90,7 @@ jobs:
           name: Upload binary
           command: |
             cd build/bin
+            strip fisco-bcos
             tar -zcf fisco-static.tar.gz fisco-bcos
       - store_artifacts:
           path: /root/FISCO-BCOS/build/bin/fisco-static.tar.gz
@@ -112,7 +113,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON -DCMAKE_BUILD_TYPE=Debug .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -122,6 +123,7 @@ jobs:
           name: Upload binary
           command: |
             cd build/bin
+            strip fisco-bcos
             tar -zcf fisco-static-gm.tar.gz fisco-bcos
       - store_artifacts:
           path: /root/FISCO-BCOS/build/bin/fisco-static-gm.tar.gz
@@ -140,14 +142,14 @@ workflows:
             branches:
               only: 
                 - /release-2.*/
-            # tags:
-            #   only: 
-            #     - /v2.*/
+            tags:
+              only: 
+                - /v2.*/
       - deploy_guomi:
           filters:
             branches:
               only: 
                 - /release-2.*/
-            # tags:
-            #   only: 
-            #     - /v2.*/
+            tags:
+              only: 
+                - /v2.*/

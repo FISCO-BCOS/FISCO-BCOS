@@ -176,8 +176,8 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
 {
     if (e.errorCode())
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("Connect error") << LOG_KV("errorCode", e.errorCode())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+                             << LOG_KV("what", boost::diagnostic_information(e));
 
         return;
     }
@@ -297,7 +297,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             }
             else
             {
-                SERVICE_LOG(DEBUG) << LOG_DESC("Request protocolID not found")
+                SERVICE_LOG(TRACE) << LOG_DESC("Request message doesn't have callback")
                                    << LOG_KV("messageSeq", message->seq());
             }
         }

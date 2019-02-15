@@ -33,10 +33,8 @@ using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::eth;
 using namespace dev::p2p;
-namespace dev
-{
-namespace consensus
-{
+using namespace dev::consensus;
+
 /// start the Sealer module
 void Sealer::start()
 {
@@ -236,7 +234,9 @@ void Sealer::stop()
     m_startConsensus = false;
     doneWorking();
     if (isWorking())
+    {
         stopWorking();
+        // will not restart worker, so terminate it
+        terminate();
+    }
 }
-}  // namespace consensus
-}  // namespace dev
