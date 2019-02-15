@@ -146,10 +146,10 @@ Table::Ptr DagTransferPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    auto table = tableFactoryPrecompiled->getmemoryTableFactory()->openTable(DAG_TRANSFER);
+    auto table = tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER);
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = tableFactoryPrecompiled->getmemoryTableFactory()->createTable(
+        table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
             DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, true, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
@@ -157,7 +157,6 @@ Table::Ptr DagTransferPrecompiled::openTable(
     }
 
     return table;
-
 }
 
 bytes DagTransferPrecompiled::call(
@@ -463,7 +462,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
 }
 
 void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& /*origin*/, bytes& out)
+    bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
     dev::eth::ContractABI abi;
