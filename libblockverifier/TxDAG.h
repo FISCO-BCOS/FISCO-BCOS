@@ -32,28 +32,6 @@
 
 namespace dev
 {
-namespace precompile
-{
-class DagTransferPrecompiled
-{
-public:
-    static bool isDagTransfer(dev::Address addr) { return true; }
-    static std::vector<std::string> getTransferDagTag(dev::eth::Transaction const& param)
-    {
-        h256 txHash = param.sha3();
-        std::vector<std::string> res;
-        // return res;
-        for (size_t i = 0; i < 2; i++)
-        {
-            std::string randStr = std::string() + char(txHash.data()[i] % 10);
-            res.emplace_back(randStr);
-        }
-        return res;
-    }
-};
-
-}  // namespace precompile
-
 namespace blockverifier
 {
 using ExecuteTxFunc = std::function<bool(dev::eth::Transaction const&, ID)>;
