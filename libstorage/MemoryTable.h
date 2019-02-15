@@ -334,10 +334,10 @@ public:
     virtual void clear() override { m_cache.clear(); }
     virtual bool empty() override { return m_cache.empty(); }
 
-    void setStateStorage(Storage::Ptr amopDB) { m_remoteDB = amopDB; }
-    void setBlockHash(h256 blockHash) { m_blockHash = blockHash; }
-    void setBlockNum(int blockNum) { m_blockNum = blockNum; }
-    void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; }
+    void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
+    void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
+    void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
+    void setTableInfo(TableInfo::Ptr tableInfo) override { m_tableInfo = tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override
     {
