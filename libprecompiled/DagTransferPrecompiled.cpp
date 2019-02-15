@@ -146,7 +146,8 @@ Table::Ptr DagTransferPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
-    auto table = tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER);
+    auto table =
+        tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER, false, true);
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
         table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(

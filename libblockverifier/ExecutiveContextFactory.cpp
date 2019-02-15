@@ -62,6 +62,9 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
+    // determin thi bug???
+    memoryTableFactory->openTable("_dag_transfer_", false, true);
+
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
