@@ -176,11 +176,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         TxExeFunc(_tr, _txId);
         return true;
     });
-    std::cout << LOG_BADGE("executeBlock") << LOG_BADGE("Report") << LOG_DESC("Init DAG takes")
-              << LOG_KV("time(ms)", utcTime() - startTime)
-              << LOG_KV("txNum", block.transactions().size())
-              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
-              << LOG_KV("num", block.blockHeader().number()) << std::endl;
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
+                             << LOG_DESC("Init DAG takes")
+                             << LOG_KV("time(ms)", utcTime() - startTime)
+                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
+                             << LOG_KV("num", block.blockHeader().number()) << std::endl;
     uint64_t pastTime = utcTime();
 
     if (m_paraTxExecutor != nullptr)
@@ -192,10 +193,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         while (!txDag->hasFinished())
             txDag->executeUnit();
     }
-    std::cout << LOG_BADGE("executeBlock") << LOG_BADGE("Report") << LOG_DESC("Run para tx takes")
-              << LOG_KV("time(ms)", utcTime() - pastTime) << LOG_KV("txNum", txDag->paraTxsNumber())
-              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
-              << LOG_KV("num", block.blockHeader().number()) << std::endl;
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
+                             << LOG_DESC("Run para tx takes")
+                             << LOG_KV("time(ms)", utcTime() - pastTime)
+                             << LOG_KV("txNum", txDag->paraTxsNumber())
+                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
+                             << LOG_KV("num", block.blockHeader().number()) << std::endl;
     pastTime = utcTime();
 
     h256 stateRoot = executiveContext->getState()->rootHash();
