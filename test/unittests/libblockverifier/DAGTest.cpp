@@ -41,6 +41,13 @@ bool have(set<ID>& _set, ID _id)
     return _set.find(_id) != _set.end();
 }
 
+void consumeAndPush(DAG& _dag, ID _id, set<ID>& _topSet)
+{
+    ID top = _dag.consume(_id);
+    if (top != INVALID_ID)
+        _topSet.insert(top);
+}
+
 BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 {
     DAG dag;
@@ -62,7 +69,8 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     set<ID> topSet;
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;
@@ -73,14 +81,18 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     BOOST_CHECK(have(topSet, 0));
     BOOST_CHECK(have(topSet, 6));
     BOOST_CHECK(have(topSet, 8));
-    dag.consume(0);
-    dag.consume(6);
-    dag.consume(8);
     topSet.clear();
+    consumeAndPush(dag, 0, topSet);
+    std::cout << "consume " << 0 << std::endl;
+    consumeAndPush(dag, 6, topSet);
+    std::cout << "consume " << 6 << std::endl;
+    consumeAndPush(dag, 8, topSet);
+    std::cout << "consume " << 8 << std::endl;
 
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;
@@ -91,14 +103,18 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     BOOST_CHECK(have(topSet, 1));
     BOOST_CHECK(have(topSet, 3));
     BOOST_CHECK(have(topSet, 7));
-    dag.consume(1);
-    dag.consume(3);
-    dag.consume(7);
     topSet.clear();
+    consumeAndPush(dag, 1, topSet);
+    std::cout << "consume " << 1 << std::endl;
+    consumeAndPush(dag, 3, topSet);
+    std::cout << "consume " << 3 << std::endl;
+    consumeAndPush(dag, 7, topSet);
+    std::cout << "consume " << 7 << std::endl;
 
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;
@@ -107,12 +123,14 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 2));
-    dag.consume(2);
     topSet.clear();
+    consumeAndPush(dag, 2, topSet);
+    std::cout << "consume " << 2 << std::endl;
 
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;
@@ -121,12 +139,14 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 4));
-    dag.consume(4);
     topSet.clear();
+    consumeAndPush(dag, 4, topSet);
+    std::cout << "consume " << 4 << std::endl;
 
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;
@@ -135,12 +155,14 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
     }
     BOOST_CHECK_EQUAL(topSet.size(), 1);
     BOOST_CHECK(have(topSet, 5));
-    dag.consume(5);
     topSet.clear();
+    consumeAndPush(dag, 5, topSet);
+    std::cout << "consume " << 5 << std::endl;
 
     for (int i = 0; i < 9; i++)
     {
-        auto id = dag.waitPop();
+        auto id = dag.waitPop(false);
+        std::cout << "pop " << id << std::endl;
         if (id == INVALID_ID)
         {
             break;

@@ -64,21 +64,7 @@ void DAG::generate()
     // printVtx(id);
 }
 
-ID DAG::pop()
-{
-    /*
-    Guard l(x_topLevel);
-    if (m_topLevel.empty())
-        return INVALID_ID;
-
-    ID top = m_topLevel.front();
-    m_topLevel.pop();
-    return top;
-    */
-    return 0;
-}
-
-ID DAG::waitPop()
+ID DAG::waitPop(bool _needWait)
 {
     std::unique_lock<std::mutex> ul(x_topLevel);
     ID top;
@@ -91,7 +77,13 @@ ID DAG::waitPop()
         }
         else
         {
-            cv_topLevel.wait(ul, [&]() { return m_totalConsume >= m_totalVtxs; });
+            if (_needWait)
+            {
+                cv_topLevel.wait(ul, [&]() { return m_totalConsume >= m_totalVtxs; });
+                ul.unlock();
+            }
+            else
+                break;
         }
     }
     return INVALID_ID;

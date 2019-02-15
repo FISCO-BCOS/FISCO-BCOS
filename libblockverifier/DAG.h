@@ -62,11 +62,8 @@ public:
     // Generate DAG
     void generate();
 
-    // Pop the top of DAG (thread safe), return INVALID_ID if queue is empty
-    ID pop();
-
     // Wait until topLevel is not empty, return INVALID_ID if DAG reach the end
-    ID waitPop();
+    ID waitPop(bool _needWait = true);
 
     // Consume the top and add new top in top queue (thread safe)
     ID consume(ID _id);
