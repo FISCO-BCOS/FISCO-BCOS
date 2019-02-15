@@ -118,6 +118,7 @@ void SyncMaster::stop()
 {
     doneWorking();
     stopWorking();
+    terminate();
 }
 
 void SyncMaster::doWork()
