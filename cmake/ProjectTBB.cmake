@@ -1,5 +1,11 @@
 include(ExternalProject)
 
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set(TBB_LIB_SUFFIX dylib)
+else()
+    set(TBB_LIB_SUFFIX so)
+endif()
+
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
@@ -10,14 +16,14 @@ ExternalProject_Add(tbb
     LOG_INSTALL 0
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
-    INSTALL_COMMAND bash -c "cp ./build/*_release/*.so* ${CMAKE_SOURCE_DIR}/deps/lib"
+    INSTALL_COMMAND bash -c "cp ./build/*_release/*.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib"
                             " && export LD_LIBRARY_PATH=${CMAKE_SOURCE_DIR}/deps/lib:$LD_LIBRARY_PATH"
 )
 
 ExternalProject_Get_Property(tbb SOURCE_DIR)
 add_library(TBB STATIC IMPORTED)
 set(TBB_INCLUDE_DIR ${SOURCE_DIR}/include)
-set(TBB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.so)
+set(TBB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.${TBB_LIB_SUFFIX})
 file(MAKE_DIRECTORY ${TBB_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET TBB PROPERTY IMPORTED_LOCATION ${TBB_LIBRARY})
