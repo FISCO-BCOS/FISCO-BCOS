@@ -71,7 +71,6 @@ private:
     std::mutex m_mutex;
     std::condition_variable m_cv;
     int m_count;
-    int m_init;
 };
 
 class WakeupNotifier
