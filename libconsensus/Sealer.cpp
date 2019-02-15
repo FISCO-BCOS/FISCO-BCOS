@@ -239,4 +239,3 @@ void Sealer::stop()
         terminate();
     }
 }
-
