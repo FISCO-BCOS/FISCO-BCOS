@@ -41,7 +41,7 @@ namespace blockverifier
 class CountDownLatch
 {
 public:
-    CountDownLatch(int _count) : m_count(_count), m_init(_count) {}
+    CountDownLatch(int _count) : m_count(_count) {}
     CountDownLatch(const CountDownLatch&) = delete;
 
     void wait()
