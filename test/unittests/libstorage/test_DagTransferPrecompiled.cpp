@@ -376,7 +376,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     dev::eth::ContractABI abi;
 
     std::string from, to;
-    dev::u256 amount;
+    // dev::u256 amount;
     dev::u256 result;
     bytes out;
     bytes params;

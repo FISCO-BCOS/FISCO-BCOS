@@ -158,6 +158,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
         "stateType", 5000, 300000000};
     bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
+    assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initStateDB(genesisHash);

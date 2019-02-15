@@ -55,6 +55,7 @@ struct FakeTxDAG : TxDAG
             taskQueue.push([this]() { count.fetch_add(1); });
         }
     }
+
     bool hasFinished() override
     {
         auto value = count.load();
@@ -65,7 +66,7 @@ struct FakeTxDAG : TxDAG
         return true;
     }
 
-    int executeUnit()
+    int executeUnit() override
     {
         auto ret = taskQueue.tryPop(30);
         if (ret.first)

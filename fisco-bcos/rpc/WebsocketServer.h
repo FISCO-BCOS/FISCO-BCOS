@@ -47,6 +47,8 @@ void fail(boost::system::error_code ec, char const* what)
     std::cerr << what << ": " << ec.message() << "\n";
 }
 
+namespace rpcdemo
+{
 // Echoes back all received WebSocket messages
 class session : public std::enable_shared_from_this<session>
 {
@@ -360,3 +362,4 @@ public:
         do_accept();
     }
 };
+}  // namespace rpc
