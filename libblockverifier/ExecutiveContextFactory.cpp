@@ -59,7 +59,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0xffff), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
+        Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);

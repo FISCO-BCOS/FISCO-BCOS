@@ -49,7 +49,6 @@ public:
 
     virtual ~MemoryTable(){};
 
-
     virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
         try
@@ -550,8 +549,10 @@ inline void MemoryTable<Serial>::rollback(const Change& _change)
     {
         auto entries = m_cache[_change.key];
         entries->removeEntry(_change.value[0].index);
-        // if (entries->size() == 0u)
-        //    data->erase(_change.key);
+        if (entries->size() == 0u)
+        {
+            m_cache.erase(_change.key);
+        }
         break;
     }
     case Change::Update:
