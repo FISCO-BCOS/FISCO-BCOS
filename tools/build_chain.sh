@@ -503,6 +503,8 @@ function generate_group_ini()
 ;txpool limit
 [tx_pool]
     limit=10000
+[tx_execute]
+    enable_parallel=false
 EOF
 }
 
