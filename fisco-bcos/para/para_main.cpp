@@ -1,4 +1,4 @@
-    /**
+/**
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -256,7 +256,7 @@ static void startExecute(int _totalUser, int _totalTxs)
         std::cout << "Executed" << std::endl;
     }
     */
-    
+
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
