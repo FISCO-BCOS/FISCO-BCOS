@@ -89,8 +89,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     block.resizeTransactionReceipt(block.transactions().size());
 
 
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Init env takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Init env takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number());
@@ -103,8 +102,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         TxExeFunc(tr, i);
     }
 
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Run serial tx takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run serial tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number());
@@ -125,8 +123,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }
     }
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Execute block takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number())
@@ -176,8 +173,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         TxExeFunc(_tr, _txId);
         return true;
     });
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Init DAG takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Init DAG takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
@@ -193,8 +189,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         while (!txDag->hasFinished())
             txDag->executeUnit();
     }
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Run para tx takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run para tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
                              << LOG_KV("txNum", txDag->paraTxsNumber())
                              << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
@@ -216,8 +211,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }
     }
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_BADGE("Report")
-                             << LOG_DESC("Execute block takes")
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number())
