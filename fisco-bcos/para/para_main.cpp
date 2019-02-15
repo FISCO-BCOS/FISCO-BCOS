@@ -30,7 +30,6 @@
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
-#include <omp.h>
 #include <unistd.h>
 #include <chrono>
 #include <ctime>
@@ -44,53 +43,13 @@ using namespace dev::txpool;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
 INITIALIZE_EASYLOGGINGPP
-/*
-static Transactions createTxs(std::shared_ptr<LedgerManager> ledgerManager)
-{
-    ///< transaction related
-#ifdef FISCO_GM
-    dev::bytes rlpBytes = dev::fromHex(
-        "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
-        "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
-        "0000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf"
-        "671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01"
-        "b86a37b840c7ca78e7ab80ee4be6d3936ba8e899d8fe12c12114502956ebe8c8629d36d88481dec9973574"
-        "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
-        "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
-        "8fd63b88e817");
-#else
-    dev::bytes rlpBytes = dev::fromHex(
-        "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
-        "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
-        "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
-        "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
-        "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
-        "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
-#endif
-    dev::eth::Transactions txs;
-    dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::None);
 
-    Secret sec = KeyPair::create().secret();
-    u256 maxBlockLimit = u256(500);
-
-    for (auto i = 0; i < 10000; ++i)
-    {
-        tx.setNonce(tx.nonce() + u256(utcTime()));
-        tx.setBlockLimit(u256(ledgerManager->blockChain(1)->number()) + maxBlockLimit);
-        sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
-        tx.updateSignature(SignatureStruct(sig));
-        txs.push_back(tx);
-    }
-
-    return txs;
-}
-*/
 static Secret sec = KeyPair::create().secret();
 
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
     Transactions txs;
+    // Generate user + receiver = _userNum
     for (size_t i = 0; i < _userNum; i++)
     {
         u256 value = 0;
@@ -129,7 +88,7 @@ void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
     _blockChain->commitBlock(userAddBlock, exeCtx);
 }
 
-void genTxUserTransfer(Block& _block, size_t /*_userNum*/, size_t _txNum)
+void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 {
     Transactions txs;
     srand(utcTime());
@@ -139,11 +98,21 @@ void genTxUserTransfer(Block& _block, size_t /*_userNum*/, size_t _txNum)
         u256 gasPrice = 0;
         u256 gas = 10000000;
         Address dest = Address(0xffff);
-        /*string userFrom = to_string(rand() % _userNum);
-        string userTo = to_string(rand() % _userNum);
-        */
-        string userFrom = to_string(i);
-        string userTo = to_string(_txNum + i);
+        string userFrom;
+        string userTo;
+
+        if (i > _userNum / 2)
+        {
+            userFrom = to_string(rand() % _userNum);
+            userTo = to_string(rand() % _userNum);
+        }
+        else
+        {
+            userFrom = to_string(i % (_userNum / 2));
+            userTo = to_string((_userNum / 2 + i) % (_userNum));
+        }
+
+        LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
         u256 money = 1;
         dev::eth::ContractABI abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
@@ -189,7 +158,6 @@ static void startExecute(int _totalUser, int _totalTxs)
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
         "stateType", 5000, 300000000};
     bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
-    assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initStateDB(genesisHash);
@@ -204,13 +172,6 @@ static void startExecute(int _totalUser, int _totalTxs)
         std::dynamic_pointer_cast<BlockChainImp>(blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
 
-    /*///< initialize component
-    auto initialize = std::make_shared<Initializer>();
-    initialize->init("./config.ini");
-
-    auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
-
-    auto blockChain = ledgerManager->blockChain(1);*/
     auto height = blockChain->number();
     auto parentBlock = blockChain->getBlockByNumber(height);
     BlockInfo parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
@@ -223,59 +184,34 @@ static void startExecute(int _totalUser, int _totalTxs)
     parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
         parentBlock->header().stateRoot()};
 
-    /// serial execution
+    Block block;
+    genTxUserTransfer(block, _totalUser, _totalTxs);
+    // while (true)
+    getchar();
+    for (int i = 0; i < 10; i++)
     {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "serial executing txs..." << std::endl;
-        blockVerifier->executeBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
+        blockVerifier->serialExecuteBlock(block, parentBlockInfo);
     }
-
-    /// parallel execution
-    /*
+    for (int i = 0; i < 10; i++)
     {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "parallel executing txs..." << std::endl;
         blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
     }
-    */
-
-    /// parallel concurrent queue execution
-    /*
-    {
-        std::cout << "Generating transfer txs..." << std::endl;
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        std::cout << "parallel concurrent queue executing txs..." << std::endl;
-        blockVerifier->parallelCqExecuteBlock(block, parentBlockInfo);
-        std::cout << "Executed" << std::endl;
-    }
-    */
-
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
     exit(0);
 }
 
-int main(int /*argc*/, const char* argv[])
-{ /*
-     if (argc != 3)
-     {
-         std::cout << "Usage:   mini-para <total user> <total txs>" << std::endl;
-         std::cout << "Example: mini-para 1000 10000" << std::endl;
-         return 0;
-     }
-     int totalUser = atoi(argv[1]);
-     int totalTxs = atoi(argv[2]);
-     */
-    int totalTxs = atoi(argv[1]);
-    int totalUser = totalTxs * 2;
+int main(int argc, const char* argv[])
+{
+    if (argc != 3)
+    {
+        std::cout << "Usage:   mini-para <total user> <total txs>" << std::endl;
+        std::cout << "Example: mini-para 1000 10000" << std::endl;
+        return 0;
+    }
+    int totalUser = atoi(argv[1]);
+    int totalTxs = atoi(argv[2]);
     startExecute(totalUser, totalTxs);
     return 0;
 }
