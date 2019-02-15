@@ -540,6 +540,7 @@ void RaftEngine::runAsLeader()
 
     while (runAsLeaderImp(memberHeartbeatLog))
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 
@@ -673,6 +674,7 @@ void RaftEngine::runAsCandidate()
 
     while (runAsCandidateImp(voteState))
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 
@@ -748,6 +750,7 @@ void RaftEngine::runAsFollower()
 {
     while (runAsFollowerImp())
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 
