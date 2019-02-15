@@ -236,6 +236,7 @@ void Sealer::stop()
     if (isWorking())
     {
         stopWorking();
+        // will not restart worker, so terminate it
         terminate();
     }
 }

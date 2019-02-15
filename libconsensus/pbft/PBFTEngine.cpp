@@ -1116,11 +1116,10 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_DESC("handleViewChangeMsg") << LOG_KV("blkNum", viewChange_req.height)
-        << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("GenIdx", viewChange_req.idx)
-        << LOG_KV("Cview", viewChange_req.view) << LOG_KV("view", m_view)
-        << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
-        << LOG_KV("fromIp", pbftMsg.endpoint)
+    oss << LOG_KV("blkNum", viewChange_req.height) << LOG_KV("highNum", m_highestBlock.number())
+        << LOG_KV("GenIdx", viewChange_req.idx) << LOG_KV("Cview", viewChange_req.view)
+        << LOG_KV("view", m_view) << LOG_KV("fromIdx", pbftMsg.node_idx)
+        << LOG_KV("fromNode", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
         << LOG_KV("hash", viewChange_req.block_hash.abridged()) << LOG_KV("myIdx", nodeIdx())
         << LOG_KV("myNode", m_keyPair.pub().abridged());
     valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
@@ -1149,7 +1148,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             m_signalled.notify_all();
         }
     }
-    PBFTENGINE_LOG(DEBUG) << oss.str();
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ ") << oss.str();
     return true;
 }
 

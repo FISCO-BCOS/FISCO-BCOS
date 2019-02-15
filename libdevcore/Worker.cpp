@@ -111,8 +111,7 @@ void Worker::stopWorking()
         DEV_TIMED_ABOVE("Stop worker", 100)
         while (m_state != WorkerState::Stopped)
         {
-            m_state_notifier.wait_for(l, chrono::microseconds(5));
-            this_thread::sleep_for(chrono::milliseconds(20));
+            m_state_notifier.wait(l);
         }
     }
 }
