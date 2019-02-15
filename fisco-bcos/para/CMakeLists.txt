@@ -21,11 +21,6 @@
 
 
 file(GLOB SRC_LIST "*.cpp")
-file(GLOB HEADERS "*.h")
-    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG -fopenmp")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread -fopenmp")
-    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread -fopenmp")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread -fopenmp")
 add_executable(mini-para ${SRC_LIST} ${HEADERS})
 target_link_libraries(mini-para PUBLIC initializer)
  
