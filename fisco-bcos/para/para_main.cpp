@@ -17,7 +17,7 @@
  * @brief: simple demo of para tx executor
  *
  * @file: para_main.cpp
- * @author: catli
+ * @author: catli, jimmyshi
  * @date 2019-01-15
  */
 #include <libblockchain/BlockChainImp.h>
