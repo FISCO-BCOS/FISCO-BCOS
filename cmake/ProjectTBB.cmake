@@ -17,7 +17,7 @@ ExternalProject_Add(tbb
 
 ExternalProject_Get_Property(tbb SOURCE_DIR)
 add_library(TBB STATIC IMPORTED)
-set(TBB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/deps/include)
+set(TBB_INCLUDE_DIR ${SOURCE_DIR}/include/tbb)
 set(TBB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.so)
 
 set_property(TARGET TBB PROPERTY IMPORTED_LOCATION ${TBB_LIBRARY})
