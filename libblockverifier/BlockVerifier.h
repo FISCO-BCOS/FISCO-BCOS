@@ -88,6 +88,10 @@ private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
     std::shared_ptr<dev::blockverifier::ParaTxExecutor> m_paraTxExecutor;
+    ExecutiveContext::Ptr serialExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 };
 
 }  // namespace blockverifier
