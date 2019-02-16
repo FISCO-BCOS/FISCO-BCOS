@@ -37,7 +37,7 @@ matrix:
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
         - os: osx
-          osx_image: xcode10
+          osx_image: xcode9.4
           env: CACHE_NAME=osx
 git:
     depth: 1
@@ -64,7 +64,7 @@ addons:
     - openssl
     - clang-format
 install: |
-      chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
+    chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
 script: |
     mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2 && \
     ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
