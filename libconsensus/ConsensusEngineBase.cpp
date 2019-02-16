@@ -55,7 +55,11 @@ void ConsensusEngineBase::stop()
     m_startConsensusEngine = false;
     doneWorking();
     if (isWorking())
+    {
         stopWorking();
+        // will not restart worker, so terminate it
+        terminate();
+    }
 }
 
 /// update m_sealing and receiptRoot
