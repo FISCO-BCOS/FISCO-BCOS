@@ -107,27 +107,10 @@ gen_node_cert() {
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
-    openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
     nodeid=`cat node.nodeid | head`
-    serial=`cat node.serial | head`
-    cat >node.json <<EOF
-{
- "id":"$nodeid",
- "name":"$node",
- "agency":"$agency",
- "caHash":"$serial"
-}
-EOF
-    cat >node.ca <<EOF
-{
- "serial":"$serial",
- "pubkey":"$nodeid",
- "name":"$node"
-
-EOF
 
     echo "build $node node cert successful!"
 }
@@ -178,6 +161,6 @@ execute_cmd "cat ${agencypath}/agency.crt >> ${nodepath}/node.crt"
 execute_cmd "cat ${agencypath}/ca.crt >> ${nodepath}/node.crt"
 execute_cmd "rm build.log"
 execute_cmd "cd ${nodepath}"
-execute_cmd "rm node.json node.param node.private node.ca node.pubkey"
+execute_cmd "rm node.param node.private node.pubkey"
 }
 main "$@"

@@ -47,7 +47,7 @@ cache:
   - $TRAVIS_BUILD_DIR/deps
 #   - $TRAVIS_BUILD_DIR/build
 before_cache:
-    #   - cd $TRAVIS_BUILD_DIR && rm -rf $TRAVIS_BUILD_DIR/build/nodes $TRAVIS_BUILD_DIR/build/bin
+    #   - rm -rf $TRAVIS_BUILD_DIR/build/nodes $TRAVIS_BUILD_DIR/build/bin
 addons:
   apt:
     packages:
@@ -64,7 +64,7 @@ addons:
     - openssl
     - clang-format
 install: |
-      chmod a+x ./tools/ci/*.sh &&  chmod a+x ./tools/ci/*.py && bash ./tools/ci/check-commit.sh;
+      bash tools/ci/check-commit.sh;
 script: |
     mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2 && \
     ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
