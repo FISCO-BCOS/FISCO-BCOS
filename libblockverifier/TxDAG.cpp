@@ -37,7 +37,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
 
     CriticalField<string> latestCriticals;
 
-    for (ID id = 0; id < _txs.size(); id++)
+    for (ID id = 0; id < _txs.size(); ++id)
     {
         auto& tx = _txs[id];
 
