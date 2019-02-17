@@ -21,6 +21,9 @@
 
 
 file(GLOB SRC_LIST "*.cpp")
-add_executable(mini-para ${SRC_LIST} ${HEADERS})
+add_executable(mini-para para_main.cpp ${HEADERS})
+add_executable(mini-para-node para_main_node.cpp ${HEADERS})
 target_link_libraries(mini-para PUBLIC initializer)
+target_link_libraries(mini-para-node PUBLIC initializer)
+
  
