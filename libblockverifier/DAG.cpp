@@ -34,7 +34,7 @@ DAG::~DAG()
 void DAG::init(ID _maxSize)
 {
     clear();
-    for (ID i = 0; i < _maxSize; i++)
+    for (ID i = 0; i < _maxSize; ++i)
         m_vtxs.emplace_back(make_shared<Vertex>());
     m_totalVtxs = _maxSize;
     m_totalConsume = 0;
@@ -52,7 +52,7 @@ void DAG::addEdge(ID _f, ID _t)
 
 void DAG::generate()
 {
-    for (ID id = 0; id < m_vtxs.size(); id++)
+    for (ID id = 0; id < m_vtxs.size(); ++id)
     {
         if (m_vtxs[id]->inDegree == 0)
             m_topLevel.push(id);
@@ -102,7 +102,7 @@ ID DAG::consume(ID _id)
         }
         if (lastDegree == 1)
         {
-            producedNum++;
+            ++producedNum;
             if (producedNum == 1)
                 nextId = id;
             else

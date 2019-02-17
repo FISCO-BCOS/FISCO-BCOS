@@ -230,8 +230,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
         tableData->tableName = dbIt.first;
 
-        bool dirtyTable = false;
-        dirtyTable = table->dump(tableData);
+        bool dirtyTable = table->dump(tableData);
 
         if (!tableData->data.empty() && dirtyTable)
         {

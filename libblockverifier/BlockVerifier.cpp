@@ -106,7 +106,6 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("time(ms)", utcTime() - pastTime)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number());
-    pastTime = utcTime();
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts

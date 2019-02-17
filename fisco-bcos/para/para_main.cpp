@@ -188,7 +188,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     Block block;
     genTxUserTransfer(block, _totalUser, _totalTxs);
     // while (true)
-    getchar();
+    // getchar();
     for (int i = 0; i < 10; i++)
     {
         blockVerifier->serialExecuteBlock(block, parentBlockInfo);

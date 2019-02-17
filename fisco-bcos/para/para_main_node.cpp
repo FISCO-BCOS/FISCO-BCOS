@@ -104,7 +104,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     u256 maxBlockLimit = u256(500);
     /// get the consensus status
     /// m_txSpeed default is 10
-    // uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
     // u256 count = u256(0);
 
     while (true)
@@ -114,45 +114,42 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             if (ledgerManager->blockChain(group)->number() <= 0)
                 generateUserAddTx(ledgerManager, USER_NUM);
 
-            for (int i = 0; i < (int)txSpeed; i++)
+
+            try
             {
-                try
-                {
-                    u256 value = 0;
-                    u256 gasPrice = 0;
-                    u256 gas = 10000000;
-                    Address dest = Address(0xffff);
-                    string userFrom;
-                    string userTo;
+                u256 value = 0;
+                u256 gasPrice = 0;
+                u256 gas = 10000000;
+                Address dest = Address(0xffff);
+                string userFrom;
+                string userTo;
 
-                    userFrom = to_string(rand() % USER_NUM);
-                    userTo = to_string(rand() % USER_NUM);
+                userFrom = to_string(rand() % USER_NUM);
+                userTo = to_string(rand() % USER_NUM);
 
-                    u256 money = 1;
-                    dev::eth::ContractABI abi;
-                    bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
-                        money);  // add 1000000000 to user i
-                    u256 nonce = u256(utcTime() + rand());
+                u256 money = 1;
+                dev::eth::ContractABI abi;
+                bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
+                    money);  // add 1000000000 to user i
+                u256 nonce = u256(utcTime() + rand());
 
-                    Transaction tx(value, gasPrice, gas, dest, data, nonce);
-                    // sec = KeyPair::create().secret();
-                    Signature sig = sign(sec, tx.sha3(WithoutSignature));
+                Transaction tx(value, gasPrice, gas, dest, data, nonce);
+                // sec = KeyPair::create().secret();
+                Signature sig = sign(sec, tx.sha3(WithoutSignature));
 
-                    tx.setBlockLimit(
-                        u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
-                    tx.updateSignature(SignatureStruct(sig));
-                    ledgerManager->txPool(group)->submit(tx);
-                }
+                tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                tx.updateSignature(SignatureStruct(sig));
+                ledgerManager->txPool(group)->submit(tx);
+            }
 
-                catch (std::exception& e)
-                {
-                    LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
-                               << boost::diagnostic_information(e);
-                }
+            catch (std::exception& e)
+            {
+                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                           << boost::diagnostic_information(e);
             }
         }
         LogInitializer::logRotateByTime();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
     }
 }
 
