@@ -104,7 +104,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     u256 maxBlockLimit = u256(500);
     /// get the consensus status
     /// m_txSpeed default is 10
-    uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    // uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
     // u256 count = u256(0);
 
     while (true)
