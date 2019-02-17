@@ -1,6 +1,6 @@
 # "Copyright [2018] <fisco-bcos>"
 # @ function: check code format of {.h, .hpp and .cpp} files
-# @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready 
+# @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready
 # @ author  : wheatli
 # @ file    : check-commit.sh
 # @ date    : 2018
@@ -34,42 +34,8 @@ execute_cmd() {
     fi
 }
 
-# get platform: now support debain/ubuntu, fedora/centos, oracle
-install_deps() {
-    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
-    case $(uname -s) in
-    Darwin)
-        LOG_INFO "OSX Platform";;
-    FreeBSD)
-        LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
-        exit 1;;
-    Linux)
-        if [ -f "/etc/arch-release" ]; then
-            LOG_ERROR "FISCO-BCOS V2.0 Don't Support arch-linux Yet!"
-        elif [ -f "/etc/os-release" ];then
-            DISTRO_NAME=$(. /etc/os-release; echo $NAME)
-            case $DISTRO_NAME in
-            Debian*|Ubuntu)
-                LOG_INFO "Debian*|Ubuntu Platform"
-                # execute_cmd "sudo apt-get update"
-                # execute_cmd "sudo apt-get install -y clang-format"
-                ;;
-            Fedora|CentOS*|Oracle*)
-                LOG_INFO "Fedora|CentOS* Platform"
-                # execute_cmd "sudo yum upgrade"
-                # execute_cmd "sudo yum install clang"
-                ;;
-            esac
-        else
-            LOG_ERROR "Unsupported Platform"
-        fi
-    esac
-}
-
 function check()
 {
-    #install_deps
-    deploy_check_script
     if git rev-parse --verify HEAD >/dev/null 2>&1;then
         against=HEAD^
     else
@@ -80,14 +46,14 @@ function check()
     # Redirect output to stderr.
     exec 1>&2
     sum=0
-    git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'        
+    git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'
     # for check-script
     for file in $(git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
-        LOG_INFO "=== file: ${file}" 
+        LOG_INFO "=== file: ${file}"
         sum=$(expr ${sum} + $?)
     done
-        
+
     if [ ${sum} -eq 0 ]; then
         exit 0
     else

@@ -385,7 +385,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
     }
     else
     {
-        RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#tryCommitUncommitedBlock]No uncommited block");
+        RAFTENGINE_LOG(TRACE) << LOG_DESC("[#tryCommitUncommitedBlock]No uncommited block");
         ul.unlock();
     }
 }
@@ -538,8 +538,9 @@ void RaftEngine::runAsLeader()
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
-    while (runAsLeaderImp(memberHeartbeatLog))
+    while (isWorking() && runAsLeaderImp(memberHeartbeatLog))
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 
@@ -671,8 +672,9 @@ void RaftEngine::runAsCandidate()
         return;
     }
 
-    while (runAsCandidateImp(voteState))
+    while (isWorking() && runAsCandidateImp(voteState))
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 
@@ -746,8 +748,9 @@ bool RaftEngine::runAsFollowerImp()
 
 void RaftEngine::runAsFollower()
 {
-    while (runAsFollowerImp())
+    while (isWorking() && runAsFollowerImp())
     {
+        this_thread::sleep_for(chrono::milliseconds(1));
     }
 }
 

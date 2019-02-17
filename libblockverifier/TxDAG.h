@@ -40,6 +40,7 @@ class TxDAGFace
 {
 public:
     virtual bool hasFinished() = 0;
+    virtual ~TxDAGFace(){}
 
     // Called by thread
     // Execute a unit in DAG
@@ -53,7 +54,7 @@ class TxDAG : public TxDAGFace
 {
 public:
     TxDAG() : m_dag() {}
-    ~TxDAG() {}
+    virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
     void init(ExecutiveContext::Ptr _ctx, dev::eth::Transactions const& _txs);

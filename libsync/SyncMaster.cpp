@@ -118,6 +118,8 @@ void SyncMaster::stop()
 {
     doneWorking();
     stopWorking();
+    // will not restart worker, so terminate it
+    terminate();
 }
 
 void SyncMaster::doWork()

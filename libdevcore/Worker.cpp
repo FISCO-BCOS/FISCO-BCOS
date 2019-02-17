@@ -110,7 +110,9 @@ void Worker::stopWorking()
 
         DEV_TIMED_ABOVE("Stop worker", 100)
         while (m_state != WorkerState::Stopped)
-            m_state_notifier.wait(l);  // but yes who can wake this up, when the mutex is taken.
+        {
+            m_state_notifier.wait(l);
+        }
     }
 }
 
