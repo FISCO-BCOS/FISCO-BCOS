@@ -2,6 +2,8 @@ FROM ubuntu:16.04
 
 LABEL maintainer service@fisco.com.cn
 
+WORKDIR /
+
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     git clang make build-essential cmake libssl-dev libleveldb-dev libsnappy-dev \
     ca-certificates \
