@@ -154,6 +154,19 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
     }
 }
 
+bool TxPool::txExists(dev::h256 const& txHash)
+{
+    ReadGuard l(m_lock);
+    /// can't submit to the transaction pull, return false
+    if (m_txsQueue.size() >= m_limit)
+        return true;
+    if (m_txsHash.count(txHash))
+    {
+        return true;
+    }
+    return false;
+}
+
 /**
  * @brief : verify specified transaction, including:
  *  1. whether the transaction is known (refuse repeated transaction)

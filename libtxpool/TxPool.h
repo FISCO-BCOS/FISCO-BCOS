@@ -143,6 +143,7 @@ public:
 
     /// verify and set the sender of known transactions of sepcified block
     void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
+    bool txExists(dev::h256 const& txHash) override;
 
 protected:
     /**

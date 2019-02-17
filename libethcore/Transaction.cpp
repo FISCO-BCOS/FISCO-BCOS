@@ -182,6 +182,11 @@ h256 Transaction::sha3(IncludeSignature _sig) const
     return ret;
 }
 
+void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
+{
+    m_hashWith = txHash;
+}
+
 void Transaction::tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
 {
     try

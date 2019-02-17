@@ -188,8 +188,16 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     {
         try
         {
+            /// calculate transaction hash
+            dev::h256 txHash = dev::sha3(rlps[i].out());
+            /// if the transaction exists in the transaciton pool already, do nothing
+            if (m_txPool->txExists(txHash))
+                continue;
+
+            /// if the transaction doesn't exist in to transaction pool, verify and import
             Transaction tx;
             tx.decode(rlps[i]);
+            tx.updateTransactionHashWithSig(txHash);
 
             auto importResult = m_txPool->import(tx);
             if (ImportResult::Success == importResult)

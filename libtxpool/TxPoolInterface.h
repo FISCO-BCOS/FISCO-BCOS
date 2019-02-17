@@ -115,6 +115,10 @@ public:
     }
     virtual SharedMutex& xtransactionKnownBy() = 0;
 
+    /// param: transaction hash
+    /// determine the given transaction hash exists in the transaction pool or not
+    bool txExists(dev::h256 const&) { return false; }
+
     /// param: the block that should be verified and set sender according to transactions of local
     /// transaction pool
     virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
