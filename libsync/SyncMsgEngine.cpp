@@ -189,7 +189,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         try
         {
             /// calculate transaction hash
-            dev::h256 txHash = dev::sha3(rlps[i].out());
+            dev::h256 txHash = dev::sha3(rlps[i].data());
             /// if the transaction exists in the transaciton pool already, do nothing
             if (m_txPool->txExists(txHash))
                 continue;
