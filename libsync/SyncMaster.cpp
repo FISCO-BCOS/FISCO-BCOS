@@ -297,7 +297,7 @@ void SyncMaster::maintainPeersStatus()
     // Not to start download when mining or no need
     {
         ReadGuard l(x_currentSealingNumber);
-        if (maxPeerNumber <= m_currentSealingNumber)
+        if (maxPeerNumber <= m_currentSealingNumber || maxPeerNumber == currentNumber)
         {
             // mining : maxPeerNumber - currentNumber == 1
             // no need: maxPeerNumber - currentNumber <= 0
