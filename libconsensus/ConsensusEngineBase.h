@@ -50,7 +50,7 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         dev::h512s const& _minerList = dev::h512s())
-      : Worker("ConsensusEngineBase", 0),
+      : Worker("ConsensusEngine", 0),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
