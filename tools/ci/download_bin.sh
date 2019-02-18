@@ -42,11 +42,11 @@ download_artifact()
 
     link=$(echo ${response}| grep -o 'https://[^"]*')
 
-    is_gm="$(echo "${response}"| grep -o 'static-gm')"
+    is_gm="$(echo "${response}"| grep -o 'gm')"
     if [ ! -z "${download_gm}" -a -z "${is_gm}" ] || [ -z "${download_gm}" -a ! -z "${is_gm}" ]
     then
         num=$(( build_num - 1 ))
-        link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*')
+        link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | tail -n 1)
     fi
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
     cd ${output_dir} && curl -LO ${link} && tar -zxf *.tar.gz

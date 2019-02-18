@@ -110,7 +110,6 @@ gen_node_cert() {
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=`cat node.nodeid | head`
 
     echo "build $node node cert successful!"
 }
