@@ -57,9 +57,9 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
-        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _minerList),
+            _keyPair, _sealerList),
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
         m_uncommittedBlock(dev::eth::Block()),
@@ -153,7 +153,7 @@ protected:
     void tryCommitUncommitedBlock(dev::consensus::RaftHeartBeatResp& _resp);
     virtual bool checkHeartbeatTimeout();
     virtual bool checkElectTimeout();
-    ssize_t getIndexByMiner(dev::h512 const& _nodeId);
+    ssize_t getIndexBySealer(dev::h512 const& _nodeId);
     bool getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const;
     dev::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, RaftPacketType const& packetType, PROTOCOL_ID const& protocolId);
@@ -182,7 +182,7 @@ protected:
 
     void execBlock(Sealing& _sealing, dev::eth::Block const& _block);
     void checkBlockValid(dev::eth::Block const& _block) override;
-    void checkMinerList(dev::eth::Block const& _block);
+    void checkSealerList(dev::eth::Block const& _block);
     bool checkAndExecute(dev::eth::Block const& _block);
     void checkAndSave(Sealing& _sealing);
 
@@ -229,8 +229,8 @@ protected:
     static const unsigned c_PopWaitSeconds = 5;
 
     dev::storage::Storage::Ptr m_storage;
-    // the block number that update the miner list
-    int64_t m_lastObtainMinerNum = 0;
+    // the block number that update the sealer list
+    int64_t m_lastObtainSealerNum = 0;
     uint64_t m_lastBlockTime;
 
     dev::eth::Block m_uncommittedBlock;

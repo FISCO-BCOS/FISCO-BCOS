@@ -96,7 +96,7 @@ public:
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
-    dev::h512s minerList() override;
+    dev::h512s sealerList() override;
     dev::h512s observerList() override;
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
     void getNonces(
@@ -127,9 +127,9 @@ private:
 
     dev::h512s getNodeListByType(int64_t num, std::string const& type);
     mutable SharedMutex m_nodeListMutex;
-    dev::h512s m_minerList;
+    dev::h512s m_sealerList;
     dev::h512s m_observerList;
-    int64_t m_cacheNumByMiner = -1;
+    int64_t m_cacheNumBySealer = -1;
     int64_t m_cacheNumByObserver = -1;
 
     struct SystemConfigRecord

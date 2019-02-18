@@ -44,11 +44,11 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
-        h512s const& _minerList = h512s())
+        h512s const& _sealerList = h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _baseDir, _key_pair, _minerList);
+            _blockVerifier, _protocolId, _baseDir, _key_pair, _sealerList);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
         /// called by viewchange procedure to reset block when timeout
         m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));

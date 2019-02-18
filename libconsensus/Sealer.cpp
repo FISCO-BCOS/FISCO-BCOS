@@ -60,7 +60,8 @@ bool Sealer::shouldSeal()
         sealed = m_sealing.block.isSealed();
     }
     return (!sealed && m_startConsensus &&
-            m_consensusEngine->accountType() == NodeAccountType::MinerAccount && !isBlockSyncing());
+            m_consensusEngine->accountType() == NodeAccountType::SealerAccount &&
+            !isBlockSyncing());
 }
 
 void Sealer::reportNewBlock()
@@ -215,7 +216,7 @@ void Sealer::resetSealingHeader(BlockHeader& header)
 {
     /// import block
     resetCurrentTime();
-    header.setSealerList(m_consensusEngine->minerList());
+    header.setSealerList(m_consensusEngine->sealerList());
     header.setSealer(m_consensusEngine->nodeIdx());
     header.setLogBloom(LogBloom());
     header.setGasUsed(u256(0));

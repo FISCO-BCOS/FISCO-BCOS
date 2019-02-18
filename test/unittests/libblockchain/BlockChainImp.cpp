@@ -318,8 +318,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
 BOOST_AUTO_TEST_CASE(query)
 {
-    dev::h512s minerList = m_blockChainImp->minerList();
-    BOOST_CHECK_EQUAL(minerList.size(), 0);
+    dev::h512s sealerList = m_blockChainImp->sealerList();
+    BOOST_CHECK_EQUAL(sealerList.size(), 0);
     dev::h512s observerList = m_blockChainImp->observerList();
     BOOST_CHECK_EQUAL(observerList.size(), 0);
 }

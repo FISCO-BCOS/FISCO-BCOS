@@ -164,7 +164,7 @@ public:
         m_initParam = initParam;
         return true;
     }
-    dev::h512s minerList() override { return m_initParam.minerList; };
+    dev::h512s sealerList() override { return m_initParam.sealerList; };
     dev::h512s observerList() override { return m_initParam.observerList; };
     std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
@@ -466,11 +466,12 @@ public:
     void initBlockChain()
     {
         m_blockChain = std::make_shared<MockBlockChain>();
-        dev::h512s minerList;
-        minerList.push_back(
+        dev::h512s sealerList;
+        sealerList.push_back(
             dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                       "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
-        GenesisBlockParam initParam = {"std", minerList, dev::h512s(), "", "", "", 1000, 300000000};
+        GenesisBlockParam initParam = {
+            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
     void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }

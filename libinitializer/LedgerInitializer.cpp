@@ -107,7 +107,7 @@ bool LedgerInitializer::initSingleGroup(
         return succ;
     }
     _groudID2NodeList[_groupID] =
-        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
+        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().sealerList;
 
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup")
                            << LOG_KV("groupID", to_string(_groupID));

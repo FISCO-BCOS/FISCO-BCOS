@@ -66,7 +66,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
 
 bool PBFTEngine::shouldSeal()
 {
-    if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
+    if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
     {
         return false;
     }
@@ -126,17 +126,17 @@ void PBFTEngine::resetConfig()
     auto node_idx = MAXIDX;
     updateConsensusNodeList();
     {
-        ReadGuard l(m_minerListMutex);
-        for (size_t i = 0; i < m_minerList.size(); i++)
+        ReadGuard l(m_sealerListMutex);
+        for (size_t i = 0; i < m_sealerList.size(); i++)
         {
-            if (m_minerList[i] == m_keyPair.pub())
+            if (m_sealerList[i] == m_keyPair.pub())
             {
-                m_accountType = NodeAccountType::MinerAccount;
+                m_accountType = NodeAccountType::SealerAccount;
                 node_idx = i;
                 break;
             }
         }
-        m_nodeNum = m_minerList.size();
+        m_nodeNum = m_sealerList.size();
     }
     m_f = (m_nodeNum - 1) / 3;
     m_cfgErr = (node_idx == MAXIDX);
@@ -288,10 +288,10 @@ bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 
 bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const IDXTYPE& idx) const
 {
-    nodeID = getMinerByIndex(idx);
+    nodeID = getSealerByIndex(idx);
     if (nodeID == h512())
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("getNodeIDByIndex: not miner") << LOG_KV("idx", idx)
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("getNodeIDByIndex: not sealer") << LOG_KV("idx", idx)
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return false;
     }
@@ -373,8 +373,8 @@ bool PBFTEngine::broadcastViewChangeReq()
 bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
     std::string const& key, bytesConstRef data, unsigned const& ttl)
 {
-    /// is miner?
-    if (getIndexByMiner(nodeId) < 0)
+    /// is sealer?
+    if (getIndexBySealer(nodeId) < 0)
     {
         return true;
     }
@@ -409,7 +409,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
 /**
  * @brief: broadcast specified message to all-peers with cache-filter and specified filter
  *         broadcast solutions:
- *         1. peer is not the miner: stop broadcasting
+ *         1. peer is not the sealer: stop broadcasting
  *         2. peer is in the filter list: mark the message as broadcasted, and stop broadcasting
  *         3. the packet has been broadcasted: stop broadcast
  * @param packetType: the packet type of the broadcast-message
@@ -424,8 +424,8 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
-        /// get node index of the miner from m_minerList failed ?
-        if (getIndexByMiner(session.nodeID) < 0)
+        /// get node index of the sealer from m_sealerList failed ?
+        if (getIndexBySealer(session.nodeID) < 0)
             continue;
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID))
@@ -504,45 +504,45 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     return CheckResult::VALID;
 }
 
-/// check miner list
-void PBFTEngine::checkMinerList(Block const& block)
+/// check sealer list
+void PBFTEngine::checkSealerList(Block const& block)
 {
-    ReadGuard l(m_minerListMutex);
-    if (m_minerList != block.blockHeader().sealerList())
+    ReadGuard l(m_sealerListMutex);
+    if (m_sealerList != block.blockHeader().sealerList())
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkMinerList: wrong miners")
-                              << LOG_KV("Nminer", m_minerList.size())
-                              << LOG_KV("NBlockMiner", block.blockHeader().sealerList().size())
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkSealerList: wrong sealers")
+                              << LOG_KV("Nsealer", m_sealerList.size())
+                              << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
                               << LOG_KV("hash", block.blockHeader().hash().abridged())
                               << LOG_KV("myIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         BOOST_THROW_EXCEPTION(
-            BlockMinerListWrong() << errinfo_comment("Wrong Miner List of Block"));
+            BlockSealerListWrong() << errinfo_comment("Wrong Sealer List of Block"));
     }
 }
 
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
-    ReadGuard l(m_minerListMutex);
+    ReadGuard l(m_sealerListMutex);
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
     {
         return true;
     }
     /// check sealer list(node list)
-    if (m_minerList != block.blockHeader().sealerList())
+    if (m_sealerList != block.blockHeader().sealerList())
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: wrong miners")
-                              << LOG_KV("Nminer", m_minerList.size())
-                              << LOG_KV("NBlockMiner", block.blockHeader().sealerList().size())
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: wrong sealers")
+                              << LOG_KV("Nsealer", m_sealerList.size())
+                              << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
                               << LOG_KV("hash", block.blockHeader().hash().abridged())
                               << LOG_KV("myIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return false;
     }
-    /// check sealer(sealer must be a miner)
-    if (getMinerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
+    /// check sealer(sealer must be a sealer)
+    if (getSealerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: invalid sealer ")
                               << LOG_KV("sealer", block.blockHeader().sealer());
@@ -560,20 +560,20 @@ bool PBFTEngine::checkBlock(Block const& block)
     /// check sign
     for (auto sign : sig_list)
     {
-        if (sign.first >= m_minerList.size())
+        if (sign.first >= m_sealerList.size())
         {
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: overflowed signer")
                                   << LOG_KV("signer", sign.first)
-                                  << LOG_KV("Nminer", m_minerList.size());
+                                  << LOG_KV("Nsealer", m_sealerList.size());
             return false;
         }
-        if (!dev::verify(m_minerList[sign.first.convert_to<size_t>()], sign.second,
+        if (!dev::verify(m_sealerList[sign.first.convert_to<size_t>()], sign.second,
                 block.blockHeader().hash()))
         {
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: invalid sign")
                                   << LOG_KV("signer", sign.first)
                                   << LOG_KV("pub",
-                                         m_minerList[sign.first.convert_to<size_t>()].abridged())
+                                         m_sealerList[sign.first.convert_to<size_t>()].abridged())
                                   << LOG_KV("hash", block.blockHeader().hash().abridged());
             return false;
         }
@@ -936,7 +936,7 @@ void PBFTEngine::reportBlock(Block const& block)
 /// 1. update the highest to new-committed blockHeader
 /// 2. update m_view/m_toView/m_leaderFailed/m_lastConsensusTime/m_consensusBlockNumber
 /// 3. delete invalid view-change requests according to new highestBlock
-/// 4. recalculate the m_nodeNum/m_f according to newer MinerList
+/// 4. recalculate the m_nodeNum/m_f according to newer SealerList
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
@@ -1336,7 +1336,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);
         /// get the origin gen node id of the request
-        h512 gen_node_id = getMinerByIndex(pbft_msg.idx);
+        h512 gen_node_id = getSealerByIndex(pbft_msg.idx);
         if (gen_node_id != h512())
         {
             filter.insert(gen_node_id);
