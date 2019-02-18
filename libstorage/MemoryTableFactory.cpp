@@ -84,6 +84,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
+    memoryTable->setTableInfo(tableInfo);
 
     // authority flag
     if (authorityFlag)
@@ -95,8 +96,7 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
         }
         else
         {
-            memoryTable->setTableInfo(tableInfo);
-            auto tableEntries = memoryTable->select(tableInfo->name, memoryTable->newCondition());
+            auto tableEntries = memoryTable->select(SYS_ACCESS_TABLE, memoryTable->newCondition());
             for (size_t i = 0; i < tableEntries->size(); ++i)
             {
                 auto entry = tableEntries->get(i);
@@ -108,7 +108,6 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
         }
     }
 
-    memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, string const& _key,
                                  vector<Change::Record>& _records) {
         m_changeLog.emplace_back(_table, _kind, _key, _records);
@@ -143,8 +142,8 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     tableEntry->setField("table_name", tableName);
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
-    createTableCode =
-        sysTable->insert(tableName, tableEntry, std::make_shared<AccessOptions>(_origin));
+    createTableCode = sysTable->insert(
+        tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorigytFlag));
     if (createTableCode == -1)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")

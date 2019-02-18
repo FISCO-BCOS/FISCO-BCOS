@@ -41,8 +41,9 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 {
     typedef std::shared_ptr<AccessOptions> Ptr;
     AccessOptions() = default;
-    AccessOptions(Address _origin) { origin = _origin; }
+    AccessOptions(Address _origin, bool _check = true) : origin(_origin), check(_check) {}
     Address origin;
+    bool check = true;
 };
 
 class Entry : public std::enable_shared_from_this<Entry>

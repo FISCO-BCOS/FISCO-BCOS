@@ -1,7 +1,7 @@
 version: 2
 jobs:            
   build_static_test:
-    working_directory: /root/FISCO-BCOS
+    working_directory: /FISCO-BCOS
     docker:
       - image: ubuntu:16.04
     steps:
@@ -35,7 +35,7 @@ jobs:
             bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/**
 
   build_test_guomi:
-    working_directory: /root/FISCO-BCOS-gm
+    working_directory: /FISCO-BCOS-gm
     docker:
         - image: centos:7
     steps:
@@ -63,8 +63,8 @@ jobs:
           paths:
             - deps
 
-  deploy_static:
-    working_directory: /root/FISCO-BCOS
+  build_static:
+    working_directory: /FISCO-BCOS
     docker:
       - image: ubuntu:16.04
     steps:
@@ -91,13 +91,17 @@ jobs:
           command: |
             cd build/bin
             strip fisco-bcos
-            tar -zcf fisco-static.tar.gz fisco-bcos
+            tar -zcf fisco-bcos.tar.gz fisco-bcos
       - store_artifacts:
-          path: /root/FISCO-BCOS/build/bin/fisco-static.tar.gz
-          destination: fisco-static.tar.gz
+          path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+          destination: fisco-bcos.tar.gz
+      - persist_to_workspace:
+          root: build
+          paths:
+            - bin
 
-  deploy_guomi:
-    working_directory: /root/FISCO-BCOS
+  build_guomi:
+    working_directory: /FISCO-BCOS
     docker:
       - image: ubuntu:16.04
     steps:
@@ -124,10 +128,44 @@ jobs:
           command: |
             cd build/bin
             strip fisco-bcos
-            tar -zcf fisco-static-gm.tar.gz fisco-bcos
+            tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
       - store_artifacts:
-          path: /root/FISCO-BCOS/build/bin/fisco-static-gm.tar.gz
-          destination: fisco-static-gm.tar.gz
+          path: /FISCO-BCOS/build/bin/fisco-bcos-gm.tar.gz
+          destination: fisco-bcos-gm.tar.gz
+      - persist_to_workspace:
+          root: build
+          paths:
+            - bin
+
+  deploy_static:
+    working_directory: /FISCO-BCOS
+    docker:
+      - image: ubuntu:16.04
+    steps:
+      - attach_workspace:
+          at: /FISCO-BCOS/build/bin
+      - run:
+          name: Upload to GitHub Release
+          command: |
+            apt-get update
+            apt-get install -y golang-go
+            go get github.com/tcnksm/ghr
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+
+  deploy_guomi:
+    working_directory: /FISCO-BCOS
+    docker:
+      - image: ubuntu:16.04
+    steps:
+      - attach_workspace:
+          at: /FISCO-BCOS/build/bin
+      - run:
+          name: Upload to GitHub Release
+          command: |
+            apt-get update
+            apt-get install -y golang-go
+            go get github.com/tcnksm/ghr
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-gm.tar.gz
 
 workflows:
   version: 2
@@ -137,7 +175,24 @@ workflows:
       - build_test_guomi
   deploy:
     jobs:
+      - build_static:
+          filters:
+            branches:
+              only: 
+                - /release-2.*/
+            tags:
+              only: 
+                - /v2.*/
       - deploy_static:
+          requires:
+            - build_static
+          filters:
+            tags:
+              only: 
+                - /v2.*/
+            branches:
+              ignore: /.*/
+      - build_guomi:
           filters:
             branches:
               only: 
@@ -146,10 +201,11 @@ workflows:
               only: 
                 - /v2.*/
       - deploy_guomi:
+          requires:
+            - build_guomi
           filters:
-            branches:
-              only: 
-                - /release-2.*/
             tags:
               only: 
                 - /v2.*/
+            branches:
+              ignore: /.*/

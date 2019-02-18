@@ -89,7 +89,7 @@ inline int dev::storage::MemoryTable::update(
 {
     try
     {
-        if (!checkAuthority(options->origin))
+        if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
@@ -154,7 +154,7 @@ inline int dev::storage::MemoryTable::insert(
 {
     try
     {
-        if (!checkAuthority(options->origin))
+        if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert non-authorized")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
@@ -209,7 +209,7 @@ inline int dev::storage::MemoryTable::insert(
 inline int dev::storage::MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
-    if (!checkAuthority(options->origin))
+    if (options->check && !checkAuthority(options->origin))
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
                              << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
