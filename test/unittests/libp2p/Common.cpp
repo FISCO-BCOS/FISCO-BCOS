@@ -41,52 +41,6 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(P2pCommonTest, TestOutputHelperFixture)
-/// test isPublicAddress
-BOOST_AUTO_TEST_CASE(testisPublicAddress)
-{
-    std::string address_to_check = "0.0.0.0";
-#if 0
-    BOOST_CHECK(isPublicAddress(address_to_check) == false);
-    address_to_check = "";
-    BOOST_CHECK(isPublicAddress(address_to_check) == false);
-    address_to_check = "10.10";
-    BOOST_CHECK_THROW(isPublicAddress(address_to_check), std::exception);
-    address_to_check = "10.10.10.10";
-    BOOST_CHECK(isPublicAddress(address_to_check) == true);
-    address_to_check = "127.0.0.1";
-    BOOST_CHECK(isPublicAddress(address_to_check) == true);
-#endif
-}
-
-/// test isLocalHostAddress
-BOOST_AUTO_TEST_CASE(testisLocalHostAddress)
-{
-    std::string address_to_check = "0.0.0.0";
-#if 0
-    BOOST_CHECK(isLocalHostAddress(address_to_check) == true);
-    address_to_check = "127.0.0.1";
-    BOOST_CHECK(isLocalHostAddress(address_to_check) == true);
-    address_to_check = "";
-    BOOST_CHECK(isLocalHostAddress(address_to_check) == false);
-    address_to_check = "10.01";
-    BOOST_CHECK_THROW(isLocalHostAddress(address_to_check), std::exception);
-    address_to_check = "192.10.10.18";
-    BOOST_CHECK(isLocalHostAddress(address_to_check) == false);
-#endif
-}
-
-/// test exceptions related to p2p
-BOOST_AUTO_TEST_CASE(testException)
-{
-#if 0
-    BOOST_CHECK_THROW(
-        assertThrow(false, NetworkStartRequired, "NetworkStartRequired"), NetworkStartRequired);
-    BOOST_CHECK_THROW(assertThrow(false, InvalidPublicIPAddress, "InvalidPublicIPAddress"),
-        InvalidPublicIPAddress);
-    BOOST_CHECK_THROW(
-        assertThrow(false, InvalidHostIPAddress, "InvalidHostIPAddress"), InvalidHostIPAddress);
-#endif
-}
 
 /// test reasonOf and disconnect reasons
 BOOST_AUTO_TEST_CASE(testDisconnectReason)
@@ -156,16 +110,8 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     /// test operators
     /// operator ==
     BOOST_CHECK(m_endpoint2 == NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port));
-    /// operator !=
-    // BOOST_CHECK(m_endpoint2 != m_endpoint);
     /// opearator <
     BOOST_CHECK(m_endpoint < m_endpoint2);
-    /// test construct: NodeIPEndpoint(std::string _host, uint16_t _udp, uint16_t _tcp)
-    /// NodeIPEndpoint m_endpoint3("www.baidu.com", port, port);
-    /// BOOST_CHECK(m_endpoint3.host == "www.baidu.com");
-    /// BOOST_CHECK(m_endpoint3.address.to_string().empty() == false);
-    /// BOOST_CHECK(m_endpoint3.address.to_string() != "127.0.0.1");
-    /// BOOST_CHECK(m_endpoint3.address.to_string() != "0.0.0.0");
     /// test map
     std::map<NodeIPEndpoint, bool> m_endpoint_map;
     m_endpoint_map[m_endpoint] = true;
@@ -175,17 +121,6 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == false);
     m_endpoint_map[NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port)] = true;
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == true);
-}
-/// test PeerSessionInfo
-BOOST_AUTO_TEST_CASE(testPeerSessionInfo)
-{
-#if 0
-    NodeID node_id = KeyPair::create().pub();
-    dev::p2p::P2pSessionInfo peer_session_info = {
-        node_id, "www.baidu.com", std::chrono::steady_clock::duration(), 0};
-    BOOST_CHECK(peer_session_info.id == node_id);
-    BOOST_CHECK(peer_session_info.host == "www.baidu.com");
-#endif
 }
 
 BOOST_AUTO_TEST_CASE(testMessage)
