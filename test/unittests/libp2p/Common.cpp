@@ -70,8 +70,6 @@ BOOST_AUTO_TEST_CASE(testisLocalHostAddress)
     BOOST_CHECK(isLocalHostAddress(address_to_check) == false);
     address_to_check = "10.01";
     BOOST_CHECK_THROW(isLocalHostAddress(address_to_check), std::exception);
-    address_to_check = "192.10.10.18";
-    BOOST_CHECK(isLocalHostAddress(address_to_check) == false);
 #endif
 }
 
