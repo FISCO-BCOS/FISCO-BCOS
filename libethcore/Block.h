@@ -246,7 +246,7 @@ private:
     /// block header of the block (field 0)
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
-    Transactions m_transactions;
+    mutable Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
