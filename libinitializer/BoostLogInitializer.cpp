@@ -61,7 +61,7 @@ void LogInitializer::initLog(
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
     /// set rotation size
-    uint64_t rotation_size = pt.get<uint64_t>("log.MaxLogFileSize", 209715200);
+    uint64_t rotation_size = pt.get<uint64_t>("log.MAX_LOG_FILE_SIZE", 209715200);
     sink->locked_backend()->set_rotation_size(rotation_size);
 
     /// set auto-flush according to log configuration
@@ -76,7 +76,7 @@ void LogInitializer::initLog(
             "TimeStamp", "%Y-%m-%d %H:%M:%S.%f") %
         boost::log::expressions::smessage);
     /// set log level
-    unsigned log_level = getLogLevel(pt.get<std::string>("log.Level", "info"));
+    unsigned log_level = getLogLevel(pt.get<std::string>("log.LEVEL", "info"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
     boost::log::core::get()->add_sink(sink);

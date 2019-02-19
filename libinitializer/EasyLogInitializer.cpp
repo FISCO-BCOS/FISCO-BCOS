@@ -84,13 +84,13 @@ void LogInitializer::initLog(boost::property_tree::ptree const& pt)
     defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
         pt.get<std::string>("log.PERFORMANCE_TRACKING", "false"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
-        pt.get<std::string>("log.MaxLogFileSize", "209715200"));
+        pt.get<std::string>("log.MAX_LOG_FILE_SIZE", "209715200"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
         pt.get<std::string>("log.LOG_FLUSH_THRESHOLD", "100"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
 
     /// init level log
-    auto log_level = getLogLevel(pt.get<std::string>("log.Level", "info"));
+    auto log_level = getLogLevel(pt.get<std::string>("log.LEVEL", "info"));
     defaultConf.set(el::Level::Info, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Warning, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Error, el::ConfigurationType::ToFile, "false");

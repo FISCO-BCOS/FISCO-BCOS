@@ -455,8 +455,8 @@ generate_config_ini()
     ;the directory of the log
     LOG_PATH=./log
     ;log level INFO DEBUG TRACE
-    Level=${log_level}
-    MaxLogFileSize=209715200
+    LEVEL=${log_level}
+    MAX_LOG_FILE_SIZE=209715200
     ; control log auto_flush
     FLUSH=true
     ;easylog config
