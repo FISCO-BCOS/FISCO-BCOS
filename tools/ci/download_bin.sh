@@ -49,7 +49,7 @@ download_artifact()
         link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | tail -n 1)
     fi
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
-    cd ${output_dir} && curl -LO ${link} && tar -zxf *.tar.gz
+    cd ${output_dir} && curl -LO ${link} && tar -zxf *.tar.gz && rm *.tar.gz
     result=$?
     if [[ "${result}" != "0" ]];then echo  -e "\033[31mDownload failed, please try again\033[0m" && exit 1;fi 
     echo -e "\033[32mFinished. Please check ${output_dir}\033[0m"
