@@ -140,14 +140,14 @@ check_env() {
 check_and_install_tassl()
 {
     if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
-        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
+        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR} 2> /dev/null
 
         cd ${TASSL_PKG_DIR}
         local shell_list=$(find . -name '*.sh')
         chmod a+x ${shell_list}
         chmod a+x ./util/pod2mantest        
 
-        bash config --prefix=${TASSL_INSTALL_DIR} no-shared && make -j2 && make install
+        bash config --prefix=${TASSL_INSTALL_DIR} no-shared 2> /dev/null && make -j2 2> /dev/null && make install 2> /dev/null
 
         cd ${CUR_DIR}
         rm -rf ${TASSL_PKG_DIR}
@@ -689,13 +689,33 @@ generate_node_scripts()
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
-nohup \${fisco_bcos} -c config.ini&
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+else 
+    nohup \${fisco_bcos} -c config.ini&
+fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-kill \${weth_pid}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+try_times=2
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    kill \${node_pid}
+    sleep 1
+    node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+    if [ -z \${node_pid} ];then
+        echo " stop \${node} success. "
+        exit 0
+    fi
+    ((i=i+1))
+done
+
 EOF
 }
 
@@ -824,7 +844,7 @@ mkdir -p "$output_dir"
 if [ "${Download}" == "true" ];then
     package_name="fisco-bcos.tar.gz"
     [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-    version=`curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//"`
+    version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
     curl -LO ${Download_Link}

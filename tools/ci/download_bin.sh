@@ -35,6 +35,7 @@ done
 
 download_artifact()
 {
+    [ -f ${output_dir}/fisco-bcos ] && rm -rf ${output_dir}/fisco-bcos
     mkdir -p ${output_dir}
     local build_num=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/tree/${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | head -2 | tail -1 |sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g")
     # echo "build num : ${build_num}"

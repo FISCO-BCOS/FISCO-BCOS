@@ -132,7 +132,6 @@ gen_node_cert() {
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
-    openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 }
 
@@ -171,7 +170,7 @@ main()
         gen_node_cert "" ${key_path} ${output_dir} > ${logfile} 2>&1
         cd ${output_dir}
         mkdir -p ${conf_path}/
-        rm node.param node.pubkey node.serial
+        rm node.param node.pubkey
         mv *.* ${conf_path}/
         cd ${current_dir}
         #private key should not start with 00
