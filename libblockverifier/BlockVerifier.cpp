@@ -179,15 +179,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number()) << std::endl;
     uint64_t pastTime = utcTime();
 
-    if (m_paraTxExecutor != nullptr)
-    {
-        m_paraTxExecutor->start(txDag);
-    }
-    else
-    {
-        while (!txDag->hasFinished())
-            txDag->executeUnit();
-    }
+    m_paraTxExecutor->start(txDag);
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run para tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
                              << LOG_KV("txNum", txDag->paraTxsNumber())
