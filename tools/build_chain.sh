@@ -457,6 +457,7 @@ generate_config_ini()
     ;log level INFO DEBUG TRACE
     Level=${log_level}
     MaxLogFileSize=209715200
+    ; control log auto_flush
     FLUSH=true
     ;easylog config
     FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
