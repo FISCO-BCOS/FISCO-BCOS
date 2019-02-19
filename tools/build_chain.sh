@@ -22,7 +22,6 @@ log_level="INFO"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
 guomi_mode=
 gm_conf_path="gmconf/"
@@ -823,8 +822,13 @@ dir_must_not_exists $output_dir
 mkdir -p "$output_dir"
 
 if [ "${Download}" == "true" ];then
-    echo "Downloading fisco-bcos binary..." 
-    curl -Lo ${bin_path} ${Download_Link}
+    package_name="fisco-bcos.tar.gz"
+    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+    version=`curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//"`
+    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+    curl -LO ${Download_Link}
+    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
 fi
 
