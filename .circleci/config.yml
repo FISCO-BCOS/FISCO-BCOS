@@ -58,6 +58,11 @@ jobs:
           command: |
             cd build
             ./bin/test-fisco-bcos -- --testpath=../test/data/ 
+      - run:
+          name: Run GM nodes
+          command: |
+            cd build
+            ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(ps aux| grep fisco-bcos |grep -v grep | wc -l) -eq 4 ]
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
           paths:

@@ -939,7 +939,6 @@ for line in ${ip_array[*]};do
             cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
             #move origin conf to gm conf
-            rm ${node_dir}/${conf_path}/agency.crt
             rm ${node_dir}/${conf_path}/node.nodeid
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
