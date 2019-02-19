@@ -35,6 +35,7 @@ done
 
 download_artifact()
 {
+    [ -f ${output_dir}/fisco-bcos ] && rm -rf ${output_dir}/fisco-bcos
     mkdir -p ${output_dir}
     local build_num=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/tree/${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | head -2 | tail -1 |sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g")
     # echo "build num : ${build_num}"
@@ -49,7 +50,7 @@ download_artifact()
         link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | tail -n 1)
     fi
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
-    cd ${output_dir} && curl -LO ${link} && tar -zxf *.tar.gz
+    cd ${output_dir} && curl -LO ${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=$?
     if [[ "${result}" != "0" ]];then echo  -e "\033[31mDownload failed, please try again\033[0m" && exit 1;fi 
     echo -e "\033[32mFinished. Please check ${output_dir}\033[0m"
