@@ -69,28 +69,28 @@ void LogInitializer::initLog(boost::property_tree::ptree const& pt)
     el::Loggers::setVerboseLevel(10);
     el::Configurations defaultConf;
     el::Logger* fileLogger = el::Loggers::getLogger("fileLogger");
-    std::string logPath = pt.get<std::string>("log.LOG_PATH", "./log/");
+    std::string logPath = pt.get<std::string>("log.log_path", "./log/");
     std::string logPostfix = "log_%datetime{%Y%M%d%H}.log";
     /// init the defaultConf
     /// init global configurations
     defaultConf.set(el::Level::Global, el::ConfigurationType::Enabled,
-        pt.get<std::string>("log.ENABLED", "true"));
+        pt.get<std::string>("log.enabled", "true"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToFile, "true");
     defaultConf.set(el::Level::Global, el::ConfigurationType::ToStandardOutput, "false");
     defaultConf.set(el::Level::Global, el::ConfigurationType::Format,
-        pt.get<std::string>("log.FORMAT", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"));
+        pt.get<std::string>("log.format", "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MillisecondsWidth,
-        pt.get<std::string>("log.MILLISECONDS_WIDTH", "3"));
+        pt.get<std::string>("log.millseconds_width", "3"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
-        pt.get<std::string>("log.PERFORMANCE_TRACKING", "false"));
+        pt.get<std::string>("log.performance_tracking", "false"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
-        pt.get<std::string>("log.MaxLogFileSize", "209715200"));
+        pt.get<std::string>("log.max_log_file_size", "209715200"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
-        pt.get<std::string>("log.LOG_FLUSH_THRESHOLD", "100"));
+        pt.get<std::string>("log.log_flush_threshold", "100"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);
 
     /// init level log
-    auto log_level = getLogLevel(pt.get<std::string>("log.Level", "info"));
+    auto log_level = getLogLevel(pt.get<std::string>("log.level", "info"));
     defaultConf.set(el::Level::Info, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Warning, el::ConfigurationType::ToFile, "false");
     defaultConf.set(el::Level::Error, el::ConfigurationType::ToFile, "false");

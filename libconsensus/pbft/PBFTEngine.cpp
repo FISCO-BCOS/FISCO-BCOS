@@ -655,7 +655,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(sealing.block);
     auto time_cost = utcTime() - start_exec_time;
-    PBFTENGINE_LOG(TRACE) << LOG_DESC("execBlock")
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("execBlock")
                           << LOG_KV("blkNum", sealing.block.header().number())
                           << LOG_KV("idx", req.idx)
                           << LOG_KV("hash", sealing.block.header().hash().abridged())
@@ -786,7 +786,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
     m_reqCache->addPrepareReq(sign_prepare);
-    PBFTENGINE_LOG(TRACE) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
                           << LOG_KV("blkNum", sign_prepare.height)
                           << LOG_KV("hash", sign_prepare.block_hash.abridged())
                           << LOG_KV("myIdx", nodeIdx())
@@ -811,7 +811,7 @@ void PBFTEngine::checkAndCommit()
     /// PBFT consensus
     if (sign_size == minValidNodes())
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("checkAndCommit, SignReq enough")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit, SignReq enough")
                               << LOG_KV("number", m_reqCache->prepareCache().height)
                               << LOG_KV("sigSize", sign_size)
                               << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
@@ -819,7 +819,7 @@ void PBFTEngine::checkAndCommit()
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         if (m_reqCache->prepareCache().view != m_view)
         {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC("checkAndCommit: InvalidView")
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: InvalidView")
                                   << LOG_KV("prepView", m_reqCache->prepareCache().view)
                                   << LOG_KV("view", m_view)
                                   << LOG_KV(
@@ -829,14 +829,14 @@ void PBFTEngine::checkAndCommit()
         }
         m_reqCache->updateCommittedPrepare();
         /// update and backup the commit cache
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("checkAndCommit: backup/updateCommittedPrepare")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: backup/updateCommittedPrepare")
                               << LOG_KV("blkNum", m_reqCache->committedPrepareCache().height)
                               << LOG_KV("hash",
                                      m_reqCache->committedPrepareCache().block_hash.abridged())
                               << LOG_KV("myIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("checkAndCommit: broadcastCommitReq")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: broadcastCommitReq")
                               << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                               << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                               << LOG_KV("myIdx", nodeIdx())
@@ -858,7 +858,7 @@ void PBFTEngine::checkAndSave()
     size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
     if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("checkAndSave: CommitReq enough")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndSave: CommitReq enough")
                               << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                               << LOG_KV("commitSize", commit_size)
                               << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
@@ -1241,7 +1241,7 @@ void PBFTEngine::collectGarbage()
     {
         m_reqCache->collectGarbage(m_highestBlock);
         m_timeManager.m_lastGarbageCollection = now;
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("collectGarbage")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                               << LOG_KV("Timecost", 1000 * t.elapsed());
     }
 }
