@@ -103,7 +103,8 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     }
     /// modify WARNING->DEBUG
     /// since non-precompile contracts will print this log, modify the log level to DEBUG
-    LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
+    // LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address",
+    // address);
     return Precompiled::Ptr();
 }
 

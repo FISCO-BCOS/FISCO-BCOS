@@ -32,7 +32,7 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
-static unsigned const c_maxSendTransactions = 1000;
+static unsigned const c_maxSendTransactions = 2000;
 
 void SyncMaster::printSyncInfo()
 {
@@ -132,6 +132,7 @@ void SyncMaster::doWork()
     maintainPeersConnection();
     maintainDownloadingQueueBuffer();
     maintainPeersStatus();
+    maintainDownloadingTransactions();
 
     // Idle do
     if (!isSyncing())
@@ -225,16 +226,16 @@ void SyncMaster::maintainTransactions()
     }
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        bytes txRLPs;
+        std::vector<bytes> txRLPs;
         unsigned txsSize = peerTransactions[_p->nodeId].size();
         if (0 == txsSize)
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs += ts[i].rlp();
+            txRLPs.emplace_back(ts[i].rlp());
 
         SyncTransactionsPacket packet;
-        packet.encode(txsSize, txRLPs);
+        packet.encode(txRLPs);
 
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
@@ -245,6 +246,11 @@ void SyncMaster::maintainTransactions()
                         << LOG_KV("messageSize(B)", msg->buffer()->size());
         return true;
     });
+}
+
+void SyncMaster::maintainDownloadingTransactions()
+{
+    m_txQueue->pop2TxPool(m_txPool);
 }
 
 void SyncMaster::maintainBlocks()

@@ -21,6 +21,7 @@
  * @date: 2018-10-25
  */
 
+#include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -44,8 +45,10 @@ public:
     SyncMsgEngineFixture()
       : fakeSyncToolsSet(),
         fakeStatusPtr(make_shared<SyncMasterStatus>(h256(0x1024))),
+        fakeTxQueuePtr(make_shared<DownloadingTxsQueue>(66, NodeID(0xabcd))),
         fakeMsgEngine(fakeSyncToolsSet.getServicePtr(), fakeSyncToolsSet.getTxPoolPtr(),
-            fakeSyncToolsSet.getBlockChainPtr(), fakeStatusPtr, 0, NodeID(0xabcd), h256(0xcdef)),
+            fakeSyncToolsSet.getBlockChainPtr(), fakeStatusPtr, fakeTxQueuePtr, 0, NodeID(0xabcd),
+            h256(0xcdef)),
         fakeException()
     {
         SyncPeerInfo newPeer{NodeID(), 0, h256(0x1024), h256(0x1024)};
@@ -53,6 +56,7 @@ public:
     }
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
+    shared_ptr<DownloadingTxsQueue> fakeTxQueuePtr;
     SyncMsgEngine fakeMsgEngine;
     NetworkException fakeException;
 };
@@ -78,8 +82,9 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
 {
     auto txPacket = SyncTransactionsPacket();
     auto txPtr = fakeSyncToolsSet.createTransaction(0);
-    bytes txRLPs = txPtr->rlp();
-    txPacket.encode(0x01, txRLPs);
+    vector<bytes> txRLPs;
+    txRLPs.emplace_back(txPtr->rlp());
+    txPacket.encode(txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);

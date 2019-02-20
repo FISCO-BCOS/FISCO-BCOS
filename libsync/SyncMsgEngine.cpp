@@ -180,64 +180,9 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     }
 
     RLP const& rlps = _packet.rlp();
-    unsigned itemCount = rlps.itemCount();
-
-    size_t successCnt = 0;
-    std::vector<dev::h256> knownTxHash;
-    for (unsigned i = 0; i < itemCount; ++i)
-    {
-        try
-        {
-            /// calculate transaction hash
-            dev::h256 txHash = dev::sha3(rlps[i].data());
-            /// if the transaction exists in the transaciton pool already, do nothing
-            if (m_txPool->txExists(txHash))
-                continue;
-
-            /// if the transaction doesn't exist in to transaction pool, verify and import
-            Transaction tx;
-            tx.decode(rlps[i]);
-            tx.updateTransactionHashWithSig(txHash);
-
-            auto importResult = m_txPool->import(tx);
-            if (ImportResult::Success == importResult)
-                successCnt++;
-            else if (ImportResult::AlreadyKnown == importResult)
-            {
-                SYNC_LOG(TRACE) << LOG_BADGE("Tx")
-                                << LOG_DESC(
-                                       "Import peer transaction into txPool DUPLICATED from peer")
-                                << LOG_KV("reason", int(importResult))
-                                << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3().abridged()));
-            }
-            else
-            {
-                SYNC_LOG(TRACE) << LOG_BADGE("Tx")
-                                << LOG_DESC("Import peer transaction into txPool FAILED from peer")
-                                << LOG_KV("reason", int(importResult))
-                                << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3().abridged()));
-            }
-            knownTxHash.push_back(tx.sha3());
-        }
-        catch (std::exception& e)
-        {
-            SYNC_LOG(WARNING) << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP recieved")
-                              << LOG_KV("reason", e.what())
-                              << LOG_KV("rlp", toHex(rlps[i].toBytes()));
-            continue;
-        }
-        if (knownTxHash.size() > 0)
-        {
-            m_txPool->setTransactionsAreKnownBy(knownTxHash, _packet.nodeId);
-        }
-    }
-
-    auto pengdingSize = m_txPool->pendingSize();
-    SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
-                    << LOG_KV("import", successCnt) << LOG_KV("rcv", itemCount)
-                    << LOG_KV("txPool", pengdingSize) << LOG_KV("peer", _packet.nodeId.abridged());
+    m_txQueue->push(rlps.data(), _packet.nodeId);
+    SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
+                    << LOG_KV("packetSize(B)", rlps.data().size());
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)

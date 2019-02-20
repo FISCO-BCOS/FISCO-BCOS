@@ -22,40 +22,14 @@
  * @date 2018-09-20
  */
 #include "Block.h"
+#include "TxsParallelParser.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
-#include <omp.h>
 namespace dev
 {
 namespace eth
 {
-class BlockTxsParallelParser
-{
-    /*
-        To support decode transaction parallel in a block
-        Encode/Decode Protocol:
-        [txNum] [[0], [offset1], [offset2] ...] [[txByte0], [txByte1], [txByte2] ...]
-                            |----------------------------------^
-    */
-    using Offset_t = uint32_t;
-
-public:
-    static bytes encode(Transactions& _txs);
-    static void decode(Transactions& _txs, bytesConstRef _bytes,
-        CheckTransaction _checkSig = CheckTransaction::Everything);
-
-private:
-    static inline bytes toBytes(Offset_t _num)
-    {
-        bytes ret(sizeof(Offset_t), 0);
-        *(Offset_t*)(ret.data()) = _num;
-        return ret;
-    }
-
-    static inline Offset_t fromBytes(bytesConstRef _bs) { return Offset_t(*(Offset_t*)_bs.data()); }
-};
-
 Block::Block(bytesConstRef _data, CheckTransaction const option)
 {
     decode(_data, option);
@@ -133,7 +107,7 @@ void Block::calTransactionRoot(bool update) const
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
-        m_txsCache = BlockTxsParallelParser::encode(m_transactions);
+        m_txsCache = TxsParallelParser::encode(m_transactions);
         m_transRootCache = sha3(m_txsCache);
     }
     if (update == true)
@@ -187,7 +161,7 @@ void Block::decode(bytesConstRef _block_bytes, CheckTransaction const option)
     m_txsCache = transactions_rlp.toBytes();
 
     /// decode transaction
-    BlockTxsParallelParser::decode(m_transactions, ref(m_txsCache), option);
+    TxsParallelParser::decode(m_transactions, ref(m_txsCache), option);
 
     /// get transactionReceipt list
     RLP transactionReceipts_rlp = block_rlp[2];
@@ -205,63 +179,6 @@ void Block::decode(bytesConstRef _block_bytes, CheckTransaction const option)
     /// get sig_list
     m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
 }
-
-bytes BlockTxsParallelParser::encode(Transactions& _txs)
-{
-    Offset_t txNum = _txs.size();
-    if (txNum == 0)
-        return bytes();
-
-    bytes txBytes;
-    std::vector<Offset_t> offsets(txNum + 1, 0);
-    Offset_t offset = 0;
-
-    // encode tx and caculate offset
-    for (Offset_t i = 0; i < txNum; ++i)
-    {
-        bytes txByte;
-        _txs[i].encode(txByte);
-        offsets[i] = offset;
-        offset += txByte.size();
-        txBytes += txByte;
-    }
-    offsets[txNum] = offset;  // write the end
-
-    // encode according with this protocol
-    bytes ret;
-    ret += toBytes(Offset_t(txNum));
-    for (size_t i = 0; i < offsets.size(); ++i)
-        ret += toBytes(offsets[i]);
-
-    ret += txBytes;
-
-    // std::cout << "tx encode:" << toHex(ret) << std::endl;
-    return ret;
-}
-
-// parallel decode transactions
-void BlockTxsParallelParser::decode(
-    Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig)
-{
-    // std::cout << "tx decode:" << toHex(_bytes) << std::endl;
-    if (_bytes.size() == 0)
-        return;
-
-    Offset_t txNum = fromBytes(_bytes.cropped(0));
-    vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
-    _txs.resize(txNum);
-
-    bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
-
-#pragma omp parallel for schedule(dynamic, 1)
-    for (Offset_t i = 0; i < txNum; i++)
-    {
-        Offset_t offset = offsets[i];
-        Offset_t size = offsets[i + 1] - offsets[i];
-        _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
-    }
-}
-
 
 }  // namespace eth
 }  // namespace dev

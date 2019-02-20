@@ -80,10 +80,11 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
-void SyncTransactionsPacket::encode(unsigned _txsSize, bytes const& _txRLPs)
+void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, TransactionsPacket, _txsSize).appendRaw(_txRLPs, _txsSize);
+    bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
+    prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
 }
 
 void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
