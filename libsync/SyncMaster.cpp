@@ -32,7 +32,7 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
-static unsigned const c_maxSendTransactions = 2000;
+static unsigned const c_maxSendTransactions = 1000;
 
 void SyncMaster::printSyncInfo()
 {
@@ -225,7 +225,7 @@ void SyncMaster::maintainTransactions()
         }
     }
 
-    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+    m_syncStatus->foreachPeerRandom([&](shared_ptr<SyncPeerStatus> _p) {
         std::vector<bytes> txRLPs;
         unsigned txsSize = peerTransactions[_p->nodeId].size();
         if (0 == txsSize)
