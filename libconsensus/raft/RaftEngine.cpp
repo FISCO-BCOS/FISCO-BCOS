@@ -88,28 +88,28 @@ void RaftEngine::resetConfig()
     auto shouldSwitchToFollower = false;
     {
         Guard guard(m_mutex);
-        auto nodeNum = m_minerList.size();
+        auto nodeNum = m_sealerList.size();
         if (nodeNum == 0)
         {
             RAFTENGINE_LOG(WARNING)
-                << LOG_DESC("[#resetConfig]Reset config error: no miner, stop sealing");
+                << LOG_DESC("[#resetConfig]Reset config error: no sealer, stop sealing");
             m_cfgErr = true;
             return;
         }
 
-        auto iter = std::find(m_minerList.begin(), m_minerList.end(), m_keyPair.pub());
-        if (iter == m_minerList.end())
+        auto iter = std::find(m_sealerList.begin(), m_sealerList.end(), m_keyPair.pub());
+        if (iter == m_sealerList.end())
         {
             RAFTENGINE_LOG(WARNING) << LOG_DESC(
                 "[#resetConfig]Reset config error: can't find myself in "
-                "miner list, stop sealing");
+                "sealer list, stop sealing");
             m_cfgErr = true;
             m_accountType = NodeAccountType::ObserverAccount;
             return;
         }
 
-        m_accountType = NodeAccountType::MinerAccount;
-        auto nodeIdx = iter - m_minerList.begin();
+        m_accountType = NodeAccountType::SealerAccount;
+        auto nodeIdx = iter - m_sealerList.begin();
         if (nodeNum != m_nodeNum || nodeIdx != m_idx)
         {
             m_nodeNum = nodeNum;
@@ -189,32 +189,32 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
     /// check whether message is empty
     if (_message->buffer()->size() <= 0)
         return false;
-    /// check whether in the miner list
-    _peerIndex = getIndexByMiner(_session->nodeID());
+    /// check whether in the sealer list
+    _peerIndex = getIndexBySealer(_session->nodeID());
     if (_peerIndex < 0)
     {
         RAFTENGINE_LOG(WARNING) << LOG_DESC("[#isValidReq]Recv Raft msg from unknown peer")
                                 << LOG_KV("peerNodeId", _session->nodeID());
         return false;
     }
-    /// check whether this node is in the miner list
+    /// check whether this node is in the sealer list
     h512 nodeId;
-    bool isMiner = getNodeIdByIndex(nodeId, m_idx);
-    if (!isMiner || _session->nodeID() == nodeId)
+    bool isSealer = getNodeIdByIndex(nodeId, m_idx);
+    if (!isSealer || _session->nodeID() == nodeId)
     {
-        RAFTENGINE_LOG(WARNING) << LOG_DESC("[#isValidReq]I'm not a miner");
+        RAFTENGINE_LOG(WARNING) << LOG_DESC("[#isValidReq]I'm not a sealer");
         return false;
     }
     return true;
 }
 
-ssize_t RaftEngine::getIndexByMiner(dev::h512 const& _nodeId)
+ssize_t RaftEngine::getIndexBySealer(dev::h512 const& _nodeId)
 {
-    ReadGuard guard(m_minerListMutex);
+    ReadGuard guard(m_sealerListMutex);
     ssize_t index = -1;
-    for (size_t i = 0; i < m_minerList.size(); ++i)
+    for (size_t i = 0; i < m_sealerList.size(); ++i)
     {
-        if (m_minerList[i] == _nodeId)
+        if (m_sealerList[i] == _nodeId)
         {
             index = i;
             break;
@@ -225,7 +225,7 @@ ssize_t RaftEngine::getIndexByMiner(dev::h512 const& _nodeId)
 
 bool RaftEngine::getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const
 {
-    _nodeId = getMinerByIndex(_nodeIdx.convert_to<size_t>());
+    _nodeId = getSealerByIndex(_nodeIdx.convert_to<size_t>());
     if (_nodeId == h512())
     {
         RAFTENGINE_LOG(WARNING) << LOG_DESC("[#getNodeIdByIndex]Invalid node idx")
@@ -263,9 +263,9 @@ void RaftEngine::workLoop()
 {
     while (isWorking())
     {
-        if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
+        if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a miner");
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a sealer");
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             resetConfig();
             continue;
@@ -341,7 +341,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
             {
                 if (_resp.uncommitedBlockHash == h256())
                 {
-                    // I'm the only one in miner list, commit block without any ack
+                    // I'm the only one in sealer list, commit block without any ack
                     if (m_waitingForCommitting)
                     {
                         RAFTENGINE_LOG(DEBUG) << LOG_DESC(
@@ -392,7 +392,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
 
 bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartbeatLog)
 {
-    if (m_state != RaftRole::EN_STATE_LEADER || m_accountType != NodeAccountType::MinerAccount)
+    if (m_state != RaftRole::EN_STATE_LEADER || m_accountType != NodeAccountType::SealerAccount)
     {
         return false;
     }
@@ -546,7 +546,7 @@ void RaftEngine::runAsLeader()
 
 bool RaftEngine::runAsCandidateImp(VoteState& _voteState)
 {
-    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::MinerAccount)
+    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::SealerAccount)
     {
         return false;
     }
@@ -651,7 +651,7 @@ bool RaftEngine::runAsCandidateImp(VoteState& _voteState)
 
 void RaftEngine::runAsCandidate()
 {
-    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::MinerAccount)
+    if (m_state != RaftRole::EN_STATE_CANDIDATE || m_accountType != NodeAccountType::SealerAccount)
     {
         return;
     }
@@ -680,7 +680,7 @@ void RaftEngine::runAsCandidate()
 
 bool RaftEngine::runAsFollowerImp()
 {
-    if (m_state != RaftRole::EN_STATE_FOLLOWER || m_accountType != NodeAccountType::MinerAccount)
+    if (m_state != RaftRole::EN_STATE_FOLLOWER || m_accountType != NodeAccountType::SealerAccount)
     {
         return false;
     }
@@ -902,7 +902,7 @@ void RaftEngine::broadcastMsg(P2PMessage::Ptr _data)
     m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
-        if (getIndexByMiner(session.nodeID) < 0)
+        if (getIndexBySealer(session.nodeID) < 0)
         {
             continue;
         }
@@ -1216,7 +1216,7 @@ bool RaftEngine::sendResponse(
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     for (auto session : sessions)
     {
-        if (session.nodeID != _node || getIndexByMiner(session.nodeID) < 0)
+        if (session.nodeID != _node || getIndexBySealer(session.nodeID) < 0)
         {
             continue;
         }
@@ -1340,7 +1340,7 @@ bool RaftEngine::shouldSeal()
             return false;
         }
 
-        if (m_cfgErr || m_accountType != NodeAccountType::MinerAccount)
+        if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
             RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#shouldSeal]My state is not well")
                                   << LOG_KV("cfgError", m_cfgErr)
@@ -1467,28 +1467,28 @@ void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
 void RaftEngine::checkBlockValid(dev::eth::Block const& _block)
 {
     ConsensusEngineBase::checkBlockValid(_block);
-    checkMinerList(_block);
+    checkSealerList(_block);
 }
 
-void RaftEngine::checkMinerList(Block const& _block)
+void RaftEngine::checkSealerList(Block const& _block)
 {
-    ReadGuard guard(m_minerListMutex);
-    if (m_minerList != _block.blockHeader().sealerList())
+    ReadGuard guard(m_sealerListMutex);
+    if (m_sealerList != _block.blockHeader().sealerList())
     {
-        std::string miners;
-        for (auto miner : m_minerList)
-            miners += toHex(miner) + "/";
+        std::string sealers;
+        for (auto sealer : m_sealerList)
+            sealers += toHex(sealer) + "/";
 
-        std::string blockMiners;
-        for (auto miner : _block.blockHeader().sealerList())
+        std::string blockSealers;
+        for (auto sealer : _block.blockHeader().sealerList())
         {
-            blockMiners += toHex(miner) + "/";
+            blockSealers += toHex(sealer) + "/";
         }
 
-        RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkMinerList]Wrong miners")
-                              << LOG_KV("miners", miners) << LOG_KV("blockMiners", blockMiners);
+        RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkSealerList]Wrong sealers")
+                              << LOG_KV("sealers", sealers) << LOG_KV("blockSealers", blockSealers);
         BOOST_THROW_EXCEPTION(
-            BlockMinerListWrong() << errinfo_comment("Wrong miner list of block"));
+            BlockSealerListWrong() << errinfo_comment("Wrong sealer list of block"));
     }
 }
 

@@ -213,7 +213,7 @@ void ChannelRPCServer::onConnect(
 void ChannelRPCServer::onDisconnect(
     dev::channel::ChannelException, dev::channel::ChannelSession::Ptr session)
 {
-    CHANNEL_LOG(ERROR) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
+    CHANNEL_LOG(DEBUG) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
                        << session->port();
 
     {
@@ -284,8 +284,8 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "onClientRequest error" << LOG_KV("errorCode", e.errorCode())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+        CHANNEL_LOG(WARNING) << "onClientRequest" << LOG_KV("errorCode", e.errorCode())
+                             << LOG_KV("what", e.what());
 
         onDisconnect(dev::channel::ChannelException(), session);
     }

@@ -40,11 +40,11 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
-        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<RaftEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _keyPair, _minElectTime, _maxElectTime, _protocolId, _minerList);
+            _blockVerifier, _keyPair, _minElectTime, _maxElectTime, _protocolId, _sealerList);
         m_raftEngine = std::dynamic_pointer_cast<RaftEngine>(m_consensusEngine);
     }
     void start() override;

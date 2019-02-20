@@ -30,7 +30,7 @@ ip="127.0.0.1"
 rpc_port=
 rpc_command=
 function_name=
-support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount getMinerList"
+support_rpc="getBlockNumber getPbftView getConsensusStatus getSyncStatus getClientVersion getPeers getGroupPeers getGroupList getPendingTransactions getTotalTransactionCount getSealerList"
 function get_json_value()
 {
   local json=$1
