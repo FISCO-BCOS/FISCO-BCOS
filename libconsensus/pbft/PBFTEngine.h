@@ -404,6 +404,16 @@ protected:
         }
         return false;
     }
+
+    /// in case of con-current execution of block
+    inline bool isSyncingHigherBlock(PrepareReq const& req)
+    {
+        if(m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
