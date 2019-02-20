@@ -26,6 +26,7 @@
 #include <libblockverifier/Common.h>
 #include <libblockverifier/TxDAG.h>
 #include <libdevcore/Worker.h>
+#include <algorithm>
 #include <condition_variable>
 #include <memory>
 #include <string>
@@ -47,7 +48,10 @@ public:
     void wait()
     {
         std::unique_lock<std::mutex> ul(m_mutex);
-        m_cv.wait(ul, [this]() { return m_count == 0; });
+        while (m_count > 0)
+        {
+            m_cv.wait(ul);
+        }
     }
 
     void countDown()
@@ -56,7 +60,6 @@ public:
         --m_count;
         if (m_count == 0)
         {
-            ul.unlock();
             m_cv.notify_all();
         }
     }
@@ -82,22 +85,18 @@ public:
     void wait()
     {
         std::unique_lock<std::mutex> ul(m_mutex);
-        m_cv.wait(ul, [this]() { return m_ready == true; });
+        while (!m_ready)
+        {
+            m_cv.wait(ul);
+        }
+        m_ready = false;
     }
 
     void notify()
     {
-        {
-            std::unique_lock<std::mutex> ul(m_mutex);
-            m_ready = true;
-        }
-        m_cv.notify_all();
-    }
-
-    void reset()
-    {
         std::unique_lock<std::mutex> ul(m_mutex);
-        m_ready = false;
+        m_ready = true;
+        m_cv.notify_all();
     }
 
     bool isReady()
@@ -110,7 +109,7 @@ private:
     std::mutex m_mutex;
     std::condition_variable m_cv;
     bool m_ready;
-};
+};  // namespace blockverifier
 
 class ParaTxWorker : dev::Worker
 {
@@ -123,7 +122,9 @@ public:
         m_countDownLatch(nullptr)
     {}
     void setDAG(std::shared_ptr<TxDAGFace> _txDAG) { m_txDAG = _txDAG; }
+    std::shared_ptr<TxDAGFace> getDAG() { return m_txDAG; }
     void setCountDownLatch(std::shared_ptr<CountDownLatch> _latch) { m_countDownLatch = _latch; }
+    std::shared_ptr<CountDownLatch> getCountDownLatch() { return m_countDownLatch; }
     void start() { startWorking(); }
     void stop()
     {
@@ -147,11 +148,12 @@ class ParaTxExecutor
 public:
     ParaTxExecutor() {}
     // Initialize thread pool when fisco-bcos process started
-    void initialize(unsigned _threadNum = std::thread::hardware_concurrency() - 1);
+    void initialize(
+        unsigned _threadNum = std::max((unsigned)2, std::thread::hardware_concurrency() - 1));
     // Start to execute DAG, block the calller until the execution of DAG is finished
     void start(std::shared_ptr<TxDAGFace> _txDAG);
     // Count of the worker threads;
-    unsigned threadNum() { return m_workers.size(); }
+    unsigned threadNum() { return m_threadNum; }
     ~ParaTxExecutor()
     {
         for (auto& worker : m_workers)
@@ -166,8 +168,10 @@ public:
     }
 
 private:
+    unsigned m_threadNum;
     std::vector<ParaTxWorker> m_workers;
     std::vector<std::shared_ptr<WakeupNotifier>> m_notifiers;
+    std::mutex m_startMutex;
 };
 }  // namespace blockverifier
 }  // namespace dev

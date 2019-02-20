@@ -43,7 +43,7 @@ void ParaTxWorker::doWork()
 
     m_txDAG.reset();
     m_countDownLatch->countDown();
-    m_wakeupNotifier.reset();
+    m_countDownLatch.reset();
 }
 
 void ParaTxWorker::workLoop()
@@ -61,8 +61,9 @@ void ParaTxWorker::workLoop()
 
 void ParaTxExecutor::initialize(unsigned _threadNum)
 {
-    m_workers.reserve(_threadNum);
-    for (auto i = _threadNum; i > 0; --i)
+    m_threadNum = _threadNum;
+    m_workers.reserve(m_threadNum);
+    for (auto i = m_threadNum; i > 0; --i)
     {
         m_notifiers.push_back(make_shared<WakeupNotifier>());
         m_workers.push_back(
@@ -73,10 +74,18 @@ void ParaTxExecutor::initialize(unsigned _threadNum)
 
 void ParaTxExecutor::start(shared_ptr<TxDAGFace> _txDAG)
 {
-    auto countDownLatch = make_shared<CountDownLatch>(threadNum());
+    std::unique_lock<std::mutex> ul(m_startMutex);
+    auto countDownLatch = make_shared<CountDownLatch>(m_threadNum);
 
-    for (unsigned int i = 0; i < threadNum(); ++i)
+    for (unsigned int i = 0; i < m_threadNum; ++i)
     {
+        /*
+        auto tempDag = m_workers[i].getDAG();
+        assert(tempDag == nullptr);
+        auto tempCountDownLatch = m_workers[i].getCountDownLatch();
+        assert(tempCountDownLatch == nullptr);
+        */
+
         m_workers[i].setDAG(_txDAG);
         m_workers[i].setCountDownLatch(countDownLatch);
         m_notifiers[i]->notify();
@@ -86,6 +95,14 @@ void ParaTxExecutor::start(shared_ptr<TxDAGFace> _txDAG)
     {
         _txDAG->executeUnit();
     }
+
+    /*
+    for (unsigned int i = 0; i < m_threadNum; ++i)
+    {
+        auto tempCountDownLatch = m_workers[i].getCountDownLatch();
+        assert(tempCountDownLatch == nullptr || tempCountDownLatch == countDownLatch);
+    }
+    */
 
     countDownLatch->wait();
 }
