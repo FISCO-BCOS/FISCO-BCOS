@@ -620,6 +620,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
+    auto start_decode_time = utcTime();
     if (req.pBlock)
     {
         sealing.block = *req.pBlock;
@@ -629,6 +630,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     {
         sealing.block.decode(ref(req.block), CheckTransaction::None);
     }
+    auto decode_time_cost = utcTime() - start_decode_time;
+
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
@@ -655,15 +658,12 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(sealing.block);
     auto time_cost = utcTime() - start_exec_time;
-    PBFTENGINE_LOG(TRACE) << LOG_DESC("execBlock")
-                          << LOG_KV("blkNum", sealing.block.header().number())
-                          << LOG_KV("idx", req.idx)
-                          << LOG_KV("hash", sealing.block.header().hash().abridged())
-                          << LOG_KV("myIdx", nodeIdx())
-                          << LOG_KV("myNode", m_keyPair.pub().abridged())
-                          << LOG_KV("timecost", time_cost)
-                          << LOG_KV("execPerTx",
-                                 (float)time_cost / (float)sealing.block.getTransactionSize());
+    PBFTENGINE_LOG(DEBUG)
+        << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block.header().number())
+        << LOG_KV("idx", req.idx) << LOG_KV("hash", sealing.block.header().hash().abridged())
+        << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("timecost", time_cost) << LOG_KV("decodeTimecost", decode_time_cost)
+        << LOG_KV("execPerTx", (float)time_cost / (float)sealing.block.getTransactionSize());
 }
 
 /// check whether the block is empty
