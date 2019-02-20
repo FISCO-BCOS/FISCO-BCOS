@@ -781,18 +781,18 @@ generate_server_scripts()
     # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "$output_dir/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
-for directory in \`ls \${SHELL_FOLDER}/node*\`  
+for directory in \`ls \${SHELL_FOLDER}\`  
 do  
-    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
         echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
-for directory in \`ls \${SHELL_FOLDER}/node*\`  
+for directory in \`ls \${SHELL_FOLDER}\`  
 do  
-    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
         echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
