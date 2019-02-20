@@ -452,13 +452,15 @@ generate_config_ini()
 ;log configurations
 [log]
     ;the directory of the log
-    LOG_PATH=./log
+    log_path=./log
     ;log level INFO DEBUG TRACE
-    Level=${log_level}
-    MaxLogFileSize=209715200
+    level=${log_level}
+    max_log_file_size=209715200
+    ; control log auto_flush
+    flush=true
     ;easylog config
-    FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
-    LOG_FLUSH_THRESHOLD=100
+    format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
+    log_flush_threshold=100
 EOF
 }
 
