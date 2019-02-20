@@ -43,7 +43,7 @@ jobs:
           name: Install dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel
+            yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel openssl
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -58,6 +58,11 @@ jobs:
           command: |
             cd build
             ./bin/test-fisco-bcos -- --testpath=../test/data/ 
+      - run:
+          name: Run GM nodes
+          command: |
+            cd build
+            ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos -g && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [[ $(ps -ef| grep fisco-bcos |grep -v grep | wc -l) == 4 ]]
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
           paths:

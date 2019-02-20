@@ -22,7 +22,6 @@ log_level="INFO"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/FISCO-BCOS/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
 guomi_mode=
 gm_conf_path="gmconf/"
@@ -141,14 +140,14 @@ check_env() {
 check_and_install_tassl()
 {
     if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
-        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
+        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR} 2> /dev/null
 
         cd ${TASSL_PKG_DIR}
         local shell_list=$(find . -name '*.sh')
         chmod a+x ${shell_list}
         chmod a+x ./util/pod2mantest        
 
-        bash config --prefix=${TASSL_INSTALL_DIR} no-shared && make -j2 && make install
+        bash config --prefix=${TASSL_INSTALL_DIR} no-shared 2> /dev/null && make -j2 2> /dev/null && make install 2> /dev/null
 
         cd ${CUR_DIR}
         rm -rf ${TASSL_PKG_DIR}
@@ -690,13 +689,33 @@ generate_node_scripts()
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
-nohup \${fisco_bcos} -c config.ini&
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+else 
+    nohup \${fisco_bcos} -c config.ini&
+fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-kill \${weth_pid}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+try_times=2
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    kill \${node_pid}
+    sleep 1
+    node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+    if [ -z \${node_pid} ];then
+        echo " stop \${node} success. "
+        exit 0
+    fi
+    ((i=i+1))
+done
+
 EOF
 }
 
@@ -823,8 +842,13 @@ dir_must_not_exists $output_dir
 mkdir -p "$output_dir"
 
 if [ "${Download}" == "true" ];then
-    echo "Downloading fisco-bcos binary..." 
-    curl -Lo ${bin_path} ${Download_Link}
+    package_name="fisco-bcos.tar.gz"
+    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+    version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+    curl -LO ${Download_Link}
+    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
 fi
 
@@ -939,7 +963,6 @@ for line in ${ip_array[*]};do
             cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
             #move origin conf to gm conf
-            rm ${node_dir}/${conf_path}/agency.crt
             rm ${node_dir}/${conf_path}/node.nodeid
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi

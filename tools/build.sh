@@ -1,11 +1,11 @@
 # "Copyright [2018] <fisco-bcos>"
 # @ function : one-click install shell script(appliable for centos and ubuntu)
 # @ Require  : yum or apt, git are ready
-# @ attention: if dependecies are downloaded failed, 
-#              please fetch packages into "deps/src" from https://github.com/bcosorg/lib manually
+# @ attention: if download dependecies failed, 
+#              please fetch packages into "deps/src" from https://github.com/FISCO-BCOS/LargeFiles/tree/master/libs manually
 #              and execute this shell script later
 # @ author   : yujiechen  
-# @ file     : install.sh
+# @ file     : build.sh
 # @ date     : 2018
 
 #!/bin/bash
