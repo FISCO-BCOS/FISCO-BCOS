@@ -49,7 +49,7 @@ const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response jso
     "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range",
     "Call needs a 'from' field", "Only pbft consensus supports the view property",
     "Invalid System Config",
-    "Don't send requests to this group, the node doesn't belong to the group"};
+    "Don't send request to this node, the node doesn't belong to the group of this request"};
 
 }  // namespace rpc
 }  // namespace dev

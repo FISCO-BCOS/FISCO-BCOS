@@ -73,6 +73,8 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                                      << LOG_KV("configFile", iter->path().string()) << endl;
                         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
                     }
+                    LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
+                              << LOG_KV("groupID", groupID);
                 }
             }
         }
