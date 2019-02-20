@@ -36,6 +36,8 @@
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
+#include <libsync/SyncStatus.h>
+
 namespace dev
 {
 namespace consensus
@@ -399,6 +401,16 @@ protected:
     {
         if (req.height < m_consensusBlockNumber ||
             (req.height == m_consensusBlockNumber && req.view < m_view))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// in case of con-current execution of block
+    inline bool isSyncingHigherBlock(PrepareReq const& req) const
+    {
+        if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
         {
             return true;
         }
