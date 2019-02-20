@@ -27,11 +27,7 @@ guomi_mode=
 gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
 consensus_type="pbft"
-TASSL_INSTALL_DIR="${HOME}/TASSL"
-OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
-
-TASSL_DOWNLOAD_URL=" https://github.com/jntass"
-TASSL_PKG_DIR="TASSL"
+TASSL_CMD="${HOME}"/.tassl
 
 help() {
     echo $1
@@ -139,21 +135,13 @@ check_env() {
 # TASSL env
 check_and_install_tassl()
 {
-    if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
-        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR} 2> /dev/null
-
-        cd ${TASSL_PKG_DIR}
-        local shell_list=$(find . -name '*.sh')
-        chmod a+x ${shell_list}
-        chmod a+x ./util/pod2mantest        
-
-        bash config --prefix=${TASSL_INSTALL_DIR} no-shared 2> /dev/null && make -j2 2> /dev/null && make install 2> /dev/null
-
-        cd ${CUR_DIR}
-        rm -rf ${TASSL_PKG_DIR}
+    if [ ! -f "${HOME}/.tassl" ];then
+        curl -LO https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/tools/tassl.tar.gz
+        LOG_INFO "Downloading tassl binary ..."
+        tar zxvf tassl.tar.gz
+        chmod u+x tassl
+        mv tassl ${HOME}/.tassl
     fi
-
-    OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
 }
 
 getname() {
@@ -309,8 +297,8 @@ gen_chain_cert_gm() {
     mkdir -p $chaindir
 
     generate_gmsm2_param "gmsm2.param"
-	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     ls $chaindir
 
@@ -336,9 +324,9 @@ gen_agency_cert_gm() {
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
-    $OPENSSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+    $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
+    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
     cp $chain/gmca.crt $agencydir/ca-agency.crt
@@ -355,9 +343,9 @@ gen_node_cert_with_extensions_gm() {
     type="$4"
     extensions="$5"
 
-    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
-    $OPENSSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+    $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
+    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
 }
@@ -384,14 +372,14 @@ gen_node_cert_gm() {
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
     #nodeid is pubkey
-    $OPENSSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
+    $TASSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
 
     #serial
-    if [ "" != "$($OPENSSL_CMD version | grep 1.0.2)" ];
+    if [ "" != "$($TASSL_CMD version | grep 1.0.2)" ];
     then
-        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     else
-        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     fi
 
 
@@ -946,7 +934,7 @@ for line in ${ip_array[*]};do
 
                 #private key should not start with 00
                 cd $output_dir
-                privateKey=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+                privateKey=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
                 if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
@@ -968,7 +956,7 @@ for line in ${ip_array[*]};do
         fi
 
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
             nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         fi
