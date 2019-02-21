@@ -18,7 +18,7 @@ conf_path="conf"
 bin_path=
 make_tar=
 debug_log="false"
-log_level="INFO"
+log_level="info"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
@@ -85,7 +85,7 @@ while getopts "f:l:o:p:e:t:icszhgT" option;do
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     T) debug_log="true"
-    log_level=DEBUG
+    log_level="debug"
     ;;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
@@ -136,7 +136,7 @@ check_env() {
 check_and_install_tassl()
 {
     if [ ! -f "${HOME}/.tassl" ];then
-        curl -LO https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/tools/tassl.tar.gz
+        curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         LOG_INFO "Downloading tassl binary ..."
         tar zxvf tassl.tar.gz
         chmod u+x tassl
@@ -441,7 +441,7 @@ generate_config_ini()
 [log]
     ;the directory of the log
     log_path=./log
-    ;log level INFO DEBUG TRACE
+    ;info debug trace 
     level=${log_level}
     max_log_file_size=209715200
     ; control log auto_flush
