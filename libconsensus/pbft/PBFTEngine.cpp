@@ -626,7 +626,8 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
-    auto start_decode_time = utcTime();
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     if (req.pBlock)
     {
         sealing.block = *req.pBlock;
@@ -636,7 +637,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     {
         sealing.block.decode(ref(req.block), CheckTransaction::None);
     }
-    auto decode_time_cost = utcTime() - start_decode_time;
+    auto decode_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -646,30 +648,44 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
 
     checkBlockValid(sealing.block);
+    auto check_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
+    auto start_notify_time = utcTime();
     /// notify the next leader seal a new block
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
     if (req.idx != nodeIdx())
     {
         notifySealing(sealing.block);
     }
+    auto notify_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
 
     m_blockSync->noteSealingBlockNumber(sealing.block.header().number());
+    auto noteSealing_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     /// ignore the signature verification of the transactions have already been verified in
     /// transation pool
     /// the transactions that has not been verified by the txpool should be verified
     m_txPool->verifyAndSetSenderForBlock(sealing.block);
+    auto verifyAndSetSender_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
-    auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(sealing.block);
-    auto time_cost = utcTime() - start_exec_time;
+    auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(DEBUG)
         << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block.header().number())
         << LOG_KV("idx", req.idx) << LOG_KV("hash", sealing.block.header().hash().abridged())
         << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
-        << LOG_KV("timecost", time_cost) << LOG_KV("decodeTimecost", decode_time_cost)
-        << LOG_KV("execPerTx", (float)time_cost / (float)sealing.block.getTransactionSize());
+        << LOG_KV("decodeCost", decode_time_cost) << LOG_KV("checkCost", check_time_cost)
+        << LOG_KV("notifyCost", notify_time_cost)
+        << LOG_KV("noteSealingCost", noteSealing_time_cost)
+        << LOG_KV("verifyAndSetSenderCost", verifyAndSetSender_time_cost)
+        << LOG_KV("execCost", exec_time_cost)
+        << LOG_KV("execPerTx", (float)exec_time_cost / (float)sealing.block.getTransactionSize())
+        << LOG_KV("totalCost", utcTime() - start_time);
 }
 
 /// check whether the block is empty
