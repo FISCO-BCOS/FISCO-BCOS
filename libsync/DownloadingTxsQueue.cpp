@@ -51,6 +51,14 @@ void DownloadingTxsQueue::pop2TxPool(
         // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
         dev::eth::TxsParallelParser::decode(txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
 
+// parallel verify transaction before import
+#pragma omp parallel for
+        for (size_t j = 0; j < txs.size(); ++j)
+        {
+            if (!_txPool->txExists(txs[j].sha3()))
+                txs[j].sender();
+        }
+
         // import into tx pool
         size_t successCnt = 0;
         std::vector<dev::h256> knownTxHash;
