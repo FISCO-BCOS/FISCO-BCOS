@@ -95,7 +95,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }

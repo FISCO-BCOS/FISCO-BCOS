@@ -83,10 +83,10 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
         }
         catch (std::exception& e)
         {
-            LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+            LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                        << boost::diagnostic_information(e);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 /*
@@ -144,7 +144,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
             catch (std::exception& e)
             {
-                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }
