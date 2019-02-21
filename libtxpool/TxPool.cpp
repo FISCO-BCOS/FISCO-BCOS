@@ -23,6 +23,7 @@
  */
 #include "TxPool.h"
 #include <libethcore/Exceptions.h>
+#include <omp.h>
 using namespace std;
 using namespace dev::p2p;
 using namespace dev::eth;
@@ -137,11 +138,13 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
 void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
-    ReadGuard l(m_lock);
+#pragma omp parallel for
     for (size_t i = 0; i < trans_num; i++)
     {
         /// force sender for the transaction
+        ReadGuard l(m_lock);
         auto p_tx = m_txsHash.find(block.transactions()[i].sha3());
+        l.unlock();
         if (p_tx != m_txsHash.end())
         {
             block.setSenderForTransaction(i, p_tx->second->sender());
