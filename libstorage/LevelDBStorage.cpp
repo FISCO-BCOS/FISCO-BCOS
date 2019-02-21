@@ -23,7 +23,9 @@
 #include "Table.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
+#include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
+#include <omp.h>
 #include <memory>
 
 using namespace dev;
@@ -96,15 +98,19 @@ size_t LevelDBStorage::commit(
     {
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
         size_t total = 0;
-        for (auto& it : datas)
+        SharedMutex x_batch;
+
+#pragma omp parallel for
+        for (size_t i = 0; i < datas.size(); ++i)
         {
-            for (auto& dataIt : it->data)
+            TableData::Ptr tableData = datas[i];
+            for (auto& dataIt : tableData->data)
             {
                 if (dataIt.second->size() == 0u)
                 {
                     continue;
                 }
-                std::string entryKey = it->tableName + "_" + dataIt.first;
+                std::string entryKey = tableData->tableName + "_" + dataIt.first;
                 Json::Value entry;
 
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
@@ -122,19 +128,24 @@ size_t LevelDBStorage::commit(
                 std::stringstream ssOut;
                 ssOut << entry;
 
+                WriteGuard l(x_batch);
                 batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
-                ssOut.seekg(0, std::ios::end);
+                // ssOut.seekg(0, std::ios::end);
                 STORAGE_LEVELDB_LOG(TRACE)
-                    << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt.second->size())
-                    << LOG_KV("len", ssOut.tellg());
+                    << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt.second->size());
+                //<< LOG_KV("len", ssOut.tellg());
             }
         }
 
+        auto record_time = utcTime();
         leveldb::WriteOptions writeOptions;
         writeOptions.sync = false;
         // WriteGuard l(m_remoteDBMutex);
         auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
+        auto writeDB_time_cost = utcTime() - record_time;
+        STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
+                                   << LOG_KV("timeCost", writeDB_time_cost);
         // l.unlock();
         if (!s.ok())
         {
