@@ -31,6 +31,7 @@
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
+#include <omp.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -592,7 +593,7 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -621,7 +622,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 {
     string strblockhash = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -652,7 +653,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -680,7 +681,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -769,12 +770,13 @@ void BlockChainImp::writeTotalTransactionCount(
 
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb && tb_nonces)
     {
         const std::vector<Transaction>& txs = block.transactions();
         std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
+#pragma omp parallel for
         for (uint i = 0; i < txs.size(); i++)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
@@ -837,6 +839,8 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
 
 CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     int64_t num = number();
     if ((block.blockHeader().number() != num + 1))
     {
@@ -859,24 +863,70 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
     try
     {
+        auto before_write_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
+            auto write_record_time = utcTime();
+            // writeBlockInfo(block, context);
+            writeHash2Block(block, context);
+            auto writeHash2Block_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
 
-            writeBlockInfo(block, context);
+            writeNumber2Hash(block, context);
+            auto writeNumber2Hash_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
 
             writeNumber(block, context);
+            auto writeNumber_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             writeTotalTransactionCount(block, context);
+            auto writeTotalTransactionCount_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             writeTxToBlock(block, context);
+            auto writeTxToBlock_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             context->dbCommit(block);
+            auto dbCommit_time_cost = utcTime() - write_record_time;
+            BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
+                                  << LOG_DESC("Commit block time record(write)")
+                                  << LOG_KV("writeHash2BlockTimeCost", writeHash2Block_time_cost)
+                                  << LOG_KV("writeNumber2HashTimeCost", writeNumber2Hash_time_cost)
+                                  << LOG_KV("writeNumberTimeCost", writeNumber_time_cost)
+                                  << LOG_KV("writeTotalTransactionCountTimeCost",
+                                         writeTotalTransactionCount_time_cost)
+                                  << LOG_KV("writeTxToBlockTimeCost", writeTxToBlock_time_cost)
+                                  << LOG_KV("dbCommitTimeCost", dbCommit_time_cost);
         }
+        auto writeBlock_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         m_blockCache.add(block);
+        auto addBlockCache_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         {
             WriteGuard ll(m_blockNumberMutex);
             m_blockNumber = block.blockHeader().number();
         }
+        auto updateBlockNumber_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         m_onReady(m_blockNumber);
+        auto noteReady_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit block time record")
+                              << LOG_KV("beforeTimeCost", before_write_time_cost)
+                              << LOG_KV("writeBlockTimeCost", writeBlock_time_cost)
+                              << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
+                              << LOG_KV("updateBlockNumberTimeCost", updateBlockNumber_time_cost)
+                              << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+
         return CommitResult::OK;
     }
     catch (OpenSysTableFailed&)
