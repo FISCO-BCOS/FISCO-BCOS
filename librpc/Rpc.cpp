@@ -469,6 +469,12 @@ Json::Value Rpc::getBlockByHash(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)
@@ -528,6 +534,12 @@ Json::Value Rpc::getBlockByNumber(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)
