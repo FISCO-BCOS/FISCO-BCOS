@@ -33,7 +33,8 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
+MemoryTableFactory::MemoryTableFactory()
+  : m_blockHash(h256(0)), m_blockNum(0), m_dbWorkerNotifier(), m_dbWorker(m_dbWorkerNotifier)
 {
     m_sysTables.push_back(SYS_MINERS);
     m_sysTables.push_back(SYS_TABLES);
@@ -219,11 +220,11 @@ void MemoryTableFactory::rollback(size_t _savepoint)
 
 void MemoryTableFactory::commit() {}
 
-void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+void DBWorker::doWork()
 {
     vector<dev::storage::TableData::Ptr> datas;
 
-    for (auto& dbIt : m_name2Table)
+    for (auto& dbIt : *m_name2Table)
     {
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
@@ -241,10 +242,18 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     if (!datas.empty())
     {
         /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
-        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
+        m_stateStorage->commit(m_blockHash, m_blockNumber, datas, m_blockHash);
     }
+}
 
-    m_name2Table.clear();
+void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+{
+    auto tempName2Table = std::make_shared<std::unordered_map<std::string, Table::Ptr>>();
+    tempName2Table->swap(m_name2Table);
+
+    m_dbWorker.setWorkParams(tempName2Table, stateStorage(), _blockHash, _blockNumber);
+    m_dbWorkerNotifier.notify();
+
     m_changeLog.clear();
 }
 

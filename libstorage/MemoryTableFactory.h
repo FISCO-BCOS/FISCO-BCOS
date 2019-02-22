@@ -25,6 +25,8 @@
 #include "Storage.h"
 #include "Table.h"
 #include "TablePrecompiled.h"
+#include <libdevcore/ThreadSync.h>
+#include <libdevcore/Worker.h>
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
@@ -38,6 +40,58 @@ class ExecutiveContext;
 }
 namespace storage
 {
+class DBWorker : dev::Worker
+{
+public:
+    DBWorker(dev::Notifier& _wakeupNotifier)
+      : dev::Worker("DBWorker", 30), m_wakeupNotifier(_wakeupNotifier)
+    {
+        startWorking();
+    }
+
+    ~DBWorker() { stop(); }
+
+    void stop()
+    {
+        workerState() = WorkerState::Stopping;
+        m_wakeupNotifier.notify();
+        terminate();
+    }
+
+    void setWorkParams(std::shared_ptr<std::unordered_map<std::string, Table::Ptr>> _name2Table,
+        Storage::Ptr stateStorage, h256 const& _blockHash, int64_t _blockNumber)
+    {
+        m_name2Table = _name2Table;
+        m_stateStorage = stateStorage;
+        m_blockHash = _blockHash;
+        m_blockNumber = _blockNumber;
+    }
+
+
+protected:
+    void workLoop() override
+    {
+        while (workerState() == WorkerState::Started)
+        {
+            m_wakeupNotifier.wait();
+            if (workerState() != WorkerState::Started)
+            {
+                break;
+            }
+            doWork();
+        }
+    }
+
+    void doWork() override;
+
+private:
+    dev::Notifier& m_wakeupNotifier;
+    std::shared_ptr<std::unordered_map<std::string, Table::Ptr>> m_name2Table;
+    Storage::Ptr m_stateStorage;
+    h256 m_blockHash;
+    int64_t m_blockNumber;
+};
+
 class MemoryTableFactory
 {
 public:
@@ -73,6 +127,9 @@ private:
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;
+
+    dev::Notifier m_dbWorkerNotifier;
+    DBWorker m_dbWorker;
 };
 
 }  // namespace storage
