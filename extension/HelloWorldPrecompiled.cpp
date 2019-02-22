@@ -20,10 +20,10 @@
  */
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include "HelloWorldPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libprecompiled/HelloWorldPrecompiled.h>
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
