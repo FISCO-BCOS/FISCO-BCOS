@@ -37,10 +37,10 @@ class Block
 public:
     ///-----constructors of Block
     Block() = default;
-    explicit Block(
-        bytesConstRef _data, CheckTransaction const option = CheckTransaction::Everything);
-    explicit Block(
-        bytes const& _data, CheckTransaction const option = CheckTransaction::Everything);
+    explicit Block(bytesConstRef _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true);
+    explicit Block(bytes const& _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -67,13 +67,21 @@ public:
     void encode(bytes& _out) const;
 
     ///-----decode functions
-    void decode(bytesConstRef _block, CheckTransaction const option = CheckTransaction::Everything);
+    void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
+        bool _withReceipt = true);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
     {
         bytes out;
         encode(out);
+        return out;
+    }
+
+    std::shared_ptr<bytes> rlpP() const
+    {
+        std::shared_ptr<bytes> out = std::make_shared<bytes>();
+        encode(*out);
         return out;
     }
 
