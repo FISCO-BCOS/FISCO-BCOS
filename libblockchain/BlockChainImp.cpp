@@ -837,27 +837,19 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
 
 CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
+    uint64_t num = number();
+    if ((block.blockHeader().number() != num + 1))
     {
-        WriteGuard l(x_commitBlockNumber);
-        if ((block.blockHeader().number() != m_commitBlockNumber + 1))
-        {
-            BLOCKCHAIN_LOG(WARNING)
-                << LOG_DESC("[#commitBlock]Commit fail due to incorrect block number")
-                << LOG_KV("needNumber", m_commitBlockNumber + 1)
-                << LOG_KV("committedNumber", block.blockHeader().number());
-            return CommitResult::ERROR_NUMBER;
-        }
-        m_commitBlockNumber = block.blockHeader().number();
+        BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
+                                       "[#commitBlock]Commit fail due to incorrect block number")
+                                << LOG_KV("needNumber", num + 1)
+                                << LOG_KV("committedNumber", block.blockHeader().number());
+        return CommitResult::ERROR_NUMBER;
     }
 
     h256 parentHash = numberHash(number());
     if (block.blockHeader().parentHash() != numberHash(number()))
     {
-        /// commit failed case
-        {
-            WriteGuard l(x_commitBlockNumber);
-            m_commitBlockNumber = block.blockHeader().number() - 1;
-        }
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect parent hash")
                                 << LOG_KV("needParentHash", parentHash)
@@ -889,11 +881,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     }
     catch (OpenSysTableFailed&)
     {
-        /// commit failed case
-        {
-            WriteGuard l(x_commitBlockNumber);
-            m_commitBlockNumber = block.blockHeader().number() - 1;
-        }
         BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
             "[#commitBlock]System meets error when try to write block to storage");
         throw;

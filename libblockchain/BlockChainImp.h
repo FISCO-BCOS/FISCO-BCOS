@@ -146,11 +146,6 @@ private:
     /// cache the block number
     mutable SharedMutex m_blockNumberMutex;
     int64_t m_blockNumber = -1;
-
-
-    /// cache the block number to in case of repeated commit
-    mutable SharedMutex x_commitBlockNumber;
-    int64_t m_commitBlockNumber;
 };
 }  // namespace blockchain
 }  // namespace dev
