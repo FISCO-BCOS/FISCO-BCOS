@@ -850,7 +850,7 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 
 CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    if (!isBlockShouldCommit())
+    if (!isBlockShouldCommit(block.blockHeader().number()))
     {
         return CommitResult::ERROR_NUMBER;
     }
@@ -869,7 +869,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     {
         {
             std::lock_guard<std::mutex> l(commitMutex);
-            if (!isBlockShouldCommit())
+            if (!isBlockShouldCommit(block.blockHeader().number()))
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }

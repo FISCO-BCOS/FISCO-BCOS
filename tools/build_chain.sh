@@ -1002,7 +1002,6 @@ cd ..
 ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
-generate_script_template "$output_dir/replace_all.sh"
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -1029,7 +1028,6 @@ for line in ${ip_array[*]};do
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 
