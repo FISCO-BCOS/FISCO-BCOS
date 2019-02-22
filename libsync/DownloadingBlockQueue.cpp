@@ -155,7 +155,8 @@ void DownloadingBlockQueue::flushBufferToQueue()
         {
             try
             {
-                shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
+                shared_ptr<Block> block =
+                    make_shared<Block>(rlps[i].toBytes(), CheckTransaction::Everything, false);
                 if (isNewerBlock(block))
                 {
                     successCnt++;
