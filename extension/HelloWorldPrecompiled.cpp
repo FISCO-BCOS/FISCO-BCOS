@@ -40,7 +40,7 @@ contract HelloWorld {
 */
 
 // HelloWorldPrecompiled table name
-const std::string HELLO_WORLD_TABLE_NAME = " __test_hello_world__";
+const std::string HELLO_WORLD_TABLE_NAME = "_ext_hello_world_";
 // key field
 const std::string HELLOWORLD_KEY_FIELD_NAME = "hello_key";
 // value field
