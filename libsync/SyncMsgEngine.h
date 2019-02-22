@@ -107,6 +107,7 @@ public:
     ~DownloadBlocksContainer() { clearBatchAndSend(); }
 
     void batchAndSend(BlockPtr _block);
+    void batchAndSend(std::shared_ptr<bytes> _blockRLP);
 
 private:
     void clearBatchAndSend();

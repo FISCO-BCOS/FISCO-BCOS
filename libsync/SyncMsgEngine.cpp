@@ -225,7 +225,15 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 void DownloadBlocksContainer::batchAndSend(BlockPtr _block)
 {
     // TODO: thread safe
-    bytes blockRLP = _block->rlp();
+    std::shared_ptr<bytes> blockRLP = _block->rlpP();
+
+    batchAndSend(blockRLP);
+}
+
+void DownloadBlocksContainer::batchAndSend(std::shared_ptr<dev::bytes> _blockRLP)
+{
+    // TODO: thread safe
+    bytes& blockRLP = *_blockRLP;
 
     if (blockRLP.size() > c_maxPayload)
     {
