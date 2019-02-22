@@ -119,6 +119,8 @@ private:
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
 
+    bool isBlockShouldCommit(int64_t const& _blockNumber);
+
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
     const std::string c_genesisHash =
@@ -146,11 +148,6 @@ private:
     /// cache the block number
     mutable SharedMutex m_blockNumberMutex;
     int64_t m_blockNumber = -1;
-
-
-    /// cache the block number to in case of repeated commit
-    mutable SharedMutex x_commitBlockNumber;
-    int64_t m_commitBlockNumber;
 };
 }  // namespace blockchain
 }  // namespace dev
