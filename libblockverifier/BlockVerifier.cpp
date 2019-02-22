@@ -58,9 +58,6 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
 
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
-    block.header().setStateRoot(dev::h256());
-    block.header().setReceiptsRoot(dev::h256());
-    block.header().setDBhash(dev::h256());
     for (Transaction const& tr : block.transactions())
     {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash,
