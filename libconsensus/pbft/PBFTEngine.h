@@ -30,6 +30,7 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libsync/SyncStatus.h>
 #include <sstream>
 
 #include <libp2p/P2PMessage.h>
@@ -346,6 +347,15 @@ protected:
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
+        /// TODO: add this logic when block sync is faster
+        /*if (isSyncingHigherBlock(req))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Syncing higher block")
+                                  << LOG_KV("consHeight", req.height)
+                                  << LOG_KV(
+                                         "syningHeight", m_blockSync->status().knownHighestNumber)
+                                  << LOG_KV("INFO", oss.str());
+        }*/
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
@@ -404,6 +414,17 @@ protected:
         }
         return false;
     }
+
+    /// TODO: add this logic when block sync is faster
+    /*template <class T>
+    inline bool isSyncingHigherBlock(T const& req) const
+    {
+        if (m_blockSync->isSyncing() && m_blockSync->status().knownHighestNumber >= req.height)
+        {
+            return true;
+        }
+        return false;
+    }*/
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
