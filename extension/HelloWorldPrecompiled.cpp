@@ -39,6 +39,7 @@ contract HelloWorld {
 }
 */
 
+
 // HelloWorldPrecompiled table name
 const std::string HELLO_WORLD_TABLE_NAME = "_ext_hello_world_";
 // key field
