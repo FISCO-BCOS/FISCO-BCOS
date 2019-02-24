@@ -134,7 +134,7 @@ public:
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
-    const std::string consensusStatus() const override;
+    const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
@@ -164,7 +164,7 @@ protected:
     }
     bool needOmit(Sealing const& sealing);
 
-    const void getAllNodesViewStatus(json_spirit::Array& status) const;
+    void getAllNodesViewStatus(json_spirit::Array& status);
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
@@ -409,6 +409,7 @@ protected:
         }
         return false;
     }
+
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
@@ -492,7 +493,14 @@ protected:
     void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
     {
         WriteGuard l(x_viewMap);
-        m_viewMap[idx] = view;
+        if (idx != nodeIdx())
+        {
+            m_viewMap[idx] = view;
+        }
+        else
+        {
+            m_viewMap[idx] = m_view;
+        }
     }
 
 protected:

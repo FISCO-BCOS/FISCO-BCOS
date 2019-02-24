@@ -1410,7 +1410,7 @@ void PBFTEngine::handleFutureBlock()
 }
 
 /// get the status of PBFT consensus
-const std::string PBFTEngine::consensusStatus() const
+const std::string PBFTEngine::consensusStatus()
 {
     json_spirit::Array status;
     json_spirit::Object statusObj;
@@ -1434,8 +1434,9 @@ const std::string PBFTEngine::consensusStatus() const
     return status_str;
 }
 
-const void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status) const
+void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
 {
+    updateViewMap(nodeIdx(), m_view);
     json_spirit::Array view_array;
     ReadGuard l(x_viewMap);
     for (auto it : m_viewMap)

@@ -89,7 +89,7 @@ public:
         resetConfig();
     }
 
-    const std::string consensusStatus() const override
+    const std::string consensusStatus() override
     {
         json_spirit::Object status_obj;
         getBasicConsensusStatus(status_obj);
