@@ -28,6 +28,8 @@ gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
+auto_flush="true"
+
 
 help() {
     echo $1
@@ -45,6 +47,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
+    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -67,7 +70,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgT" option;do
+while getopts "f:l:o:p:e:t:icszhgTd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -87,6 +90,7 @@ while getopts "f:l:o:p:e:t:icszhgT" option;do
     T) debug_log="true"
     log_level="debug"
     ;;
+    d) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     h) help;;
@@ -445,7 +449,7 @@ generate_config_ini()
     level=${log_level}
     max_log_file_size=209715200
     ; control log auto_flush
-    flush=true
+    flush=${auto_flush}
     ;easylog config
     format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     log_flush_threshold=100
