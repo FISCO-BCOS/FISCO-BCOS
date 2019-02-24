@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "ExecutiveContextFactory.h"
+#include <extension/HelloWorldPrecompiled.h>
 #include <libdevcore/Common.h>
 #include <libprecompiled/AuthorityPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
@@ -57,6 +58,8 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
+    context->setAddress2Precompiled(
+        Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
     context->setMemoryTableFactory(memoryTableFactory);
 
     context->setBlockInfo(blockInfo);
