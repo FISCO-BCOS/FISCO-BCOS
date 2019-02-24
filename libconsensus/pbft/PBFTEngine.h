@@ -156,7 +156,7 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
+    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
@@ -164,9 +164,12 @@ protected:
     }
     bool needOmit(Sealing const& sealing);
 
+    const void getAllNodesViewStatus(json_spirit::Array& status) const;
+
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        std::unordered_set<dev::network::NodeID> const& filter =
+            std::unordered_set<dev::network::NodeID>(),
         unsigned const& ttl = 0);
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -213,7 +216,7 @@ protected:
 
     bool checkSign(PBFTMsg const& req) const;
     inline bool broadcastFilter(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -228,7 +231,7 @@ protected:
      * common
      */
     inline void broadcastMark(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -240,7 +243,7 @@ protected:
     /// @param nodeId: the node id of the sealer
     /// @return : 1. >0: the index of the sealer
     ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    inline ssize_t getIndexBySealer(dev::h512 const& nodeId)
+    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
         ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
@@ -258,11 +261,12 @@ protected:
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getSealerByIndex(size_t const& index) const
+    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
+        ReadGuard l(m_sealerListMutex);
         if (index < m_sealerList.size())
             return m_sealerList[index];
-        return h512();
+        return dev::network::NodeID();
     }
 
     /// trans data into message
@@ -319,7 +323,7 @@ protected:
             return false;
         }
         /// check whether this node is in the sealer list
-        h512 node_id;
+        dev::network::NodeID node_id;
         bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
         if (!is_sealer || session->nodeID() == node_id)
             return false;
@@ -347,15 +351,6 @@ protected:
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
-        /// TODO: add this logic when block sync is faster
-        /*if (isSyncingHigherBlock(req))
-        {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Syncing higher block")
-                                  << LOG_KV("consHeight", req.height)
-                                  << LOG_KV(
-                                         "syningHeight", m_blockSync->status().knownHighestNumber)
-                                  << LOG_KV("INFO", oss.str());
-        }*/
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
@@ -414,17 +409,6 @@ protected:
         }
         return false;
     }
-
-    /// TODO: add this logic when block sync is faster
-    /*template <class T>
-    inline bool isSyncingHigherBlock(T const& req) const
-    {
-        if (m_blockSync->isSyncing() && m_blockSync->status().knownHighestNumber >= req.height)
-        {
-            return true;
-        }
-        return false;
-    }*/
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
@@ -505,6 +489,12 @@ protected:
         return boost::filesystem::space(path).available > 1024;
     }
 
+    void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
+    {
+        WriteGuard l(x_viewMap);
+        m_viewMap[idx] = view;
+    }
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
@@ -537,6 +527,10 @@ protected:
     bool m_emptyBlockViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
+
+    /// map between nodeIdx to view
+    mutable SharedMutex x_viewMap;
+    std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 };
 }  // namespace consensus
 }  // namespace dev
