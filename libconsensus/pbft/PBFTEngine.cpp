@@ -1423,6 +1423,8 @@ const std::string PBFTEngine::consensusStatus()
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
+    status.push_back(statusObj);
+
     /// get view of node id
     getAllNodesViewStatus(status);
 
@@ -1444,8 +1446,7 @@ void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
         dev::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != dev::network::NodeID())
         {
-            view_obj.push_back(json_spirit::Pair("nodeId", "0x" + dev::toHex(node_id)));
-            view_obj.push_back(json_spirit::Pair("view", it.second));
+            view_obj.push_back(json_spirit::Pair("0x" + dev::toHex(node_id), it.second));
             view_array.push_back(view_obj);
         }
     }
