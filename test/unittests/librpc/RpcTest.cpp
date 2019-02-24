@@ -78,7 +78,6 @@ BOOST_AUTO_TEST_CASE(GM_testConsensusPart)
     BOOST_CHECK_THROW(rpc->getPbftView(invalidGroup), JsonRpcException);
 
     Json::Value status = rpc->getConsensusStatus(groupId);
-    BOOST_CHECK(status.size() == 7);
     BOOST_CHECK_THROW(rpc->getConsensusStatus(invalidGroup), JsonRpcException);
 }
 
@@ -392,7 +391,6 @@ BOOST_AUTO_TEST_CASE(testConsensusPart)
     BOOST_CHECK_THROW(rpc->getPbftView(invalidGroup), JsonRpcException);
 
     Json::Value status = rpc->getConsensusStatus(groupId);
-    BOOST_CHECK(status.size() == 7);
     BOOST_CHECK_THROW(rpc->getConsensusStatus(invalidGroup), JsonRpcException);
 
     Json::Value sealerList = rpc->getSealerList(groupId);
