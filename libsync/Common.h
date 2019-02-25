@@ -28,7 +28,7 @@
  */
 #pragma once
 #include <libnetwork/Common.h>
-#include <libp2p/P2PMessage.h>
+#include <libp2p/Common.h>
 
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
@@ -42,9 +42,6 @@ namespace dev
 namespace sync
 {
 DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
-
-static unsigned const c_maxSendTransactions = 128;
-
 // Every c_downloadingRequestTimeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
@@ -60,7 +57,6 @@ static size_t const c_maxReceivedDownloadRequestPerPeer = 8;
 static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
 
 static unsigned const c_syncPacketIDBase = 1;
-static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 
 static uint64_t const c_maintainBlocksTimeout = 5000;  // ms
 
@@ -72,7 +68,7 @@ using BlockPtrVec = std::vector<BlockPtr>;
 
 #define SYNC_LOG(_OBV)                                     \
     LOG(_OBV) << "[g:" << std::to_string(m_groupId) << "]" \
-              << "[p:" << std::dec << m_protocolId << "][SYNC]"
+              << "[p:" << std::dec << m_protocolId << "][SYNC][id:" << m_nodeId.abridged() << "]"
 
 enum SyncPacketType : byte
 {

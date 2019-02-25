@@ -167,19 +167,15 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     /// test success
     message.kind = EVMC_CREATE;
     evmc_result create_result;
-    std::cout << "#### begin test create success" << std::endl;
     fake_ext_vm.setMyAddress(fromEvmC(message.sender));
     fake_ext_vm.fn_table->call(&create_result, &fake_ext_vm, &message);
     BOOST_CHECK(create_result.status_code == EVMC_SUCCESS);
     BOOST_CHECK(create_result.output_data == nullptr);
     BOOST_CHECK(create_result.output_size == 0);
     /// test failed
-    std::cout << "#### begin test create failed" << std::endl;
     fake_ext_vm.fn_table->call(&create_result, &fake_ext_vm, &message);
     BOOST_CHECK(create_result.status_code == EVMC_FAILURE);
     std::string create_str = "fake create";
-    std::cout << "fake create:" << create_result.output_data << std::endl;
-    std::cout << "fake create size:" << create_result.output_size << std::endl;
     BOOST_CHECK(strncmp((const char*)create_result.output_data, create_str.c_str(),
                     create_result.output_size) == 0);
     data = evmc_get_optional_storage(&create_result);
@@ -256,7 +252,7 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     BOOST_CHECK(fromEvmC(result.tx_gas_price) == fake_ext_vm.gasPrice());
     BOOST_CHECK(fromEvmC(result.tx_origin) == fake_ext_vm.origin());
     BOOST_CHECK(result.block_number == fake_ext_vm.envInfo().number());
-    BOOST_CHECK(result.block_timestamp == fake_ext_vm.envInfo().timestamp());
+    BOOST_CHECK((uint64_t)result.block_timestamp == fake_ext_vm.envInfo().timestamp());
     BOOST_CHECK(result.block_gas_limit == static_cast<int64_t>(fake_ext_vm.envInfo().gasLimit()));
     ///========== test getBlockHash =====================
     evmc_uint256be block_hash;

@@ -21,10 +21,10 @@
  */
 
 #include "EncryptedFile.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Base64.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
-
 
 using namespace std;
 using namespace dev;

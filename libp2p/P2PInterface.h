@@ -42,6 +42,8 @@ class P2PInterface
 public:
     virtual ~P2PInterface(){};
 
+    virtual NodeID id() const = 0;
+
     virtual std::shared_ptr<P2PMessage> sendMessageByNodeID(
         NodeID nodeID, std::shared_ptr<P2PMessage> message) = 0;
 
@@ -70,11 +72,11 @@ public:
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
     virtual P2PSessionInfos sessionInfos() = 0;
-    virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) = 0;
+    virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const = 0;
 
-    virtual bool isConnected(NodeID _nodeID) = 0;
+    virtual bool isConnected(NodeID const& _nodeID) const = 0;
 
-    virtual std::shared_ptr<std::vector<std::string>> topics() = 0;
+    virtual std::vector<std::string> topics() = 0;
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;

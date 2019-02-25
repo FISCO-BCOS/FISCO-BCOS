@@ -36,7 +36,7 @@ class TxPoolInterface
 public:
     TxPoolInterface() = default;
     virtual ~TxPoolInterface(){};
-    void setMaxBlockLimit(unsigned const& limit) {}
+    void setMaxBlockLimit(unsigned const&) {}
     /**
      * @brief Remove transaction from the queue
      * @param _txHash: transaction hash
@@ -55,8 +55,10 @@ public:
     virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
     virtual dev::eth::Transactions topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
-    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const& _limit,
-        std::function<bool(dev::eth::Transaction const&)> const& _condition = nullptr)
+
+    /// param 1: the transaction limit
+    /// param 2: the node id
+    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const&, dev::h512 const&)
     {
         return dev::eth::Transactions();
     };
@@ -91,7 +93,13 @@ public:
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
     /// Set transaction is known by a node
-    virtual void transactionIsKnownBy(h256 const&, h512 const&){};
+    /// param1: tx hash
+    /// param2: node id
+    virtual void setTransactionIsKnownBy(h256 const&, h512 const&){};
+
+    /// param1: the vector of txhashes
+    /// param2: the node id
+    virtual void setTransactionsAreKnownBy(std::vector<dev::h256> const&, h512 const&){};
 
     /// Is the transaction is known by the node ?
     virtual bool isTransactionKnownBy(h256 const&, h512 const&) { return false; };
@@ -105,6 +113,11 @@ public:
     {
         return m_onReady.add(_t);
     }
+    virtual SharedMutex& xtransactionKnownBy() = 0;
+
+    /// param: the block that should be verified and set sender according to transactions of local
+    /// transaction pool
+    virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

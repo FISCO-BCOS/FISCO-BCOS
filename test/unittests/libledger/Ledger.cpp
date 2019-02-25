@@ -49,7 +49,6 @@ public:
     /// init the ledger(called by initializer)
     bool initLedger() override
     {
-        std::cout << "##### callbaci initLedger for FakeLedgerForTest" << std::endl;
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain
@@ -75,10 +74,10 @@ void checkParam(std::shared_ptr<LedgerParam> param)
     BOOST_CHECK(param->mutableConsensusParam().consensusType == "raft");
     /// BOOST_CHECK(param->mutableConsensusParam().intervalBlockTime == 2000);
     BOOST_CHECK(param->mutableConsensusParam().maxTransactions == 2000);
-    BOOST_CHECK(toHex(param->mutableConsensusParam().minerList[0]) ==
+    BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[0]) ==
                 "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe63"
                 "7191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61");
-    BOOST_CHECK(toHex(param->mutableConsensusParam().minerList[1]) ==
+    BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[1]) ==
                 "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3"
                 "da6fc491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1");
     /// check tx params

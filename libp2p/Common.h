@@ -25,8 +25,8 @@ typedef dev::network::NodeIPEndpoint NodeIPEndpoint;
 
 using NodeIDs = std::vector<NodeID>;
 
-#define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[LIBP2P][P2PMSG] "
-#define SERVICE_LOG(LEVEL) LOG(LEVEL) << "[LIBP2P][SERVICE] "
+#define P2PMSG_LOG(LEVEL) LOG(LEVEL) << "[P2P][P2PMessage] "
+#define SERVICE_LOG(LEVEL) LOG(LEVEL) << "[P2P][Service] "
 
 struct P2PSessionInfo
 {

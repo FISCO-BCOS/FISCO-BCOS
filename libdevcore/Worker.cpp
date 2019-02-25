@@ -18,9 +18,8 @@
  * @author Gav Wood <i@gavwood.com>
  * @date 2014
  */
-
 #include "Worker.h"
-
+#include "Common.h"
 #include "easylog.h"
 #include <pthread.h>
 #include <chrono>
@@ -32,6 +31,8 @@ void dev::setThreadName(std::string const& _n)
 {
 #if defined(__GLIBC__)
     pthread_setname_np(pthread_self(), _n.c_str());
+#elif defined(__APPLE__)
+    pthread_setname_np(_n.c_str());
 #endif
 }
 
@@ -69,8 +70,8 @@ void Worker::startWorking()
                 }
                 catch (std::exception const& e)
                 {
-                    LOG(WARNING) << "Exception thrown in Worker thread: "
-                                 << boost::diagnostic_information(e);
+                    LOG(ERROR) << "Exception thrown in Worker thread: "
+                               << boost::diagnostic_information(e);
                 }
 
                 {
@@ -109,7 +110,9 @@ void Worker::stopWorking()
 
         DEV_TIMED_ABOVE("Stop worker", 100)
         while (m_state != WorkerState::Stopped)
-            m_state_notifier.wait(l);  // but yes who can wake this up, when the mutex is taken.
+        {
+            m_state_notifier.wait(l);
+        }
     }
 }
 

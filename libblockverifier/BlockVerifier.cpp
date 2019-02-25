@@ -72,6 +72,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     }
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
+    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
@@ -127,7 +128,9 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
         e.go(onOp);
     e.finalize();
 
-    return make_pair(res,
-        TransactionReceipt(executiveContext->getState()->rootHash(), startGasUsed + e.gasUsed(),
-            e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
+    /// mptstate calculates every transactions
+    /// storagestate ignore hash calculation
+    return make_pair(res, TransactionReceipt(executiveContext->getState()->rootHash(false),
+                              startGasUsed + e.gasUsed(), e.logs(), e.status(),
+                              e.takeOutput().takeBytes(), e.newAddress()));
 }

@@ -49,16 +49,13 @@ using namespace dev::precompiled;
 
 using boost::lexical_cast;
 
-std::shared_ptr<Block> BlockCache::add(Block& _block)
+std::shared_ptr<Block> BlockCache::add(Block const& _block)
 {
-    LOG(DEBUG) << LOG_DESC("[#add]Add block to block cache")
-               << LOG_KV("blockHash", _block.header().hash());
     {
         WriteGuard guard(m_sharedMutex);
         if (m_blockCache.size() > c_blockCacheSize)
         {
-            LOG(DEBUG) << LOG_DESC("[#add]Block cache full, start to remove old item...");
-
+            BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[add]Block cache full, start to remove old item...");
             auto firstHash = m_blockCacheFIFO.front();
             m_blockCacheFIFO.pop_front();
             m_blockCache.erase(firstHash);
@@ -71,9 +68,9 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
             }
         }
 
-        auto blockHash = _block.header().hash();
-        auto block = std::make_shared<Block>(_block);
-        m_blockCache.insert(std::make_pair(blockHash, std::make_pair(block, blockHash)));
+        auto blockHash = _block.blockHeader().hash();
+        auto block = std::make_shared<Block>(std::move(_block));
+        m_blockCache.insert(std::make_pair(blockHash, block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
 
@@ -83,7 +80,8 @@ std::shared_ptr<Block> BlockCache::add(Block& _block)
 
 std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
 {
-    LOG(DEBUG) << LOG_DESC("[#get]Read block from block cache") << LOG_KV("blockHash", _hash);
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[get]Read block from block cache")
+                          << LOG_KV("blockHash", _hash.abridged());
     {
         ReadGuard guard(m_sharedMutex);
 
@@ -93,7 +91,7 @@ std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
             return std::make_pair(nullptr, h256(0));
         }
 
-        return it->second;
+        return std::make_pair(it->second, _hash);
     }
 
     return std::make_pair(nullptr, h256(0));  // just make compiler happy
@@ -119,6 +117,11 @@ shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
 
 std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
 {
+    /// the future block
+    if (_i > number())
+    {
+        return nullptr;
+    }
     string blockHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
@@ -157,7 +160,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
             {
                 auto entry = entries->get(0);
                 strBlock = entry->getField(SYS_VALUE);
-                auto block = Block(fromHex(strBlock.c_str()));
+                auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
 
                 BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Write to cache");
                 auto blockPtr = m_blockCache.add(block);
@@ -330,14 +333,14 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
         }
 
-        tb = mtb->openTable(SYS_MINERS);
+        tb = mtb->openTable(SYS_CONSENSUS);
         if (tb)
         {
-            for (dev::h512 node : initParam.minerList)
+            for (dev::h512 node : initParam.sealerList)
             {
                 Entry::Ptr entry = std::make_shared<Entry>();
                 entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+                entry->setField(NODE_TYPE, NODE_TYPE_SEALER);
                 entry->setField(NODE_KEY_NODEID, dev::toHex(node));
                 entry->setField(NODE_KEY_ENABLENUM, "0");
                 tb->insert(PRI_KEY, entry);
@@ -365,9 +368,11 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         }
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
+        {
+            WriteGuard l(m_blockNumberMutex);
+            m_blockNumber = 0;
+        }
         BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]Insert the 0th block");
-
-        return true;
     }
     else
     {
@@ -408,6 +413,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             return false;
         }
     }
+    return true;
 }
 
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
@@ -415,7 +421,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     dev::h512s list;
     try
     {
-        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_MINERS);
+        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_CONSENSUS);
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getNodeListByType]Open table error");
@@ -455,20 +461,20 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     return list;
 }
 
-dev::h512s BlockChainImp::minerList()
+dev::h512s BlockChainImp::sealerList()
 {
     int64_t blockNumber = number();
     UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByMiner == blockNumber)
+    if (m_cacheNumBySealer == blockNumber)
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#minerList]Get miner list by cache")
-                              << LOG_KV("size", m_minerList.size());
-        return m_minerList;
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#sealerList]Get sealer list by cache")
+                              << LOG_KV("size", m_sealerList.size());
+        return m_sealerList;
     }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_MINER);
+    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_SEALER);
     UpgradeGuard ul(l);
-    m_cacheNumByMiner = blockNumber;
-    m_minerList = list;
+    m_cacheNumBySealer = blockNumber;
+    m_sealerList = list;
 
     return list;
 }
@@ -565,6 +571,11 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
 {
+    /// return directly if the blocknumber is invalid
+    if (_i > number())
+    {
+        return nullptr;
+    }
     auto block = getBlock(_i);
     if (bool(block))
     {
@@ -591,7 +602,10 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
-            assert(pblock != nullptr);
+            if (!pblock)
+            {
+                return Transaction();
+            }
             const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
@@ -617,6 +631,10 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             strblockhash = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
+            if (!pblock)
+            {
+                return LocalisedTransaction(Transaction(), h256(0), -1, -1);
+            }
             const std::vector<Transaction>& txs = pblock->transactions();
             if (txs.size() > lexical_cast<uint>(txIndex))
             {
@@ -644,6 +662,10 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             strblock = entry->getField(SYS_VALUE);
             txIndex = entry->getField("index");
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
+            if (!pblock)
+            {
+                return TransactionReceipt();
+            }
             std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
             if (receipts.size() > lexical_cast<uint>(txIndex))
             {
@@ -669,6 +691,11 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
             auto txIndex = lexical_cast<uint>(entry->getField("index"));
 
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(blockNum));
+            if (!pblock)
+            {
+                return LocalisedTransactionReceipt(
+                    TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
+            }
             const Transactions& txs = pblock->transactions();
             const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > txIndex && txs.size() > txIndex)
@@ -743,7 +770,7 @@ void BlockChainImp::writeTotalTransactionCount(
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
-    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES, false);
     if (tb && tb_nonces)
     {
         const std::vector<Transaction>& txs = block.transactions();
@@ -808,15 +835,23 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeNumber2Hash(block, context);
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
-    int64_t num = number();
-    if ((block.blockHeader().number() != num + 1))
+    if (_blockNumber != number() + 1)
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect block number")
-                                << LOG_KV("needNumber", num + 1)
-                                << LOG_KV("committedNumber", block.blockHeader().number());
+                                << LOG_KV("needNumber", number() + 1)
+                                << LOG_KV("committedNumber", _blockNumber);
+        return false;
+    }
+    return true;
+}
+
+CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+{
+    if (!isBlockShouldCommit(block.blockHeader().number()))
+    {
         return CommitResult::ERROR_NUMBER;
     }
 
@@ -829,40 +864,36 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                 << LOG_KV("committedParentHash", block.blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
-    if (commitMutex.try_lock())
+
+    try
     {
-        try
         {
+            std::lock_guard<std::mutex> l(commitMutex);
+            if (!isBlockShouldCommit(block.blockHeader().number()))
+            {
+                return CommitResult::ERROR_PARENT_HASH;
+            }
             writeBlockInfo(block, context);
 
             writeNumber(block, context);
             writeTotalTransactionCount(block, context);
             writeTxToBlock(block, context);
             context->dbCommit(block);
-            commitMutex.unlock();
-            m_blockCache.add(block);
-            {
-                WriteGuard l(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
-            }
-            m_onReady();
-            return CommitResult::OK;
         }
-        catch (OpenSysTableFailed)
-        {
-            commitMutex.unlock();
-            BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-                "[#commitBlock]System meets error when try to write block to storage");
-            throw;
-        }
-    }
-    else
-    {
-        BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#commitBlock]Try lock commitMutex fail")
-                             << LOG_KV("blockNumber", block.blockHeader().number())
-                             << LOG_KV("blockParentHash", block.blockHeader().parentHash())
-                             << LOG_KV("parentHash", parentHash);
+        m_blockCache.add(block);
 
-        return CommitResult::ERROR_COMMITTING;
+        {
+            WriteGuard ll(m_blockNumberMutex);
+            m_blockNumber = block.blockHeader().number();
+        }
+
+        m_onReady(m_blockNumber);
+        return CommitResult::OK;
+    }
+    catch (OpenSysTableFailed&)
+    {
+        BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
+            "[#commitBlock]System meets error when try to write block to storage");
+        throw;
     }
 }

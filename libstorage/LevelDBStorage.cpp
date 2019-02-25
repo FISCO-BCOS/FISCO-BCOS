@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MinerPrecompiled.h
+/** @file SealerPrecompiled.h
  *  @author ancelmo
  *  @date 20180921
  */
@@ -29,8 +29,7 @@
 using namespace dev;
 using namespace dev::storage;
 
-Entries::Ptr LevelDBStorage::select(
-    h256 hash, int num, const std::string& table, const std::string& key)
+Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
 {
     try
     {
@@ -88,19 +87,15 @@ Entries::Ptr LevelDBStorage::select(
 }
 
 size_t LevelDBStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
 {
     try
     {
-        STORAGE_LEVELDB_LOG(INFO) << LOG_DESC("leveldb commit data")
-                                  << LOG_KV("blockHash", blockHash) << LOG_KV("num", num);
-
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
-
         size_t total = 0;
-        for (auto it : datas)
+        for (auto& it : datas)
         {
-            for (auto dataIt : it->data)
+            for (auto& dataIt : it->data)
             {
                 if (dataIt.second->size() == 0u)
                 {
@@ -112,7 +107,7 @@ size_t LevelDBStorage::commit(
                 for (size_t i = 0; i < dataIt.second->size(); ++i)
                 {
                     Json::Value value;
-                    for (auto fieldIt : *(dataIt.second->get(i)->fields()))
+                    for (auto& fieldIt : *(dataIt.second->get(i)->fields()))
                     {
                         value[fieldIt.first] = fieldIt.second;
                     }
@@ -126,9 +121,10 @@ size_t LevelDBStorage::commit(
 
                 batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
                 ++total;
+                ssOut.seekg(0, std::ios::end);
                 STORAGE_LEVELDB_LOG(TRACE)
-                    << LOG_DESC("leveldb commit key") << LOG_KV("key", entryKey)
-                    << LOG_KV("data size", ssOut.tellp());
+                    << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt.second->size())
+                    << LOG_KV("len", ssOut.tellg());
             }
         }
 
@@ -150,7 +146,6 @@ size_t LevelDBStorage::commit(
     {
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
-
         BOOST_THROW_EXCEPTION(e);
     }
 

@@ -20,7 +20,9 @@
  */
 #include "TableFactoryPrecompiled.h"
 #include "MemoryTable.h"
+#include "MemoryTableFactory.h"
 #include "TablePrecompiled.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -102,6 +104,11 @@ bytes TableFactoryPrecompiled::call(
         // set createTableCode
         int createTableCode = m_memoryTableFactory->getCreateTableCode();
         out = abi.abiIn("", createTableCode);
+    }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("TableFactoryPrecompiled")
+                           << LOG_DESC("call undefined function!");
     }
     return out;
 }

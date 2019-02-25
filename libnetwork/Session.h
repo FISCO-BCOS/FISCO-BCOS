@@ -34,13 +34,14 @@
 
 #include "Common.h"
 #include "SessionFace.h"
-#include "SocketFace.h"
+
 
 namespace dev
 {
 namespace network
 {
 class Host;
+class SocketFace;
 
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
@@ -56,11 +57,11 @@ public:
 
     virtual bool isConnected() const override;
 
-    virtual void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override;
+    virtual void asyncSendMessage(
+        Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override;
     // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
-    virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_socket->nodeIPEndpoint(); }
+    virtual NodeIPEndpoint nodeIPEndpoint() const override;
 
     virtual bool actived() const override;
 
@@ -138,8 +139,7 @@ private:
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(
-        NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message);
+    void onMessage(NetworkException const& e, Message::Ptr message);
 
     std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
@@ -149,8 +149,8 @@ private:
     class QueueCompare
     {
     public:
-        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>& lhs,
-            const std::pair<std::shared_ptr<bytes>, u256>& rhs) const
+        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>&,
+            const std::pair<std::shared_ptr<bytes>, u256>&) const
         {
             return false;
         }

@@ -29,17 +29,17 @@ using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
 
+static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
+
 void SyncMsgEngine::messageHandler(
-    NetworkException _e, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
+    NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
     SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());
-
     if (!checkSession(_session) || !checkMessage(_msg))
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                          << LOG_DESC("Reject packet: [reason]: session or msg illegal");
-        _session->stop(dev::network::LocalIdentity);
+                          << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
         return;
     }
 
@@ -51,7 +51,6 @@ void SyncMsgEngine::messageHandler(
                           << LOG_KV("nodeId", _session->nodeID().abridged())
                           << LOG_KV("size", _msg->buffer()->size())
                           << LOG_KV("message", toHex(*_msg->buffer()));
-        _session->stop(dev::network::BadProtocol);
         return;
     }
 
@@ -66,6 +65,10 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     if (_session->nodeID() == m_nodeId)
+        return false;
+
+    /// Drop packets comes from other groups
+    if (needCheckPacketInGroup && !m_syncStatus->hasPeer(_session->nodeID()))
         return false;
     return true;
 }
@@ -151,8 +154,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
                         << LOG_KV("peer", info.nodeId.abridged())
                         << LOG_KV("peerNumber", info.number)
-                        << LOG_KV("genesisHash", info.genesisHash)
-                        << LOG_KV("latestHash", info.latestHash);
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
+                        << LOG_KV("latestHash", info.latestHash.abridged());
         m_syncStatus->newSyncPeerStatus(info);
     }
     else
@@ -160,8 +163,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from peer")
                         << LOG_KV("peerNodeId", info.nodeId.abridged())
                         << LOG_KV("peerNumber", info.number)
-                        << LOG_KV("genesisHash", info.genesisHash)
-                        << LOG_KV("latestHash", info.latestHash);
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
+                        << LOG_KV("latestHash", info.latestHash.abridged());
         status->update(info);
     }
 }
@@ -180,7 +183,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     unsigned itemCount = rlps.itemCount();
 
     size_t successCnt = 0;
-
+    std::vector<dev::h256> knownTxHash;
     for (unsigned i = 0; i < itemCount; ++i)
     {
         try
@@ -198,7 +201,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                        "Import peer transaction into txPool DUPLICATED from peer")
                                 << LOG_KV("reason", int(importResult))
                                 << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3()));
+                                << LOG_KV("peer", move(tx.sha3().abridged()));
             }
             else
             {
@@ -206,10 +209,9 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                 << LOG_DESC("Import peer transaction into txPool FAILED from peer")
                                 << LOG_KV("reason", int(importResult))
                                 << LOG_KV("txHash", _packet.nodeId.abridged())
-                                << LOG_KV("peer", move(tx.sha3()));
+                                << LOG_KV("peer", move(tx.sha3().abridged()));
             }
-
-            m_txPool->transactionIsKnownBy(tx.sha3(), _packet.nodeId);
+            knownTxHash.push_back(tx.sha3());
         }
         catch (std::exception& e)
         {
@@ -217,6 +219,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                               << LOG_KV("reason", e.what())
                               << LOG_KV("rlp", toHex(rlps[i].toBytes()));
             continue;
+        }
+        if (knownTxHash.size() > 0)
+        {
+            m_txPool->setTransactionsAreKnownBy(knownTxHash, _packet.nodeId);
         }
     }
 

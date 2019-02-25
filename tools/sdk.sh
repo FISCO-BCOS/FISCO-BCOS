@@ -1,5 +1,4 @@
 #!/bin/bash
-pkcs12_passwd=""
 
 getname() {
     local name="$1"
@@ -78,12 +77,6 @@ gen_sdk_cert() {
     gen_cert_secp256k1 "$agpath" "$sdkpath" "$sdk" sdk
     cd ${current_path}
     cat ${agpath}/agency.crt >> ${sdkpath}/sdk.crt
-    cat ${agpath}/ca.crt >> ${sdkpath}/sdk.crt
-    # create keystore
-    openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in ${sdkpath}/sdk.crt -inkey ${sdkpath}/sdk.key -out ${sdkpath}/keystore.p12
-    # keytool -importkeystore -destkeystore ${sdkpath}/client.keystore -srckeystore ${sdkpath}/keystore.p12 -srcstoretype pkcs12 -alias client
-    #nodeid is pubkey
-    openssl ec -in $sdkpath/sdk.key
     echo "build $sdk sdk cert successful!"
 }
 agencypath=

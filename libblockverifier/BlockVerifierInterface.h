@@ -22,7 +22,6 @@
 
 #include "Common.h"
 #include "ExecutiveContext.h"
-#include "Precompiled.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>

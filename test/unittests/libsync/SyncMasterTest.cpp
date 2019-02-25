@@ -144,13 +144,13 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
 
-    // no miner packet number is 0
+    // no sealer packet number is 0
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 0);
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
 
-    // Set miner
+    // Set sealer
     sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        _p->isMiner = true;
+        _p->isSealer = true;
         return true;
     });
 
@@ -183,7 +183,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     for (auto& tx : *txs)
     {
         txPool->submit(tx);
-        txPool->transactionIsKnownBy(tx.sha3(), NodeID(101));
+        txPool->setTransactionIsKnownBy(tx.sha3(), NodeID(101));
     }
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
@@ -259,7 +259,6 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     status->knownHighestNumber = latestNumber;
     status->knownLatestHash = latestBlockChain.getBlockByNumber(latestNumber)->headerHash();
 
-    int64_t currentNumber = 0;
     vector<shared_ptr<Block>> blocks;
 
     cout << " latestNumber: 6  curr:[0] -> downloadqueue:[1] -> curr:[0, 1]  not finish " << endl;
@@ -343,7 +342,6 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
 BOOST_AUTO_TEST_CASE(DoWorkTest)
 {
     int64_t currentBlockNumber = 0;
-    int64_t latestNumber = 6;
     FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
     std::shared_ptr<SyncMaster> sync = syncTools.sync;
 

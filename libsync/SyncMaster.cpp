@@ -32,29 +32,33 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
+static unsigned const c_maxSendTransactions = 1000;
+
 void SyncMaster::printSyncInfo()
 {
-    SYNC_LOG(TRACE) << "[Sync Info] --------------------------------------------" << endl;
-    SYNC_LOG(TRACE) << "            IsSyncing:    " << isSyncing() << endl;
-    SYNC_LOG(TRACE) << "            Block number: " << m_blockChain->number() << endl;
-    SYNC_LOG(TRACE) << "            Block hash:   "
-                    << m_blockChain->numberHash(m_blockChain->number()) << endl;
-    SYNC_LOG(TRACE) << "            Genesis hash: " << m_syncStatus->genesisHash << endl;
     auto pendingSize = m_txPool->pendingSize();
-    SYNC_LOG(TRACE) << "            TxPool size:  " << pendingSize << endl;
-    SYNC_LOG(TRACE) << "            Peers size:   " << m_syncStatus->peers().size() << endl;
-    SYNC_LOG(TRACE) << "[Peer Info] --------------------------------------------" << endl;
-    SYNC_LOG(TRACE) << "    Host: " << m_nodeId.abridged() << endl;
-
     NodeIDs peers = m_syncStatus->peers();
+    std::string peer_str;
     for (auto& peer : peers)
-        SYNC_LOG(TRACE) << "    Peer: " << peer.abridged() << endl;
-    SYNC_LOG(TRACE) << "            --------------------------------------------" << endl;
+    {
+        peer_str += peer.abridged() + "/";
+    }
+    SYNC_LOG(TRACE) << "\n[Sync Info] --------------------------------------------\n"
+                    << "            IsSyncing:    " << isSyncing() << "\n"
+                    << "            Block number: " << m_blockChain->number() << "\n"
+                    << "            Block hash:   "
+                    << m_blockChain->numberHash(m_blockChain->number()) << "\n"
+                    << "            Genesis hash: " << m_syncStatus->genesisHash.abridged() << "\n"
+                    << "            TxPool size:  " << pendingSize << "\n"
+                    << "            Peers size:   " << m_syncStatus->peers().size() << "\n"
+                    << "[Peer Info] --------------------------------------------\n"
+                    << "    Host: " << m_nodeId.abridged() << "\n"
+                    << "    Peer: " << peer_str << "\n"
+                    << "            --------------------------------------------";
 }
 
 SyncStatus SyncMaster::status() const
 {
-    ReadGuard l(x_sync);
     SyncStatus res;
     res.state = m_syncStatus->state;
     res.protocolId = m_protocolId;
@@ -69,13 +73,13 @@ string const SyncMaster::syncInfo() const
     json_spirit::Object syncInfo;
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
     syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
-    syncInfo.push_back(json_spirit::Pair("genesisHash", toHex(m_syncStatus->genesisHash)));
+    syncInfo.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(m_syncStatus->genesisHash)));
     syncInfo.push_back(json_spirit::Pair("nodeId", toHex(m_nodeId)));
 
     int64_t currentNumber = m_blockChain->number();
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
-        json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
+        json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
     // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
     // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
     // toHex(m_syncStatus->knownLatestHash)));
@@ -85,9 +89,9 @@ string const SyncMaster::syncInfo() const
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         json_spirit::Object info;
         info.push_back(json_spirit::Pair("nodeId", toHex(_p->nodeId)));
-        info.push_back(json_spirit::Pair("genesisHash", toHex(_p->genesisHash)));
+        info.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(_p->genesisHash)));
         info.push_back(json_spirit::Pair("blockNumber", _p->number));
-        info.push_back(json_spirit::Pair("latestHash", toHex(_p->latestHash)));
+        info.push_back(json_spirit::Pair("latestHash", toHexPrefixed(_p->latestHash)));
         peersInfo.push_back(info);
         return true;
     });
@@ -114,6 +118,8 @@ void SyncMaster::stop()
 {
     doneWorking();
     stopWorking();
+    // will not restart worker, so terminate it
+    terminate();
 }
 
 void SyncMaster::doWork()
@@ -131,7 +137,7 @@ void SyncMaster::doWork()
     if (!isSyncing())
     {
         // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        if (m_newTransactions)
+        if (m_needMaintainTransactions && m_newTransactions)
         {
             m_newTransactions = false;
             maintainTransactions();
@@ -177,6 +183,7 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 {
     WriteGuard l(x_currentSealingNumber);
     m_currentSealingNumber = _number;
+    m_signalled.notify_all();
 }
 
 bool SyncMaster::isSyncing() const
@@ -188,18 +195,13 @@ void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
-    auto ts =
-        m_txPool->topTransactionsCondition(c_maxSendTransactions, [&](Transaction const& _tx) {
-            bool unsent = !m_txPool->isTransactionKnownBy(_tx.sha3(), m_nodeId);
-            return unsent;
-        });
-
+    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
     auto txSize = ts.size();
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
-
+    UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (size_t i = 0; i < ts.size(); ++i)
     {
         auto const& t = ts[i];
@@ -208,20 +210,19 @@ void SyncMaster::maintainTransactions()
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
-            bool isMiner = _p->isMiner;
-            return isMiner && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            bool isSealer = _p->isSealer;
+            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
-
+        if (0 == peers.size())
+            return;
+        UpgradeGuard ul(l);
+        m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->transactionIsKnownBy(t.sha3(), p);
+            m_txPool->setTransactionIsKnownBy(t.sha3(), p);
         }
-
-        if (0 != peers.size())
-            m_txPool->transactionIsKnownBy(t.sha3(), m_nodeId);
     }
-
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         bytes txRLPs;
@@ -261,8 +262,9 @@ void SyncMaster::maintainBlocks()
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Status")
                         << LOG_DESC("Send current status when maintainBlocks")
-                        << LOG_KV("number", int(number)) << LOG_KV("genesisHash", m_genesisHash)
-                        << LOG_KV("currentHash", currentHash)
+                        << LOG_KV("number", int(number))
+                        << LOG_KV("genesisHash", m_genesisHash.abridged())
+                        << LOG_KV("currentHash", currentHash.abridged())
                         << LOG_KV("peer", _p->nodeId.abridged());
 
         return true;
@@ -303,12 +305,12 @@ void SyncMaster::maintainPeersStatus()
                             << LOG_KV("currentNumber", currentNumber)
                             << LOG_KV("currentSealingNumber", m_currentSealingNumber)
                             << LOG_KV("maxPeerNumber", maxPeerNumber);
-
             return;  // no need to sync
         }
     }
 
     // Skip downloading if last if not timeout
+
     uint64_t currentTime = utcTime();
     if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
     {
@@ -381,9 +383,9 @@ void SyncMaster::maintainPeersStatus()
             int64_t from = currentNumber + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
 
-            SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                            << LOG_DESC("Couldn't find any peers to request blocks")
-                            << LOG_KV("from", from) << LOG_KV("to", to);
+            SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                              << LOG_DESC("Couldn't find any peers to request blocks")
+                              << LOG_KV("from", from) << LOG_KV("to", to);
             break;
         }
     }
@@ -415,11 +417,11 @@ bool SyncMaster::maintainDownloadingQueue()
                 if (ret == CommitResult::OK)
                 {
                     m_txPool->dropBlockTrans(*topBlock);
-                    SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                     << LOG_DESC("Download block commit")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
-                                    << LOG_KV("hash", topBlock->headerHash());
+                                    << LOG_KV("hash", topBlock->headerHash().abridged());
                 }
                 else
                 {
@@ -427,16 +429,16 @@ bool SyncMaster::maintainDownloadingQueue()
                                     << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
-                                    << LOG_KV("hash", topBlock->headerHash());
+                                    << LOG_KV("hash", topBlock->headerHash().abridged());
                 }
             }
             else
             {
-                SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                 << LOG_DESC("Block of queue top is not new block")
                                 << LOG_KV("number", topBlock->header().number())
                                 << LOG_KV("txs", topBlock->transactions().size())
-                                << LOG_KV("hash", topBlock->headerHash());
+                                << LOG_KV("hash", topBlock->headerHash().abridged());
             }
         }
         catch (exception& e)
@@ -445,7 +447,7 @@ bool SyncMaster::maintainDownloadingQueue()
                             << LOG_DESC("Block of queue top is not a valid block")
                             << LOG_KV("number", topBlock->header().number())
                             << LOG_KV("txs", topBlock->transactions().size())
-                            << LOG_KV("hash", topBlock->headerHash());
+                            << LOG_KV("hash", topBlock->headerHash().abridged());
         }
 
         bq.pop();
@@ -464,8 +466,9 @@ bool SyncMaster::maintainDownloadingQueue()
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
         SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Download finish") << LOG_KV("latestHash", latestHash)
-                        << LOG_KV("expectedHash", m_syncStatus->knownLatestHash);
+                        << LOG_DESC("Download finish")
+                        << LOG_KV("latestHash", latestHash.abridged())
+                        << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
 
         if (m_syncStatus->knownLatestHash != latestHash)
             SYNC_LOG(FATAL)
@@ -481,50 +484,86 @@ bool SyncMaster::maintainDownloadingQueue()
 
 void SyncMaster::maintainPeersConnection()
 {
-    // Delete inactive peers
-    NodeIDs nodeIds = m_syncStatus->peers();
-    for (NodeID const& id : nodeIds)
-    {
-        if (!m_service->isConnected(id))
-            m_syncStatus->deletePeer(id);
-    }
-
-    // Add new peers
+    // Get active peers
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    int64_t currentNumber = m_blockChain->number();
-    h256 const& currentHash = m_blockChain->numberHash(currentNumber);
+    set<NodeID> activePeers;
     for (auto const& session : sessions)
     {
-        if (!m_syncStatus->hasPeer(session.nodeID))
+        activePeers.insert(session.nodeID);
+    }
+
+    // Get sealers and observer
+    NodeIDs sealers = m_blockChain->sealerList();
+    NodeIDs sealerOrObserver = sealers + m_blockChain->observerList();
+
+    // member set is [(sealer || observer) && activePeer && not myself]
+    set<NodeID> memberSet;
+    bool hasMyself = false;
+    for (auto const& member : sealerOrObserver)
+    {
+        /// find active peers
+        if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
+        {
+            memberSet.insert(member);
+        }
+        hasMyself |= (member == m_nodeId);
+    }
+
+    // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
+    // other peers)
+    if (hasMyself)
+    {
+        NodeIDs nodeIds = m_syncStatus->peers();
+        for (NodeID const& id : nodeIds)
+        {
+            if (memberSet.find(id) == memberSet.end())
+            {
+                m_syncStatus->deletePeer(id);
+            }
+        }
+    }
+
+
+    // Add new peers
+    int64_t currentNumber = m_blockChain->number();
+    h256 const& currentHash = m_blockChain->numberHash(currentNumber);
+    for (auto const& member : memberSet)
+    {
+        if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
             // create a peer
-            SyncPeerInfo newPeer{session.nodeID, 0, m_genesisHash, m_genesisHash};
+            SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
             m_syncStatus->newSyncPeerStatus(newPeer);
 
             // send my status to her
             SyncStatusPacket packet;
             packet.encode(currentNumber, m_genesisHash, currentHash);
 
-            m_service->asyncSendMessageByNodeID(session.nodeID, packet.toMessage(m_protocolId),
-                CallbackFuncWithSession(), Options());
-            SYNC_LOG(ERROR) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
+            m_service->asyncSendMessageByNodeID(
+                member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+            SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
-                            << LOG_KV("genesisHash", m_genesisHash)
-                            << LOG_KV("currentHash", currentHash)
-                            << LOG_KV("peer", session.nodeID.abridged());
+                            << LOG_KV("genesisHash", m_genesisHash.abridged())
+                            << LOG_KV("currentHash", currentHash.abridged())
+                            << LOG_KV("peer", member.abridged());
         }
     }
 
-    // Update sync miner status
-    set<h512> minerSet;
-    h512s miners = m_blockChain->minerList();
-    for (auto miner : miners)
-        minerSet.insert(miner);
+    // Update sync sealer status
+    set<NodeID> sealerSet;
+    for (auto sealer : sealers)
+        sealerSet.insert(sealer);
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        _p->isMiner = (minerSet.find(_p->nodeId) != minerSet.end());
+        _p->isSealer = (sealerSet.find(_p->nodeId) != sealerSet.end());
         return true;
     });
+
+    // If myself is not in group, ignore receive packet checking from all peers
+    m_msgEngine->needCheckPacketInGroup = hasMyself;
+
+    // If myself is not in group, no need to maintain transactions(send transactions to peers)
+    m_needMaintainTransactions = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
@@ -591,7 +630,7 @@ void SyncMaster::maintainBlockRequest()
             {
                 // write back the rest request range
                 reqQueue.enablePush();
-                SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                 << LOG_DESC("Push unsent requests back to reqQueue")
                                 << LOG_KV("from", number) << LOG_KV("to", numberLimit - 1)
                                 << LOG_KV("peer", _p->nodeId.abridged());
@@ -627,12 +666,13 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
                           << LOG_KV("reason", "parent hash illegal")
                           << LOG_KV("thisNumber", _block->header().number())
                           << LOG_KV("currentNumber", currentNumber)
-                          << LOG_KV("thisParentHash", _block->header().parentHash())
-                          << LOG_KV("currentHash", m_blockChain->numberHash(currentNumber));
+                          << LOG_KV("thisParentHash", _block->header().parentHash().abridged())
+                          << LOG_KV(
+                                 "currentHash", m_blockChain->numberHash(currentNumber).abridged());
         return false;
     }
 
-    // check block minerlist sig
+    // check block sealerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
         SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
@@ -640,8 +680,9 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
                         << LOG_KV("reason", "consensus check failed")
                         << LOG_KV("thisNumber", _block->header().number())
                         << LOG_KV("currentNumber", currentNumber)
-                        << LOG_KV("thisParentHash", _block->header().parentHash())
-                        << LOG_KV("currentHash", m_blockChain->numberHash(currentNumber));
+                        << LOG_KV("thisParentHash", _block->header().parentHash().abridged())
+                        << LOG_KV(
+                               "currentHash", m_blockChain->numberHash(currentNumber).abridged());
         return false;
     }
 

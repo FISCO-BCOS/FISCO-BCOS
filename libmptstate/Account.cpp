@@ -21,6 +21,7 @@
 
 #include "Account.h"
 #include "ValidationSchemes.h"
+#include <libdevcore/CommonIO.h>
 #include <libdevcore/JsonUtils.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ChainOperationParams.h>

@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
+#include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -32,20 +33,21 @@
 
 using namespace dev;
 using namespace dev::txpool;
+using namespace dev::p2p;
 using namespace dev::blockchain;
 
 namespace dev
 {
 namespace test
 {
-class FakeService : public Service
+class FakeService : public dev::p2p::Service
 {
 public:
     FakeService() : Service() {}
-    void setSessionInfos(P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
-    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) override { return m_sessionInfos; }
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
 
     void asyncSendMessageByNodeID(
         NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
@@ -72,7 +74,7 @@ public:
     }
 
     void setConnected() { m_connected = true; }
-    bool isConnected(NodeID const& nodeId) const { return m_connected; }
+    bool isConnected(NodeID const&) const override { return m_connected; }
 
 private:
     P2PSessionInfos m_sessionInfos;
@@ -118,12 +120,8 @@ public:
             {
                 fake_block.m_block.header().setParentHash(
                     m_blockChain[blockHeight - 1]->headerHash());
-                std::cout << "### setParent:" << toHex(m_blockChain[blockHeight - 1]->headerHash())
-                          << std::endl;
                 fake_block.m_block.header().setNumber(blockHeight);
             }
-            std::cout << "#### push back:" << toHex(fake_block.m_block.header().hash())
-                      << std::endl;
             m_blockHash[fake_block.m_block.header().hash()] = blockHeight;
             m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
         }
@@ -133,7 +131,7 @@ public:
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
     {
         auto pBlock = getBlockByNumber(_blockNumber);
-        for (auto trans : pBlock->transactions())
+        for (auto& trans : pBlock->transactions())
         {
             _nonceVector.push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans.nonce()));
         }
@@ -187,9 +185,8 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
-
     bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
-    dev::h512s minerList() override { return dev::h512s(); };
+    dev::h512s sealerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
     std::map<h256, int64_t> m_blockHash;

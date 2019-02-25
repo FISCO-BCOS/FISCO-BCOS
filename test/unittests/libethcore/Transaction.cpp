@@ -19,6 +19,7 @@
  * @author: chaychen
  * @date 2018
  */
+#include <iostream>
 
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>
@@ -52,7 +53,6 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     /// test encode
     bytes encodeBytes;
     tx.encode(encodeBytes, eth::IncludeSignature::WithSignature);
-    std::cout << "encoded bytes of transaction:" << toHex(encodeBytes) << std::endl;
     /// test decode
     Transaction decodeTx;
     decodeTx.decode(ref(encodeBytes));

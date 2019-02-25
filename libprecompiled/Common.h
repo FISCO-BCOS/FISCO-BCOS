@@ -19,11 +19,22 @@
  *  @date 20180921
  */
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
+#include "libblockverifier/Precompiled.h"
+#include <memory>
 #include <string>
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
+
+namespace storage
+{
+class Table;
+}
+
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
@@ -43,7 +54,7 @@ const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = -31;
 
 /// ConsensusPrecompiled
 const int CODE_INVALID_NODEID = -40;
-const int CODE_LAST_MINER = -41;
+const int CODE_LAST_SEALER = -41;
 
 /// CNSPrecompiled -50 ~ -59
 const int CODE_ADDRESS_AND_VERSION_EXIST = -50;

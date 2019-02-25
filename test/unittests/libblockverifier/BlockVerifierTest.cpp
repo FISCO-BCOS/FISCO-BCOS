@@ -44,7 +44,7 @@ class FakeBlockchain
 {
 public:
     FakeBlockchain() {}
-    dev::h256 getHash(int64_t x) { return h256(0); }
+    dev::h256 getHash(int64_t) { return h256(0); }
 };
 
 struct BlockVerifierFixture

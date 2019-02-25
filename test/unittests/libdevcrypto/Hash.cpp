@@ -72,8 +72,8 @@ BOOST_AUTO_TEST_CASE(GM_testSha3CommonFunc)
     // test sha3Secure
     SecureFixedHash<32> sec_sha3 = sha3Secure(ref(content_bytes));
     SecureFixedHash<32> copyed_sha3 = sec_sha3;
-    const byte* ptr = copyed_sha3.data();
-    const byte* p_sec = sec_sha3.data();
+    // const byte* ptr = copyed_sha3.data();
+    /// const byte* p_sec = sec_sha3.data();
     BOOST_CHECK(copyed_sha3.data() != sec_sha3.data());
     BOOST_CHECK(sec_sha3.data());
     // test sha3 with SecureFixedHash input
@@ -150,8 +150,6 @@ BOOST_AUTO_TEST_CASE(testSha3CommonFunc)
     // test sha3Secure
     SecureFixedHash<32> sec_sha3 = sha3Secure(ref(content_bytes));
     SecureFixedHash<32> copyed_sha3 = sec_sha3;
-    const byte* ptr = copyed_sha3.data();
-    const byte* p_sec = sec_sha3.data();
     BOOST_CHECK(copyed_sha3.data() != sec_sha3.data());
     BOOST_CHECK(sec_sha3.data());
     // test sha3 with SecureFixedHash input

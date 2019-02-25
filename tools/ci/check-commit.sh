@@ -34,42 +34,8 @@ execute_cmd() {
     fi
 }
 
-# get platform: now support debain/ubuntu, fedora/centos, oracle
-install_deps() {
-    uname -v > /dev/null 2>&1 || { echo >&2 "ERROR - FISCO-BCOS requires 'uname' to identify the platform."; exit 1; }
-    case $(uname -s) in
-    Darwin)
-        LOG_INFO "OSX Platform";;
-    FreeBSD)
-        LOG_ERROR "FISCO-BCOS V2.0 Don't Support FreeBSD Yet!"
-        exit 1;;
-    Linux)
-        if [ -f "/etc/arch-release" ]; then
-            LOG_ERROR "FISCO-BCOS V2.0 Don't Support arch-linux Yet!"
-        elif [ -f "/etc/os-release" ];then
-            DISTRO_NAME=$(. /etc/os-release; echo $NAME)
-            case $DISTRO_NAME in
-            Debian*|Ubuntu)
-                LOG_INFO "Debian*|Ubuntu Platform"
-                # execute_cmd "sudo apt-get update"
-                # execute_cmd "sudo apt-get install -y clang-format"
-                ;;
-            Fedora|CentOS*|Oracle*)
-                LOG_INFO "Fedora|CentOS* Platform"
-                # execute_cmd "sudo yum upgrade"
-                # execute_cmd "sudo yum install clang"
-                ;;
-            esac
-        else
-            LOG_ERROR "Unsupported Platform"
-        fi
-    esac
-}
-
 function check()
 {
-    #install_deps
-    deploy_check_script
     if git rev-parse --verify HEAD >/dev/null 2>&1;then
         against=HEAD^
     else

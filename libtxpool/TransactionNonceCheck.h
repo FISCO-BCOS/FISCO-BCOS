@@ -54,7 +54,6 @@ public:
     unsigned const& maxBlockLimit() const { return m_maxBlockLimit; }
     void setBlockLimit(unsigned const& limit) { m_maxBlockLimit = limit; }
 
-private:
     bool isBlockLimitOk(dev::eth::Transaction const& _trans);
 
 private:

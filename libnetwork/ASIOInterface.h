@@ -115,14 +115,14 @@ public:
     }
 
     virtual void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        boost::system::error_code ec = boost::system::error_code())
+        boost::system::error_code = boost::system::error_code())
     {
         m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
     }
 
     virtual void asyncConnect(std::shared_ptr<SocketFace> socket,
         const bi::tcp::endpoint peer_endpoint, Handler_Type handler,
-        boost::system::error_code ec = boost::system::error_code())
+        boost::system::error_code = boost::system::error_code())
     {
         socket->ref().async_connect(peer_endpoint, handler);
     }
@@ -211,14 +211,14 @@ public:
 
     virtual void asyncWait(boost::asio::deadline_timer* m_timer,
         boost::asio::io_service::strand& m_strand, Handler_Type handler,
-        boost::system::error_code ec = boost::system::error_code())
+        boost::system::error_code = boost::system::error_code())
     {
         if (m_timer)
             m_timer->async_wait(m_strand.wrap(handler));
     }
 
     virtual void setVerifyCallback(
-        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool verify_succ = true)
+        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true)
     {
         socket->sslref().set_verify_callback(callback);
     }

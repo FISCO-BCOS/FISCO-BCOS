@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MinerPrecompiled.h
+/** @file SealerPrecompiled.h
  *  @author ancelmo
  *  @date 20180921
  */
@@ -43,7 +43,7 @@ public:
     virtual Entries::Ptr select(
         h256 hash, int num, const std::string& table, const std::string& key) override;
     virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 blockHash) override;
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&) override;
     virtual bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);

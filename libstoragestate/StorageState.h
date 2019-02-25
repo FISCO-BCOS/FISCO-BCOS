@@ -88,7 +88,7 @@ public:
 
     /// Get the value of a storage position of an account.
     /// @returns 0 if no account exists at that address.
-    virtual u256 storage(Address const& _contract, u256 const& _memory) const override;
+    virtual u256 storage(Address const& _contract, u256 const& _memory) override;
 
     /// Set the value of a storage position of an account.
     virtual void setStorage(
@@ -139,7 +139,7 @@ public:
     virtual u256 getNonce(Address const& _address) const override;
 
     /// The hash of the root of our state tree.
-    virtual h256 rootHash() const override;
+    virtual h256 rootHash(bool needCalculate = true) const override;
 
     /// Commit all changes waiting in the address cache to the DB.
     /// @param _commitBehaviour whether or not to remove empty accounts during commit.

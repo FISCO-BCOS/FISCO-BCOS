@@ -19,7 +19,9 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
+
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -45,17 +47,6 @@ CNSPrecompiled::CNSPrecompiled()
 std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
 {
     return "CNS";
-}
-
-Table::Ptr CNSPrecompiled::openTable(ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
 bytes CNSPrecompiled::call(
@@ -111,7 +102,7 @@ bytes CNSPrecompiled::call(
             entry->setField(SYS_CNS_FIELD_VERSION, contractVersion);
             entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
             entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
-            int count = table->insert(contractName, entry, getOptions(origin));
+            int count = table->insert(contractName, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
@@ -195,7 +186,7 @@ bytes CNSPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("error func")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call undefined function")
                                << LOG_KV("func", func);
     }
 

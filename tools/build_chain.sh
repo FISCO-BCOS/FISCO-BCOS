@@ -11,29 +11,25 @@ ip_param=
 use_ip_param=
 ip_array=
 output_dir=nodes
-port_start=30300 
-state_type=mpt 
+port_start=(30300 20200 8545)
+state_type=storage 
 storage_type=LevelDB
 conf_path="conf"
-eth_path=
-pkcs12_passwd=""
+bin_path=
 make_tar=
 debug_log="false"
-log_level="INFO"
+log_level="info"
 logfile=build.log
 listen_ip="127.0.0.1"
 Download=false
-Download_Link=https://github.com/FISCO-BCOS/lab-bcos/raw/dev/bin/fisco-bcos
 bcos_bin_name=fisco-bcos
-
 guomi_mode=
 gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
-TASSL_INSTALL_DIR="${HOME}/TASSL"
-OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
+consensus_type="pbft"
+TASSL_CMD="${HOME}"/.tassl
+auto_flush="true"
 
-TASSL_DOWNLOAD_URL=" https://github.com/jntass"
-TASSL_PKG_DIR="TASSL"
 
 help() {
     echo $1
@@ -41,19 +37,20 @@ help() {
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
-    -e <FISCO-BCOS binary path>         Default download from GitHub
+    -e <FISCO-BCOS binary path>         Default download fisco-bcos from GitHub. If set -e, use the binary at the specified location
     -o <Output Dir>                     Default ./nodes/
-    -p <Start Port>                     Default 30300
-    -i <rpc listen public ip>           Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -P <PKCS12 passwd>                  Default generate PKCS12 file without passwd, use -P to set custom passwd
-    -s <State type>                     Default mpt. if set -s, use storage 
+    -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
+    -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
+    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -s <State type>                     Default storage. if set -s, use mpt 
+    -g <Generate guomi nodes>           Default no
+    -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -z <Generate tar packet>            Default no
-    -g <Generate guomi nodes>           Default no
+    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
-    build_chain.sh -l "192.168.0.1:2,192.168.0.2:2"
+    $0 -l "127.0.0.1:4"
 EOF
 
 exit 0
@@ -73,7 +70,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:P:t:iszhgT" option;do
+while getopts "f:l:o:p:e:t:icszhgTd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -83,19 +80,17 @@ while getopts "f:l:o:p:e:P:t:iszhgT" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
-    p) port_start=$OPTARG;;
-    e) eth_path=$OPTARG;;
-    P) [ ! -z $OPTARG ] && pkcs12_passwd=$OPTARG
-       [[ "$pkcs12_passwd" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
+    p) port_start=(${OPTARG//,/ })
+    if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
-    s) state_type=storage;;
+    e) bin_path=$OPTARG;;
+    s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
+    c) consensus_type="raft";;
     T) debug_log="true"
-    log_level=DEBUG
+    log_level="debug"
     ;;
+    d) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     h) help;;
@@ -106,11 +101,11 @@ done
 print_result()
 {
 echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path   : $eth_path"
+LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
-LOG_INFO "Start Port        : $port_start"
-LOG_INFO "Server IP         : ${ip_array[@]}"
+LOG_INFO "Start Port        : ${port_start[*]}"
+LOG_INFO "Server IP         : ${ip_array[*]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
 [ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
@@ -130,35 +125,28 @@ fail_message()
 EXIT_CODE=-1
 
 check_env() {
-    [ ! -z "`openssl version 2>&1 | grep 1.0.2`" ] || [ ! -z "`openssl version 2>&1 | grep 1.1.0`" ] || {
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         echo "please install openssl 1.0.2k-fips!"
-        #echo "please install openssl 1.0.2 series!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
     }
+    if [ ! -z "$(openssl version | grep reSSL)" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+    fi
 }
 
 # TASSL env
 check_and_install_tassl()
 {
-    if [ ! -f "${TASSL_INSTALL_DIR}/bin/openssl" ];then
-        git clone ${TASSL_DOWNLOAD_URL}/${TASSL_PKG_DIR}
-
-        cd ${TASSL_PKG_DIR}
-        local shell_list=$(find . -name '*.sh')
-        chmod a+x ${shell_list}
-        chmod a+x ./util/pod2mantest        
-
-        bash config --prefix=${TASSL_INSTALL_DIR} no-shared && make -j2 && make install
-
-        cd ${CUR_DIR}
-        rm -rf ${TASSL_PKG_DIR}
+    if [ ! -f "${HOME}/.tassl" ];then
+        curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+        LOG_INFO "Downloading tassl binary ..."
+        tar zxvf tassl.tar.gz
+        chmod u+x tassl
+        mv tassl ${HOME}/.tassl
     fi
-
-    OPENSSL_CMD=${TASSL_INSTALL_DIR}/bin/openssl
 }
-
 
 getname() {
     local name="$1"
@@ -283,31 +271,13 @@ gen_node_cert() {
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
-    openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
+    # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(cat node.nodeid | head)
-    serial=$(cat node.serial | head)
-    cat >node.json <<EOF
-{
- "id":"$nodeid",
- "name":"$node",
- "agency":"$agency",
- "caHash":"$serial"
-}
-EOF
-    cat >node.ca <<EOF
-{
- "serial":"$serial",
- "pubkey":"$nodeid",
- "name":"$node"
-}
-EOF
 
     echo "build $node node cert successful!"
 }
-
 
 generate_gmsm2_param()
 {
@@ -331,8 +301,8 @@ gen_chain_cert_gm() {
     mkdir -p $chaindir
 
     generate_gmsm2_param "gmsm2.param"
-	$OPENSSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$OPENSSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     ls $chaindir
 
@@ -358,9 +328,9 @@ gen_agency_cert_gm() {
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    $OPENSSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
-    $OPENSSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+    $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
+    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
     cp $chain/gmca.crt $agencydir/ca-agency.crt
@@ -377,9 +347,9 @@ gen_node_cert_with_extensions_gm() {
     type="$4"
     extensions="$5"
 
-    $OPENSSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $OPENSSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
-    $OPENSSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+    $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
+    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
 }
@@ -406,121 +376,59 @@ gen_node_cert_gm() {
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
     #nodeid is pubkey
-    $OPENSSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
+    $TASSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
 
     #serial
-    if [ "" != "$($OPENSSL_CMD version | grep 1.0.2)" ];
+    if [ "" != "$($TASSL_CMD version | grep 1.0.2)" ];
     then
-        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     else
-        $OPENSSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     fi
 
 
     cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
 
     cd $ndpath
-    nodeid=$(head gmnode.nodeid)
-    serial=$(head gmnode.serial)
-    cat >gmnode.json <<EOF
-{
- "id":"$nodeid",
- "name":"$node",
- "agency":"$agency",
- "caHash":"$serial"
-}
-EOF
-    cat >gmnode.ca <<EOF
-{
- "serial":"$serial",
- "pubkey":"$nodeid",
- "name":"$node"
-}
-EOF
 
     echo "build $node node cert successful!"
-}
-
-read_password() {
-    read -se -p "Enter password for keystore:" pass1
-    echo
-    read -se -p "Verify password for keystore:" pass2
-    echo
-    [[ "$pass1" =~ ^[a-zA-Z0-9._-]{6,}$ ]] || {
-        echo "password invalid, at least 6 digits, should match regex: ^[a-zA-Z0-9._-]{6,}\$"
-        exit $EXIT_CODE
-    }
-    [ "$pass1" != "$pass2" ] && {
-        echo "Verify password failure!"
-        exit $EXIT_CODE
-    }
-    jks_passwd=$pass1
-}
-
-gen_sdk_cert() {
-    agency="$2"
-    sdkpath="$3"
-    sdk=$(getname "$sdkpath")
-    dir_must_exists "$agency"
-    file_must_exists "$agency/agency.key"
-    dir_must_not_exists "$sdkpath"
-    check_name sdk "$sdk"
-
-    mkdir -p $sdkpath
-    gen_cert_secp256k1 "$agency" "$sdkpath" "$sdk" sdk
-    cp $agency/ca-agency.crt $sdkpath/ca.crt
-    
-    read_password
-    openssl pkcs12 -export -name client -passout "pass:$jks_passwd" -in $sdkpath/sdk.crt -inkey $sdkpath/sdk.key -out $sdkpath/keystore.p12
-
-    echo "build $sdk sdk cert successful!"
 }
 
 generate_config_ini()
 {
     local output=${1}
-    local index=${2}
+    local ip=${2}
+    local offset=${ip_node_counts[${ip//./}]}
     local node_groups=(${3//,/ })
-    local group_conf_list=
     local prefix=""
     if [ -n "$guomi_mode" ]; then
         prefix="gm"
-    fi
-    if [ "${use_ip_param}" == "false" ];then
-        for j in ${node_groups[@]};do
-        group_conf_list=$"${group_conf_list}group_config.${j}=${conf_path}/group.${j}.genesis
-    "
-        done
-    else
-        group_conf_list="group_config.1=${conf_path}/group.1.genesis"
     fi
     cat << EOF > ${output}
 [rpc]
     ;rpc listen ip
     listen_ip=${listen_ip}
     ;channelserver listen port
-    channel_listen_port=$(( port_start + 1 + index * 3 ))
+    channel_listen_port=$(( offset + port_start[1] ))
     ;jsonrpc listen port
-    jsonrpc_listen_port=$(( port_start + 2 + index * 3 ))
+    jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
     ;p2p listen ip
     listen_ip=0.0.0.0
     ;p2p listen port
-    listen_port=$(( port_start + index * 3 ))
+    listen_port=$(( offset + port_start[0] ))
     ;nodes to connect
     $ip_list
 ;certificate rejected list		
 [crl]		
-    ;crl.0=4d9752efbb1de1253d1d463a934d34230398e787b3112805728525ed5b9d2ba29e4ad92c6fcde5156ede8baa5aca372a209f94dc8f283c8a4fa63e3787c338a4
+    ;crl.0 should be nodeid, nodeid's length is 128 
+    ;crl.0=
 
 ;group configurations
-;if need add a new group, eg. group2, can add the following configuration:
-;group_config.2=conf/group.2.genesis
-;group.2.genesis can be populated from group.1.genesis
 ;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
-    ${group_conf_list}
+    group_config_path=${conf_path}/
 
 ;certificate configuration
 [secure]
@@ -536,41 +444,30 @@ generate_config_ini()
 ;log configurations
 [log]
     ;the directory of the log
-    LOG_PATH=./log
-    GLOBAL-ENABLED=true
-    GLOBAL-FORMAT=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
-    GLOBAL-MILLISECONDS_WIDTH=3
-    GLOBAL-PERFORMANCE_TRACKING=false
-    GLOBAL-MAX_LOG_FILE_SIZE=209715200
-    GLOBAL-LOG_FLUSH_THRESHOLD=100
-
-    ;log level configuration, enable(true)/disable(false) corresponding level log
-    FATAL-ENABLED=true
-    ERROR-ENABLED=true
-    WARNING-ENABLED=true
-    INFO-ENABLED=true
-    DEBUG-ENABLED=${debug_log}
-    TRACE-ENABLED=false
-    VERBOSE-ENABLED=false
-    ;log level for boost log
-    Level=${log_level}
-    MaxLogFileSize=1677721600
+    log_path=./log
+    ;info debug trace 
+    level=${log_level}
+    max_log_file_size=209715200
+    ; control log auto_flush
+    flush=${auto_flush}
+    ;easylog config
+    format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
+    log_flush_threshold=100
 EOF
 }
 
 generate_group_genesis()
 {
     local output=$1
-    local node_list=$2
+    local index=$2
+    local node_list=$3
     cat << EOF > ${output} 
 ;consensus configuration
 [consensus]
     ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
-    consensus_type=pbft
+    consensus_type=${consensus_type}
     ;the max number of transactions of a block
     max_trans_num=1000
-    ;the ttl of broadcasted pbft message
-    ;ttl=2
     ;the node id of leaders
     ${node_list}
 
@@ -584,6 +481,8 @@ generate_group_genesis()
 ;tx gas limit
 [tx]
     gas_limit=300000000
+[group]
+    index=${index}
 EOF
 }
 
@@ -591,13 +490,12 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
-;sync period time
-[sync]
-    idle_wait_ms=200
-
+; the ttl for broadcasting pbft message
+[consensus]
+    ;ttl=2
 ;txpool limit
 [tx_pool]
-    limit=1000
+    limit=10000
 EOF
 }
 
@@ -785,13 +683,33 @@ generate_node_scripts()
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
-nohup setsid \${fisco_bcos} -c config.ini&
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+else 
+    nohup \${fisco_bcos} -c config.ini&
+fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-kill \${weth_pid}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+try_times=2
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    kill \${node_pid}
+    sleep 1
+    node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+    if [ -z \${node_pid} ];then
+        echo " stop \${node} success. "
+        exit 0
+    fi
+    ((i=i+1))
+done
+
 EOF
 }
 
@@ -804,15 +722,19 @@ genTransTest()
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
 
-ip_port=http://127.0.0.1:$(( port_start + 2 ))
+ip_port=http://127.0.0.1:$(( port_start[2] ))
 trans_num=1
-if [ \$# -eq 1 ];then
+target_group=1
+if [ \$# -ge 1 ];then
     trans_num=\$1
+fi
+if [ \$# -ge 2 ];then
+    target_group=\$2
 fi
 
 block_limit()
 {
-    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":[1],"id":83}' \$1\`
+    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \$1\`
     if [ \`echo \${result} | grep -i failed | wc -l\` -gt 0 ] || [ -z \${result} ];then
         echo "getBlockNumber error!"
         exit 1
@@ -824,10 +746,11 @@ block_limit()
 send_a_tx()
 {
     limit=\$(block_limit \$1)
+    random_id="\$(date +%s)\$(printf "%09d" \${RANDOM})"
     if [ \${#limit} -gt 4 ];then echo "blockLimit exceed 0xffff, this scripts is unavailable!"; exit 0;fi
-    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\`date +%s%N\`85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\${random_id}85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":[1, "'\$txBytes'"],"id":83}' \$1
+    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \$1
 }
 
 send_many_tx()
@@ -854,7 +777,7 @@ generate_server_scripts()
     cat << EOF >> "$output/start_all.sh"
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
-    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
         echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
@@ -863,7 +786,7 @@ EOF
     cat << EOF >> "$output/stop_all.sh"
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
-    if [ -d "\${SHELL_FOLDER}/\${directory}" ];then  
+    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
         echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
@@ -902,8 +825,8 @@ else
     help 
 fi
 
-if [ -z ${eth_path} ];then
-    eth_path=${output_dir}/${bcos_bin_name}
+if [ -z ${bin_path} ];then
+    bin_path=${output_dir}/${bcos_bin_name}
     Download=true
 fi
 
@@ -911,9 +834,14 @@ dir_must_not_exists $output_dir
 mkdir -p "$output_dir"
 
 if [ "${Download}" == "true" ];then
-    echo "Downloading fisco-bcos binary..." 
-    curl -Lo ${eth_path} ${Download_Link}
-    chmod a+x ${eth_path}
+    package_name="fisco-bcos.tar.gz"
+    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+    version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+    curl -LO ${Download_Link}
+    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
+    chmod a+x ${bin_path}
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -926,6 +854,7 @@ fi
 if [ "${use_ip_param}" == "true" ];then
     for i in `seq 0 ${#ip_array[*]}`;do
         agency_array[i]="agency"
+        group_array[i]=1
     done
 fi
 
@@ -968,30 +897,28 @@ ip_list=""
 count=0
 server_count=0
 groups=
+ip_node_counts=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    if [ -z "$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")" ];then
+    checkIP=$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
+    if [ -z "${checkIP}" ];then
         LOG_WARN "Please check IP address: ${ip}"
     fi
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
-    
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
+        node_dir="$output_dir/${ip}/node${ip_node_counts[${ip//./}]}"
         [ -d "${node_dir}" ] && echo "${node_dir} exist! Please delete!" && exit 1
         
         while :
         do
             gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >$output_dir/${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.json node.param node.private node.ca node.pubkey
+            rm node.param node.private node.pubkey agency.crt
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -1007,12 +934,11 @@ for line in ${ip_array[*]};do
             if [ -n "$guomi_mode" ]; then
                 gen_node_cert_gm "" ${output_dir}/gmcert/agency ${node_dir} >$output_dir/build.log 2>&1
                 mkdir -p ${gm_conf_path}/
-                rm gmnode.json gmnode.ca
                 mv ./*.* ${gm_conf_path}/
 
                 #private key should not start with 00
                 cd $output_dir
-                privateKey=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
+                privateKey=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
                 if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
@@ -1023,29 +949,18 @@ for line in ${ip_array[*]};do
             break;
         done
         cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
-        cat ${output_dir}/cert/ca.crt >> ${node_dir}/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
             cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
             cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
             #move origin conf to gm conf
-            rm ${node_dir}/${conf_path}/agency.crt
             rm ${node_dir}/${conf_path}/node.nodeid
-            rm ${node_dir}/${conf_path}/node.serial
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
         fi
 
-        # gen sdk files
-        mkdir -p ${node_dir}/sdk/
-        # read_password
-        openssl pkcs12 -export -name client -passout "pass:${pkcs12_passwd}" -in "${node_dir}/${conf_path}/node.crt" -inkey "${node_dir}/${conf_path}/node.key" -out "${node_dir}/sdk/keystore.p12"
-        cp ${output_dir}/cert/ca.crt ${node_dir}/sdk/
-        # gen_sdk_cert ${output_dir}/cert/agency ${node_dir}
-        # mv ${node_dir}/* ${node_dir}/sdk/
-
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($OPENSSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         else
             nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
         fi
@@ -1071,47 +986,52 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( port_start + i * 3 ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${ip_node_counts[${ip//./}]} + port_start[0] ))"
     "
+        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
         ((++count))
     done
+    sdk_path="$output_dir/${ip}/sdk"
+    if [ ! -d ${sdk_path} ];then
+        gen_node_cert "" ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">$output_dir/${logfile} 2>&1
+        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
+        rm node.param node.private node.pubkey node.nodeid agency.crt
+        cp ${output_dir}/cert/ca.crt ${sdk_path}/
+        cd $output_dir
+    fi
     ((++server_count))
 done 
 cd ..
 
-
+ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
-generate_script_template "$output_dir/replace_all.sh"
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
-    if [ "${use_ip_param}" == "true" ];then
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:1"
-    else
-        echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    fi
+    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
+    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> $output_dir/${logfile}
-        node_dir="$output_dir/${ip}/node_${ip}_${i}"
-        generate_config_ini "${node_dir}/config.ini" ${i} "${group_array[server_count]}"
+        node_dir="$output_dir/${ip}/node${ip_node_counts[${ip//./}]}"
+        generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${groups[${j}]}"
+                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}"
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "${nodeid_list}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}"
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
+        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
     done
     generate_server_scripts "$output_dir/${ip}"
-    cp "$eth_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
+    cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 

@@ -21,6 +21,7 @@
  */
 
 #include "SecureInitializer.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
@@ -106,7 +107,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM* p) {});
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
 
     std::shared_ptr<char> privateKeyData(
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
@@ -239,7 +240,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM* p) {});
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
 
     std::shared_ptr<char> privateKeyData(
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
@@ -329,10 +330,10 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;
-        m_sslContexts[Usage::ForP2p] = gmConfig.sslContext;
+        m_sslContexts[Usage::ForP2P] = gmConfig.sslContext;
 
         ConfigResult originConfig = initOriginConfig(pt);
-        m_sslContexts[Usage::ForRpc] = originConfig.sslContext;
+        m_sslContexts[Usage::ForRPC] = originConfig.sslContext;
     }
     catch (Exception& e)
     {

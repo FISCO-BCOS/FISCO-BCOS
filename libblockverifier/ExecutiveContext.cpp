@@ -88,16 +88,14 @@ bool ExecutiveContext::isPrecompiled(Address address) const
 
 Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
 {
-    LOG(TRACE) << LOG_DESC("[#getPrecompiled]")
-               << LOG_KV("addressSize", m_address2Precompiled.size());
-
     auto itPrecompiled = m_address2Precompiled.find(address);
 
     if (itPrecompiled != m_address2Precompiled.end())
     {
         return itPrecompiled->second;
     }
-
+    /// since non-precompile contracts will print this log, modify the log level to DEBUG
+    LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
     return Precompiled::Ptr();
 }
 
@@ -123,7 +121,7 @@ bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
     return m_precompiledContract.count(_a);
 }
 
-std::pair<bool, bytes> ExecutiveContext::executeOrginPrecompiled(
+std::pair<bool, bytes> ExecutiveContext::executeOriginPrecompiled(
     Address const& _a, bytesConstRef _in) const
 {
     return m_precompiledContract.at(_a).execute(_in);
