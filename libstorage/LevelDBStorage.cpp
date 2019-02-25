@@ -27,6 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <omp.h>
 #include <memory>
+#include <thread>
 
 using namespace dev;
 using namespace dev::storage;
@@ -91,71 +92,107 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
     return Entries::Ptr();
 }
 
+size_t LevelDBStorage::commitTableDataRange(
+    TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to)
+{
+    // commit table data of given range, thread safe
+    // range to commit: [from, to)
+    if (from >= to)
+        return 0;
+
+    size_t total = 0;
+    std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
+    auto dataIt = tableData->data.begin();
+    std::advance(dataIt, from);
+
+    while (from < to && dataIt != tableData->data.end())
+    {
+        if (dataIt->second->size() == 0u)
+        {
+            dataIt++;
+            from++;
+            continue;
+        }
+        std::string entryKey = tableData->tableName + "_" + dataIt->first;
+        Json::Value entry;
+
+        for (size_t i = 0; i < dataIt->second->size(); ++i)
+        {
+            Json::Value value;
+            for (auto& fieldIt : *(dataIt->second->get(i)->fields()))
+            {
+                value[fieldIt.first] = fieldIt.second;
+            }
+            value["_hash_"] = hash.hex();
+            value["_num_"] = num;
+            entry["values"].append(value);
+        }
+
+        std::stringstream ssOut;
+        ssOut << entry;
+
+        batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+        ++total;
+        // ssOut.seekg(0, std::ios::end);
+        STORAGE_LEVELDB_LOG(TRACE)
+            << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt->second->size());
+        //<< LOG_KV("len", ssOut.tellg());
+        dataIt++;
+        from++;
+    }
+
+    auto record_time = utcTime();
+    leveldb::WriteOptions writeOptions;
+    writeOptions.sync = false;
+    // WriteGuard l(m_remoteDBMutex);
+    auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
+    auto writeDB_time_cost = utcTime() - record_time;
+    STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
+                               << LOG_KV("timeCost", writeDB_time_cost);
+    // l.unlock();
+    if (!s.ok())
+    {
+        STORAGE_LEVELDB_LOG(ERROR)
+            << LOG_DESC("Commit leveldb failed") << LOG_KV("status", s.ToString());
+
+        BOOST_THROW_EXCEPTION(StorageException(-1, "Commit leveldb exception:" + s.ToString()));
+        return 0;
+    }
+
+    return total;
+}
+
 size_t LevelDBStorage::commit(
     h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
 {
     try
     {
-        std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
-        size_t total = 0;
-        SharedMutex x_batch;
+        std::atomic<size_t> total;
+        total = 0;
 
-#pragma omp parallel for
         for (size_t i = 0; i < datas.size(); ++i)
         {
             TableData::Ptr tableData = datas[i];
-            for (auto& dataIt : tableData->data)
+            size_t totalSize = tableData->data.size();
+            size_t threadNum = std::thread::hardware_concurrency();
+            if (totalSize < threadNum)  //
             {
-                if (dataIt.second->size() == 0u)
+                commitTableDataRange(tableData, hash, num, 0, totalSize);
+            }
+            else
+            {
+#pragma omp parallel for
+                for (size_t j = 0; j < threadNum; ++j)
                 {
-                    continue;
+                    size_t from = (totalSize / threadNum) * j;
+                    size_t to = std::min((totalSize / threadNum) * (j + 1), totalSize);
+                    size_t threadTotal = commitTableDataRange(tableData, hash, num, from, to);
+                    total += threadTotal;
                 }
-                std::string entryKey = tableData->tableName + "_" + dataIt.first;
-                Json::Value entry;
-
-                for (size_t i = 0; i < dataIt.second->size(); ++i)
-                {
-                    Json::Value value;
-                    for (auto& fieldIt : *(dataIt.second->get(i)->fields()))
-                    {
-                        value[fieldIt.first] = fieldIt.second;
-                    }
-                    value["_hash_"] = hash.hex();
-                    value["_num_"] = num;
-                    entry["values"].append(value);
-                }
-
-                std::stringstream ssOut;
-                ssOut << entry;
-
-                WriteGuard l(x_batch);
-                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
-                ++total;
-                // ssOut.seekg(0, std::ios::end);
-                STORAGE_LEVELDB_LOG(TRACE)
-                    << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt.second->size());
-                //<< LOG_KV("len", ssOut.tellg());
             }
         }
 
-        auto record_time = utcTime();
-        leveldb::WriteOptions writeOptions;
-        writeOptions.sync = false;
-        // WriteGuard l(m_remoteDBMutex);
-        auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
-        auto writeDB_time_cost = utcTime() - record_time;
-        STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
-                                   << LOG_KV("timeCost", writeDB_time_cost);
-        // l.unlock();
-        if (!s.ok())
-        {
-            STORAGE_LEVELDB_LOG(ERROR)
-                << LOG_DESC("Commit leveldb failed") << LOG_KV("status", s.ToString());
-
-            BOOST_THROW_EXCEPTION(StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-        }
-
-        return total;
+        return total.load();
     }
     catch (std::exception& e)
     {

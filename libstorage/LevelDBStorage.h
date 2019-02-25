@@ -49,6 +49,8 @@ public:
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
+    size_t commitTableDataRange(
+        TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
 };
