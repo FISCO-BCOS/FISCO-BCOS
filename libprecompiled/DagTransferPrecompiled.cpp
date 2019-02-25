@@ -50,7 +50,7 @@ const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
 const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
-DagTransferPrecompiled::DagTransferPrecompiled()
+DagTransferPrecompiled::DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context)
 {
     name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
@@ -61,6 +61,9 @@ DagTransferPrecompiled::DagTransferPrecompiled()
     name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_TRS_STR2_UINT);
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
+
+    // Create table before parallel execution
+    openTable(context, Address());
 }
 
 bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
@@ -151,7 +154,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
         table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
-            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, true, origin);
+            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, false, origin, true);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");

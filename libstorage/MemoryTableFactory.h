@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Common.h"
+#include "ConcurrentMemoryTable.h"
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
@@ -47,7 +48,8 @@ public:
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = false);
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag, Address const& _origin = Address());
+        const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
+        bool isPara = false);
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }

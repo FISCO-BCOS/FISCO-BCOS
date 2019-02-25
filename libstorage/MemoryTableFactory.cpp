@@ -89,10 +89,12 @@ Table::Ptr MemoryTableFactory::openTable(
     Table::Ptr memoryTable = nullptr;
     if (isPara)
     {
+        std::cout << "create table para " << tableName << std::endl;
         memoryTable = std::make_shared<MemoryTable<Parallel>>();
     }
     else
     {
+        std::cout << "create table " << tableName << std::endl;
         memoryTable = std::make_shared<MemoryTable<Serial>>();
     }
 
@@ -134,10 +136,10 @@ Table::Ptr MemoryTableFactory::openTable(
 }
 
 Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
-    const std::string& keyField, const std::string& valueField, bool authorigytFlag,
-    Address const& _origin)
+    const std::string& keyField, const std::string& valueField, bool authorityFlag,
+    Address const& _origin, bool isPara)
 {
-    auto sysTable = openTable(SYS_TABLES, authorigytFlag);
+    auto sysTable = openTable(SYS_TABLES, authorityFlag);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
@@ -163,7 +165,7 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
         return nullptr;
     }
-    return openTable(tableName);
+    return openTable(tableName, authorityFlag, isPara);
 }
 
 void MemoryTableFactory::setBlockHash(h256 blockHash)
@@ -221,6 +223,8 @@ void MemoryTableFactory::commit() {}
 
 void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     vector<dev::storage::TableData::Ptr> datas;
 
     for (auto& dbIt : m_name2Table)
@@ -237,15 +241,25 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
             datas.push_back(tableData);
         }
     }
+    auto getData_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     if (!datas.empty())
     {
         /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
         stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
+    auto commit_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     m_name2Table.clear();
     m_changeLog.clear();
+    auto clear_time_cost = utcTime() - record_time;
+    STORAGE_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit db time record")
+                       << LOG_KV("getDataTimeCost", getData_time_cost)
+                       << LOG_KV("commitTimeCost", commit_time_cost)
+                       << LOG_KV("clearTimeCost", clear_time_cost)
+                       << LOG_KV("totalTimeCost", utcTime() - start_time);
 }
 
 storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
