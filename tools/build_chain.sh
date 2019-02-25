@@ -28,6 +28,8 @@ gm_conf_path="gmconf/"
 CUR_DIR=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
+auto_flush="true"
+
 
 help() {
     echo $1
@@ -35,7 +37,7 @@ help() {
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
-    -e <FISCO-BCOS binary path>         Default download from GitHub
+    -e <FISCO-BCOS binary path>         Default download fisco-bcos from GitHub. If set -e, use the binary at the specified location
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
@@ -45,6 +47,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
+    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -67,7 +70,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgT" option;do
+while getopts "f:l:o:p:e:t:icszhgTd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -87,6 +90,7 @@ while getopts "f:l:o:p:e:t:icszhgT" option;do
     T) debug_log="true"
     log_level="debug"
     ;;
+    d) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     h) help;;
@@ -445,7 +449,7 @@ generate_config_ini()
     level=${log_level}
     max_log_file_size=209715200
     ; control log auto_flush
-    flush=true
+    flush=${auto_flush}
     ;easylog config
     format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     log_flush_threshold=100
@@ -1002,7 +1006,6 @@ cd ..
 ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
-generate_script_template "$output_dir/replace_all.sh"
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
@@ -1029,7 +1032,6 @@ for line in ${ip_array[*]};do
     done
     generate_server_scripts "$output_dir/${ip}"
     cp "$bin_path" "$output_dir/${ip}/fisco-bcos"
-    echo "cp \${1} \${SHELL_FOLDER}/${ip}/" >> "$output_dir/replace_all.sh"
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 

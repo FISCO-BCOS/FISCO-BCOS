@@ -119,6 +119,8 @@ private:
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
 
+    bool isBlockShouldCommit(int64_t const& _blockNumber);
+
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
     const std::string c_genesisHash =

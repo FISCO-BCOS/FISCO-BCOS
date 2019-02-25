@@ -758,12 +758,16 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     {
         return false;
     }
+    /// update the view for given idx
+    updateViewMap(prepareReq.idx, prepareReq.view);
+
     if (valid_ret == CheckResult::FUTURE)
     {
         return true;
     }
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
+
     Sealing workingSealing;
     try
     {
@@ -993,6 +997,8 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return false;
     }
+    updateViewMap(sign_req.idx, sign_req.view);
+
     if (check_ret == CheckResult::FUTURE)
     {
         return true;
@@ -1068,6 +1074,9 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
     {
         return false;
     }
+    /// update the view for given idx
+    updateViewMap(commit_req.idx, commit_req.view);
+
     if (valid_ret == CheckResult::FUTURE)
     {
         return true;
@@ -1401,7 +1410,7 @@ void PBFTEngine::handleFutureBlock()
 }
 
 /// get the status of PBFT consensus
-const std::string PBFTEngine::consensusStatus() const
+const std::string PBFTEngine::consensusStatus()
 {
     json_spirit::Array status;
     json_spirit::Object statusObj;
@@ -1415,11 +1424,34 @@ const std::string PBFTEngine::consensusStatus() const
     /// get leader failed or not
     statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
     status.push_back(statusObj);
+
+    /// get view of node id
+    getAllNodesViewStatus(status);
+
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);
     json_spirit::Value value(status);
     std::string status_str = json_spirit::write_string(value, true);
     return status_str;
 }
+
+void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
+{
+    updateViewMap(nodeIdx(), m_view);
+    json_spirit::Array view_array;
+    ReadGuard l(x_viewMap);
+    for (auto it : m_viewMap)
+    {
+        json_spirit::Object view_obj;
+        dev::network::NodeID node_id = getSealerByIndex(it.first);
+        if (node_id != dev::network::NodeID())
+        {
+            view_obj.push_back(json_spirit::Pair("0x" + dev::toHex(node_id), it.second));
+            view_array.push_back(view_obj);
+        }
+    }
+    status.push_back(view_array);
+}
+
 }  // namespace consensus
 }  // namespace dev
