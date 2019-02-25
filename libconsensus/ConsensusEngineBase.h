@@ -89,7 +89,7 @@ public:
         resetConfig();
     }
 
-    const std::string consensusStatus() const override
+    const std::string consensusStatus() override
     {
         json_spirit::Object status_obj;
         getBasicConsensusStatus(status_obj);
@@ -105,13 +105,14 @@ public:
         status_obj.push_back(json_spirit::Pair("max_faulty_leader", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
-        status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
+        status_obj.push_back(
+            json_spirit::Pair("highestblockHash", "0x" + toHex(m_highestBlock.hash())));
         status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
         status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
-        status_obj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
+        status_obj.push_back(json_spirit::Pair("nodeID", "0x" + toHex(m_keyPair.pub())));
         int i = 0;
         std::string sealer_list = "";
         {

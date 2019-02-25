@@ -312,7 +312,8 @@ private:
     void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
     {
         json_spirit::Object cacheStatus;
-        cacheStatus.push_back(json_spirit::Pair(key + "_blockHash", toHex(cache.block_hash)));
+        cacheStatus.push_back(
+            json_spirit::Pair(key + "_blockHash", "0x" + toHex(cache.block_hash)));
         cacheStatus.push_back(json_spirit::Pair(key + "_height", cache.height));
         cacheStatus.push_back(json_spirit::Pair(key + "_idx", toString(cache.idx)));
         cacheStatus.push_back(json_spirit::Pair(key + "_view", toString(cache.view)));

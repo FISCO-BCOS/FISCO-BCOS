@@ -835,15 +835,23 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeNumber2Hash(block, context);
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
-    int64_t num = number();
-    if ((block.blockHeader().number() != num + 1))
+    if (_blockNumber != number() + 1)
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect block number")
-                                << LOG_KV("needNumber", num + 1)
-                                << LOG_KV("committedNumber", block.blockHeader().number());
+                                << LOG_KV("needNumber", number() + 1)
+                                << LOG_KV("committedNumber", _blockNumber);
+        return false;
+    }
+    return true;
+}
+
+CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+{
+    if (!isBlockShouldCommit(block.blockHeader().number()))
+    {
         return CommitResult::ERROR_NUMBER;
     }
 
@@ -861,7 +869,10 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     {
         {
             std::lock_guard<std::mutex> l(commitMutex);
-
+            if (!isBlockShouldCommit(block.blockHeader().number()))
+            {
+                return CommitResult::ERROR_PARENT_HASH;
+            }
             writeBlockInfo(block, context);
 
             writeNumber(block, context);

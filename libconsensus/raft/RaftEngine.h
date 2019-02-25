@@ -107,7 +107,7 @@ public:
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
     void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
-    const std::string consensusStatus() const override;
+    const std::string consensusStatus() override;
 
 protected:
     void initRaftEnv();

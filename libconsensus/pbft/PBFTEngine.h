@@ -30,6 +30,7 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libsync/SyncStatus.h>
 #include <sstream>
 
 #include <libp2p/P2PMessage.h>
@@ -133,7 +134,7 @@ public:
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
-    const std::string consensusStatus() const override;
+    const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
@@ -155,7 +156,7 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
+    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
@@ -163,9 +164,12 @@ protected:
     }
     bool needOmit(Sealing const& sealing);
 
+    void getAllNodesViewStatus(json_spirit::Array& status);
+
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        std::unordered_set<dev::network::NodeID> const& filter =
+            std::unordered_set<dev::network::NodeID>(),
         unsigned const& ttl = 0);
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -212,7 +216,7 @@ protected:
 
     bool checkSign(PBFTMsg const& req) const;
     inline bool broadcastFilter(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -227,7 +231,7 @@ protected:
      * common
      */
     inline void broadcastMark(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -239,7 +243,7 @@ protected:
     /// @param nodeId: the node id of the sealer
     /// @return : 1. >0: the index of the sealer
     ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    inline ssize_t getIndexBySealer(dev::h512 const& nodeId)
+    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
         ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
@@ -257,11 +261,12 @@ protected:
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getSealerByIndex(size_t const& index) const
+    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
+        ReadGuard l(m_sealerListMutex);
         if (index < m_sealerList.size())
             return m_sealerList[index];
-        return h512();
+        return dev::network::NodeID();
     }
 
     /// trans data into message
@@ -318,7 +323,7 @@ protected:
             return false;
         }
         /// check whether this node is in the sealer list
-        h512 node_id;
+        dev::network::NodeID node_id;
         bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
         if (!is_sealer || session->nodeID() == node_id)
             return false;
@@ -404,6 +409,7 @@ protected:
         }
         return false;
     }
+
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
@@ -484,6 +490,12 @@ protected:
         return boost::filesystem::space(path).available > 1024;
     }
 
+    void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
+    {
+        WriteGuard l(x_viewMap);
+        m_viewMap[idx] = view;
+    }
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
@@ -516,6 +528,10 @@ protected:
     bool m_emptyBlockViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
+
+    /// map between nodeIdx to view
+    mutable SharedMutex x_viewMap;
+    std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 };
 }  // namespace consensus
 }  // namespace dev

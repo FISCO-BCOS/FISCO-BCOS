@@ -1523,7 +1523,7 @@ bool RaftEngine::reachBlockIntervalTime()
     return nowTime - parentTime >= g_BCOSConfig.c_intervalBlockTime;
 }
 
-const std::string RaftEngine::consensusStatus() const
+const std::string RaftEngine::consensusStatus()
 {
     json_spirit::Array status;
     json_spirit::Object statusObj;
