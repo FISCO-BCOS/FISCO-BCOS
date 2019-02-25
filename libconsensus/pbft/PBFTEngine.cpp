@@ -876,6 +876,8 @@ void PBFTEngine::checkAndCommit()
 /// check whether view and height is valid, if valid, then commit the block and clear the context
 void PBFTEngine::checkAndSave()
 {
+    auto start_commit_time = utcTime();
+    auto record_time = utcTime();
     size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
     size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
     if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
@@ -904,22 +906,34 @@ void PBFTEngine::checkAndSave()
             /// Block block(m_reqCache->prepareCache().block);
             std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
-            auto start_commit_time = utcTime();
+            auto genSig_time_cost = utcTime() - record_time;
+            record_time = utcTime();
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock((*p_block),
                 std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            auto commitBlock_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
                 dropHandledTransactions(*p_block);
+                auto dropTxs_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
+                auto noteSealing_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 PBFTENGINE_LOG(DEBUG)
                     << LOG_DESC("CommitBlock Succ")
                     << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                     << LOG_KV("idx", m_reqCache->prepareCache().idx)
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("myIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
-                    << LOG_KV("time_cost", utcTime() - start_commit_time);
+                    << LOG_KV("genSigTimeCost", genSig_time_cost)
+                    << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                    << LOG_KV("dropTxsTimeCost", dropTxs_time_cost)
+                    << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
+                    << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else

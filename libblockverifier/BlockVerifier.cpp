@@ -144,8 +144,8 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
 
-    uint64_t startTime = utcTime();
-
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     try
     {
@@ -160,10 +160,14 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
                               << errinfo_comment("Error during initExecutiveContext"));
     }
+    auto initExeCtx_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
     block.resizeTransactionReceipt(block.transactions().size());
+    auto perpareBlock_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(executiveContext, block.transactions());
@@ -172,27 +176,35 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         TxExeFunc(_tr, _txId);
         return true;
     });
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Init DAG takes")
-                             << LOG_KV("time(ms)", utcTime() - startTime)
-                             << LOG_KV("txNum", block.transactions().size())
-                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
-                             << LOG_KV("num", block.blockHeader().number()) << std::endl;
-    uint64_t pastTime = utcTime();
+    auto initDag_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
-    m_paraTxExecutor->start(txDag);
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run para tx takes")
-                             << LOG_KV("time(ms)", utcTime() - pastTime)
-                             << LOG_KV("txNum", txDag->paraTxsNumber())
-                             << LOG_KV("haveExecureTxNum", txDag->haveExecuteNumber())
-                             << LOG_KV("num", block.blockHeader().number()) << std::endl;
-    pastTime = utcTime();
+    // m_paraTxExecutor->start(txDag);
+#pragma omp parallel
+    {
+        while (!txDag->hasFinished())
+            txDag->executeUnit();
+    }
+    auto exe_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     h256 stateRoot = executiveContext->getState()->rootHash();
+    auto getRootHash_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     // set stateRoot in receipts
     block.setStateRootToAllReceipt(stateRoot);
     block.updateSequenceReceiptGas();
+    auto setAllReceipt_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     block.calReceiptRoot();
+    auto getReceiptRoot_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     block.header().setStateRoot(stateRoot);
+    auto setStateRoot_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
@@ -202,14 +214,22 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }
     }
-    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")
-                             << LOG_KV("time(ms)", utcTime() - startTime)
+    BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block takes")
+                             << LOG_KV("time(ms)", utcTime() - start_time)
                              << LOG_KV("txNum", block.transactions().size())
                              << LOG_KV("num", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
                              << LOG_KV("transactionRoot", block.transactionRoot())
-                             << LOG_KV("receiptRoot", block.receiptRoot());
+                             << LOG_KV("receiptRoot", block.receiptRoot())
+                             << LOG_KV("initExeCtxTimeCost", initExeCtx_time_cost)
+                             << LOG_KV("perpareBlockTimeCost", perpareBlock_time_cost)
+                             << LOG_KV("initDagTimeCost", initDag_time_cost)
+                             << LOG_KV("exeTimeCost", exe_time_cost)
+                             << LOG_KV("getRootHashTimeCost", getRootHash_time_cost)
+                             << LOG_KV("setAllReceiptTimeCost", setAllReceipt_time_cost)
+                             << LOG_KV("getReceiptRootTimeCost", getReceiptRoot_time_cost)
+                             << LOG_KV("setStateRootTimeCost", setStateRoot_time_cost);
     return executiveContext;
 }
 
