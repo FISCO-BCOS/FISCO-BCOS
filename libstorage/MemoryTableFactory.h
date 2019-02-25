@@ -21,7 +21,6 @@
 #pragma once
 
 #include "Common.h"
-#include "ConcurrentMemoryTable.h"
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
