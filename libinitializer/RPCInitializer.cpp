@@ -85,7 +85,9 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     std::string topic =
                         "_block_notify_" + boost::lexical_cast<std::string>((int)groupID);
-                    std::string content = boost::lexical_cast<std::string>(groupID) + "," +
+                    uint8_t topic_len = 1;
+                    std::string content = boost::lexical_cast<std::string>(topic_len) +
+                                          boost::lexical_cast<std::string>(groupID) + "," +
                                           boost::lexical_cast<std::string>(number);
 
                     auto message = c->channelServer()->messageFactory()->buildMessage();
