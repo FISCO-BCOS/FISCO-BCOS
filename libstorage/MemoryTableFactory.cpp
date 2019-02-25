@@ -89,12 +89,10 @@ Table::Ptr MemoryTableFactory::openTable(
     Table::Ptr memoryTable = nullptr;
     if (isPara)
     {
-        std::cout << "create table para " << tableName << std::endl;
         memoryTable = std::make_shared<MemoryTable<Parallel>>();
     }
     else
     {
-        std::cout << "create table " << tableName << std::endl;
         memoryTable = std::make_shared<MemoryTable<Serial>>();
     }
 
