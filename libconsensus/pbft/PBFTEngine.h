@@ -493,14 +493,7 @@ protected:
     void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
     {
         WriteGuard l(x_viewMap);
-        if (idx != nodeIdx())
-        {
-            m_viewMap[idx] = view;
-        }
-        else
-        {
-            m_viewMap[idx] = m_view;
-        }
+        m_viewMap[idx] = m_view;
     }
 
 protected:
