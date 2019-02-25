@@ -73,13 +73,13 @@ string const SyncMaster::syncInfo() const
     json_spirit::Object syncInfo;
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
     syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
-    syncInfo.push_back(json_spirit::Pair("genesisHash", toHex(m_syncStatus->genesisHash)));
+    syncInfo.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(m_syncStatus->genesisHash)));
     syncInfo.push_back(json_spirit::Pair("nodeId", toHex(m_nodeId)));
 
     int64_t currentNumber = m_blockChain->number();
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
-        json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
+        json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
     // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
     // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
     // toHex(m_syncStatus->knownLatestHash)));
@@ -89,9 +89,9 @@ string const SyncMaster::syncInfo() const
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         json_spirit::Object info;
         info.push_back(json_spirit::Pair("nodeId", toHex(_p->nodeId)));
-        info.push_back(json_spirit::Pair("genesisHash", toHex(_p->genesisHash)));
+        info.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(_p->genesisHash)));
         info.push_back(json_spirit::Pair("blockNumber", _p->number));
-        info.push_back(json_spirit::Pair("latestHash", toHex(_p->latestHash)));
+        info.push_back(json_spirit::Pair("latestHash", toHexPrefixed(_p->latestHash)));
         peersInfo.push_back(info);
         return true;
     });
