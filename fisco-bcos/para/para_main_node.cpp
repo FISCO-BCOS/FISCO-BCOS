@@ -23,7 +23,6 @@
 #include "ParamParse.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libblockverifier/ParaTxExecutor.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>

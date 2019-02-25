@@ -24,7 +24,6 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libblockverifier/ParaTxExecutor.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
@@ -306,13 +305,13 @@ bool Ledger::initBlockVerifier()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
         return false;
     }
-    std::shared_ptr<ParaTxExecutor> executor = nullptr;
+
+    bool enableParallel = false;
     if (m_param->mutableTxParam().enableParallel)
     {
-        executor = std::make_shared<ParaTxExecutor>();
-        executor->initialize();
+        enableParallel = true;
     }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =

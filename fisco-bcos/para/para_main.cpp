@@ -22,7 +22,6 @@
  */
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libblockverifier/ParaTxExecutor.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>
@@ -163,10 +162,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initStateDB(genesisHash);
 
-    std::shared_ptr<ParaTxExecutor> executor = std::make_shared<ParaTxExecutor>();
-    executor->initialize();
-
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(executor);
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(true);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> _blockChain =

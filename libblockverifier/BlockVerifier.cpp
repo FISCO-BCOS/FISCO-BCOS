@@ -47,7 +47,7 @@ using namespace dev::executive;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
-    if (m_paraTxExecutor == nullptr)
+    if (!m_enableParallel)
     {
         return serialExecuteBlock(block, parentBlockInfo);
     }
@@ -179,7 +179,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    // m_paraTxExecutor->start(txDag);
 #pragma omp parallel
     {
         while (!txDag->hasFinished())
