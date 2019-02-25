@@ -318,7 +318,8 @@ void SyncMaster::maintainPeersStatus()
     // Skip downloading if last if not timeout
 
     uint64_t currentTime = utcTime();
-    if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
+    if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
+        (int64_t)c_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
                         << LOG_KV("currentNumber", currentNumber)
@@ -413,21 +414,36 @@ bool SyncMaster::maintainDownloadingQueue()
         {
             if (isNewBlock(topBlock))
             {
+                auto record_time = utcTime();
                 auto parentBlock =
                     m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
                 BlockInfo parentBlockInfo{parentBlock->header().hash(),
                     parentBlock->header().number(), parentBlock->header().stateRoot()};
+                auto getBlockByNumber_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
                 ExecutiveContext::Ptr exeCtx =
                     m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                auto executeBlock_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
                 CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                auto commitBlock_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 if (ret == CommitResult::OK)
                 {
                     m_txPool->dropBlockTrans(*topBlock);
-                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                    << LOG_DESC("Download block commit")
-                                    << LOG_KV("number", topBlock->header().number())
-                                    << LOG_KV("txs", topBlock->transactions().size())
-                                    << LOG_KV("hash", topBlock->headerHash().abridged());
+                    auto dropBlockTrans_time_cost = utcTime() - record_time;
+                    SYNC_LOG(DEBUG)
+                        << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Download block commit")
+                        << LOG_KV("number", topBlock->header().number())
+                        << LOG_KV("txs", topBlock->transactions().size())
+                        << LOG_KV("hash", topBlock->headerHash().abridged())
+                        << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
+                        << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
+                        << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                        << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
                 }
                 else
                 {
@@ -604,8 +620,9 @@ void SyncMaster::maintainBlockRequest()
             // Send block at sequence
             for (; number < numberLimit && utcTime() <= timeout; number++)
             {
-                shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
-                if (!block)
+                auto start_get_block_time = utcTime();
+                shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
+                if (!blockRLP)
                 {
                     SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                     << LOG_DESC("Get block for node failed")
@@ -613,17 +630,12 @@ void SyncMaster::maintainBlockRequest()
                                     << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
                 }
-                else if (block->header().number() != number)
-                {
-                    SYNC_LOG(TRACE)
-                        << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Get block for node failed")
-                        << LOG_KV("reason", "number incorrect") << LOG_KV("number", number)
-                        << LOG_KV("nodeId", _p->nodeId.abridged());
-                    break;
-                }
 
-                blockContainer.batchAndSend(block);
+                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                                << LOG_BADGE("BlockSync") << LOG_DESC("Batch blocks for sending")
+                                << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
+                                << LOG_KV("timeCost", utcTime() - start_get_block_time);
+                blockContainer.batchAndSend(blockRLP);
             }
 
             if (req.fromNumber < number)
