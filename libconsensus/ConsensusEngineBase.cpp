@@ -137,13 +137,13 @@ void ConsensusEngineBase::updateConsensusNodeList()
     try
     {
         std::stringstream s2;
-        s2 << "[#updateConsensusNodeList] Miners:";
+        s2 << "[#updateConsensusNodeList] Sealers:";
         {
-            WriteGuard l(m_minerListMutex);
-            m_minerList = m_blockChain->minerList();
-            /// to make sure the index of all miners are consistent
-            std::sort(m_minerList.begin(), m_minerList.end());
-            for (dev::h512 node : m_minerList)
+            WriteGuard l(m_sealerListMutex);
+            m_sealerList = m_blockChain->sealerList();
+            /// to make sure the index of all sealers are consistent
+            std::sort(m_sealerList.begin(), m_sealerList.end());
+            for (dev::h512 node : m_sealerList)
                 s2 << node.abridged() << ",";
         }
         s2 << "Observers:";
@@ -169,7 +169,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
 
 void ConsensusEngineBase::updateNodeListInP2P()
 {
-    dev::h512s nodeList = m_blockChain->minerList() + m_blockChain->observerList();
+    dev::h512s nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
     m_service->setNodeListByGroupID(ret.first, nodeList);
 }

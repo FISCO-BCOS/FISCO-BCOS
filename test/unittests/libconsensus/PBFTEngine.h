@@ -38,19 +38,19 @@ namespace dev
 {
 namespace test
 {
-static void FakePBFTMinerByKeyPair(
+static void FakePBFTSealerByKeyPair(
     FakeConsensus<FakePBFTEngine>& fake_pbft, KeyPair const& key_pair)
 {
-    fake_pbft.m_minerList.push_back(key_pair.pub());
+    fake_pbft.m_sealerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
-    fake_pbft.consensus()->appendMiner(key_pair.pub());
+    fake_pbft.consensus()->appendSealer(key_pair.pub());
     fake_pbft.resetSessionInfo();
 }
 
-/// update the miner list of PBFT Consensus
-static void FakePBFTMiner(FakeConsensus<FakePBFTEngine>& fake_pbft)
+/// update the sealer list of PBFT Consensus
+static void FakePBFTSealer(FakeConsensus<FakePBFTEngine>& fake_pbft)
 {
-    FakePBFTMinerByKeyPair(fake_pbft, fake_pbft.consensus()->keyPair());
+    FakePBFTSealerByKeyPair(fake_pbft, fake_pbft.consensus()->keyPair());
 }
 
 
@@ -207,10 +207,10 @@ static void CheckBlockChain(FakeConsensus<FakePBFTEngine>& fake_pbft, int64_t bl
     BOOST_CHECK(p_blockChain->m_blockChain.size() == (uint64_t)blockNumber);
 }
 
-static inline void checkResetConfig(FakeConsensus<FakePBFTEngine>& fake_pbft, bool isMiner)
+static inline void checkResetConfig(FakeConsensus<FakePBFTEngine>& fake_pbft, bool isSealer)
 {
-    BOOST_CHECK(fake_pbft.consensus()->nodeNum() == fake_pbft.consensus()->minerList().size());
-    if (isMiner)
+    BOOST_CHECK(fake_pbft.consensus()->nodeNum() == fake_pbft.consensus()->sealerList().size());
+    if (isSealer)
     {
         BOOST_CHECK(fake_pbft.consensus()->nodeIdx() != MAXIDX);
         BOOST_CHECK(fake_pbft.consensus()->cfgErr() == false);
@@ -240,7 +240,7 @@ static inline void checkDelCommitCache(
 
 /*
 static void checkReportBlock(
-    FakeConsensus<FakePBFTEngine>& fake_pbft, BlockHeader const& highest, bool isMiner = false)
+    FakeConsensus<FakePBFTEngine>& fake_pbft, BlockHeader const& highest, bool isSealer = false)
 {
     BOOST_CHECK(fake_pbft.consensus()->mutableConsensusNumber() ==
                 fake_pbft.consensus()->mutableHighest().number() + 1);
@@ -248,7 +248,7 @@ static void checkReportBlock(
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime > utcTime() - 100000);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime <= utcTime());
     /// check resetConfig
-    checkResetConfig(fake_pbft, isMiner);
+    checkResetConfig(fake_pbft, isSealer);
     /// check clearAllExceptCommitCache
     checkClearAllExceptCommitCache(fake_pbft);
     /// check delCommitCache
@@ -287,7 +287,7 @@ static void checkBroadcastSpecifiedMsg(
     std::string key = tmp_req.uniqueKey();
     /// append session info
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
-    /// case1: the peer node is not miner
+    /// case1: the peer node is not sealer
     if (packetType == SignReqPacket)
     {
         fake_pbft.consensus()->broadcastSignReq(prepare_req);
@@ -303,10 +303,10 @@ static void checkBroadcastSpecifiedMsg(
     }
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
 
-    /// case2: the the peer node is a miner
-    fake_pbft.m_minerList.push_back(peer_keyPair.pub());
-    fake_pbft.consensus()->appendMiner(peer_keyPair.pub());
-    FakePBFTMiner(fake_pbft);
+    /// case2: the the peer node is a sealer
+    fake_pbft.m_sealerList.push_back(peer_keyPair.pub());
+    fake_pbft.consensus()->appendSealer(peer_keyPair.pub());
+    FakePBFTSealer(fake_pbft);
 
     T req(prepare_req, fake_pbft.consensus()->keyPair(), fake_pbft.consensus()->nodeIdx());
     key = req.uniqueKey();
@@ -396,7 +396,7 @@ static void testCheckSign(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& 
 static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq& req)
 {
     /// init the env
-    FakePBFTMiner(fake_pbft);
+    FakePBFTSealer(fake_pbft);
     FakeBlockChain* p_blockChain =
         dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
     BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
@@ -408,7 +408,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     req.view = fake_pbft.consensus()->view();
     Block block;
     fake_pbft.consensus()->resetBlock(block);
-    block.header().setSealerList(fake_pbft.consensus()->minerList());
+    block.header().setSealerList(fake_pbft.consensus()->sealerList());
     block.header().setSealer(u256(req.idx));
     block.encode(req.block);
     block.decode(ref(req.block));
@@ -460,8 +460,8 @@ template <typename T>
 void FakeValidSignorCommitReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PBFTMsgPacket& packet,
     T& req, PrepareReq& prepareReq, KeyPair const& peer_keyPair)
 {
-    FakePBFTMiner(fake_pbft);
-    FakePBFTMinerByKeyPair(fake_pbft, peer_keyPair);
+    FakePBFTSealer(fake_pbft);
+    FakePBFTSealerByKeyPair(fake_pbft, peer_keyPair);
     KeyPair key_pair;
     prepareReq = FakePrepareReq(key_pair);
     fakeValidPrepare(fake_pbft, prepareReq);
@@ -474,7 +474,7 @@ void FakeValidSignorCommitReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PBFTMsgP
     fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
     fake_pbft.consensus()->setView(prepareReq.view);
     FakePBFTMsgPacket(
-        packet, req, SignReqPacket, fake_pbft.m_minerList.size() - 1, peer_keyPair.pub());
+        packet, req, SignReqPacket, fake_pbft.m_sealerList.size() - 1, peer_keyPair.pub());
 }
 
 /// test isExistSign
@@ -565,10 +565,10 @@ static void testReHandleCommitPrepareCache(
     FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq const& req)
 {
     /// check callback broadcastMsg
-    for (size_t i = 0; i < fake_pbft.m_minerList.size(); i++)
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        fake_pbft.m_minerList[i], PrepareReqPacket, req.uniqueKey()) == false);
+                        fake_pbft.m_sealerList[i], PrepareReqPacket, req.uniqueKey()) == false);
     }
 }
 

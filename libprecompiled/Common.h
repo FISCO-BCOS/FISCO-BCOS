@@ -54,7 +54,7 @@ const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = -31;
 
 /// ConsensusPrecompiled
 const int CODE_INVALID_NODEID = -40;
-const int CODE_LAST_MINER = -41;
+const int CODE_LAST_SEALER = -41;
 
 /// CNSPrecompiled -50 ~ -59
 const int CODE_ADDRESS_AND_VERSION_EXIST = -50;

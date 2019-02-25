@@ -49,7 +49,7 @@ public:
      * @param _blockSync: block sync module
      * @param _blockVerifier: block verifier module
      * @param _protocolId: protocolId
-     * @param _minerList: miners to generate and execute block
+     * @param _sealerList: sealers to generate and execute block
      */
     Sealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,

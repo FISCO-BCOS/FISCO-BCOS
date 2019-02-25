@@ -52,7 +52,7 @@ void LogInitializer::initLog(
     boost::property_tree::ptree const& pt, std::string const& channel, std::string const& logType)
 {
     /// set file name
-    std::string logDir = pt.get<std::string>("log.LOG_PATH", "log");
+    std::string logDir = pt.get<std::string>("log.log_path", "log");
     std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M.log";
     boost::shared_ptr<boost::log::sinks::text_file_backend> backend(
         new boost::log::sinks::text_file_backend(boost::log::keywords::file_name = fileName,
@@ -61,8 +61,13 @@ void LogInitializer::initLog(
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
     /// set rotation size
-    uint64_t rotation_size = pt.get<uint64_t>(logType + ".MaxLogFileSize", 209715200);
+    uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 209715200);
     sink->locked_backend()->set_rotation_size(rotation_size);
+
+    /// set auto-flush according to log configuration
+    bool need_flush = pt.get<bool>("log.flush", true);
+    sink->locked_backend()->auto_flush(need_flush);
+
     /// set file format
     sink->set_formatter(
         boost::log::expressions::format("%1%|%2%| %3%") %
@@ -71,10 +76,11 @@ void LogInitializer::initLog(
             "TimeStamp", "%Y-%m-%d %H:%M:%S.%f") %
         boost::log::expressions::smessage);
     /// set log level
-    unsigned log_level = getLogLevel(pt.get<std::string>(logType + ".Level", "info"));
+    unsigned log_level = getLogLevel(pt.get<std::string>("log.level", "info"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
     boost::log::core::get()->add_sink(sink);
+
     m_sinks.push_back(sink);
     // add attributes
     boost::log::add_common_attributes();
