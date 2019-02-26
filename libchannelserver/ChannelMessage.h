@@ -125,10 +125,11 @@ public:
 
     virtual std::string topic()
     {
-        if (!(_type == 0x30 || _type == 0x31))
+        if (!(_type == 0x30 || _type == 0x31 || _type == 0x1001))
         {
             throw(ChannelException(
-                -1, "type: " + boost::lexical_cast<std::string>(_type) + " Not ChannelMessage"));
+                -1, "type: " + boost::lexical_cast<std::string>(_type) +
+                        " Not ChannelMessage, ChannelMessage type must be 0x30, 0x31 or 0x1001"));
         }
 
         if (_data->size() < 1)

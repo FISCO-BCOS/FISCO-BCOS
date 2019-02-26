@@ -770,7 +770,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
     }
 }
 
-dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
+dev::channel:: ::Ptr ChannelRPCServer::pushChannelMessage(
     dev::channel::TopicChannelMessage::Ptr message)
 {
     try

@@ -85,15 +85,14 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     std::string topic =
                         "_block_notify_" + boost::lexical_cast<std::string>((int)groupID);
-                    uint8_t topic_len = 1;
-                    std::string content = boost::lexical_cast<std::string>(topic_len) +
-                                          boost::lexical_cast<std::string>(groupID) + "," +
+                    std::string content = boost::lexical_cast<std::string>(groupID) + "," +
                                           boost::lexical_cast<std::string>(number);
-
-                    auto message = c->channelServer()->messageFactory()->buildMessage();
+                    std::shared_ptr<dev::channel::TopicChannelMessage> message =
+                        std::make_shared<dev::channel::TopicChannelMessage>();
                     message->setType(0x1001);
                     message->setSeq(std::string(32, '0'));
                     message->setResult(0);
+                    message->setTopic(topic);
                     message->setData((const byte*)content.data(), content.size());
                     c->asyncBroadcastChannelMessage(topic, message);
                 }
