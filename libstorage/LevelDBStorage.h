@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MinerPrecompiled.h
+/** @file SealerPrecompiled.h
  *  @author ancelmo
  *  @date 20180921
  */

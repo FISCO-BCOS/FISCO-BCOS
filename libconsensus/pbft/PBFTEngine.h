@@ -30,6 +30,7 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libsync/SyncStatus.h>
 #include <sstream>
 
 #include <libp2p/P2PMessage.h>
@@ -57,9 +58,9 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
-        h512s const& _minerList = h512s())
+        h512s const& _sealerList = h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _minerList),
+            _keyPair, _sealerList),
         m_baseDir(_baseDir)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
@@ -68,7 +69,7 @@ public:
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
 
-        /// register checkMinerList to blockSync for check MinerList
+        /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
     }
 
@@ -133,7 +134,7 @@ public:
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
-    const std::string consensusStatus() const override;
+    const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
@@ -155,17 +156,20 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
+    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
-        checkMinerList(block);
+        checkSealerList(block);
     }
     bool needOmit(Sealing const& sealing);
 
+    void getAllNodesViewStatus(json_spirit::Array& status);
+
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        std::unordered_set<dev::network::NodeID> const& filter =
+            std::unordered_set<dev::network::NodeID>(),
         unsigned const& ttl = 0);
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -212,7 +216,7 @@ protected:
 
     bool checkSign(PBFTMsg const& req) const;
     inline bool broadcastFilter(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -227,7 +231,7 @@ protected:
      * common
      */
     inline void broadcastMark(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -235,17 +239,17 @@ protected:
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
-    /// get the index of specified miner according to its node id
-    /// @param nodeId: the node id of the miner
-    /// @return : 1. >0: the index of the miner
-    ///           2. equal to -1: the node is not a miner(not exists in miner list)
-    inline ssize_t getIndexByMiner(dev::h512 const& nodeId)
+    /// get the index of specified sealer according to its node id
+    /// @param nodeId: the node id of the sealer
+    /// @return : 1. >0: the index of the sealer
+    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
+    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
-        ReadGuard l(m_minerListMutex);
+        ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
-        for (size_t i = 0; i < m_minerList.size(); ++i)
+        for (size_t i = 0; i < m_sealerList.size(); ++i)
         {
-            if (m_minerList[i] == nodeId)
+            if (m_sealerList[i] == nodeId)
             {
                 index = i;
                 break;
@@ -253,15 +257,16 @@ protected:
         }
         return index;
     }
-    /// get the node id of specified miner according to its index
+    /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
-    /// @return h512(): the node is not in the miner list
+    /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getMinerByIndex(size_t const& index) const
+    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
-        if (index < m_minerList.size())
-            return m_minerList[index];
-        return h512();
+        ReadGuard l(m_sealerListMutex);
+        if (index < m_sealerList.size())
+            return m_sealerList[index];
+        return dev::network::NodeID();
     }
 
     /// trans data into message
@@ -294,8 +299,8 @@ protected:
     /**
      * @brief : the message received from the network is valid or not?
      *      invalid cases: 1. received data is empty
-     *                     2. the message is not sended by miners
-     *                     3. the message is not receivied by miners
+     *                     2. the message is not sended by sealers
+     *                     3. the message is not receivied by sealers
      *                     4. the message is sended by the node-self
      * @param message : message constructed from data received from the network
      * @param session : the session related to the network data(can get informations about the
@@ -309,18 +314,18 @@ protected:
         /// check message size
         if (message->buffer()->size() <= 0)
             return false;
-        /// check whether in the miner list
-        peerIndex = getIndexByMiner(session->nodeID());
+        /// check whether in the sealer list
+        peerIndex = getIndexBySealer(session->nodeID());
         if (peerIndex < 0)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC(
                 "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
             return false;
         }
-        /// check whether this node is in the miner list
-        h512 node_id;
-        bool is_miner = getNodeIDByIndex(node_id, nodeIdx());
-        if (!is_miner || session->nodeID() == node_id)
+        /// check whether this node is in the sealer list
+        dev::network::NodeID node_id;
+        bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
+        if (!is_sealer || session->nodeID() == node_id)
             return false;
         return true;
     }
@@ -404,6 +409,7 @@ protected:
         }
         return false;
     }
+
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
@@ -467,7 +473,7 @@ protected:
         return true;
     }
 
-    void checkMinerList(dev::eth::Block const& block);
+    void checkSealerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
@@ -482,6 +488,12 @@ protected:
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
+    }
+
+    void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
+    {
+        WriteGuard l(x_viewMap);
+        m_viewMap[idx] = view;
     }
 
 protected:
@@ -516,6 +528,10 @@ protected:
     bool m_emptyBlockViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
+
+    /// map between nodeIdx to view
+    mutable SharedMutex x_viewMap;
+    std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 };
 }  // namespace consensus
 }  // namespace dev

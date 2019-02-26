@@ -25,7 +25,7 @@ namespace dev
 namespace precompiled
 {
 #if 0
-contract Miner {
+contract Sealer {
     function add(string) public constant returns();
     function remove(string) public returns();
 }
@@ -35,9 +35,9 @@ contract Miner {
 }
 #endif
 
-/// \brief Sign of the miner is valid or not
+/// \brief Sign of the sealer is valid or not
 const char* const NODE_TYPE = "type";
-const char* const NODE_TYPE_MINER = "miner";
+const char* const NODE_TYPE_SEALER = "sealer";
 const char* const NODE_TYPE_OBSERVER = "observer";
 const char* const NODE_KEY_NODEID = "node_id";
 const char* const NODE_KEY_ENABLENUM = "enable_num";
@@ -56,7 +56,7 @@ public:
 
 private:
     void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    bool checkIsLastMiner(std::shared_ptr<storage::Table> table, std::string const& nodeID);
+    bool checkIsLastSealer(std::shared_ptr<storage::Table> table, std::string const& nodeID);
 };
 
 }  // namespace precompiled

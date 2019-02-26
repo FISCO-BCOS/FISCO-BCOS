@@ -33,7 +33,7 @@ using namespace std;
 
 MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
 {
-    m_sysTables.push_back(SYS_MINERS);
+    m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
     m_sysTables.push_back(SYS_ACCESS_TABLE);
     m_sysTables.push_back(SYS_CURRENT_STATE);
@@ -281,7 +281,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
-    if (tableName == SYS_MINERS)
+    if (tableName == SYS_CONSENSUS)
     {
         tableInfo->key = "name";
         tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};

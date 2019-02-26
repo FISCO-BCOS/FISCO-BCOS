@@ -73,6 +73,8 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                                      << LOG_KV("configFile", iter->path().string()) << endl;
                         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
                     }
+                    LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
+                              << LOG_KV("groupID", groupID);
                 }
             }
         }
@@ -107,7 +109,7 @@ bool LedgerInitializer::initSingleGroup(
         return succ;
     }
     _groudID2NodeList[_groupID] =
-        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
+        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().sealerList;
 
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup")
                            << LOG_KV("groupID", to_string(_groupID));

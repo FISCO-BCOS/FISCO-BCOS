@@ -7,4 +7,4 @@ add_library(blockverifier ${SRC_LIST} ${HEADERS})
 
 target_include_directories(blockverifier PRIVATE ..)
 target_link_libraries(blockverifier PUBLIC executivecontext devcore)
-target_link_libraries(blockverifier PRIVATE storage precompiled)
+target_link_libraries(blockverifier PRIVATE storage precompiled extension)

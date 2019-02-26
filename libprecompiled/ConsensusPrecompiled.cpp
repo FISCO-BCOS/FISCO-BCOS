@@ -36,19 +36,19 @@ using namespace dev::precompiled;
 /*
 contract ConsensusSystemTable
 {
-    function addMiner(string nodeID) public returns(int256);
+    function addSealer(string nodeID) public returns(int256);
     function addObserver(string nodeID) public returns(int256);
     function remove(string nodeID) public returns(int256);
 }
 */
 
-const char* const CSS_METHOD_ADD_MINER = "addMiner(string)";
+const char* const CSS_METHOD_ADD_SEALER = "addSealer(string)";
 const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 const char* const CSS_METHOD_REMOVE = "remove(string)";
 
 ConsensusPrecompiled::ConsensusPrecompiled()
 {
-    name2Selector[CSS_METHOD_ADD_MINER] = getFuncSelector(CSS_METHOD_ADD_MINER);
+    name2Selector[CSS_METHOD_ADD_SEALER] = getFuncSelector(CSS_METHOD_ADD_SEALER);
     name2Selector[CSS_METHOD_ADD_SER] = getFuncSelector(CSS_METHOD_ADD_SER);
     name2Selector[CSS_METHOD_REMOVE] = getFuncSelector(CSS_METHOD_REMOVE);
 }
@@ -70,15 +70,15 @@ bytes ConsensusPrecompiled::call(
     showConsensusTable(context);
 
 
-    if (func == name2Selector[CSS_METHOD_ADD_MINER])
+    if (func == name2Selector[CSS_METHOD_ADD_SEALER])
     {
-        // addMiner(string)
+        // addSealer(string)
         std::string nodeID;
         abi.abiOut(data, nodeID);
         // Uniform lowercase nodeID
         boost::to_lower(nodeID);
 
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addMiner func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
                                << LOG_KV("nodeID", nodeID);
 
         if (nodeID.size() != 128u)
@@ -89,13 +89,13 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_CONSENSUS);
 
             auto condition = table->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
             auto entries = table->select(PRI_KEY, condition);
             auto entry = table->newEntry();
-            entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+            entry->setField(NODE_TYPE, NODE_TYPE_SEALER);
             entry->setField(PRI_COLUMN, PRI_KEY);
             entry->setField(NODE_KEY_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
@@ -116,7 +116,7 @@ bytes ConsensusPrecompiled::call(
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                               << LOG_DESC("addMiner successfully");
+                                               << LOG_DESC("addSealer successfully");
 
                         out = abi.abiIn("", count);
                     }
@@ -135,7 +135,7 @@ bytes ConsensusPrecompiled::call(
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                               << LOG_DESC("addMiner successfully");
+                                               << LOG_DESC("addSealer successfully");
 
                         out = abi.abiIn("", count);
                     }
@@ -160,7 +160,7 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_CONSENSUS);
 
             auto condition = table->newCondition();
             condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -190,7 +190,7 @@ bytes ConsensusPrecompiled::call(
                     out = abi.abiIn("", count);
                 }
             }
-            else if (!checkIsLastMiner(table, nodeID))
+            else if (!checkIsLastSealer(table, nodeID))
             {
                 count = table->update(
                     PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
@@ -211,7 +211,7 @@ bytes ConsensusPrecompiled::call(
             }
             else
             {
-                out = abi.abiIn("", CODE_LAST_MINER);
+                out = abi.abiIn("", CODE_LAST_SEALER);
             }
         }
     }
@@ -232,9 +232,9 @@ bytes ConsensusPrecompiled::call(
         }
         else
         {
-            storage::Table::Ptr table = openTable(context, SYS_MINERS);
+            storage::Table::Ptr table = openTable(context, SYS_CONSENSUS);
 
-            if (!checkIsLastMiner(table, nodeID))
+            if (!checkIsLastSealer(table, nodeID))
             {
                 auto condition = table->newCondition();
                 condition->EQ(NODE_KEY_NODEID, nodeID);
@@ -256,7 +256,7 @@ bytes ConsensusPrecompiled::call(
             }
             else
             {
-                out = abi.abiIn("", CODE_LAST_MINER);
+                out = abi.abiIn("", CODE_LAST_SEALER);
             }
         }
     }
@@ -270,7 +270,7 @@ bytes ConsensusPrecompiled::call(
 
 void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
 {
-    storage::Table::Ptr table = openTable(context, SYS_MINERS);
+    storage::Table::Ptr table = openTable(context, SYS_CONSENSUS);
     auto condition = table->newCondition();
     auto entries = table->select(PRI_KEY, condition);
 
@@ -293,20 +293,20 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
                            << LOG_KV("consensusTable", s.str());
 }
 
-bool ConsensusPrecompiled::checkIsLastMiner(storage::Table::Ptr table, std::string const& nodeID)
+bool ConsensusPrecompiled::checkIsLastSealer(storage::Table::Ptr table, std::string const& nodeID)
 {
-    // Check is last miner or not.
+    // Check is last sealer or not.
     auto condition = table->newCondition();
-    condition->EQ(NODE_TYPE, NODE_TYPE_MINER);
+    condition->EQ(NODE_TYPE, NODE_TYPE_SEALER);
     auto entries = table->select(PRI_KEY, condition);
     if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
     {
-        // The nodeID in param is the last miner, cannot be deleted.
-        PRECOMPILED_LOG(WARNING)
-            << LOG_BADGE("ConsensusPrecompiled")
-            << LOG_DESC(
-                   "ConsensusPrecompiled the nodeID in param is the last miner, cannot be deleted.")
-            << LOG_KV("nodeID", nodeID);
+        // The nodeID in param is the last sealer, cannot be deleted.
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("ConsensusPrecompiled")
+                                 << LOG_DESC(
+                                        "ConsensusPrecompiled the nodeID in param is the last "
+                                        "sealer, cannot be deleted.")
+                                 << LOG_KV("nodeID", nodeID);
         return true;
     }
     return false;

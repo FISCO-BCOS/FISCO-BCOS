@@ -63,7 +63,7 @@ BOOST_FIXTURE_TEST_SUITE(CRUDPrecompiled, CRUDPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(call_add)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("select(string,string)", "_sys_miners_", "miner");
+    bytes in = abi.abiIn("select(string,string)", SYS_CONSENSUS, "sealer");
     bytes out = crudPrecompiled->call(context, bytesConstRef(&in));
 }
 

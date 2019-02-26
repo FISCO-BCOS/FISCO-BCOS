@@ -163,7 +163,7 @@ void Ledger::initConsensusIniConfig(ptree const& pt)
 /// 1. consensusType: current support pbft only (default is pbft)
 /// 2. maxTransNum: max number of transactions can be sealed into a block
 /// 3. intervalBlockTime: average block generation period
-/// 4. miner.${idx}: define the node id of every miner related to the group
+/// 4. sealer.${idx}: define the node id of every sealer related to the group
 void Ledger::initConsensusConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().consensusType =
@@ -194,7 +194,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
                                  << LOG_KV("consensus_node_key", it.first) << LOG_KV("node", data);
                 // Uniform lowercase nodeID
                 dev::h512 nodeID(data);
-                m_param->mutableConsensusParam().minerList.push_back(nodeID);
+                m_param->mutableConsensusParam().sealerList.push_back(nodeID);
                 // The full output node ID is required.
                 nodeListMark << data << ",";
             }
@@ -324,7 +324,7 @@ bool Ledger::initBlockChain()
     std::string storageType = m_param->mutableStorageParam().type;
     std::string stateType = m_param->mutableStateParam().type;
     GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
-        m_param->mutableConsensusParam().minerList, m_param->mutableConsensusParam().observerList,
+        m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
         consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
         m_param->mutableTxParam().txGasLimit};
     bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
@@ -359,9 +359,9 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                       << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<Sealer> pbftSealer =
-        std::make_shared<PBFTSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
-            protocol_id, m_param->baseDir(), m_keyPair, m_param->mutableConsensusParam().minerList);
+    std::shared_ptr<Sealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
+        m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
+        m_param->mutableConsensusParam().sealerList);
 
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
@@ -389,12 +389,12 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
     // auto intervalBlockTime = g_BCOSConfig.c_intervalBlockTime;
     // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
     //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
-    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().minerList);
+    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().sealerList);
     std::shared_ptr<Sealer> raftSealer =
         std::make_shared<RaftSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
             m_param->mutableConsensusParam().maxElectTime, protocol_id,
-            m_param->mutableConsensusParam().minerList);
+            m_param->mutableConsensusParam().sealerList);
     /// set params for RaftEngine
     std::shared_ptr<RaftEngine> raftEngine =
         std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());

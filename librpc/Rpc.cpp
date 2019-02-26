@@ -63,7 +63,7 @@ void Rpc::checkRequest(int _groupID)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
     }
-    auto _nodeList = blockchain->minerList() + blockchain->observerList();
+    auto _nodeList = blockchain->sealerList() + blockchain->observerList();
     auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
     if (it == _nodeList.end())
     {
@@ -166,19 +166,19 @@ std::string Rpc::getPbftView(int _groupID)
     }
 }
 
-Json::Value Rpc::getMinerList(int _groupID)
+Json::Value Rpc::getSealerList(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getMinerList") << LOG_DESC("request")
+        RPC_LOG(INFO) << LOG_BADGE("getSealerList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        auto miners = blockchain->minerList();
+        auto sealers = blockchain->sealerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
-        for (auto it = miners.begin(); it != miners.end(); ++it)
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
         {
             response.append((*it).hex());
         }
@@ -469,6 +469,12 @@ Json::Value Rpc::getBlockByHash(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)
@@ -528,6 +534,12 @@ Json::Value Rpc::getBlockByNumber(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)
@@ -950,8 +962,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-
+                      << LOG_KV("groupID", _groupID);
+        RPC_LOG(DEBUG) << LOG_BADGE("sendRawTransaction") << LOG_KV("rlp", _rlp);
         checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
 
