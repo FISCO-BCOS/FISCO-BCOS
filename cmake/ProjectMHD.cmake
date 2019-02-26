@@ -17,7 +17,7 @@ ExternalProject_Add(mhd
     LOG_INSTALL 1
     BUILD_COMMAND make
     INSTALL_COMMAND ""
-    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/src/mhd/src/microhttpd/.libs/libmicrohttpd.a
+    BUILD_BYPRODUCTS <SOURCE_DIR>/src/microhttpd/.libs/libmicrohttpd.a
 )
 
 ExternalProject_Get_Property(mhd SOURCE_DIR)

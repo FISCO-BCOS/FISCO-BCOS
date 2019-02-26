@@ -58,7 +58,8 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
     if (!m_openStatus.ok() || !db)
     {
         std::stringstream exitInfo;
-        exitInfo << "Database open error" << endl;
+        exitInfo << "Database open error"
+                 << ", path=" << _name << endl;
         errorExit(exitInfo);
     }
     m_db.reset(db);
