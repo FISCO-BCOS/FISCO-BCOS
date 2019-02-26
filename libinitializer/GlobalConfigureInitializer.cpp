@@ -29,14 +29,15 @@ using namespace dev::initializer;
 
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
+    // TODO: rename keycenter to key-manager, disk encryption to data secure
     g_BCOSConfig.diskEncryption.enable = _pt.get<bool>("data_secure.enable", false);
-    g_BCOSConfig.diskEncryption.keyCenterIP = _pt.get<std::string>("data_secure.keycenter_ip", "");
-    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>("data_secure.keycenter_port", 0);
+    g_BCOSConfig.diskEncryption.keyCenterIP =
+        _pt.get<std::string>("data_secure.key_manager_ip", "");
+    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>("data_secure.key_manager_port", 0);
     g_BCOSConfig.diskEncryption.cipherDataKey =
         _pt.get<std::string>("data_secure.cipher_data_key", "");
 
-    INITIALIZER_LOG(DEBUG) << LOG_BADGE("initDiskEncryptionConfig")
-                           << LOG_DESC("load configuration")
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
                            << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
                            << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                            << LOG_KV("url.port",
