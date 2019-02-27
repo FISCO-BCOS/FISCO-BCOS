@@ -36,18 +36,27 @@ bytes TxsParallelParser::encode(Transactions& _txs)
 
     bytes txBytes;
     std::vector<Offset_t> offsets(txNum + 1, 0);
-    Offset_t offset = 0;
+    std::vector<bytes> txRLPs(txNum, bytes());
 
     // encode tx and caculate offset
+#pragma omp parallel for
     for (Offset_t i = 0; i < txNum; ++i)
     {
         bytes txByte;
         _txs[i].encode(txByte);
-        offsets[i] = offset;
-        offset += txByte.size();
-        txBytes += txByte;
+
+        // record bytes size in offsets for caculating real offset
+        offsets[i + 1] = txByte.size();
+
+        // record bytes in txRLPs for caculating all transaction bytes
+        txRLPs[i] = txByte;
     }
-    offsets[txNum] = offset;  // write the end
+
+    // caculate real offset
+    for (size_t i = 0; i < txNum; ++i)
+    {
+        offsets[i + 1] += offsets[i];
+    }
 
     // encode according with this protocol
     bytes ret;
@@ -55,7 +64,8 @@ bytes TxsParallelParser::encode(Transactions& _txs)
     for (size_t i = 0; i < offsets.size(); ++i)
         ret += toBytes(offsets[i]);
 
-    ret += txBytes;
+    for (size_t i = 0; i < txNum; ++i)
+        ret += txRLPs[i];
 
     // std::cout << "tx encode:" << toHex(ret) << std::endl;
     return ret;
