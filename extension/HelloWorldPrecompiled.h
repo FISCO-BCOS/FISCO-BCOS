@@ -19,18 +19,10 @@
  *  @date 20190111
  */
 #pragma once
-#include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/Common.h>
-#include <libethcore/Common.h>
 #include <libprecompiled/Common.h>
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-}
-
 namespace precompiled
 {
 class HelloWorldPrecompiled : public dev::blockverifier::Precompiled
@@ -40,22 +32,18 @@ public:
     HelloWorldPrecompiled();
     virtual ~HelloWorldPrecompiled(){};
 
-    std::string toString(dev::blockverifier::ExecutiveContext::Ptr) override;
+    virtual std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>) override;
 
-    bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
-
-protected:
-    std::shared_ptr<storage::Table> openTable(
-        dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address()) override;
 
 private:
     // call HelloWorld get interface
-    void get(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void get(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
 
     // call HelloWorld set interface
-    void set(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void set(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
 };
 

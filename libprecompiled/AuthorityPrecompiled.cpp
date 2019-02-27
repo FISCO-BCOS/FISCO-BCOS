@@ -19,7 +19,7 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-
+#include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>

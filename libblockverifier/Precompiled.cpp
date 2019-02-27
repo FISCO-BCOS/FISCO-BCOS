@@ -23,6 +23,7 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Hash.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;

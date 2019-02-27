@@ -22,6 +22,7 @@
 
 #include "HelloWorldPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -63,26 +64,6 @@ std::string HelloWorldPrecompiled::toString(dev::blockverifier::ExecutiveContext
     return "HelloWorld";
 }
 
-Table::Ptr HelloWorldPrecompiled::openTable(
-    dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("openTable");
-
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    auto table =
-        tableFactoryPrecompiled->getmemoryTableFactory()->openTable(HELLO_WORLD_TABLE_NAME);
-    if (!table)
-    {
-        // table is not exist, create it.
-        table =
-            tableFactoryPrecompiled->getmemoryTableFactory()->createTable(HELLO_WORLD_TABLE_NAME,
-                HELLOWORLD_KEY_FIELD_NAME, HELLOWORLD_VALUE_FIELD_VALUE, true, origin);
-    }
-    return table;
-}
-
 bytes HelloWorldPrecompiled::call(
     dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
@@ -118,7 +99,7 @@ bytes HelloWorldPrecompiled::call(
 void HelloWorldPrecompiled::get(dev::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {
-    Table::Ptr table = openTable(context, origin);
+    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
     if (!table)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
@@ -145,7 +126,7 @@ void HelloWorldPrecompiled::get(dev::blockverifier::ExecutiveContext::Ptr contex
 void HelloWorldPrecompiled::set(dev::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {
-    Table::Ptr table = openTable(context, origin);
+    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
     if (!table)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
