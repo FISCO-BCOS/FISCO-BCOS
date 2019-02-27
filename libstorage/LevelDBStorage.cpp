@@ -99,7 +99,7 @@ size_t LevelDBStorage::commitTableDataRange(
     // range to commit: [from, to)
     if (from >= to)
         return 0;
-
+    auto record_time = utcTime();
     size_t total = 0;
     std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
     auto dataIt = tableData->data.begin();
@@ -141,13 +141,12 @@ size_t LevelDBStorage::commitTableDataRange(
         from++;
     }
 
-    auto record_time = utcTime();
     leveldb::WriteOptions writeOptions;
     writeOptions.sync = false;
     // WriteGuard l(m_remoteDBMutex);
     auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
     auto writeDB_time_cost = utcTime() - record_time;
-    STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
+    STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db in thread")
                                << LOG_KV("timeCost", writeDB_time_cost);
     // l.unlock();
     if (!s.ok())
@@ -162,11 +161,13 @@ size_t LevelDBStorage::commitTableDataRange(
     return total;
 }
 
+static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
 size_t LevelDBStorage::commit(
     h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
 {
     try
     {
+        auto start_time = utcTime();
         std::atomic<size_t> total;
         total = 0;
 
@@ -174,23 +175,20 @@ size_t LevelDBStorage::commit(
         {
             TableData::Ptr tableData = datas[i];
             size_t totalSize = tableData->data.size();
-            size_t threadNum = std::thread::hardware_concurrency();
-            if (totalSize < threadNum)  //
-            {
-                commitTableDataRange(tableData, hash, num, 0, totalSize);
-            }
-            else
-            {
+
 #pragma omp parallel for
-                for (size_t j = 0; j < threadNum; ++j)
-                {
-                    size_t from = (totalSize / threadNum) * j;
-                    size_t to = std::min((totalSize / threadNum) * (j + 1), totalSize);
-                    size_t threadTotal = commitTableDataRange(tableData, hash, num, from, to);
-                    total += threadTotal;
-                }
+            for (size_t j = 0; j < (totalSize + c_commitTableDataRangeEachThread - 1) /
+                                       c_commitTableDataRangeEachThread;
+                 ++j)
+            {
+                size_t from = c_commitTableDataRangeEachThread * j;
+                size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
+                size_t threadTotal = commitTableDataRange(tableData, hash, num, from, to);
+                total += threadTotal;
             }
         }
+        STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
+                                   << LOG_KV("totalTimeCost", utcTime() - start_time);
 
         return total.load();
     }
