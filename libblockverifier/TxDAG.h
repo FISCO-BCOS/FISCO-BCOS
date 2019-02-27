@@ -25,6 +25,7 @@
 #include "ExecutiveContext.h"
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <map>
 #include <memory>
 #include <queue>
 #include <vector>
@@ -40,7 +41,7 @@ class TxDAGFace
 {
 public:
     virtual bool hasFinished() = 0;
-    virtual ~TxDAGFace(){}
+    virtual ~TxDAGFace() {}
 
     // Called by thread
     // Execute a unit in DAG
@@ -98,14 +99,37 @@ public:
     {
         auto it = m_criticals.find(_c);
         if (it == m_criticals.end())
+        {
+            if (m_criticalAll != INVALID_ID)
+                return m_criticalAll;
             return INVALID_ID;
+        }
         return it->second;
     }
 
     void update(T const& _c, ID _txId) { m_criticals[_c] = _txId; }
 
+    void foreachField(std::function<bool(std::pair<T, ID>)> const& _f)
+    {
+        for (auto _fieldAndId : m_criticals)
+        {
+            if (!_f(_fieldAndId))
+                break;
+        }
+
+        if (m_criticalAll != INVALID_ID)
+            _f(std::pair<T, ID>(T(), m_criticalAll));
+    }
+
+    void setCriticalAll(ID _id)
+    {
+        m_criticalAll = _id;
+        m_criticals.clear();
+    }
+
 private:
     std::map<T, ID> m_criticals;
+    ID m_criticalAll = INVALID_ID;
 };
 
 }  // namespace blockverifier

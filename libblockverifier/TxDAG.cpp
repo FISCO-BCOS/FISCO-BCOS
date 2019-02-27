@@ -41,30 +41,42 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
     {
         auto& tx = _txs[id];
 
-        // Is para transaction? //XXX Serial transaction has all criticals it will seperate DAG
+        // Is para transaction?
         auto p = _ctx->getPrecompiled(tx.receiveAddress());
         if (!p || !p->isDagPrecompiled())
         {
-            continue;
+            // Normal transaction: Conflict with all transaction
+            latestCriticals.foreachField([&](std::pair<string, ID> _fieldAndId) {
+                ID pId = _fieldAndId.second;
+                // Add edge from all critical transaction
+                m_dag.addEdge(pId, id);
+                return true;
+            });
+
+            // set all critical to my id
+            latestCriticals.setCriticalAll(id);
         }
-
-        // Get critical field
-        vector<string> criticals = p->getDagTag(ref(tx.data()));
-
-        // Add edge between critical transaction
-        for (string const& c : criticals)
+        else
         {
-            ID pIds = latestCriticals.get(c);
-            if (pIds != INVALID_ID)
+            // DAG transaction: Conflict with certain critical fields
+            // Get critical field
+            vector<string> criticals = p->getDagTag(ref(tx.data()));
+
+            // Add edge between critical transaction
+            for (string const& c : criticals)
             {
-                m_dag.addEdge(pIds, id);  // add DAG edge
-                // LOG(DEBUG) << "Edge: " << pIds << " <-> " << id;
+                ID pId = latestCriticals.get(c);
+                if (pId != INVALID_ID)
+                {
+                    m_dag.addEdge(pId, id);  // add DAG edge
+                    // LOG(DEBUG) << "Edge: " << pId << " <-> " << id;
+                }
             }
-        }
 
-        for (string const& c : criticals)
-        {
-            latestCriticals.update(c, id);
+            for (string const& c : criticals)
+            {
+                latestCriticals.update(c, id);
+            }
         }
     }
 
