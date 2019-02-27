@@ -26,6 +26,8 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
+#include <omp.h>
+
 namespace dev
 {
 namespace eth
@@ -122,53 +124,32 @@ void Block::calReceiptRoot(bool update) const
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes())
     {
-        RLPStream txReceipts;
-        txReceipts.appendList(m_transactionReceipts.size());
-        BytesMap mapCache;
-        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        size_t receiptsNum = m_transactionReceipts.size();
+
+        std::vector<dev::bytes> receiptsRLPs(receiptsNum, bytes());
+#pragma omp parallel for
+        for (size_t i = 0; i < receiptsNum; ++i)
         {
             RLPStream s;
             s << i;
-            bytes tranReceipts_data;
-            m_transactionReceipts[i].encode(tranReceipts_data);
-            txReceipts.appendRaw(tranReceipts_data);
-            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+            dev::bytes receiptRLP;
+            m_transactionReceipts[i].encode(receiptRLP);
+            receiptsRLPs[i] = receiptRLP;
+        }
+
+        RLPStream txReceipts;
+        for (size_t i = 0; i < receiptsNum; ++i)
+        {
+            txReceipts.appendRaw(receiptsRLPs[i]);
         }
         txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = hash256(mapCache);
+        m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
     }
     if (update == true)
     {
         m_blockHeader.setReceiptsRoot(m_receiptRootCache);
     }
 }
-/*
-void Block::calReceiptRoot(bool update) const
-{
-    WriteGuard l(x_txReceiptsCache);
-    if (m_tReceiptsCache == bytes())
-    {
-        RLPStream txReceipts;
-        txReceipts.appendList(m_transactionReceipts.size());
-        BytesMap mapCache;
-        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
-        {
-            RLPStream s;
-            s << i;
-            bytes tranReceipts_data;
-            m_transactionReceipts[i].encode(tranReceipts_data);
-            txReceipts.appendRaw(tranReceipts_data);
-            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
-        }
-        txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = hash256(mapCache);
-    }
-    if (update == true)
-    {
-        m_blockHeader.setReceiptsRoot(m_receiptRootCache);
-    }
-}
-*/
 
 /**
  * @brief : decode specified data of block into Block class
