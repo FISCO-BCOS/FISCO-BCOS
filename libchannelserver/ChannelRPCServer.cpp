@@ -854,8 +854,9 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
         }
 
         LOG(TRACE) << "session topics:" << it.second->topics().size();
-        auto topicIt = it.second->topics().find(topic);
-        if (topicIt != it.second->topics().end())
+        auto topics = it.second->topics();
+        auto topicIt = topics.find(topic);
+        if (topicIt != topics.end())
         {
         	LOG(TRACE) << "topic: " << *topicIt;
             activedSessions.push_back(it.second);
