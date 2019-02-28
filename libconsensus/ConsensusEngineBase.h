@@ -112,7 +112,7 @@ public:
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
         status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
-        status_obj.push_back(json_spirit::Pair("nodeID", "0x" + toHex(m_keyPair.pub())));
+        status_obj.push_back(json_spirit::Pair("nodeId", toHex(m_keyPair.pub())));
         int i = 0;
         std::string sealer_list = "";
         {
