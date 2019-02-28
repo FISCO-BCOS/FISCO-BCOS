@@ -21,7 +21,6 @@ debug_log="false"
 log_level="info"
 logfile=build.log
 listen_ip="127.0.0.1"
-Download=false
 bcos_bin_name=fisco-bcos
 guomi_mode=
 gm_conf_path="gmconf/"
@@ -708,14 +707,18 @@ try_times=2
 i=0
 while [ \$i -lt \${try_times} ]
 do
-    kill \${node_pid}
+    if [ -z \${node_pid} ];then
+        echo " \${node} isn't running."
+        exit 0
+    fi
+    [ ! -z \${node_pid} ] && kill \${node_pid}
+    sleep 1
     node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
     if [ -z \${node_pid} ];then
-        echo " stop \${node} success. "
+        echo " stop \${node} success."
         exit 0
     fi
     ((i=i+1))
-    sleep 1
 done
 
 EOF
@@ -725,7 +728,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/transTest.sh"
+    local file="${output}/.transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -833,15 +836,13 @@ else
     help 
 fi
 
-if [ -z ${bin_path} ];then
-    bin_path=${output_dir}/${bcos_bin_name}
-    Download=true
-fi
 
 dir_must_not_exists $output_dir
 mkdir -p "$output_dir"
 
-if [ "${Download}" == "true" ];then
+# download fisco-bcos and check it
+if [ -z ${bin_path} ];then
+    bin_path=${output_dir}/${bcos_bin_name}
     package_name="fisco-bcos.tar.gz"
     [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
     version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
@@ -850,6 +851,21 @@ if [ "${Download}" == "true" ];then
     curl -LO ${Download_Link}
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
+else
+    LOG_INFO "Checking fisco-bcos version..."
+    bin_version=$(${bin_path} -v)
+    if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
+        LOG_WARN "${bin_path} is wrong. Please correct it and try again."
+        exit 1
+    fi
+    if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
+        LOG_WARN "${bin_path} isn't gm version. Please correct it and try again."
+        exit 1
+    fi
+    if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
+        LOG_WARN "${bin_path} isn't standard version. Please correct it and try again."
+        exit 1
+    fi
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -1043,7 +1059,7 @@ for line in ${ip_array[*]};do
     [ -n "$make_tar" ] && tar zcf "$output_dir/${ip}.tar.gz" "$output_dir/${ip}"
     ((++server_count))
 done 
-rm $output_dir/${logfile} #cert.cnf
+rm $output_dir/${logfile} #$output_dir/cert.cnf
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in `seq 0 ${#groups_count[@]}`;do

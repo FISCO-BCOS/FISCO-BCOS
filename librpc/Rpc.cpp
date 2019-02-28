@@ -293,11 +293,7 @@ Json::Value Rpc::getClientVersion()
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
         Json::Value version;
 
-#ifdef FISCO_GM
-        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION;
-#else
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
-#endif
         version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
         version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
                                 std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
