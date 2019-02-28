@@ -63,6 +63,9 @@ protected:
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         const std::string& tableName);
+    std::shared_ptr<dev::storage::Table> createTable(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
+        const std::string& keyField, const std::string& valueField, Address const& origin);
 };
 
 }  // namespace blockverifier

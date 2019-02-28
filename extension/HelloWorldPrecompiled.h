@@ -36,15 +36,6 @@ public:
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address()) override;
-
-private:
-    // call HelloWorld get interface
-    void get(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
-
-    // call HelloWorld set interface
-    void set(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
 };
 
 }  // namespace precompiled

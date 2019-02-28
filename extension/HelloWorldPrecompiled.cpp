@@ -73,15 +73,66 @@ bytes HelloWorldPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
     bytes out;
+    dev::eth::ContractABI abi;
+
+    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
+    if (!table)
+    {
+        // table is not exist, create it.
+        table = createTable(context, HELLO_WORLD_TABLE_NAME, HELLOWORLD_KEY_FIELD_NAME,
+            HELLOWORLD_KEY_FIELD_NAME, origin);
+        if (!table)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
+                                   << LOG_DESC("open table failed.");
+            out = abi.abiIn("", CODE_NO_AUTHORIZED);
+            return out;
+        }
+    }
     if (func == name2Selector[HELLO_WORLD_METHOD_GET])
     {  // get() function call
-        get(context, data, origin, out);
+        // default retMsg
+        std::string retValue = "Hello World!";
+        auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
+        if (0u != entries->size())
+        {
+            auto entry = entries->get(0);
+            retValue = entry->getField(HELLOWORLD_VALUE_FIELD_VALUE);
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
+                                   << LOG_KV("value", retValue);
+        }
+        out = abi.abiIn("", retValue);
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
-        set(context, data, origin, out);
+        Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
+
+        std::string strValue;
+        abi.abiOut(data, strValue);
+
+        auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
+        auto entry = table->newEntry();
+        entry->setField(HELLOWORLD_VALUE_FIELD_VALUE, strValue);
+
+        int count = 0;
+        if (0u != entries->size())
+        {  // update
+            count = table->update(HELLOWORLD_KEY_FIELD_NAME, entry, table->newCondition(),
+                std::make_shared<AccessOptions>(origin));
+        }
+        else
+        {  // insert
+            count = table->insert(
+                HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(origin));
+        }
+
+        if (count == CODE_NO_AUTHORIZED)
+        {  //  permission denied
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
+                                   << LOG_DESC("non-authorized");
+        }
+        out = abi.abiIn("", count);
     }
     else
     {  // unkown function call
@@ -89,75 +140,5 @@ bytes HelloWorldPrecompiled::call(
                                << LOG_KV("func", func);
     }
 
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
-                           << LOG_DESC("end");
-
     return out;
-}
-
-// call HelloWorld get interface
-void HelloWorldPrecompiled::get(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& origin, bytes& out)
-{
-    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
-    if (!table)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
-                               << LOG_DESC("open table failed.");
-        return;
-    }
-
-    // default retMsg
-    std::string retValue = "Hello World!";
-    auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
-    if (entries.get() && (0u != entries->size()))
-    {  // exist
-        auto entry = entries->get(0);
-        retValue = entry->getField(HELLOWORLD_VALUE_FIELD_VALUE);
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
-                               << LOG_KV("value", retValue);
-    }
-
-    dev::eth::ContractABI abi;
-    out = abi.abiIn("", retValue);
-}
-
-// call HelloWorld set interface
-void HelloWorldPrecompiled::set(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& origin, bytes& out)
-{
-    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
-    if (!table)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
-                               << LOG_DESC("open table failed.");
-        return;
-    }
-    dev::eth::ContractABI abi;
-    std::string strValue;
-
-    abi.abiOut(data, strValue);
-
-    auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
-    auto entry = table->newEntry();
-    entry->setField(HELLOWORLD_KEY_FIELD_NAME, HELLOWORLD_KEY_FIELD_NAME);
-    entry->setField(HELLOWORLD_VALUE_FIELD_VALUE, strValue);
-
-    int count = 0;
-    if (entries.get() && (0u != entries->size()))
-    {  // update
-        count = table->update(HELLOWORLD_KEY_FIELD_NAME, entry, table->newCondition(),
-            std::make_shared<AccessOptions>(origin));
-    }
-    else
-    {  // insert
-        count = table->insert(
-            HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(origin));
-    }
-
-    if (count == CODE_NO_AUTHORIZED)
-    {  //  permission denied
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
-                               << LOG_DESC("non-authorized");
-    }
 }
