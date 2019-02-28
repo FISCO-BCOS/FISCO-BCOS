@@ -853,12 +853,10 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
             continue;
         }
 
-        LOG(TRACE) << "session topics:" << it.second->topics().size();
         auto topics = it.second->topics();
         auto topicIt = topics.find(topic);
         if (topicIt != topics.end())
         {
-        	LOG(TRACE) << "topic: " << *topicIt;
             activedSessions.push_back(it.second);
         }
     }
