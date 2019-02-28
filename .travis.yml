@@ -53,9 +53,9 @@ addons:
     packages:
     - cmake
     - libssl-dev
-    - libleveldb-dev
-    - libsnappy-dev
     - clang
+    # - libleveldb-dev
+    # - libsnappy-dev
     # - ninja-build
     - openssl
   homebrew:
