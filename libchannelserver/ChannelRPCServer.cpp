@@ -846,16 +846,18 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
 
     std::lock_guard<std::mutex> lock(_sessionMutex);
-    for (auto& it : _sessions)
+    for (auto it : _sessions)
     {
         if (it.second->topics().empty() || !it.second->actived())
         {
             continue;
         }
 
+        LOG(TRACE) << "session topics:" << it.second->topics().size();
         auto topicIt = it.second->topics().find(topic);
         if (topicIt != it.second->topics().end())
         {
+        	LOG(TRACE) << "topic: " << *topicIt;
             activedSessions.push_back(it.second);
         }
     }
