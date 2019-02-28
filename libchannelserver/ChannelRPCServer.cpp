@@ -765,6 +765,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
         CHANNEL_LOG(INFO) << "Push channel message success"
+        				<< LOG_KV("topic", topic)
                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                           << LOG_KV("session", session->host()) << ":" << session->port();
     }

@@ -26,6 +26,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
+#include <libdevcore/Common.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
