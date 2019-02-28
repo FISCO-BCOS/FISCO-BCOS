@@ -9,7 +9,7 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -43,7 +43,7 @@ jobs:
           name: Install dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel leveldb-devel openssl
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -77,7 +77,7 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git clang make curl build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git clang make curl build-essential cmake libssl-dev
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -114,7 +114,7 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update 
-            apt-get install -y git clang make curl build-essential cmake libssl-dev libleveldb-dev libsnappy-dev
+            apt-get install -y git clang make curl build-essential cmake libssl-dev
       - checkout
       - restore_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -150,6 +150,12 @@ jobs:
       - attach_workspace:
           at: /FISCO-BCOS/build/bin
       - run:
+          name: Strip
+          command: |
+            cd build/bin
+            strip fisco-bcos && rm fisco-bcos.tar.gz
+            tar -zcf fisco-bcos.tar.gz fisco-bcos
+      - run:
           name: Upload to GitHub Release
           command: |
             apt-get update
@@ -164,6 +170,12 @@ jobs:
     steps:
       - attach_workspace:
           at: /FISCO-BCOS/build/bin
+      - run:
+          name: Strip
+          command: |
+            cd build/bin
+            strip fisco-bcos && rm fisco-bcos-gm.tar.gz
+            tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
       - run:
           name: Upload to GitHub Release
           command: |
