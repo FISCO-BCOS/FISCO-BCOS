@@ -123,6 +123,8 @@ public:
     /// transaction pool
     virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
 
+    virtual bool isFull() { return false; }
+
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.

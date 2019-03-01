@@ -145,6 +145,12 @@ public:
     void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
     bool txExists(dev::h256 const& txHash) override;
 
+    bool isFull() override
+    {
+        UpgradableGuard l(m_lock);
+        return m_txsQueue.size() >= m_limit;
+    }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue

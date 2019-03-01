@@ -41,6 +41,9 @@ void DownloadingTxsQueue::pop2TxPool(
         m_buffer = std::make_shared<std::vector<DownloadTxsShard>>();
     }
 
+    if (_txPool->isFull())
+        return;
+
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
         // decode
