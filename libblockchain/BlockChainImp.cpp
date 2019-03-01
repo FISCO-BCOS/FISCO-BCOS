@@ -1004,6 +1004,15 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
+            if ((block.blockHeader().number() != num + 1))
+            {
+                BLOCKCHAIN_LOG(WARNING)
+                    << LOG_DESC("[#commitBlock]Commit fail due to incorrect block number")
+                    << LOG_KV("needNumber", num + 1)
+                    << LOG_KV("committedNumber", block.blockHeader().number());
+                return CommitResult::ERROR_NUMBER;
+            }
+
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
             writeHash2Block(block, context);
