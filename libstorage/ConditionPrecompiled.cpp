@@ -54,7 +54,7 @@ ConditionPrecompiled::ConditionPrecompiled()
     name2Selector[CONDITION_METHOD_LIMIT_2INT] = getFuncSelector(CONDITION_METHOD_LIMIT_2INT);
 }
 
-std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string ConditionPrecompiled::toString()
 {
     return "Condition";
 }

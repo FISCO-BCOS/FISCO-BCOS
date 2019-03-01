@@ -44,7 +44,7 @@ AuthorityPrecompiled::AuthorityPrecompiled()
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
+std::string AuthorityPrecompiled::toString()
 {
     return "Authority";
 }

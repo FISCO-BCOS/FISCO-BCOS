@@ -69,7 +69,7 @@ BOOST_FIXTURE_TEST_SUITE(TableFactoryPrecompiled, TableFactoryPrecompiledFixture
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_TEST(tableFactoryPrecompiled->toString(context) == "TableFactory");
+    BOOST_TEST(tableFactoryPrecompiled->toString() == "TableFactory");
 }
 
 BOOST_AUTO_TEST_CASE(call_afterBlock)

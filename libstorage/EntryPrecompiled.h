@@ -57,7 +57,7 @@ public:
     EntryPrecompiled();
     virtual ~EntryPrecompiled(){};
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>);
+    virtual std::string toString();
 
     virtual bytes call(
         std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const& origin = Address());

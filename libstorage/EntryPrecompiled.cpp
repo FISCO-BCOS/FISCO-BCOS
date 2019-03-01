@@ -47,7 +47,7 @@ EntryPrecompiled::EntryPrecompiled()
     name2Selector[ENTRYIY_METHOD_GETB_STR32] = getFuncSelector(ENTRYIY_METHOD_GETB_STR32);
 }
 
-std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string EntryPrecompiled::toString()
 {
     return "Entry";
 }

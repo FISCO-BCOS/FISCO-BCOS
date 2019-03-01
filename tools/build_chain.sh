@@ -405,22 +405,22 @@ generate_config_ini()
     fi
     cat << EOF > ${output}
 [rpc]
-    ;rpc listen ip
+    ; rpc listen ip
     listen_ip=${listen_ip}
-    ;channelserver listen port
+    ; channelserver listen port
     channel_listen_port=$(( offset + port_start[1] ))
-    ;jsonrpc listen port
+    ; jsonrpc listen port
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
-    ;p2p listen ip
+    ; p2p listen ip
     listen_ip=0.0.0.0
-    ;p2p listen port
+    ; p2p listen port
     listen_port=$(( offset + port_start[0] ))
-    ;nodes to connect
+    ; nodes to connect
     $ip_list
 ;certificate rejected list		
 [crl]		
-    ;crl.0 should be nodeid, nodeid's length is 128 
+    ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
 ;group configurations
@@ -431,25 +431,26 @@ generate_config_ini()
 
 ;certificate configuration
 [secure]
-    ;directory the certificates located in
+    ; directory the certificates located in
     data_path=${conf_path}/
-    ;the node private key file
+    ; the node private key file
     key=${prefix}node.key
-    ;the node certificate file
+    ; the node certificate file
     cert=${prefix}node.crt
-    ;the ca certificate file
+    ; the ca certificate file
     ca_cert=${prefix}ca.crt
 
 ;log configurations
 [log]
-    ;the directory of the log
+    ; the directory of the log
     log_path=./log
-    ;info debug trace 
+    ; info debug trace 
     level=${log_level}
-    max_log_file_size=209715200
+    ; MB
+    max_log_file_size=200
     ; control log auto_flush
     flush=${auto_flush}
-    ;easylog config
+    ; easylog config
     format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     log_flush_threshold=100
 EOF

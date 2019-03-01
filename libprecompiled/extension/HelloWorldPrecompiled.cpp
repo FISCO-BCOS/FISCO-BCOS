@@ -42,9 +42,10 @@ contract HelloWorld {
 // HelloWorldPrecompiled table name
 const std::string HELLO_WORLD_TABLE_NAME = "_ext_hello_world_";
 // key field
+const std::string HELLOWORLD_KEY_FIELD = "key";
 const std::string HELLOWORLD_KEY_FIELD_NAME = "hello_key";
 // value field
-const std::string HELLOWORLD_VALUE_FIELD_VALUE = "hello_value";
+const std::string HELLOWORLD_VALUE_FIELD = "value";
 
 // get interface
 const char* const HELLO_WORLD_METHOD_GET = "get()";
@@ -57,29 +58,29 @@ HelloWorldPrecompiled::HelloWorldPrecompiled()
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET);
 }
 
-std::string HelloWorldPrecompiled::toString(dev::blockverifier::ExecutiveContext::Ptr)
+std::string HelloWorldPrecompiled::toString()
 {
     return "HelloWorld";
 }
 
-bytes HelloWorldPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _context,
+    bytesConstRef _param, Address const& _origin)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", toHex(_param));
 
     // parse function name
-    uint32_t func = getParamFunc(param);
-    bytesConstRef data = getParamData(param);
+    uint32_t func = getParamFunc(_param);
+    bytesConstRef data = getParamData(_param);
     bytes out;
     dev::eth::ContractABI abi;
 
-    Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
+    Table::Ptr table = openTable(_context, HELLO_WORLD_TABLE_NAME);
     if (!table)
     {
         // table is not exist, create it.
-        table = createTable(context, HELLO_WORLD_TABLE_NAME, HELLOWORLD_KEY_FIELD_NAME,
-            HELLOWORLD_KEY_FIELD_NAME, origin);
+        table = createTable(_context, HELLO_WORLD_TABLE_NAME, HELLOWORLD_KEY_FIELD,
+            HELLOWORLD_VALUE_FIELD, _origin);
         if (!table)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
@@ -92,11 +93,12 @@ bytes HelloWorldPrecompiled::call(
     {  // get() function call
         // default retMsg
         std::string retValue = "Hello World!";
+
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
         if (0u != entries->size())
         {
             auto entry = entries->get(0);
-            retValue = entry->getField(HELLOWORLD_VALUE_FIELD_VALUE);
+            retValue = entry->getField(HELLOWORLD_VALUE_FIELD);
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
@@ -104,25 +106,24 @@ bytes HelloWorldPrecompiled::call(
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
-        Table::Ptr table = openTable(context, HELLO_WORLD_TABLE_NAME);
 
         std::string strValue;
         abi.abiOut(data, strValue);
-
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
         auto entry = table->newEntry();
-        entry->setField(HELLOWORLD_VALUE_FIELD_VALUE, strValue);
+        entry->setField(HELLOWORLD_KEY_FIELD, HELLOWORLD_KEY_FIELD_NAME);
+        entry->setField(HELLOWORLD_VALUE_FIELD, strValue);
 
         int count = 0;
         if (0u != entries->size())
         {  // update
             count = table->update(HELLOWORLD_KEY_FIELD_NAME, entry, table->newCondition(),
-                std::make_shared<AccessOptions>(origin));
+                std::make_shared<AccessOptions>(_origin));
         }
         else
         {  // insert
             count = table->insert(
-                HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(origin));
+                HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(_origin));
         }
 
         if (count == CODE_NO_AUTHORIZED)

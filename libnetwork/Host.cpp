@@ -228,7 +228,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake get nodeID failed")
+        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get nodeID failed")
                           << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
         socket->close();
         return;
@@ -423,7 +423,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     }
     if (endpointPublicKey->empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake get nodeID failed")
+        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get nodeID failed")
                           << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
         socket->close();
         return;

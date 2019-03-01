@@ -60,8 +60,8 @@ void LogInitializer::initLog(
             boost::log::keywords::time_based_rotation = &canRotate,
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
-    /// set rotation size
-    uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 209715200);
+    /// set rotation size MB
+    uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576;
     sink->locked_backend()->set_rotation_size(rotation_size);
 
     /// set auto-flush according to log configuration

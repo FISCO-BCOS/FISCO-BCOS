@@ -44,7 +44,7 @@ CNSPrecompiled::CNSPrecompiled()
 }
 
 
-std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
+std::string CNSPrecompiled::toString()
 {
     return "CNS";
 }

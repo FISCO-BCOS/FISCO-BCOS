@@ -32,10 +32,10 @@ public:
     HelloWorldPrecompiled();
     virtual ~HelloWorldPrecompiled(){};
 
-    virtual std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>) override;
+    virtual std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address()) override;
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        bytesConstRef _param, Address const& _origin = Address()) override;
 };
 
 }  // namespace precompiled

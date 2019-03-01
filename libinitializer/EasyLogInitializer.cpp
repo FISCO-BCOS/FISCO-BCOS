@@ -83,8 +83,9 @@ void LogInitializer::initLog(boost::property_tree::ptree const& pt)
         pt.get<std::string>("log.millseconds_width", "3"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::PerformanceTracking,
         pt.get<std::string>("log.performance_tracking", "false"));
-    defaultConf.set(el::Level::Global, el::ConfigurationType::MaxLogFileSize,
-        pt.get<std::string>("log.max_log_file_size", "209715200"));
+    uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576;
+    defaultConf.set(
+        el::Level::Global, el::ConfigurationType::MaxLogFileSize, std::to_string(rotation_size));
     defaultConf.set(el::Level::Global, el::ConfigurationType::LogFlushThreshold,
         pt.get<std::string>("log.log_flush_threshold", "100"));
     defaultConf.set(el::Level::Global, el::ConfigurationType::Filename, logPath + "/" + logPostfix);

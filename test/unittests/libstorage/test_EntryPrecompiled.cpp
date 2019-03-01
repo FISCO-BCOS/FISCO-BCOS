@@ -51,7 +51,7 @@ BOOST_FIXTURE_TEST_SUITE(EntryPrecompiled, EntryPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(testBeforeAndAfterBlock)
 {
-    BOOST_TEST_TRUE(entryPrecompiled->toString(precompiledContext) == "Entry");
+    BOOST_TEST_TRUE(entryPrecompiled->toString() == "Entry");
 }
 
 BOOST_AUTO_TEST_CASE(testEntry)

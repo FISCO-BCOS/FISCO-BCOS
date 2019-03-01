@@ -19,13 +19,13 @@
  *  @date 20180921
  */
 #include "ExecutiveContextFactory.h"
-#include <extension/HelloWorldPrecompiled.h>
 #include <libdevcore/Common.h>
 #include <libprecompiled/AuthorityPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
+#include <libprecompiled/extension/HelloWorldPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
