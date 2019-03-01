@@ -146,7 +146,7 @@ size_t LevelDBStorage::commitTableDataRange(
     // WriteGuard l(m_remoteDBMutex);
     auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
     auto writeDB_time_cost = utcTime() - record_time;
-    STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db in thread")
+    STORAGE_LEVELDB_LOG(TRACE) << LOG_BADGE("Commit") << LOG_DESC("Write to db in thread")
                                << LOG_KV("timeCost", writeDB_time_cost);
     // l.unlock();
     if (!s.ok())

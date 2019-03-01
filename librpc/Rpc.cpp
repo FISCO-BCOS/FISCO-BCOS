@@ -949,8 +949,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
+        RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
+                       << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 
         checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
