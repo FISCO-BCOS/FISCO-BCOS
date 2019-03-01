@@ -18,8 +18,6 @@
  *  @author octopuswang
  *  @date 20190111
  */
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include "HelloWorldPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>

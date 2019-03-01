@@ -689,13 +689,14 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     nohup \${fisco_bcos} -c config.ini 2>>nohup.out &
+    sleep 0.5
 fi
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 if [ ! -z \${node_pid} ];then
     echo " \${node} start successfully"
 else
     echo " \${node} start failed"
-    cat \${node}/nohup.out
+    cat nohup.out
 fi
 EOF
     generate_script_template "$output/stop.sh"
@@ -703,7 +704,7 @@ EOF
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-try_times=2
+try_times=5
 i=0
 while [ \$i -lt \${try_times} ]
 do
@@ -712,7 +713,7 @@ do
         exit 0
     fi
     [ ! -z \${node_pid} ] && kill \${node_pid}
-    sleep 1
+    sleep 0.4
     node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
     if [ -z \${node_pid} ];then
         echo " stop \${node} success."
@@ -728,7 +729,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/tx_test.sh"
+    local file="${output}/transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -852,7 +853,7 @@ if [ -z ${bin_path} ];then
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
 else
-    LOG_INFO "Checking fisco-bcos version..."
+    echo "Checking fisco-bcos binary..."
     bin_version=$(${bin_path} -v)
     if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
         LOG_WARN "${bin_path} is wrong. Please correct it and try again."
@@ -866,6 +867,7 @@ else
         LOG_WARN "${bin_path} isn't standard version. Please correct it and try again."
         exit 1
     fi
+    echo "Binary check passed."
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -883,6 +885,7 @@ if [ "${use_ip_param}" == "true" ];then
 fi
 
 # prepare CA
+echo "=============================================================="
 if [ ! -e "$ca_file" ]; then
     echo "Generating CA key..."
     dir_must_not_exists ${output_dir}/chain
