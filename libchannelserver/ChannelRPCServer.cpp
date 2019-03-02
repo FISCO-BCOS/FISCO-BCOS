@@ -764,7 +764,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
-        CHANNEL_LOG(INFO) << "Push channel message success"
+        CHANNEL_LOG(INFO) << "Push channel message success" << LOG_KV("topic", topic)
                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                           << LOG_KV("session", session->host()) << ":" << session->port();
     }
@@ -846,15 +846,16 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
 
     std::lock_guard<std::mutex> lock(_sessionMutex);
-    for (auto& it : _sessions)
+    for (auto it : _sessions)
     {
         if (it.second->topics().empty() || !it.second->actived())
         {
             continue;
         }
 
-        auto topicIt = it.second->topics().find(topic);
-        if (topicIt != it.second->topics().end())
+        auto topics = it.second->topics();
+        auto topicIt = topics.find(topic);
+        if (topicIt != topics.end())
         {
             activedSessions.push_back(it.second);
         }
