@@ -44,6 +44,17 @@ using namespace dev::ledger;
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
 
+std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
+    {RPCExceptionType::GroupID, "GroupID does not exist"},
+    {RPCExceptionType::JsonParse, "Response json parse error"},
+    {RPCExceptionType::BlockHash, "BlockHash does not exist"},
+    {RPCExceptionType::BlockNumberT, "BlockNumber does not exist"},
+    {RPCExceptionType::TransactionIndex, "TransactionIndex is out of range"},
+    {RPCExceptionType::CallFrom, "Call needs a 'from' field"},
+    {RPCExceptionType::NoView, "Only pbft consensus supports the view property"},
+    {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
+    {RPCExceptionType::InvalidRequest,
+        "Don't send request to this node who doesn't belong to the group"}};
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)

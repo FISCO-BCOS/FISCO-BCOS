@@ -186,17 +186,17 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 216u);
+    BOOST_TEST(count == 156u);
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 216u);
+    BOOST_TEST(count == 156u);
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 216u);
+    BOOST_TEST(count == 156u);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
@@ -227,13 +227,13 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 215u);
+    BOOST_TEST(count == 157u);
 
     in = abi.abiIn("addObserver(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 215u);
+    BOOST_TEST(count == 157u);
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)
