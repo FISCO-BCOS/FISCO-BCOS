@@ -846,7 +846,7 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
 
     std::lock_guard<std::mutex> lock(_sessionMutex);
-    for (auto it : _sessions)
+    for (auto& it : _sessions)
     {
         if (it.second->topics().empty() || !it.second->actived())
         {

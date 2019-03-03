@@ -113,7 +113,7 @@ public:
     {
         m_rawPrepareCache = req;
         PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
-                                << LOG_KV("idx", req.idx)
+                                << LOG_KV("reqIdx", req.idx)
                                 << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
     }
@@ -175,7 +175,7 @@ public:
         {
             PBFTReqCache_LOG(INFO)
                 << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req.height)
-                << LOG_KV("idx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
+                << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
             m_futurePrepareCache[req.height] = std::make_shared<PrepareReq>(std::move(req));
         }
     }

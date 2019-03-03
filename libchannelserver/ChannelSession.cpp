@@ -122,7 +122,7 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
 
                 responseCallback->timeoutHandler = timeoutHandler;
             }
-            _responseCallbacks.insert(std::make_pair(request->seq(), responseCallback));
+            insertResponseCallback(request->seq(), responseCallback);
         }
 
         std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
@@ -397,26 +397,25 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             return;
         }
 
-        auto it = _responseCallbacks.find(message->seq());
-        if (it != _responseCallbacks.end())
+        auto response_callback = findResponseCallbackBySeq(message->seq());
+        if (response_callback != nullptr)
         {
-            if (it->second->timeoutHandler)
+            if (response_callback->timeoutHandler)
             {
-                it->second->timeoutHandler->cancel();
+                response_callback->timeoutHandler->cancel();
             }
 
-            if (it->second->callback)
+            if (response_callback->callback)
             {
                 m_threadPool->enqueue([=]() {
-                    it->second->callback(e, message);
-                    _responseCallbacks.erase(it);
+                    response_callback->callback(e, message);
+                    eraseResponseCallbackBySeq(message->seq());
                 });
             }
             else
             {
                 CHANNEL_SESSION_LOG(ERROR) << LOG_DESC("onMessage Callback empty");
-
-                _responseCallbacks.erase(it);
+                eraseResponseCallbackBySeq(message->seq());
             }
         }
         else
@@ -465,19 +464,19 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
             return;
         }
 
-        auto it = _responseCallbacks.find(seq);
-        if (it != _responseCallbacks.end())
+        auto response_callback = findResponseCallbackBySeq(seq);
+        if (response_callback)
         {
-            if (it->second->callback)
+            if (response_callback->callback)
             {
-                it->second->callback(ChannelException(-2, "Response timeout"), Message::Ptr());
+                response_callback->callback(
+                    ChannelException(-2, "Response timeout"), Message::Ptr());
             }
             else
             {
                 CHANNEL_SESSION_LOG(ERROR) << "Callback empty";
             }
-
-            _responseCallbacks.erase(it);
+            eraseResponseCallbackBySeq(seq);
         }
         else
         {
@@ -529,9 +528,9 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
             _idleTimer->cancel();
             _actived = false;
 
-            if (!_responseCallbacks.empty())
             {
-                for (auto& it : _responseCallbacks)
+                ReadGuard l(x_responseCallbacks);
+                for (auto& it : m_responseCallbacks)
                 {
                     try
                     {
@@ -557,10 +556,8 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                             << LOG_KV("what", boost::diagnostic_information(e));
                     }
                 }
-
-                _responseCallbacks.clear();
             }
-
+            clearResponseCallbacks();
             if (_messageHandler)
             {
                 try

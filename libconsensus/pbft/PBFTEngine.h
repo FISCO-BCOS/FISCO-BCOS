@@ -462,10 +462,10 @@ protected:
             {
                 PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("idx", req.idx) << LOG_KV("leader", leader.second)
+                    << LOG_KV("reqIdx", req.idx) << LOG_KV("sealerIdx", leader.second)
                     << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
                     << LOG_KV("highSealer", m_highestBlock.sealer())
-                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("myIdx", nodeIdx());
+                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("nodeIdx", nodeIdx());
             }
             return false;
         }
