@@ -526,23 +526,26 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
-    ReadGuard l(m_sealerListMutex);
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
     {
         return true;
     }
-    /// check sealer list(node list)
-    if (m_sealerList != block.blockHeader().sealerList())
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: wrong sealers")
-                              << LOG_KV("Nsealer", m_sealerList.size())
-                              << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
-                              << LOG_KV("hash", block.blockHeader().hash().abridged())
-                              << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        return false;
+        /// check sealer list(node list)
+        ReadGuard l(m_sealerListMutex);
+        if (m_sealerList != block.blockHeader().sealerList())
+        {
+            PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: wrong sealers")
+                                  << LOG_KV("Nsealer", m_sealerList.size())
+                                  << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
+                                  << LOG_KV("hash", block.blockHeader().hash().abridged())
+                                  << LOG_KV("nodeIdx", nodeIdx())
+                                  << LOG_KV("myNode", m_keyPair.pub().abridged());
+            return false;
+        }
     }
+
     /// check sealer(sealer must be a sealer)
     if (getSealerByIndex(block.blockHeader().sealer().convert_to<size_t>()) == NodeID())
     {
