@@ -132,7 +132,6 @@ jobs:
           name: Upload binary
           command: |
             cd build/bin
-            strip fisco-bcos
             tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos-gm.tar.gz
