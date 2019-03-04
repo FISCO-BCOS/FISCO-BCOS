@@ -55,11 +55,7 @@ private:
 
 void version()
 {
-#ifdef FISCO_GM
-    std::cout << "FISCO-BCOS gm version " << dev::Version << std::endl;
-#else
-    std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;
-#endif
+    std::cout << "FISCO-BCOS version : " << dev::Version << std::endl;
     std::cout << "Build Time         : " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
     std::cout << "Build Type         : " << DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM) << "/"
               << DEV_QUOTED(FISCO_BCOS_BUILD_TYPE) << std::endl;

@@ -22,6 +22,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
+#include <libstorage/MemoryTableFactory.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>

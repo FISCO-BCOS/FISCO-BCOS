@@ -45,7 +45,7 @@ TableFactoryPrecompiled::TableFactoryPrecompiled()
     name2Selector[TABLE_METHOD_CRT_STR_STR] = getFuncSelector(TABLE_METHOD_CRT_STR_STR);
 }
 
-std::string TableFactoryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string TableFactoryPrecompiled::toString()
 {
     return "TableFactory";
 }

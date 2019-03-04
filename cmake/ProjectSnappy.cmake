@@ -1,7 +1,7 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-ExternalProject_Add(Snappy
+ExternalProject_Add(snappy
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME snappy-1.1.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
@@ -23,13 +23,13 @@ ExternalProject_Add(Snappy
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}snappy${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 
-ExternalProject_Get_Property(Snappy INSTALL_DIR)
-add_library(snappy STATIC IMPORTED)
+ExternalProject_Get_Property(snappy INSTALL_DIR)
+add_library(Snappy STATIC IMPORTED)
 set(SNAPPY_INCLUDE_DIR ${INSTALL_DIR}/include/)
 set(SNAPPY_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}snappy${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-set_property(TARGET snappy PROPERTY IMPORTED_LOCATION ${SNAPPY_LIBRARY})
-set_property(TARGET snappy PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SNAPPY_INCLUDE_DIR})
-add_dependencies(snappy Snappy)
+set_property(TARGET Snappy PROPERTY IMPORTED_LOCATION ${SNAPPY_LIBRARY})
+set_property(TARGET Snappy PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SNAPPY_INCLUDE_DIR})
+add_dependencies(Snappy snappy)
 
 unset(INSTALL_DIR)

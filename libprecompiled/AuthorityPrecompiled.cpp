@@ -19,7 +19,7 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-
+#include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -44,7 +44,7 @@ AuthorityPrecompiled::AuthorityPrecompiled()
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
+std::string AuthorityPrecompiled::toString()
 {
     return "Authority";
 }

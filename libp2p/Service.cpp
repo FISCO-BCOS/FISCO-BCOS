@@ -177,7 +177,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
-                             << LOG_KV("what", boost::diagnostic_information(e));
+                             << LOG_KV("what", e.what());
 
         return;
     }

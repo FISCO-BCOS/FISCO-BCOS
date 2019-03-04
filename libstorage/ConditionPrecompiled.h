@@ -67,7 +67,7 @@ public:
     virtual ~ConditionPrecompiled(){};
 
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>);
+    virtual std::string toString();
 
     virtual bytes call(
         ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());

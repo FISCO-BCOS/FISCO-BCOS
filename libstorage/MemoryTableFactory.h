@@ -40,7 +40,7 @@ public:
 
     Table::Ptr openTable(const std::string& table, bool authorityFlag = true) override;
     Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag,
+        const std::string& valueField, bool authorigytFlag = true,
         Address const& _origin = Address()) override;
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }

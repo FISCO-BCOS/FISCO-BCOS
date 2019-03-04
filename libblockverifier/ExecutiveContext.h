@@ -38,7 +38,7 @@ namespace dev
 namespace storage
 {
 class Table;
-}
+}  // namespace storage
 
 namespace executive
 {
@@ -74,8 +74,6 @@ public:
 
     std::shared_ptr<dev::executive::StateFace> getState();
     void setState(std::shared_ptr<dev::executive::StateFace> state);
-
-    std::shared_ptr<dev::storage::Table> getTable(const Address& address);
 
     virtual bool isOrginPrecompiled(Address const& _a) const;
 

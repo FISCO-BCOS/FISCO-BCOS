@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(testOperators)
     BOOST_CHECK(c_str_array == total_array);
 
     // test toString
-    string32 s_32 = {'a', 'b', 'c'};
+    string32 s_32 = {{'a', 'b', 'c'}};
     std::string s = toString(s_32);
     BOOST_CHECK(s == "abc");
 }

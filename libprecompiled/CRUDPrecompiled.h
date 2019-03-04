@@ -37,7 +37,7 @@ public:
     CRUDPrecompiled();
     virtual ~CRUDPrecompiled(){};
 
-    virtual std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>);
+    virtual std::string toString();
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address());

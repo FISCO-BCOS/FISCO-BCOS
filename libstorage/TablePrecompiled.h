@@ -53,7 +53,7 @@ public:
     virtual ~TablePrecompiled(){};
 
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>) override;
+    virtual std::string toString() override;
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;

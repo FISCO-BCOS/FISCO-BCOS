@@ -190,8 +190,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
             {
                 std::string data = it.second.data();
                 boost::to_lower(data);
-                Ledger_LOG(INFO) << LOG_BADGE("initConsensusConfig")
-                                 << LOG_KV("consensus_node_key", it.first) << LOG_KV("node", data);
+                Ledger_LOG(INFO) << LOG_BADGE("initConsensusConfig") << LOG_KV("it.first", data);
                 // Uniform lowercase nodeID
                 dev::h512 nodeID(data);
                 m_param->mutableConsensusParam().sealerList.push_back(nodeID);

@@ -54,13 +54,10 @@ addons:
     - cmake
     - libssl-dev
     - clang
-    # - libleveldb-dev
-    # - libsnappy-dev
     # - ninja-build
     - openssl
   homebrew:
     packages:
-    - leveldb
     - openssl
     - clang-format
 install: |

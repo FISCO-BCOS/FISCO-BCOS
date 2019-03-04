@@ -49,7 +49,7 @@ TablePrecompiled::TablePrecompiled()
     name2Selector[TABLE_METHOD_UP_STR_2ADD] = getFuncSelector(TABLE_METHOD_UP_STR_2ADD);
 }
 
-std::string TablePrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string TablePrecompiled::toString()
 {
     return "Table";
 }

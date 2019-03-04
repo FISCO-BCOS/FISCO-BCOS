@@ -90,7 +90,6 @@ add_subdirectory(libinitializer)
 add_subdirectory(libsecurity)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
-add_subdirectory(extension)
 
 
 if (TESTS)
