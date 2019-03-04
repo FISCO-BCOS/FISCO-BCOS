@@ -210,7 +210,7 @@ public:
 
     virtual Table::Ptr openTable(const std::string& table, bool authorityFlag = true) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag, Address const& _origin = Address()) = 0;
+        const std::string& valueField, bool authorityFlag, Address const& _origin = Address()) = 0;
 };
 
 }  // namespace storage
