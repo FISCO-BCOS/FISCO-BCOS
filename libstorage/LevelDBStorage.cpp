@@ -179,25 +179,25 @@ size_t LevelDBStorage::commit(
             record_time = utcTime();
 
             // write batch
-            // A bug here, if node is killed when some batches have been written and some haven't.
-            // The probability is 60ms / 1s
+            std::shared_ptr<dev::db::LevelDBWriteBatch> totalBatch = m_db->createWriteBatch();
             for (size_t j = 0; j < batchesSize; ++j)
             {
-                leveldb::WriteOptions writeOptions;
-                writeOptions.sync = false;
-                auto s = m_db->Write(writeOptions, &(batches[j]->writeBatch()));
+                totalBatch->append(*batches[j]);
+            }
+            leveldb::WriteOptions writeOptions;
+            writeOptions.sync = false;
+            auto s = m_db->Write(writeOptions, &(totalBatch->writeBatch()));
 
-                if (!s.ok())
-                {
-                    STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
-                                                      "Commit leveldb crashed! Please remove all "
-                                                      "data and sync data from other nodes")
-                                               << LOG_KV("status", s.ToString());
+            if (!s.ok())
+            {
+                STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
+                                                  "Commit leveldb crashed! Please remove all "
+                                                  "data and sync data from other nodes")
+                                           << LOG_KV("status", s.ToString());
 
-                    BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-                    return 0;
-                }
+                BOOST_THROW_EXCEPTION(
+                    StorageException(-1, "Commit leveldb exception:" + s.ToString()));
+                return 0;
             }
             writeDB_time_cost += utcTime() - record_time;
             record_time = utcTime();

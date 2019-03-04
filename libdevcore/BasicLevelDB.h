@@ -40,8 +40,8 @@ class LevelDBWriteBatch : public WriteBatchFace
 public:
     void insert(Slice _key, Slice _value) override;
     void kill(Slice _key) override;
-
-    leveldb::WriteBatch const& writeBatch() const { return m_writeBatch; }
+    void append(const LevelDBWriteBatch& _batch);
+    const leveldb::WriteBatch& writeBatch() const { return m_writeBatch; }
     leveldb::WriteBatch& writeBatch() { return m_writeBatch; }
 
     // For Encrypted level DB
