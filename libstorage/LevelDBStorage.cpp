@@ -92,18 +92,17 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
     return Entries::Ptr();
 }
 
-size_t LevelDBStorage::commitTableDataRange(
+size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
     TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to)
 {
     // commit table data of given range, thread safe
     // range to commit: [from, to)
     if (from >= to)
         return 0;
-    auto record_time = utcTime();
     size_t total = 0;
-    std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
     auto dataIt = tableData->data.begin();
     std::advance(dataIt, from);
+    batch = m_db->createWriteBatch();
 
     while (from < to && dataIt != tableData->data.end())
     {
@@ -141,23 +140,6 @@ size_t LevelDBStorage::commitTableDataRange(
         from++;
     }
 
-    leveldb::WriteOptions writeOptions;
-    writeOptions.sync = false;
-    // WriteGuard l(m_remoteDBMutex);
-    auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
-    auto writeDB_time_cost = utcTime() - record_time;
-    STORAGE_LEVELDB_LOG(TRACE) << LOG_BADGE("Commit") << LOG_DESC("Write to db in thread")
-                               << LOG_KV("timeCost", writeDB_time_cost);
-    // l.unlock();
-    if (!s.ok())
-    {
-        STORAGE_LEVELDB_LOG(ERROR)
-            << LOG_DESC("Commit leveldb failed") << LOG_KV("status", s.ToString());
-
-        BOOST_THROW_EXCEPTION(StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-        return 0;
-    }
-
     return total;
 }
 
@@ -168,6 +150,10 @@ size_t LevelDBStorage::commit(
     try
     {
         auto start_time = utcTime();
+        auto record_time = utcTime();
+        auto encode_time_cost = 0;
+        auto writeDB_time_cost = 0;
+
         std::atomic<size_t> total;
         total = 0;
 
@@ -176,18 +162,49 @@ size_t LevelDBStorage::commit(
             TableData::Ptr tableData = datas[i];
             size_t totalSize = tableData->data.size();
 
+            // Parallel encode and batch
+            size_t batchesSize = (totalSize + c_commitTableDataRangeEachThread - 1) /
+                                 c_commitTableDataRangeEachThread;
+            std::vector<std::shared_ptr<dev::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
 #pragma omp parallel for
-            for (size_t j = 0; j < (totalSize + c_commitTableDataRangeEachThread - 1) /
-                                       c_commitTableDataRangeEachThread;
-                 ++j)
+            for (size_t j = 0; j < batchesSize; ++j)
             {
                 size_t from = c_commitTableDataRangeEachThread * j;
                 size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
-                size_t threadTotal = commitTableDataRange(tableData, hash, num, from, to);
+                size_t threadTotal =
+                    commitTableDataRange(batches[j], tableData, hash, num, from, to);
                 total += threadTotal;
             }
+            encode_time_cost += utcTime() - record_time;
+            record_time = utcTime();
+
+            // write batch
+            // A bug here, if node is killed when some batches have been written and some haven't.
+            // The probability is 60ms / 1s
+            for (size_t j = 0; j < batchesSize; ++j)
+            {
+                leveldb::WriteOptions writeOptions;
+                writeOptions.sync = false;
+                auto s = m_db->Write(writeOptions, &(batches[j]->writeBatch()));
+
+                if (!s.ok())
+                {
+                    STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
+                                                      "Commit leveldb crashed! Please remove all "
+                                                      "data and sync data from other nodes")
+                                               << LOG_KV("status", s.ToString());
+
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(-1, "Commit leveldb exception:" + s.ToString()));
+                    return 0;
+                }
+            }
+            writeDB_time_cost += utcTime() - record_time;
+            record_time = utcTime();
         }
         STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
+                                   << LOG_KV("encodeTimeCost", encode_time_cost)
+                                   << LOG_KV("writeDBTimeCost", writeDB_time_cost)
                                    << LOG_KV("totalTimeCost", utcTime() - start_time);
 
         return total.load();
