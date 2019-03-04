@@ -207,7 +207,7 @@ public:
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int insert(const std::string& key, Entry::Ptr entry,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>(), bool needSelect = true) = 0;
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual bool checkAuthority(Address const& _origin) const = 0;
@@ -225,6 +225,7 @@ public:
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
+    virtual size_t cacheSize() { return 0; }
 };
 }  // namespace storage
 }  // namespace dev

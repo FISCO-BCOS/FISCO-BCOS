@@ -907,28 +907,59 @@ void BlockChainImp::writeTotalTransactionCount(
 
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     if (tb && tb_nonces)
     {
         const std::vector<Transaction>& txs = block.transactions();
         std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
+        auto constructVector_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+// auto constructEntry_time_cost = 0;
+// auto insertTb_time_cost = 0;
 #pragma omp parallel for
         for (uint i = 0; i < txs.size(); i++)
         {
+            // record_time = utcTime();
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
-            tb->insert(txs[i].sha3().hex(), entry);
+            // constructEntry_time_cost += utcTime() - record_time;
+            // record_time = utcTime();
+
+            tb->insert(
+                txs[i].sha3().hex(), entry, std::make_shared<dev::storage::AccessOptions>(), false);
             nonce_vector[i] = txs[i].nonce();
+            // insertTb_time_cost += utcTime() - record_time;
+            // record_time = utcTime();
         }
 
+        auto insertTable_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         /// insert tb2Nonces
         RLPStream rs;
         rs.appendVector(nonce_vector);
+        auto encodeNonceVector_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
         entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
+        auto insertNonceVector_time_cost = utcTime() - record_time;
+        BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
+                              << LOG_DESC("Write tx to block time record")
+                              << LOG_KV("openTableTimeCost", openTable_time_cost)
+                              << LOG_KV("constructVectorTimeCost", constructVector_time_cost)
+                              << LOG_KV("insertTableTimeCost", insertTable_time_cost)
+                              << LOG_KV("encodeNonceVectorTimeCost", encodeNonceVector_time_cost)
+                              << LOG_KV("insertNonceVectorTimeCost", insertNonceVector_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
     }
     else
     {

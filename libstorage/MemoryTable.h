@@ -171,7 +171,8 @@ public:
     }
 
     virtual int insert(const std::string& key, Entry::Ptr entry,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
+        bool needSelect = true) override
     {
         try
         {
@@ -198,7 +199,12 @@ public:
             {
                 if (m_remoteDB)
                 {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    if (needSelect)
+                        entries =
+                            m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    else
+                        entries = std::make_shared<Entries>();
+
                     m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
@@ -368,6 +374,8 @@ public:
     }
     virtual void rollback(const Change& _change) override;
 
+    size_t cacheSize() override { return m_cache.size(); }
+
 private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
@@ -521,7 +529,7 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
-};
+};  // namespace storage
 
 template <>
 inline void MemoryTable<Serial>::setRecorder(
