@@ -49,8 +49,8 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
-        dev::h512s const& _minerList = dev::h512s())
-      : Worker("ConsensusEngineBase", 0),
+        dev::h512s const& _sealerList = dev::h512s())
+      : Worker("ConsensusEngine", 0),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
@@ -59,37 +59,37 @@ public:
         m_consensusBlockNumber(0),
         m_protocolId(_protocolId),
         m_keyPair(_keyPair),
-        m_minerList(_minerList)
+        m_sealerList(_sealerList)
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
-        std::sort(m_minerList.begin(), m_minerList.end());
+        std::sort(m_sealerList.begin(), m_sealerList.end());
     }
 
     void start() override;
     void stop() override;
     virtual ~ConsensusEngineBase() { stop(); }
 
-    /// get miner list
-    dev::h512s minerList() const override
+    /// get sealer list
+    dev::h512s sealerList() const override
     {
-        ReadGuard l(m_minerListMutex);
-        return m_minerList;
+        ReadGuard l(m_sealerListMutex);
+        return m_sealerList;
     }
-    /// append miner
-    void appendMiner(h512 const& _miner) override
+    /// append sealer
+    void appendSealer(h512 const& _sealer) override
     {
         {
-            WriteGuard l(m_minerListMutex);
-            m_minerList.push_back(_miner);
+            WriteGuard l(m_sealerListMutex);
+            m_sealerList.push_back(_sealer);
         }
         resetConfig();
     }
 
-    const std::string consensusStatus() const override
+    const std::string consensusStatus() override
     {
         json_spirit::Object status_obj;
         getBasicConsensusStatus(status_obj);
@@ -105,20 +105,21 @@ public:
         status_obj.push_back(json_spirit::Pair("max_faulty_leader", m_f));
         status_obj.push_back(json_spirit::Pair("consensusedBlockNumber", m_consensusBlockNumber));
         status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
-        status_obj.push_back(json_spirit::Pair("highestblockHash", toHex(m_highestBlock.hash())));
+        status_obj.push_back(
+            json_spirit::Pair("highestblockHash", "0x" + toHex(m_highestBlock.hash())));
         status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
         status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
         status_obj.push_back(json_spirit::Pair("accountType", m_accountType));
         status_obj.push_back(json_spirit::Pair("cfgErr", m_cfgErr));
         status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
-        status_obj.push_back(json_spirit::Pair("nodeID", toHex(m_keyPair.pub())));
+        status_obj.push_back(json_spirit::Pair("nodeId", toHex(m_keyPair.pub())));
         int i = 0;
-        std::string miner_list = "";
+        std::string sealer_list = "";
         {
-            ReadGuard l(m_minerListMutex);
-            for (auto miner : m_minerList)
+            ReadGuard l(m_sealerListMutex);
+            for (auto sealer : m_sealerList)
             {
-                status_obj.push_back(json_spirit::Pair("miner." + toString(i), toHex(miner)));
+                status_obj.push_back(json_spirit::Pair("sealer." + toString(i), toHex(sealer)));
                 i++;
             }
         }
@@ -129,7 +130,7 @@ public:
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; }
     GROUP_ID groupId() const override { return m_groupId; }
     /// get account type
-    ///@return NodeAccountType::MinerAccount: the node can generate and execute block
+    ///@return NodeAccountType::SealerAccount: the node can generate and execute block
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
     NodeAccountType accountType() override { return m_accountType; }
     /// set the node account type
@@ -137,7 +138,7 @@ public:
     {
         m_accountType = _accountType;
     }
-    /// get the node index if the node is a miner
+    /// get the node index if the node is a sealer
     IDXTYPE nodeIdx() const override
     {
         ReadGuard l(m_idxMutex);
@@ -162,16 +163,16 @@ public:
     }
 
 protected:
-    virtual void resetConfig() { m_nodeNum = m_minerList.size(); }
+    virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
-    /// get the node id of specified miner according to its index
+    /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
-    /// @return h512(): the node is not in the miner list
+    /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getMinerByIndex(size_t const& index) const
+    inline h512 getSealerByIndex(size_t const& index) const
     {
-        if (index < m_minerList.size())
-            return m_minerList[index];
+        if (index < m_sealerList.size())
+            return m_sealerList[index];
         return h512();
     }
 
@@ -283,15 +284,15 @@ protected:
 
     PROTOCOL_ID m_protocolId;
     GROUP_ID m_groupId;
-    /// type of this node (MinerAccount or ObserveAccount)
+    /// type of this node (SealerAccount or ObserveAccount)
     NodeAccountType m_accountType;
     /// index of this node
     IDXTYPE m_idx = 0;
     mutable SharedMutex m_idxMutex;
     KeyPair m_keyPair;
-    /// miner list
-    mutable SharedMutex m_minerListMutex;
-    dev::h512s m_minerList;
+    /// sealer list
+    mutable SharedMutex m_sealerListMutex;
+    dev::h512s m_sealerList;
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
     bool m_startConsensusEngine = false;

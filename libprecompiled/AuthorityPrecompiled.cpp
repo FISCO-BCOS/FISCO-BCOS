@@ -19,7 +19,7 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-
+#include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -44,7 +44,7 @@ AuthorityPrecompiled::AuthorityPrecompiled()
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
+std::string AuthorityPrecompiled::toString()
 {
     return "Authority";
 }
@@ -192,7 +192,7 @@ bytes AuthorityPrecompiled::call(
 
 void AuthorityPrecompiled::addPrefixToUserTable(std::string& table_name)
 {
-    if (table_name == SYS_ACCESS_TABLE || table_name == SYS_MINERS || table_name == SYS_TABLES ||
+    if (table_name == SYS_ACCESS_TABLE || table_name == SYS_CONSENSUS || table_name == SYS_TABLES ||
         table_name == SYS_CNS || table_name == SYS_CONFIG)
     {
         return;

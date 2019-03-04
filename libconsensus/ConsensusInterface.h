@@ -38,13 +38,13 @@ public:
     /// stop the consensus module
     virtual void stop() = 0;
 
-    /// get miner list
-    virtual h512s minerList() const = 0;
-    /// set the miner list
-    /// virtual void setMinerList(h512s const& _minerList) = 0;
-    virtual void appendMiner(h512 const& _miner) = 0;
+    /// get sealer list
+    virtual h512s sealerList() const = 0;
+    /// set the sealer list
+    /// virtual void setSealerList(h512s const& _sealerList) = 0;
+    virtual void appendSealer(h512 const& _sealer) = 0;
     /// get status of consensus
-    virtual const std::string consensusStatus() const = 0;
+    virtual const std::string consensusStatus() = 0;
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;

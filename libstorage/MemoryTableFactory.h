@@ -38,7 +38,7 @@ class ExecutiveContext;
 }
 namespace storage
 {
-class MemoryTableFactory
+class MemoryTableFactory : public StateDBFactory
 {
 public:
     typedef std::shared_ptr<MemoryTableFactory> Ptr;
@@ -47,8 +47,8 @@ public:
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = false);
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
-        bool isPara = false);
+        const std::string& valueField, bool authorityFlag = true,
+        Address const& _origin = Address(), bool isPara = false);
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }

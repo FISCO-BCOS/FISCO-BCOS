@@ -49,12 +49,12 @@ DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
 DEV_SIMPLE_EXCEPTION(ExistedBlock);
 DEV_SIMPLE_EXCEPTION(ParentNoneExist);
 DEV_SIMPLE_EXCEPTION(WrongParentHash);
-DEV_SIMPLE_EXCEPTION(BlockMinerListWrong);
+DEV_SIMPLE_EXCEPTION(BlockSealerListWrong);
 
 enum NodeAccountType
 {
     ObserverAccount = 0,
-    MinerAccount
+    SealerAccount
 };
 struct Sealing
 {

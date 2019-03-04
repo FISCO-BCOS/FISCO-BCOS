@@ -131,6 +131,48 @@ private:
 
     void updateIdleTimer();
 
+    struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+    {
+        typedef std::shared_ptr<ResponseCallback> Ptr;
+
+        std::string seq = "";
+        std::function<void(ChannelException, Message::Ptr)> callback;
+        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+    };
+
+    void insertResponseCallback(std::string const& seq, ResponseCallback::Ptr callback_ptr)
+    {
+        WriteGuard l(x_responseCallbacks);
+        m_responseCallbacks.insert(std::make_pair(seq, callback_ptr));
+    }
+
+    ResponseCallback::Ptr findResponseCallbackBySeq(std::string const& seq)
+    {
+        ReadGuard l(x_responseCallbacks);
+        auto it = m_responseCallbacks.find(seq);
+        if (it != m_responseCallbacks.end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    void eraseResponseCallbackBySeq(std::string const& seq)
+    {
+        WriteGuard l(x_responseCallbacks);
+        m_responseCallbacks.erase(seq);
+    }
+
+    void clearResponseCallbacks()
+    {
+        WriteGuard l(x_responseCallbacks);
+        m_responseCallbacks.clear();
+    }
+
+    mutable SharedMutex x_responseCallbacks;
+    std::map<std::string, ResponseCallback::Ptr> m_responseCallbacks;
+
+
     MessageFactory::Ptr _messageFactory;
     std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>
         _messageHandler;
@@ -152,17 +194,6 @@ private:
 
     std::shared_ptr<boost::asio::io_service> _ioService;
     std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
-
-    struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
-    {
-        typedef std::shared_ptr<ResponseCallback> Ptr;
-
-        std::string seq = "";
-        std::function<void(ChannelException, Message::Ptr)> callback;
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
-    };
-
-    std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
     mutable SharedMutex x_topics;
     std::shared_ptr<std::set<std::string> > m_topics;

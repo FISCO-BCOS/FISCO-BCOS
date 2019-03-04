@@ -140,7 +140,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get ca casic failed");
+                HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
                 return preverified;
             }
             /// ignore ca
@@ -226,7 +226,13 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-
+    if (endpointPublicKey->empty())
+    {
+        HOST_LOG(WARNING) << LOG_DESC("handshakeServer get nodeID failed")
+                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
+        socket->close();
+        return;
+    }
     if (m_run)
     {
         std::string node_id_str(*endpointPublicKey);
@@ -413,6 +419,13 @@ void Host::handshakeClient(const boost::system::error_code& error,
         {
             socket->close();
         }
+        return;
+    }
+    if (endpointPublicKey->empty())
+    {
+        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get nodeID failed")
+                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
+        socket->close();
         return;
     }
 

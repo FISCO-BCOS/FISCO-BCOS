@@ -44,6 +44,17 @@ using namespace dev::ledger;
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
 
+std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
+    {RPCExceptionType::GroupID, "GroupID does not exist"},
+    {RPCExceptionType::JsonParse, "Response json parse error"},
+    {RPCExceptionType::BlockHash, "BlockHash does not exist"},
+    {RPCExceptionType::BlockNumberT, "BlockNumber does not exist"},
+    {RPCExceptionType::TransactionIndex, "TransactionIndex is out of range"},
+    {RPCExceptionType::CallFrom, "Call needs a 'from' field"},
+    {RPCExceptionType::NoView, "Only pbft consensus supports the view property"},
+    {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
+    {RPCExceptionType::InvalidRequest,
+        "Don't send request to this node who doesn't belong to the group"}};
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -63,7 +74,7 @@ void Rpc::checkRequest(int _groupID)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
     }
-    auto _nodeList = blockchain->minerList() + blockchain->observerList();
+    auto _nodeList = blockchain->sealerList() + blockchain->observerList();
     auto it = std::find(_nodeList.begin(), _nodeList.end(), service()->id());
     if (it == _nodeList.end())
     {
@@ -166,19 +177,19 @@ std::string Rpc::getPbftView(int _groupID)
     }
 }
 
-Json::Value Rpc::getMinerList(int _groupID)
+Json::Value Rpc::getSealerList(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getMinerList") << LOG_DESC("request")
+        RPC_LOG(INFO) << LOG_BADGE("getSealerList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        auto miners = blockchain->minerList();
+        auto sealers = blockchain->sealerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
-        for (auto it = miners.begin(); it != miners.end(); ++it)
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
         {
             response.append((*it).hex());
         }
@@ -293,11 +304,7 @@ Json::Value Rpc::getClientVersion()
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
         Json::Value version;
 
-#ifdef FISCO_GM
-        version["FISCO-BCOS GM Version"] = FISCO_BCOS_PROJECT_VERSION;
-#else
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
-#endif
         version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
         version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
                                 std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
@@ -469,6 +476,12 @@ Json::Value Rpc::getBlockByHash(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)
@@ -528,6 +541,12 @@ Json::Value Rpc::getBlockByNumber(
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
         response["extraData"] = Json::Value(Json::arrayValue);
         auto datas = block->header().extraData();
         for (auto const& data : datas)

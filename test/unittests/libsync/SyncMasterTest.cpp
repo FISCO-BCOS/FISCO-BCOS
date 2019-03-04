@@ -147,13 +147,13 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
 
-    // no miner packet number is 0
+    // no sealer packet number is 0
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 0);
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
 
-    // Set miner
+    // Set sealer
     sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        _p->isMiner = true;
+        _p->isSealer = true;
         return true;
     });
 

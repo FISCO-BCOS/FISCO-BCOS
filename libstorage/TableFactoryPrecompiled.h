@@ -49,7 +49,7 @@ public:
     TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>);
+    virtual std::string toString();
 
     virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address());

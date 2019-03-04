@@ -138,7 +138,7 @@ std::vector<std::string> DagTransferPrecompiled::getDagTag(bytesConstRef param)
     return results;
 }
 
-std::string DagTransferPrecompiled::toString(dev::blockverifier::ExecutiveContext::Ptr)
+std::string DagTransferPrecompiled::toString()
 {
     return "DagTransfer";
 }

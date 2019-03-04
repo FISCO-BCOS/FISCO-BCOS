@@ -42,10 +42,10 @@ public:
 
     virtual ~Precompiled(){};
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>) { return ""; }
+    virtual std::string toString() { return ""; }
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address()) = 0;
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        bytesConstRef _param, Address const& _origin = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
     virtual bool isDagPrecompiled() { return false; }
@@ -54,9 +54,9 @@ public:
         return std::vector<std::string>();
     }
 
-    virtual uint32_t getParamFunc(bytesConstRef param)
+    virtual uint32_t getParamFunc(bytesConstRef _param)
     {
-        auto funcBytes = param.cropped(0, 4);
+        auto funcBytes = _param.cropped(0, 4);
         uint32_t func = *((uint32_t*)(funcBytes.data()));
 
         return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
@@ -64,17 +64,22 @@ public:
     }
 
     virtual uint32_t getFuncSelector(std::string const& _functionName);
-    virtual bytesConstRef getParamData(bytesConstRef param) { return param.cropped(4); }
+    virtual bytesConstRef getParamData(bytesConstRef _param) { return _param.cropped(4); }
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
     std::shared_ptr<dev::storage::Table> openTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& tableName);
     virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
     {
         return std::make_shared<dev::storage::AccessOptions>(origin);
     }
+
+    std::shared_ptr<dev::storage::Table> createTable(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
+        Address const& origin);
 };
 
 }  // namespace blockverifier

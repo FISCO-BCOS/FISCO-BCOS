@@ -41,7 +41,7 @@ public:
     DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context);
     virtual ~DagTransferPrecompiled(){};
 
-    std::string toString(dev::blockverifier::ExecutiveContext::Ptr) override;
+    std::string toString() override;
 
     bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
         Address const& origin = Address()) override;

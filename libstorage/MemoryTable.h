@@ -101,7 +101,7 @@ public:
     {
         try
         {
-            if (!checkAuthority(options->origin))
+            if (options->check && !checkAuthority(options->origin))
             {
                 // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update
                 // non-authorized")
@@ -176,7 +176,7 @@ public:
     {
         try
         {
-            if (!checkAuthority(options->origin))
+            if (options->check && !checkAuthority(options->origin))
             {
                 // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert
                 // non-authorized")
@@ -248,7 +248,7 @@ public:
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
     {
-        if (!checkAuthority(options->origin))
+        if (options->check && !checkAuthority(options->origin))
         {
             // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
             //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);

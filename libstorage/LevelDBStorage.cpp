@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MinerPrecompiled.h
+/** @file SealerPrecompiled.h
  *  @author ancelmo
  *  @date 20180921
  */
@@ -179,10 +179,32 @@ size_t LevelDBStorage::commit(
             record_time = utcTime();
 
             // write batch
+            // A bug here when node is killed in this for, some batches have been written but some
+            // not! Because leveldb::WriteBatch didn't support Append() function in it's release
+            // version v1.20 (Just support in it's master branch now)
+            for (size_t j = 0; j < batchesSize; ++j)
+            {
+                leveldb::WriteOptions writeOptions;
+                writeOptions.sync = false;
+                auto s = m_db->Write(writeOptions, &(batches[j]->writeBatch()));
+
+                if (!s.ok())
+                {
+                    STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
+                                                      "Commit leveldb crashed! Please remove all "
+                                                      "data and sync data from other nodes")
+                                               << LOG_KV("status", s.ToString());
+
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(-1, "Commit leveldb exception:" + s.ToString()));
+                    return 0;
+                }
+            }
+            /*
             std::shared_ptr<dev::db::LevelDBWriteBatch> totalBatch = m_db->createWriteBatch();
             for (size_t j = 0; j < batchesSize; ++j)
             {
-                totalBatch->append(*batches[j]);
+                totalBatch->append(*batches[j]);  // Not support append now
             }
             leveldb::WriteOptions writeOptions;
             writeOptions.sync = false;
@@ -199,6 +221,7 @@ size_t LevelDBStorage::commit(
                     StorageException(-1, "Commit leveldb exception:" + s.ToString()));
                 return 0;
             }
+            */
             writeDB_time_cost += utcTime() - record_time;
             record_time = utcTime();
         }

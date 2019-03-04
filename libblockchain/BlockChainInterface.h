@@ -47,7 +47,7 @@ enum class CommitResult
 struct GenesisBlockParam
 {
     std::string groupMark;      // Data written to extra data of genesis block.
-    dev::h512s minerList;       // miner nodes for consensus/syns modules
+    dev::h512s sealerList;      // sealer nodes for consensus/syns modules
     dev::h512s observerList;    // observer nodes for syns module
     std::string consensusType;  // the type of consensus, now pbft
     std::string storageType;    // the type of storage, now LevelDB
@@ -82,8 +82,8 @@ public:
     /// If it is a subsequent block with same extra data, function returns true.
     /// Returns an error in the rest of the cases.
     virtual bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) = 0;
-    /// get miner or observer nodes
-    virtual dev::h512s minerList() = 0;
+    /// get sealer or observer nodes
+    virtual dev::h512s sealerList() = 0;
     virtual dev::h512s observerList() = 0;
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;

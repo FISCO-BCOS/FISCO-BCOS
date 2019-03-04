@@ -38,17 +38,17 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
-        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _minerList = dev::h512s())
+        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
       : RaftEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _keyPair,
-            _minElectTime, _maxElectTime, _protocolId, _minerList)
+            _minElectTime, _maxElectTime, _protocolId, _sealerList)
     {}
 
     /*
-    void updateMinerList()
+    void updateSealerList()
     {
-        if (m_highestBlock.number() == m_lastObtainMinerNum)
+        if (m_highestBlock.number() == m_lastObtainSealerNum)
             return;
-        m_lastObtainMinerNum = m_highestBlock.number();
+        m_lastObtainSealerNum = m_highestBlock.number();
     }
     */
     void updateConsensusNodeList() override {}
@@ -73,9 +73,9 @@ public:
         return dev::consensus::RaftEngine::onRecvRaftMessage(_exception, _session, _message);
     }
 
-    ssize_t getIndexByMiner(dev::h512 const& _nodeId)
+    ssize_t getIndexBySealer(dev::h512 const& _nodeId)
     {
-        return dev::consensus::RaftEngine::getIndexByMiner(_nodeId);
+        return dev::consensus::RaftEngine::getIndexBySealer(_nodeId);
     }
 
     bool getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const

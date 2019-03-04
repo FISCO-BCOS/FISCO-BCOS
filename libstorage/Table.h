@@ -46,8 +46,9 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 {
     typedef std::shared_ptr<AccessOptions> Ptr;
     AccessOptions() = default;
-    AccessOptions(Address _origin) { origin = _origin; }
+    AccessOptions(Address _origin, bool _check = true) : origin(_origin), check(_check) {}
     Address origin;
+    bool check = true;
 };
 
 class Entry : public std::enable_shared_from_this<Entry>
@@ -227,5 +228,20 @@ public:
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
     virtual size_t cacheSize() { return 0; }
 };
+
+// Block execution time construction
+class StateDBFactory : public std::enable_shared_from_this<StateDBFactory>
+{
+public:
+    typedef std::shared_ptr<StateDBFactory> Ptr;
+
+    virtual ~StateDBFactory() {}
+
+    virtual Table::Ptr openTable(
+        const std::string& table, bool authorityFlag = true, bool isPara = false) = 0;
+    virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
+        const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
+        bool isPara = false) = 0;
+};  // namespace storage
 }  // namespace storage
 }  // namespace dev

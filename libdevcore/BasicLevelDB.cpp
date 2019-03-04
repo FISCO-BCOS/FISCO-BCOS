@@ -38,10 +38,12 @@ void LevelDBWriteBatch::insert(Slice _key, Slice _value)
     this->insertSlice(toLDBSlice(_key), toLDBSlice(_value));
 }
 
+/*
 void LevelDBWriteBatch::append(const LevelDBWriteBatch& _batch)
 {
     m_writeBatch.Append(_batch.writeBatch());
 }
+*/
 
 void LevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice _value)
 {
@@ -63,7 +65,8 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
     if (!m_openStatus.ok() || !db)
     {
         std::stringstream exitInfo;
-        exitInfo << "Database open error" << endl;
+        exitInfo << "Database open error"
+                 << ", path=" << _name << endl;
         errorExit(exitInfo);
     }
     m_db.reset(db);

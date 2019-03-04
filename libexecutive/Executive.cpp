@@ -22,6 +22,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
+#include <libstorage/MemoryTableFactory.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -353,7 +354,7 @@ bool Executive::finalize()
             m_ext->evmSchedule().suicideRefundGas * m_ext->sub().suicides.size();
 
     // SSTORE refunds...
-    // must be done before the miner gets the fees.
+    // must be done before the sealer gets the fees.
     m_refunded = m_ext ? min((m_t.gas() - m_gas) / 2, m_ext->sub().refunds) : 0;
     m_gas += m_refunded;
 

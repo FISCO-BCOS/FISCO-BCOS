@@ -32,7 +32,7 @@ namespace storage
 /// \brief Sign of the DB key is valid or not
 const char* const STATUS = "_status_";
 const char* const SYS_TABLES = "_sys_tables_";
-const char* const SYS_MINERS = "_sys_miners_";
+const char* const SYS_CONSENSUS = "_sys_consensus_";
 const char* const SYS_CURRENT_STATE = "_sys_current_state_";
 const char* const SYS_KEY_CURRENT_NUMBER = "current_number";
 const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";

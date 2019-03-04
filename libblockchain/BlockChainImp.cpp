@@ -452,14 +452,14 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
         }
 
-        tb = mtb->openTable(SYS_MINERS);
+        tb = mtb->openTable(SYS_CONSENSUS);
         if (tb)
         {
-            for (dev::h512 node : initParam.minerList)
+            for (dev::h512 node : initParam.sealerList)
             {
                 Entry::Ptr entry = std::make_shared<Entry>();
                 entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_MINER);
+                entry->setField(NODE_TYPE, NODE_TYPE_SEALER);
                 entry->setField(NODE_KEY_NODEID, dev::toHex(node));
                 entry->setField(NODE_KEY_ENABLENUM, "0");
                 tb->insert(PRI_KEY, entry);
@@ -540,7 +540,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     dev::h512s list;
     try
     {
-        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_MINERS);
+        Table::Ptr tb = getMemoryTableFactory()->openTable(storage::SYS_CONSENSUS);
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getNodeListByType]Open table error");
@@ -580,20 +580,20 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     return list;
 }
 
-dev::h512s BlockChainImp::minerList()
+dev::h512s BlockChainImp::sealerList()
 {
     int64_t blockNumber = number();
     UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByMiner == blockNumber)
+    if (m_cacheNumBySealer == blockNumber)
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#minerList]Get miner list by cache")
-                              << LOG_KV("size", m_minerList.size());
-        return m_minerList;
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#sealerList]Get sealer list by cache")
+                              << LOG_KV("size", m_sealerList.size());
+        return m_sealerList;
     }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_MINER);
+    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_SEALER);
     UpgradeGuard ul(l);
-    m_cacheNumByMiner = blockNumber;
-    m_minerList = list;
+    m_cacheNumBySealer = blockNumber;
+    m_sealerList = list;
 
     return list;
 }
@@ -910,7 +910,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
     auto start_time = utcTime();
     auto record_time = utcTime();
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
-    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES, false);
     auto openTable_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -1005,17 +1005,28 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
     writeNumber2Hash(block, context);
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
     int64_t num = number();
-    if ((block.blockHeader().number() != num + 1))
+    if (_blockNumber != number() + 1)
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect block number")
-                                << LOG_KV("needNumber", num + 1)
-                                << LOG_KV("committedNumber", block.blockHeader().number());
+                                << LOG_KV("needNumber", number() + 1)
+                                << LOG_KV("committedNumber", _blockNumber);
+        return false;
+    }
+    return true;
+}
+
+CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+    if (!isBlockShouldCommit(block.blockHeader().number()))
+    {
         return CommitResult::ERROR_NUMBER;
     }
 
@@ -1032,16 +1043,11 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     try
     {
         auto before_write_time_cost = utcTime() - record_time;
-        record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
-            if ((block.blockHeader().number() != num + 1))
+            if (!isBlockShouldCommit(block.blockHeader().number()))
             {
-                BLOCKCHAIN_LOG(WARNING)
-                    << LOG_DESC("[#commitBlock]Commit fail due to incorrect block number")
-                    << LOG_KV("needNumber", num + 1)
-                    << LOG_KV("committedNumber", block.blockHeader().number());
-                return CommitResult::ERROR_NUMBER;
+                return CommitResult::ERROR_PARENT_HASH;
             }
 
             auto write_record_time = utcTime();

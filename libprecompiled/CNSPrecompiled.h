@@ -37,7 +37,7 @@ public:
     CNSPrecompiled();
     virtual ~CNSPrecompiled(){};
 
-    std::string toString(std::shared_ptr<dev::blockverifier::ExecutiveContext>) override;
+    std::string toString() override;
 
     bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address()) override;

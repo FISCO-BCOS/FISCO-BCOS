@@ -57,10 +57,10 @@ void PBFTSealer::handleBlock()
         return;
     }
     setBlock();
-    PBFTSEALER_LOG(INFO) << LOG_DESC("++++++++Generating seal on")
+    PBFTSEALER_LOG(INFO) << LOG_DESC("++++++++++++++++ Generating seal on")
                          << LOG_KV("blkNum", m_sealing.block.header().number())
                          << LOG_KV("tx", m_sealing.block.getTransactionSize())
-                         << LOG_KV("myIdx", m_pbftEngine->nodeIdx())
+                         << LOG_KV("nodeIdx", m_pbftEngine->nodeIdx())
                          << LOG_KV("hash", m_sealing.block.header().hash().abridged());
     bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
     if (!succ)

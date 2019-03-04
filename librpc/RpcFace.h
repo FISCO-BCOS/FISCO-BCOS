@@ -41,9 +41,9 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getPbftView", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPbftViewI);
-        this->bindAndAddMethod(jsonrpc::Procedure("getMinerList", jsonrpc::PARAMS_BY_POSITION,
+        this->bindAndAddMethod(jsonrpc::Procedure("getSealerList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getMinerListI);
+            &dev::rpc::RpcFace::getSealerListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getObserverList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getObserverListI);
@@ -141,9 +141,9 @@ public:
     {
         response = this->getPbftView(request[0u].asInt());
     }
-    inline virtual void getMinerListI(const Json::Value& request, Json::Value& response)
+    inline virtual void getSealerListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getMinerList(request[0u].asInt());
+        response = this->getSealerList(request[0u].asInt());
     }
     inline virtual void getObserverListI(const Json::Value& request, Json::Value& response)
     {
@@ -246,7 +246,7 @@ public:
     // consensus part
     virtual std::string getBlockNumber(int param1) = 0;
     virtual std::string getPbftView(int param1) = 0;
-    virtual Json::Value getMinerList(int param1) = 0;
+    virtual Json::Value getSealerList(int param1) = 0;
     virtual Json::Value getObserverList(int param1) = 0;
     virtual Json::Value getConsensusStatus(int param1) = 0;
 

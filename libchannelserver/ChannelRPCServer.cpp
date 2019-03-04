@@ -213,7 +213,7 @@ void ChannelRPCServer::onConnect(
 void ChannelRPCServer::onDisconnect(
     dev::channel::ChannelException, dev::channel::ChannelSession::Ptr session)
 {
-    CHANNEL_LOG(ERROR) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
+    CHANNEL_LOG(DEBUG) << "onDisconnect remove session" << LOG_KV("From", session->host()) << ":"
                        << session->port();
 
     {
@@ -284,8 +284,8 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "onClientRequest error" << LOG_KV("errorCode", e.errorCode())
-                           << LOG_KV("what", boost::diagnostic_information(e));
+        CHANNEL_LOG(WARNING) << "onClientRequest" << LOG_KV("errorCode", e.errorCode())
+                             << LOG_KV("what", e.what());
 
         onDisconnect(dev::channel::ChannelException(), session);
     }
@@ -764,7 +764,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
-        CHANNEL_LOG(INFO) << "Push channel message success"
+        CHANNEL_LOG(INFO) << "Push channel message success" << LOG_KV("topic", topic)
                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                           << LOG_KV("session", session->host()) << ":" << session->port();
     }
@@ -853,8 +853,9 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
             continue;
         }
 
-        auto topicIt = it.second->topics().find(topic);
-        if (topicIt != it.second->topics().end())
+        auto topics = it.second->topics();
+        auto topicIt = topics.find(topic);
+        if (topicIt != topics.end())
         {
             activedSessions.push_back(it.second);
         }

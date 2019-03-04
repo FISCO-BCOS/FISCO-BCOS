@@ -73,13 +73,13 @@ string const SyncMaster::syncInfo() const
     json_spirit::Object syncInfo;
     syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
     syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
-    syncInfo.push_back(json_spirit::Pair("genesisHash", toHex(m_syncStatus->genesisHash)));
+    syncInfo.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(m_syncStatus->genesisHash)));
     syncInfo.push_back(json_spirit::Pair("nodeId", toHex(m_nodeId)));
 
     int64_t currentNumber = m_blockChain->number();
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
-        json_spirit::Pair("latestHash", toHex(m_blockChain->numberHash(currentNumber))));
+        json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
     // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
     // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
     // toHex(m_syncStatus->knownLatestHash)));
@@ -89,9 +89,9 @@ string const SyncMaster::syncInfo() const
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         json_spirit::Object info;
         info.push_back(json_spirit::Pair("nodeId", toHex(_p->nodeId)));
-        info.push_back(json_spirit::Pair("genesisHash", toHex(_p->genesisHash)));
+        info.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(_p->genesisHash)));
         info.push_back(json_spirit::Pair("blockNumber", _p->number));
-        info.push_back(json_spirit::Pair("latestHash", toHex(_p->latestHash)));
+        info.push_back(json_spirit::Pair("latestHash", toHexPrefixed(_p->latestHash)));
         peersInfo.push_back(info);
         return true;
     });
@@ -211,8 +211,8 @@ void SyncMaster::maintainTransactions()
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
-            bool isMiner = _p->isMiner;
-            return isMiner && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            bool isSealer = _p->isSealer;
+            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
         if (0 == peers.size())
             return;
@@ -514,14 +514,14 @@ void SyncMaster::maintainPeersConnection()
         activePeers.insert(session.nodeID);
     }
 
-    // Get miners and observer
-    NodeIDs miners = m_blockChain->minerList();
-    NodeIDs minerOrObserver = miners + m_blockChain->observerList();
+    // Get sealers and observer
+    NodeIDs sealers = m_blockChain->sealerList();
+    NodeIDs sealerOrObserver = sealers + m_blockChain->observerList();
 
-    // member set is [(miner || observer) && activePeer && not myself]
+    // member set is [(sealer || observer) && activePeer && not myself]
     set<NodeID> memberSet;
     bool hasMyself = false;
-    for (auto const& member : minerOrObserver)
+    for (auto const& member : sealerOrObserver)
     {
         /// find active peers
         if (activePeers.find(member) != activePeers.end() && member != m_nodeId)
@@ -531,7 +531,7 @@ void SyncMaster::maintainPeersConnection()
         hasMyself |= (member == m_nodeId);
     }
 
-    // Delete uncorrelated peers(only if the node the miner or observer, check the identities of
+    // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
     // other peers)
     if (hasMyself)
     {
@@ -571,13 +571,13 @@ void SyncMaster::maintainPeersConnection()
         }
     }
 
-    // Update sync miner status
-    set<NodeID> minerSet;
-    for (auto miner : miners)
-        minerSet.insert(miner);
+    // Update sync sealer status
+    set<NodeID> sealerSet;
+    for (auto sealer : sealers)
+        sealerSet.insert(sealer);
 
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        _p->isMiner = (minerSet.find(_p->nodeId) != minerSet.end());
+        _p->isSealer = (sealerSet.find(_p->nodeId) != sealerSet.end());
         return true;
     });
 
@@ -690,7 +690,7 @@ bool SyncMaster::isNewBlock(BlockPtr _block)
         return false;
     }
 
-    // check block minerlist sig
+    // check block sealerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
         SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")

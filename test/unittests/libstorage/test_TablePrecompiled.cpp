@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(clear)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL(tablePrecompiled->toString(context), "Table");
+    BOOST_CHECK_EQUAL(tablePrecompiled->toString(), "Table");
 }
 
 BOOST_AUTO_TEST_CASE(call_select)

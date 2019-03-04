@@ -48,10 +48,10 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        PROTOCOL_ID const& _protocolId, h512s const& _minerList = h512s(),
+        PROTOCOL_ID const& _protocolId, h512s const& _sealerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _minerList)
+            _baseDir, _key_pair, _sealerList)
     {}
     void updateConsensusNodeList() override {}
     KeyPair const& keyPair() const { return m_keyPair; }
@@ -76,7 +76,7 @@ public:
     {
         /// import block
         header.setTimestamp(utcTime());
-        header.setSealerList(minerList());
+        header.setSealerList(sealerList());
         header.setSealer(u256(nodeIdx()));
         header.setLogBloom(LogBloom());
         header.setGasUsed(u256(0));
@@ -182,16 +182,16 @@ template <typename T>
 class FakeConsensus
 {
 public:
-    FakeConsensus(size_t minerSize, PROTOCOL_ID protocolID,
+    FakeConsensus(size_t sealerSize, PROTOCOL_ID protocolID,
         std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>(),
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
             std::make_shared<FakeBlockverifier>(),
         std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
     {
         m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
-            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_minerList);
-        /// fake minerList
-        FakeMinerList(minerSize);
+            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_sealerList);
+        /// fake sealerList
+        FakeSealerList(sealerSize);
         resetSessionInfo();
     }
 
@@ -199,30 +199,30 @@ public:
     {
         FakeService* service = dynamic_cast<FakeService*>(m_consensus->mutableService().get());
         service->clearSessionInfo();
-        for (size_t i = 0; i < m_minerList.size(); i++)
+        for (size_t i = 0; i < m_sealerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            P2PSessionInfo info(m_minerList[i], m_endpoint, std::set<std::string>());
+            P2PSessionInfo info(m_sealerList[i], m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }
 
-    /// fake miner list
-    void FakeMinerList(size_t minerSize)
+    /// fake sealer list
+    void FakeSealerList(size_t sealerSize)
     {
-        m_minerList.clear();
-        for (size_t i = 0; i < minerSize; i++)
+        m_sealerList.clear();
+        for (size_t i = 0; i < sealerSize; i++)
         {
             KeyPair key_pair = KeyPair::create();
-            m_minerList.push_back(key_pair.pub());
+            m_sealerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
-            m_consensus->appendMiner(key_pair.pub());
+            m_consensus->appendSealer(key_pair.pub());
         }
     }
     std::shared_ptr<T> consensus() { return m_consensus; }
 
 public:
-    h512s m_minerList;
+    h512s m_sealerList;
     std::vector<Secret> m_secrets;
 
 private:
@@ -239,12 +239,12 @@ public:
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
-        KeyPair const& _key_pair = KeyPair::create(), h512s const& _minerList = h512s())
+        KeyPair const& _key_pair = KeyPair::create(), h512s const& _sealerList = h512s())
       : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _minerList)
+            _baseDir, _key_pair, _sealerList)
     {
         m_pbftEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _minerList, _baseDir, _key_pair);
+            _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
     }
 
     void loadTransactions(uint64_t const& transToFetch)

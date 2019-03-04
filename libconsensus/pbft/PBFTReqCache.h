@@ -113,7 +113,7 @@ public:
     {
         m_rawPrepareCache = req;
         PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
-                                << LOG_KV("idx", req.idx)
+                                << LOG_KV("reqIdx", req.idx)
                                 << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
     }
@@ -175,7 +175,7 @@ public:
         {
             PBFTReqCache_LOG(INFO)
                 << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req.height)
-                << LOG_KV("idx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
+                << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
             m_futurePrepareCache[req.height] = std::make_shared<PrepareReq>(std::move(req));
         }
     }
@@ -312,7 +312,8 @@ private:
     void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
     {
         json_spirit::Object cacheStatus;
-        cacheStatus.push_back(json_spirit::Pair(key + "_blockHash", toHex(cache.block_hash)));
+        cacheStatus.push_back(
+            json_spirit::Pair(key + "_blockHash", "0x" + toHex(cache.block_hash)));
         cacheStatus.push_back(json_spirit::Pair(key + "_height", cache.height));
         cacheStatus.push_back(json_spirit::Pair(key + "_idx", toString(cache.idx)));
         cacheStatus.push_back(json_spirit::Pair(key + "_view", toString(cache.view)));

@@ -14,33 +14,28 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file CRUDPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+/** @file DagTransferPrecompiled.h
+ *  @author octopuswang
+ *  @date 20190111
  */
 #pragma once
-#include "Common.h"
+#include <libprecompiled/Common.h>
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-}
-
 namespace precompiled
 {
-class CRUDPrecompiled : public dev::blockverifier::Precompiled
+class HelloWorldPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
-    typedef std::shared_ptr<CRUDPrecompiled> Ptr;
-    CRUDPrecompiled();
-    virtual ~CRUDPrecompiled(){};
+    typedef std::shared_ptr<HelloWorldPrecompiled> Ptr;
+    HelloWorldPrecompiled();
+    virtual ~HelloWorldPrecompiled(){};
 
-    virtual std::string toString();
+    virtual std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address());
+    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        bytesConstRef _param, Address const& _origin = Address()) override;
 };
 
 }  // namespace precompiled
