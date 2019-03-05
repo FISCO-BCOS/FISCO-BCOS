@@ -640,7 +640,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     /// decode the network received prepare packet
     else
     {
-        sealing.block.decode(ref(req.block), CheckTransaction::None);
+        // without receipt, with transaction hash(parallel calc txs' hash)
+        sealing.block.decode(ref(req.block), CheckTransaction::None, false, true);
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();

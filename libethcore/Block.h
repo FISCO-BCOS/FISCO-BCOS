@@ -38,9 +38,11 @@ public:
     ///-----constructors of Block
     Block() = default;
     explicit Block(bytesConstRef _data,
-        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true);
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
     explicit Block(bytes const& _data,
-        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true);
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -68,7 +70,7 @@ public:
 
     ///-----decode functions
     void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
-        bool _withReceipt = true);
+        bool _withReceipt = true, bool _withTxHash = false);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const

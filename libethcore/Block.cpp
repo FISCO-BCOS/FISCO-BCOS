@@ -32,14 +32,16 @@ namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data, CheckTransaction const _option, bool _withReceipt)
+Block::Block(
+    bytesConstRef _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
-    decode(_data, _option, _withReceipt);
+    decode(_data, _option, _withReceipt, _withTxHash);
 }
 
-Block::Block(bytes const& _data, CheckTransaction const _option, bool _withReceipt)
+Block::Block(
+    bytes const& _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
-    decode(ref(_data), _option, _withReceipt);
+    decode(ref(_data), _option, _withReceipt, _withTxHash);
 }
 
 Block::Block(Block const& _block)
@@ -167,7 +169,8 @@ void Block::calReceiptRoot(bool update) const
  * @brief : decode specified data of block into Block class
  * @param _block : the specified data of block
  */
-void Block::decode(bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt)
+void Block::decode(
+    bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
     /// no try-catch to throw exceptions directly
     /// get RLP of block
@@ -181,7 +184,7 @@ void Block::decode(bytesConstRef _block_bytes, CheckTransaction const _option, b
     m_txsCache = transactions_rlp.toBytes();
 
     /// decode transaction
-    TxsParallelParser::decode(m_transactions, ref(m_txsCache), _option);
+    TxsParallelParser::decode(m_transactions, ref(m_txsCache), _option, _withTxHash);
 
     /// get hash
     h256 hash = block_rlp[2].toHash<h256>();
