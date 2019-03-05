@@ -1451,7 +1451,8 @@ void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
         dev::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != dev::network::NodeID())
         {
-            view_obj.push_back(json_spirit::Pair("0x" + dev::toHex(node_id), it.second));
+            view_obj.push_back(json_spirit::Pair("nodeId", dev::toHex(node_id)));
+            view_obj.push_back(json_spirit::Pair("view", it.second));
             view_array.push_back(view_obj);
         }
     }
