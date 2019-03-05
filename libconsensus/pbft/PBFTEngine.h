@@ -458,7 +458,7 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            if (!m_emptyBlockViewChange)
+            if (!m_fastViewChange)
             {
                 PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
@@ -481,7 +481,7 @@ protected:
     {
         m_timeManager.changeView();
         m_timeManager.m_changeCycle = 0;
-        m_emptyBlockViewChange = true;
+        m_fastViewChange = true;
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
@@ -525,7 +525,7 @@ protected:
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
-    bool m_emptyBlockViewChange = false;
+    bool m_fastViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
 

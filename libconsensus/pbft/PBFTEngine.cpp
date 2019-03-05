@@ -355,7 +355,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
     /// view change not caused by omit empty block
-    if (!m_emptyBlockViewChange)
+    if (!m_fastViewChange)
     {
         PBFTENGINE_LOG(WARNING) << LOG_DESC("ViewChangeWarning: not caused by omit empty block ")
                                 << LOG_KV("v", m_view) << LOG_KV("toV", m_toView)
@@ -365,7 +365,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
     /// reset the flag
-    m_emptyBlockViewChange = false;
+    m_fastViewChange = false;
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
@@ -1156,7 +1156,8 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         {
             m_timeManager.changeView();
             m_toView = min_view - 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("Tigger fast-viewchange") << LOG_KV("view", m_view)
+            m_fastViewChange = true;
+            PBFTENGINE_LOG(INFO) << LOG_DESC("Trigger fast-viewchange") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("minView", min_view)
                                  << LOG_KV("INFO", oss.str());
             m_signalled.notify_all();
