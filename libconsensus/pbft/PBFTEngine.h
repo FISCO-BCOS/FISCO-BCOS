@@ -458,18 +458,6 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            /// leader failure doesn't caused by view change should output warning
-            if (!m_fastViewChange)
-            {
-                PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("reqIdx", req.idx) << LOG_KV("reqView", req.view)
-                    << LOG_KV("reqHeight", req.height)
-                    << LOG_KV("reqHash", req.block_hash.abridged())
-                    << LOG_KV("sealerIdx", leader.second) << LOG_KV("leaderFailed", m_leaderFailed)
-                    << LOG_KV("view", m_view) << LOG_KV("highSealer", m_highestBlock.sealer())
-                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("nodeIdx", nodeIdx());
-            }
             return false;
         }
 
