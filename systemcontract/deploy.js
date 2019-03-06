@@ -18,6 +18,9 @@ if (typeof web3 !== 'undefined') {
 	web3 = new Web3(new Web3.providers.HttpProvider(config.HttpProvider));
 }
 
+web3.eth.defaultAccount = config.account;
+
+
 function getAbi(file){
 	var abi=JSON.parse(fs.readFileSync(config.Ouputpath+"./"/*+file+".sol:"*/+file+".abi",'utf-8'));
 	return abi;

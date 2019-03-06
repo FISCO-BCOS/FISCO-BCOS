@@ -19,6 +19,8 @@ if (typeof web3 !== 'undefined') {
   web3 = new Web3(new Web3.providers.HttpProvider(config.HttpProvider));
 }
 
+web3.eth.defaultAccount = config.account;
+
 console.log(config);
 
 console.log('ViewChangeCheck.js  ........................Start........................');
