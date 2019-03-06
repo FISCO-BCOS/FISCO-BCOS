@@ -441,6 +441,7 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
+            /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
@@ -516,6 +517,8 @@ protected:
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
+    /// for output time-out caused viewchange
+    /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
     bool m_fastViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
