@@ -354,8 +354,8 @@ bool PBFTEngine::broadcastViewChangeReq()
                           << LOG_KV("hash", req.block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
-    /// view change not caused by omit empty block
-    if (!m_emptyBlockViewChange)
+    /// view change not caused by fast view change
+    if (!m_fastViewChange)
     {
         PBFTENGINE_LOG(WARNING) << LOG_DESC("ViewChangeWarning: not caused by omit empty block ")
                                 << LOG_KV("v", m_view) << LOG_KV("toV", m_toView)
@@ -364,8 +364,7 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
-    /// reset the flag
-    m_emptyBlockViewChange = false;
+
     bytes view_change_data;
     req.encode(view_change_data);
     return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
@@ -1156,7 +1155,8 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         {
             m_timeManager.changeView();
             m_toView = min_view - 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("Tigger fast-viewchange") << LOG_KV("view", m_view)
+            m_fastViewChange = true;
+            PBFTENGINE_LOG(INFO) << LOG_DESC("Trigger fast-viewchange") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("minView", min_view)
                                  << LOG_KV("INFO", oss.str());
             m_signalled.notify_all();
@@ -1232,6 +1232,11 @@ void PBFTEngine::checkAndChangeView()
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                              << LOG_KV("to_view", m_toView);
+        /// reach to consensue dure to fast view change
+        if (m_timeManager.m_lastSignTime == 0)
+        {
+            m_fastViewChange = false;
+        }
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
@@ -1267,6 +1272,11 @@ void PBFTEngine::checkTimeout()
         Guard l(m_mutex);
         if (m_timeManager.isTimeout())
         {
+            /// timeout not triggered by fast view change
+            if (m_timeManager.m_lastConsensusTime != 0)
+            {
+                m_fastViewChange = false;
+            }
             Timer t;
             m_toView += 1;
             m_leaderFailed = true;
@@ -1451,7 +1461,8 @@ void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
         dev::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != dev::network::NodeID())
         {
-            view_obj.push_back(json_spirit::Pair("0x" + dev::toHex(node_id), it.second));
+            view_obj.push_back(json_spirit::Pair("nodeId", dev::toHex(node_id)));
+            view_obj.push_back(json_spirit::Pair("view", it.second));
             view_array.push_back(view_obj);
         }
     }

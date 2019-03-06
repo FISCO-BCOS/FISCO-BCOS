@@ -199,6 +199,7 @@ public:
         m_prepareCache.clear();
         m_signCache.clear();
         m_commitCache.clear();
+        m_futurePrepareCache.clear();
         removeInvalidViewChange(curView);
     }
     /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash

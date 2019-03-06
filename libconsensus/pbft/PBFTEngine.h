@@ -441,6 +441,7 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
+            /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
@@ -458,15 +459,6 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            if (!m_emptyBlockViewChange)
-            {
-                PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("reqIdx", req.idx) << LOG_KV("sealerIdx", leader.second)
-                    << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
-                    << LOG_KV("highSealer", m_highestBlock.sealer())
-                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("nodeIdx", nodeIdx());
-            }
             return false;
         }
 
@@ -481,7 +473,7 @@ protected:
     {
         m_timeManager.changeView();
         m_timeManager.m_changeCycle = 0;
-        m_emptyBlockViewChange = true;
+        m_fastViewChange = true;
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
@@ -525,7 +517,9 @@ protected:
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
-    bool m_emptyBlockViewChange = false;
+    /// for output time-out caused viewchange
+    /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
+    bool m_fastViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
 
