@@ -39,9 +39,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("hash", block.header().hash().abridged())
                             << LOG_KV("height", block.header().number())
-                            << LOG_KV("receiptRoot", block.header().receiptRoot())
+                            << LOG_KV("receiptRoot", block.header().receiptsRoot())
                             << LOG_KV("stateRoot", block.header().stateRoot())
-                            << LOG_KV("dbHash", block.header().dBHash())
+                            << LOG_KV("dbHash", block.header().dbHash())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
@@ -85,8 +85,8 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
             BLOCKVERIFIER_LOG(ERROR) << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
                                      << LOG_KV("originHash", tmpHeader.hash().abridged())
                                      << LOG_KV("curHash", block.header().hash().abridged())
-                                     << LOG_KV("orgReceipt", tmpHeader.receiptRoot())
-                                     << LOG_KV("curRecepit", block.header().receiptRoot())
+                                     << LOG_KV("orgReceipt", tmpHeader.receiptsRoot())
+                                     << LOG_KV("curRecepit", block.header().receiptsRoot())
                                      << LOG_KV("orgState", tmpHeader.stateRoot())
                                      << LOG_KV("curState", block.header().stateRoot())
                                      << LOG_KV("orgDBHash", tmpHeader.dbHash())
