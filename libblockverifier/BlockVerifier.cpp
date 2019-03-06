@@ -37,6 +37,11 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("num", block.blockHeader().number())
+                            << LOG_KV("hash", block.header().hash().abridged())
+                            << LOG_KV("height", block.header().number())
+                            << LOG_KV("receiptRoot", block.header().receiptRoot())
+                            << LOG_KV("stateRoot", block.header().stateRoot())
+                            << LOG_KV("dbHash", block.header().dBHash())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
@@ -77,8 +82,17 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     {
         if (tmpHeader != block.blockHeader())
         {
+            BLOCKVERIFIER_LOG(ERROR) << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
+                                     << LOG_KV("originHash", tmpHeader.hash().abridged())
+                                     << LOG_KV("curHash", block.header().hash().abridged())
+                                     << LOG_KV("orgReceipt", tmpHeader.receiptRoot())
+                                     << LOG_KV("curRecepit", block.header().receiptRoot())
+                                     << LOG_KV("orgState", tmpHeader.stateRoot())
+                                     << LOG_KV("curState", block.header().stateRoot())
+                                     << LOG_KV("orgDBHash", tmpHeader.dbHash())
+                                     << LOG_KV("curDBHash", block.header().dbHash());
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
-                                      "Invalid Block with bad stateRoot or ReciptRoot"));
+                                      "Invalid Block with bad stateRoot or ReceiptRoot"));
         }
     }
     return executiveContext;
