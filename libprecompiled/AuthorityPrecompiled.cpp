@@ -90,12 +90,12 @@ bytes AuthorityPrecompiled::call(
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -132,12 +132,12 @@ bytes AuthorityPrecompiled::call(
         {
             int count =
                 table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
