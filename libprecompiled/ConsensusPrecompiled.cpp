@@ -106,12 +106,12 @@ bytes ConsensusPrecompiled::call(
                 {
                     entry->setField(NODE_KEY_NODEID, nodeID);
                     count = table->insert(PRI_KEY, entry, std::make_shared<AccessOptions>(origin));
-                    if (count == CODE_NO_AUTHORIZED)
+                    if (count == storage::CODE_NO_AUTHORIZED)
                     {
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                        out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                        out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                     }
                     else
                     {
@@ -125,12 +125,12 @@ bytes ConsensusPrecompiled::call(
                 {
                     count = table->update(
                         PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
-                    if (count == CODE_NO_AUTHORIZED)
+                    if (count == storage::CODE_NO_AUTHORIZED)
                     {
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                        out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                        out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                     }
                     else
                     {
@@ -175,12 +175,12 @@ bytes ConsensusPrecompiled::call(
             {
                 entry->setField(NODE_KEY_NODEID, nodeID);
                 count = table->insert(PRI_KEY, entry, std::make_shared<AccessOptions>(origin));
-                if (count == CODE_NO_AUTHORIZED)
+                if (count == storage::CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                    out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                 }
                 else
                 {
@@ -194,12 +194,12 @@ bytes ConsensusPrecompiled::call(
             {
                 count = table->update(
                     PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
-                if (count == CODE_NO_AUTHORIZED)
+                if (count == storage::CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                    out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                 }
                 else
                 {
@@ -239,12 +239,12 @@ bytes ConsensusPrecompiled::call(
                 auto condition = table->newCondition();
                 condition->EQ(NODE_KEY_NODEID, nodeID);
                 count = table->remove(PRI_KEY, condition, std::make_shared<AccessOptions>(origin));
-                if (count == CODE_NO_AUTHORIZED)
+                if (count == storage::CODE_NO_AUTHORIZED)
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("non-authorized");
 
-                    out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                 }
                 else
                 {
