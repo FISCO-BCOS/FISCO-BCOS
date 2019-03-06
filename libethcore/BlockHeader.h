@@ -20,7 +20,7 @@
  *
  * @author wheatli
  * @date 2018.8.28
- * @brief Block header structures of lab-bcos
+ * @brief Block header structures of FISCO-BCOS
  */
 
 #pragma once

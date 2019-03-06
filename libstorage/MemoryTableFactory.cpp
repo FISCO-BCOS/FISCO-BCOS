@@ -144,7 +144,7 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     tableEntry->setField("value_field", valueField);
     createTableCode = sysTable->insert(
         tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
-    if (createTableCode == -1)
+    if (createTableCode == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
                              << LOG_DESC("create table non-authorized")

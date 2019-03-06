@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
+ * @brief: empty framework for main of FISCO-BCOS
  *
  * @file: p2p_main.cpp
  * @author: yujiechen

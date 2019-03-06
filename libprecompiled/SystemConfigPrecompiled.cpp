@@ -87,12 +87,12 @@ bytes SystemConfigPrecompiled::call(
         if (entries->size() == 0u)
         {
             count = table->insert(configKey, entry, std::make_shared<AccessOptions>(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -106,12 +106,12 @@ bytes SystemConfigPrecompiled::call(
         {
             count =
                 table->update(configKey, entry, condition, std::make_shared<AccessOptions>(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {

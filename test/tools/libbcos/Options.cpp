@@ -39,10 +39,10 @@ Options::Options(int argc, char** argv)
 {
     namespace po = boost::program_options;
 
-    po::options_description test_options("test of lab-bcos:");
+    po::options_description test_options("test of FISCO-BCOS:");
 
     test_options.add_options()("testpath,t", boost::program_options::value<std::string>(),
-        " set test path")("help,h", "help of lab-bcos");
+        " set test path")("help,h", "help of FISCO-BCOS");
 
     po::variables_map vm;
     try
