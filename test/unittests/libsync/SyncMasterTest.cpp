@@ -81,9 +81,9 @@ public:
             std::make_shared<SyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
                 txpool_creator.m_blockChain, blockVerifier, c_protocolId, _nodeId, m_genesisHash);
         std::shared_ptr<DownloadingTxsQueue> txQueue =
-            std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId) return FakeSyncToolsSet{
-                fakeSyncMaster, txpool_creator.m_topicService, txpool_creator.m_txPool,
-                txpool_creator.m_blockChain, blockVerifier};
+            std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId);
+        return FakeSyncToolsSet{fakeSyncMaster, txpool_creator.m_topicService,
+            txpool_creator.m_txPool, txpool_creator.m_blockChain, blockVerifier, txQueue};
     }
 
     shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)

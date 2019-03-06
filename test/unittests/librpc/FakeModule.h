@@ -205,6 +205,16 @@ public:
         return nullptr;
     }
 
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash)
+    {
+        return getBlockByHash(_blockHash)->rlpP();
+    }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i)
+    {
+        return getBlockRLPByHash(numberHash(_i));
+    }
+
     virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction(transaction, blockHash, 0, 0);

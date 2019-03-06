@@ -116,7 +116,7 @@ public:
         return entries;
     }
 
-    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr) override
+    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr, bool) override
     {
         m_fakeStorage[m_table].insert(std::make_pair(key, entry));
         return 0;

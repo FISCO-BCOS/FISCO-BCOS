@@ -95,6 +95,17 @@ public:
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash)
+    {
+        return getBlockByHash(_blockHash)->rlpP();
+    }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i)
+    {
+        return getBlockRLPByHash(numberHash(_i));
+    }
+
     dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction();
