@@ -132,6 +132,7 @@ void SyncMaster::doWork()
     maintainPeersConnection();
     maintainDownloadingQueueBuffer();
     maintainPeersStatus();
+    maintainBlocks();
 
     // Idle do
     if (!isSyncing())
@@ -141,13 +142,6 @@ void SyncMaster::doWork()
         {
             m_newTransactions = false;
             maintainTransactions();
-        }
-
-        if (m_newBlocks || utcTime() > m_maintainBlocksTimeout)
-        {
-            m_newBlocks = false;
-            maintainBlocks();
-            m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
         }
 
         maintainBlockRequest();
@@ -249,6 +243,13 @@ void SyncMaster::maintainTransactions()
 
 void SyncMaster::maintainBlocks()
 {
+    if (!m_newBlocks && utcTime() <= m_maintainBlocksTimeout)
+        return;
+
+    m_newBlocks = false;
+    m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
+
+
     int64_t number = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(number);
 
