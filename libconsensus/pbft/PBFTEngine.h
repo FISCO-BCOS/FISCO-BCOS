@@ -459,7 +459,7 @@ protected:
         if (!leader.first || req.idx != leader.second)
         {
             /// leader failure doesn't caused by view change should output warning
-            if (!m_leaderFailed)
+            if (!m_fastViewChange)
             {
                 PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
