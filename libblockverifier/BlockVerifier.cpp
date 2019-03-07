@@ -85,12 +85,12 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
             BLOCKVERIFIER_LOG(ERROR) << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
                                      << LOG_KV("originHash", tmpHeader.hash().abridged())
                                      << LOG_KV("curHash", block.header().hash().abridged())
-                                     << LOG_KV("orgReceipt", tmpHeader.receiptsRoot())
-                                     << LOG_KV("curRecepit", block.header().receiptsRoot())
-                                     << LOG_KV("orgState", tmpHeader.stateRoot())
-                                     << LOG_KV("curState", block.header().stateRoot())
-                                     << LOG_KV("orgDBHash", tmpHeader.dbHash())
-                                     << LOG_KV("curDBHash", block.header().dbHash());
+                                     << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
+                                     << LOG_KV("curRecepit", block.header().receiptsRoot().abridged())
+                                     << LOG_KV("orgState", tmpHeader.stateRoot().abridged())
+                                     << LOG_KV("curState", block.header().stateRoot().abridged())
+                                     << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
+                                     << LOG_KV("curDBHash", block.header().dbHash().abridged());
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
                                       "Invalid Block with bad stateRoot or ReceiptRoot"));
         }
