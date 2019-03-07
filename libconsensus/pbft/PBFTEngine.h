@@ -111,7 +111,7 @@ public:
     /// even if the maxTransNum condition has been meeted
     bool canHandleBlockForNextLeader()
     {
-        /// the case that only a node is the miner and the next leader is equal to the leader
+        /// the case that only a node is both the leader and the next leader
         if (getLeader().second == nodeIdx())
         {
             return true;

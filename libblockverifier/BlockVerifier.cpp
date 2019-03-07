@@ -78,6 +78,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
+    /// since origin value is empty if executeBlock is called by sync module, need to compare
+    /// receiptRoot, stateRoot and dbHash
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
