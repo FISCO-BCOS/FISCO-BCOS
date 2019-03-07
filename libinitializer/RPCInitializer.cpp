@@ -114,9 +114,13 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
                                << LOG_DESC("init RPC/channelserver failed")
+                               << LOG_KV("check channel_listen_port", listenPort)
+                               << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC/channelserver failed")
+                     << LOG_KV("check channel_listen_port", listenPort)
+                     << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
