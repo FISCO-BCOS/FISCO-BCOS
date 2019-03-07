@@ -24,6 +24,7 @@
 
 using namespace dev;
 using namespace dev::sync;
+using namespace dev::eth;
 
 void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
 {
@@ -34,25 +35,41 @@ void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
 void DownloadingTxsQueue::pop2TxPool(
     std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, dev::eth::CheckTransaction _checkSig)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     // fetch from buffer
     std::shared_ptr<std::vector<DownloadTxsShard>> localBuffer = m_buffer;
+    auto moveBuffer_time_cost = utcTime() - record_time;
+    record_time = utcTime();
     {
         WriteGuard l(x_buffer);
         m_buffer = std::make_shared<std::vector<DownloadTxsShard>>();
     }
+    auto newBuffer_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     if (_txPool->isFull())
         return;
+    auto isBufferFull_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
+        auto maintainBuffer_start_time = utcTime();
         // decode
         dev::eth::Transactions txs;
         DownloadTxsShard const& txsShard = (*localBuffer)[i];
+        // TODO drop by Txs Shard
+
         NodeID fromPeer = txsShard.fromPeer;
         RLP const& txsBytesRLP = RLP(ref(txsShard.txsBytes))[0];
+        auto constructRLP_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
         dev::eth::TxsParallelParser::decode(txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
+        auto decode_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
 // parallel verify transaction before import
 #pragma omp parallel for
@@ -61,12 +78,13 @@ void DownloadingTxsQueue::pop2TxPool(
             if (!_txPool->txExists(txs[j].sha3()))
                 txs[j].sender();
         }
+        auto verifySig_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         // import into tx pool
         size_t successCnt = 0;
         std::vector<dev::h256> knownTxHash;
-        auto startTime = utcTime();
-        for (auto tx : txs)
+        for (Transaction& tx : txs)
         {
             try
             {
@@ -99,15 +117,34 @@ void DownloadingTxsQueue::pop2TxPool(
                                   << LOG_KV("reason", e.what()) << LOG_KV("rlp", toHex(tx.rlp()));
                 continue;
             }
-            if (knownTxHash.size() > 0)
-            {
-                _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
-            }
         }
+        auto import_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        if (knownTxHash.size() > 0)
+        {
+            _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
+        }
+        auto setTxKnownBy_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         auto pengdingSize = _txPool->pendingSize();
+        auto getPendingSize_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
                         << LOG_KV("import", successCnt) << LOG_KV("rcv", txs.size())
                         << LOG_KV("txPool", pengdingSize) << LOG_KV("peer", fromPeer.abridged())
-                        << LOG_KV("timeCost", utcTime() - startTime);
+                        << LOG_KV("moveBufferTimeCost", moveBuffer_time_cost)
+                        << LOG_KV("newBufferTimeCost", newBuffer_time_cost)
+                        << LOG_KV("isBufferFullTimeCost", isBufferFull_time_cost)
+                        << LOG_KV("constructRLPTimeCost", constructRLP_time_cost)
+                        << LOG_KV("decodTimeCost", decode_time_cost)
+                        << LOG_KV("verifySigTimeCost", verifySig_time_cost)
+                        << LOG_KV("importTimeCost", import_time_cost)
+                        << LOG_KV("setTxKnownByTimeCost", setTxKnownBy_time_cost)
+                        << LOG_KV("getPendingSizeTimeCost", getPendingSize_time_cost)
+                        << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
+                        << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
     }
 }
