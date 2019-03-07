@@ -138,13 +138,16 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
 void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
-#pragma omp parallel for
+#pragma omp parallel for schedule(dynamic, 125)
     for (size_t i = 0; i < trans_num; i++)
     {
+        h256 txHash = block.transactions()[i].sha3();
+
         /// force sender for the transaction
         ReadGuard l(m_lock);
-        auto p_tx = m_txsHash.find(block.transactions()[i].sha3());
+        auto p_tx = m_txsHash.find(txHash);
         l.unlock();
+
         if (p_tx != m_txsHash.end())
         {
             block.setSenderForTransaction(i, p_tx->second->sender());

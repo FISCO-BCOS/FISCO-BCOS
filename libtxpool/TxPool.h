@@ -147,7 +147,7 @@ public:
 
     bool isFull() override
     {
-        UpgradableGuard l(m_lock);
+        // UpgradableGuard l(m_lock);
         return m_txsQueue.size() >= m_limit;
     }
 
