@@ -88,8 +88,8 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     auto msgPtr = txPacket.toMessage(0x02);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
-
     auto txPoolPtr = fakeSyncToolsSet.getTxPoolPtr();
+    fakeTxQueuePtr->pop2TxPool(txPoolPtr);
     auto topTxs = txPoolPtr->topTransactions(1);
     BOOST_CHECK(topTxs.size() == 1);
     BOOST_CHECK_EQUAL(topTxs[0].sha3(), txPtr->sha3());
