@@ -23,6 +23,7 @@
  */
 
 #include "TxsParallelParser.h"
+#include "Exceptions.h"
 
 namespace dev
 {
@@ -107,31 +108,40 @@ bytes TxsParallelParser::encode(std::vector<bytes> const& _txs)
 void TxsParallelParser::decode(
     Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
 {
-    if (_bytes.size() == 0)
-        return;
-    // std::cout << "tx decode:" << toHex(_bytes) << std::endl;
-    Offset_t txNum = fromBytes(_bytes.cropped(0));
-    vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
-    _txs.resize(txNum);
-
-    bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
-
-#pragma omp parallel for schedule(dynamic, 1)
-    for (Offset_t i = 0; i < txNum; i++)
+    try
     {
-        Offset_t offset = offsets[i];
-        Offset_t size = offsets[i + 1] - offsets[i];
+        if (_bytes.size() == 0)
+            return;
+        // std::cout << "tx decode:" << toHex(_bytes) << std::endl;
+        Offset_t txNum = fromBytes(_bytes.cropped(0));
+        vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
+        _txs.resize(txNum);
 
-        _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
-        if (_withHash)
+        bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
+
+#pragma omp parallel for schedule(dynamic, 125)
+        for (Offset_t i = 0; i < txNum; i++)
         {
-            dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
-            _txs[i].updateTransactionHashWithSig(txHash);
-        } /*
-         LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i", i)
-                    << LOG_KV("offset", offset)
-                    << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
-                    */
+            Offset_t offset = offsets[i];
+            Offset_t size = offsets[i + 1] - offsets[i];
+
+            _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
+            if (_withHash)
+            {
+                dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
+                _txs[i].updateTransactionHashWithSig(txHash);
+            } /*
+             LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i", i)
+                        << LOG_KV("offset", offset)
+                        << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
+                        */
+        }
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidBlockFormat()
+                              << errinfo_comment("Block transactions bytes is invalid")
+                              << BadFieldError(1, _bytes.toString()));
     }
 }
 
