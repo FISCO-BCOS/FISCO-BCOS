@@ -1039,6 +1039,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     try
     {
         auto before_write_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
             if (!isBlockShouldCommit(block.blockHeader().number()))
@@ -1070,12 +1071,12 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
             context->dbCommit(block);
             auto dbCommit_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
             {
                 WriteGuard ll(m_blockNumberMutex);
                 m_blockNumber = block.blockHeader().number();
             }
-            auto updateBlockNumber_time_cost = utcTime() - record_time;
-            record_time = utcTime();
+            auto updateBlockNumber_time_cost = utcTime() - write_record_time;
 
             BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
                                   << LOG_DESC("Commit block time record(write)")
