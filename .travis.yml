@@ -55,6 +55,7 @@ addons:
     - libssl-dev
     - clang
     # - ninja-build
+    - libomp-dev
     - openssl
   homebrew:
     packages:
