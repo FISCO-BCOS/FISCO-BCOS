@@ -22,8 +22,7 @@ language: cpp
 compiler: gcc
 branches:
   only:
-      - /dev*/
-      - master
+      - /.*/
 env:
     global:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
