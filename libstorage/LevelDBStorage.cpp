@@ -166,7 +166,7 @@ size_t LevelDBStorage::commit(
             size_t batchesSize = (totalSize + c_commitTableDataRangeEachThread - 1) /
                                  c_commitTableDataRangeEachThread;
             std::vector<std::shared_ptr<dev::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
-            //#pragma omp parallel for
+#pragma omp parallel for
             for (size_t j = 0; j < batchesSize; ++j)
             {
                 size_t from = c_commitTableDataRangeEachThread * j;
@@ -190,7 +190,7 @@ size_t LevelDBStorage::commit(
 
                 if (!s.ok())
                 {
-                    STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
+                    STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC(
                                                       "Commit leveldb crashed! Please remove all "
                                                       "data and sync data from other nodes")
                                                << LOG_KV("status", s.ToString());
