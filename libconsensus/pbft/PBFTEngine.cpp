@@ -603,7 +603,8 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
     /// only if the current node is the next leader and not the current leader
     /// notify the seal module to seal new block
-    if (getLeader().second != nodeIdx() && nodeIdx() == getNextLeader())
+    if (getLeader().first == true && getLeader().second != nodeIdx() &&
+        nodeIdx() == getNextLeader())
     {
         /// obtain transaction filters
         h256Hash filter;

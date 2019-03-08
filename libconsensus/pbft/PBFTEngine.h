@@ -112,7 +112,7 @@ public:
     bool canHandleBlockForNextLeader()
     {
         /// the case that only a node is both the leader and the next leader
-        if (getLeader().second == nodeIdx())
+        if (getLeader().first && getLeader().second == nodeIdx())
         {
             return true;
         }
