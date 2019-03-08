@@ -139,7 +139,7 @@ void Block::calReceiptRoot(bool update) const
             receiptsRLPs[i] = receiptRLP;
         }
 
-        auto record_time = utcTime();
+        // auto record_time = utcTime();
         RLPStream txReceipts;
         txReceipts.appendList(receiptsNum);
         for (size_t i = 0; i < receiptsNum; ++i)
@@ -148,7 +148,7 @@ void Block::calReceiptRoot(bool update) const
         }
         txReceipts.swapOut(m_tReceiptsCache);
         // auto appenRLP_time_cost = utcTime() - record_time;
-        record_time = utcTime();
+        // record_time = utcTime();
 
         m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
         // auto hashReceipts_time_cost = utcTime() - record_time;

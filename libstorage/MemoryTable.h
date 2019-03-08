@@ -107,7 +107,7 @@ public:
                 // non-authorized")
                 //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
                 //                     key);
-                return precompiled::CODE_NO_AUTHORIZED;
+                return storage::CODE_NO_AUTHORIZED;
             }
             // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
             // key);
@@ -182,7 +182,7 @@ public:
                 // non-authorized")
                 //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
                 //                     key);
-                return precompiled::CODE_NO_AUTHORIZED;
+                return storage::CODE_NO_AUTHORIZED;
             }
             // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
             // key);
@@ -252,7 +252,7 @@ public:
         {
             // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
             //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
-            return precompiled::CODE_NO_AUTHORIZED;
+            return storage::CODE_NO_AUTHORIZED;
         }
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key",
         // key);
