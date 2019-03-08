@@ -121,6 +121,7 @@ void generateCallResult(
     new (data) bytes(output.takeBytes());
     // Set the destructor to delete the vector.
     o_result->release = [](evmc_result const* _result) {
+        // check _result is not null
         if (_result == NULL)
         {
             return;
