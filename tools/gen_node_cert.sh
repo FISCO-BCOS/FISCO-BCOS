@@ -151,7 +151,7 @@ generate_node_scripts()
     local output=$1
     generate_script_template "$output/start.sh"
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
@@ -172,7 +172,7 @@ fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 node=\$(basename \${SHELL_FOLDER})
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 try_times=5
