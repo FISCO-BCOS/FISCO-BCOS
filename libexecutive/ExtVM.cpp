@@ -122,7 +122,9 @@ void generateCallResult(
     // Set the destructor to delete the vector.
     o_result->release = [](evmc_result const* _result) {
         if (_result == NULL)
+        {
             return;
+        }
         auto* data = evmc_get_const_optional_storage(_result);
         auto& output = reinterpret_cast<bytes const&>(*data);
         // Explicitly call vector's destructor to release its data.
