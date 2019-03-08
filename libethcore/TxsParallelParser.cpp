@@ -121,9 +121,9 @@ void TxsParallelParser::decode(
 
         if (offsets.size() == 0 || txBytes.size() == 0)
         {
-            BOOST_THROW_EXCEPTION(InvalidBlockFormat()
-                                  << errinfo_comment("Block transactions bytes is invalid")
-                                  << BadFieldError(1, _bytes.toString()));
+            BOOST_THROW_EXCEPTION(
+                InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
+            return;
         }
 
 #pragma omp parallel for schedule(dynamic, 125)
@@ -146,9 +146,8 @@ void TxsParallelParser::decode(
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(InvalidBlockFormat()
-                              << errinfo_comment("Block transactions bytes is invalid")
-                              << BadFieldError(1, _bytes.toString()));
+        BOOST_THROW_EXCEPTION(
+            InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
     }
 }
 
