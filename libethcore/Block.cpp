@@ -147,11 +147,11 @@ void Block::calReceiptRoot(bool update) const
             txReceipts.appendRaw(receiptsRLPs[i]);
         }
         txReceipts.swapOut(m_tReceiptsCache);
-        auto appenRLP_time_cost = utcTime() - record_time;
+        // auto appenRLP_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
         m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
-        auto hashReceipts_time_cost = utcTime() - record_time;
+        // auto hashReceipts_time_cost = utcTime() - record_time;
         /*
         LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_DESC("Calculate receipt root cost")
                    << LOG_KV("appenRLPTimeCost", appenRLP_time_cost)
