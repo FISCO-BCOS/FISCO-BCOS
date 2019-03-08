@@ -62,7 +62,7 @@ void RaftSealer::handleBlock()
 
     if (m_sealing.block.getTransactionSize() == 0)
     {
-        RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]Empty block will not be committed");
+        RAFTSEALER_LOG(TRACE) << LOG_DESC("[#handleBlock]Empty block will not be committed");
         reset();
         m_raftEngine->resetLastBlockTime();
         return;

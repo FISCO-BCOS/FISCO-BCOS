@@ -111,6 +111,11 @@ public:
     /// even if the maxTransNum condition has been meeted
     bool canHandleBlockForNextLeader()
     {
+        /// the case that only a node is both the leader and the next leader
+        if (getLeader().second == nodeIdx())
+        {
+            return true;
+        }
         if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
         {
             return false;
