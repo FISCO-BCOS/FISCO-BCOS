@@ -124,16 +124,34 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     // Debug print
     if (isSyncing())
         printSyncInfo();
+    auto printSyncInfo_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     // Always do
     maintainPeersConnection();
-    maintainDownloadingQueueBuffer();
-    maintainPeersStatus();
-    maintainDownloadingTransactions();
+    auto maintainPeersConnection_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
+    maintainDownloadingQueueBuffer();
+    auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    maintainPeersStatus();
+    auto maintainPeersStatus_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    maintainDownloadingTransactions();
+    auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    auto maintainTransactions_time_cost = 0;
+    auto maintainBlocks_time_cost = 0;
+    auto maintainBlockRequest_time_cost = 0;
     // Idle do
     if (!isSyncing())
     {
@@ -143,6 +161,8 @@ void SyncMaster::doWork()
             m_newTransactions = false;
             maintainTransactions();
         }
+        maintainTransactions_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         if (m_newBlocks || utcTime() > m_maintainBlocksTimeout)
         {
@@ -150,10 +170,15 @@ void SyncMaster::doWork()
             maintainBlocks();
             m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
         }
+        maintainBlocks_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         maintainBlockRequest();
+        maintainBlockRequest_time_cost = utcTime() - record_time;
+        record_time = utcTime();
     }
 
+    auto maintainDownloadingQueue_time_cost = 0;
     // Not Idle do
     if (isSyncing())
     {
@@ -163,7 +188,24 @@ void SyncMaster::doWork()
             if (finished)
                 noteDownloadingFinish();
         }
+        maintainDownloadingQueue_time_cost = utcTime() - record_time;
+        record_time = utcTime();
     }
+
+    SYNC_LOG(DEBUG) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
+                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
+                    << LOG_KV("maintainPeersConnectionTimeCost", maintainPeersConnection_time_cost)
+                    << LOG_KV("maintainDownloadingQueueBufferTimeCost",
+                           maintainDownloadingQueueBuffer_time_cost)
+                    << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
+                    << LOG_KV("maintainDownloadingTransactionsTimeCost",
+                           maintainDownloadingTransactions_time_cost)
+                    << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
+                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
+                    << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
+                    << LOG_KV(
+                           "maintainDownloadingQueueTimeCost", maintainDownloadingQueue_time_cost)
+                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
 void SyncMaster::workLoop()
