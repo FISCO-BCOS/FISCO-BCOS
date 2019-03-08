@@ -114,7 +114,9 @@ void TxsParallelParser::decode(
             return;
         // std::cout << "tx decode:" << toHex(_bytes) << std::endl;
         Offset_t txNum = fromBytes(_bytes.cropped(0));
-        vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
+        vector_ref<Offset_t> offsets(const_cast<Offset_t*>(reinterpret_cast<const Offset_t*>(
+                                         _bytes.cropped(sizeof(Offset_t)).data())),
+            txNum + 1);
         _txs.resize(txNum);
 
         bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
@@ -123,7 +125,7 @@ void TxsParallelParser::decode(
             throw;
 
 #pragma omp parallel for schedule(dynamic, 125)
-        for (Offset_t i = 0; i < txNum; i++)
+        for (Offset_t i = 0; i < txNum; ++i)
         {
             Offset_t offset = offsets[i];
             Offset_t size = offsets[i + 1] - offsets[i];
