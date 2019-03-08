@@ -177,6 +177,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     }
     catch (Exception& e)
     {
+        // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
                                << LOG_DESC("load verify file failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));

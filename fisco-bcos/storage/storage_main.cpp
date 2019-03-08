@@ -109,7 +109,7 @@ int main(int argc, const char* argv[])
     filesystem::create_directories(storagePath);
     leveldb::Options option;
     option.create_if_missing = true;
-    option.max_open_files = 100;
+    option.max_open_files = 1000;
     dev::db::BasicLevelDB* dbPtr = NULL;
     leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())

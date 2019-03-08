@@ -910,7 +910,7 @@ void PBFTEngine::checkAndSave()
             }
             else
             {
-                PBFTENGINE_LOG(ERROR)
+                PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("CommitBlock Failed")
                     << LOG_KV("blkNum", p_block->blockHeader().number())
                     << LOG_KV("highNum", m_highestBlock.number())
