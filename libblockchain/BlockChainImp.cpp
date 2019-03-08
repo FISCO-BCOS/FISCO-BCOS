@@ -1083,6 +1083,12 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                          writeTotalTransactionCount_time_cost)
                                   << LOG_KV("writeTxToBlockTimeCost", writeTxToBlock_time_cost)
                                   << LOG_KV("dbCommitTimeCost", dbCommit_time_cost);
+            {
+                WriteGuard ll(m_blockNumberMutex);
+                m_blockNumber = block.blockHeader().number();
+            }
+            auto updateBlockNumber_time_cost = utcTime() - record_time;
+            record_time = utcTime();
         }
         auto writeBlock_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -1090,14 +1096,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         m_blockCache.add(block);
         auto addBlockCache_time_cost = utcTime() - record_time;
         record_time = utcTime();
-
-        {
-            WriteGuard ll(m_blockNumberMutex);
-            m_blockNumber = block.blockHeader().number();
-        }
-        auto updateBlockNumber_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
         m_onReady(m_blockNumber);
         auto noteReady_time_cost = utcTime() - record_time;
         record_time = utcTime();

@@ -148,9 +148,11 @@ void SyncMaster::doWork()
     maintainDownloadingTransactions();
     auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
     record_time = utcTime();
+    maintainBlocks();
+    auto maintainBlocks_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     auto maintainTransactions_time_cost = 0;
-    auto maintainBlocks_time_cost = 0;
     auto maintainBlockRequest_time_cost = 0;
     // Idle do
     if (!isSyncing())
@@ -162,15 +164,6 @@ void SyncMaster::doWork()
             maintainTransactions();
         }
         maintainTransactions_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        if (m_newBlocks || utcTime() > m_maintainBlocksTimeout)
-        {
-            m_newBlocks = false;
-            maintainBlocks();
-            m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
-        }
-        maintainBlocks_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
         maintainBlockRequest();
@@ -198,10 +191,10 @@ void SyncMaster::doWork()
                     << LOG_KV("maintainDownloadingQueueBufferTimeCost",
                            maintainDownloadingQueueBuffer_time_cost)
                     << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
+                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
                     << LOG_KV("maintainDownloadingTransactionsTimeCost",
                            maintainDownloadingTransactions_time_cost)
                     << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
-                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
                     << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
                     << LOG_KV(
                            "maintainDownloadingQueueTimeCost", maintainDownloadingQueue_time_cost)
@@ -297,6 +290,13 @@ void SyncMaster::maintainDownloadingTransactions()
 
 void SyncMaster::maintainBlocks()
 {
+    if (!m_newBlocks && utcTime() <= m_maintainBlocksTimeout)
+        return;
+
+    m_newBlocks = false;
+    m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
+
+
     int64_t number = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(number);
 

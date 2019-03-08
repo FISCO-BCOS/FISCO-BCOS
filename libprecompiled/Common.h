@@ -40,13 +40,9 @@ namespace precompiled
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
 
 /// correct return: code great or equal 0
-/// system error: code from -29 to -1
-/// logic error: each Precompiled occupy range of 10 numbers for code
 
 /// note: abi.abiOut will return a positive number related to the negative number.
 /// It maybe coincide with the positive number that should have been returned.
-
-const int CODE_NO_AUTHORIZED = 50000;
 
 /// AuthorityPrecompiled 51000 ~ 51099
 const int CODE_TABLE_AND_ADDRESS_EXIST = 51000;

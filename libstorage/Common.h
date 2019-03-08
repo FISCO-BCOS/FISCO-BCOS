@@ -48,5 +48,7 @@ const char* const USER_TABLE_PREFIX = "_user_";
 const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 const std::string DAG_TRANSFER = "_dag_transfer_";
 
+const int CODE_NO_AUTHORIZED = 50000;
+
 }  // namespace storage
 }  // namespace dev

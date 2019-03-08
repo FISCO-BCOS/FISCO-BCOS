@@ -63,6 +63,11 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("num", block.blockHeader().number())
+                            << LOG_KV("hash", block.header().hash().abridged())
+                            << LOG_KV("height", block.header().number())
+                            << LOG_KV("receiptRoot", block.header().receiptsRoot())
+                            << LOG_KV("stateRoot", block.header().stateRoot())
+                            << LOG_KV("dbHash", block.header().dbHash())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
@@ -114,12 +119,25 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     block.calReceiptRoot();
     block.header().setStateRoot(executiveContext->getState()->rootHash());
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
+    /// since origin value is empty if executeBlock is called by sync module, need to compare
+    /// receiptRoot, stateRoot and dbHash
     if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
+            BLOCKVERIFIER_LOG(ERROR)
+                << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
+                << LOG_KV("originHash", tmpHeader.hash().abridged())
+                << LOG_KV("curHash", block.header().hash().abridged())
+                << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
+                << LOG_KV("curRecepit", block.header().receiptsRoot().abridged())
+                << LOG_KV("orgState", tmpHeader.stateRoot().abridged())
+                << LOG_KV("curState", block.header().stateRoot().abridged())
+                << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
+                << LOG_KV("curDBHash", block.header().dbHash().abridged());
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
-                                      "Invalid Block with bad stateRoot or ReciptRoot"));
+                                      "Invalid Block with bad stateRoot or ReceiptRoot"));
         }
     }
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")
