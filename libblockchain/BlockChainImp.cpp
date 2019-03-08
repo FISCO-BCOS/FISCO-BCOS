@@ -260,7 +260,6 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
                 auto blockRLP = std::make_shared<bytes>(fromHex(strBlock.c_str()));
                 auto blockRLP_time_cost = utcTime() - record_time;
 
-                auto addCache_time_cost = utcTime() - record_time;
                 BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from leveldb")
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
@@ -1007,9 +1006,6 @@ void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContex
 
 bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    int64_t num = number();
     if (_blockNumber != number() + 1)
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
