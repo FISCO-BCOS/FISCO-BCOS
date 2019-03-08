@@ -1074,6 +1074,13 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
             context->dbCommit(block);
             auto dbCommit_time_cost = utcTime() - write_record_time;
+            {
+                WriteGuard ll(m_blockNumberMutex);
+                m_blockNumber = block.blockHeader().number();
+            }
+            auto updateBlockNumber_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+
             BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
                                   << LOG_DESC("Commit block time record(write)")
                                   << LOG_KV("writeHash2BlockTimeCost", writeHash2Block_time_cost)
@@ -1082,13 +1089,9 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                   << LOG_KV("writeTotalTransactionCountTimeCost",
                                          writeTotalTransactionCount_time_cost)
                                   << LOG_KV("writeTxToBlockTimeCost", writeTxToBlock_time_cost)
-                                  << LOG_KV("dbCommitTimeCost", dbCommit_time_cost);
-            {
-                WriteGuard ll(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
-            }
-            auto updateBlockNumber_time_cost = utcTime() - record_time;
-            record_time = utcTime();
+                                  << LOG_KV("dbCommitTimeCost", dbCommit_time_cost)
+                                  << LOG_KV(
+                                         "updateBlockNumberTimeCost", updateBlockNumber_time_cost);
         }
         auto writeBlock_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -1104,7 +1107,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                               << LOG_KV("beforeTimeCost", before_write_time_cost)
                               << LOG_KV("writeBlockTimeCost", writeBlock_time_cost)
                               << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
-                              << LOG_KV("updateBlockNumberTimeCost", updateBlockNumber_time_cost)
                               << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
                               << LOG_KV("totalTimeCost", utcTime() - start_time);
 
