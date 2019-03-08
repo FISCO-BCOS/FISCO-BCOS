@@ -29,7 +29,6 @@ var contract = web3.eth.contract(abi);
 var instance = contract.at(address);
 console.log("合约address:"+address);
 
-web3.eth.defaultAccount = config.account;
 
 (async function(){
   var func;

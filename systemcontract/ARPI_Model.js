@@ -21,7 +21,6 @@ function getAddress(file){
   return (fs.readFileSync(config.Ouputpath+"./"+file+".address",'utf-8'));
 }
 
-web3.eth.defaultAccount = config.account;
 var account = config.account;
 var privKey = config.privKey;
   

@@ -46,7 +46,6 @@ function Usage() {
 	console.log('                                                 listPermission            // Pass in the filter number and account');
 }
 
-web3.eth.defaultAccount = config.account;
 
 (async function() {
 	var options = process.argv;
