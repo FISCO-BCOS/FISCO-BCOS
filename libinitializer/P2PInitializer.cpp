@@ -135,6 +135,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
     catch (std::exception& e)
     {
+        // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer")
                                << LOG_DESC("initConfig for P2PInitializer failed")
                                << LOG_KV("check Port", listenPort)

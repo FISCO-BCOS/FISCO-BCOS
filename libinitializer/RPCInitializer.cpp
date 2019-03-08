@@ -65,7 +65,14 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
-        m_channelRPCHttpServer->StartListening();
+        if (!m_channelRPCHttpServer->StartListening())
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("RPCInitializer") << LOG_KV("check channel_listen_port", listenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                         << LOG_KV("check channel_listen_port", listenPort) << std::endl;
+            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
+        }
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("ChannelRPCHttpServer started.");
 
@@ -106,12 +113,20 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
-        m_jsonrpcHttpServer->StartListening();
+        if (!m_jsonrpcHttpServer->StartListening())
+        {
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
+                                   << LOG_KV("check jsonrpc_listen_port", httpListenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                         << LOG_KV("check jsonrpc_listen_port", httpListenPort) << std::endl;
+            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
+        }
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("JsonrpcHttpServer started.");
     }
     catch (std::exception& e)
     {
+        // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
                                << LOG_DESC("init RPC/channelserver failed")
                                << LOG_KV("check channel_listen_port", listenPort)
