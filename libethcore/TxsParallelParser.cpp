@@ -120,7 +120,11 @@ void TxsParallelParser::decode(
         bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
 
         if (offsets.size() == 0 || txBytes.size() == 0)
-            throw;
+        {
+            BOOST_THROW_EXCEPTION(InvalidBlockFormat()
+                                  << errinfo_comment("Block transactions bytes is invalid")
+                                  << BadFieldError(1, _bytes.toString()));
+        }
 
 #pragma omp parallel for schedule(dynamic, 125)
         for (Offset_t i = 0; i < txNum; ++i)
