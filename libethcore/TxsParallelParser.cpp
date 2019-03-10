@@ -104,33 +104,53 @@ bytes TxsParallelParser::encode(std::vector<bytes> const& _txs)
     return ret;
 }
 
+inline void throwInvalidBlockFormat()
+{
+    BOOST_THROW_EXCEPTION(
+        InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
+}
+
 // parallel decode transactions
 void TxsParallelParser::decode(
     Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
 {
     try
     {
-        if (_bytes.size() == 0)
+        size_t bytesSize = _bytes.size();
+        if (bytesSize == 0)
             return;
         // std::cout << "tx decode:" << toHex(_bytes) << std::endl;
         Offset_t txNum = fromBytes(_bytes.cropped(0));
+        // check txNum
+        size_t objectStart = sizeof(Offset_t) * (txNum + 2);
+        if (objectStart >= bytesSize)
+            throwInvalidBlockFormat();
+
+        // Get offsets space
         vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
         _txs.resize(txNum);
 
+        // Get objects space
         bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
 
+        // check objects space
         if (offsets.size() == 0 || txBytes.size() == 0)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
-            return;
-        }
+            throwInvalidBlockFormat();
 
-#pragma omp parallel for schedule(dynamic, 125)
+        // parallel decoding
+        size_t maxOffset = bytesSize - objectStart - 1;
+        bool exceptionHappen = false;
+#pragma omp parallel for schedule(dynamic, 125) shared(exceptionHappen)
         for (Offset_t i = 0; i < txNum; ++i)
         {
+            if (exceptionHappen)
+                continue;
+
             Offset_t offset = offsets[i];
             Offset_t size = offsets[i + 1] - offsets[i];
+
+            if (offset > maxOffset)
+                exceptionHappen = true;
 
             _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
             if (_withHash)
@@ -143,11 +163,12 @@ void TxsParallelParser::decode(
                         << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
                         */
         }
+        if (exceptionHappen)
+            throwInvalidBlockFormat();
     }
     catch (...)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
+        throwInvalidBlockFormat();
     }
 }
 
