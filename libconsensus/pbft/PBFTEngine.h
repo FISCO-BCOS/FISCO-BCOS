@@ -90,11 +90,15 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        if (false == getLeader().first)
+        {
+            return false;
+        }
         /// the block is sealed by the next leader, and can execute after the last block has been
         /// consensused
         if (m_notifyNextLeaderSeal)
         {
-            /// represent that the latest block has been consensused
+            /// represent that the latest block has not been consensused
             if (getNextLeader() == nodeIdx())
             {
                 return false;
