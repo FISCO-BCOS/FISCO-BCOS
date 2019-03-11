@@ -39,6 +39,8 @@ public:
     {
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
     }
+
+    virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
     /// specified prepareRequest exists in raw-prepare-cache or not?
     /// @return true : the prepare request exists in the  raw-prepare-cache
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
@@ -46,7 +48,6 @@ public:
     {
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
-
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {
@@ -96,14 +97,23 @@ public:
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
-    inline PrepareReq const& futurePrepareCache() { return m_futurePrepareCache; }
+    /// get the future prepare according to specified block hash
+    inline std::shared_ptr<PrepareReq> futurePrepareCache(uint64_t const& blockNumber)
+    {
+        auto it = m_futurePrepareCache.find(blockNumber);
+        if (it != m_futurePrepareCache.end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
     /// add specified raw-prepare-request into the raw-prepare-cache
     /// reset the prepare-cache
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
         PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
-                                << LOG_KV("idx", req.idx)
+                                << LOG_KV("reqIdx", req.idx)
                                 << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
     }
@@ -160,14 +170,19 @@ public:
     /// add future-prepare cache
     inline void addFuturePrepareCache(PrepareReq const& req)
     {
-        if (m_futurePrepareCache.block_hash != req.block_hash)
+        auto it = m_futurePrepareCache.find(req.height);
+        if (it == m_futurePrepareCache.end())
         {
-            m_futurePrepareCache = req;
             PBFTReqCache_LOG(INFO)
                 << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req.height)
-                << LOG_KV("idx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
+                << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
+            m_futurePrepareCache[req.height] = std::make_shared<PrepareReq>(std::move(req));
         }
     }
+
+    /// get the future prepare cache size
+    inline size_t futurePrepareCacheSize() { return m_futurePrepareCache.size(); }
+
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
@@ -184,9 +199,13 @@ public:
         m_prepareCache.clear();
         m_signCache.clear();
         m_commitCache.clear();
+        m_futurePrepareCache.clear();
         removeInvalidViewChange(curView);
     }
     /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
+    /// update the sign cache and commit cache immediately
+    /// in case of that the commit/sign requests with the same hash are solved in
+    /// handleCommitMsg/handleSignMsg again
     void delCache(h256 const& hash);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
@@ -212,7 +231,15 @@ public:
         clearAllExceptCommitCache();
         m_commitCache.clear();
     }
-    void resetFuturePrepare() { m_futurePrepareCache = PrepareReq(); }
+
+    /// erase specified future request from the future prepare cache
+    void eraseHandledFutureReq(uint64_t const& blockNumber)
+    {
+        if (m_futurePrepareCache.find(blockNumber) != m_futurePrepareCache.end())
+        {
+            m_futurePrepareCache.erase(blockNumber);
+        }
+    }
     /// complemented functions for UTs
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>>& mutableSignCache()
     {
@@ -286,7 +313,8 @@ private:
     void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
     {
         json_spirit::Object cacheStatus;
-        cacheStatus.push_back(json_spirit::Pair(key + "_blockHash", toHex(cache.block_hash)));
+        cacheStatus.push_back(
+            json_spirit::Pair(key + "_blockHash", "0x" + toHex(cache.block_hash)));
         cacheStatus.push_back(json_spirit::Pair(key + "_height", cache.height));
         cacheStatus.push_back(json_spirit::Pair(key + "_idx", toString(cache.idx)));
         cacheStatus.push_back(json_spirit::Pair(key + "_view", toString(cache.view)));
@@ -326,7 +354,8 @@ private:
     /// cache for prepare request need to be backup and saved
     PrepareReq m_committedPrepareCache;
     /// cache for the future prepare cache
-    PrepareReq m_futurePrepareCache;
+    /// key: block hash, value: the cached future prepeare
+    std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;
 };
 }  // namespace consensus
 }  // namespace dev

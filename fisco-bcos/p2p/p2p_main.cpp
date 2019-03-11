@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
+ * @brief: empty framework for main of FISCO-BCOS
  *
  * @file: p2p_main.cpp
  * @author: yujiechen
@@ -32,7 +32,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
-int main(int argc, const char* argv[])
+int main()
 {
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
@@ -44,12 +44,13 @@ int main(int argc, const char* argv[])
     uint32_t counter = 0;
     while (true)
     {
-        std::shared_ptr<std::vector<std::string>> topics = p2pService->topics();
+        std::shared_ptr<std::vector<std::string>> p_topics =
+            std::shared_ptr<std::vector<std::string>>();
         std::string topic = "Topic" + to_string(counter++);
-        topics->push_back(topic);
-        P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << topics->size() - 1
+        p_topics->push_back(topic);
+        P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << p_topics->size() - 1
                           << "]:" << topic;
-        p2pService->setTopics(topics);
+        p2pService->setTopics(p_topics);
         LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));
     }

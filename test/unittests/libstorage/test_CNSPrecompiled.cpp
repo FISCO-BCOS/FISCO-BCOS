@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(select)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_TEST(cnsPrecompiled->toString(context) == "CNS");
+    BOOST_TEST(cnsPrecompiled->toString() == "CNS");
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)

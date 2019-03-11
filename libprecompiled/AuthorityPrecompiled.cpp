@@ -19,8 +19,9 @@
  *  @date 20181205
  */
 #include "AuthorityPrecompiled.h"
-#include "Common.h"
+#include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -43,22 +44,9 @@ AuthorityPrecompiled::AuthorityPrecompiled()
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-
-std::string AuthorityPrecompiled::toString(ExecutiveContext::Ptr)
+std::string AuthorityPrecompiled::toString()
 {
     return "Authority";
-}
-
-storage::Table::Ptr AuthorityPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
 bytes AuthorityPrecompiled::call(
@@ -101,13 +89,13 @@ bytes AuthorityPrecompiled::call(
             entry->setField(SYS_AC_ADDRESS, addr);
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-            int count = table->insert(tableName, entry, getOptions(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -142,13 +130,14 @@ bytes AuthorityPrecompiled::call(
         }
         else
         {
-            int count = table->remove(tableName, condition, getOptions(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            int count =
+                table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -195,15 +184,15 @@ bytes AuthorityPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }
 
 void AuthorityPrecompiled::addPrefixToUserTable(std::string& table_name)
 {
-    if (table_name == SYS_ACCESS_TABLE || table_name == SYS_MINERS || table_name == SYS_TABLES ||
+    if (table_name == SYS_ACCESS_TABLE || table_name == SYS_CONSENSUS || table_name == SYS_TABLES ||
         table_name == SYS_CNS || table_name == SYS_CONFIG)
     {
         return;

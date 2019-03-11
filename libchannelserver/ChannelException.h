@@ -23,7 +23,8 @@
 #pragma once
 
 #include <string>
-#define CHANNEL_LOG(LEVEL) LOG(LEVEL) << "[channel]"
+#define CHANNEL_LOG(LEVEL) LOG(LEVEL) << "[CHANNEL]"
+#define CHANNEL_SESSION_LOG(LEVEL) LOG(LEVEL) << "[CHANNEL][SESSION]"
 #pragma warning(push)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"

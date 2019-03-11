@@ -14,25 +14,44 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file SystemConfigMgr.h
- *  @author yujiechen
- *  @date 2018-11-08
+/**
+ * @brief : Global configure of the node
+ * @author: jimmyshi
+ * @date: 2018-11-30
  */
+
 #pragma once
-#include <libdevcore/Common.h>
+
+#include <string>
+
 namespace dev
 {
-namespace config
-{
-class SystemConfigMgr
+class GlobalConfigure
 {
 public:
+    static GlobalConfigure& instance()
+    {
+        static GlobalConfigure ins;
+        return ins;
+    }
+
+    struct DiskEncryption
+    {
+        bool enable = false;
+        std::string keyCenterIP;
+        int keyCenterPort;
+        std::string cipherDataKey;
+    } diskEncryption;
+
+
     /// default block time
-    static const unsigned c_intervalBlockTime = 1000;
+    const unsigned c_intervalBlockTime = 1000;
     /// omit empty block or not
-    static const bool c_omitEmptyBlock = true;
+    const bool c_omitEmptyBlock = true;
     /// default blockLimit
-    static const unsigned c_blockLimit = 1000;
+    const unsigned c_blockLimit = 1000;
 };
-}  // namespace config
+
+#define g_BCOSConfig GlobalConfigure::instance()
+
 }  // namespace dev

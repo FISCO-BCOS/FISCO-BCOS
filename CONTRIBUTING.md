@@ -17,7 +17,7 @@ Our branching method is [git-flow](https://jeffkreeftmeijer.com/git-flow/)
 
 ### Issue
 
-Go to [issues page](https://github.com/FISCO-BCOS/lab-bcos/issues)
+Go to [issues page](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)
 
 ### Fix bugs
 
@@ -60,3 +60,23 @@ git clang-format <commit> # to reformat commits between specified commit and HEA
 [clang-format]: https://clang.llvm.org/docs/ClangFormat.html
 [.clang-format]: .clang-format
 [git-clang-format]: https://llvm.org/svn/llvm-project/cfe/trunk/tools/clang-format/git-clang-format
+
+
+## Continous integration
+
+**Continous integration platform**
+
+* travis-ci: [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg?branch=master)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS) (check unitest)
+
+* circleci: [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master.svg?style=svg)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS/tree/master) (check static complie and guomi version)
+
+**Coverage**
+
+* codecov:  [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS)
+
+**Code quality**
+
+* CodeFactor: [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos/badge)](https://www.codefactor.io/repository/github/fisco-bcos/fisco-bcos)
+
+* Codacy: [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) 
+

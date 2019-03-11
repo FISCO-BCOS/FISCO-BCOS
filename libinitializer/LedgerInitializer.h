@@ -42,7 +42,10 @@ public:
 
     std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
 
-    void setP2PService(std::shared_ptr<P2PInterface> _p2pService) { m_p2pService = _p2pService; }
+    void setP2PService(std::shared_ptr<dev::p2p::P2PInterface> _p2pService)
+    {
+        m_p2pService = _p2pService;
+    }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
     ~LedgerInitializer() { stopAll(); }
@@ -64,7 +67,7 @@ private:
         GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
 
     std::shared_ptr<LedgerManager> m_ledgerManager;
-    std::shared_ptr<P2PInterface> m_p2pService;
+    std::shared_ptr<dev::p2p::P2PInterface> m_p2pService;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
 };

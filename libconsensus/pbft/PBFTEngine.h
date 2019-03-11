@@ -30,11 +30,14 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libsync/SyncStatus.h>
 #include <sstream>
 
 #include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
+
+#include <libsync/SyncStatus.h>
 
 namespace dev
 {
@@ -56,11 +59,10 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
-        h512s const& _minerList = h512s())
-      : ConsensusEngineBase(
-            _service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId, _minerList),
-        m_keyPair(_key_pair),
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
+        h512s const& _sealerList = h512s())
+      : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
+            _keyPair, _sealerList),
         m_baseDir(_baseDir)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
@@ -69,7 +71,7 @@ public:
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
 
-        /// register checkMinerList to blockSync for check MinerList
+        /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
     }
 
@@ -90,7 +92,37 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        /// the block is sealed by the next leader, and can execute after the last block has been
+        /// consensused
+        if (m_notifyNextLeaderSeal)
+        {
+            /// represent that the latest block has been consensused
+            if (getNextLeader() == nodeIdx())
+            {
+                return false;
+            }
+            return true;
+        }
+        /// the block is sealed by the current leader
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+    }
+
+    /// in case of the next leader packeted the number of maxTransNum transactions before the last
+    /// block is consensused
+    /// when sealing for the next leader,  return true only if the last block has been consensused
+    /// even if the maxTransNum condition has been meeted
+    bool canHandleBlockForNextLeader()
+    {
+        /// the case that only a node is both the leader and the next leader
+        if (getLeader().second == nodeIdx())
+        {
+            return true;
+        }
+        if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
+        {
+            return false;
+        }
+        return true;
     }
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
@@ -99,32 +131,52 @@ public:
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
+    {
+        m_onNotifyNextLeaderReset = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
     void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
-    const std::string consensusStatus() const override;
+    const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
+    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
+
+    inline std::pair<bool, IDXTYPE> getLeader() const
+    {
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+        {
+            return std::make_pair(false, MAXIDX);
+        }
+        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
+    }
+
 protected:
+    void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(h512& nodeId, const IDXTYPE& idx) const;
+    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
-        checkMinerList(block);
+        checkSealerList(block);
     }
     bool needOmit(Sealing const& sealing);
 
+    void getAllNodesViewStatus(json_spirit::Array& status);
+
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+        std::unordered_set<dev::network::NodeID> const& filter =
+            std::unordered_set<dev::network::NodeID>(),
         unsigned const& ttl = 0);
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -142,16 +194,16 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    void handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
+    bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
-    void handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
-    void handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
-    void handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
-    void handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+    bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
+    bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
+    bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
@@ -171,7 +223,7 @@ protected:
 
     bool checkSign(PBFTMsg const& req) const;
     inline bool broadcastFilter(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -186,7 +238,7 @@ protected:
      * common
      */
     inline void broadcastMark(
-        h512 const& nodeId, unsigned const& packetType, std::string const& key)
+        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -194,17 +246,17 @@ protected:
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
-    /// get the index of specified miner according to its node id
-    /// @param nodeId: the node id of the miner
-    /// @return : 1. >0: the index of the miner
-    ///           2. equal to -1: the node is not a miner(not exists in miner list)
-    inline ssize_t getIndexByMiner(dev::h512 const& nodeId)
+    /// get the index of specified sealer according to its node id
+    /// @param nodeId: the node id of the sealer
+    /// @return : 1. >0: the index of the sealer
+    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
+    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
-        ReadGuard l(m_minerListMutex);
+        ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
-        for (size_t i = 0; i < m_minerList.size(); ++i)
+        for (size_t i = 0; i < m_sealerList.size(); ++i)
         {
-            if (m_minerList[i] == nodeId)
+            if (m_sealerList[i] == nodeId)
             {
                 index = i;
                 break;
@@ -212,15 +264,16 @@ protected:
         }
         return index;
     }
-    /// get the node id of specified miner according to its index
+    /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
-    /// @return h512(): the node is not in the miner list
+    /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getMinerByIndex(size_t const& index) const
+    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
-        if (index < m_minerList.size())
-            return m_minerList[index];
-        return h512();
+        ReadGuard l(m_sealerListMutex);
+        if (index < m_sealerList.size())
+            return m_sealerList[index];
+        return dev::network::NodeID();
     }
 
     /// trans data into message
@@ -253,8 +306,8 @@ protected:
     /**
      * @brief : the message received from the network is valid or not?
      *      invalid cases: 1. received data is empty
-     *                     2. the message is not sended by miners
-     *                     3. the message is not receivied by miners
+     *                     2. the message is not sended by sealers
+     *                     3. the message is not receivied by sealers
      *                     4. the message is sended by the node-self
      * @param message : message constructed from data received from the network
      * @param session : the session related to the network data(can get informations about the
@@ -268,24 +321,24 @@ protected:
         /// check message size
         if (message->buffer()->size() <= 0)
             return false;
-        /// check whether in the miner list
-        peerIndex = getIndexByMiner(session->nodeID());
+        /// check whether in the sealer list
+        peerIndex = getIndexBySealer(session->nodeID());
         if (peerIndex < 0)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC(
                 "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
             return false;
         }
-        /// check whether this node is in the miner list
-        h512 node_id;
-        bool is_miner = getNodeIDByIndex(node_id, nodeIdx());
-        if (!is_miner || session->nodeID() == node_id)
+        /// check whether this node is in the sealer list
+        dev::network::NodeID node_id;
+        bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
+        if (!is_sealer || session->nodeID() == node_id)
             return false;
         return true;
     }
 
     /// check the specified prepareReq is valid or not
-    bool isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -305,6 +358,15 @@ protected:
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
+        if (isSyncingHigherBlock(req))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Is Syncing higher number")
+                                  << LOG_KV("ReqNumber", req.height)
+                                  << LOG_KV(
+                                         "syncingNumber", m_blockSync->status().knownHighestNumber);
+            return CheckResult::INVALID;
+        }
+
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
@@ -348,33 +410,53 @@ protected:
         return CheckResult::VALID;
     }
 
-    bool isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
-    bool isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
         ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 
     template <class T>
     inline bool hasConsensused(T const& req) const
     {
-        if (req.height < m_consensusBlockNumber || req.view < m_view)
+        if (req.height < m_consensusBlockNumber ||
+            (req.height == m_consensusBlockNumber && req.view < m_view))
         {
-            PBFTENGINE_LOG(DEBUG) << "[#hasConsensused] [height/consNum/reqView/Cview]:  "
-                                  << req.height << "/" << m_consensusBlockNumber << "/" << req.view
-                                  << "/" << m_view << std::endl;
+            return true;
+        }
+        return false;
+    }
+
+    /// in case of con-current execution of block
+    template <class T>
+    inline bool isSyncingHigherBlock(T const& req) const
+    {
+        if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
+    /**
+     * @brief : decide the sign or commit request is the future request or not
+     *          1. the block number is no smalller than the current consensused block number
+     *          2. or the view is no smaller than the current consensused block number
+     */
+    template <typename T>
+    inline bool isFutureBlock(T const& req) const
+    {
+        if (req.height >= m_consensusBlockNumber || req.view > m_view)
+        {
             return true;
         }
         return false;
     }
 
     template <typename T>
-    inline bool isFutureBlock(T const& req) const
+    inline bool isFuturePrepare(T const& req) const
     {
         if (req.height > m_consensusBlockNumber ||
             (req.height == m_consensusBlockNumber && req.view > m_view))
         {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("FutureBlock") << LOG_KV("height", req.height)
-                                  << LOG_KV("consNum", m_consensusBlockNumber)
-                                  << LOG_KV("reqView", req.view) << LOG_KV("view", m_view);
             return true;
         }
         return false;
@@ -385,6 +467,7 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
+            /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
@@ -402,53 +485,44 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            if (!m_emptyBlockViewChange)
-            {
-                PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("idx", req.idx) << LOG_KV("leader", leader.second)
-                    << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
-                    << LOG_KV("highSealer", m_highestBlock.sealer())
-                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("myIdx", nodeIdx());
-            }
             return false;
         }
 
         return true;
     }
 
-    inline std::pair<bool, IDXTYPE> getLeader() const
-    {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
-        {
-            return std::make_pair(false, MAXIDX);
-        }
-        return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
-    }
-    void checkMinerList(dev::eth::Block const& block);
+    void checkSealerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-
-    void changeViewForEmptyBlock();
+    void changeViewForEmptyBlock()
+    {
+        m_timeManager.changeView();
+        m_timeManager.m_changeCycle = 0;
+        m_fastViewChange = true;
+        m_signalled.notify_all();
+    }
+    void notifySealing(dev::eth::Block const& block);
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
         return boost::filesystem::space(path).available > 1024;
     }
 
+    void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
+    {
+        WriteGuard l(x_viewMap);
+        m_viewMap[idx] = view;
+    }
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
-    IDXTYPE m_connectedNode;
-    KeyPair m_keyPair;
     std::string m_baseDir;
-    bool m_cfgErr = false;
     bool m_leaderFailed = false;
+    bool m_notifyNextLeaderSeal = false;
 
     dev::storage::Storage::Ptr m_storage;
 
-    /// whether to omit empty block
-    bool m_omitEmptyBlock = true;
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
 
@@ -467,10 +541,17 @@ protected:
     Mutex x_signalled;
 
     std::function<void()> m_onViewChange;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
-    bool m_emptyBlockViewChange = false;
+    /// for output time-out caused viewchange
+    /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
+    bool m_fastViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
+
+    /// map between nodeIdx to view
+    mutable SharedMutex x_viewMap;
+    std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 };
 }  // namespace consensus
 }  // namespace dev

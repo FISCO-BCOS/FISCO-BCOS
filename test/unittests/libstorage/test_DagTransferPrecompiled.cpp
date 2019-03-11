@@ -51,7 +51,7 @@ struct DagTransferPrecompiledFixture
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
-        dtPrecompiled = std::make_shared<DagTransferPrecompiled>();
+        dtPrecompiled = std::make_shared<DagTransferPrecompiled>(context);
         memoryTableFactory = context->getMemoryTableFactory();
     }
 
@@ -73,7 +73,7 @@ BOOST_FIXTURE_TEST_SUITE(test_DagTransferPrecompiled, DagTransferPrecompiledFixt
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_TEST(dtPrecompiled->toString(context) == "DagTransfer");
+    BOOST_TEST(dtPrecompiled->toString() == "DagTransfer");
 }
 
 BOOST_AUTO_TEST_CASE(isDagPrecompiled)
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    
+
     BOOST_TEST((256 - std::abs(CODE_INVALID_USER_NAME)) == result);
 
     // normal input, first add this user
@@ -376,7 +376,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     dev::eth::ContractABI abi;
 
     std::string from, to;
-    dev::u256 amount;
+    // dev::u256 amount;
     dev::u256 result;
     bytes out;
     bytes params;

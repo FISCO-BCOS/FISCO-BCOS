@@ -20,8 +20,15 @@
  */
 #pragma once
 
+#include "Common.h"
+#include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
+#include "TablePrecompiled.h"
+#include <libdevcore/easylog.h>
+#include <boost/algorithm/string.hpp>
+#include <memory>
+#include <type_traits>
 
 namespace dev
 {
@@ -37,11 +44,11 @@ public:
     typedef std::shared_ptr<MemoryTableFactory> Ptr;
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
-
-    Table::Ptr openTable(const std::string& table, bool authorityFlag = true) override;
-    Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorigytFlag,
-        Address const& _origin = Address()) override;
+    virtual Table::Ptr openTable(
+        const std::string& tableName, bool authorityFlag = true, bool isPara = false);
+    virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
+        const std::string& valueField, bool authorityFlag = true,
+        Address const& _origin = Address(), bool isPara = false);
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
@@ -54,7 +61,6 @@ public:
     void rollback(size_t _savepoint);
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
-
     int getCreateTableCode() { return createTableCode; }
 
 private:
@@ -63,7 +69,7 @@ private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
-    std::map<std::string, Table::Ptr> m_name2Table;
+    std::unordered_map<std::string, Table::Ptr> m_name2Table;
     std::vector<Change> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;

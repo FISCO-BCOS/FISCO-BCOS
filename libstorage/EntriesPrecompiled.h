@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Table.h"
-#include "libblockverifier/ExecutiveContext.h"
+#include <libblockverifier/ExecutiveContext.h>
 
 namespace dev
 {
@@ -45,7 +45,7 @@ public:
     EntriesPrecompiled();
     virtual ~EntriesPrecompiled(){};
 
-    virtual std::string toString(std::shared_ptr<ExecutiveContext>);
+    virtual std::string toString();
 
     virtual bytes call(
         ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());

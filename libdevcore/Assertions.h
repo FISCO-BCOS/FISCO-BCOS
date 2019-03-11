@@ -27,7 +27,6 @@
 
 #include <boost/exception/info.hpp>
 #include <iosfwd>
-#include <iostream>
 
 namespace dev
 {

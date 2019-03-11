@@ -40,8 +40,8 @@ class LevelDBWriteBatch : public WriteBatchFace
 public:
     void insert(Slice _key, Slice _value) override;
     void kill(Slice _key) override;
-
-    leveldb::WriteBatch const& writeBatch() const { return m_writeBatch; }
+    // void append(const LevelDBWriteBatch& _batch);
+    const leveldb::WriteBatch& writeBatch() const { return m_writeBatch; }
     leveldb::WriteBatch& writeBatch() { return m_writeBatch; }
 
     // For Encrypted level DB
@@ -85,18 +85,6 @@ protected:
     std::shared_ptr<leveldb::DB> m_db;
     leveldb::Status m_openStatus;
     std::string m_name;
-};
-
-#define DBErrorExit DBErrorExitHandler()
-
-class DBErrorExitHandler
-{
-    template <typename T>
-    void operator<<(T _errorInfo)
-    {
-        LOG(ERROR) << "[DB] ERROR: " << _errorInfo;
-        assert(false);
-    }
 };
 
 inline void errorExit(std::stringstream& _exitInfo)

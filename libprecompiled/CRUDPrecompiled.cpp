@@ -18,9 +18,12 @@
  *  @author ancelmo
  *  @date 20180921
  */
+
 #include "CRUDPrecompiled.h"
+
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
+#include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
@@ -37,24 +40,12 @@ CRUDPrecompiled::CRUDPrecompiled()
     name2Selector[CRUD_METHOD_SLT_STR_STR] = getFuncSelector(CRUD_METHOD_SLT_STR_STR);
 }
 
-std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
+std::string CRUDPrecompiled::toString()
 {
     return "CRUD";
 }
 
-storage::Table::Ptr CRUDPrecompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("tableName", tableName);
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
-}
-
-bytes CRUDPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -78,6 +69,11 @@ bytes CRUDPrecompiled::call(
             auto newAddress = context->registerPrecompiled(entriesPrecompiled);
             out = abi.abiIn("", newAddress);
         }
+    }
+    else
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }

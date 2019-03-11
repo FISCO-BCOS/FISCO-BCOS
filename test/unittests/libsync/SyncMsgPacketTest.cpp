@@ -54,7 +54,6 @@ public:
 
     std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
-        unsigned const protocolVersion = 0;
         NodeIPEndpoint peer_endpoint(bi::address::from_string(ip), m_listenPort, m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();
@@ -146,15 +145,17 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 {
     SyncTransactionsPacket txPacket;
-    bytes txRLPs = fakeTransaction.rlp();
+    vector<bytes> txRLPs;
+    txRLPs.emplace_back(fakeTransaction.rlp());
 
-    txPacket.encode(0x01, txRLPs);
+    txPacket.encode(txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
     txPacket.decode(fakeSessionPtr, msgPtr);
+
     auto rlpTx = txPacket.rlp()[0];
-    Transaction tx;
-    tx.decode(rlpTx);
-    BOOST_CHECK(tx == fakeTransaction);
+    Transactions txs;
+    dev::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
+    BOOST_CHECK(txs[0] == fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

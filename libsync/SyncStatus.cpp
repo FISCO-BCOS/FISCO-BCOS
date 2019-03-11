@@ -86,7 +86,7 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
     if (peer == m_peersStatus.end())
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Status") << LOG_DESC("Peer data not found")
-                          << LOG_KV("nodeId", _id);
+                          << LOG_KV("nodeId", _id.abridged());
         return nullptr;
     }
     return peer->second;

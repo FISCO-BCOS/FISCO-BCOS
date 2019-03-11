@@ -23,63 +23,70 @@
 #include "LedgerInitializer.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
+using namespace std;
 using namespace dev::initializer;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
+    namespace fs = boost::filesystem;
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initConfig");
-    m_groupDataDir = _pt.get<std::string>("group.group_data_path", "data/");
+    m_groupDataDir = _pt.get<string>("group.group_data_path", "data/");
+    auto groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
     assert(m_p2pService);
-    /// TODO: modify FakeLedger to the real Ledger after all modules ready
-    m_ledgerManager = std::make_shared<LedgerManager>(m_p2pService, m_keyPair);
-    std::map<GROUP_ID, h512s> groudID2NodeList;
+    m_ledgerManager = make_shared<LedgerManager>(m_p2pService, m_keyPair);
+    map<GROUP_ID, h512s> groudID2NodeList;
     bool succ = true;
     try
     {
-        for (auto it : _pt.get_child("group"))
+        LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_KV("groupConfigPath", groupConfigPath);
+        fs::path path(groupConfigPath);
+        if (fs::is_directory(path))
         {
-            if (it.first.find("group_config.") != 0)
-                continue;
-
-            INITIALIZER_LOG(TRACE)
-                << LOG_BADGE("LedgerInitializer") << LOG_DESC("load group config")
-                << LOG_KV("groupID", it.first) << LOG_KV("config", it.second.data());
-            std::vector<std::string> s;
-            boost::split(s, it.first, boost::is_any_of("."), boost::token_compress_on);
-            if (s.size() != 2)
+            fs::directory_iterator endIter;
+            for (fs::directory_iterator iter(path); iter != endIter; iter++)
             {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse groupID failed")
-                    << LOG_KV("data", it.first.data());
-                ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse groupID failed")
-                             << std::endl;
-                BOOST_THROW_EXCEPTION(MissingField());
-            }
-
-            succ =
-                initSingleGroup(boost::lexical_cast<int>(s[1]), it.second.data(), groudID2NodeList);
-            if (!succ)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup failed")
-                    << LOG_KV("group", s[1]);
-                ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup failed")
-                             << LOG_KV("group", s[1]) << std::endl;
-                BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
+                if (fs::extension(*iter) == ".genesis")
+                {
+                    boost::property_tree::ptree pt;
+                    boost::property_tree::read_ini(iter->path().string(), pt);
+                    auto groupID = pt.get<int>("group.index", 0);
+                    if (groupID <= 0)
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << LOG_BADGE("LedgerInitializer") << LOG_DESC("groupID invalid")
+                            << LOG_KV("groupID", groupID)
+                            << LOG_KV("configFile", iter->path().string());
+                        continue;
+                    }
+                    succ = initSingleGroup(groupID, iter->path().string(), groudID2NodeList);
+                    if (!succ)
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup failed")
+                            << LOG_KV("configFile", iter->path().string());
+                        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer")
+                                     << LOG_DESC("initSingleGroup failed")
+                                     << LOG_KV("configFile", iter->path().string()) << endl;
+                        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
+                    }
+                    LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
+                              << LOG_KV("groupID", groupID);
+                }
             }
         }
         m_p2pService->setGroupID2NodeList(groudID2NodeList);
     }
-    catch (std::exception& e)
+    catch (exception& e)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
                                << LOG_DESC("parse group config faield")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config faield")
-                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
         BOOST_THROW_EXCEPTION(e);
     }
     /// stop the node if there is no group
@@ -94,7 +101,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 }
 
 bool LedgerInitializer::initSingleGroup(
-    GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList)
+    GROUP_ID _groupID, string const& _path, map<GROUP_ID, h512s>& _groudID2NodeList)
 {
     bool succ = m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
     if (!succ)
@@ -102,9 +109,9 @@ bool LedgerInitializer::initSingleGroup(
         return succ;
     }
     _groudID2NodeList[_groupID] =
-        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().minerList;
+        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().sealerList;
 
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup")
-                           << LOG_KV("groupID", std::to_string(_groupID));
+                           << LOG_KV("groupID", to_string(_groupID));
     return succ;
 }

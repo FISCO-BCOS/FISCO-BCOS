@@ -26,6 +26,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libethcore/TxsParallelParser.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -81,7 +82,7 @@ public:
         if (index == 2)
             s.append(fake_value);
         else
-            s.appendRaw(m_transactionData);
+            s.append(ref(m_transactionData));
         s.append(m_blockHeader.hash());
         s.appendVector(m_sigList);
         s.swapOut(result);
@@ -136,7 +137,7 @@ public:
         m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
-            block_hash = sha3(toString("block " + i));
+            block_hash = sha3("block " + std::to_string(i));
             sig = sign(m_sec, block_hash);
             m_sigList.push_back(std::make_pair(u256(block_hash), sig));
         }
@@ -152,11 +153,8 @@ public:
         for (size_t i = 0; i < size; i++)
         {
             m_transaction[i] = m_singleTransaction;
-            bytes trans_data;
-            m_transaction[i].encode(trans_data);
-            txs.appendRaw(trans_data);
         }
-        txs.swapOut(m_transactionData);
+        m_transactionData = TxsParallelParser::encode(m_transaction);
     }
 
     void FakeTransactionReceipt(size_t size)

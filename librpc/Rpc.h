@@ -22,15 +22,15 @@
 #pragma once
 
 #include "RpcFace.h"
-#include <jsonrpccpp/common/exception.h>
-#include <jsonrpccpp/server.h>
 #include <libdevcrypto/Common.h>
 #include <libledger/LedgerInterface.h>
 #include <libledger/LedgerManager.h>
 #include <libledger/LedgerParam.h>
 #include <libp2p/P2PInterface.h>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
+#include <mutex>
+
 namespace dev
 {
 namespace rpc
@@ -56,7 +56,7 @@ public:
     // consensus part
     virtual std::string getBlockNumber(int _groupID) override;
     virtual std::string getPbftView(int _groupID) override;
-    virtual Json::Value getMinerList(int _groupID) override;
+    virtual Json::Value getSealerList(int _groupID) override;
     virtual Json::Value getObserverList(int _groupID) override;
     virtual Json::Value getConsensusStatus(int _groupID) override;
 
@@ -65,9 +65,10 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() override;
-    virtual Json::Value getPeers() override;
+    virtual Json::Value getPeers(int _groupID) override;
     virtual Json::Value getGroupPeers(int _groupID) override;
     virtual Json::Value getGroupList() override;
+    virtual Json::Value getNodeIDList(int _groupID) override;
 
     // block part
     virtual Json::Value getBlockByHash(
@@ -87,10 +88,18 @@ public:
     virtual Json::Value getTransactionReceipt(
         int _groupID, const std::string& _transactionHash) override;
     virtual Json::Value getPendingTransactions(int _groupID) override;
+    virtual std::string getPendingTxSize(int _groupID) override;
     virtual std::string getCode(int _groupID, const std::string& address) override;
     virtual Json::Value getTotalTransactionCount(int _groupID) override;
     virtual Json::Value call(int _groupID, const Json::Value& request) override;
     virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
+
+    void setCurrentTransactionCallback(
+        std::function<void(const std::string& receiptContext)>* callback)
+    {
+        m_currentTransactionCallback.reset(callback);
+    }
+    void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
 
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
@@ -101,6 +110,14 @@ protected:
 private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
+    bool isValidSystemConfig(std::string const& key);
+
+    /// transaction callback related
+    std::function<std::function<void>()> setTransactionCallbackFactory();
+    boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
+        m_currentTransactionCallback;
+
+    void checkRequest(int _groupID);
 };
 
 }  // namespace rpc

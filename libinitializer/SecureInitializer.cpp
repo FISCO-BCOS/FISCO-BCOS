@@ -21,6 +21,7 @@
  */
 
 #include "SecureInitializer.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/easylog.h>
@@ -104,7 +105,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM* p) {});
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
 
     std::shared_ptr<char> privateKeyData(
         BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
@@ -125,7 +126,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
         SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
                                << LOG_KV("nodeID", m_key.pub().hex());
 
@@ -137,7 +137,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer")
                                    << LOG_DESC("use user certificate") << LOG_KV("file", cert);
             sslContext->use_certificate_chain_file(cert);
-            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
@@ -155,7 +154,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
                                    << LOG_DESC("use ca certificate") << LOG_KV("file", caCert);
             sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
-            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
         else
         {
@@ -171,8 +169,9 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             INITIALIZER_LOG(DEBUG)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca") << LOG_KV("file", caPath);
             sslContext->add_verify_path(caPath);
-            sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
         }
+        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
+                                    boost::asio::ssl::verify_fail_if_no_peer_cert);
 
         m_sslContexts[Usage::Default] = sslContext;
     }

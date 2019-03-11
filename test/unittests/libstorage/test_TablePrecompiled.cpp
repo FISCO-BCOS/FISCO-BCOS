@@ -37,13 +37,9 @@ class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
-
-    virtual Address registerPrecompiled(BlockInfo info, Precompiled::Ptr p) { return ++address; }
-
-    h160 address;
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable
+class MockMemoryDB : public dev::storage::MemoryTable<Serial>
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -93,7 +89,7 @@ BOOST_AUTO_TEST_CASE(clear)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL(tablePrecompiled->toString(context), "Table");
+    BOOST_CHECK_EQUAL(tablePrecompiled->toString(), "Table");
 }
 
 BOOST_AUTO_TEST_CASE(call_select)

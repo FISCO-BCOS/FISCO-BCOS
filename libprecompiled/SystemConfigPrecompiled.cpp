@@ -19,6 +19,7 @@
  *  @date 20181211
  */
 #include "SystemConfigPrecompiled.h"
+
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
@@ -85,13 +86,13 @@ bytes SystemConfigPrecompiled::call(
 
         if (entries->size() == 0u)
         {
-            count = table->insert(configKey, entry, getOptions(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            count = table->insert(configKey, entry, std::make_shared<AccessOptions>(origin));
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -103,13 +104,14 @@ bytes SystemConfigPrecompiled::call(
         }
         else
         {
-            count = table->update(configKey, entry, condition, getOptions(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            count =
+                table->update(configKey, entry, condition, std::make_shared<AccessOptions>(origin));
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {
@@ -122,8 +124,8 @@ bytes SystemConfigPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("error func")
-                               << LOG_KV("func", func);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }
@@ -132,11 +134,28 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
 {
     if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
+            return false;
+        }
     }
     else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
     {
-        return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
+            return false;
+        }
     }
-    return true;
+    // only can insert tx_count_limit and tx_gas_limit as system config
+    return false;
 }

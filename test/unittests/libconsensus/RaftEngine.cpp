@@ -31,7 +31,9 @@
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <thread>
 
 using namespace std;
 using namespace dev;
@@ -54,16 +56,14 @@ public:
     }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
-    void disconnect(dev::network::DisconnectReason _reason) override {}
+    void disconnect(dev::network::DisconnectReason) override {}
 
     bool isConnected() const override { return true; }
 
-    void asyncSendMessage(Message::Ptr message, Options options = Options(),
-        CallbackFunc callback = CallbackFunc()) override
+    void asyncSendMessage(Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
-            messageHandler) override
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>) override
     {}
     bool actived() const override { return true; }
     std::shared_ptr<SocketFace> socket() override { return nullptr; }
@@ -85,7 +85,7 @@ public:
 
     void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason reason) { m_run = false; }
+    void stop(dev::network::DisconnectReason) override { m_run = false; }
 
     NodeID nodeID() override { return m_id; }
 
@@ -117,7 +117,7 @@ RaftMsgPacket transDataToPacket(RaftMsg& _msg, RaftPacketType _packetType,
 class RaftEngineTestFixture : public TestOutputHelperFixture
 {
 public:
-    RaftEngineTestFixture(uint64_t _blockNum = 5, size_t _txSize = 5, size_t _minerNum = 5)
+    RaftEngineTestFixture(uint64_t _blockNum = 5, size_t _txSize = 5, size_t _sealerNum = 5)
       : txpoolCreator(make_shared<TxPoolFixture>(_blockNum, _txSize)), fakeBlock(5)
     {
         auto fakeService = txpoolCreator->m_topicService;
@@ -127,18 +127,18 @@ public:
         auto fakeBlockVerifier = std::make_shared<FakeBlockverifier>();
         auto fakeKeyPair = KeyPair::create();
 
-        // add node itself to miner list
-        fakeMinerList.push_back(fakeKeyPair.pub());
+        // add node itself to sealer list
+        fakeSealerList.push_back(fakeKeyPair.pub());
 
-        for (size_t i = 0; i < _minerNum; i++)
+        for (size_t i = 0; i < _sealerNum; i++)
         {
             KeyPair keyPair = KeyPair::create();
-            fakeMinerList.push_back(keyPair.pub());
+            fakeSealerList.push_back(keyPair.pub());
         }
-        std::sort(fakeMinerList.begin(), fakeMinerList.end());
+        std::sort(fakeSealerList.begin(), fakeSealerList.end());
 
         raftEngine = make_shared<FakeRaftEngine>(fakeService, fakeTxPool, fakeBlockChain, fakeSync,
-            fakeBlockVerifier, fakeKeyPair, 1000, 2000, ProtocolID::Raft, fakeMinerList);
+            fakeBlockVerifier, fakeKeyPair, 1000, 2000, ProtocolID::Raft, fakeSealerList);
         raftEngine->start();
         auto state = raftEngine->getState();
         BOOST_CHECK(state == RaftRole::EN_STATE_FOLLOWER);
@@ -147,7 +147,7 @@ public:
         BOOST_CHECK(raftEngine->getHighestBlock().number() == 4);
     }
 
-    h512s fakeMinerList;
+    h512s fakeSealerList;
     shared_ptr<FakeRaftEngine> raftEngine;
     std::shared_ptr<TxPoolFixture> txpoolCreator;
     FakeBlock fakeBlock;
@@ -155,12 +155,12 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(RaftEngineTest, RaftEngineTestFixture)
 
-BOOST_AUTO_TEST_CASE(testGetIndexByMiner)
+BOOST_AUTO_TEST_CASE(testGetIndexBySealer)
 {
-    for (ssize_t i = 0; i < static_cast<ssize_t>(fakeMinerList.size()); ++i)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(fakeSealerList.size()); ++i)
     {
-        auto miner = fakeMinerList[i];
-        auto index = raftEngine->getIndexByMiner(miner);
+        auto sealer = fakeSealerList[i];
+        auto index = raftEngine->getIndexBySealer(sealer);
         BOOST_CHECK(index == i);
     }
 }
@@ -168,13 +168,13 @@ BOOST_AUTO_TEST_CASE(testGetIndexByMiner)
 BOOST_AUTO_TEST_CASE(testGetNodeIdByIndex)
 {
     h512 nodeId;
-    for (ssize_t i = 0; i < static_cast<ssize_t>(fakeMinerList.size()); ++i)
+    for (ssize_t i = 0; i < static_cast<ssize_t>(fakeSealerList.size()); ++i)
     {
         auto exist = raftEngine->getNodeIdByIndex(nodeId, i);
         BOOST_CHECK(exist == true);
-        BOOST_CHECK(nodeId == fakeMinerList[i]);
+        BOOST_CHECK(nodeId == fakeSealerList[i]);
     }
-    BOOST_CHECK(raftEngine->getNodeIdByIndex(nodeId, fakeMinerList.size()) == false);
+    BOOST_CHECK(raftEngine->getNodeIdByIndex(nodeId, fakeSealerList.size()) == false);
 }
 
 BOOST_AUTO_TEST_CASE(testVoteState)
@@ -188,6 +188,36 @@ BOOST_AUTO_TEST_CASE(testVoteState)
     voteState.firstVote = 4;
     voteState.discardedVote = 5;
     BOOST_CHECK(voteState.totalVoteCount() == 15);
+}
+
+BOOST_AUTO_TEST_CASE(testGenerateMsg)
+{
+    raftEngine->setUncommitedBlock(fakeBlock.m_block);
+    raftEngine->setUncommitedNumber(10);
+    raftEngine->setConsensusBlockNumber(10);
+
+    auto hbMsg = raftEngine->generateHeartbeat();
+    BOOST_CHECK(hbMsg->protocolID() == raftEngine->protocolId());
+
+    RaftMsgPacket packet;
+    auto data = *(hbMsg->buffer());
+    packet.decode(ref(data));
+
+    RaftHeartBeat hb;
+    hb.populate(RLP(ref(packet.data))[0]);
+    BOOST_CHECK(hb.leader == raftEngine->nodeIdx());
+    BOOST_CHECK(hb.uncommitedBlockNumber == 10);
+
+    auto vrMsg = raftEngine->generateVoteReq();
+    BOOST_CHECK(vrMsg->protocolID() == raftEngine->protocolId());
+
+    data = *(vrMsg->buffer());
+    packet.decode(ref(data));
+
+    RaftVoteReq vr;
+    vr.populate(RLP(ref(packet.data))[0]);
+    BOOST_CHECK(vr.candidate == raftEngine->nodeIdx());
+    BOOST_CHECK(vr.lastBlockNumber == raftEngine->getBlockChain()->number() + 1);
 }
 
 BOOST_AUTO_TEST_CASE(testHandleHeartbeatMsg)
@@ -373,7 +403,7 @@ BOOST_AUTO_TEST_CASE(testRunAsLeader)
 
     resp.term = 10;
     unsigned repeatTime = 2;
-    unsigned msgNum = fakeMinerList.size() * repeatTime;
+    unsigned msgNum = fakeSealerList.size() * repeatTime;
     for (unsigned i = 0; i < msgNum; ++i)
     {
         raftEngine->msgQueue().push(
@@ -504,7 +534,7 @@ BOOST_AUTO_TEST_CASE(testRunAsCandidate)
 
     resetCandidate();
 
-    voteState.vote = fakeMinerList.size();
+    voteState.vote = fakeSealerList.size();
     raftEngine->electTimeout = true;
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
     BOOST_CHECK(flag == false);
@@ -563,7 +593,7 @@ BOOST_AUTO_TEST_CASE(testRunAsCandidate)
 
     resp.term = 10;
     resp.voteFlag = VOTE_RESP_GRANTED;
-    voteState.vote = fakeMinerList.size();
+    voteState.vote = fakeSealerList.size();
     raftEngine->msgQueue().push(transDataToPacket(resp, RaftPacketType::RaftVoteRespPacket));
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsCandidateImp(voteState));
     BOOST_CHECK(flag == false);
@@ -598,10 +628,33 @@ BOOST_AUTO_TEST_CASE(testRunAsCandidate)
     BOOST_CHECK(state == RaftRole::EN_STATE_CANDIDATE);
 }
 
+BOOST_AUTO_TEST_CASE(testTryCommitUncommitedBlock)
+{
+    raftEngine->setUncommitedBlock(Block());
+    RaftHeartBeatResp resp;
+    BOOST_CHECK_NO_THROW(raftEngine->tryCommitUncommitedBlock(resp));
+}
+
 BOOST_AUTO_TEST_CASE(testShouldSeal)
 {
     raftEngine->setState(RaftRole::EN_STATE_FOLLOWER);
     BOOST_CHECK(raftEngine->shouldSeal() == false);
+}
+
+BOOST_AUTO_TEST_CASE(testCommitBlock)
+{
+    raftEngine->setState(RaftRole::EN_STATE_LEADER);
+    auto t = std::thread(std::bind(&FakeRaftEngine::fakeLeader, raftEngine.get()));
+    auto flag = false;
+    auto block = fakeBlock.m_block;
+    auto number = raftEngine->getBlockChain()->number();
+    block.header().setNumber(number + 1);
+    auto parent = raftEngine->getBlockChain()->getBlockByNumber(number);
+    block.header().setParentHash(parent->header().hash());
+    block.header().setSealerList(fakeSealerList);
+    BOOST_CHECK_NO_THROW(flag = raftEngine->commit(block));
+    BOOST_CHECK(flag == true);
+    t.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

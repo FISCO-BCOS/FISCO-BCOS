@@ -36,6 +36,10 @@ set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 if (${BUILD_SHARED_LIBS})
     set(BOOST_CXXFLAGS "cxxflags=-fPIC")
+else()
+    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+        set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
+    endif()
 endif()
 
 set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
@@ -44,13 +48,12 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
         ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
         ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
-set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
 
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz
-    URL_HASH SHA256=da3411ea45622579d419bfda66f45cd0f8c32a181d84adfa936f5688388995cf
+    URL http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.bz2
+    URL_HASH SHA256=7f6130bc3cf65f56a618888ce9d5ea704fa10b462be126ad053e80e553d6d8b7
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}
     LOG_CONFIGURE 1
@@ -134,6 +137,7 @@ add_dependencies(Boost::program_options boost)
 add_library(Boost::Log STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Log PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_log${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::Log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+set_property(TARGET Boost::Log PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
 add_dependencies(Boost::Log boost)
 
 unset(SOURCE_DIR)

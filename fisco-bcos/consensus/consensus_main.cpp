@@ -41,11 +41,10 @@ static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPt
 {
     CONSENSUS_MAIN_LOG(TRACE) << "[#rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
                               << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
-                              << receiptPtr->blockHash() << std::endl;
+                              << receiptPtr->blockHash();
 }
 
-static void createTx(
-    std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const& key_pair)
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const&)
 {
     ///< transaction related
 #ifdef FISCO_GM
@@ -89,14 +88,15 @@ static void createTx(
             {
                 tx.setNonce(tx.nonce() + u256(utcTime()));
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                sec = KeyPair::create().secret();
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
-                           << boost::diagnostic_information(e) << std::endl;
+                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                           << boost::diagnostic_information(e);
             }
         }
         LogInitializer::logRotateByTime();

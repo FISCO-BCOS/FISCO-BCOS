@@ -54,13 +54,12 @@ ConditionPrecompiled::ConditionPrecompiled()
     name2Selector[CONDITION_METHOD_LIMIT_2INT] = getFuncSelector(CONDITION_METHOD_LIMIT_2INT);
 }
 
-std::string ConditionPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string ConditionPrecompiled::toString()
 {
     return "Condition";
 }
 
-bytes ConditionPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
 {
     STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
 
@@ -154,6 +153,11 @@ bytes ConditionPrecompiled::call(
         abi.abiOut(data, offset, size);
 
         m_condition->limit(offset.convert_to<size_t>(), size.convert_to<size_t>());
+    }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("ConditionPrecompiled")
+                           << LOG_DESC("call undefined function!");
     }
     return out;
 }

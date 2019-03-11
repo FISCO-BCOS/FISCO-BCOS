@@ -73,7 +73,7 @@ public:
 class FakeLastBlockHashes : public LastBlockHashesFace
 {
 public:
-    virtual h256s precedingHashes(h256 const& _mostRecentHash) const
+    virtual h256s precedingHashes(h256 const&) const
     {
         h256s tmp;
         return tmp;
@@ -109,7 +109,7 @@ public:
         return genesis;
     }
 
-    static dev::h256 fakeCallBack(int64_t x) { return h256(); }
+    static dev::h256 fakeCallBack(int64_t) { return h256(); }
 
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
@@ -121,7 +121,7 @@ public:
 class FakeExtVM : public ExtVMFace
 {
 public:
-    virtual evmc_result call(CallParameters& param)
+    evmc_result call(CallParameters& param) override
     {
         fake_result = "fake call";
         bytes fake_result_bytes(fake_result.begin(), fake_result.end());
@@ -134,13 +134,11 @@ public:
             result.status_code = EVMC_FAILURE;
         result.gas_left = static_cast<int64_t>(param.gas);
         copyToOptionalStorage(std::move(output), &result);
-        std::cout << "call result:" << (char*)result.output_data << std::endl;
-        std::cout << "call size:" << result.output_size << std::endl;
         return result;
     }
 
-    virtual evmc_result create(u256 _endowment, u256& io_gas, bytesConstRef _code, Instruction _op,
-        u256 _salt, OnOpFunc const& _onOp)
+    evmc_result create(
+        u256 const&, u256& io_gas, bytesConstRef, Instruction, u256, OnOpFunc const&) override
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(sha3(rlpList(myAddress(), nonce)));
@@ -162,20 +160,18 @@ public:
             output = {std::move(fake_result_bytes), 0, fake_result_bytes.size()};
             result.create_address = toEvmC(m_newAddress);
             copyToOptionalStorage(std::move(output), &result);
-            std::cout << "create result:" << (char*)result.output_data << std::endl;
-            std::cout << "create size:" << result.output_size << std::endl;
         }
         return result;
     }
     /// account related function
-    virtual bool exists(Address addr)
+    bool exists(Address const& addr) override
     {
         if (account_map.count(addr))
             return true;
         return false;
     }
     /// Read storage location.
-    virtual u256 store(u256 key)
+    u256 store(u256 const& key) override
     {
         auto it = storage_map.find(key);
         if (it != storage_map.end())
@@ -185,7 +181,7 @@ public:
         return u256(0);
     }
     /// Write a value in storage.
-    virtual void setStore(u256 _key, u256 _value)
+    void setStore(u256 const& _key, u256 const& _value) override
     {
         auto it = storage_map.find(_key);
         if (it != storage_map.end())
@@ -200,7 +196,7 @@ public:
     }
 
     /// Read address's balance.
-    virtual u256 balance(Address addr)
+    u256 balance(Address const& addr) override
     {
         auto it = balance_map.find(addr);
         if (it != balance_map.end())
@@ -210,27 +206,27 @@ public:
         return 0;
     }
     /// @returns the size of the code in bytes at the given address.
-    virtual size_t codeSizeAt(Address contract_addr)
+    size_t codeSizeAt(Address const& contract_addr) override
     {
         if (account_map.count(contract_addr))
             return code().size();
         return 0;
     }
 
-    virtual h256 codeHashAt(Address contract_addr)
+    h256 codeHashAt(Address const& contract_addr) override
     {
         if (account_map.count(contract_addr))
             return codeHash();
         return h256{};
     }
     /// Read address's code.
-    virtual bytes const codeAt(Address contract_addr) { return code(); }
+    bytes const codeAt(Address const&) override { return code(); }
 
-    virtual h256 blockHash(int64_t number) { return sha3(toString(number)); }
+    h256 blockHash(int64_t number) override { return sha3(toString(number)); }
 
-    FakeExtVM(EnvInfo const& _envInfo, Address _myAddress, Address _caller, Address _origin,
-        u256 _value, u256 _gasPrice, bytesConstRef _data, bytes _code, h256 const& _codeHash,
-        unsigned _depth, bool _isCreate, bool _staticCall)
+    FakeExtVM(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+        Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+        bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
       : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code,
             _codeHash, _depth, _isCreate, _staticCall)
     {
@@ -257,7 +253,6 @@ private:
     void copyToOptionalStorage(owning_bytes_ref&& _output_own_bytes, evmc_result* o_result)
     {
         owning_bytes_ref output_own_bytes(std::move(_output_own_bytes));
-        std::cout << "### size:" << output_own_bytes.size() << std::endl;
         o_result->output_data = output_own_bytes.data();
         o_result->output_size = output_own_bytes.size();
 
@@ -265,8 +260,6 @@ private:
         auto* data = evmc_get_optional_storage(o_result);
         static_assert(sizeof(bytes) <= sizeof(*data), "Vector is too big");
         new (data) bytes(output_own_bytes.takeBytes());
-
-        std::cout << "###data FINAL:" << (char*)data->pointer << std::endl;
         /// to avoid memory leak
         // Set the destructor to delete the vector.
         o_result->release = [](evmc_result const* _result) {

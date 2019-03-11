@@ -19,37 +19,44 @@
  *  @date 20180921
  */
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
+#include "libblockverifier/Precompiled.h"
+#include <memory>
 #include <string>
 
 namespace dev
 {
+namespace blockverifier
+{
+class ExecutiveContext;
+}
+
+namespace storage
+{
+class Table;
+}
+
 namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
 
 /// correct return: code great or equal 0
-/// system error: code from -29 to -1
-/// logic error: each Precompiled occupy range of 10 numbers for code
 
 /// note: abi.abiOut will return a positive number related to the negative number.
 /// It maybe coincide with the positive number that should have been returned.
 
-const int CODE_NO_AUTHORIZED = -1;
-
-/// AuthorityPrecompiled -30 ~ -39
-const int CODE_TABLE_AND_ADDRESS_EXIST = -30;
-const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = -31;
+/// AuthorityPrecompiled 51000 ~ 51099
+const int CODE_TABLE_AND_ADDRESS_EXIST = 51000;
+const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = 51001;
 
 /// ConsensusPrecompiled
-const int CODE_INVALID_NODEID = -40;
-const int CODE_LAST_MINER = -41;
+const int CODE_INVALID_NODEID = 51100;
+const int CODE_LAST_SEALER = 51101;
 
-/// CNSPrecompiled -50 ~ -59
-const int CODE_ADDRESS_AND_VERSION_EXIST = -50;
+/// CNSPrecompiled
+const int CODE_ADDRESS_AND_VERSION_EXIST = 51200;
 
-/// SystemConfigPrecompiled -60 ~ -69
-const int CODE_INVALID_CONFIGURATION_VALUES = -60;
+/// SystemConfigPrecompiled
+const int CODE_INVALID_CONFIGURATION_VALUES = 51300;
 
 /// DagTransferPrecompiled -70 ~ -79
 const int CODE_INVALID_USER_NAME = -70;

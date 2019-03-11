@@ -78,8 +78,8 @@ static void deployContract(
     updateSender(mptState, tx, param);
     ExecutionResult res;
     ExecuteTransaction(res, mptState, info, tx);
-    EVMC_LOG(INFO) << "[evm_main/newAddress]:" << toHex(res.newAddress) << std::endl;
-    EVMC_LOG(INFO) << "[evm_main/depositSize]:" << res.depositSize << std::endl;
+    EVMC_LOG(INFO) << "[evm_main/newAddress]:" << toHex(res.newAddress);
+    EVMC_LOG(INFO) << "[evm_main/depositSize]:" << res.depositSize;
 }
 
 static void updateMptState(std::shared_ptr<MPTState> mptState, Input& input)
@@ -103,7 +103,7 @@ static void callTransaction(
     }
     ContractABI abi;
     bytes inputData = abi.abiIn(input.inputCall);
-    EVMC_LOG(INFO) << "[evm_main/callTransaction/Parms]: " << toHex(inputData) << std::endl;
+    EVMC_LOG(INFO) << "[evm_main/callTransaction/Parms]: " << toHex(inputData);
     Transaction tx = Transaction(
         param.transValue(), param.gasPrice(), param.gas(), input.addr, inputData, u256(0));
     updateSender(mptState, tx, param);
@@ -112,11 +112,11 @@ static void callTransaction(
     bytes output = std::move(res.output);
     std::string result;
     abi.abiOut(ref(output), result);
-    EVMC_LOG(INFO) << "[evm_main/callTransaction/output]: " << toHex(output) << std::endl;
-    EVMC_LOG(INFO) << "[evm_main/callTransaction/result string]: " << result << std::endl;
+    EVMC_LOG(INFO) << "[evm_main/callTransaction/output]: " << toHex(output);
+    EVMC_LOG(INFO) << "[evm_main/callTransaction/result string]: " << result;
 }
 
-int main(int argc, const char* argv[])
+int main()
 {
     /// init configuration
     ptree pt;
@@ -134,15 +134,13 @@ int main(int argc, const char* argv[])
     /// test deploy
     for (size_t i = 0; i < param.code().size(); i++)
     {
-        EVMC_LOG(INFO) << "=======[evm_main/BEGIN deploy Contract/index]:" << i
-                       << "=======" << std::endl;
+        EVMC_LOG(INFO) << "=======[evm_main/BEGIN deploy Contract/index]:" << i << "=======";
         deployContract(mptState, envInfo, param.code()[i], param);
     }
     /// test callfunctions
     for (size_t i = 0; i < param.input().size(); i++)
     {
-        EVMC_LOG(INFO) << "=======[evm_main/BEGIN call transaction/index]:" << i
-                       << "=======" << std::endl;
+        EVMC_LOG(INFO) << "=======[evm_main/BEGIN call transaction/index]:" << i << "=======";
         callTransaction(mptState, envInfo, param.input()[i], param);
     }
     return 0;

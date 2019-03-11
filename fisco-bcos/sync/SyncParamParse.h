@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
+ * @brief: empty framework for main of FISCO-BCOS
  *
  * @file: ParamParse.h
  * @author: chaychen
@@ -52,7 +52,7 @@ public:
     }
 
     void initParams(boost::program_options::variables_map const& vm,
-        boost::program_options::options_description const& option)
+        boost::program_options::options_description const&)
     {
         if (vm.count("blockSpeed") || vm.count("b"))
             m_blockSpeed = vm["blockSpeed"].as<float>();

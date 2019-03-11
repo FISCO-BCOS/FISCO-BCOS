@@ -18,25 +18,30 @@
  * @brief basic data structure for block
  *
  * @file Block.cpp
- * @author: yujiechem
+ * @author: yujiechem, jimmyshi
  * @date 2018-09-20
  */
 #include "Block.h"
+#include "TxsParallelParser.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
+#include <omp.h>
+
 namespace dev
 {
 namespace eth
 {
-Block::Block(bytesConstRef _data)
+Block::Block(
+    bytesConstRef _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
-    decode(_data);
+    decode(_data, _option, _withReceipt, _withTxHash);
 }
 
-Block::Block(bytes const& _data)
+Block::Block(
+    bytes const& _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
-    decode(ref(_data));
+    decode(ref(_data), _option, _withReceipt, _withTxHash);
 }
 
 Block::Block(Block const& _block)
@@ -44,10 +49,11 @@ Block::Block(Block const& _block)
     m_transactions(_block.transactions()),
     m_transactionReceipts(_block.transactionReceipts()),
     m_sigList(_block.sigList()),
-    m_txsCache(_block.m_txsCache)
-{
-    noteChange();
-}
+    m_txsCache(_block.m_txsCache),
+    m_tReceiptsCache(_block.m_tReceiptsCache),
+    m_transRootCache(_block.m_transRootCache),
+    m_receiptRootCache(_block.m_receiptRootCache)
+{}
 
 Block& Block::operator=(Block const& _block)
 {
@@ -59,7 +65,9 @@ Block& Block::operator=(Block const& _block)
     /// init sigList
     m_sigList = _block.sigList();
     m_txsCache = _block.m_txsCache;
-    noteChange();
+    m_tReceiptsCache = _block.m_tReceiptsCache;
+    m_transRootCache = _block.m_transRootCache;
+    m_receiptRootCache = _block.m_receiptRootCache;
     return *this;
 }
 
@@ -84,13 +92,13 @@ void Block::encode(bytes& _out) const
     // append block header
     block_stream.appendRaw(headerData);
     // append transaction list
-    block_stream.appendRaw(m_txsCache);
-    // append transactionReceipts list
-    block_stream.appendRaw(m_tReceiptsCache);
+    block_stream.append(ref(m_txsCache));
     // append block hash
     block_stream.append(m_blockHeader.hash());
     // append sig_list
     block_stream.appendVector(m_sigList);
+    // append transactionReceipts list
+    block_stream.appendRaw(m_tReceiptsCache);
     block_stream.swapOut(_out);
 }
 
@@ -103,21 +111,13 @@ void Block::calTransactionRoot(bool update) const
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
-        BytesMap txsMapCache;
-        for (size_t i = 0; i < m_transactions.size(); i++)
-        {
-            RLPStream s;
-            s << i;
-            bytes trans_data;
-            m_transactions[i].encode(trans_data);
-            txs.appendRaw(trans_data);
-            txsMapCache.insert(std::make_pair(s.out(), trans_data));
-        }
-        txs.swapOut(m_txsCache);
-        m_transRootCache = hash256(txsMapCache);
+        m_txsCache = TxsParallelParser::encode(m_transactions);
+        m_transRootCache = sha3(m_txsCache);
     }
     if (update == true)
+    {
         m_blockHeader.setTransactionsRoot(m_transRootCache);
+    }
 }
 
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
@@ -126,20 +126,38 @@ void Block::calReceiptRoot(bool update) const
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes())
     {
-        RLPStream txReceipts;
-        txReceipts.appendList(m_transactionReceipts.size());
-        BytesMap mapCache;
-        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        size_t receiptsNum = m_transactionReceipts.size();
+
+        std::vector<dev::bytes> receiptsRLPs(receiptsNum, bytes());
+#pragma omp parallel for
+        for (size_t i = 0; i < receiptsNum; ++i)
         {
             RLPStream s;
             s << i;
-            bytes tranReceipts_data;
-            m_transactionReceipts[i].encode(tranReceipts_data);
-            txReceipts.appendRaw(tranReceipts_data);
-            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+            dev::bytes receiptRLP;
+            m_transactionReceipts[i].encode(receiptRLP);
+            receiptsRLPs[i] = receiptRLP;
+        }
+
+        // auto record_time = utcTime();
+        RLPStream txReceipts;
+        txReceipts.appendList(receiptsNum);
+        for (size_t i = 0; i < receiptsNum; ++i)
+        {
+            txReceipts.appendRaw(receiptsRLPs[i]);
         }
         txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = hash256(mapCache);
+        // auto appenRLP_time_cost = utcTime() - record_time;
+        // record_time = utcTime();
+
+        m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
+        // auto hashReceipts_time_cost = utcTime() - record_time;
+        /*
+        LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_DESC("Calculate receipt root cost")
+                   << LOG_KV("appenRLPTimeCost", appenRLP_time_cost)
+                   << LOG_KV("hashReceiptsTimeCost", hashReceipts_time_cost)
+                   << LOG_KV("receipts num", receiptsNum);
+                   */
     }
     if (update == true)
     {
@@ -151,7 +169,8 @@ void Block::calReceiptRoot(bool update) const
  * @brief : decode specified data of block into Block class
  * @param _block : the specified data of block
  */
-void Block::decode(bytesConstRef _block_bytes)
+void Block::decode(
+    bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
     /// no try-catch to throw exceptions directly
     /// get RLP of block
@@ -160,27 +179,33 @@ void Block::decode(bytesConstRef _block_bytes)
     m_blockHeader.populate(block_rlp[0]);
     /// get transaction list
     RLP transactions_rlp = block_rlp[1];
-    m_transactions.resize(transactions_rlp.itemCount());
-    for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
-    {
-        m_transactions[i].decode(transactions_rlp[i]);
-    }
-    /// get transactionReceipt list
-    RLP transactionReceipts_rlp = block_rlp[2];
-    m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
-    for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
-    {
-        m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
-    }
+
+    /// get txsCache
+    m_txsCache = transactions_rlp.toBytes();
+
+    /// decode transaction
+    TxsParallelParser::decode(m_transactions, ref(m_txsCache), _option, _withTxHash);
+
     /// get hash
-    h256 hash = block_rlp[3].toHash<h256>();
+    h256 hash = block_rlp[2].toHash<h256>();
     if (hash != m_blockHeader.hash())
     {
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     /// get sig_list
-    m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
-    noteChange();
+    m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
+
+    /// get transactionReceipt list
+    if (_withReceipt)
+    {
+        RLP transactionReceipts_rlp = block_rlp[4];
+        m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
+        for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
+        {
+            m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
+        }
+    }
 }
+
 }  // namespace eth
 }  // namespace dev

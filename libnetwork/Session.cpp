@@ -23,18 +23,16 @@
  */
 
 #include "Session.h"
-
+#include "ASIOInterface.h"
+#include "Common.h"
+#include "Host.h"
+#include "SocketFace.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 #include <chrono>
-
-#include "ASIOInterface.h"
-#include "Common.h"
-#include "Host.h"
-#include "SessionFace.h"
 
 using namespace dev;
 using namespace dev::network;
@@ -46,7 +44,7 @@ Session::Session()
 
 Session::~Session()
 {
-    SESSION_LOG(INFO) << "Closing peer session";
+    SESSION_LOG(DEBUG) << "Deconstruct peer session";
 
     try
     {
@@ -65,35 +63,45 @@ Session::~Session()
     }
 }
 
+NodeIPEndpoint Session::nodeIPEndpoint() const
+{
+    return m_socket->nodeIPEndpoint();
+}
+
 void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
 {
     auto server = m_server.lock();
     if (!actived())
     {
         SESSION_LOG(WARNING) << "Session inactived";
-
-        server->threadPool()->enqueue(
-            [callback] { callback(NetworkException(-1, "Session inactived"), Message::Ptr()); });
-
+        if (callback)
+        {
+            server->threadPool()->enqueue([callback] {
+                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
+            });
+        }
         return;
     }
-
-    auto handler = std::make_shared<ResponseCallback>();
-    handler->callbackFunc = callback;
-    if (options.timeout > 0)
+    if (callback)
     {
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
-            server->asioInterface()->newTimer(options.timeout);
+        auto handler = std::make_shared<ResponseCallback>();
+        handler->callbackFunc = callback;
+        if (options.timeout > 0)
+        {
+            std::shared_ptr<boost::asio::deadline_timer> timeoutHandler =
+                server->asioInterface()->newTimer(options.timeout);
 
-        auto session = std::weak_ptr<Session>(shared_from_this());
-        timeoutHandler->async_wait(boost::bind(&Session::onTimeout, shared_from_this(),
-            boost::asio::placeholders::error, message->seq()));
+            auto session = std::weak_ptr<Session>(shared_from_this());
+            timeoutHandler->async_wait(boost::bind(&Session::onTimeout, shared_from_this(),
+                boost::asio::placeholders::error, message->seq()));
 
-        handler->timeoutHandler = timeoutHandler;
-        handler->m_startTime = utcTime();
+            handler->timeoutHandler = timeoutHandler;
+            handler->m_startTime = utcTime();
+        }
+        addSeqCallback(message->seq(), handler);
     }
-
-    addSeqCallback(message->seq(), handler);
+    SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
+                       << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     message.reset();
@@ -118,7 +126,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     if (!m_socket->isConnected())
         return;
 
-    SESSION_LOG(TRACE) << "Session send, writeQueue: " << m_writeQueue.size();
+    SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
         Guard l(x_writeQueue);
 
@@ -128,8 +136,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     write();
 }
 
-void Session::onWrite(
-    boost::system::error_code ec, std::size_t length, std::shared_ptr<bytes> buffer)
+void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
 {
     if (!actived())
     {
@@ -140,8 +147,9 @@ void Session::onWrite(
     {
         if (ec)
         {
-            SESSION_LOG(WARNING) << "Error sending: " << ec.message() << " at "
-                                 << nodeIPEndpoint().name();
+            SESSION_LOG(WARNING) << LOG_DESC("onWrite error sending")
+                                 << LOG_KV("message", ec.message())
+                                 << LOG_KV("endpoint", nodeIPEndpoint().name());
             drop(TCPError);
             return;
         }
@@ -157,7 +165,8 @@ void Session::onWrite(
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
+        SESSION_LOG(ERROR) << LOG_DESC("onWrite error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -212,6 +221,7 @@ void Session::write()
         {
             if (m_socket->isConnected())
             {
+                // asio::buffer referecne buffer, so buffer need alive before asio::buffer be used
                 server->asioInterface()->asyncWrite(m_socket, boost::asio::buffer(*buffer),
                     boost::bind(&Session::onWrite, session, boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred, buffer));
@@ -225,14 +235,15 @@ void Session::write()
         }
         else
         {
-            SESSION_LOG(WARNING) << "Host is gone";
+            SESSION_LOG(WARNING) << "Host has gone";
             drop(TCPError);
             return;
         }
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << "Error:" << boost::diagnostic_information(e);
+        SESSION_LOG(ERROR) << LOG_DESC("write error")
+                           << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
     }
@@ -254,9 +265,9 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
-    SESSION_LOG(INFO) << "Session::drop, call and erase all callbackFunc in this session!";
+    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!";
     RecursiveGuard l(x_seq2Callback);
-    for (auto it : *m_seq2Callback)
+    for (auto& it : *m_seq2Callback)
     {
         if (it.second->timeoutHandler)
         {
@@ -264,7 +275,7 @@ void Session::drop(DisconnectReason _reason)
         }
         if (it.second->callbackFunc)
         {
-            SESSION_LOG(TRACE) << "Session::drop, call callbackFunc by seq=" << it.first;
+            SESSION_LOG(TRACE) << "drop, call callbackFunc by seq" << LOG_KV("seq", it.first);
             if (server)
             {
                 auto callback = it.second;
@@ -292,15 +303,15 @@ void Session::drop(DisconnectReason _reason)
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG)
-                    << "Disconnecting| Closing " << m_socket->remote_endpoint() << "("
-                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remote_endpoint()
+                                   << LOG_KV("reason", reasonOf(_reason))
+                                   << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
             else
             {
-                SESSION_LOG(WARNING)
-                    << "Disconnecting | Closing " << m_socket->remote_endpoint() << "("
-                    << reasonOf(_reason) << ")" << m_socket->nodeIPEndpoint().address;
+                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remote_endpoint()
+                                     << LOG_KV("reason", reasonOf(_reason))
+                                     << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
 
             /// if get Host object failed, close the socket directly
@@ -318,25 +329,24 @@ void Session::drop(DisconnectReason _reason)
                 /// drop operation has been aborted
                 if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(DEBUG)
-                        << "[#drop] operation aborted  by async_shutdown [ECODE/EINFO]:"
-                        << error.value() << "/" << error.message();
+                    SESSION_LOG(DEBUG) << "[drop] operation aborted  by async_shutdown"
+                                       << LOG_KV("errorValue", error.value())
+                                       << LOG_KV("message", error.message());
                     return;
                 }
                 /// shutdown timer error
                 if (error && error != boost::asio::error::operation_aborted)
                 {
                     SESSION_LOG(WARNING)
-                        << "[#drop] shutdown timer error [ECODE/EINFO]: " << error.value() << "/"
-                        << error.message();
+                        << "[drop] shutdown timer error" << LOG_KV("errorValue", error.value())
+                        << LOG_KV("message", error.message());
                 }
                 /// force to shutdown when timeout
                 if (socket->ref().is_open())
                 {
                     SESSION_LOG(WARNING)
-                        << "[#drop] timeout, force close the socket [remote_ip:remote_port]"
-                        << socket->ref().remote_endpoint().address().to_string() << ":"
-                        << socket->ref().remote_endpoint().port();
+                        << "[drop] timeout, force close the socket"
+                        << LOG_KV("remote endpoint", socket->ref().remote_endpoint());
                     socket->close();
                 }
             });
@@ -348,8 +358,8 @@ void Session::drop(DisconnectReason _reason)
                     if (error)
                     {
                         SESSION_LOG(WARNING)
-                            << "[#drop] shutdown failed [ECODE/EINFO]: " << error.value() << "/"
-                            << error.message();
+                            << "[drop] shutdown failed " << LOG_KV("errorValue", error.value())
+                            << LOG_KV("message", error.message());
                     }
                     /// force to close the socket
                     if (socket->ref().is_open())
@@ -396,8 +406,9 @@ void Session::doRead()
             {
                 if (ec)
                 {
-                    SESSION_LOG(WARNING) << "Error reading: " << ec.message() << " at "
-                                         << s->nodeIPEndpoint().name();
+                    SESSION_LOG(WARNING) << LOG_DESC("doRead error")
+                                         << LOG_KV("endpoint", s->nodeIPEndpoint().name())
+                                         << LOG_KV("message", ec.message());
                     s->drop(TCPError);
                     return;
                 }
@@ -412,7 +423,7 @@ void Session::doRead()
                     {
                         /// SESSION_LOG(TRACE) << "Decode success: " << result;
                         NetworkException e(P2PExceptionType::Success, "Success");
-                        s->onMessage(e, s, message);
+                        s->onMessage(e, message);
                         s->m_data.erase(s->m_data.begin(), s->m_data.begin() + result);
                     }
                     else if (result == 0)
@@ -422,9 +433,10 @@ void Session::doRead()
                     }
                     else
                     {
-                        SESSION_LOG(ERROR) << "Decode message error: " << result;
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode message error") << LOG_KV("result", result);
                         s->onMessage(
-                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"), s,
+                            NetworkException(P2PExceptionType::ProtocolError, "ProtocolError"),
                             message);
                         break;
                     }
@@ -439,7 +451,7 @@ void Session::doRead()
         }
         else
         {
-            SESSION_LOG(WARNING) << "Error Reading ssl socket is close!";
+            SESSION_LOG(WARNING) << LOG_DESC("Error Reading ssl socket is close!");
             drop(TCPError);
             return;
         }
@@ -451,7 +463,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     if (_ec && _ec.category() != boost::asio::error::get_misc_category() &&
         _ec.value() != boost::asio::error::eof)
     {
-        SESSION_LOG(WARNING) << "Error reading: " << _ec.message();
+        SESSION_LOG(WARNING) << LOG_DESC("checkRead error") << LOG_KV("message", _ec.message());
         drop(TCPError);
 
         return false;
@@ -460,8 +472,7 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-void Session::onMessage(
-    NetworkException const& e, std::shared_ptr<Session> session, Message::Ptr message)
+void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
@@ -496,10 +507,10 @@ void Session::onMessage(
         }
         else
         {
-            SESSION_LOG(TRACE) << "Not found callback, call messageHandler: " << message->seq();
-
             if (m_messageHandler)
             {
+                SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
+                                   << LOG_KV("message.seq", message->seq());
                 auto session = shared_from_this();
                 auto handler = m_messageHandler;
 
@@ -508,7 +519,7 @@ void Session::onMessage(
             }
             else
             {
-                SESSION_LOG(WARNING) << "MessageHandler not found";
+                SESSION_LOG(WARNING) << "onMessage can't find callback and default messageHandler";
             }
         }
     }

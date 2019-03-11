@@ -28,18 +28,13 @@ using namespace dev::initializer;
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("rpc.channel_listen_port", 30301);
-    int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 0);
+    int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
+    int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC(
-                                      "initConfig for RPCInitializer failed! Invalid ListenPort "
-                                      "for RPC, must between [0,65536]");
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
                      << LOG_DESC(
-                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC, "
-                            "must between [0,65536]")
+                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
                      << std::endl;
         exit(1);
     }
@@ -66,12 +61,44 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         m_channelRPCServer->setChannelServer(server);
 
+
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
         m_channelRPCHttpServer->StartListening();
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("ChannelRPCHttpServer started.");
+
+        m_channelRPCServer->setCallbackSetter(
+            std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
+
+        for (auto it : m_ledgerManager->getGrouplList())
+        {
+            auto groupID = it;
+            auto blockChain = m_ledgerManager->blockChain(it);
+            auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+            auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
+                LOG(INFO) << "Push block notify: " << std::to_string(groupID) << "-" << number;
+                auto c = channelRPCServer.lock();
+
+                if (c)
+                {
+                    std::string topic = "_block_notify_" + std::to_string(groupID);
+                    std::string content =
+                        std::to_string(groupID) + "," + boost::lexical_cast<std::string>(number);
+                    std::shared_ptr<dev::channel::TopicChannelMessage> message =
+                        std::make_shared<dev::channel::TopicChannelMessage>();
+                    message->setType(0x1001);
+                    message->setSeq(std::string(32, '0'));
+                    message->setResult(0);
+                    message->setTopic(topic);
+                    message->setData((const byte*)content.data(), content.size());
+                    c->asyncBroadcastChannelMessage(topic, message);
+                }
+            });
+
+            m_channelRPCServer->addHandler(handler);
+        }
 
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.

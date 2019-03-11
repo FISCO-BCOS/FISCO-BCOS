@@ -21,10 +21,10 @@
 
 #pragma once
 
+#include <map>
 #include <string>
-
 #define INVALIDNUMBER -1
-#define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC] "
+#define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC]"
 
 namespace dev
 {
@@ -34,17 +34,19 @@ namespace rpc
 enum RPCExceptionType
 {
     Success = 0,
-    GroupID,
+    GroupID = 40001,
     JsonParse,
     BlockHash,
     BlockNumberT,
     TransactionIndex,
-    CallFrom
+    CallFrom,
+    NoView,
+    InvalidSystemConfig,
+    InvalidRequest
 };
 
-const std::string RPCMsg[] = {"Success", "GroupID does not exist", "Response json parse error",
-    "BlockHash does not exist", "BlockNumber does not exist", "TransactionIndex is out of range",
-    "Call needs a 'from' field"};
+extern std::map<int, std::string> RPCMsg;
+
 
 }  // namespace rpc
 }  // namespace dev

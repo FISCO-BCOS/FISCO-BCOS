@@ -23,6 +23,7 @@
 add_subdirectory(main)
 
 if (TESTS)
+    add_subdirectory(para)
     add_subdirectory(p2p)
     add_subdirectory(consensus)
     add_subdirectory(blockverifier)

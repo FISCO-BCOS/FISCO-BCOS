@@ -41,8 +41,8 @@ ExternalProject_Add(jsoncpp
                ${_only_release_configuration}
                -DJSONCPP_WITH_TESTS=Off
                -DJSONCPP_WITH_PKGCONFIG_SUPPORT=Off
-               	-DCMAKE_C_FLAGS=-Wa,-march=generic64
-               	-DCMAKE_CXX_FLAGS=-Wa,-march=generic64
+               	# -DCMAKE_C_FLAGS=-Wa,-march=generic64
+               	# -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     LOG_CONFIGURE 1
@@ -50,7 +50,7 @@ ExternalProject_Add(jsoncpp
     BUILD_COMMAND ""
     ${_overwrite_install_command}
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libjsoncpp.a
+    BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libjsoncpp.a
 )
 
 # Create jsoncpp imported library

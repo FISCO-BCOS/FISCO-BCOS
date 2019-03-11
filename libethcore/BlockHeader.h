@@ -20,7 +20,7 @@
  *
  * @author wheatli
  * @date 2018.8.28
- * @brief Block header structures of lab-bcos
+ * @brief Block header structures of FISCO-BCOS
  */
 
 #pragma once
@@ -76,8 +76,8 @@ class BlockHeader
     friend class BlockChain;
 
 public:
-    static const BlockNumber MaxBlockNumber = INT64_MAX;
-    static const unsigned BasicFields = 12;
+    const BlockNumber MaxBlockNumber = INT64_MAX;
+    const unsigned BasicFields = 13;
     BlockHeader();
     /// construct block or block header according to input params
     explicit BlockHeader(
@@ -108,7 +108,8 @@ public:
                m_number == _cmp.number() && m_gasLimit == _cmp.gasLimit() &&
                m_gasUsed == _cmp.gasUsed() && m_timestamp == _cmp.timestamp() &&
                m_extraData == _cmp.extraData() && m_sealer == _cmp.sealer() &&
-               m_sealerList == sealerList();
+               m_stateRoot == _cmp.stateRoot() && m_dbHash == _cmp.dbHash() &&
+               m_sealerList == _cmp.sealerList();
     }
     bool operator!=(BlockHeader const& _cmp) const { return !operator==(_cmp); }
 
@@ -150,31 +151,36 @@ public:
         noteDirty();
     }
 
-    /// field 4: set logBloom
+    void setDBhash(h256 const& _dbHash)
+    {
+        m_dbHash = _dbHash;
+        noteDirty();
+    }
+    /// field 5: set logBloom
     void setLogBloom(LogBloom const& _logBloom)
     {
         m_logBloom = _logBloom;
         noteDirty();
     }
-    /// field 5: set block number
+    /// field 6: set block number
     void setNumber(int64_t _blockNumber)
     {
         m_number = _blockNumber;
         noteDirty();
     }
-    /// field 6: set gas limit
+    /// field 7: set gas limit
     void setGasLimit(u256 const& _gasLimit)
     {
         m_gasLimit = _gasLimit;
         noteDirty();
     }
-    /// field 7: set gas used
+    /// field 8: set gas used
     void setGasUsed(u256 const& _gasUsed)
     {
         m_gasUsed = _gasUsed;
         noteDirty();
     }
-    /// field 8: set/append extra data
+    /// field 9: set/append extra data
     void appendExtraDataArray(bytes const& _content)
     {
         m_extraData.push_back(_content);
@@ -209,19 +215,19 @@ public:
         m_extraData = _extra;
         noteDirty();
     }
-    /// field 9: set timestamp
+    /// field 10: set timestamp
     void setTimestamp(uint64_t _timestamp)
     {
         m_timestamp = _timestamp;
         noteDirty();
     }
-    /// field 10: set m_sealer
+    /// field 11: set m_sealer
     void setSealer(u256 _sealer)
     {
         m_sealer = _sealer;
         noteDirty();
     }
-    /// filed 11: set m_sealerList
+    /// filed 12: set m_sealerList
     void setSealerList(h512s const& _sealerList)
     {
         m_sealerList = _sealerList;
@@ -249,16 +255,17 @@ public:
         m_receiptsRoot = _receiptsRoot;
         noteDirty();
     }
-    LogBloom const& logBloom() const { return m_logBloom; }                            /// field 4
-    int64_t number() const { return m_number; }                                        /// field 5
-    u256 const& gasLimit() const { return m_gasLimit; }                                /// field 6
-    u256 const& gasUsed() const { return m_gasUsed; }                                  /// field 7
-    uint64_t timestamp() const { return m_timestamp; }                                 /// field 8
-    bytes const& extraData(unsigned int _index) const { return m_extraData[_index]; }  // field 9
+    h256 const& dbHash() const { return m_dbHash; }          /// field 4
+    LogBloom const& logBloom() const { return m_logBloom; }  /// field 5
+    int64_t number() const { return m_number; }              /// field 6
+    u256 const& gasLimit() const { return m_gasLimit; }      /// field 7
+    u256 const& gasUsed() const { return m_gasUsed; }        /// field 8
+    uint64_t timestamp() const { return m_timestamp; }       /// field 9
+    bytes const& extraData(unsigned int _index) const { return m_extraData[_index]; }
 
-    std::vector<bytes> const& extraData() const { return m_extraData; }  /// field 9
-    u256 const& sealer() const { return m_sealer; }                      /// field 10
-    h512s const& sealerList() const { return m_sealerList; }             /// field 11
+    std::vector<bytes> const& extraData() const { return m_extraData; }  /// field 10
+    u256 const& sealer() const { return m_sealer; }                      /// field 11
+    h512s const& sealerList() const { return m_sealerList; }             /// field 12
     /// ------ get interfaces related to block header END------
     void populate(RLP const& _header);
 
@@ -275,9 +282,9 @@ private:  /// private data fields
     /// -------structure of block header------
     h256 m_parentHash;
     mutable h256 m_stateRoot;  // from state
-    h256 m_dbHash;             // from MemoryTableFactory
     mutable h256 m_transactionsRoot;
     mutable h256 m_receiptsRoot;
+    h256 m_dbHash;  // from MemoryTableFactory
     LogBloom m_logBloom;
     int64_t m_number = 0;
     u256 m_gasLimit;
@@ -297,8 +304,8 @@ inline std::ostream& operator<<(std::ostream& _out, BlockHeader const& _bi)
 {
     _out << _bi.hash() << " " << _bi.parentHash() << " "
          << " " << _bi.stateRoot() << " " << _bi.transactionsRoot() << " " << _bi.receiptsRoot()
-         << " " << _bi.logBloom() << " " << _bi.number() << " " << _bi.gasLimit() << " "
-         << _bi.gasUsed() << " " << _bi.timestamp() << " " << _bi.sealer();
+         << " " << _bi.dbHash() << " " << _bi.logBloom() << " " << _bi.number() << " "
+         << _bi.gasLimit() << " " << _bi.gasUsed() << " " << _bi.timestamp() << " " << _bi.sealer();
     return _out;
 }
 

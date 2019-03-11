@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
+ * @brief: empty framework for main of FISCO-BCOS
  *
  * @file: ParamParse.h
  * @author: chaychen
@@ -55,11 +55,7 @@ private:
 
 void version()
 {
-#ifdef FISCO_GM
-    std::cout << "FISCO-BCOS gm version " << dev::Version << std::endl;
-#else
     std::cout << "FISCO-BCOS Version : " << dev::Version << std::endl;
-#endif
     std::cout << "Build Time         : " << DEV_QUOTED(FISCO_BCOS_BUILD_TIME) << std::endl;
     std::cout << "Build Type         : " << DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM) << "/"
               << DEV_QUOTED(FISCO_BCOS_BUILD_TYPE) << std::endl;
@@ -69,8 +65,9 @@ void version()
 
 MainParams initCommandLine(int argc, const char* argv[])
 {
-    boost::program_options::options_description main_options("Main for lab-bcos");
-    main_options.add_options()("help,h", "help of lab-bcos")("version,v", "version of lab-bcos")(
+    boost::program_options::options_description main_options("Main for FISCO-BCOS");
+    main_options.add_options()("help,h", "help of FISCO-BCOS")(
+        "version,v", "version of FISCO-BCOS")(
         "config,c", boost::program_options::value<std::string>(), "configuration path");
     boost::program_options::variables_map vm;
     try

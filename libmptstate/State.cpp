@@ -22,6 +22,7 @@
 #include "State.h"
 
 #include "Defaults.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/TrieHash.h>
@@ -57,7 +58,7 @@ State::State(State const& _s)
     m_changeLog(_s.m_changeLog)
 {}
 
-OverlayDB State::openDB(fs::path const& _basePath, h256 const& _genesisHash, WithExisting _we)
+OverlayDB State::openDB(fs::path const& _basePath, h256 const&, WithExisting _we)
 {
     fs::path path = _basePath.empty() ? Defaults::get()->m_dbPath : _basePath;
     path /= fs::path("state");
@@ -162,7 +163,7 @@ Account* State::account(Address const& _addr)
     if (it != m_cache.end())
         return &it->second;
 
-    if (m_nonExistingAccountsCache.count(_addr))
+    if (m_nonExistingAccountsCache.find(_addr) != m_nonExistingAccountsCache.end())
         return nullptr;
 
     // Populate basic info.
@@ -431,9 +432,16 @@ u256 State::getNonce(Address const& _addr) const
         return m_accountStartNonce;
 }
 
-u256 State::storage(Address const& _id, u256 const& _key) const
+/// The hash of the root of our state tree.
+h256 State::rootHash(bool) const
 {
-    if (Account const* a = account(_id))
+    return m_state.root();
+}
+
+/// modify here to enable account storage cache
+u256 State::storage(Address const& _id, u256 const& _key)
+{
+    if (Account* a = account(_id))
     {
         auto mit = a->storageOverlay().find(_key);
         if (mit != a->storageOverlay().end())
@@ -444,7 +452,7 @@ u256 State::storage(Address const& _id, u256 const& _key) const
             a->baseRoot());  // promise we won't change the overlay! :)
         string payload = memdb.at(_key);
         u256 ret = payload.size() ? RLP(payload).toInt<u256>() : 0;
-        a->setStorageCache(_key, ret);
+        a->setStorage(_key, ret);
         return ret;
     }
     else

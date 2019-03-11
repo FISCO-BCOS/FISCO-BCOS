@@ -22,6 +22,7 @@
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
+#include <libstorage/MemoryTableFactory.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -63,19 +64,6 @@ void Executive::initialize(Transaction const& _transaction)
 
     if (!m_t.hasZeroSignature())
     {
-        // Avoid invalid transactions.
-        Address sender;
-        try
-        {
-            sender = m_t.sender();
-        }
-        catch (InvalidSignature const&)
-        {
-            LOG(WARNING) << "Invalid Signature";
-            m_excepted = TransactionException::InvalidSignature;
-            throw;
-        }
-
         // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
@@ -85,8 +73,8 @@ void Executive::initialize(Transaction const& _transaction)
     }
 }
 
-void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction const& _t,
-    BlockHeader const& _header, u256 const& _gasUsed) const
+void Executive::verifyTransaction(
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
@@ -101,17 +89,8 @@ void Executive::verifyTransaction(ImportRequirements::value _ir, Transaction con
 
 bool Executive::execute()
 {
-    // Entry point for a user-executed transaction.
-
-    // Pay...
-    LOG(TRACE) << "Paying " << m_gasCost << " from sender for gas (" << m_t.gas() << " gas at "
-               << m_t.gasPrice() << ")";
-    // m_s.subBalance(m_t.sender(), m_gasCost);
-
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    LOG(TRACE) << "Practical limitation of tx gas: " << txGasLimit;
-
-    assert(txGasLimit >= (u256)m_baseGasRequired);
+    assert(m_t.gas() >= (u256)m_baseGasRequired);
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
@@ -138,7 +117,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         // Increment associated nonce for sender.
         // if (_p.senderAddress != MaxAddress ||
         // m_envInfo.number() < m_sealEngine.chainParams().experimentalForkBlock)  // EIP86
-        m_s->incNonce(_p.senderAddress);
+        // m_s->incNonce(_p.senderAddress);
     }
 
     m_savepoint = m_s->savepoint();
@@ -150,7 +129,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         bytes output;
         bool success;
         tie(success, output) =
-            m_envInfo.precompiledEngine()->executeOrginPrecompiled(_p.codeAddress, _p.data);
+            m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
     }
@@ -159,7 +138,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     {
         m_gas = _p.gas;
 
-        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+        // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
         auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
@@ -178,7 +157,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     }
 
     // Transfer ether.
-    m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+    // m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
     return !m_ext;
 }
 
@@ -375,7 +354,7 @@ bool Executive::finalize()
             m_ext->evmSchedule().suicideRefundGas * m_ext->sub().suicides.size();
 
     // SSTORE refunds...
-    // must be done before the miner gets the fees.
+    // must be done before the sealer gets the fees.
     m_refunded = m_ext ? min((m_t.gas() - m_gas) / 2, m_ext->sub().refunds) : 0;
     m_gas += m_refunded;
 
@@ -405,7 +384,7 @@ void Executive::revert()
 
     // Set result address to the null one.
     m_newAddress = {};
-    m_s->rollback(m_savepoint);
+    // m_s->rollback(m_savepoint);
     auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
-    memoryTableFactory->rollback(m_tableFactorySavepoint);
+    // memoryTableFactory->rollback(m_tableFactorySavepoint);
 }

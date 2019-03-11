@@ -30,12 +30,13 @@ using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
 using namespace dev::initializer;
+using namespace rpcdemo;
 
 
 using tcp = boost::asio::ip::tcp;
 namespace websocket = boost::beast::websocket;
 
-int main(int argc, const char* argv[])
+int main()
 {
 #if 0
 	/// websocket demo
@@ -73,7 +74,6 @@ int main(int argc, const char* argv[])
 
     ModularServer<>* jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpc);
     std::string listenIP = "127.0.0.1";
-    int listenPort = 30301;
     int httpListenPort = 30302;
     jsonrpcHttpServer->addConnector(new SafeHttpServer(listenIP, httpListenPort));
     jsonrpcHttpServer->StartListening();

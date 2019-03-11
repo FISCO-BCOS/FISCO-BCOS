@@ -27,9 +27,9 @@
 #include <libdevcore/easylog.h>
 #include <memory>
 
-#define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LIBBLOCKCHAIN")
+#define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKCHAIN")
 #define EXECUTIVECONTEXT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("EXECUTIVECONTEXT")
-
+#define PARA_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
 namespace dev
 {

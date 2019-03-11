@@ -44,7 +44,9 @@ void PBFTReqCache::delCache(h256 const& hash)
         m_commitCache.erase(pcommit);
     /// delete from prepare cache
     if (hash == m_prepareCache.block_hash)
+    {
         m_prepareCache.clear();
+    }
 }
 
 /**
@@ -58,12 +60,15 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& 
     std::vector<std::pair<u256, Signature>> sig_list;
     if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
-        for (auto item : m_commitCache[m_prepareCache.block_hash])
+        for (auto const& item : m_commitCache[m_prepareCache.block_hash])
         {
             sig_list.push_back(
                 std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
         }
-        assert(sig_list.size() >= minSigSize);
+        if (sig_list.size() < minSigSize)
+        {
+            return false;
+        }
         /// set siglist for prepare cache
         block.setSigList(sig_list);
         return true;
@@ -89,11 +94,11 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
     std::map<IDXTYPE, VIEWTYPE> idx_view_map;
     minView = MAXVIEW;
     int64_t min_height = INT64_MAX;
-    for (auto viewChangeItem : m_recvViewChangeReq)
+    for (auto const& viewChangeItem : m_recvViewChangeReq)
     {
         if (viewChangeItem.first > toView)
         {
-            for (auto viewChangeEntry : viewChangeItem.second)
+            for (auto const& viewChangeEntry : viewChangeItem.second)
             {
                 auto it = idx_view_map.find(viewChangeEntry.first);
                 if ((it == idx_view_map.end() || viewChangeItem.first > it->second) &&
@@ -195,7 +200,6 @@ void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) con
     /// commited prepare cache
     getCacheStatus(status_array, "committedPrepareCache", m_committedPrepareCache);
     /// future prepare cache
-    getCacheStatus(status_array, "futureCache", m_futurePrepareCache);
     /// signCache
     getCollectedCacheStatus(status_array, "signCache", m_signCache);
     getCollectedCacheStatus(status_array, "commitCache", m_commitCache);

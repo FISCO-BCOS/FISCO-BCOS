@@ -53,7 +53,7 @@ BOOST_FIXTURE_TEST_SUITE(ConditionPrecompiled, ConditionPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL((conditionPrecompiled->toString(context) == "Condition"), true);
+    BOOST_CHECK_EQUAL((conditionPrecompiled->toString() == "Condition"), true);
 }
 
 BOOST_AUTO_TEST_CASE(getCondition)
