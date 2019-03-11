@@ -62,10 +62,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     endif ()
     
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG -fopenmp")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread -fopenmp")
-    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread -fopenmp")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread -fopenmp")
+    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
+    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread")
     
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)

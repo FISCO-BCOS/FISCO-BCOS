@@ -26,7 +26,7 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
-#include <omp.h>
+#include <tbb/parallel_for.h>
 
 namespace dev
 {
@@ -129,15 +129,17 @@ void Block::calReceiptRoot(bool update) const
         size_t receiptsNum = m_transactionReceipts.size();
 
         std::vector<dev::bytes> receiptsRLPs(receiptsNum, bytes());
-#pragma omp parallel for
-        for (size_t i = 0; i < receiptsNum; ++i)
-        {
-            RLPStream s;
-            s << i;
-            dev::bytes receiptRLP;
-            m_transactionReceipts[i].encode(receiptRLP);
-            receiptsRLPs[i] = receiptRLP;
-        }
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, receiptsNum), [&](const tbb::blocked_range<size_t>& _r) {
+                for (size_t i = _r.begin(); i != _r.end(); ++i)
+                {
+                    RLPStream s;
+                    s << i;
+                    dev::bytes receiptRLP;
+                    m_transactionReceipts[i].encode(receiptRLP);
+                    receiptsRLPs[i] = receiptRLP;
+                }
+            });
 
         // auto record_time = utcTime();
         RLPStream txReceipts;
