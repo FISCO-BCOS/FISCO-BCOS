@@ -546,7 +546,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
                     {
-                        LOG(ERROR) << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
+                        LOG(WARNING) << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                                    << LOG_KV("what", boost::diagnostic_information(e));
                         message->setType(0x31);
                         message->setResult(REMOTE_PEER_UNAVAILIBLE);
@@ -578,7 +578,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
     }
     else
     {
-        CHANNEL_LOG(ERROR) << "unknown message type" << LOG_KV("type", message->type());
+        CHANNEL_LOG(WARNING) << "unknown message type" << LOG_KV("type", message->type());
     }
 }
 
@@ -635,7 +635,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 {
                     if (e.errorCode() != 0)
                     {
-                        CHANNEL_LOG(ERROR)
+                        CHANNEL_LOG(WARNING)
                             << "onResponse error" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
 
@@ -648,7 +648,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 }
                 catch (dev::channel::ChannelException& ex)
                 {
-                    CHANNEL_LOG(ERROR) << "onResponse error" << LOG_KV("errorCode", ex.errorCode())
+                    CHANNEL_LOG(WARNING) << "onResponse error" << LOG_KV("errorCode", ex.errorCode())
                                        << LOG_KV("what", ex.what());
 
                     try
@@ -657,7 +657,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                     }
                     catch (exception& e)
                     {
-                        CHANNEL_LOG(ERROR) << "onResponse error"
+                        CHANNEL_LOG(WARNING) << "onResponse error"
                                            << LOG_KV("what", boost::diagnostic_information(e));
                     }
 
@@ -670,7 +670,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 }
                 catch (exception& e)
                 {
-                    CHANNEL_LOG(ERROR)
+                    CHANNEL_LOG(WARNING)
                         << "onResponse error" << LOG_KV("what", boost::diagnostic_information(e));
                 }
             }
