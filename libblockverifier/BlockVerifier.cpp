@@ -28,9 +28,9 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
+#include <algorithm>
 #include <exception>
 #include <thread>
-#include <algorithm>
 
 using namespace dev;
 using namespace std;
@@ -201,7 +201,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     vector<thread> threads;
-    for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), 1); ++i)
+    for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
     {
         threads.push_back(std::thread([txDag]() {
             while (!txDag->hasFinished())
