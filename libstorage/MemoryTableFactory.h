@@ -63,7 +63,8 @@ private:
     Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
-    std::unordered_map<std::string, Table::Ptr> m_name2Table;
+    // this map can't be changed, hash() need ordered data
+    std::map<std::string, Table::Ptr> m_name2Table;
     std::vector<Change> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;

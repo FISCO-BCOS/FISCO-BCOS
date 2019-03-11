@@ -482,7 +482,7 @@ generate_group_genesis()
 [tx]
     gas_limit=300000000
 [group]
-    index=${index}
+    id=${index}
 EOF
 }
 
@@ -631,9 +631,9 @@ stateOrProvinceName_default =GuangDong
 localityName = Locality Name (eg, city)
 localityName_default = ShenZhen
 organizationalUnitName = Organizational Unit Name (eg, section)
-organizationalUnitName_default = webank
-commonName =  Organizational  commonName (eg, webank)
-commonName_default =  webank
+organizationalUnitName_default = fisco
+commonName =  Organizational  commonName (eg, fisco)
+commonName_default =  fisco
 commonName_max = 64
 
 [ usr_cert ]

@@ -35,10 +35,10 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 {
     try
     {
-        EXECUTIVECONTEXT_LOG(TRACE)
-            << LOG_DESC("[#call]PrecompiledEngine call") << LOG_KV("blockHash", m_blockInfo.hash)
-            << LOG_KV("number", m_blockInfo.number) << LOG_KV("address", address)
-            << LOG_KV("param", toHex(param));
+        EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
+                                    << LOG_KV("blockHash", m_blockInfo.hash.abridged())
+                                    << LOG_KV("number", m_blockInfo.number)
+                                    << LOG_KV("address", address) << LOG_KV("param", toHex(param));
 
         auto p = getPrecompiled(address);
 
