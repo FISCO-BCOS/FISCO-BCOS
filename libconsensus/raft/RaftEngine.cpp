@@ -1454,7 +1454,7 @@ void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
     Block working_block(_block);
     RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#execBlock]")
                           << LOG_KV("number", working_block.header().number())
-                          << LOG_KV("hash", working_block.header().hash());
+                          << LOG_KV("hash", working_block.header().hash().abridged());
 
     checkBlockValid(working_block);
     m_blockSync->noteSealingBlockNumber(working_block.header().number());
