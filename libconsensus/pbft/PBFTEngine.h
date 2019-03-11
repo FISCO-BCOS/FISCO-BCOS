@@ -377,7 +377,7 @@ protected:
             if (is_future && checkSign(req))
             {
                 PBFTENGINE_LOG(INFO)
-                    << LOG_DESC("checkReq: Recv future request:")
+                    << LOG_DESC("checkReq: Recv future request")
                     << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;
