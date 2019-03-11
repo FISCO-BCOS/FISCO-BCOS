@@ -467,7 +467,7 @@ generate_group_genesis()
     ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
     ;the max number of transactions of a block
-    max_trans_num=1000
+    max_trans_num=10000
     ;the node id of leaders
     ${node_list}
 
@@ -497,7 +497,7 @@ function generate_group_ini()
 [tx_pool]
     limit=10000
 [tx_execute]
-    enable_parallel=false
+    enable_parallel=true
 EOF
 }
 
