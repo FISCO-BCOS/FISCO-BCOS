@@ -224,17 +224,16 @@ public:
     {
         m_recorder = _recorder;
     }
-    virtual h256 hash() = 0;
-    virtual void clear() = 0;
-    // this map can't be changed, hash() need ordered data
-    virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
-    virtual bool checkAuthority(Address const& _origin) const = 0;
 
     virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
     virtual size_t cacheSize() { return 0; }
+
+protected:
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        m_recorder;
 };
 
 // Block execution time construction
