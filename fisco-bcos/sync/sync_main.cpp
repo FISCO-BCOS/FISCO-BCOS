@@ -134,7 +134,7 @@ static void startSync(Params& params)
     // NodeID nodeId = NodeID(fromHex(asString(contents(getDataDir().string() + "/node.nodeid"))));
     auto nodeIdstr = asString(contents("conf/node.nodeid"));
     NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
-    LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId << endl;
+    LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId.abridged() << endl;
 
     PROTOCOL_ID txPoolId = getGroupProtoclID(groupId, ProtocolID::TxPool);
     PROTOCOL_ID syncId = getGroupProtoclID(groupId, ProtocolID::BlockSync);

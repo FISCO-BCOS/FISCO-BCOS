@@ -43,7 +43,7 @@ class MemoryTable : public Table
 public:
     using CacheType = typename std::conditional<Mode::value,
         tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
-        std::unordered_map<std::string, Entries::Ptr>>::type;
+        std::map<std::string, Entries::Ptr>>::type;
     using CacheItr = typename CacheType::iterator;
     using Ptr = std::shared_ptr<MemoryTable<Mode>>;
 

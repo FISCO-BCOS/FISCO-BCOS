@@ -68,7 +68,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                             << LOG_KV("receiptRoot", block.header().receiptsRoot())
                             << LOG_KV("stateRoot", block.header().stateRoot())
                             << LOG_KV("dbHash", block.header().dbHash())
-                            << LOG_KV("parentHash", parentBlockInfo.hash)
+                            << LOG_KV("parentHash", parentBlockInfo.hash.abridged())
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
 

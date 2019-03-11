@@ -140,10 +140,10 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::unordered_map<std::string, std::pair<Op, std::string>>* getConditions();
+    virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
 
 private:
-    std::unordered_map<std::string, std::pair<Op, std::string>> m_conditions;
+    std::map<std::string, std::pair<Op, std::string> > m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
 };
@@ -220,7 +220,15 @@ public:
     virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder) = 0;
+            _recorder)
+    {
+        m_recorder = _recorder;
+    }
+    virtual h256 hash() = 0;
+    virtual void clear() = 0;
+    // this map can't be changed, hash() need ordered data
+    virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
+    virtual bool checkAuthority(Address const& _origin) const = 0;
 
     virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
     virtual void setBlockHash(h256 blockHash) = 0;
