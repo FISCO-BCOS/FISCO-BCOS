@@ -45,8 +45,9 @@ void LevelDBWriteBatch::append(const LevelDBWriteBatch& _batch)
 }
 */
 
-void LevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice _value)
+void LevelDBWriteBatch::insertSlice(const leveldb::Slice& _key, const leveldb::Slice& _value)
 {
+    dev::WriteGuard l(x_writeBatch);
     m_writeBatch.Put(_key, _value);
 }
 
