@@ -63,6 +63,7 @@ public:
 	}
 	~RLPXSocketSSL() 
 	{ 
+		LOG(TRACE) << "~RLPXSocketSSL destoryed";
 		close(); 
 	}
 	

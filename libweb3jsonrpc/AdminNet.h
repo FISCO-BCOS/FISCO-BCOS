@@ -42,18 +42,22 @@ public:
 	{
 		return RPCModules{RPCModule{"admin", "1.0"}};
 	}
+#if 0
 	virtual bool admin_net_start(std::string const& _session) override;
 	virtual bool admin_net_stop(std::string const& _session) override;
 	virtual bool admin_net_connect(std::string const& _node, std::string const& _session) override;
 	virtual Json::Value admin_net_peers(std::string const& _session) override;
 	virtual Json::Value admin_net_nodeInfo(std::string const& _session) override;
+#endif
 	virtual Json::Value admin_nodeInfo() override;
 	virtual Json::Value admin_peers() override;
+#if 0
 	virtual bool admin_addPeer(std::string const& _node) override;
 	virtual bool admin_addNodePubKeyInfo(string const& _node) override;
 	virtual Json::Value admin_NodePubKeyInfos() override;
 	virtual Json::Value admin_ConfNodePubKeyInfos() override;
 	virtual bool admin_delNodePubKeyInfo(string const& _node) override;
+#endif
 
 private:
 	NetworkFace& m_network;
