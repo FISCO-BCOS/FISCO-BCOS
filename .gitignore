@@ -51,4 +51,6 @@ tool/java/web3j-v2.1.0_src/bin/**
 .vs/
 .vscode/
 
+# macOS
+.DS_Store
 

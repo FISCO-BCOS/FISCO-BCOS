@@ -13,7 +13,7 @@ FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行
 - 对金融监管机构，为监管机构提供了一致且易于审计的数据，通过对机构间区块链的数据分析，能够比传统审计流程更快更精确地监管金融业务，并极大加强反洗钱力度；
 - 在跨境金融场景中，有助于实现跨境金融机构间的账本共享，降低合作银行间对账与清结算成本及争议摩擦成本，从而提高跨境业务处理速度及效率。
 
-FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master/LICENSE)。  
+FISCO BCOS的开源协议为GPL3.0，详情参见[LICENSE](https://github.com/FISCO-BCOS/FISCO-BCOS/blob/master-1.3/LICENSE)。  
 
 
 ## 1.2 技术白皮书
