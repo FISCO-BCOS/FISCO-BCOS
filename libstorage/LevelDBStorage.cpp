@@ -102,7 +102,6 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
     size_t total = 0;
     auto dataIt = tableData->data.begin();
     std::advance(dataIt, from);
-    batch = m_db->createWriteBatch();
 
     while (from < to && dataIt != tableData->data.end())
     {
@@ -165,54 +164,30 @@ size_t LevelDBStorage::commit(
             // Parallel encode and batch
             size_t batchesSize = (totalSize + c_commitTableDataRangeEachThread - 1) /
                                  c_commitTableDataRangeEachThread;
-            std::vector<std::shared_ptr<dev::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
+            std::shared_ptr<dev::db::LevelDBWriteBatch> batch = nullptr;
+            batch = m_db->createWriteBatch();
+
 #pragma omp parallel for
             for (size_t j = 0; j < batchesSize; ++j)
             {
                 size_t from = c_commitTableDataRangeEachThread * j;
                 size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
-                size_t threadTotal =
-                    commitTableDataRange(batches[j], tableData, hash, num, from, to);
+                // size_t threadTotal =
+                //    commitTableDataRange(batches[j], tableData, hash, num, from, to);
+                size_t threadTotal = commitTableDataRange(batch, tableData, hash, num, from, to);
                 total += threadTotal;
             }
             encode_time_cost += utcTime() - record_time;
             record_time = utcTime();
 
             // write batch
-            // A bug here when node is killed in this for, some batches have been written but some
-            // not! Because leveldb::WriteBatch didn't support Append() function in it's release
-            // version v1.20 (Just support in it's master branch now)
-            for (size_t j = 0; j < batchesSize; ++j)
-            {
-                leveldb::WriteOptions writeOptions;
-                writeOptions.sync = false;
-                auto s = m_db->Write(writeOptions, &(batches[j]->writeBatch()));
-
-                if (!s.ok())
-                {
-                    STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC(
-                                                      "Commit leveldb crashed! Please remove all "
-                                                      "data and sync data from other nodes")
-                                               << LOG_KV("status", s.ToString());
-
-                    BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-                    return 0;
-                }
-            }
-            /*
-            std::shared_ptr<dev::db::LevelDBWriteBatch> totalBatch = m_db->createWriteBatch();
-            for (size_t j = 0; j < batchesSize; ++j)
-            {
-                totalBatch->append(*batches[j]);  // Not support append now
-            }
             leveldb::WriteOptions writeOptions;
             writeOptions.sync = false;
-            auto s = m_db->Write(writeOptions, &(totalBatch->writeBatch()));
+            auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
 
             if (!s.ok())
             {
-                STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
+                STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC(
                                                   "Commit leveldb crashed! Please remove all "
                                                   "data and sync data from other nodes")
                                            << LOG_KV("status", s.ToString());
@@ -221,7 +196,7 @@ size_t LevelDBStorage::commit(
                     StorageException(-1, "Commit leveldb exception:" + s.ToString()));
                 return 0;
             }
-            */
+
             writeDB_time_cost += utcTime() - record_time;
             record_time = utcTime();
         }
