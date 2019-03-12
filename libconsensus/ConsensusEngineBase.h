@@ -27,6 +27,7 @@
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
+#include <libcompress/CompressInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
@@ -162,6 +163,12 @@ public:
         return m_maxBlockTransactions;
     }
 
+
+    void setCompressHahdler(std::shared_ptr<dev::compress::CompressInterface> compress)
+    {
+        m_compressHandler = compress;
+    }
+
 protected:
     virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
@@ -200,7 +207,16 @@ protected:
         bool valid = isValidReq(message, session, peer_index);
         if (valid)
         {
-            valid = decodeToRequests(req, ref(*(message->buffer())));
+            if (m_compressHandler)
+            {
+                bytes uncompressed_data;
+                m_compressHandler->uncompress(ref(*(message->buffer())), uncompressed_data);
+                valid = decodeToRequests(req, ref(uncompressed_data));
+            }
+            else
+            {
+                valid = decodeToRequests(req, ref(*(message->buffer())));
+            }
             if (valid)
                 req.setOtherField(
                     peer_index, session->nodeID(), session->session()->nodeIPEndpoint().name());
@@ -303,6 +319,9 @@ protected:
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
     bool m_cfgErr = false;
+
+    /// need compress/uncompress when send/receive PBFT packets
+    std::shared_ptr<dev::compress::CompressInterface> m_compressHandler = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

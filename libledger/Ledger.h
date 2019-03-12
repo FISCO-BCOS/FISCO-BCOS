@@ -26,6 +26,7 @@
 #include "LedgerInterface.h"
 #include "LedgerParam.h"
 #include "LedgerParamInterface.h"
+#include <libcompress/CompressInterface.h>
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
@@ -142,6 +143,7 @@ protected:
     virtual bool initSync();
 
 private:
+    void initCompressHandler(boost::property_tree::ptree const& pt);
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
@@ -153,6 +155,7 @@ private:
 
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
+    void initCompressIniConfig(boost::property_tree::ptree const& pt);
 
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initDBConfig(boost::property_tree::ptree const& pt);
@@ -175,6 +178,7 @@ protected:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
+    std::shared_ptr<dev::compress::CompressInterface> m_compress = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
 };

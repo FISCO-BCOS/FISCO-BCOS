@@ -304,6 +304,7 @@ enum class WithExisting : int
 
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
+uint64_t utcTimeUs();
 
 /// Reference to a slice of buffer that also owns the buffer.
 ///

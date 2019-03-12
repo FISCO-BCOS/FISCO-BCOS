@@ -89,6 +89,7 @@ add_subdirectory(libledger)
 add_subdirectory(librpc)
 add_subdirectory(libinitializer)
 add_subdirectory(libsecurity)
+add_subdirectory(libcompress)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
 

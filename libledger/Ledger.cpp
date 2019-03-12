@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libcompress/SnappyCompress.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
@@ -45,6 +46,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::consensus;
 using namespace dev::sync;
+using namespace dev::compress;
 using namespace dev::precompiled;
 namespace dev
 {
@@ -63,7 +65,9 @@ bool Ledger::initLedger()
     /// init the DB
     bool ret = initBlockChain();
     if (!ret)
+    {
         return false;
+    }
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
     m_dbInitializer->initStateDB(genesisHash);
     if (!m_dbInitializer->stateFactory())
@@ -99,6 +103,8 @@ void Ledger::initConfig(std::string const& configPath)
         initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
+        /// init compress
+        initCompressHandler(pt);
     }
     catch (std::exception& e)
     {
@@ -384,11 +390,23 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
+
     pbftEngine->setIntervalBlockTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
+    pbftEngine->setCompressHahdler(m_compress);
     return pbftSealer;
+}
+
+/// init compress handler
+void Ledger::initCompressHandler(boost::property_tree::ptree const& pt)
+{
+    std::string compress_algorithm = pt.get<std::string>("compress.algorithm", "");
+    if (dev::stringCmpIgnoreCase(compress_algorithm, "snappy") == 0)
+    {
+        m_compress = std::make_shared<SnappyCompress>();
+    }
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()

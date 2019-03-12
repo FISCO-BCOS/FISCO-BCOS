@@ -37,8 +37,6 @@
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
-#include <libsync/SyncStatus.h>
-
 namespace dev
 {
 namespace consensus

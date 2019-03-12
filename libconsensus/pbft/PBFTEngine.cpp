@@ -436,16 +436,34 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         }
         /// packet has been broadcasted?
         if (broadcastFilter(session.nodeID, packetType, key))
+        {
             continue;
+        }
+
         PBFTENGINE_LOG(TRACE) << LOG_DESC("broadcastMsg") << LOG_KV("packetType", packetType)
                               << LOG_KV("dstNodeId", session.nodeID.abridged())
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", session.nodeID.abridged());
-        /// send messages
-        m_service->asyncSendMessageByNodeID(
-            session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
+
+        /// compress the PBFT packet
+        if (m_compressHandler)
+        {
+            dev::bytes compressedData;
+            m_compressHandler->compress(data, compressedData);
+            /// send messages
+            m_service->asyncSendMessageByNodeID(
+                session.nodeID, transDataToMessage(ref(compressedData), packetType, ttl), nullptr);
+        }
+        else
+        {
+            /// send messages
+            m_service->asyncSendMessageByNodeID(
+                session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
+        }
+
+
         broadcastMark(session.nodeID, packetType, key);
     }
     return true;
