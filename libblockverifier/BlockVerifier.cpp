@@ -34,16 +34,6 @@ using namespace std;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
-//*
-#define TxExeFunc(_TX, _TXID)                                          \
-    {                                                                  \
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);        \
-        envInfo.setPrecompiledEngine(executiveContext);                \
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt = \
-            execute(envInfo, _TX, OnOpFunc(), executiveContext);       \
-        block.setTransactionReceipt(_TXID, resultReceipt.second);      \
-        executiveContext->getState()->commit();                        \
-    }
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -103,8 +93,13 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        auto& tr = block.transactions()[i];
-        TxExeFunc(tr, i);
+        auto& tx = block.transactions()[i];
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, tx, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(i, resultReceipt.second);
+        executiveContext->getState()->commit();
     }
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run serial tx takes")
@@ -191,17 +186,33 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        TxExeFunc(_tr, _txId);
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, _tr, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(_txId, resultReceipt.second);
+        executiveContext->getState()->commit();
         return true;
     });
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
+    auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
 #pragma omp parallel
     {
-        while (!txDag->hasFinished())
+        while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
+        {
             txDag->executeUnit();
+        }
     }
+    if (utcTime() >= parallelTimeOut)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
+                                 << LOG_DESC("Para execute block timeout")
+                                 << LOG_KV("txNum", block.transactions().size())
+                                 << LOG_KV("blockNumber", block.blockHeader().number());
+    }
+
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -234,7 +245,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block takes")
                              << LOG_KV("time(ms)", utcTime() - start_time)
                              << LOG_KV("txNum", block.transactions().size())
-                             << LOG_KV("num", block.blockHeader().number())
+                             << LOG_KV("blockNumber", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
                              << LOG_KV("transactionRoot", block.transactionRoot())

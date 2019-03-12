@@ -99,11 +99,17 @@ ID DAG::waitPop(bool _needWait)
     cv_topLevel.wait_for(ul, std::chrono::milliseconds(10), [&]() {
         auto has = m_topLevel.try_pop(top);
         if (has)
+        {
             return true;
+        }
         else if (m_totalConsume >= m_totalVtxs)
+        {
             return true;
+        }
         else if (!_needWait)
+        {
             return true;
+        }
 
         return false;
     });
@@ -125,7 +131,9 @@ ID DAG::consume(ID _id)
         {
             ++producedNum;
             if (producedNum == 1)
+            {
                 nextId = id;
+            }
             else
             {
                 m_topLevel.push(id);

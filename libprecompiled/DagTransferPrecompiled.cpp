@@ -72,7 +72,7 @@ bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
     return strUserName.empty();
 }
 
-std::vector<std::string> DagTransferPrecompiled::getDagTag(bytesConstRef param)
+std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef param)
 {
     // parse function name
     uint32_t func = getParamFunc(param);
