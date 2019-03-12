@@ -195,6 +195,18 @@ workflows:
             branches:
               only: 
                 - /release-2.*/
+                - master
+                - dev
+            tags:
+              only: 
+                - /v2.*/
+      - build_guomi:
+          filters:
+            branches:
+              only: 
+                - /release-2.*/
+                - master
+                - dev
             tags:
               only: 
                 - /v2.*/
@@ -207,14 +219,6 @@ workflows:
                 - /v2.*/
             branches:
               ignore: /.*/
-      - build_guomi:
-          filters:
-            branches:
-              only: 
-                - /release-2.*/
-            tags:
-              only: 
-                - /v2.*/
       - deploy_guomi:
           requires:
             - build_guomi

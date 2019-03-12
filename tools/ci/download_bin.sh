@@ -2,7 +2,7 @@
 
 org=FISCO-BCOS
 repo=FISCO-BCOS
-branch=release-2.0.1
+branch=master
 output_dir=bin/
 download_gm=
 
@@ -10,7 +10,7 @@ help() {
     echo $1
     cat << EOF
 Usage:
-    -b <Branch>                   Default release-2.0.1
+    -b <Branch>                   Default master
     -o <Output Dir>               Default ./
     -g <Generate guomi nodes>     Default no
     -h Help
