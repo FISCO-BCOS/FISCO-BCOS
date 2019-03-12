@@ -78,7 +78,7 @@ FISCO BCOS提供了群签名&&环签名链上验证功能，下表详细介绍�
 ## 2 部署
 
 
-开启和关闭群签名&&环签名ethcall之前，必须保证您的机器可正确部署FISCO BCOS，FISCO BCOS详细部署方法可参考[FISCO BCOS区块链操作手册](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual).
+开启和关闭群签名&&环签名ethcall之前，必须保证您的机器可正确部署FISCO BCOS，FISCO BCOS详细部署方法可参考[FISCO BCOS区块链操作手册](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3/doc/manual).
 
 ### 2.1 开启群签名&&环签名ethcall
 
@@ -204,7 +204,7 @@ sig-service-client客户端提供了以下功能：
 - 访问[群签名&&环签名服务](https://github.com/FISCO-BCOS/sig-service)rpc接口；
 - 将群签名&&环签名信息写入链上（发交易）
 
-具体使用和部署方法请参考[群签名&&环签名客户端操作手册](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master/doc/manual).
+具体使用和部署方法请参考[群签名&&环签名客户端操作手册](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3/doc/manual).
 
 <br>
 

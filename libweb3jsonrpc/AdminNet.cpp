@@ -39,6 +39,7 @@ using namespace dev::eth;
 
 AdminNet::AdminNet(NetworkFace& _network, SessionManager& _sm): m_network(_network), m_sm(_sm) {}
 
+#if 0
 bool AdminNet::admin_net_start(std::string const& _session)
 {
 	RPC_ADMIN;
@@ -78,6 +79,7 @@ Json::Value AdminNet::admin_net_nodeInfo(std::string const& _session)
 	ret["enode"] = i.enode();
 	return ret;
 }
+#endif
 
 Json::Value AdminNet::admin_nodeInfo()
 {
@@ -114,6 +116,7 @@ Json::Value AdminNet::admin_peers()
 	return ret;
 }
 
+#if 0
 bool AdminNet::admin_addPeer(string const& _node)
 {
 	m_network.addPeer(p2p::NodeSpec(_node), p2p::PeerType::Required);
@@ -196,3 +199,4 @@ Json::Value AdminNet::admin_ConfNodePubKeyInfos()
 
 	return ret;
 }
+#endif

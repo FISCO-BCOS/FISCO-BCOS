@@ -1,3 +1,15 @@
+### V1.3.7
+
+(2018-12-28)
+
+* Fix
+
+1，网络断连后，不自动重连的问题
+2，PBFT view change触发逻辑（fast viewchange / disconnect 两处修改）
+3，RPC 接口去掉admin_peers和admin_nodeInfo以外的接口
+4，日志提示错误的文件描述符
+5，偶发的5s没有任何操作日志的问题
+
 ### V1.3.6
 
 (2018-12-14)

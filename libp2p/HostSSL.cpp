@@ -52,11 +52,7 @@ using namespace dev::eth;
 using namespace dev::crypto;
 
 /// Interval at which HostSSL::run will call keepAlivePeers to ping peers.
-std::chrono::seconds const c_keepAliveIntervalSSL = std::chrono::seconds(20);
-std::chrono::seconds const c_reconnectNodesIntervalSSL = std::chrono::seconds(60);
-std::chrono::seconds const c_AnnouncementConnectNodesIntervalSSL = std::chrono::seconds(60);
-const size_t c_maxAnnouncementSize = 100;
-
+std::chrono::seconds const c_keepAliveIntervalSSL = std::chrono::seconds(1);
 std::chrono::milliseconds const c_keepAliveTimeOutSSL = std::chrono::milliseconds(10000);
 
 void HostSSL::doneWorking()
@@ -130,7 +126,8 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 	auto protocolVersion = _rlp[0].toInt<unsigned>();
 	auto clientVersion = _rlp[1].toString();
 	auto caps = _rlp[2].toVector<CapDesc>();
-	auto listenPort = _rlp[3].toInt<unsigned short>();
+	//auto listenPort = _rlp[3].toInt<unsigned short>();
+	auto listenPort = _s->remoteEndpoint().port();
 	auto pub = _rlp[4].toHash<Public>();
 	LOG(INFO) << "HostSSL::startPeerSession! " << pub.abridged() ;
 	Public  _id=pub;
@@ -150,7 +147,7 @@ void HostSSL::startPeerSession( RLP const& _rlp, unique_ptr<RLPXFrameCoder>&& _i
 
 	NodeIPEndpoint _nodeIPEndpoint;
 	_nodeIPEndpoint.address = _s->remoteEndpoint().address();
-	_nodeIPEndpoint.tcpPort=_s->remoteEndpoint().port();
+	_nodeIPEndpoint.tcpPort=listenPort;
 	_nodeIPEndpoint.udpPort=listenPort;
 	_nodeIPEndpoint.host=_s->nodeIPEndpoint().host;
 
@@ -298,6 +295,8 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 		LOG(WARNING) << "HostSSL::async_handshake err:" << error.message();
 
 		socket->ref().close();
+
+		runAcceptor();
 		return;
 	}
 
@@ -320,6 +319,7 @@ void HostSSL::sslHandshakeServer(const boost::system::error_code& error, std::sh
 	}
 	if (!success)
 		socket->ref().close();
+
 	runAcceptor(); 
 }
 
@@ -434,7 +434,9 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 {
 	if (error)
 	{
-		m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+		erasePeedingPeerConn(_nodeIPEndpoint);
+		socket->ref().close();
+
 		LOG(WARNING) << "HostSSL::sslHandshakeClient Err:" << error.message();
 		return ;
 	}
@@ -444,87 +446,157 @@ void HostSSL::sslHandshakeClient(const boost::system::error_code& error, std::sh
 		Guard l(x_connecting);
 		m_connecting.push_back(handshake);
 	}
+
 	handshake->start();
 
-	Guard l(x_pendingNodeConns);
-	m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+	erasePeedingPeerConn(_nodeIPEndpoint);
 }
 
 void HostSSL::connect(NodeIPEndpoint const& _nodeIPEndpoint)
 {
-	if (!m_run)
-		return;
-
-	if (((!m_netPrefs.listenIPAddress.empty()
-			&& _nodeIPEndpoint.address
-					== boost::asio::ip::address::from_string(
-							m_netPrefs.listenIPAddress))
-			|| (!m_netPrefs.publicIPAddress.empty()
-					&& _nodeIPEndpoint.address
-							== boost::asio::ip::address::from_string(
-									m_netPrefs.publicIPAddress))
-			|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
-			|| _nodeIPEndpoint.address == m_tcpPublic.address()
-			|| _nodeIPEndpoint.address == m_tcpClient.address())
-			&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
-		LOG(TRACE)<< "Ignore connect self" << _nodeIPEndpoint.name();
-
-		return;
-	}
-
-	if( m_tcpPublic == _nodeIPEndpoint)
-	{
-		LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	if (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) == _nodeIPEndpoint)
-	{
-		LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	if( m_peers.count(_nodeIPEndpoint.name() ) )
-	{
-		LOG(TRACE) <<"Don't Repeat Connect ("<<_nodeIPEndpoint.name() <<")";
-		if( !_nodeIPEndpoint.host.empty() )
-			m_peers[_nodeIPEndpoint.name()]->endpoint.host = _nodeIPEndpoint.host;
-		return;
-	}
-	if( _nodeIPEndpoint.address.to_string().empty() )
-	{
-		LOG(TRACE) <<"Target Node Ip Is Empty  ("<<_nodeIPEndpoint.name()<<")";
-		return;
-	}
-	
-	{
-		Guard l(x_pendingNodeConns);
-		if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+	try {
+		if (!m_run)
 			return;
-		m_pendingPeerConns.insert(_nodeIPEndpoint.name());
-	}
 
-	LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name() << "," <<  _nodeIPEndpoint.host;
-	std::shared_ptr<RLPXSocketSSL> socket;
-	socket.reset(new RLPXSocketSSL(m_ioService,_nodeIPEndpoint));
+		if (((!m_netPrefs.listenIPAddress.empty()
+				&& _nodeIPEndpoint.address
+						== boost::asio::ip::address::from_string(
+								m_netPrefs.listenIPAddress))
+				|| (!m_netPrefs.publicIPAddress.empty()
+						&& _nodeIPEndpoint.address
+								== boost::asio::ip::address::from_string(
+										m_netPrefs.publicIPAddress))
+				|| m_ifAddresses.find(_nodeIPEndpoint.address) != m_ifAddresses.end()
+				|| _nodeIPEndpoint.address == m_tcpPublic.address()
+				)
+				&& _nodeIPEndpoint.tcpPort == m_netPrefs.listenPort) {
+				LOG(TRACE)<< "Ignore connect self: " << _nodeIPEndpoint.name();
 
-	m_tcpClient = socket->remoteEndpoint();
-	socket->sslref().set_verify_mode(ba::ssl::verify_peer);
-	socket->sslref().set_verify_depth(3);
-	socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
-
-	socket->ref().async_connect(_nodeIPEndpoint, m_strand.wrap([ = ](boost::system::error_code const & ec)
-	{
-		if (ec)
+			return;
+		}
+	
+		if( m_tcpPublic == _nodeIPEndpoint)
 		{
-			LOG(WARNING) << "Connection refused to node" << id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
-			
+			LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
+		if (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) == _nodeIPEndpoint)
+		{
+			LOG(TRACE) <<"Abort Connect Self("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
+		if( m_peers.count(_nodeIPEndpoint.name() ) )
+		{
+			LOG(TRACE) <<"Don't Repeat Connect ("<<_nodeIPEndpoint.name() <<")";
+			if( !_nodeIPEndpoint.host.empty() )
+				m_peers[_nodeIPEndpoint.name()]->endpoint.host = _nodeIPEndpoint.host;
+			return;
+		}
+		if( _nodeIPEndpoint.address.to_string().empty() )
+		{
+			LOG(TRACE) <<"Target Node Ip Is Empty  ("<<_nodeIPEndpoint.name()<<")";
+			return;
+		}
+
+		{
 			Guard l(x_pendingNodeConns);
-			m_pendingPeerConns.erase(_nodeIPEndpoint.name());
+			if (m_pendingPeerConns.count(_nodeIPEndpoint.name()))
+				return;
+			m_pendingPeerConns.insert(_nodeIPEndpoint.name());
 		}
-		else
+
+		//if nodeIPEndpoint connected
 		{
-			socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket,NodeID(), _nodeIPEndpoint)) );
+			DEV_RECURSIVE_GUARDED(x_sessions);
+			auto it = m_peers.find(_nodeIPEndpoint.name());
+
+			if(it != m_peers.end() && it->second->address() != NodeID()) {
+				it->second->id;
+				auto sIt = m_sessions.find(it->second->address()); //address in peer means nodeid
+				if(sIt != m_sessions.end()) {
+					auto session = sIt->second.lock();
+					if(session && session->isConnected()) {
+						LOG(TRACE) << "NodeIPEndpoint: " << _nodeIPEndpoint.name() << " nodeID: " << it->second->address().hex() << " already connected, ignore";
+						return;
+					}
+				}
+			}
 		}
-	}));
+
+		LOG(INFO) << "Attempting connection to node " << id().abridged() << "@" << _nodeIPEndpoint.name();
+		std::shared_ptr<RLPXSocketSSL> socket;
+		socket.reset(new RLPXSocketSSL(m_ioService,_nodeIPEndpoint));
+
+		m_tcpClient = socket->remoteEndpoint();
+		socket->sslref().set_verify_mode(ba::ssl::verify_peer);
+		socket->sslref().set_verify_depth(3);
+		socket->sslref().set_verify_callback(boost::bind(&HostSSL::sslVerifyCert, this, _1, _2));
+
+		auto connectTimer = std::make_shared<boost::asio::deadline_timer>(m_ioService, boost::posix_time::milliseconds(30000));
+		auto weakSocket = std::weak_ptr<RLPXSocketSSL>(socket);
+		auto self = std::weak_ptr<HostSSL>(std::dynamic_pointer_cast<HostSSL>(shared_from_this()));
+		connectTimer->async_wait(
+				[weakSocket, _nodeIPEndpoint, self](const boost::system::error_code& error) {
+					try {
+						LOG(TRACE) << "enter connectTimer: " << error.value();
+						if (error)
+						{
+							if(error != boost::asio::error::operation_aborted ) {
+								LOG(WARNING) << "shutdown timer error: " << error.message();
+							}
+							else {
+								return;
+							}
+						}
+
+						auto socket = weakSocket.lock();
+						if(socket && socket->ref().is_open()) {
+							LOG(WARNING) << "connection timeout, force close";
+							socket->ref().close();
+						}
+
+						auto host = self.lock();
+						if(host) {
+							host->erasePeedingPeerConn(_nodeIPEndpoint);
+						}
+					}
+					catch (std::exception &e) {
+						LOG(WARNING) << "connectTimer error: " << e.what();
+					}
+				});
+
+		socket->ref().async_connect(_nodeIPEndpoint, [ self, socket, _nodeIPEndpoint, connectTimer ](boost::system::error_code const & ec)
+		{
+			auto host = self.lock();
+			if(host) {
+				if (ec)
+				{
+					LOG(WARNING) << "Connection refused to node" << host->id().abridged() <<  "@" << _nodeIPEndpoint.name() << "(" << ec.message() << ")";
+
+					connectTimer->cancel();
+					host->erasePeedingPeerConn(_nodeIPEndpoint);
+				}
+				else
+				{
+					LOG(TRACE) << "connect done, start ssl handshake: " << _nodeIPEndpoint.name();
+					//socket->sslref().async_handshake(ba::ssl::stream_base::client, m_strand.wrap(boost::bind(&HostSSL::sslHandshakeClient, this, ba::placeholders::error, socket, NodeID(), _nodeIPEndpoint)) );
+					socket->sslref().async_handshake(ba::ssl::stream_base::client, [self, socket, _nodeIPEndpoint, connectTimer] (boost::system::error_code const & ec) {
+						LOG(TRACE) << "ssl handshake done: " << _nodeIPEndpoint.name();
+						connectTimer->cancel();
+
+						auto host = self.lock();
+						if(host) {
+							auto nodeIDEndpoint = _nodeIPEndpoint;
+							host->sslHandshakeClient(ec, socket, NodeID(), nodeIDEndpoint);
+						}
+					} );
+				}
+			}
+		});
+	}
+	catch (std::exception &e) {
+		LOG(ERROR) << "connect error:" << e.what();
+	}
 }
 
 PeerSessionInfos HostSSL::peerSessionInfo() const
@@ -560,7 +632,7 @@ void HostSSL::run(boost::system::error_code const&)
 	});
 
 	keepAlivePeers();
-	reconnectAllNodes();
+	//reconnectAllNodes();
 
 	auto runcb = [this](boost::system::error_code const & error) { run(error); };
 	m_timer->expires_from_now(boost::posix_time::milliseconds(c_timerInterval));
@@ -591,7 +663,7 @@ void HostSSL::startedWorking()
 	else
 	{
 		LOG(ERROR) << "p2p.start.notice id:" << id().abridged() << "TCP Listen port is invalid or unavailable.";
-		LOG(ERROR) << "P2pPort Bind Fail！" << "\n";
+		LOG(ERROR) << "P2pPort Bind Fail" << "\n";
 		exit(-1);
 	}
 
@@ -614,8 +686,13 @@ void HostSSL::keepAlivePeers()
 {
 	auto now = chrono::steady_clock::now();
 
-	if ( (now - c_keepAliveIntervalSSL < m_lastPing) && (!m_reconnectnow) )
+	if ( now - c_keepAliveIntervalSSL < m_lastPing && m_lastPing != std::chrono::steady_clock::time_point())
 		return;
+
+	bool pingNow = false;
+	if(now - m_lastPing > c_keepAliveTimeOutSSL) {
+		pingNow = true;
+	}
 
 	RecursiveGuard l(x_sessions);
 	for (auto it = m_sessions.begin(); it != m_sessions.end();) {
@@ -623,28 +700,29 @@ void HostSSL::keepAlivePeers()
 		{
 			if( p->isConnected() )
 			{
-				if (now - c_keepAliveTimeOutSSL > m_lastPing && p->lastReceived() < m_lastPing)
-				{
-					LOG(WARNING) << "HostSSL::keepAlivePeers  timeout disconnect " << p->id().abridged();
+				if ((p->lastReceived() < now) && now - p->lastReceived() > c_keepAliveTimeOutSSL ) {
+					LOG(WARNING)<< "HostSSL::keepAlivePeers  timeout disconnect " << p->id().abridged();
 					p->disconnect(PingTimeout);
+				} else if(pingNow) {
+					p->ping();
 				}
-				else
-					p->ping(); 
-
-				++it;
 			}
-			else
+
+			//else
+			if(! p->isConnected())
 			{
 				if (m_peers.count(p->info().nodeIPEndpoint.name() ) )
 					m_peers.erase(p->info().nodeIPEndpoint.name());
 				LOG(WARNING) << "HostSSL::keepAlivePeers m_peers erase " << p->id().abridged() << "," << p->info().nodeIPEndpoint.name();
 				it = m_sessions.erase(it);
 			}
+			else {
+				++it;
+			}
 		}
 		else {
 			LOG(WARNING) << "HostSSL::keepAlivePeers erase Session " << it->first;
 			it = m_sessions.erase(it);
-			
 		}
 	}
 	
@@ -660,60 +738,20 @@ void HostSSL::keepAlivePeers()
 	}
 
 	m_lastPing = chrono::steady_clock::now();
+
+	reconnectAllNodes();
 }
 
 void HostSSL::reconnectAllNodes()
 {
-	Guard rl(x_reconnectnow);
-	if ( (chrono::steady_clock::now() - c_reconnectNodesIntervalSSL < m_lastReconnect) && (!m_reconnectnow) )
-		return;
-
-	
 	std::map<std::string, NodeIPEndpoint> mConnectParams;
 	NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
 	std::map<std::string, NodeIPEndpoint> mMergeConnectParams;//merge 
 	
-	/* /// commented by wheatli, there is a bug in this section, it will not merge the session peers when the config list is empty
-	RecursiveGuard l(x_sessions);
-	for (auto stNode : mConnectParams)
-	{
-		bool hasPeer = false;
-		for (auto const& p : m_peers)
-		{
-			if( !mMergeConnectParams.count(p.second->endpoint.name()))
-				mMergeConnectParams[p.second->endpoint.name()] = p.second->endpoint;
-			
-			if( !p.second->endpoint.host.empty() )
-				mMergeConnectParams[p.second->endpoint.name()].host = p.second->endpoint.host;
-			
-			//LOG(TRACE) << "HostSSL::reconnectAllNodes m_peers " << p.second->endpoint.name() << "," << p.second->endpoint.host;
-			if (p.second->endpoint == stNode.second )
-			{
-				if( !havePeerSession(p.second->id) )
-				{
-					LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << p.second->id.abridged() <<":" << stNode.second.name();
-					connect(p.second->endpoint);
-				}	
-				hasPeer = true;
-				break;
-			}
-		}
-	
-		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
-		{
-			LOG(TRACE) << "HostSSL::reconnectAllNodes try to connect " << stNode.second.name();
-			connect(stNode.second);
-		}
-		if( !mMergeConnectParams.count(stNode.second.name()))
-			mMergeConnectParams[stNode.second.name()] = stNode.second;
-		
-	}//for */
-
 	for (auto stNode : mConnectParams) {
 		mMergeConnectParams[stNode.second.name()] = stNode.second;
 	}
 	
-	RecursiveGuard l(x_sessions);
 	std::set<std::string> sessionSet;
 	for (auto const& p : m_peers) {
 		if( !mMergeConnectParams.count(p.second->endpoint.name()))
@@ -731,13 +769,12 @@ void HostSSL::reconnectAllNodes()
 		bool hasPeer = sessionSet.count(stNode.first);
 		if( !hasPeer && ( m_tcpPublic != stNode.second) && (NodeIPEndpoint(bi::address::from_string(m_netPrefs.listenIPAddress),listenPort(),listenPort()) != stNode.second) )
 		{
-			LOG(TRACE) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
+			LOG(INFO) << "HostSSL::reconnectAllNodes try to reconnect " << stNode.first;
 			connect(stNode.second);
 		}
 	}
 
 	m_lastReconnect = chrono::steady_clock::now();
-	m_reconnectnow = false;
 }
 
 void HostSSL::disconnectLatePeers()

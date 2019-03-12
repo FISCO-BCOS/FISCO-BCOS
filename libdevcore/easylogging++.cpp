@@ -3039,6 +3039,7 @@ void Loggers::configureFromGlobal(const char* globalConfigurationFilePath) {
   std::stringstream ss;
   Logger* logger = nullptr;
   auto configure = [&](void) {
+    if (logger == nullptr) { return; }
     ELPP_INTERNAL_INFO(8, "Configuring logger: '" << logger->id() << "' with configurations \n" << ss.str()
                        << "\n--------------");
     Configurations c;
