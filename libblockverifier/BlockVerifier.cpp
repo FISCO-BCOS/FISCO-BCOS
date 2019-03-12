@@ -28,7 +28,10 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
+#include <algorithm>
 #include <exception>
+#include <thread>
+
 using namespace dev;
 using namespace std;
 using namespace dev::eth;
@@ -197,11 +200,26 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-#pragma omp parallel
+    vector<thread> threads;
+    for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
     {
-        while (!txDag->hasFinished())
-            txDag->executeUnit();
+        threads.push_back(std::thread([txDag]() {
+            while (!txDag->hasFinished())
+                txDag->executeUnit();
+        }));
     }
+
+    for (auto& t : threads)
+    {
+        t.join();
+    }
+    /*
+    #pragma omp parallel
+        {
+            while (!txDag->hasFinished())
+                txDag->executeUnit();
+        }
+        */
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

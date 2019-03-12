@@ -31,7 +31,7 @@
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
-#include <omp.h>
+#include <tbb/parallel_for.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -920,9 +920,28 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
-// auto constructEntry_time_cost = 0;
-// auto insertTb_time_cost = 0;
-#pragma omp parallel for
+        // auto constructEntry_time_cost = 0;
+        // auto insertTb_time_cost = 0;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
+                for (size_t i = _r.begin(); i != _r.end(); ++i)
+                {
+                    // record_time = utcTime();
+                    Entry::Ptr entry = std::make_shared<Entry>();
+                    entry->setField(
+                        SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+                    entry->setField("index", lexical_cast<std::string>(i));
+                    // constructEntry_time_cost += utcTime() - record_time;
+                    // record_time = utcTime();
+
+                    tb->insert(txs[i].sha3().hex(), entry,
+                        std::make_shared<dev::storage::AccessOptions>(), false);
+                    nonce_vector[i] = txs[i].nonce();
+                    // insertTb_time_cost += utcTime() - record_time;
+                    // record_time = utcTime();
+                }
+            });
+        /*
         for (uint i = 0; i < txs.size(); i++)
         {
             // record_time = utcTime();
@@ -938,6 +957,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
             // insertTb_time_cost += utcTime() - record_time;
             // record_time = utcTime();
         }
+        */
 
         auto insertTable_time_cost = utcTime() - record_time;
         record_time = utcTime();

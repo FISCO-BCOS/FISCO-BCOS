@@ -27,7 +27,6 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
-#include <omp.h>
 
 namespace dev
 {
