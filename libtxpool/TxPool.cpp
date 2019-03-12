@@ -140,7 +140,7 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, trans_num), [&](const tbb::blocked_range<size_t> _r) {
+        tbb::blocked_range<size_t>(0, trans_num), [&](const tbb::blocked_range<size_t>& _r) {
             for (size_t i = _r.begin(); i != _r.end(); i++)
             {
                 h256 txHash = block.transactions()[i].sha3();

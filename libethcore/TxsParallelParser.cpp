@@ -145,7 +145,7 @@ void TxsParallelParser::decode(
         size_t maxOffset = bytesSize - objectStart - 1;
         bool exceptionHappen = false;
         tbb::parallel_for(
-            tbb::blocked_range<Offset_t>(0, txNum), [&](const tbb::blocked_range<Offset_t> _r) {
+            tbb::blocked_range<Offset_t>(0, txNum), [&](const tbb::blocked_range<Offset_t>& _r) {
                 for (Offset_t i = _r.begin(); i != _r.end(); ++i)
                 {
                     if (exceptionHappen)
