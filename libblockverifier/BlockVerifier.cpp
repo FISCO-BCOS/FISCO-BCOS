@@ -204,7 +204,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     vector<thread> threads;
     for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
     {
-        threads.push_back(std::thread([txDag]() {
+        threads.push_back(std::thread([txDag, parallelTimeOut]() {
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
                 txDag->executeUnit();
         }));
