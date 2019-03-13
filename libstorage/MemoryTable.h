@@ -27,7 +27,6 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
-#include <libethcore/ThreadSafeMap.h>
 #include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
