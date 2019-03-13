@@ -42,7 +42,7 @@ namespace dev
 {
 #define KC_LOG(_OBV)        \
     LOG(_OBV) << "[g:null]" \
-              << "[p:null][KeyCenter]"
+              << "[p:null][KeyManager]"
 
 class KeyCenterHttpClient
 {
