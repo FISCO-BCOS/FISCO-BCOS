@@ -106,7 +106,7 @@ void dev::channel::ChannelServer::onAccept(
     }
     else
     {
-        CHANNEL_LOG(ERROR) << LOG_DESC("Accept failed") << LOG_KV("message", error.message());
+        CHANNEL_LOG(WARNING) << LOG_DESC("Accept failed") << LOG_KV("message", error.message());
 
         try
         {
@@ -114,8 +114,8 @@ void dev::channel::ChannelServer::onAccept(
         }
         catch (std::exception& e)
         {
-            CHANNEL_LOG(ERROR) << LOG_DESC("Close error")
-                               << LOG_KV("what", boost::diagnostic_information(e));
+            CHANNEL_LOG(WARNING) << LOG_DESC("Close error")
+                                 << LOG_KV("what", boost::diagnostic_information(e));
         }
     }
 
@@ -198,8 +198,8 @@ void dev::channel::ChannelServer::onHandshake(
         }
         else
         {
-            CHANNEL_LOG(ERROR) << LOG_DESC("SSL handshake error")
-                               << LOG_KV("message", error.message());
+            CHANNEL_LOG(WARNING) << LOG_DESC("SSL handshake error")
+                                 << LOG_KV("message", error.message());
 
             try
             {
@@ -207,7 +207,7 @@ void dev::channel::ChannelServer::onHandshake(
             }
             catch (std::exception& e)
             {
-                CHANNEL_LOG(ERROR)
+                CHANNEL_LOG(WARNING)
                     << "Close error" << LOG_KV("what", boost::diagnostic_information(e));
             }
         }

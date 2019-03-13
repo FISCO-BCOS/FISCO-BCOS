@@ -52,7 +52,12 @@ public:
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _sealerList)
-    {}
+    {
+        setLeaderFailed(false);
+        BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
+        setHighest(highest);
+        setNodeNum(3);
+    }
     void updateConsensusNodeList() override {}
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
@@ -145,6 +150,7 @@ public:
         return PBFTEngine::isValidPrepare(req, oss);
     }
     bool& mutableLeaderFailed() { return m_leaderFailed; }
+    void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
