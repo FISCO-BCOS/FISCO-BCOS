@@ -68,7 +68,7 @@ void KeyCenterHttpClient::connect()
     }
     catch (exception& e)
     {
-        KC_LOG(ERROR) << LOG_DESC("Init keycenter failed.") << LOG_KV("reason", e.what()) << endl;
+        KC_LOG(ERROR) << LOG_DESC("Init key manager failed.") << LOG_KV("reason", e.what()) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterInitError());
     }
 }
@@ -84,7 +84,7 @@ void KeyCenterHttpClient::close()
 
     if (ec && ec != beast::errc::not_connected)
     {
-        KC_LOG(ERROR) << LOG_DESC("Close keycenter failed.") << LOG_KV("error_code", ec) << endl;
+        KC_LOG(ERROR) << LOG_DESC("Close key manager failed.") << LOG_KV("error_code", ec) << endl;
         BOOST_THROW_EXCEPTION(KeyCenterCloseError());
     }
 }
@@ -134,7 +134,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         // Receive the HTTP response
         http::read(m_socket, buffer, rsp);
 
-        KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("keycenter respond")
+        KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("key manager respond")
                       << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
 
         if (rsp.result_int() != 200)
