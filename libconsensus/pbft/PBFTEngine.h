@@ -137,7 +137,11 @@ public:
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
-    void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onViewChange(std::function<void()> const& _f)
+    {
+        m_onViewChange = _f;
+        m_notifyNextLeaderSeal = false;
+    }
     void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
     {
         m_onNotifyNextLeaderReset = _f;
