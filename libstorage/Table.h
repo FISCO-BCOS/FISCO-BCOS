@@ -62,7 +62,7 @@ public:
 
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
-    virtual std::unordered_map<std::string, std::string>* fields();
+    virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();
     virtual void setStatus(int status);
@@ -71,7 +71,7 @@ public:
     void setDirty(bool dirty);
 
 private:
-    std::unordered_map<std::string, std::string> m_fields;
+    std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
 };
 
@@ -126,10 +126,10 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::unordered_map<std::string, std::pair<Op, std::string> >* getConditions();
+    virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
 
 private:
-    std::unordered_map<std::string, std::pair<Op, std::string> > m_conditions;
+    std::map<std::string, std::pair<Op, std::string> > m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
 };
@@ -192,7 +192,8 @@ public:
     }
     virtual h256 hash() = 0;
     virtual void clear() = 0;
-    virtual std::unordered_map<std::string, Entries::Ptr>* data() { return NULL; }
+    // this map can't be changed, hash() need ordered data
+    virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
     virtual bool checkAuthority(Address const& _origin) const = 0;
 
 protected:

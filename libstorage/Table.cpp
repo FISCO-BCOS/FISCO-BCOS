@@ -69,7 +69,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     m_dirty = true;
 }
 
-std::unordered_map<std::string, std::string>* Entry::fields()
+std::map<std::string, std::string>* Entry::fields()
 {
     return &m_fields;
 }
@@ -191,7 +191,7 @@ void Condition::limit(size_t offset, size_t count)
     m_count = count;
 }
 
-std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
+std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
 }
