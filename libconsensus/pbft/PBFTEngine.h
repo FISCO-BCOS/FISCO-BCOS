@@ -90,11 +90,15 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        if (false == getLeader().first)
+        {
+            return false;
+        }
         /// the block is sealed by the next leader, and can execute after the last block has been
         /// consensused
         if (m_notifyNextLeaderSeal)
         {
-            /// represent that the latest block has been consensused
+            /// represent that the latest block has not been consensused
             if (getNextLeader() == nodeIdx())
             {
                 return false;
@@ -111,6 +115,11 @@ public:
     /// even if the maxTransNum condition has been meeted
     bool canHandleBlockForNextLeader()
     {
+        /// get leader failed
+        if (false == getLeader().first)
+        {
+            return false;
+        }
         /// the case that only a node is both the leader and the next leader
         if (getLeader().second == nodeIdx())
         {
@@ -368,7 +377,7 @@ protected:
             if (is_future && checkSign(req))
             {
                 PBFTENGINE_LOG(INFO)
-                    << LOG_DESC("checkReq: Recv future request:")
+                    << LOG_DESC("checkReq: Recv future request")
                     << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;

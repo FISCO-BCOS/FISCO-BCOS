@@ -1,5 +1,11 @@
 include(ExternalProject)
 
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+else()
+    set(SED_CMMAND sed -i)
+endif()
+
 ExternalProject_Add(leveldb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME leveldb-1.20.tar.gz
@@ -10,7 +16,7 @@ ExternalProject_Add(leveldb
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ""
+    CONFIGURE_COMMAND ${SED_CMMAND} "s#-lsnappy##g" build_detect_platform COMMAND ${SED_CMMAND} "s#-DSNAPPY##g" build_detect_platform
     BUILD_COMMAND make out-static/libleveldb.a
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/out-static/libleveldb.a
