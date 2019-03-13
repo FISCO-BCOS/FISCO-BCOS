@@ -48,8 +48,8 @@ public:
 
 public:
     // is this precompiled need parallel processing, default false.
-    virtual bool isDagPrecompiled() override { return true; }
-    virtual std::vector<std::string> getDagTag(bytesConstRef param) override;
+    virtual bool isParallelPrecompiled() override { return true; }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef param) override;
 
 protected:
     std::shared_ptr<storage::Table> openTable(

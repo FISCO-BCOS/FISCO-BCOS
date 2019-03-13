@@ -183,7 +183,7 @@ u256 StorageState::storage(Address const& _address, u256 const& _key)
             return u256(entries->get(0)->getField(STORAGE_VALUE));
         }
     }
-    return u256();
+    return u256(0);
 }
 
 void StorageState::setStorage(Address const& _address, u256 const& _location, u256 const& _value)

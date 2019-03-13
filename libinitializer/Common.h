@@ -34,6 +34,7 @@
 namespace dev
 {
 DEV_SIMPLE_EXCEPTION(InvalidListenPort);
+DEV_SIMPLE_EXCEPTION(ListenPortIsUsed);
 DEV_SIMPLE_EXCEPTION(ConfigNotExist);
 DEV_SIMPLE_EXCEPTION(InvalidConfig);
 DEV_SIMPLE_EXCEPTION(InitFailed);

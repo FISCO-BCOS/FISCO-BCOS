@@ -195,7 +195,7 @@ void Condition::limit(size_t offset, size_t count)
     m_count = count;
 }
 
-std::unordered_map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
+std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
 }

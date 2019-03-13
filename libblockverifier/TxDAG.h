@@ -72,8 +72,6 @@ public:
     // This function can be parallel
     int executeUnit() override;
 
-    void executeSerialTxs();
-
     ID paraTxsNumber() { return m_totalParaTxs; }
 
     ID haveExecuteNumber() { return m_exeCnt; }
@@ -82,7 +80,6 @@ private:
     ExecuteTxFunc f_executeTx;
     std::shared_ptr<dev::eth::Transactions const> m_txs;
 
-    IDs serialTxs;
     DAG m_dag;
 
     ID m_exeCnt = 0;

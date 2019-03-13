@@ -48,8 +48,8 @@ public:
         bytesConstRef _param, Address const& _origin = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
-    virtual bool isDagPrecompiled() { return false; }
-    virtual std::vector<std::string> getDagTag(bytesConstRef /*param*/)
+    virtual bool isParallelPrecompiled() { return false; }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef /*param*/)
     {
         return std::vector<std::string>();
     }

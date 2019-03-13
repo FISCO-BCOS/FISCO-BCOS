@@ -140,10 +140,10 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::unordered_map<std::string, std::pair<Op, std::string>>* getConditions();
+    virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
 
 private:
-    std::unordered_map<std::string, std::pair<Op, std::string>> m_conditions;
+    std::map<std::string, std::pair<Op, std::string> > m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
 };
@@ -220,13 +220,20 @@ public:
     virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder) = 0;
+            _recorder)
+    {
+        m_recorder = _recorder;
+    }
 
     virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
     virtual size_t cacheSize() { return 0; }
+
+protected:
+    std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
+        m_recorder;
 };
 
 // Block execution time construction

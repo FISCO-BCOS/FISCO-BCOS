@@ -24,6 +24,7 @@
 
 #include "TxsParallelParser.h"
 #include "Exceptions.h"
+#include <tbb/parallel_for.h>
 
 namespace dev
 {
@@ -40,18 +41,21 @@ bytes TxsParallelParser::encode(Transactions& _txs)
     std::vector<bytes> txRLPs(txNum, bytes());
 
     // encode tx and caculate offset
-#pragma omp parallel for
-    for (Offset_t i = 0; i < txNum; ++i)
-    {
-        bytes txByte;
-        _txs[i].encode(txByte);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, txNum), [&](const tbb::blocked_range<size_t>& _r) {
+            for (Offset_t i = _r.begin(); i < _r.end(); ++i)
+            {
+                bytes txByte;
+                _txs[i].encode(txByte);
 
-        // record bytes size in offsets for caculating real offset
-        offsets[i + 1] = txByte.size();
+                // record bytes size in offsets for caculating real offset
+                offsets[i + 1] = txByte.size();
 
-        // record bytes in txRLPs for caculating all transaction bytes
-        txRLPs[i] = txByte;
-    }
+                // record bytes in txRLPs for caculating all transaction bytes
+                txRLPs[i] = txByte;
+            }
+        });
+
 
     // caculate real offset
     for (size_t i = 0; i < txNum; ++i)
@@ -140,29 +144,32 @@ void TxsParallelParser::decode(
         // parallel decoding
         size_t maxOffset = bytesSize - objectStart - 1;
         bool exceptionHappen = false;
-#pragma omp parallel for schedule(dynamic, 125) shared(exceptionHappen)
-        for (Offset_t i = 0; i < txNum; ++i)
-        {
-            if (exceptionHappen)
-                continue;
+        tbb::parallel_for(
+            tbb::blocked_range<Offset_t>(0, txNum), [&](const tbb::blocked_range<Offset_t>& _r) {
+                for (Offset_t i = _r.begin(); i != _r.end(); ++i)
+                {
+                    if (exceptionHappen)
+                        continue;
 
-            Offset_t offset = offsets[i];
-            Offset_t size = offsets[i + 1] - offsets[i];
+                    Offset_t offset = offsets[i];
+                    Offset_t size = offsets[i + 1] - offsets[i];
 
-            if (offset > maxOffset)
-                exceptionHappen = true;
+                    if (offset > maxOffset)
+                        exceptionHappen = true;
 
-            _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
-            if (_withHash)
-            {
-                dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
-                _txs[i].updateTransactionHashWithSig(txHash);
-            } /*
-             LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i", i)
-                        << LOG_KV("offset", offset)
-                        << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
-                        */
-        }
+                    _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
+                    if (_withHash)
+                    {
+                        dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
+                        _txs[i].updateTransactionHashWithSig(txHash);
+                    } /*
+                     LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i", i)
+                                << LOG_KV("offset", offset)
+                                << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
+                                */
+                }
+            });
+
         if (exceptionHappen)
             throwInvalidBlockFormat();
     }

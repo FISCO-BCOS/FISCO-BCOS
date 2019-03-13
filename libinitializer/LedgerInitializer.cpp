@@ -53,7 +53,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     boost::property_tree::ptree pt;
                     boost::property_tree::read_ini(iter->path().string(), pt);
-                    auto groupID = pt.get<int>("group.index", 0);
+                    auto groupID = pt.get<int>("group.id", 0);
                     if (groupID <= 0)
                     {
                         INITIALIZER_LOG(ERROR)
