@@ -25,7 +25,7 @@
 #include <leveldb/write_batch.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
-#include <omp.h>
+#include <tbb/parallel_for.h>
 #include <memory>
 #include <thread>
 
@@ -167,16 +167,18 @@ size_t LevelDBStorage::commit(
             std::shared_ptr<dev::db::LevelDBWriteBatch> batch = nullptr;
             batch = m_db->createWriteBatch();
 
-#pragma omp parallel for
-            for (size_t j = 0; j < batchesSize; ++j)
-            {
-                size_t from = c_commitTableDataRangeEachThread * j;
-                size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
-                // size_t threadTotal =
-                //    commitTableDataRange(batches[j], tableData, hash, num, from, to);
-                size_t threadTotal = commitTableDataRange(batch, tableData, hash, num, from, to);
-                total += threadTotal;
-            }
+            std::vector<std::shared_ptr<dev::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, batchesSize),
+                [&](const tbb::blocked_range<size_t>& _r) {
+                    for (size_t j = _r.begin(); j != _r.end(); ++j)
+                    {
+                        size_t from = c_commitTableDataRangeEachThread * j;
+                        size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
+                        size_t threadTotal =
+                            commitTableDataRange(batch, tableData, hash, num, from, to);
+                        total += threadTotal;
+                    }
+                });
             encode_time_cost += utcTime() - record_time;
             record_time = utcTime();
 

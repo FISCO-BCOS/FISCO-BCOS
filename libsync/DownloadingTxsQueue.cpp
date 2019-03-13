@@ -21,6 +21,7 @@
  */
 
 #include "DownloadingTxsQueue.h"
+#include <tbb/parallel_for.h>
 
 using namespace dev;
 using namespace dev::sync;
@@ -71,13 +72,16 @@ void DownloadingTxsQueue::pop2TxPool(
         auto decode_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
-// parallel verify transaction before import
-#pragma omp parallel for
-        for (size_t j = 0; j < txs.size(); ++j)
-        {
-            if (!_txPool->txExists(txs[j].sha3()))
-                txs[j].sender();
-        }
+        // parallel verify transaction before import
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
+                for (size_t j = _r.begin(); j != _r.end(); ++j)
+                {
+                    if (!_txPool->txExists(txs[j].sha3()))
+                        txs[j].sender();
+                }
+            });
+
         auto verifySig_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
