@@ -52,7 +52,7 @@ install: #clean cache
 script:
     mkdir build && cd build && cmake -DTESTS=ON .. && make -j2 && CTEST_OUTPUT_ON_FAILURE=TRUE make test 
 after_success:
-    bash <(curl -s https://codecov.io/bash)
+    # bash <(curl -s https://codecov.io/bash)
 webhooks:
     urls:
       - https://webhooks.gitter.im/e/334c46f8aee9f5fb65dc
