@@ -555,6 +555,13 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             break;
         }
 
+        // transfer self, do nothing
+        if (fromUser == toUser)
+        {
+            ret = 0;
+            break;
+        }
+
         Table::Ptr table = openTable(context, origin);
         if (!table)
         {
