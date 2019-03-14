@@ -1241,6 +1241,7 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
+        m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
