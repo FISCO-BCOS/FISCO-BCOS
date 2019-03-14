@@ -65,8 +65,8 @@ echo '{ "presets": ["es2017"] }' > ~/.babelrc
 > The compiler name is *fisco-solc*. Download to /usr/bin.
 
 ```shell
-wget https://github.com/FISCO-BCOS/FISCO-BCOS/raw/master/fisco-solc
-sudo cp fisco-solc  /usr/bin/fisco-solc
+wget https://github.com/FISCO-BCOS/solidity/releases/download/v0.4.11/fisco-solc-ubuntu
+sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
 sudo chmod +x /usr/bin/fisco-solc
 ```
 

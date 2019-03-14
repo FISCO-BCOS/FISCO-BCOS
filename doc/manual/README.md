@@ -659,12 +659,12 @@ Port:30300
 
 ```shell
 [ubuntu]：
-    wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-ubuntu
+    wget https://github.com/FISCO-BCOS/solidity/releases/download/v0.4.11/fisco-solc-ubuntu
     sudo cp fisco-solc-ubuntu  /usr/bin/fisco-solc
     sudo chmod +x /usr/bin/fisco-solc
 
 [centos]：
-    wget https://github.com/FISCO-BCOS/fisco-solc/raw/master/fisco-solc-centos
+    wget https://github.com/FISCO-BCOS/solidity/releases/download/v0.4.11/fisco-solc-centos
     sudo cp fisco-solc-centos  /usr/bin/fisco-solc
     sudo chmod +x /usr/bin/fisco-solc
 ```
