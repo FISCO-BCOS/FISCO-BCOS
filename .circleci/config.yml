@@ -31,8 +31,7 @@ jobs:
       - run:
           name: Upload Coverage
           command: |
-            rm -rf deps
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/**
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/** > /dev/null
 
   build_test_guomi:
     working_directory: /FISCO-BCOS-gm
@@ -195,6 +194,18 @@ workflows:
             branches:
               only: 
                 - /release-2.*/
+                - master
+                - dev
+            tags:
+              only: 
+                - /v2.*/
+      - build_guomi:
+          filters:
+            branches:
+              only: 
+                - /release-2.*/
+                - master
+                - dev
             tags:
               only: 
                 - /v2.*/
@@ -207,14 +218,6 @@ workflows:
                 - /v2.*/
             branches:
               ignore: /.*/
-      - build_guomi:
-          filters:
-            branches:
-              only: 
-                - /release-2.*/
-            tags:
-              only: 
-                - /v2.*/
       - deploy_guomi:
           requires:
             - build_guomi
