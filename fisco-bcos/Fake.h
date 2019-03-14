@@ -96,12 +96,12 @@ public:
         return nullptr;
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash)
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
     {
         return getBlockByHash(_blockHash)->rlpP();
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i)
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
     {
         return getBlockRLPByHash(numberHash(_i));
     }
