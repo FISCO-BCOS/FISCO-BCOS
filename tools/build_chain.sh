@@ -482,7 +482,7 @@ generate_group_genesis()
 [tx]
     gas_limit=300000000
 [group]
-    index=${index}
+    id=${index}
 EOF
 }
 

@@ -44,7 +44,7 @@ public:
     EncryptedLevelDBWriteBatch(const dev::bytes& _dataKey, const std::string& _name = "")
       : m_dataKey(_dataKey), m_name(_name)
     {}
-    void insertSlice(leveldb::Slice _key, leveldb::Slice _value) override;
+    void insertSlice(const leveldb::Slice& _key, const leveldb::Slice& _value) override;
 
 private:
     dev::bytes m_dataKey;

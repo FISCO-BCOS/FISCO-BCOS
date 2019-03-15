@@ -43,24 +43,11 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
 
         // Is para transaction?
         auto p = _ctx->getPrecompiled(tx.receiveAddress());
-        if (!p || !p->isDagPrecompiled())
-        {
-            // Normal transaction: Conflict with all transaction
-            latestCriticals.foreachField([&](std::pair<string, ID> _fieldAndId) {
-                ID pId = _fieldAndId.second;
-                // Add edge from all critical transaction
-                m_dag.addEdge(pId, id);
-                return true;
-            });
-
-            // set all critical to my id
-            latestCriticals.setCriticalAll(id);
-        }
-        else
+        if (p && p->isParallelPrecompiled())
         {
             // DAG transaction: Conflict with certain critical fields
             // Get critical field
-            vector<string> criticals = p->getDagTag(ref(tx.data()));
+            vector<string> criticals = p->getParallelTag(ref(tx.data()));
 
             // Add edge between critical transaction
             for (string const& c : criticals)
@@ -78,12 +65,25 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
                 latestCriticals.update(c, id);
             }
         }
+        else
+        {
+            // Normal transaction: Conflict with all transaction
+            latestCriticals.foreachField([&](std::pair<string, ID> _fieldAndId) {
+                ID pId = _fieldAndId.second;
+                // Add edge from all critical transaction
+                m_dag.addEdge(pId, id);
+                return true;
+            });
+
+            // set all critical to my id
+            latestCriticals.setCriticalAll(id);
+        }
     }
 
     // Generate DAG
     m_dag.generate();
 
-    m_totalParaTxs = _txs.size() - serialTxs.size();
+    m_totalParaTxs = _txs.size();
 }
 
 // Set transaction execution function
@@ -96,12 +96,10 @@ int TxDAG::executeUnit()
 {
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit") << LOG_KV("exeCnt", m_exeCnt)
     //              << LOG_KV("total", m_txs->size());
-    ID id;
-    {
-        id = m_dag.waitPop();
-        if (id == INVALID_ID)
-            return 0;
-    }
+    ID id = m_dag.waitPop();
+    if (id == INVALID_ID)
+        return 0;
+
 
     int exeCnt = 0;
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
@@ -121,13 +119,4 @@ int TxDAG::executeUnit()
         //                << LOG_KV("total", m_txs->size());
     }
     return exeCnt;
-}
-
-void TxDAG::executeSerialTxs()
-{
-    for (ID id : serialTxs)
-    {
-        // TODO catch execute exception
-        f_executeTx((*m_txs)[id], id);
-    }
 }

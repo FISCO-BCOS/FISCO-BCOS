@@ -38,7 +38,8 @@ class DagTransferPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<DagTransferPrecompiled> Ptr;
-    DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context);
+    DagTransferPrecompiled(
+        dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable = true);
     virtual ~DagTransferPrecompiled(){};
 
     std::string toString() override;
@@ -48,8 +49,8 @@ public:
 
 public:
     // is this precompiled need parallel processing, default false.
-    virtual bool isDagPrecompiled() override { return true; }
-    virtual std::vector<std::string> getDagTag(bytesConstRef param) override;
+    virtual bool isParallelPrecompiled() override { return true; }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef param) override;
 
 protected:
     std::shared_ptr<storage::Table> openTable(

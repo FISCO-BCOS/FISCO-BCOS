@@ -640,7 +640,8 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
     /// only if the current node is the next leader and not the current leader
     /// notify the seal module to seal new block
-    if (getLeader().second != nodeIdx() && nodeIdx() == getNextLeader())
+    if (getLeader().first == true && getLeader().second != nodeIdx() &&
+        nodeIdx() == getNextLeader())
     {
         /// obtain transaction filters
         h256Hash filter;
@@ -1001,7 +1002,7 @@ void PBFTEngine::checkAndSave()
             }
             else
             {
-                PBFTENGINE_LOG(ERROR)
+                PBFTENGINE_LOG(WARNING)
                     << LOG_DESC("CommitBlock Failed")
                     << LOG_KV("blkNum", p_block->blockHeader().number())
                     << LOG_KV("highNum", m_highestBlock.number())
@@ -1352,6 +1353,7 @@ void PBFTEngine::checkAndChangeView()
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
+        m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }

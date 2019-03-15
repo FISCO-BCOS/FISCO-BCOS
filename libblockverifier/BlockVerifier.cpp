@@ -37,16 +37,6 @@ using namespace std;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
-//*
-#define TxExeFunc(_TX, _TXID)                                          \
-    {                                                                  \
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);        \
-        envInfo.setPrecompiledEngine(executiveContext);                \
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt = \
-            execute(envInfo, _TX, OnOpFunc(), executiveContext);       \
-        block.setTransactionReceipt(_TXID, resultReceipt.second);      \
-        executiveContext->getState()->commit();                        \
-    }
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -71,7 +61,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                             << LOG_KV("receiptRoot", block.header().receiptsRoot())
                             << LOG_KV("stateRoot", block.header().stateRoot())
                             << LOG_KV("dbHash", block.header().dbHash())
-                            << LOG_KV("parentHash", parentBlockInfo.hash)
+                            << LOG_KV("parentHash", parentBlockInfo.hash.abridged())
                             << LOG_KV("parentNum", parentBlockInfo.number)
                             << LOG_KV("parentStateRoot", parentBlockInfo.stateRoot);
 
@@ -106,8 +96,13 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        auto& tr = block.transactions()[i];
-        TxExeFunc(tr, i);
+        auto& tx = block.transactions()[i];
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, tx, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(i, resultReceipt.second);
+        executiveContext->getState()->commit();
     }
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run serial tx takes")
@@ -194,17 +189,23 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     txDag->init(executiveContext, block.transactions());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        TxExeFunc(_tr, _txId);
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+            execute(envInfo, _tr, OnOpFunc(), executiveContext);
+        block.setTransactionReceipt(_txId, resultReceipt.second);
+        executiveContext->getState()->commit();
         return true;
     });
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
+    auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
     vector<thread> threads;
     for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
     {
-        threads.push_back(std::thread([txDag]() {
-            while (!txDag->hasFinished())
+        threads.push_back(std::thread([txDag, parallelTimeOut]() {
+            while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
                 txDag->executeUnit();
         }));
     }
@@ -212,6 +213,13 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     for (auto& t : threads)
     {
         t.join();
+    }
+    if (utcTime() >= parallelTimeOut)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
+                                 << LOG_DESC("Para execute block timeout")
+                                 << LOG_KV("txNum", block.transactions().size())
+                                 << LOG_KV("blockNumber", block.blockHeader().number());
     }
     /*
     #pragma omp parallel
@@ -252,7 +260,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block takes")
                              << LOG_KV("time(ms)", utcTime() - start_time)
                              << LOG_KV("txNum", block.transactions().size())
-                             << LOG_KV("num", block.blockHeader().number())
+                             << LOG_KV("blockNumber", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
                              << LOG_KV("transactionRoot", block.transactionRoot())

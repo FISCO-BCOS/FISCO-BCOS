@@ -50,7 +50,8 @@ const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
 const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
-DagTransferPrecompiled::DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context)
+DagTransferPrecompiled::DagTransferPrecompiled(
+    dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable)
 {
     name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
@@ -63,7 +64,10 @@ DagTransferPrecompiled::DagTransferPrecompiled(dev::blockverifier::ExecutiveCont
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
 
     // Create table before parallel execution
-    openTable(context, Address());
+    if (needOpenTable)
+    {
+        openTable(context, Address());
+    }
 }
 
 bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
@@ -72,7 +76,7 @@ bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
     return strUserName.empty();
 }
 
-std::vector<std::string> DagTransferPrecompiled::getDagTag(bytesConstRef param)
+std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef param)
 {
     // parse function name
     uint32_t func = getParamFunc(param);
@@ -552,6 +556,13 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         {
             strErrorMsg = "invalid amount";
             ret = CODE_INVALID_AMOUNT;
+            break;
+        }
+
+        // transfer self, do nothing
+        if (fromUser == toUser)
+        {
+            ret = 0;
             break;
         }
 

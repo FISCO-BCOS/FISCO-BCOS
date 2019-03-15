@@ -76,9 +76,9 @@ BOOST_AUTO_TEST_CASE(toString)
     BOOST_TEST(dtPrecompiled->toString() == "DagTransfer");
 }
 
-BOOST_AUTO_TEST_CASE(isDagPrecompiled)
+BOOST_AUTO_TEST_CASE(isParallelPrecompiled)
 {
-    auto ret = dtPrecompiled->isDagPrecompiled();
+    auto ret = dtPrecompiled->isParallelPrecompiled();
     BOOST_TEST(ret);
 }
 
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(invalidUserName)
     BOOST_TEST((!ret));
 }
 
-BOOST_AUTO_TEST_CASE(getDagTag)
+BOOST_AUTO_TEST_CASE(getParallelTag)
 {
     // valid user name with valid amount
     std::string user = "user";
@@ -106,19 +106,19 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     std::vector<std::string> vTags;
     // add
     param = abi.abiIn(userAddFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(((vTags.size() == 1) && (vTags[0] == user)));
     // save
     param = abi.abiIn(userSaveFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(((vTags.size() == 1) && (vTags[0] == user)));
     // draw
     param = abi.abiIn(userDrawFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(((vTags.size() == 1) && (vTags[0] == user)));
     // balance
     param = abi.abiIn(userBalanceFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
 
     // invalid user name
@@ -126,19 +126,19 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     amount = 0;
     // add
     param = abi.abiIn(userAddFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
     // save
     param = abi.abiIn(userSaveFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
     // draw
     param = abi.abiIn(userDrawFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
     // balance
     param = abi.abiIn(userBalanceFunc, user, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
 
     // transfer test
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     std::string to = "to";
     amount = 1111111;
     param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(((vTags.size() == 2) && (vTags[0] == from) && (vTags[1] == to)));
 
     // from user empty
@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     to = "to";
     amount = 1111111;
     param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
 
     // to user empty
@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     to = "";
     amount = 1111111;
     param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
 
     // amount zero
@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(getDagTag)
     to = "to";
     amount = 0;
     param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getDagTag(bytesConstRef(&param));
+    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
 }
 
