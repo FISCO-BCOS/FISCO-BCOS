@@ -38,7 +38,8 @@ class DagTransferPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<DagTransferPrecompiled> Ptr;
-    DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context);
+    DagTransferPrecompiled(
+        dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable = true);
     virtual ~DagTransferPrecompiled(){};
 
     std::string toString() override;
