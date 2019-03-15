@@ -30,8 +30,8 @@ namespace compress
 class CompressInterface
 {
 public:
-    virtual size_t compress(dev::bytesConstRef inputData, dev::bytes& compressedData) = 0;
-    virtual size_t uncompress(dev::bytesConstRef compressedData, dev::bytes& uncompressedData) = 0;
+    virtual size_t compress(dev::bytes const& inputData, dev::bytes& compressedData) = 0;
+    virtual size_t uncompress(dev::bytes const& compressedData, dev::bytes& uncompressedData) = 0;
 };
 }  // namespace compress
 }  // namespace dev

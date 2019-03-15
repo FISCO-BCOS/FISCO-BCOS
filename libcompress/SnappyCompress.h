@@ -32,8 +32,8 @@ namespace compress
 class SnappyCompress : public CompressInterface
 {
 public:
-    size_t compress(bytesConstRef inputData, bytes& compressedData);
-    size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData);
+    size_t compress(bytes const& inputData, bytes& compressedData);
+    size_t uncompress(bytes const& compressedData, bytes& uncompressedData);
 };
 }  // namespace compress
 }  // namespace dev

@@ -103,8 +103,6 @@ void Ledger::initConfig(std::string const& configPath)
         initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
-        /// init compress
-        initCompressHandler(pt);
     }
     catch (std::exception& e)
     {
@@ -135,6 +133,9 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
         /// init params releated to consensus(ttl)
         initConsensusIniConfig(pt);
+
+        /// init compress
+        initCompressHandler(pt);
     }
     catch (std::exception& e)
     {
@@ -170,8 +171,10 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+    m_statisticFreq = pt.get<uint64_t>("consensus.statistic", 1000);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
-                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
+                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
+                      << LOG_KV("statisticFreq", m_statisticFreq);
 }
 
 
@@ -396,6 +399,9 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setCompressHahdler(m_compress);
+
+    /// set statistic freq
+    pbftEngine->setStatisticFreq(m_statisticFreq);
     return pbftSealer;
 }
 

@@ -154,6 +154,8 @@ public:
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
+    
+    void setStatisticFreq(uint64_t const& freq) { m_statisticFreq = freq; }
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -550,6 +552,15 @@ protected:
     /// map between nodeIdx to view
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
+
+    /// statisticFreq, default is 1000 txs
+    uint64_t m_statisticFreq = 100;
+    uint64_t m_savedSendData = 0;
+    uint64_t m_savedReceiveData = 0;
+
+    uint64_t m_compressTime = 0;
+    uint64_t m_uncompressTime = 0;
+    uint64_t m_totalTime = 0;
 };
 }  // namespace consensus
 }  // namespace dev

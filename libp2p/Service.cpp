@@ -268,6 +268,11 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
 
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
+        /// update the total received data
+        {
+            WriteGuard l(x_receivedData);
+            m_receivedData += message->length();
+        }
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
         // AMOP topic message, redirect to p2psession
@@ -385,6 +390,11 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         if (it != m_sessions.end() && it->second->actived())
         {
             message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
+            /// update the total amount of received data
+            {
+                WriteGuard l(x_sendData);
+                m_sendData += message->length();
+            }
             if (message->seq() == 0)
             {
                 message->setSeq(m_p2pMessageFactory->newSeq());

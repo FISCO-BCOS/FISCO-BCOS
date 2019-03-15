@@ -26,7 +26,7 @@ namespace dev
 {
 namespace compress
 {
-size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
+size_t SnappyCompress::compress(bytes const& inputData, bytes& compressedData)
 {
     size_t compress_len;
     auto start_t = utcTimeUs();
@@ -42,7 +42,7 @@ size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
     return compress_len;
 }
 
-size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
+size_t SnappyCompress::uncompress(bytes const& compressedData, bytes& uncompressedData)
 {
     size_t uncompressed_len = 0;
     auto start_t = utcTimeUs();

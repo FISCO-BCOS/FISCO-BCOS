@@ -249,9 +249,36 @@ bool PBFTEngine::generatePrepare(Block const& block)
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
     bytes prepare_data;
     prepare_req.encode(prepare_data);
+    bool succ = false;
+    /// compress the PBFT prepare packet
+    if (m_compressHandler)
+    {
+        dev::bytes compressed_data;
+        auto start_t = utcTimeUs();
+        m_compressHandler->compress(prepare_data, compressed_data);
 
-    /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
+        m_savedReceiveData += (prepare_data.size() - compressed_data.size());
+        m_compressTime += utcTimeUs() - start_t;
+        m_totalTime += utcTimeUs() - start_t;
+
+
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("compress") << LOG_KV("org_len", prepare_data.size())
+                              << LOG_KV("compressed_len", compressed_data.size())
+                              << LOG_KV("blkNum", block.blockHeader().number())
+                              << LOG_KV("txNum", block.getTransactionSize())
+                              << LOG_KV("ratio",
+                                     (float)prepare_data.size() / (float)compressed_data.size())
+                              << LOG_KV("timecost", (utcTimeUs() - start_t));
+        /// broadcast the generated preparePacket
+        succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(compressed_data));
+    }
+    else
+    {
+        /// broadcast the generated preparePacket
+        succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
+    }
+
+
     if (succ)
     {
         if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -439,7 +466,6 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         {
             continue;
         }
-
         PBFTENGINE_LOG(TRACE) << LOG_DESC("broadcastMsg") << LOG_KV("packetType", packetType)
                               << LOG_KV("dstNodeId", session.nodeID.abridged())
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
@@ -447,23 +473,10 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", session.nodeID.abridged());
 
-        /// compress the PBFT packet
-        if (m_compressHandler)
-        {
-            dev::bytes compressedData;
-            m_compressHandler->compress(data, compressedData);
-            /// send messages
-            m_service->asyncSendMessageByNodeID(
-                session.nodeID, transDataToMessage(ref(compressedData), packetType, ttl), nullptr);
-        }
-        else
-        {
-            /// send messages
-            m_service->asyncSendMessageByNodeID(
-                session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
-        }
 
-
+        /// send messages
+        m_service->asyncSendMessageByNodeID(
+            session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
         broadcastMark(session.nodeID, packetType, key);
     }
     return true;
@@ -767,7 +780,31 @@ void PBFTEngine::onRecvPBFTMessage(
 
 bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
 {
-    bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
+    bool valid = false;
+    if (m_compressHandler)
+    {
+        auto start_t = utcTimeUs();
+        bytes uncompressed_data;
+        m_compressHandler->uncompress(pbftMsg.data, uncompressed_data);
+
+        m_savedReceiveData += (uncompressed_data.size() - pbftMsg.data.size());
+        m_uncompressTime += (utcTimeUs() - start_t);
+        m_totalTime += (utcTimeUs() - start_t);
+
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("Uncompress")
+                              << LOG_KV("org_len", uncompressed_data.size())
+                              << LOG_KV("compressed_len", pbftMsg.data.size())
+                              << LOG_KV("ratio",
+                                     (float)uncompressed_data.size() / (float)pbftMsg.data.size())
+                              << LOG_KV("timecost", (utcTimeUs() - start_t));
+
+        valid = decodeToRequests(prepare_req, ref(uncompressed_data));
+    }
+    else
+    {
+        valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
+    }
+
     if (!valid)
     {
         return false;
@@ -1018,6 +1055,27 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         }
         resetConfig();
         m_reqCache->delCache(m_highestBlock.hash());
+
+        /// output statistic compress related descriptions
+        if (m_blockChain->number() % m_statisticFreq == 0)
+        {
+            uint64_t totalReceivedData = m_service->receivedData();
+            uint64_t totalSendData = m_service->sendData();
+            PBFTENGINE_LOG(INFO)
+                << LOG_BADGE("STATISTIC") << LOG_DESC("Compress/Uncompress")
+                << LOG_KV("savedSendData", m_savedSendData)
+                << LOG_KV("savedReceiveData", m_savedReceiveData)
+                << LOG_KV("compressTime(ms)", (float)m_compressTime / (float)1000)
+                << LOG_KV("uncompressedTime(ms)", (float)m_uncompressTime / (float)1000)
+                << LOG_KV("totalTime(ms)", (float)m_totalTime / (float)1000)
+                << LOG_KV("totalReceivedData", totalReceivedData)
+                << LOG_KV("totalSendData", totalSendData)
+                << LOG_KV("receiveSaveRatio", (float)m_savedReceiveData / (float)totalReceivedData)
+                << LOG_KV("sendSaveRatio", (float)m_savedSendData / (float)totalSendData)
+                << LOG_KV("totalSaveRatio", (float)(m_savedReceiveData + m_savedSendData) /
+                                                (float)(totalReceivedData + totalSendData));
+        }
+
         PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("sealerIdx", m_highestBlock.sealer())
                              << LOG_KV("hash", m_highestBlock.hash().abridged())

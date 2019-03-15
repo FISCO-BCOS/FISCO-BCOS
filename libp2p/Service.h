@@ -143,6 +143,18 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
+    uint64_t receivedData() const override
+    {
+        ReadGuard l(x_receivedData);
+        return m_receivedData;
+    }
+
+    uint64_t sendData() const override
+    {
+        ReadGuard l(x_sendData);
+        return m_sendData;
+    }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
@@ -179,6 +191,13 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
+
+    /// use to statistics the amount of received data and sent data
+    mutable SharedMutex x_receivedData;
+    uint64_t m_receivedData = 0;
+
+    mutable SharedMutex x_sendData;
+    uint64_t m_sendData = 0;
 };
 
 }  // namespace p2p

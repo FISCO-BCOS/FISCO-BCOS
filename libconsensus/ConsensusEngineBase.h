@@ -207,19 +207,12 @@ protected:
         bool valid = isValidReq(message, session, peer_index);
         if (valid)
         {
-            if (m_compressHandler)
-            {
-                bytes uncompressed_data;
-                m_compressHandler->uncompress(ref(*(message->buffer())), uncompressed_data);
-                valid = decodeToRequests(req, ref(uncompressed_data));
-            }
-            else
-            {
-                valid = decodeToRequests(req, ref(*(message->buffer())));
-            }
+            valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
+            {
                 req.setOtherField(
                     peer_index, session->nodeID(), session->session()->nodeIPEndpoint().name());
+            }
         }
         return valid;
     }
