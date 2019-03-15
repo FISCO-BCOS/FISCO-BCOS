@@ -493,7 +493,7 @@ function generate_group_ini()
 ; the ttl for broadcasting pbft message
 [consensus]
     ;ttl=2
-    ;statistic=1000
+    ;statistic=100
 ;txpool limit
 [tx_pool]
     limit=10000

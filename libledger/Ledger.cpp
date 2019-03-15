@@ -171,7 +171,7 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
-    m_statisticFreq = pt.get<uint64_t>("consensus.statistic", 1000);
+    m_statisticFreq = pt.get<uint64_t>("consensus.statistic", 100);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
                       << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
                       << LOG_KV("statisticFreq", m_statisticFreq);

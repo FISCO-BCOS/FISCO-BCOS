@@ -167,7 +167,7 @@ public:
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
-    
+
     void setStatisticFreq(uint64_t const& freq) { m_statisticFreq = freq; }
 
 protected:
@@ -198,6 +198,7 @@ protected:
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
+    bool broadcastPrepareReq(PrepareReq const& req);
 
     /// broadcast commit message
     bool broadcastCommitReq(PrepareReq const& req);
@@ -567,7 +568,7 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     /// statisticFreq, default is 1000 txs
-    uint64_t m_statisticFreq = 100;
+    uint64_t m_statisticFreq;
     uint64_t m_savedSendData = 0;
     uint64_t m_savedReceiveData = 0;
 

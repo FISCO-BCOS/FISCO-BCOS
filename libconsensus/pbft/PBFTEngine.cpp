@@ -109,10 +109,9 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
     m_broadCastCache->clearAll();
     PrepareReq prepare_req(req, m_keyPair, m_view, nodeIdx());
-    bytes prepare_data;
-    prepare_req.encode(prepare_data);
     /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
+    broadcastPrepareReq(prepare_req);
+
     handlePrepareMsg(prepare_req);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
@@ -247,38 +246,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
     Guard l(m_mutex);
     m_notifyNextLeaderSeal = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
-    bytes prepare_data;
-    prepare_req.encode(prepare_data);
-    bool succ = false;
-    /// compress the PBFT prepare packet
-    if (m_compressHandler)
-    {
-        dev::bytes compressed_data;
-        auto start_t = utcTimeUs();
-        m_compressHandler->compress(prepare_data, compressed_data);
-
-        m_savedReceiveData += (prepare_data.size() - compressed_data.size());
-        m_compressTime += utcTimeUs() - start_t;
-        m_totalTime += utcTimeUs() - start_t;
-
-
-        PBFTENGINE_LOG(DEBUG) << LOG_DESC("compress") << LOG_KV("org_len", prepare_data.size())
-                              << LOG_KV("compressed_len", compressed_data.size())
-                              << LOG_KV("blkNum", block.blockHeader().number())
-                              << LOG_KV("txNum", block.getTransactionSize())
-                              << LOG_KV("ratio",
-                                     (float)prepare_data.size() / (float)compressed_data.size())
-                              << LOG_KV("timecost", (utcTimeUs() - start_t));
-        /// broadcast the generated preparePacket
-        succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(compressed_data));
-    }
-    else
-    {
-        /// broadcast the generated preparePacket
-        succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
-    }
-
-
+    bool succ = broadcastPrepareReq(prepare_req);
     if (succ)
     {
         if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -297,6 +265,41 @@ bool PBFTEngine::generatePrepare(Block const& block)
     m_signalled.notify_all();
     return succ;
 }
+
+
+bool PBFTEngine::broadcastPrepareReq(PrepareReq const& req)
+{
+    bytes prepare_data;
+    req.encode(prepare_data);
+    bool succ = false;
+    /// compress the PBFT prepare packet
+    if (m_compressHandler)
+    {
+        dev::bytes compressed_data;
+        auto start_t = utcTimeUs();
+        m_compressHandler->compress(prepare_data, compressed_data);
+
+        m_savedSendData += (prepare_data.size() - compressed_data.size());
+        m_compressTime += utcTimeUs() - start_t;
+        m_totalTime += utcTimeUs() - start_t;
+
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("compress") << LOG_KV("org_len", prepare_data.size())
+                              << LOG_KV("compressed_len", compressed_data.size())
+                              << LOG_KV("blkNum", req.height)
+                              << LOG_KV("ratio",
+                                     (float)prepare_data.size() / (float)compressed_data.size())
+                              << LOG_KV("timecost", (utcTimeUs() - start_t));
+        /// broadcast the generated preparePacket
+        succ = broadcastMsg(PrepareReqPacket, req.uniqueKey(), ref(compressed_data));
+    }
+    else
+    {
+        /// broadcast the generated preparePacket
+        succ = broadcastMsg(PrepareReqPacket, req.uniqueKey(), ref(prepare_data));
+    }
+    return succ;
+}
+
 
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
@@ -1074,7 +1077,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                 << LOG_KV("receiveSaveRatio", (float)m_savedReceiveData / (float)totalReceivedData)
                 << LOG_KV("sendSaveRatio", (float)m_savedSendData / (float)totalSendData)
                 << LOG_KV("totalSaveRatio", (float)(m_savedReceiveData + m_savedSendData) /
-                                                (float)(totalReceivedData + totalSendData));
+                                                (float)(totalReceivedData + totalSendData))
+                << LOG_KV("totalTxNum", m_blockChain->totalTransactionCount().first);
         }
 
         PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("num", m_highestBlock.number())

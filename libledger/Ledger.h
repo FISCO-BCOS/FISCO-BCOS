@@ -181,7 +181,7 @@ protected:
     std::shared_ptr<dev::compress::CompressInterface> m_compress = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
-    uint64_t m_statisticFreq = 100;
+    uint64_t m_statisticFreq;
 };
 }  // namespace ledger
 }  // namespace dev
