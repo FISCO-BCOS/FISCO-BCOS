@@ -499,6 +499,8 @@ function generate_group_ini()
     limit=10000
 [tx_execute]
     enable_parallel=true
+[compress]
+    algorithm=snappy
 EOF
 }
 
