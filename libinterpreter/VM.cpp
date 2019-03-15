@@ -245,6 +245,12 @@ void VM::fetchInstruction()
     m_newMemSize = m_mem.size();
     m_copyMemSize = 0;
 }
+// Print crash message
+// WingTecher
+void LegacyVM::PrintCrash(string s) {
+    string content = "********************************************************\nSOL_ASAN: " + s + "\n";
+    cout << content << endl;
+}
 
 evmc_tx_context const& VM::getTxContext()
 {
