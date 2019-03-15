@@ -22,6 +22,7 @@
 
 #include "VM.h"
 #include "interpreter.h"
+#include <string>
 
 #include "libdevcrypto/Hash.h"
 
@@ -247,9 +248,9 @@ void VM::fetchInstruction()
 }
 // Print crash message
 // WingTecher
-void LegacyVM::PrintCrash(string s) {
-    string content = "********************************************************\nSOL_ASAN: " + s + "\n";
-    cout << content << endl;
+void VM::PrintCrash(std::string s) {
+    std::string content = "********************************************************\nSOL_ASAN: " + s + "\n";
+    std::cout << content << std::endl;
 }
 
 evmc_tx_context const& VM::getTxContext()
