@@ -24,6 +24,8 @@ set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path 
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
 project(FISCO-BCOS VERSION "2.0.0")
+# Suffix like "-rc1" e.t.c. to append to versions wherever needed.
+set(VERSION_SUFFIX "-rc1")
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -103,7 +105,7 @@ if(DOXYGEN_FOUND)
   set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/.Doxyfile.in)
   set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
   configure_file(${doxyfile_in} ${doxyfile} @ONLY)
-# Adding docs target
+# Add doc target
 add_custom_target(doc COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                        COMMENT "Generating documentation with Doxygen..." VERBATIM)

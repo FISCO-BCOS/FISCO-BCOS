@@ -22,11 +22,10 @@ English / [中文](docs/README_CN.md)
 
 ### Features
 
-- **Security**: Comprehensive security coverage includes role-based access control, certificate authorities and key management
-- **Privacy**: Authority management, guomi algorithm, zero-knowledge proof, homomorphic encryption, group signature, ring signature
-- **Performance**: Parallel computation, efficient consensus mechanism
-- **Usability**: More convenient to deploy and manage your consortium blockchain, including contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
-- **Reliability**: Several applications in production environment work stability
+**Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
+**Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
+**Reliability**: Verified by multiple running cross-organization financial applications.
+**Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
 
 ### Featured Cases
 
