@@ -147,7 +147,6 @@ void Ledger::initTxExecuteConfig(ptree const& pt)
     {
         bool enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
         m_param->mutableTxParam().enableParallel = enableParallel;
-
     }
     m_param->mutableTxParam().enableParallel = enableParallel;
     Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
