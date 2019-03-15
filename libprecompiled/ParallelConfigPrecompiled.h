@@ -35,15 +35,6 @@ class Table;
 
 namespace precompiled
 {
-class ParaFuncConfig
-{
-public:
-    typedef Ptr = std::shared_ptr<ParaFuncConfig>;
-
-    std::string functionName;
-    int criticalSize = 0;
-};
-
 class ParallelConfigPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
