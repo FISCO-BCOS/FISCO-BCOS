@@ -578,8 +578,16 @@ void VM::interpretCases()
 
             CASE(MUL)
         {
+           // Mul integer overflow detection
+           // fcorleone
             ON_OP();
             updateIOGas();
+	    u512 temp = (u512)(m_SP[0]) + (u512)(m_SP[1]);
+            u256 temp_ = m_SP[0] + m_SP[1];
+            if (temp != temp_){
+                PrintCrash("integer overflow when doing mul operation");
+                throw "SOL_ASAN Crash";
+            }
 
             // pops two items and pushes their product mod 2^256.
             m_SPP[0] = m_SP[0] * m_SP[1];
@@ -798,18 +806,28 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[2] ? u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]) : 0;
-        }
+            if (m_SP[2] == 0){
+		PrintCrash("integer overflow when doing addmod operation");
+                throw "SOL_ASAN Crash";
+            }
+	    else{
+                m_SPP[0] = u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]);
+           }        
+}
         NEXT
 
             CASE(MULMOD)
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[2] ? u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]) : 0;
-        }
+	    if (m_SP[2] == 0){
+                PrintCrash("integer overflow when doing mulmod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else{
+            m_SPP[0] = u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]);
+}        
+}
         NEXT
 
             CASE(SIGNEXTEND)
