@@ -17,20 +17,20 @@
 要参与进来，很简单，你可以：
 
 - 点亮我们的小星星！  
-- 提交代码(Pull requests)，我们有[代码贡献流程](CONTRIBUTING.md)和[编码规范](CODING_STYLE.md)。
+- 提交代码(Pull requests)，我们有[代码贡献流程](../CONTRIBUTING.md)和[编码规范](../CODING_STYLE.md)。
 - 也可以[提问](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)和[提交BUG](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
-- 或者可以在[微信群](docs/images/WeChatQR.jpeg)和[Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
+- 或者可以在[微信群](images/WeChatQR.jpeg)和[Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
 
 ### 关键特性
 
-- **安全**：提供准入机制、权限控制、CA认证，密钥管理，国密等功能，满足多种应用场景需求。
-- **性能**：提供并行交易处理、预编译合约、分布式存储等功能，大幅度提升性能。
-- **稳定**：多个机构多个应用在生产环境中长时间实践检验。
-- **易用**：提供控制台、部署工具、浏览器和SDK等配套工具，更简单更易用。
+- **安全**：提供准入机制、权限控制、CA认证，密钥管理，国密等高级安全功能，满足金融级商业应用场景需求。
+- **性能**：提供并行交易处理、预编译合约、分布式存储等功能，能够高效地处理大吞吐量的交易请求。
+- **稳定**：已有多个跨机构的金融级商业应用落地，长时间的实践检验了其稳定性。
+- **易用**：提供控制台、部署工具、浏览器和SDK等配套工具，便于用户快速上手。
 
 ### 落地应用案例
 
-FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地应用案例](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf)。
+FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地应用案例](https://www.fisco.com.cn/files/FISCOBCOS_FeaturedCases.pdf)。
 
 ## 社区生态
 
@@ -46,6 +46,6 @@ FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地
 
 ## License
 
-[![](https://img.shields.io/github/license/FISCO-BCOS/FISCO-BCOS.svg)](LICENSE)
+[![](https://img.shields.io/github/license/FISCO-BCOS/FISCO-BCOS.svg)](../LICENSE)
 
-FISCO BCOS的开源协议为[GPL 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)。详情参见[LICENSE](LICENSE)。  
+FISCO BCOS的开源协议为[GPL 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html)。详情参见[LICENSE](../LICENSE)。  

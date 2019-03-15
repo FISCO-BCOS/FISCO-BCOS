@@ -22,10 +22,10 @@ English / [中文](docs/README_CN.md)
 
 ### Features
 
-- **Security**: Provide access mechanism, privilege control, CA authentication, key management, guomi algorithm to meet the needs of a variety of application scenarios.
-- **Performance**: Provides parallel transaction processing, pre-compiled contracts, Advanced Mass Database, greatly improving performance.
-- **Reliability**: Several applications in production environment work stability.
-- **Usability**: Provide console, deployment tools, browser, SDK and other supporting tools, more simple and easy to use.
+**Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
+**Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
+**Reliability**: Verified by multiple running cross-organization financial applications.
+**Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
 
 ### Featured Cases
 
