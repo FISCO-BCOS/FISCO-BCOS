@@ -97,13 +97,13 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 196u);
+    BOOST_TEST(count == 100u);
 
     in = abi.abiIn("setValueByKey(string,string)", "tx_count_limit", "0");
     out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 196u);
+    BOOST_TEST(count == 100u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

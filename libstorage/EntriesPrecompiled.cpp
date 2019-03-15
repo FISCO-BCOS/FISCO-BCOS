@@ -36,7 +36,7 @@ EntriesPrecompiled::EntriesPrecompiled()
     name2Selector[ENTRYIES_METHOD_SIZE] = getFuncSelector(ENTRYIES_METHOD_SIZE);
 }
 
-std::string dev::blockverifier::EntriesPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string dev::blockverifier::EntriesPrecompiled::toString()
 {
     return "Entries";
 }

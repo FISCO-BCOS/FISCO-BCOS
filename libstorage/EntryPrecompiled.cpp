@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "EntryPrecompiled.h"
+#include "Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -46,7 +47,7 @@ EntryPrecompiled::EntryPrecompiled()
     name2Selector[ENTRYIY_METHOD_GETB_STR32] = getFuncSelector(ENTRYIY_METHOD_GETB_STR32);
 }
 
-std::string EntryPrecompiled::toString(std::shared_ptr<ExecutiveContext>)
+std::string EntryPrecompiled::toString()
 {
     return "Entry";
 }

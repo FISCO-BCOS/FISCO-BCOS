@@ -58,11 +58,11 @@ void RaftSealer::handleBlock()
     RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]++++++++++++++++ Generating seal")
                          << LOG_KV("blockNumber", m_sealing.block.header().number())
                          << LOG_KV("txNum", m_sealing.block.getTransactionSize())
-                         << LOG_KV("hash", m_sealing.block.header().hash());
+                         << LOG_KV("hash", m_sealing.block.header().hash().abridged());
 
     if (m_sealing.block.getTransactionSize() == 0)
     {
-        RAFTSEALER_LOG(INFO) << LOG_DESC("[#handleBlock]Empty block will not be committed");
+        RAFTSEALER_LOG(TRACE) << LOG_DESC("[#handleBlock]Empty block will not be committed");
         reset();
         m_raftEngine->resetLastBlockTime();
         return;

@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(error_func)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_TEST(authorityPrecompiled->toString(context) == "Authority");
+    BOOST_TEST(authorityPrecompiled->toString() == "Authority");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -24,7 +24,7 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libstorage/MemoryTableFactory.h>
 
 using namespace dev::executive;
 using namespace dev::eth;
@@ -35,10 +35,10 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 {
     try
     {
-        EXECUTIVECONTEXT_LOG(TRACE)
-            << LOG_DESC("[#call]PrecompiledEngine call") << LOG_KV("blockHash", m_blockInfo.hash)
-            << LOG_KV("number", m_blockInfo.number) << LOG_KV("address", address)
-            << LOG_KV("param", toHex(param));
+        EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
+                                    << LOG_KV("blockHash", m_blockInfo.hash.abridged())
+                                    << LOG_KV("number", m_blockInfo.number)
+                                    << LOG_KV("address", address) << LOG_KV("param", toHex(param));
 
         auto p = getPrecompiled(address);
 
@@ -95,16 +95,8 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
         return itPrecompiled->second;
     }
     /// since non-precompile contracts will print this log, modify the log level to DEBUG
-    LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
+    LOG(TRACE) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
     return Precompiled::Ptr();
-}
-
-std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
-{
-    std::string tableName = "_contract_data_" + address.hex() + "_";
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
 }
 
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()

@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: empty framework for main of lab-bcos
+ * @brief: empty framework for main of FISCO-BCOS
  *
  * @file: main.cpp
  * @author: yujiechen
@@ -66,6 +66,7 @@ int main(int argc, const char* argv[])
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         LogInitializer::logRotateByTime();
     }
+    initialize.reset();
     std::cout << "FISCO-BCOS program exit normally." << std::endl;
     return 0;
 }

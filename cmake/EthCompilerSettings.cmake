@@ -114,6 +114,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     endif()
 
     if (COVERAGE)
+        set(TESTS ON)
         if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") 
             set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
             set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")

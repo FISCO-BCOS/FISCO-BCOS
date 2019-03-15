@@ -44,7 +44,7 @@ CNSPrecompiled::CNSPrecompiled()
 }
 
 
-std::string CNSPrecompiled::toString(ExecutiveContext::Ptr)
+std::string CNSPrecompiled::toString()
 {
     return "CNS";
 }
@@ -103,11 +103,11 @@ bytes CNSPrecompiled::call(
             entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
             entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
             int count = table->insert(contractName, entry, std::make_shared<AccessOptions>(origin));
-            if (count == CODE_NO_AUTHORIZED)
+            if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
 
-                out = abi.abiIn("", CODE_NO_AUTHORIZED);
+                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
             }
             else
             {

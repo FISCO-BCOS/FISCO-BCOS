@@ -50,7 +50,7 @@ ExternalProject_Add(jsoncpp
     BUILD_COMMAND ""
     ${_overwrite_install_command}
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libjsoncpp.a
+    BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libjsoncpp.a
 )
 
 # Create jsoncpp imported library

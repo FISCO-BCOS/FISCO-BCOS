@@ -879,14 +879,12 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             writeTotalTransactionCount(block, context);
             writeTxToBlock(block, context);
             context->dbCommit(block);
+            {
+                WriteGuard ll(m_blockNumberMutex);
+                m_blockNumber = block.blockHeader().number();
+            }
         }
         m_blockCache.add(block);
-
-        {
-            WriteGuard ll(m_blockNumberMutex);
-            m_blockNumber = block.blockHeader().number();
-        }
-
         m_onReady(m_blockNumber);
         return CommitResult::OK;
     }

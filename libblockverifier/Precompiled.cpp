@@ -23,6 +23,7 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Hash.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
@@ -42,4 +43,15 @@ storage::Table::Ptr Precompiled::openTable(
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
     return tableFactoryPrecompiled->getmemoryTableFactory()->openTable(tableName);
+}
+
+storage::Table::Ptr Precompiled::createTable(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
+    const std::string& keyField, const std::string& valueField, Address const& origin)
+{
+    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
+            context->getPrecompiled(Address(0x1001)));
+    return tableFactoryPrecompiled->getmemoryTableFactory()->createTable(
+        tableName, keyField, valueField, true, origin);
 }

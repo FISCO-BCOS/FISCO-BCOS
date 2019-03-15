@@ -119,13 +119,13 @@ Table::Ptr MemoryTableFactory::openTable(const string& tableName, bool authority
 }
 
 Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string& keyField,
-    const std::string& valueField, bool authorigytFlag, Address const& _origin)
+    const std::string& valueField, bool authorityFlag, Address const& _origin)
 {
     STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory") << LOG_DESC("create table")
                        << LOG_KV("table name", tableName) << LOG_KV("blockHash", m_blockHash)
                        << LOG_KV("blockNum", m_blockNum);
 
-    auto sysTable = openTable(SYS_TABLES, authorigytFlag);
+    auto sysTable = openTable(SYS_TABLES, authorityFlag);
 
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
@@ -143,8 +143,8 @@ Table::Ptr MemoryTableFactory::createTable(const string& tableName, const string
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
     createTableCode = sysTable->insert(
-        tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorigytFlag));
-    if (createTableCode == -1)
+        tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
+    if (createTableCode == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
                              << LOG_DESC("create table non-authorized")

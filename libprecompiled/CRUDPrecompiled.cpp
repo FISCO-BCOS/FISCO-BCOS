@@ -23,6 +23,7 @@
 
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
+#include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
@@ -39,7 +40,7 @@ CRUDPrecompiled::CRUDPrecompiled()
     name2Selector[CRUD_METHOD_SLT_STR_STR] = getFuncSelector(CRUD_METHOD_SLT_STR_STR);
 }
 
-std::string CRUDPrecompiled::toString(ExecutiveContext::Ptr)
+std::string CRUDPrecompiled::toString()
 {
     return "CRUD";
 }

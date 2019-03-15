@@ -90,11 +90,15 @@ public:
 
     virtual bool reachBlockIntervalTime()
     {
+        if (false == getLeader().first)
+        {
+            return false;
+        }
         /// the block is sealed by the next leader, and can execute after the last block has been
         /// consensused
         if (m_notifyNextLeaderSeal)
         {
-            /// represent that the latest block has been consensused
+            /// represent that the latest block has not been consensused
             if (getNextLeader() == nodeIdx())
             {
                 return false;
@@ -111,6 +115,16 @@ public:
     /// even if the maxTransNum condition has been meeted
     bool canHandleBlockForNextLeader()
     {
+        /// get leader failed
+        if (false == getLeader().first)
+        {
+            return false;
+        }
+        /// the case that only a node is both the leader and the next leader
+        if (getLeader().second == nodeIdx())
+        {
+            return true;
+        }
         if (m_notifyNextLeaderSeal && getNextLeader() == nodeIdx())
         {
             return false;
@@ -123,7 +137,11 @@ public:
     bool generatePrepare(dev::eth::Block const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
-    void onViewChange(std::function<void()> const& _f) { m_onViewChange = _f; }
+    void onViewChange(std::function<void()> const& _f)
+    {
+        m_onViewChange = _f;
+        m_notifyNextLeaderSeal = false;
+    }
     void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
     {
         m_onNotifyNextLeaderReset = _f;
@@ -363,7 +381,7 @@ protected:
             if (is_future && checkSign(req))
             {
                 PBFTENGINE_LOG(INFO)
-                    << LOG_DESC("checkReq: Recv future request:")
+                    << LOG_DESC("checkReq: Recv future request")
                     << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;
@@ -441,6 +459,7 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
+            /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
@@ -458,15 +477,6 @@ protected:
         /// get leader failed or this prepareReq is not broadcasted from leader
         if (!leader.first || req.idx != leader.second)
         {
-            if (!m_emptyBlockViewChange)
-            {
-                PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("InvalidPrepare: Get leader failed") << LOG_KV("cfgErr", m_cfgErr)
-                    << LOG_KV("idx", req.idx) << LOG_KV("leader", leader.second)
-                    << LOG_KV("leaderFailed", m_leaderFailed) << LOG_KV("view", m_view)
-                    << LOG_KV("highSealer", m_highestBlock.sealer())
-                    << LOG_KV("highNum", m_highestBlock.number()) << LOG_KV("myIdx", nodeIdx());
-            }
             return false;
         }
 
@@ -481,7 +491,7 @@ protected:
     {
         m_timeManager.changeView();
         m_timeManager.m_changeCycle = 0;
-        m_emptyBlockViewChange = true;
+        m_fastViewChange = true;
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
@@ -525,7 +535,9 @@ protected:
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
 
-    bool m_emptyBlockViewChange = false;
+    /// for output time-out caused viewchange
+    /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
+    bool m_fastViewChange = false;
 
     uint8_t maxTTL = MAXTTL;
 

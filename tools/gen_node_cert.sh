@@ -153,13 +153,45 @@ generate_node_scripts()
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
 cd \${SHELL_FOLDER}
-nohup \${fisco_bcos} -c config.ini&
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+if [ ! -z \${node_pid} ];then
+    echo " \${node} is running, pid is \$node_pid."
+    exit 0
+else 
+    nohup \${fisco_bcos} -c config.ini 2>>nohup.out &
+    sleep 0.5
+fi
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+if [ ! -z \${node_pid} ];then
+    echo " \${node} start successfully"
+else
+    echo " \${node} start failed"
+    cat nohup.out
+fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/../fisco-bcos
-weth_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
-kill \${weth_pid}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+try_times=5
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    if [ -z \${node_pid} ];then
+        echo " \${node} isn't running."
+        exit 0
+    fi
+    [ ! -z \${node_pid} ] && kill \${node_pid}
+    sleep 0.4
+    node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+    if [ -z \${node_pid} ];then
+        echo " stop \${node} success."
+        exit 0
+    fi
+    ((i=i+1))
+done
 EOF
 }
 

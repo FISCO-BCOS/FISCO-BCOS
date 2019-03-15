@@ -63,8 +63,6 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     }
     BOOST_CHECK(txpool_creator->m_txPool->pendingSize() == txCnt);
 
-    /*FakeConsensus<FakePBFTEngine> fake_engine(
-        1, ProtocolID::PBFT, sync, blockVerifier, txpool_creator);*/
     FakePBFTSealer fake_pbft(txpool_creator->m_topicService, txpool_creator->m_txPool,
         txpool_creator->m_blockChain, sync, blockVerifier, 10);
 

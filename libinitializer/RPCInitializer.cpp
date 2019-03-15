@@ -65,7 +65,14 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
-        m_channelRPCHttpServer->StartListening();
+        if (!m_channelRPCHttpServer->StartListening())
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("RPCInitializer") << LOG_KV("check channel_listen_port", listenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                         << LOG_KV("check channel_listen_port", listenPort) << std::endl;
+            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
+        }
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("ChannelRPCHttpServer started.");
 
@@ -78,20 +85,20 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             auto blockChain = m_ledgerManager->blockChain(it);
             auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
             auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
-                LOG(TRACE) << "Push block notify: " << (int)groupID << "-" << number;
+                LOG(INFO) << "Push block notify: " << std::to_string(groupID) << "-" << number;
                 auto c = channelRPCServer.lock();
 
                 if (c)
                 {
-                    std::string topic =
-                        "_block_notify_" + boost::lexical_cast<std::string>((int)groupID);
-                    std::string content = boost::lexical_cast<std::string>(groupID) + "," +
-                                          boost::lexical_cast<std::string>(number);
-
-                    auto message = c->channelServer()->messageFactory()->buildMessage();
+                    std::string topic = "_block_notify_" + std::to_string(groupID);
+                    std::string content =
+                        std::to_string(groupID) + "," + boost::lexical_cast<std::string>(number);
+                    std::shared_ptr<dev::channel::TopicChannelMessage> message =
+                        std::make_shared<dev::channel::TopicChannelMessage>();
                     message->setType(0x1001);
                     message->setSeq(std::string(32, '0'));
                     message->setResult(0);
+                    message->setTopic(topic);
                     message->setData((const byte*)content.data(), content.size());
                     c->asyncBroadcastChannelMessage(topic, message);
                 }
@@ -106,17 +113,29 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
-        m_jsonrpcHttpServer->StartListening();
+        if (!m_jsonrpcHttpServer->StartListening())
+        {
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
+                                   << LOG_KV("check jsonrpc_listen_port", httpListenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                         << LOG_KV("check jsonrpc_listen_port", httpListenPort) << std::endl;
+            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
+        }
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("JsonrpcHttpServer started.");
     }
     catch (std::exception& e)
     {
+        // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
                                << LOG_DESC("init RPC/channelserver failed")
+                               << LOG_KV("check channel_listen_port", listenPort)
+                               << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC/channelserver failed")
+                     << LOG_KV("check channel_listen_port", listenPort)
+                     << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }

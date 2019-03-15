@@ -23,11 +23,11 @@
 
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <extension/HelloWorldPrecompiled.h>
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
+#include <libprecompiled/extension/HelloWorldPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -72,7 +72,7 @@ BOOST_FIXTURE_TEST_SUITE(test_HelloWorldPrecompiled, HelloWorldPrecompiledFixtur
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_TEST(helloWorldPrecompiled->toString(context) == "HelloWorld");
+    BOOST_TEST(helloWorldPrecompiled->toString() == "HelloWorld");
 }
 
 BOOST_AUTO_TEST_CASE(get)

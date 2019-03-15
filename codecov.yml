@@ -1,5 +1,5 @@
 codecov:
-  branch: dev-2.0
+  branch: dev
 coverage:
   range: 30...100
   notify:
