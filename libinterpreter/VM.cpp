@@ -591,7 +591,14 @@ void VM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] = m_SP[0] - m_SP[1];
+            // SUB integer overflow detection -- renardbebe
+            if (m_SP[0] >= m_SP[1]) {
+            	m_SPP[0] = m_SP[0] - m_SP[1];
+            }
+            else {
+            	PrintCrash("integer overflow when doing sub operation");
+                throw "SOL_ASAN Crash";
+            }
         }
         NEXT
 
