@@ -32,6 +32,7 @@
 #include <evmc/instructions.h>
 
 #include <boost/optional.hpp>
+#include <string>
 
 namespace dev
 {
@@ -159,6 +160,7 @@ private:
     void updateMem(uint64_t _newMem);
     void logGasMem();
     void fetchInstruction();
+    void PrintCrash(std::string);
 
     uint64_t decodeJumpDest(const byte* const _code, uint64_t& _pc);
     uint64_t decodeJumpvDest(const byte* const _code, uint64_t& _pc, byte _voff);
