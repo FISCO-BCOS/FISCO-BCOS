@@ -171,7 +171,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     {
         Condition::Ptr cond = table->newCondition();
         cond->EQ(PARA_SELECTOR, to_string(selector));
-        auto entries = table->remove(PARA_KEY, cond, getOptions(origin));
+        table->remove(PARA_KEY, cond, getOptions(origin));
     }
     out = abi.abiIn("", CODE_SUCCESS);
 }
