@@ -175,3 +175,29 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     }
     out = abi.abiIn("", CODE_SUCCESS);
 }
+
+
+ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
+    dev::blockverifier::ExecutiveContext::Ptr context, Address const& contractAddress,
+    uint32_t selector, Address const& origin)
+{
+    Table::Ptr table = openTable(context, contractAddress, origin);
+    if (!table.get())
+    {
+        return nullptr;
+    }
+    Condition::Ptr cond = table->newCondition();
+    cond->EQ(PARA_SELECTOR, to_string(selector));
+    auto entries = table->select(PARA_KEY, cond);
+    if (entries->size() == 0)
+    {
+        return nullptr;
+    }
+    else
+    {
+        auto entry = entries->get(0);
+        string funtionName = entry->getField(PARA_FUNC_NAME);
+        u256 criticalSize = fromBigEndian<u256, string>(entry->getField(PARA_CRITICAL_SIZE));
+        return make_shared<ParallelConfig>(ParallelConfig{funtionName, criticalSize});
+    }
+}

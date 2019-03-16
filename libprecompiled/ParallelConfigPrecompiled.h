@@ -35,6 +35,13 @@ class Table;
 
 namespace precompiled
 {
+struct ParallelConfig
+{
+    typedef std::shared_ptr<ParallelConfig> Ptr;
+    std::string functionName;
+    u256 criticalSize;
+};
+
 class ParallelConfigPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
@@ -50,12 +57,16 @@ public:
     dev::storage::Table::Ptr openTable(dev::blockverifier::ExecutiveContext::Ptr context,
         Address const& contractAddress, Address const& origin);
 
-
 private:
     void registerParallelFunction(dev::blockverifier::ExecutiveContext::Ptr context,
         bytesConstRef data, Address const& origin, bytes& out);
     void unregisterParallelFunction(dev::blockverifier::ExecutiveContext::Ptr context,
         bytesConstRef data, Address const& origin, bytes& out);
+
+public:
+    /// get paralllel config, return nullptr if not found
+    ParallelConfig::Ptr getParallelConfig(dev::blockverifier::ExecutiveContext::Ptr context,
+        Address const& contractAddress, uint32_t selector, Address const& origin);
 };
 
 }  // namespace precompiled
