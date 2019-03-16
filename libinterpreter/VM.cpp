@@ -595,6 +595,13 @@ void VM::interpretCases()
             updateIOGas();
 
             // pops two items and pushes their product mod 2^256.
+            u256 temp = m_SP[0] * m_SP[1];
+            u512 temp = u512(m_SP[0]) * u512(m_SP[1]);
+            if (temp != temp_)
+            {
+                PrintCrash("integer overflow when doing add operation");
+                throw "SOL_ASAN Crash"
+            }
             m_SPP[0] = m_SP[0] * m_SP[1];
         }
         NEXT
@@ -817,8 +824,15 @@ void VM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] =
-                m_SP[2] ? u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing addmod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]);
+            }
         }
         NEXT
 
@@ -827,8 +841,15 @@ void VM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] =
-                m_SP[2] ? u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing mulmod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]);
+            }
         }
         NEXT
 
