@@ -200,11 +200,11 @@ void VM::fetchInstruction() {
   m_copyMemSize = 0;
 }
 
-void LegacyVM::PrintCrash(string s) {
-  string content =
+void VM::PrintCrash(std::string s) {
+  std::string content =
       "********************************************************\nSOL_ASAN: " +
       s + "\n";
-  cout << content << endl;
+  std::cout << content << std::endl;
 }
 
 evmc_tx_context const &VM::getTxContext() {
