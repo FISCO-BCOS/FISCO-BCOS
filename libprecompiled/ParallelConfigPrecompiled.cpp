@@ -44,9 +44,9 @@ const string PARA_FUNC_NAME = "functionName";
 const string PARA_CRITICAL_SIZE = "criticalSize";
 
 const string PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT =
-    "registerParallelFunctionBasic(address,string,uint256)";
+    "registerParallelFunctionInternal(address,string,uint256)";
 const string PARA_CONFIG_UNREGISTER_METHOD_ADDR_STR =
-    "unregisterParallelFunctionBasic(address,string)";
+    "unregisterParallelFunctionInternal(address,string)";
 
 const string PARA_KEY_NAME = PARA_KEY;
 const string PARA_VALUE_NAMES = PARA_SELECTOR + "," + PARA_FUNC_NAME + "," + PARA_CRITICAL_SIZE;
@@ -117,8 +117,8 @@ void ParallelConfigPrecompiled::registerParallelFunction(
     dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
     bytes& out)
 {
-    // registerParallelFunctionBasic(address,string,uint256)
-    // registerParallelFunctionBasic(address contractAddress, string functionName, uint256
+    // registerParallelFunctionInternal(address,string,uint256)
+    // registerParallelFunctionInternal(address contractAddress, string functionName, uint256
     // criticalSize)
 
     Address contractAddress;
@@ -150,6 +150,10 @@ void ParallelConfigPrecompiled::registerParallelFunction(
         }
 
         out = abi.abiIn("", CODE_SUCCESS);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("registerParallelFunction success")
+                               << LOG_KV(PARA_SELECTOR, to_string(selector))
+                               << LOG_KV(PARA_FUNC_NAME, functionName)
+                               << LOG_KV(PARA_CRITICAL_SIZE, criticalSize);
     }
 }
 
@@ -157,8 +161,8 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
     bytes& out)
 {
-    // unregisterParallelFunctionBasic(address,string)
-    // unregisterParallelFunctionBasic(address contractAddress, string functionName)
+    // unregisterParallelFunctionInternal(address,string)
+    // unregisterParallelFunctionInternal(address contractAddress, string functionName)
     Address contractAddress;
     string functionName;
 
@@ -174,6 +178,9 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
         table->remove(PARA_KEY, cond, getOptions(origin));
     }
     out = abi.abiIn("", CODE_SUCCESS);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("unregisterParallelFunction success")
+                           << LOG_KV(PARA_SELECTOR, to_string(selector));
+    ;
 }
 
 

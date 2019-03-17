@@ -24,12 +24,14 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
 using namespace dev::executive;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev;
+using namespace std;
 
 bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
 {
@@ -145,4 +147,63 @@ void ExecutiveContext::dbCommit(Block& block)
 {
     m_stateFace->dbCommit(block.header().hash(), block.header().number());
     m_memoryTableFactory->commitDB(block.header().hash(), block.header().number());
+}
+
+std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const Transaction& _tx)
+{
+    if (_tx.isCreation())
+    {
+        // Not to parallel contract creation transaction
+        return nullptr;
+    }
+
+    auto p = getPrecompiled(_tx.receiveAddress());
+    if (p)
+    {
+        // Precompile transaction
+        if (p->isParallelPrecompiled())
+        {
+            return make_shared<vector<string>>(p->getParallelTag(ref(_tx.data())));
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        // Normal transaction
+        auto parallelConfigPrecompiled =
+            std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
+                getPrecompiled(Address(0x1007)));
+
+        uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+
+        auto config = parallelConfigPrecompiled->getParallelConfig(
+            shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
+
+        if (config == nullptr)
+        {
+            return nullptr;
+        }
+        else
+        {
+            // TODO call perser to decode _tx.data()
+            // shared getParallelTagByFunctionName(_tx.data, config->functionName,
+            // config->criticalSize);
+            {  // Testing code
+                bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                ContractABI abi;
+                string c0, c1;
+                abi.abiOut(data, c0, c1);
+                LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("Get normal transaction criticals")
+                           << LOG_KV("c0", c0) << LOG_KV("c1", c1);
+
+                auto res = make_shared<vector<string>>();
+                res->emplace_back(c0);
+                res->emplace_back(c1);
+                return res;
+            }
+        }
+    }
 }

@@ -55,9 +55,9 @@ public:
     const string PARA_CRITICAL_SIZE = "criticalSize";
 
     const string PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT =
-        "registerParallelFunctionBasic(address,string,uint256)";
+        "registerParallelFunctionInternal(address,string,uint256)";
     const string PARA_CONFIG_UNREGISTER_METHOD_ADDR_STR =
-        "unregisterParallelFunctionBasic(address,string)";
+        "unregisterParallelFunctionInternal(address,string)";
 
 public:
     ParallelConfigPrecompiledFixture() : TestOutputHelperFixture()
