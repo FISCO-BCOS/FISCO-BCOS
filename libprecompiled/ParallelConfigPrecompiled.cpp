@@ -98,6 +98,13 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
+    if (!tableFactoryPrecompiled)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ParallelConfigPrecompiled")
+                               << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
+        return nullptr;
+    }
+
     auto table =
         tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName, false, false);
     if (!table)
@@ -130,7 +137,7 @@ void ParallelConfigPrecompiled::registerParallelFunction(
     uint32_t selector = getFuncSelector(functionName);
 
     Table::Ptr table = openTable(context, contractAddress, origin);
-    if (table.get())
+    if (table && table.get())
     {
         Entry::Ptr entry = table->newEntry();
         entry->setField(PARA_SELECTOR, to_string(selector));
@@ -171,7 +178,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     uint32_t selector = getFuncSelector(functionName);
 
     Table::Ptr table = openTable(context, contractAddress, origin);
-    if (table.get())
+    if (table && table.get())
     {
         Condition::Ptr cond = table->newCondition();
         cond->EQ(PARA_SELECTOR, to_string(selector));
@@ -189,7 +196,7 @@ ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
     uint32_t selector, Address const& origin)
 {
     Table::Ptr table = openTable(context, contractAddress, origin);
-    if (!table.get())
+    if (!table || !table.get())
     {
         return nullptr;
     }

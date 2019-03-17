@@ -25,6 +25,7 @@
 #include <libethcore/ABI.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/DagTransferPrecompiled.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -93,6 +94,8 @@ public:
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
             Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>(ctx, false));
+        ctx->setAddress2Precompiled(
+            Address(0x1007), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
         return ctx;
     }
 
