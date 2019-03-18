@@ -13,7 +13,9 @@ English / [中文](docs/README_CN.md)
 
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
 
-Version [2.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master) is an upgrade with very large changes and is **not compatible** with version [1.3.x](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3).
+## Compatibility
+
+Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
 
 ## Developing & Contributing
 

@@ -12,7 +12,9 @@
 
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
 
-版本[2.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master)是一个升级版本，版本变动较大，与版本[1.3.x](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3)**不兼容**。
+## 兼容性说明
+
+2.0版本与1.0版本数据和协议不兼容，合约兼容。如果要从1.3版本升级到2.0版本，需要做数据迁移。
 
 ## 贡献代码
 
