@@ -59,11 +59,8 @@ public:
         u256 nonce = u256(utcTime() + rand());
 
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
-
         tx.setBlockLimit(500);
-        tx.updateSignature(SignatureStruct(sig));
+        tx.forceSender(Address(0x2333));
 
         return tx;
     }
@@ -80,11 +77,8 @@ public:
         u256 nonce = u256(utcTime() + rand());
 
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
-
         tx.setBlockLimit(500);
-        tx.updateSignature(SignatureStruct(sig));
+        tx.forceSender(Address(0x2333));
 
         return tx;
     }
