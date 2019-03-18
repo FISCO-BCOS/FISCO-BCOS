@@ -41,3 +41,7 @@
 
 1. 提供入门级的搭链工具
 2. 提供模块化的单元测试和端对端集成测试，支持自动化持续集成和持续部署
+
+**说明**
+
+版本[2.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master)是一个升级版本，版本变动较大，与版本[1.3.x]((https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3))**不兼容**。
