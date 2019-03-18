@@ -594,45 +594,7 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-            //    std::cout<<m_SP[0]<<std::endl;
-            //    std::cout<<m_SP[1]<<std::endl;
-            //    if (m_SP[0] == 0) {
-            //      m_SPP[0] = 0;
-            //    }
 
-            // //          //pops two items and pushes their product mod 2^256.
-
-            // else
-            // {
-            //  u256 c =  m_SP[0] * m_SP[1];
-            //  if(c/m_SP[0] != m_SP[1])
-            //  {
-            //   PrintCrash("integer overflow when doing mul operation");
-            //               throw "SOL_ASAN Crash";
-            //  }
-            //  m_SPP[0] = m_SP[0] * m_SP[1];
-
-            // }
-            //      }
-
-            // pops two items and pushes their product mod 2^256.
-            // std::cout<<m_SP[1]<<std::endl;
-            // std::cout<<u2s(m_SP[1])<<std::endl;
-            // m_SPP[0] = m_SP[0] * m_SP[1];
-            // std::cout<<m_SP[0]<<std::endl;
-            // std::cout<<m_SP[1]<<std::endl;
-            // std::cout<<m_SPP[0]<<std::endl;
-            // std::cout<<u2s(m_SP[0])<<std::endl;
-            // std::cout<<u2s(m_SP[1])<<std::endl;
-            // std::cout<<u2s(m_SPP[0])<<std::endl;
-
-            // m_SPP[0] = m_SP[0] * m_SP[1];
-            // std::cout<<m_SP[0]<<std::endl;
-            // std::cout<<m_SP[1]<<std::endl;
-            // // std::cout<<m_SPP[0]<<std::endl;
-            // std::cout<<u2s(m_SP[0])<<std::endl;
-            // std::cout<<u2s(m_SP[1])<<std::endl;
-            // std::cout<<u2s(m_SPP[0])<<std::endl;
             u256 a = m_SP[0];
             u256 b = m_SP[1];
             u256 temp_ = a * b;
@@ -640,6 +602,11 @@ void VM::interpretCases()
             {
                 if (s2u(divWorkaround(u2s(temp_), u2s(a))) != b)
                 {
+                    std::cout << a << std::endl;
+                    std::cout << b << std::endl;
+                    std::cout << temp_ << std::endl;
+                    std::cout << s2u(divWorkaround(u2s(temp_), u2s(a)))
+                              << std::endl;
                     PrintCrash("integer overflow when doing mul operation");
                     throw "SOL_ASAN Crash";
                 }
