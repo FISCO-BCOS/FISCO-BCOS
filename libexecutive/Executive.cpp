@@ -384,7 +384,7 @@ void Executive::revert()
 
     // Set result address to the null one.
     m_newAddress = {};
-    // m_s->rollback(m_savepoint);
+    m_s->rollback(m_savepoint);
     auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
-    // memoryTableFactory->rollback(m_tableFactorySavepoint);
+    memoryTableFactory->rollback(m_tableFactorySavepoint);
 }

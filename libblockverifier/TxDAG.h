@@ -30,7 +30,6 @@
 #include <queue>
 #include <vector>
 
-
 namespace dev
 {
 namespace blockverifier

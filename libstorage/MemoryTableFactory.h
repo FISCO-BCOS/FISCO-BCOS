@@ -27,6 +27,7 @@
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/thread/tss.hpp>
 #include <memory>
 #include <type_traits>
 
@@ -57,7 +58,7 @@ public:
     void setBlockNum(int64_t blockNum);
 
     h256 hash();
-    size_t savepoint() const { return m_changeLog.size(); };
+    size_t savepoint() const { return m_changeLog->size(); };
     void rollback(size_t _savepoint);
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
@@ -71,7 +72,7 @@ private:
     int m_blockNum;
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
-    std::vector<Change> m_changeLog;
+    boost::thread_specific_ptr<std::vector<Change>> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;

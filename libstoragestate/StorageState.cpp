@@ -387,12 +387,13 @@ void StorageState::noteAccountStartNonce(u256 const& _actual)
 
 size_t StorageState::savepoint() const
 {
-    return m_memoryTableFactory->savepoint();
+    // return m_memoryTableFactory->savepoint();
+    return 0;
 }
 
-void StorageState::rollback(size_t _savepoint)
+void StorageState::rollback(size_t)
 {
-    m_memoryTableFactory->rollback(_savepoint);
+    // m_memoryTableFactory->rollback(_savepoint);
 }
 
 void StorageState::clear()

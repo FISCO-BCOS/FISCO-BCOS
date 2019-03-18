@@ -126,7 +126,7 @@ Table::Ptr MemoryTableFactory::openTable(
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
                                  std::vector<Change::Record>& _records) {
-        m_changeLog.emplace_back(_table, _kind, _key, _records);
+        m_changeLog->emplace_back(_table, _kind, _key, _records);
     });
 
     m_name2Table.insert({tableName, memoryTable});
@@ -202,17 +202,14 @@ h256 MemoryTableFactory::hash()
     return m_hash;
 }
 
-void MemoryTableFactory::rollback(size_t _savepoint)
+void MemoryTableFactory::rollback(size_t)
 {
-    while (_savepoint < m_changeLog.size())
+    for (auto iter = m_changeLog->rbegin(); iter != m_changeLog->rend(); ++iter)
     {
-        auto& change = m_changeLog.back();
-
-        // Public MemoryTable API cannot be used here because it will add another
-        // change log entry.
+        auto& change = *iter;
         change.table->rollback(change);
 
-        m_changeLog.pop_back();
+        m_changeLog->pop_back();
     }
 }
 
@@ -250,7 +247,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     record_time = utcTime();
 
     m_name2Table.clear();
-    m_changeLog.clear();
+    m_changeLog->clear();
     auto clear_time_cost = utcTime() - record_time;
     STORAGE_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit db time record")
                        << LOG_KV("getDataTimeCost", getData_time_cost)
