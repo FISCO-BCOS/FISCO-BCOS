@@ -209,7 +209,7 @@ void MemoryTableFactory::rollback(size_t)
         auto& change = *iter;
         change.table->rollback(change);
 
-        m_changeLog->pop_back();
+        // m_changeLog->pop_back();
     }
 }
 
@@ -247,7 +247,6 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     record_time = utcTime();
 
     m_name2Table.clear();
-    m_changeLog->clear();
     auto clear_time_cost = utcTime() - record_time;
     STORAGE_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit db time record")
                        << LOG_KV("getDataTimeCost", getData_time_cost)

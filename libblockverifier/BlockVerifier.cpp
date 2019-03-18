@@ -28,7 +28,6 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
-#include <algorithm>
 #include <exception>
 #include <thread>
 
@@ -205,12 +204,15 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
     vector<thread> threads;
-    for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
+    for (unsigned int i = 0; i < m_threadNum; ++i)
     {
-        threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory]() {
-            memoryTableFactory->setChangeLog();
+        threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory, this, i]() {
+            memoryTableFactory->setChangeLog(&m_changeLogs[i]);
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
+            {
                 txDag->executeUnit();
+                m_changeLogs[i].clear();
+            }
         }));
     }
 
@@ -218,6 +220,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     {
         t.join();
     }
+
     if (utcTime() >= parallelTimeOut)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
@@ -225,13 +228,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                                  << LOG_KV("txNum", block.transactions().size())
                                  << LOG_KV("blockNumber", block.blockHeader().number());
     }
-    /*
-    #pragma omp parallel
-        {
-            while (!txDag->hasFinished())
-                txDag->executeUnit();
-        }
-        */
+
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

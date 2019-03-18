@@ -63,7 +63,7 @@ public:
 
     void setBlockHash(h256 blockHash);
     void setBlockNum(int64_t blockNum);
-    void setChangeLog() { m_changeLog.reset(new std::vector<Change>()); }
+    void setChangeLog(std::vector<Change>* _changeLog) {m_changeLog.reset(_changeLog); }
 
     h256 hash();
     size_t savepoint() const { return m_changeLog->size(); };
