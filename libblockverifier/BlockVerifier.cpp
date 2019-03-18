@@ -176,6 +176,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
                               << errinfo_comment("Error during initExecutiveContext"));
     }
+
+    auto memoryTableFactory = executiveContext->getMemoryTableFactory();
+
     auto initExeCtx_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -204,7 +207,8 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     vector<thread> threads;
     for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
     {
-        threads.push_back(std::thread([txDag, parallelTimeOut]() {
+        threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory]() {
+            memoryTableFactory->setChangeLog();
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
                 txDag->executeUnit();
         }));
