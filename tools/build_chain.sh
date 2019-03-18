@@ -495,7 +495,7 @@ function generate_group_ini()
     ;ttl=2
 ;txpool limit
 [tx_pool]
-    limit=10000
+    limit=150000
 [tx_execute]
     enable_parallel=true
 EOF
