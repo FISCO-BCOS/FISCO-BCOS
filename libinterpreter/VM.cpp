@@ -600,16 +600,25 @@ void VM::interpretCases()
             u256 temp_ = a * b;
             if (a != 0)
             {
-                if (divWorkaround(temp_, a) != b)
-                {
-                    std::cout << a << std::endl;
-                    std::cout << b << std::endl;
-                    std::cout << temp_ << std::endl;
-                    std::cout << divWorkaround(temp_, a)
-                              << std::endl;
-                    PrintCrash("integer overflow when doing mul operation");
-                    throw "SOL_ASAN Crash";
+                if (u2s(a) < 0 || u2s(b) < 0){
+                    if (s2u(divWorkaround(u2s(temp_), u2s(a))) != b){
+                        PrintCrash("integer overflow when doing mul operation");
+                        throw "SOL_ASAN Crash";
+                    }
                 }
+                else {
+                    if (divWorkaround(temp_, a) != b)
+                    {
+                        std::cout << a << std::endl;
+                        std::cout << b << std::endl;
+                        std::cout << temp_ << std::endl;
+                        std::cout << divWorkaround(temp_, a)
+                                  << std::endl;
+                        std::cout << s2u(divWorkaround(u2s(temp_), u2s(a))) << std::endl;
+                        PrintCrash("integer overflow when doing mul operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                }   
             }
             m_SPP[0] = m_SP[0] * m_SP[1];
         }
