@@ -1,13 +1,16 @@
 /*
     This file is part of cpp-ethereum.
+
     cpp-ethereum is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
+
     cpp-ethereum is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
+
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -24,6 +27,7 @@
 
 #include <include/BuildInfo.h>
 #include <string>
+
 namespace
 {
 void destroy(evmc_instance* _instance)
@@ -121,7 +125,6 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
     return &s_instance;
 }
 
-
 namespace dev
 {
 namespace eth
@@ -142,7 +145,6 @@ S modWorkaround(S const& _a, S const& _b)
 {
     return (S)(s512(_a) % s512(_b));
 }
-
 
 //
 // for decoding destinations of JUMPTO, JUMPV, JUMPSUB and JUMPSUBV
@@ -174,7 +176,6 @@ uint64_t VM::decodeJumpvDest(const byte* const _code, uint64_t& _pc, byte _voff)
     _pc += 1 + n * 2;  // adust inout _pc to opcode after table
     return dest;
 }
-
 
 //
 // set current SP to SP', adjust SP' per _removed and _added items
@@ -252,6 +253,7 @@ void VM::PrintCrash(std::string s)
         s + "\n";
     std::cout << content << std::endl;
 }
+
 evmc_tx_context const& VM::getTxContext()
 {
     if (!m_tx_context)
@@ -261,7 +263,6 @@ evmc_tx_context const& VM::getTxContext()
     }
     return m_tx_context.value();
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -380,7 +381,8 @@ void VM::interpretCases()
             evmc_address destination = toEvmC(asAddress(m_SP[0]));
 
             // After EIP158 zero-value suicides do not have to pay account
-            // creation gas.
+            // creation
+            // gas.
             evmc_uint256be rawBalance;
             m_context->fn_table->get_balance(
                 &rawBalance, m_context, &m_message->destination);
@@ -409,7 +411,6 @@ void VM::interpretCases()
             m_bounce = 0;
         }
         BREAK
-
 
         //
         // instructions potentially expanding memory
@@ -595,13 +596,6 @@ void VM::interpretCases()
             updateIOGas();
 
             // pops two items and pushes their product mod 2^256.
-            u256 temp = m_SP[0] * m_SP[1];
-            u512 temp = u512(m_SP[0]) * u512(m_SP[1]);
-            if (temp != temp_)
-            {
-                PrintCrash("integer overflow when doing add operation");
-                throw "SOL_ASAN Crash"
-            }
             m_SPP[0] = m_SP[0] * m_SP[1];
         }
         NEXT
@@ -619,8 +613,16 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing div operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = divWorkaround(m_SP[0], m_SP[1]);
+            }
+            // m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -628,9 +630,19 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing sdiv operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
+            }
 
-            m_SPP[0] =
-                m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
+            // m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]),
+            // u2s(m_SP[1]))) :
+            // 0;
             --m_SP;
         }
         NEXT
@@ -639,8 +651,17 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing mod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = modWorkaround(m_SP[0], m_SP[1]);
+            }
 
-            m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
+            //     m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -648,9 +669,19 @@ void VM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing smod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
+            }
 
-            m_SPP[0] =
-                m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
+            //     m_SPP[0] = m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]),
+            //     u2s(m_SP[1])))
+            //     : 0;
         }
         NEXT
 
@@ -824,15 +855,8 @@ void VM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            if (m_SP[2] == 0)
-            {
-                PrintCrash("integer overflow when doing addmod operation");
-                throw "SOL_ASAN Crash";
-            }
-            else
-            {
-                m_SPP[0] = u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]);
-            }
+            m_SPP[0] =
+                m_SP[2] ? u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]) : 0;
         }
         NEXT
 
@@ -841,15 +865,8 @@ void VM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            if (m_SP[2] == 0)
-            {
-                PrintCrash("integer overflow when doing mulmod operation");
-                throw "SOL_ASAN Crash";
-            }
-            else
-            {
-                m_SPP[0] = u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]);
-            }
+            m_SPP[0] =
+                m_SP[2] ? u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]) : 0;
         }
         NEXT
 
@@ -945,7 +962,6 @@ void VM::interpretCases()
         }
         NEXT
 
-
             CASE(CALLER)
         {
             ON_OP();
@@ -963,7 +979,6 @@ void VM::interpretCases()
             m_SPP[0] = fromEvmC(m_message->value);
         }
         NEXT
-
 
             CASE(CALLDATALOAD)
         {
@@ -988,7 +1003,6 @@ void VM::interpretCases()
             };
         }
         NEXT
-
 
             CASE(CALLDATASIZE)
         {
@@ -1113,7 +1127,6 @@ void VM::interpretCases()
         }
         NEXT
 
-
             CASE(GASPRICE)
         {
             ON_OP();
@@ -1206,7 +1219,8 @@ void VM::interpretCases()
             updateIOGas();
 
             // get val at two-byte offset into const pool and advance pc by
-            // one-byte remainder
+            // one-byte
+            // remainder
             TRACE_OP(2, m_PC, m_OP);
             unsigned off;
             ++m_PC;
@@ -1353,7 +1367,6 @@ void VM::interpretCases()
         }
         NEXT
 
-
             CASE(SWAP1) CASE(SWAP2) CASE(SWAP3) CASE(SWAP4) CASE(SWAP5)
                 CASE(SWAP6) CASE(SWAP7) CASE(SWAP8) CASE(SWAP9) CASE(SWAP10)
                     CASE(SWAP11) CASE(SWAP12) CASE(SWAP13) CASE(SWAP14)
@@ -1366,7 +1379,6 @@ void VM::interpretCases()
             std::swap(m_SP[0], m_SP[n]);
         }
         NEXT
-
 
             CASE(SLOAD)
         {
