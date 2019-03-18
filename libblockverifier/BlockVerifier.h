@@ -34,7 +34,6 @@
 #include <libevm/ExtVMFace.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libmptstate/State.h>
-#include <libstorage/Table.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <memory>
@@ -66,10 +65,6 @@ public:
         if (_enableParallel)
         {
             m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
-            for (unsigned int i = 0; i < m_threadNum; ++i)
-            {
-                m_changeLogs.push_back(std::vector<storage::Change>());
-            }
         }
     }
 
@@ -103,7 +98,6 @@ private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
     bool m_enableParallel;
-    std::vector<std::vector<storage::Change>> m_changeLogs;
     unsigned int m_threadNum = -1;
 };
 

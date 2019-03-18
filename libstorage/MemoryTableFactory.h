@@ -44,14 +44,7 @@ class MemoryTableFactory : public StateDBFactory
 public:
     typedef std::shared_ptr<MemoryTableFactory> Ptr;
     MemoryTableFactory();
-    virtual ~MemoryTableFactory()
-    {
-        auto ptr = m_changeLog.release();
-        if (ptr != nullptr)
-        {
-            delete ptr;
-        }
-    }
+    virtual ~MemoryTableFactory() { m_changeLog.reset(); }
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = false);
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
@@ -63,7 +56,7 @@ public:
 
     void setBlockHash(h256 blockHash);
     void setBlockNum(int64_t blockNum);
-    void setChangeLog(std::vector<Change>* _changeLog) {m_changeLog.reset(_changeLog); }
+    void setChangeLog(std::vector<Change>* _changeLog) { m_changeLog.reset(_changeLog); }
 
     h256 hash();
     size_t savepoint() const { return m_changeLog->size(); };

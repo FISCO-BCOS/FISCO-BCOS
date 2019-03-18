@@ -28,6 +28,7 @@
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <utility>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
@@ -45,6 +46,9 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_CNS);
     m_sysTables.push_back(SYS_CONFIG);
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
+
+    auto changeLog = new vector<Change>();
+    setChangeLog(changeLog);
 }
 
 
