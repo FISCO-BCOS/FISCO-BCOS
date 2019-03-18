@@ -585,7 +585,7 @@ void VM::interpretCases()
             updateIOGas();
             // ADD Integer overflow detection
             u512 temp = (u512)m_SP[0] + (u512)m_SP[1];
-            u256 temp = m_SP[0] + m_SP[1];
+            u256 temp_ = m_SP[0] + m_SP[1];
             if (temp != temp_){
                 PrintCrash("integer overflow when doing add operation");
                 throw "SOL_ASAN Crash";
