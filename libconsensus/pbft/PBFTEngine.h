@@ -571,6 +571,8 @@ protected:
     uint64_t m_statisticFreq;
     uint64_t m_savedSendData = 0;
     uint64_t m_savedReceiveData = 0;
+    uint64_t m_totalSendData = 0;
+    uint64_t m_totalReceiveData = 0;
 
     uint64_t m_compressTime = 0;
     uint64_t m_uncompressTime = 0;

@@ -278,8 +278,10 @@ bool PBFTEngine::broadcastPrepareReq(PrepareReq const& req)
         dev::bytes compressed_data;
         auto start_t = utcTimeUs();
         m_compressHandler->compress(prepare_data, compressed_data);
+        m_savedSendData +=
+            (prepare_data.size() - compressed_data.size()) * (sealerList().size() - 1);
+        m_totalSendData += compressed_data.size() * (sealerList().size() - 1);
 
-        m_savedSendData += (prepare_data.size() - compressed_data.size());
         m_compressTime += utcTimeUs() - start_t;
         m_totalTime += utcTimeUs() - start_t;
 
@@ -792,6 +794,8 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
         m_compressHandler->uncompress(pbftMsg.data, uncompressed_data);
 
         m_savedReceiveData += (uncompressed_data.size() - pbftMsg.data.size());
+        m_totalReceiveData += pbftMsg.data.size();
+
         m_uncompressTime += (utcTimeUs() - start_t);
         m_totalTime += (utcTimeUs() - start_t);
 
@@ -1065,19 +1069,48 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         {
             uint64_t totalReceivedData = m_service->receivedData();
             uint64_t totalSendData = m_service->sendData();
+            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
+                                 << LOG_DESC("###### Compress/Uncompress ######")
+                                 << LOG_KV("savedSendData", m_savedSendData)
+                                 << LOG_KV("savedReceiveData", m_savedReceiveData)
+                                 << LOG_KV("compressTime(ms)", (float)m_compressTime / (float)1000)
+                                 << LOG_KV("uncompressedTime(ms)",
+                                        (float)m_uncompressTime / (float)1000)
+                                 << LOG_KV("totalTime(ms)", (float)m_totalTime / (float)1000);
+
+            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
+                                 << LOG_KV("pbft_ReceivedData", m_totalReceiveData)
+                                 << LOG_KV("pbft_SendData", m_totalSendData)
+                                 << LOG_KV("p2p_totalReceivedData", totalReceivedData)
+                                 << LOG_KV("p2p_totalSendData", totalSendData)
+                                 << LOG_KV("pbft_recvRatio",
+                                        (float)(m_totalReceiveData) / (float)(totalReceivedData))
+                                 << LOG_KV("pbft_sendRatio",
+                                        (float)(m_totalSendData) / (float)totalSendData)
+                                 << LOG_KV("pbft_totalRatio",
+                                        (float)(m_totalSendData + m_totalReceiveData) /
+                                            (float)(totalSendData + totalReceivedData));
+
+            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
+                                 << LOG_KV("p2p_recvRatio",
+                                        (float)totalReceivedData /
+                                            (float)(totalReceivedData + totalSendData))
+                                 << LOG_KV("p2p_sendRatio",
+                                        (float)totalSendData /
+                                            float(totalReceivedData + totalSendData));
+
+            PBFTENGINE_LOG(DEBUG) << LOG_BADGE("STATISTIC")
+                                  << LOG_KV("pbft_compressRatio",
+                                         (float)(m_savedSendData) / (float)(m_totalSendData) + 1)
+                                  << LOG_KV("pbft_uncompressRatio",
+                                         1 - (float)m_savedReceiveData / (float)m_totalReceiveData);
+
             PBFTENGINE_LOG(INFO)
-                << LOG_BADGE("STATISTIC") << LOG_DESC("Compress/Uncompress")
-                << LOG_KV("savedSendData", m_savedSendData)
-                << LOG_KV("savedReceiveData", m_savedReceiveData)
-                << LOG_KV("compressTime(ms)", (float)m_compressTime / (float)1000)
-                << LOG_KV("uncompressedTime(ms)", (float)m_uncompressTime / (float)1000)
-                << LOG_KV("totalTime(ms)", (float)m_totalTime / (float)1000)
-                << LOG_KV("totalReceivedData", totalReceivedData)
-                << LOG_KV("totalSendData", totalSendData)
-                << LOG_KV("receiveSaveRatio", (float)m_savedReceiveData / (float)totalReceivedData)
-                << LOG_KV("sendSaveRatio", (float)m_savedSendData / (float)totalSendData)
-                << LOG_KV("totalSaveRatio", (float)(m_savedReceiveData + m_savedSendData) /
-                                                (float)(totalReceivedData + totalSendData))
+                << LOG_BADGE("STATISTIC")
+                << LOG_KV("saved_recvRatio", (float)m_savedReceiveData / (float)totalReceivedData)
+                << LOG_KV("saved_sendRatio", (float)m_savedSendData / (float)totalSendData)
+                << LOG_KV("saved_totalRatio", (float)(m_savedReceiveData + m_savedSendData) /
+                                                  (float)(totalReceivedData + totalSendData))
                 << LOG_KV("totalTxNum", m_blockChain->totalTransactionCount().first);
         }
 
