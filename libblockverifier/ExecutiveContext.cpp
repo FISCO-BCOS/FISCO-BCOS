@@ -196,9 +196,10 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 ContractABI abi;
                 string c0, c1;
                 abi.abiOut(data, c0, c1);
+                /*
                 LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("Get normal transaction criticals")
                            << LOG_KV("c0", c0) << LOG_KV("c1", c1);
-
+*/
                 auto res = make_shared<vector<string>>();
                 res->emplace_back(c0);
                 res->emplace_back(c1);
