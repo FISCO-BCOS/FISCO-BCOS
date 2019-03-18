@@ -84,6 +84,8 @@ void ExecutiveContextFactory::setStateFactory(
 
 void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr context)
 {
+	(void)context;
+#if 0
     // get value from db
     try
     {
@@ -128,4 +130,5 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#setTxGasLimitToContext]Failed")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
+#endif
 }

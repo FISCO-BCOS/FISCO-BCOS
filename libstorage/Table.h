@@ -216,7 +216,6 @@ public:
     virtual void clear() = 0;
 
     virtual bool dump(dev::storage::TableData::Ptr _data) = 0;
-    virtual void rollback(const Change& _change) = 0;
     virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>

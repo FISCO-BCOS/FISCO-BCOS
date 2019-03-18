@@ -36,6 +36,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
 {
     try
     {
+    	(void)condition;
         std::string entryKey = table;
         entryKey.append("_").append(key);
 

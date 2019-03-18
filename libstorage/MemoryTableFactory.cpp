@@ -210,7 +210,7 @@ void MemoryTableFactory::rollback(size_t _savepoint)
 
         // Public MemoryTable API cannot be used here because it will add another
         // change log entry.
-        change.table->rollback(change);
+        //change.table->rollback(change);
 
         m_changeLog.pop_back();
     }

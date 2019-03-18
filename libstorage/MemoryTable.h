@@ -61,7 +61,7 @@ public:
             {
                 if (m_remoteDB)
                 {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
                     m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
@@ -123,7 +123,7 @@ public:
             {
                 if (m_remoteDB)
                 {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
                     m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
@@ -201,7 +201,7 @@ public:
                 {
                     if (needSelect)
                         entries =
-                            m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                            m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
                     else
                         entries = std::make_shared<Entries>();
 
@@ -268,7 +268,7 @@ public:
         {
             if (m_remoteDB)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
                 m_cache.insert(std::make_pair(key, entries));
                 // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
                 //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
@@ -523,7 +523,7 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
-}  // namespace storage
+};  // namespace storage
 
 }  // namespace storage
 }  // namespace dev
