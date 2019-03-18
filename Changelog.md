@@ -44,4 +44,4 @@
 
 **说明**
 
-版本[2.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master)是一个升级版本，版本变动较大，与版本[1.3.x]((https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3))**不兼容**。
+版本[2.0](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master)是一个升级版本，版本变动较大，与版本[1.3.x](https://github.com/FISCO-BCOS/FISCO-BCOS/tree/master-1.3)**不兼容**。
