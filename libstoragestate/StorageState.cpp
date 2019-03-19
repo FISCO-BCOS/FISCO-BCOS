@@ -393,7 +393,7 @@ size_t StorageState::savepoint() const
 
 void StorageState::rollback(size_t)
 {
-    // m_memoryTableFactory->rollback(_savepoint);
+    m_memoryTableFactory->rollback(0);
 }
 
 void StorageState::clear()

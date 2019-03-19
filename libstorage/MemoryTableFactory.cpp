@@ -48,6 +48,7 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
 
     auto changeLog = new vector<Change>();
+    std::cout << changeLog << std::endl;
     setChangeLog(changeLog);
 }
 
@@ -215,6 +216,7 @@ void MemoryTableFactory::rollback(size_t)
 
         // m_changeLog->pop_back();
     }
+    m_changeLog->clear();
 }
 
 void MemoryTableFactory::commit() {}

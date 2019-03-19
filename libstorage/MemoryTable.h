@@ -61,12 +61,13 @@ public:
 
             CacheItr it;
             it = m_cache.find(key);
-            if (it == m_cache.end())
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache.insert(std::make_pair(key, entries));
+                    m_cache[key] = entries;
+                    // m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
                     //                    << LOG_KV("key", key) << LOG_KV("records",
@@ -123,12 +124,13 @@ public:
                 // ReadGuard l(x_cache);
                 it = m_cache.find(key);
             }
-            if (it == m_cache.end())
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache.insert(std::make_pair(key, entries));
+                    m_cache[key] = entries;
+                    // m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
                     //                    << LOG_KV("key", key) << LOG_KV("records",
@@ -199,7 +201,7 @@ public:
                 // ReadGuard l(x_cache);
                 it = m_cache.find(key);
             }
-            if (it == m_cache.end())
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
@@ -208,8 +210,8 @@ public:
                             m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
                     else
                         entries = std::make_shared<Entries>();
-
-                    m_cache.insert(std::make_pair(key, entries));
+                    m_cache[key] = entries;
+                    // m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
                     //                    << LOG_KV("key", key) << LOG_KV("records",
@@ -268,12 +270,13 @@ public:
             // ReadGuard l(x_cache);
             it = m_cache.find(key);
         }
-        if (it == m_cache.end())
+        if (it == m_cache.end() || it->second == nullptr)
         {
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache.insert(std::make_pair(key, entries));
+                m_cache[key] = entries;
+                // m_cache.insert(std::make_pair(key, entries));
                 // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
                 //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
             }
@@ -302,9 +305,9 @@ public:
 
     virtual h256 hash() override
     {
-        std::map<std::string, Entries::Ptr> tmpMap(m_cache.begin(), m_cache.end());
+        std::map<std::string, Entries::Ptr> tmpOrderedCache(m_cache.begin(), m_cache.end());
         bytes data;
-        for (auto& it : tmpMap)
+        for (auto& it : tmpOrderedCache)
         {
             if (it.second->dirty())
             {
@@ -361,7 +364,10 @@ public:
 
     virtual void setRecorder(std::function<void(
             Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder) override;
+            _recorder) override
+    {
+        m_recorder = _recorder;
+    }
 
     virtual bool dump(TableData::Ptr _data) override
     {
@@ -377,7 +383,50 @@ public:
         }
         return dirtyTable;
     }
-    virtual void rollback(const Change& _change) override;
+    virtual void rollback(const Change& _change) override
+    {
+        {
+            // Public MemoryTable API cannot be used here because it will add another
+            // change log entry.
+            switch (_change.kind)
+            {
+            case Change::Insert:
+            {
+                auto entries = m_cache[_change.key];
+                entries->removeEntry(_change.value[0].index);
+                if (entries->size() == 0u)
+                {
+                    m_cache[_change.key] = nullptr;
+                }
+                break;
+            }
+            case Change::Update:
+            {
+                auto entries = m_cache[_change.key];
+                for (auto& record : _change.value)
+                {
+                    auto entry = entries->get(record.index);
+                    entry->setField(record.key, record.oldValue);
+                }
+                break;
+            }
+            case Change::Remove:
+            {
+                auto entries = m_cache[_change.key];
+                for (auto& record : _change.value)
+                {
+                    auto entry = entries->get(record.index);
+                    entry->setStatus(0);
+                }
+                break;
+            }
+            case Change::Select:
+
+            default:
+                break;
+            }
+        }
+    }
 
     size_t cacheSize() override { return m_cache.size(); }
 
@@ -534,68 +583,6 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
-};  // namespace storage
-
-template <>
-inline void MemoryTable<Serial>::setRecorder(
-    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        _recorder)
-{
-    m_recorder = _recorder;
-}
-
-template <>
-inline void MemoryTable<Parallel>::setRecorder(
-    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
-{
-    m_recorder = [](Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
-}
-
-template <>
-inline void MemoryTable<Serial>::rollback(const Change& _change)
-{
-    // Public MemoryTable API cannot be used here because it will add another
-    // change log entry.
-    switch (_change.kind)
-    {
-    case Change::Insert:
-    {
-        auto entries = m_cache[_change.key];
-        entries->removeEntry(_change.value[0].index);
-        if (entries->size() == 0u)
-        {
-            m_cache.erase(_change.key);
-        }
-        break;
-    }
-    case Change::Update:
-    {
-        auto entries = m_cache[_change.key];
-        for (auto& record : _change.value)
-        {
-            auto entry = entries->get(record.index);
-            entry->setField(record.key, record.oldValue);
-        }
-        break;
-    }
-    case Change::Remove:
-    {
-        auto entries = m_cache[_change.key];
-        for (auto& record : _change.value)
-        {
-            auto entry = entries->get(record.index);
-            entry->setStatus(0);
-        }
-        break;
-    }
-    case Change::Select:
-
-    default:
-        break;
-    }
-}
-template <>
-inline void MemoryTable<Parallel>::rollback(const Change&)
-{}
+};
 }  // namespace storage
 }  // namespace dev
