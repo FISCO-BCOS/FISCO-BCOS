@@ -26,7 +26,8 @@ namespace dev
 {
 namespace compress
 {
-size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData, size_t offset)
+size_t SnappyCompress::compress(
+    bytesConstRef inputData, bytes& compressedData, size_t offset, bool forBroadCast)
 {
     size_t compress_len;
     auto start_t = utcTimeUs();
@@ -36,11 +37,11 @@ size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData, 
     compressedData.resize(compress_len + offset);
 
     /// update the statistic
-    m_statistic->updateCompressValue(inputData.size(), compress_len, (utcTimeUs() - start_t));
+    m_statistic->updateCompressValue(
+        inputData.size(), compress_len, (utcTimeUs() - start_t), forBroadCast);
 
     LOG(DEBUG) << LOG_BADGE("SnappyCompress") << LOG_DESC("Compress")
-               << LOG_KV("org_len", inputData.size())
-               << LOG_KV("compressed_len", compressedData.size())
+               << LOG_KV("org_len", inputData.size()) << LOG_KV("compressed_len", compress_len)
                << LOG_KV("ratio", (float)inputData.size() / (float)compressedData.size())
                << LOG_KV("timecost", (utcTimeUs() - start_t));
 

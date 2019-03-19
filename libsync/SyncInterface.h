@@ -21,6 +21,7 @@
  */
 #pragma once
 #include "Common.h"
+#include <libcompress/CompressInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 namespace dev
@@ -56,6 +57,7 @@ public:
     // verify handler to check downloading block
     virtual void registerConsensusVerifyHandler(
         std::function<bool(dev::eth::Block const&)> _handler) = 0;
+    virtual void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface>) {}
 };
 
 }  // namespace sync

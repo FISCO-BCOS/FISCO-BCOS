@@ -31,8 +31,8 @@ class CompressStatistic;
 class CompressInterface
 {
 public:
-    virtual size_t compress(
-        bytesConstRef inputData, dev::bytes& compressedData, size_t offset = 0) = 0;
+    virtual size_t compress(bytesConstRef inputData, dev::bytes& compressedData, size_t offset = 0,
+        bool forBroadcast = false) = 0;
     virtual size_t uncompress(bytesConstRef compressedData, dev::bytes& uncompressedData) = 0;
     virtual std::shared_ptr<CompressStatistic> statistic() { return nullptr; }
 };

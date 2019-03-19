@@ -398,7 +398,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
-    pbftEngine->setCompressHahdler(m_compress);
+    pbftEngine->setCompressHandler(m_compress);
 
     /// set statistic freq
     pbftEngine->setStatisticFreq(m_statisticFreq);
@@ -490,6 +490,10 @@ bool Ledger::initSync()
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+
+    /// set compress handler for sync module
+    m_sync->setCompressHandler(m_compress);
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

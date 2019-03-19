@@ -23,6 +23,7 @@
  */
 #include "PBFTEngine.h"
 #include <json_spirit/JsonSpiritHeaders.h>
+#include <libcompress/SnappyCompress.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
@@ -136,6 +137,10 @@ void PBFTEngine::resetConfig()
             }
         }
         m_nodeNum = m_sealerList.size();
+        if (m_compressHandler)
+        {
+            m_compressHandler->statistic()->setSealerSize(m_nodeNum);
+        }
     }
     m_f = (m_nodeNum - 1) / 3;
     m_cfgErr = (node_idx == MAXIDX);
@@ -277,13 +282,7 @@ bool PBFTEngine::broadcastPrepareReq(PrepareReq const& req)
     {
         dev::bytes compressed_data;
         auto start_t = utcTimeUs();
-        m_compressHandler->compress(prepare_data, compressed_data);
-        m_savedSendData +=
-            (prepare_data.size() - compressed_data.size()) * (sealerList().size() - 1);
-        m_totalSendData += compressed_data.size() * (sealerList().size() - 1);
-
-        m_compressTime += utcTimeUs() - start_t;
-        m_totalTime += utcTimeUs() - start_t;
+        m_compressHandler->compress(ref(prepare_data), compressed_data, 0, true);
 
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("compress") << LOG_KV("org_len", prepare_data.size())
                               << LOG_KV("compressed_len", compressed_data.size())
@@ -301,7 +300,6 @@ bool PBFTEngine::broadcastPrepareReq(PrepareReq const& req)
     }
     return succ;
 }
-
 
 /**
  * @brief : 1. generate and broadcast signReq according to given prepareReq,
@@ -791,13 +789,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
     {
         auto start_t = utcTimeUs();
         bytes uncompressed_data;
-        m_compressHandler->uncompress(pbftMsg.data, uncompressed_data);
-
-        m_savedReceiveData += (uncompressed_data.size() - pbftMsg.data.size());
-        m_totalReceiveData += pbftMsg.data.size();
-
-        m_uncompressTime += (utcTimeUs() - start_t);
-        m_totalTime += (utcTimeUs() - start_t);
+        m_compressHandler->uncompress(ref(pbftMsg.data), uncompressed_data);
 
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("Uncompress")
                               << LOG_KV("org_len", uncompressed_data.size())
@@ -1067,28 +1059,43 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         /// output statistic compress related descriptions
         if (m_blockChain->number() % m_statisticFreq == 0)
         {
-            uint64_t totalReceivedData = m_service->receivedData();
-            uint64_t totalSendData = m_service->sendData();
-            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
-                                 << LOG_DESC("###### Compress/Uncompress ######")
-                                 << LOG_KV("savedSendData", m_savedSendData)
-                                 << LOG_KV("savedReceiveData", m_savedReceiveData)
-                                 << LOG_KV("compressTime(ms)", (float)m_compressTime / (float)1000)
-                                 << LOG_KV("uncompressedTime(ms)",
-                                        (float)m_uncompressTime / (float)1000)
-                                 << LOG_KV("totalTime(ms)", (float)m_totalTime / (float)1000);
+            auto totalReceivedData = m_service->receivedData();
+            auto totalSendData = m_service->sendData();
 
-            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
-                                 << LOG_KV("pbft_ReceivedData", m_totalReceiveData)
-                                 << LOG_KV("pbft_SendData", m_totalSendData)
+            auto compressTime = m_compressHandler->statistic()->compressTime();
+            auto uncompressTime = m_compressHandler->statistic()->uncompressTime();
+
+            auto orgCompressData = m_compressHandler->statistic()->orgCompressDataSize();
+            auto compressData = m_compressHandler->statistic()->compressDataSize();
+
+            auto orgUncompressData = m_compressHandler->statistic()->orgUncompressDataSize();
+            auto uncompressData = m_compressHandler->statistic()->uncompressDataSize();
+
+            auto recvData = m_compressHandler->statistic()->recvDataSize();
+            auto sendData = m_compressHandler->statistic()->sendDataSize();
+
+            auto savedSendData = m_compressHandler->statistic()->savedSendDataSize();
+            auto savedRecvData = uncompressData - orgUncompressData;
+
+            PBFTENGINE_LOG(INFO)
+                << LOG_BADGE("STATISTIC") << LOG_DESC("###### Compress/Uncompress ######")
+                << LOG_KV("compressTime(ms)", (float)compressTime / (float)1000)
+                << LOG_KV("uncompressedTime(ms)", (float)uncompressTime / (float)1000)
+                << LOG_KV("totalTime(ms)", (float)(compressTime + uncompressTime) / (float)1000)
+                << LOG_KV("compressSpeed(us/KB)",
+                       (float)(1024 * compressTime) / (float)(orgCompressData))
+                << LOG_KV("unCompressSpeed(us/KB)",
+                       (float)(1024 * uncompressTime) / (float)(orgUncompressData));
+
+            PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC") << LOG_KV("ReceivedData", recvData)
+                                 << LOG_KV("SendData", sendData)
                                  << LOG_KV("p2p_totalReceivedData", totalReceivedData)
                                  << LOG_KV("p2p_totalSendData", totalSendData)
-                                 << LOG_KV("pbft_recvRatio",
-                                        (float)(m_totalReceiveData) / (float)(totalReceivedData))
-                                 << LOG_KV("pbft_sendRatio",
-                                        (float)(m_totalSendData) / (float)totalSendData)
-                                 << LOG_KV("pbft_totalRatio",
-                                        (float)(m_totalSendData + m_totalReceiveData) /
+                                 << LOG_KV(
+                                        "recvRatio", (float)(recvData) / (float)(totalReceivedData))
+                                 << LOG_KV("sendRatio", (float)(sendData) / (float)totalSendData)
+                                 << LOG_KV("totalRatio",
+                                        (float)(recvData + sendData) /
                                             (float)(totalSendData + totalReceivedData));
 
             PBFTENGINE_LOG(INFO) << LOG_BADGE("STATISTIC")
@@ -1100,16 +1107,17 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                                             float(totalReceivedData + totalSendData));
 
             PBFTENGINE_LOG(DEBUG) << LOG_BADGE("STATISTIC")
-                                  << LOG_KV("pbft_compressRatio",
-                                         (float)(m_savedSendData) / (float)(m_totalSendData) + 1)
-                                  << LOG_KV("pbft_uncompressRatio",
-                                         1 - (float)m_savedReceiveData / (float)m_totalReceiveData);
+                                  << LOG_KV("compressRatio",
+                                         (float)(orgCompressData) / (float)(compressData))
+                                  << LOG_KV("uncompressRatio",
+                                         (float)orgUncompressData / (float)uncompressData);
+
 
             PBFTENGINE_LOG(INFO)
                 << LOG_BADGE("STATISTIC")
-                << LOG_KV("saved_recvRatio", (float)m_savedReceiveData / (float)totalReceivedData)
-                << LOG_KV("saved_sendRatio", (float)m_savedSendData / (float)totalSendData)
-                << LOG_KV("saved_totalRatio", (float)(m_savedReceiveData + m_savedSendData) /
+                << LOG_KV("saved_recvRatio", (float)(savedRecvData) / (float)totalReceivedData)
+                << LOG_KV("saved_sendRatio", (float)(savedSendData) / (float)totalSendData)
+                << LOG_KV("saved_totalRatio", (float)(savedSendData + savedRecvData) /
                                                   (float)(totalReceivedData + totalSendData))
                 << LOG_KV("totalTxNum", m_blockChain->totalTransactionCount().first);
         }

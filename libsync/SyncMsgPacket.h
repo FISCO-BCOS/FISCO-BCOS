@@ -25,6 +25,7 @@
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
 #include "SyncMsgPacket.h"
+#include <libcompress/CompressInterface.h>
 #include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
 #include <libp2p/Service.h>
@@ -50,6 +51,12 @@ public:
 
     RLP const& rlp() const { return m_rlp; }
 
+    /// register compress handler
+    static void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> compress)
+    {
+        g_compressHandler = compress;
+    }
+
 public:
     SyncPacketType packetType;
     NodeID nodeId;
@@ -58,8 +65,13 @@ protected:
     RLP m_rlp;              /// The result of decode
     RLPStream m_rlpStream;  // The result of encode
 
+    /// compress handlers
+    static std::shared_ptr<dev::compress::CompressInterface> g_compressHandler;
+    std::shared_ptr<dev::bytes> m_compressPtr = nullptr;
+
 private:
     bool checkPacket(bytesConstRef _msg);
+    bool checkPacketWithoutType(bytesConstRef _msg);
 };
 
 

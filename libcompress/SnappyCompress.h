@@ -34,7 +34,8 @@ class SnappyCompress : public CompressInterface
 {
 public:
     SnappyCompress() { m_statistic = std::make_shared<CompressStatistic>(); }
-    size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0) override;
+    size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0,
+        bool forBroadCast = false) override;
     size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
     std::shared_ptr<CompressStatistic> statistic() override { return m_statistic; }
 

@@ -164,7 +164,7 @@ public:
     }
 
 
-    void setCompressHahdler(std::shared_ptr<dev::compress::CompressInterface> compress)
+    void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> compress)
     {
         m_compressHandler = compress;
     }

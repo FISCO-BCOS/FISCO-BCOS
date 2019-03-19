@@ -66,12 +66,17 @@ public:
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
 
+    /// add compress handler
+    void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> compress)
+    {
+        m_compressHandler = compress;
+    }
+
 public:
     bool needCheckPacketInGroup = true;
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
-    bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:
@@ -93,6 +98,9 @@ private:
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+
+    /// compress handlers
+    std::shared_ptr<dev::compress::CompressInterface> m_compressHandler = nullptr;
 };
 
 class DownloadBlocksContainer

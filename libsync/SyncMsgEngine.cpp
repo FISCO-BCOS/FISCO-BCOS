@@ -36,7 +36,7 @@ void SyncMsgEngine::messageHandler(
 {
     SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());
-    if (!checkSession(_session) || !checkMessage(_msg))
+    if (!checkSession(_session))
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                           << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
@@ -69,16 +69,6 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
 
     /// Drop packets comes from other groups
     if (needCheckPacketInGroup && !m_syncStatus->hasPeer(_session->nodeID()))
-        return false;
-    return true;
-}
-
-bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
-{
-    bytesConstRef msgBytes = ref(*_msg->buffer());
-    if (msgBytes.size() < 2 || msgBytes[0] > 0x7f)
-        return false;
-    if (RLP(msgBytes.cropped(1)).actualSize() + 1 != msgBytes.size())
         return false;
     return true;
 }
@@ -181,6 +171,8 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 
     RLP const& rlps = _packet.rlp();
     m_txQueue->push(rlps.data(), _packet.nodeId);
+
+
     SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
                     << LOG_KV("packetSize(B)", rlps.data().size());
 }

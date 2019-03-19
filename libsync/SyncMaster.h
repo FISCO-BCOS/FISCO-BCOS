@@ -139,6 +139,14 @@ public:
 
     std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
 
+    /// add compress handler
+    void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> compress) override
+    {
+        m_compressHandler = compress;
+        SyncMsgPacket::setCompressHandler(m_compressHandler);
+        m_msgEngine->setCompressHandler(m_compressHandler);
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -187,6 +195,9 @@ private:
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+
+    /// compress handlers
+    std::shared_ptr<dev::compress::CompressInterface> m_compressHandler = nullptr;
 
 public:
     void maintainTransactions();

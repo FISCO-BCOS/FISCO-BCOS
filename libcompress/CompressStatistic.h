@@ -43,12 +43,22 @@ public:
         ReadGuard l(x_sealerSize);
         return m_sealerSize;
     }
-    void updateCompressValue(
-        uint64_t const& orgDataSize, uint64_t const& compressedDataSize, uint64_t compressTime)
+    void updateCompressValue(uint64_t const& orgDataSize, uint64_t const& compressedDataSize,
+        uint64_t compressTime, bool forBroadcast)
     {
         WriteGuard l(x_compress);
-        m_compressOrgDataSize += (orgDataSize * getBroadcastSize());
-        m_compressedDataSize += (compressedDataSize * getBroadcastSize());
+        if (forBroadcast)
+        {
+            m_sendDataSize += (compressedDataSize * getBroadcastSize());
+            m_savedSendData += (compressedDataSize * getBroadcastSize());
+        }
+        else
+        {
+            m_sendDataSize += compressedDataSize;
+            m_savedSendData += compressedDataSize;
+        }
+        m_compressOrgDataSize += orgDataSize;
+        m_compressedDataSize += compressedDataSize;
         m_compressTime += compressTime;
     }
 
@@ -56,8 +66,8 @@ public:
         uint64_t const& orgDataSize, uint64_t const& uncompressedDataSize, uint64_t uncompressTime)
     {
         WriteGuard l(x_uncompress);
-        m_uncompressOrgDataSize += (orgDataSize * getBroadcastSize());
-        m_uncompressedDataSize += (uncompressedDataSize * getBroadcastSize());
+        m_uncompressOrgDataSize += orgDataSize;
+        m_uncompressedDataSize += uncompressedDataSize;
         m_uncompressTime += uncompressTime;
     }
 
@@ -96,12 +106,35 @@ public:
         return m_uncompressTime;
     }
 
+    uint64_t sendDataSize()
+    {
+        dev::ReadGuard l(x_compress);
+        return m_sendDataSize;
+    }
+
+    uint64_t recvDataSize()
+    {
+        dev::ReadGuard l(x_uncompress);
+        return m_uncompressOrgDataSize;
+    }
+
+    uint64_t savedSendDataSize()
+    {
+        dev::ReadGuard l(x_compress);
+        return m_savedSendData;
+    }
+
 private:
     uint64_t m_compressOrgDataSize = 0;
     uint64_t m_compressedDataSize = 0;
 
     uint64_t m_uncompressOrgDataSize = 0;
     uint64_t m_uncompressedDataSize = 0;
+
+    uint64_t m_sendDataSize = 0;
+
+    uint64_t m_savedSendData = 0;
+    uint64_t m_savedRecvData = 0;
 
     uint64_t m_compressTime = 0;
     uint64_t m_uncompressTime = 0;
