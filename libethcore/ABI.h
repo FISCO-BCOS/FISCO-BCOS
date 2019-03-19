@@ -31,6 +31,142 @@ namespace dev
 {
 namespace eth
 {
+namespace abi
+{
+static const int MAX_BIT_LENGTH = (256);
+static const int MAX_BYTE_LENGTH = (MAX_BYTE_LENGTH / 8);
+
+template <class... Args>
+struct Length;
+
+template <>
+struct Length<>
+{
+    enum
+    {
+        value = 0
+    };
+};
+
+template <class Last>
+struct Length<Last>
+{
+    enum
+    {
+        value = 1
+    };
+};
+
+template <class Array, int N>
+struct Length<Array[N]>
+{
+    enum
+    {
+        value = N * Length<Array>::value
+    };
+};
+
+template <class First, class... Rest>
+struct Length<First, Rest...>
+{
+    enum
+    {
+        value = Length<First>::value + Length<Rest...>::value
+    };
+};
+
+struct AbiTool
+{
+public:
+    // unsigned integer type of M bits, 0 < M <= 256, M % 8 == 0. e.g. uint32, uint8, uint256.
+    template <std::size_t N>
+    bytes serialise(const uintN<N>& _u)
+    {
+        static_assert((N > 0) && (N <= 256) && (N % 8 == 0),
+            "Parameter sizes must in (0, 256] and divided by 8.");
+        return h256(_u).asBytes();
+    }
+
+    // two’s complement signed integer type of M bits, 0 < M <= 256, M % 8 == 0.
+    template <std::size_t N>
+    bytes serialise(const intN<N>& _i)
+    {
+        static_assert((N > 0) && (N <= 256) && (N % 8 == 0),
+            "Parameter sizes must in (0, 256] and divided by 8.");
+        return h256((uintN<N>)_i).asBytes();
+    }
+
+    // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
+    // bool is used.
+    bytes serialise(bool _b) { return h256(u256(_b ? 1 : 0)).asBytes(); }
+
+    // equivalent to uint160, except for the assumed interpretation and language typing. For
+    // computing the function selector, address is used.
+    bytes serialise(const Address& _addr) { return bytes(12, 0) + _addr.asBytes(); }
+
+    // binary type of M bytes, 0 < M <= 32.
+    template <std::size_t N>
+    bytes serialise(const stringN<N>& _s)
+    {
+    static_assert( (N > 0) && (N <= 32) ), "Parameter sizes must in (0, 32].");
+    bytes ret(32, 0);
+    bytesConstRef((byte const*)_s.data(), 32).populate(bytesRef(&ret));
+    return ret;
+    }
+
+    // dynamic sized unicode string assumed to be UTF-8 encoded.
+    bytes serialise(const std::string& _s)
+    {
+        bytes ret;
+        ret = h256(u256(_s.size())).asBytes();
+        ret.resize(ret.size() + (_s.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+        bytesConstRef(&_s).populate(bytesRef(&ret).cropped(32));
+        return ret;
+    }
+
+    // a fixed-length array of M elements, M >= 0, of the given type.
+    template <class T, std::size_t N>
+    bytes serialise(const T (&_t)[N])
+    {
+        bytes ret;
+        for (std::size_t index = 0; index < N; index++)
+        {
+            ret += serialise(_t[index]);
+        }
+        return ret;
+    }
+
+    // a variable-length array of elements of the given type.
+    template <class T>
+    bytes serialise(const std::vector<T>& _vt)
+    {
+        bytes ret;
+        ret += serialise(u256(_vt.size()));
+        for (const auto& _v : _vt)
+        {
+            ret += serialise(_v);
+        }
+        return ret;
+    }
+};
+
+
+class ContractABI
+{
+public:
+    template <class... T>
+    bytes abiIn(std::string _func, T const&... _t)
+    {
+        u256 dynamicDataOffset = MAX_BYTE_LENGTH * Length<T...>::value;
+    }
+
+    template <class... T>
+    void abiOut(bytesConstRef _data, T&... _t)
+    {}
+};
+
+}  // namespace abi
+
 class ContractABI
 {
 public:

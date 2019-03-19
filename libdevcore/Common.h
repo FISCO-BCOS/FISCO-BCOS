@@ -91,6 +91,14 @@ using bytesSec = secure_vector<byte>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
+
+// usigned int
+template<uint N> using uintN = = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<N, N,
+    boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
+// signed int
+template<uint N> using intN = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<N, N,
+    boost::multiprecision::signed_magnitude, boost::multiprecision::unchecked, void>>;
+
 // unsigned int64
 using u64 = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<64, 64,
     boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
@@ -132,6 +140,9 @@ using u256HashMap = std::unordered_map<u256, u256>;
 
 // String types.
 using strings = std::vector<std::string>;
+// Fix-length N string.
+template<uint N> using stringN = std::array<char, N>;
+
 using string64 = std::array<char, 64>;
 // Fixed-length string types.
 using string32 = std::array<char, 32>;
