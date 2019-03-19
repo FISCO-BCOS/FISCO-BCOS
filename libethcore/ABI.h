@@ -54,6 +54,7 @@ public:
         // eg: function set(string)
         if ((i0 != std::string::npos) && (i1 != std::string::npos) && (i1 > i0))
         {
+            allParamsTypes.clear();
             std::string strFuncName = tempSig.substr(0, i0);
             std::string strParams = tempSig.substr(i0 + 1, i1 - i0 - 1);
 
@@ -61,18 +62,20 @@ public:
             boost::split(allParams, strParams, boost::is_any_of(","));
 
             strName = strFuncName;
-            allParamsTypes = allParams;
+            // allParamsTypes = allParams;
 
             tempSig = strName + "(";
 
-            std::for_each(
-                allParamsTypes.begin(), allParamsTypes.end(), [&tempSig](std::string& type) {
-                    type.erase(0, type.find_first_not_of(" "));
-                    type.erase(type.find_last_not_of(" ") + 1);
-
+            std::for_each(allParams.begin(), allParams.end(), [&tempSig, this](std::string& type) {
+                type.erase(0, type.find_first_not_of(" "));
+                type.erase(type.find_last_not_of(" ") + 1);
+                if (!type.empty())
+                {
+                    this->allParamsTypes.push_back(type);
                     tempSig += type;
                     tempSig += ",";
-                });
+                }
+            });
 
             if (',' == tempSig.back())
             {
@@ -96,6 +99,7 @@ public:
     inline std::string getSignature() const { return strFuncsignature; }
     inline std::vector<std::string> getParamsTypes() const { return allParamsTypes; }
     inline std::string getSelector() const { return strSelector; }
+    inline std::string getFuncName() const { return strName; }
     inline void setSignature(const std::string& _sig) { strFuncsignature = _sig; }
 };
 

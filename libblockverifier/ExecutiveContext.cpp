@@ -188,7 +188,6 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         }
         else
         {
-            // TODO call perser to decode _tx.data()
             {  // Testing code
                // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
 
@@ -217,7 +216,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                     return nullptr;
                 }
 
-                res.resize(config->criticalSize);
+                res->resize((size_t)config->criticalSize);
 
                 return res;
             }
