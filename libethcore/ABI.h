@@ -34,6 +34,7 @@ namespace eth
 class ContractABI
 {
 public:
+    void serialise(s256 const& _t) { fixedItems.push_back(h256((s256)_t).asBytes()); }
     void serialise(u256 const& _t) { fixedItems.push_back(h256(_t).asBytes()); }
 
     void serialise(byte const& _t)
@@ -136,6 +137,14 @@ public:
         return 1;
     }
 
+    size_t deserialise(s256& out)
+    {
+        u256 u;
+        u = fromBigEndian<u256>(data.cropped(getOffset(), 32));
+        out = (s256)u;
+        return 1;
+    }
+
     size_t deserialise(u160& out)
     {
         out = fromBigEndian<u160>(data.cropped(getOffset() + 12, 20));
@@ -196,6 +205,49 @@ public:
         decodeOffset = 0;
 
         abiOutAux(_t...);
+    }
+
+    bool abiOutByFuncSelector(bytesConstRef _data, const std::vector<std::string>& _allTypes,
+        std::vector<std::string>& _out)
+    {
+        data = _data;
+        decodeOffset = 0;
+
+        for (const std::string& type : _allTypes)
+        {
+            size_t offset = 0;
+            if ("int" == type || "int256" == type)
+            {
+                s256 s;
+                offset = deserialise(s);
+                _out.push_back(s.str());
+            }
+            else if ("uint" == type || "uint256" == type)
+            {
+                u256 u;
+                offset = deserialise(u);
+                _out.push_back(u.str());
+            }
+            else if ("address" == type)
+            {
+                Address addr;
+                offset = deserialise(addr);
+                _out.push_back(addr.hex());
+            }
+            else if ("string" == type)
+            {
+                std::string str;
+                offset = deserialise(str);
+                _out.push_back(str);
+            }
+            else
+            {  // unsupport type
+                return false;
+            }
+            decodeOffset += offset;
+        }
+
+        return true;
     }
 
 private:
