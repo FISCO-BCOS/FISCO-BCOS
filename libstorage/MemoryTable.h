@@ -41,6 +41,10 @@ template <typename Mode = Serial>
 class MemoryTable : public Table
 {
 public:
+    /*
+    using CacheType = typename std::conditional<Mode::value,
+        eth::ThreadSafeMap<std::string, Entries::Ptr>, std::map<std::string, Entries::Ptr>>::type;
+    */
     using CacheType = typename std::conditional<Mode::value,
         tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
         std::map<std::string, Entries::Ptr>>::type;
@@ -298,8 +302,9 @@ public:
 
     virtual h256 hash() override
     {
+        std::map<std::string, Entries::Ptr> tmpMap(m_cache.begin(), m_cache.end());
         bytes data;
-        for (auto& it : m_cache)
+        for (auto& it : tmpMap)
         {
             if (it.second->dirty())
             {

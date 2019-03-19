@@ -33,7 +33,6 @@
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
-#include <omp.h>
 #include <unistd.h>
 #include <chrono>
 #include <ctime>
