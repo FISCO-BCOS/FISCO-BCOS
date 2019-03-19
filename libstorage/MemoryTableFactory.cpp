@@ -48,7 +48,6 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
 
     auto changeLog = new vector<Change>();
-    std::cout << changeLog << std::endl;
     setChangeLog(changeLog);
 }
 
@@ -207,16 +206,18 @@ h256 MemoryTableFactory::hash()
     return m_hash;
 }
 
-void MemoryTableFactory::rollback(size_t)
+void MemoryTableFactory::rollback(size_t _savepoint)
 {
-    for (auto iter = m_changeLog->rbegin(); iter != m_changeLog->rend(); ++iter)
+    while(_savepoint < m_changeLog->size())
     {
-        auto& change = *iter;
+        auto& change = m_changeLog->back();
+
+        // Public MemoryTable API cannot be used here because it will add another
+        // change log entry.
         change.table->rollback(change);
 
-        // m_changeLog->pop_back();
+        m_changeLog->pop_back();
     }
-    m_changeLog->clear();
 }
 
 void MemoryTableFactory::commit() {}

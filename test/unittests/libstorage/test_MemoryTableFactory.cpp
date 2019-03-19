@@ -89,12 +89,12 @@ BOOST_AUTO_TEST_CASE(open_Table)
     entry->setField("key", "balance");
     entry->setField("value", "500");
     table->insert("balance", entry);
-    // auto savePoint = memoryDBFactory->savepoint();
+    auto savePoint = memoryDBFactory->savepoint();
     auto condition = table->newCondition();
     condition->EQ("key", "name");
     condition->NE("value", "name");
     table->remove("name", condition);
-    // memoryDBFactory->rollback(savePoint);
+    memoryDBFactory->rollback(savePoint);
     condition = table->newCondition();
     condition->EQ("key", "balance");
     condition->GT("value", "404");
