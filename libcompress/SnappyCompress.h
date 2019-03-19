@@ -22,6 +22,7 @@
  */
 #pragma once
 #include "CompressInterface.h"
+#include "CompressStatistic.h"
 #include "snappy.h"
 #include <libdevcore/easylog.h>
 
@@ -32,8 +33,13 @@ namespace compress
 class SnappyCompress : public CompressInterface
 {
 public:
-    size_t compress(bytes const& inputData, bytes& compressedData);
-    size_t uncompress(bytes const& compressedData, bytes& uncompressedData);
+    SnappyCompress() { m_statistic = std::make_shared<CompressStatistic>(); }
+    size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0) override;
+    size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
+    std::shared_ptr<CompressStatistic> statistic() override { return m_statistic; }
+
+private:
+    std::shared_ptr<CompressStatistic> m_statistic;
 };
 }  // namespace compress
 }  // namespace dev

@@ -27,11 +27,14 @@ namespace dev
 {
 namespace compress
 {
+class CompressStatistic;
 class CompressInterface
 {
 public:
-    virtual size_t compress(dev::bytes const& inputData, dev::bytes& compressedData) = 0;
-    virtual size_t uncompress(dev::bytes const& compressedData, dev::bytes& uncompressedData) = 0;
+    virtual size_t compress(
+        bytesConstRef inputData, dev::bytes& compressedData, size_t offset = 0) = 0;
+    virtual size_t uncompress(bytesConstRef compressedData, dev::bytes& uncompressedData) = 0;
+    virtual std::shared_ptr<CompressStatistic> statistic() { return nullptr; }
 };
 }  // namespace compress
 }  // namespace dev

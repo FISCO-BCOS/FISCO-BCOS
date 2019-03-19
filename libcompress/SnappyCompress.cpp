@@ -26,23 +26,29 @@ namespace dev
 {
 namespace compress
 {
-size_t SnappyCompress::compress(bytes const& inputData, bytes& compressedData)
+size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData, size_t offset)
 {
     size_t compress_len;
     auto start_t = utcTimeUs();
-    compressedData.resize(snappy::MaxCompressedLength(inputData.size()));
-    snappy::RawCompress(
-        (const char*)inputData.data(), inputData.size(), (char*)&compressedData[0], &compress_len);
-    compressedData.resize(compress_len);
+    compressedData.resize(snappy::MaxCompressedLength(inputData.size()) + offset);
+    snappy::RawCompress((const char*)inputData.data(), inputData.size(),
+        (char*)&compressedData[offset], &compress_len);
+    compressedData.resize(compress_len + offset);
+
+    /// update the statistic
+    m_statistic->updateCompressValue(inputData.size(), compress_len, (utcTimeUs() - start_t));
+
     LOG(DEBUG) << LOG_BADGE("SnappyCompress") << LOG_DESC("Compress")
                << LOG_KV("org_len", inputData.size())
                << LOG_KV("compressed_len", compressedData.size())
                << LOG_KV("ratio", (float)inputData.size() / (float)compressedData.size())
                << LOG_KV("timecost", (utcTimeUs() - start_t));
+
+
     return compress_len;
 }
 
-size_t SnappyCompress::uncompress(bytes const& compressedData, bytes& uncompressedData)
+size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
 {
     size_t uncompressed_len = 0;
     auto start_t = utcTimeUs();
@@ -53,6 +59,9 @@ size_t SnappyCompress::uncompress(bytes const& compressedData, bytes& uncompress
         (const char*)compressedData.data(), compressedData.size(), (char*)&uncompressedData[0]);
     if (status)
     {
+        m_statistic->updateUncompressValue(
+            compressedData.size(), uncompressed_len, (utcTimeUs() - start_t));
+
         LOG(DEBUG) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress")
                    << LOG_KV("org_len", uncompressed_len)
                    << LOG_KV("compress_len", compressedData.size())
