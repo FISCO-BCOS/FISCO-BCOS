@@ -37,22 +37,18 @@ namespace dev
 {
 namespace storage
 {
-template <typename Mode = Serial>
+
 class MemoryTable : public Table
 {
 public:
-    /*
-    using CacheType = typename std::conditional<Mode::value,
-        eth::ThreadSafeMap<std::string, Entries::Ptr>, std::map<std::string, Entries::Ptr>>::type;
-    */
-    using CacheType = typename std::conditional<Mode::value,
-        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
-        std::map<std::string, Entries::Ptr>>::type;
+    using CacheType = std::map<std::string, Entries::Ptr>;
     using CacheItr = typename CacheType::iterator;
-    using Ptr = std::shared_ptr<MemoryTable<Mode>>;
+    using Ptr = std::shared_ptr<MemoryTable>;
 
     virtual ~MemoryTable(){};
 
+    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
+#if 0
     virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
         try
@@ -99,7 +95,11 @@ public:
 
         return std::make_shared<Entries>();
     }
+#endif
 
+    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+#if 0
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
     {
@@ -173,7 +173,12 @@ public:
 
         return 0;
     }
+#endif
 
+    virtual int insert(const std::string& key, Entry::Ptr entry,
+            AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
+            bool needSelect = true) override;
+#if 0
     virtual int insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
         bool needSelect = true) override
@@ -248,7 +253,11 @@ public:
 
         return 1;
     }
+#endif
 
+    virtual int remove(const std::string& key, Condition::Ptr condition,
+            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+#if 0
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override
     {
@@ -299,7 +308,10 @@ public:
 
         return indexes.size();
     }
+#endif
 
+    virtual h256 hash() override;
+#if 0
     virtual h256 hash() override
     {
         std::map<std::string, Entries::Ptr> tmpMap(m_cache.begin(), m_cache.end());
@@ -342,6 +354,8 @@ public:
 
         return hash;
     }
+#endif
+
     virtual void clear() override { m_cache.clear(); }
     virtual bool empty() override { return m_cache.empty(); }
 
@@ -361,6 +375,8 @@ public:
 
     virtual bool dump(TableData::Ptr _data) override
     {
+    	(void)_data;
+#if 0
         bool dirtyTable = false;
         for (auto it : m_cache)
         {
@@ -372,7 +388,10 @@ public:
             }
         }
         return dirtyTable;
+#endif
+        return false;
     }
+
     size_t cacheSize() override { return m_cache.size(); }
 
 private:
@@ -512,10 +531,9 @@ private:
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
-                // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not
-                // exist")
-                //                   << LOG_KV("table name", m_tableInfo->name)
-                //                   << LOG_KV("field", it.first);
+                STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
+                                  << LOG_KV("table name", m_tableInfo->name)
+                                  << LOG_KV("field", it.first);
                 throw std::invalid_argument("Invalid key.");
             }
         }
@@ -523,11 +541,10 @@ private:
 
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
-    CacheType m_cache;
+    std::map<uint32_t, Entry::Ptr> m_cache;
+    Entries::Ptr m_newEntries;
     h256 m_blockHash;
     int m_blockNum = 0;
-    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        m_recorder;
 };  // namespace storage
 
 }  // namespace storage

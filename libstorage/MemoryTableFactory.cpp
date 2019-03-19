@@ -207,7 +207,7 @@ void MemoryTableFactory::rollback(size_t _savepoint)
 {
     while (_savepoint < m_changeLog.size())
     {
-        auto& change = m_changeLog.back();
+        //auto& change = m_changeLog.back();
 
         // Public MemoryTable API cannot be used here because it will add another
         // change log entry.

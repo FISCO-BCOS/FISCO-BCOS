@@ -36,8 +36,16 @@ using namespace dev::storage;
 
 Entry::Entry()
 {
-    // status required
+	m_id = 0;
     m_fields.insert(std::make_pair(STATUS, "0"));
+}
+
+uint32_t Entry::getID() const {
+	return m_id;
+}
+
+void Entry::setID(uint32_t id) {
+	m_id = id;
 }
 
 std::string Entry::getField(const std::string& key) const

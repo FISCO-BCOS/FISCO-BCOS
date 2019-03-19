@@ -54,19 +54,6 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
-    struct MyHashCompare
-    {
-        static size_t hash(const std::string& x)
-        {
-            size_t h = 0;
-            for (const char* s = x.c_str(); *s; ++s)
-                h = (h * 17) ^ *s;
-            return h;
-        }
-        //! True if strings are equal
-        static bool equal(const std::string& x, const std::string& y) { return x == y; }
-    };
-
     typedef std::shared_ptr<Entry> Ptr;
 
     enum Status
@@ -78,8 +65,12 @@ public:
     Entry();
     virtual ~Entry() {}
 
+    virtual uint32_t getID() const;
+    virtual void setID(uint32_t id);
+
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
+
     virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();
@@ -89,6 +80,7 @@ public:
     void setDirty(bool dirty);
 
 private:
+    uint32_t m_id;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
 };
