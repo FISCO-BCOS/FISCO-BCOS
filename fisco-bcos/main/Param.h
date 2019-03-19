@@ -95,7 +95,7 @@ MainParams initCommandLine(int argc, const char* argv[])
 
     MainParams m_params(vm);
 
-    if (m_params.configPath == "")
+    if (m_params.configPath() == "")
     {
         std::cerr << "Must set configuration path for FISCO BCOS!!!" << std::endl;
         std::cout << main_options << std::endl;
