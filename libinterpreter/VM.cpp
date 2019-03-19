@@ -625,7 +625,6 @@ void VM::interpretCases()
                     }
                 }
             }
-
         }
         NEXT
 
