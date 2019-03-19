@@ -33,10 +33,7 @@ BraceWrapping:
   BeforeCatch:     true
   BeforeElse:      true
   IndentBraces:    false
-  SplitEmptyFunction: false
 BreakBeforeTernaryOperators: false
-BreakConstructorInitializers: BeforeColon
-ColumnLimit:     100
 CommentPragmas:  '^ IWYU pragma:'
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 2
@@ -68,8 +65,6 @@ NamespaceIndentation: None
 ObjCBlockIndentWidth: 2
 ObjCSpaceAfterProperty: false
 ObjCSpaceBeforeProtocolList: false
-PenaltyBreakAssignment: 1
-PenaltyBreakBeforeFirstCallParameter: 1
 PenaltyBreakComment: 50
 PenaltyBreakFirstLessLess: 120
 PenaltyBreakString: 1000
