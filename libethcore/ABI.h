@@ -21,20 +21,88 @@
 
 #pragma once
 
+#include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <boost/algorithm/string.hpp>
 
 namespace dev
 {
 namespace eth
 {
+class AbiFunction
+{
+private:
+    std::string strFuncsignature;
+    std::string strSelector;
+    std::string strName;
+    std::vector<std::string> allParamsTypes;
+
+public:
+    inline bool doParser(const std::string& _strSig = "")
+    {
+        std::string tempSig = _strSig;
+        if (tempSig.empty())
+        {
+            tempSig = strFuncsignature;
+        }
+        auto i0 = tempSig.find("(");
+        auto i1 = tempSig.find(")");
+        // eg: function set(string)
+        if ((i0 != std::string::npos) && (i1 != std::string::npos) && (i1 > i0))
+        {
+            std::string strFuncName = tempSig.substr(0, i0);
+            std::string strParams = tempSig.substr(i0 + 1, i1 - i0 - 1);
+
+            std::vector<std::string> allParams;
+            boost::split(allParams, strParams, boost::is_any_of(","));
+
+            strName = strFuncName;
+            allParamsTypes = allParams;
+
+            tempSig = strName + "(";
+
+            std::for_each(
+                allParamsTypes.begin(), allParamsTypes.end(), [&tempSig](std::string& type) {
+                    type.erase(0, type.find_first_not_of(" "));
+                    type.erase(type.find_last_not_of(" ") + 1);
+
+                    tempSig += type;
+                    tempSig += ",";
+                });
+
+            if (',' == tempSig.back())
+            {
+                tempSig.back() = ')';
+            }
+            else
+            {
+                tempSig += ")";
+            }
+
+            strFuncsignature = tempSig;
+            strSelector = "0x" + dev::sha3(strFuncsignature).hex().substr(0, 8);
+
+            return true;
+        }
+
+        return false;
+    }
+
+public:
+    inline std::string getSignature() const { return strFuncsignature; }
+    inline std::vector<std::string> getParamsTypes() const { return allParamsTypes; }
+    inline std::string getSelector() const { return strSelector; }
+    inline void setSignature(const std::string& _sig) { strFuncsignature = _sig; }
+};
+
 class ContractABI
 {
 public:
-    void serialise(s256 const& _t) { fixedItems.push_back(h256((s256)_t).asBytes()); }
+    void serialise(s256 const& _t) { fixedItems.push_back(h256(_t.convert_to<u256>()).asBytes()); }
     void serialise(u256 const& _t) { fixedItems.push_back(h256(_t).asBytes()); }
 
     void serialise(byte const& _t)
@@ -139,9 +207,19 @@ public:
 
     size_t deserialise(s256& out)
     {
-        u256 u;
-        u = fromBigEndian<u256>(data.cropped(getOffset(), 32));
-        out = (s256)u;
+        u256 u = fromBigEndian<u256>(data.cropped(getOffset(), 32));
+        if (u > u256("0x8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+        {
+            auto r =
+                (dev::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") -
+                    u) +
+                1;
+            out = s256("-" + r.str());
+        }
+        else
+        {
+            out = u.convert_to<s256>();
+        }
         return 1;
     }
 
@@ -208,47 +286,7 @@ public:
     }
 
     bool abiOutByFuncSelector(bytesConstRef _data, const std::vector<std::string>& _allTypes,
-        std::vector<std::string>& _out)
-    {
-        data = _data;
-        decodeOffset = 0;
-
-        for (const std::string& type : _allTypes)
-        {
-            size_t offset = 0;
-            if ("int" == type || "int256" == type)
-            {
-                s256 s;
-                offset = deserialise(s);
-                _out.push_back(s.str());
-            }
-            else if ("uint" == type || "uint256" == type)
-            {
-                u256 u;
-                offset = deserialise(u);
-                _out.push_back(u.str());
-            }
-            else if ("address" == type)
-            {
-                Address addr;
-                offset = deserialise(addr);
-                _out.push_back(addr.hex());
-            }
-            else if ("string" == type)
-            {
-                std::string str;
-                offset = deserialise(str);
-                _out.push_back(str);
-            }
-            else
-            {  // unsupport type
-                return false;
-            }
-            decodeOffset += offset;
-        }
-
-        return true;
-    }
+        std::vector<std::string>& _out);
 
 private:
     struct DynamicItem
