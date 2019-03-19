@@ -59,7 +59,7 @@ public:
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::MemoryTableFactory> getmemoryTableFactory()
+    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory()
     {
         return m_memoryTableFactory;
     }

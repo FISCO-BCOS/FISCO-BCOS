@@ -149,6 +149,7 @@ private:
     /// init configurations
     void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);
+    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
 
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);

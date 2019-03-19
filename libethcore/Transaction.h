@@ -223,6 +223,8 @@ public:
     void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
     void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
 
+    void updateTransactionHashWithSig(dev::h256 const& txHash);
+
 protected:
     /// Type of transaction.
     enum Type

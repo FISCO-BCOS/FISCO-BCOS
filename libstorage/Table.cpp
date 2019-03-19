@@ -42,6 +42,7 @@ Entry::Entry()
 
 std::string Entry::getField(const std::string& key) const
 {
+    // dev::ReadGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
@@ -55,6 +56,7 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
+    // dev::WriteGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
@@ -76,6 +78,7 @@ std::map<std::string, std::string>* Entry::fields()
 
 uint32_t Entry::getStatus()
 {
+    // dev::ReadGuard l(x_fields);
     auto it = m_fields.find(STATUS);
     if (it == m_fields.end())
     {
@@ -89,6 +92,7 @@ uint32_t Entry::getStatus()
 
 void Entry::setStatus(int status)
 {
+    // dev::WriteGuard l(x_fields);
     auto it = m_fields.find(STATUS);
     if (it == m_fields.end())
     {
@@ -112,6 +116,11 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
+size_t Entries::size() const
+{
+    return m_entries.size();
+}
+
 Entry::Ptr Entries::get(size_t i)
 {
     if (m_entries.size() <= i)
@@ -122,11 +131,6 @@ Entry::Ptr Entries::get(size_t i)
     }
 
     return m_entries[i];
-}
-
-size_t Entries::size() const
-{
-    return m_entries.size();
 }
 
 void Entries::addEntry(Entry::Ptr entry)
@@ -194,13 +198,4 @@ void Condition::limit(size_t offset, size_t count)
 std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
-}
-
-Entry::Ptr Table::newEntry()
-{
-    return std::make_shared<Entry>();
-}
-Condition::Ptr Table::newCondition()
-{
-    return std::make_shared<Condition>();
 }

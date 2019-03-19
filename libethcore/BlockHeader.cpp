@@ -193,10 +193,11 @@ RLP BlockHeader::extractBlock(bytesConstRef _block)
         BOOST_THROW_EXCEPTION(InvalidBlockFormat() << errinfo_comment("Block header must be a list")
                                                    << BadFieldError(0, root[0].data().toString()));
     // check the transactions(must be list)
-    if (!root[1].isList())
+    /*if (!root[1].isList())
         BOOST_THROW_EXCEPTION(InvalidBlockFormat()
                               << errinfo_comment("Block transactions must be a list")
                               << BadFieldError(1, root[1].data().toString()));
+                              */
     return root;
 }
 

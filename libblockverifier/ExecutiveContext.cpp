@@ -35,10 +35,12 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 {
     try
     {
+        /*
         EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
                                     << LOG_KV("blockHash", m_blockInfo.hash.abridged())
                                     << LOG_KV("number", m_blockInfo.number)
                                     << LOG_KV("address", address) << LOG_KV("param", toHex(param));
+                                    */
 
         auto p = getPrecompiled(address);
 
@@ -49,14 +51,18 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
         }
         else
         {
+            /*
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[#call]Can't find address") << LOG_KV("address", address);
+                */
         }
     }
     catch (std::exception& e)
     {
+        /*
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#call]Precompiled call error")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
+                                    */
 
         throw dev::eth::PrecompiledError();
     }
@@ -77,12 +83,13 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
     auto p = getPrecompiled(address);
-
-    if (p)
-    {
-        LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address", address);
-    }
-
+    /*
+        if (p)
+        {
+            LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address",
+       address);
+        }
+    */
     return p.get() != NULL;
 }
 
@@ -95,10 +102,19 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
         return itPrecompiled->second;
     }
     /// since non-precompile contracts will print this log, modify the log level to DEBUG
-    LOG(TRACE) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
+    // LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address",
+    // address);
     return Precompiled::Ptr();
 }
-
+/*
+std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
+{
+    std::string tableName = "_contract_data_" + address.hex() + "_";
+    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
+}
+*/
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()
 {
     return m_stateFace;

@@ -155,6 +155,16 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
+    {
+        return getBlockByHash(_blockHash)->rlpP();
+    }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    {
+        return getBlockRLPByHash(numberHash(_i));
+    }
+
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
     dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {

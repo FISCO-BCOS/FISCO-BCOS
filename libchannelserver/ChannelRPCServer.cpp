@@ -146,7 +146,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (it != _seq2session.end())
     {
-        CHANNEL_LOG(DEBUG) << "send ethereum resp seq"
+        CHANNEL_LOG(TRACE) << "send ethereum resp seq"
                            << LOG_KV("seq", it->first.substr(0, c_seqAbridgedLen))
                            << LOG_KV("response", _response);
 
@@ -249,9 +249,9 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 {
     if (e.errorCode() == 0)
     {
-        CHANNEL_LOG(INFO) << "receive sdk message" << LOG_KV("length", message->length())
-                          << LOG_KV("type", message->type())
-                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
+        CHANNEL_LOG(TRACE) << "receive sdk message" << LOG_KV("length", message->length())
+                           << LOG_KV("type", message->type())
+                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
 
         switch (message->type())
         {
@@ -298,7 +298,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "client ethereum request"
+    CHANNEL_LOG(TRACE) << "client ethereum request"
                        << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                        << LOG_KV("ethereum request",
                               std::string((char*)message->data(), message->dataSize()));

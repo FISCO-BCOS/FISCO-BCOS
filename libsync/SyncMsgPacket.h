@@ -23,6 +23,7 @@
 
 #pragma once
 #include "Common.h"
+#include "DownloadingTxsQueue.h"
 #include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
@@ -73,7 +74,7 @@ class SyncTransactionsPacket : public SyncMsgPacket
 {
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
-    void encode(unsigned _txsSize, bytes const& txRLPs);
+    void encode(std::vector<bytes> const& _txRLPs);
 };
 
 class SyncBlocksPacket : public SyncMsgPacket

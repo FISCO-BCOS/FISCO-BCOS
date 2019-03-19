@@ -24,14 +24,10 @@
 
 #pragma once
 #include "libexecutive/StateFace.h"
+#include <libstorage/MemoryTableFactory.h>
 
 namespace dev
 {
-namespace storage
-{
-class Table;
-class MemoryTableFactory;
-}  // namespace storage
 namespace storagestate
 {
 const char* const STORAGE_KEY = "key";

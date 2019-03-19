@@ -473,6 +473,12 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
+    if (isSyncingHigherBlock(req))
+    {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: Is Syncing higher number")
+                              << LOG_KV("EINFO", oss.str());
+        return CheckResult::INVALID;
+    }
     if (hasConsensused(req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: Consensused Prep")
@@ -625,6 +631,8 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
 void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     if (req.pBlock)
     {
         sealing.block = *req.pBlock;
@@ -632,8 +640,12 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     /// decode the network received prepare packet
     else
     {
-        sealing.block.decode(ref(req.block), CheckTransaction::None);
+        // without receipt, with transaction hash(parallel calc txs' hash)
+        sealing.block.decode(ref(req.block), CheckTransaction::None, false, true);
     }
+    auto decode_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
     {
@@ -642,6 +654,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
 
     checkBlockValid(sealing.block);
+    auto check_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     /// notify the next leader seal a new block
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
@@ -649,26 +663,34 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     {
         notifySealing(sealing.block);
     }
+    auto notify_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
 
     m_blockSync->noteSealingBlockNumber(sealing.block.header().number());
+    auto noteSealing_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     /// ignore the signature verification of the transactions have already been verified in
     /// transation pool
     /// the transactions that has not been verified by the txpool should be verified
     m_txPool->verifyAndSetSenderForBlock(sealing.block);
+    auto verifyAndSetSender_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
-    auto start_exec_time = utcTime();
     sealing.p_execContext = executeBlock(sealing.block);
-    auto time_cost = utcTime() - start_exec_time;
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("execBlock")
-                          << LOG_KV("blkNum", sealing.block.header().number())
-                          << LOG_KV("reqIdx", req.idx)
-                          << LOG_KV("hash", sealing.block.header().hash().abridged())
-                          << LOG_KV("nodeIdx", nodeIdx())
-                          << LOG_KV("myNode", m_keyPair.pub().abridged())
-                          << LOG_KV("timecost", time_cost)
-                          << LOG_KV("execPerTx",
-                                 (float)time_cost / (float)sealing.block.getTransactionSize());
+    auto exec_time_cost = utcTime() - record_time;
+    PBFTENGINE_LOG(DEBUG)
+        << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block.header().number())
+        << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", sealing.block.header().hash().abridged())
+        << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("decodeCost", decode_time_cost) << LOG_KV("checkCost", check_time_cost)
+        << LOG_KV("notifyCost", notify_time_cost)
+        << LOG_KV("noteSealingCost", noteSealing_time_cost)
+        << LOG_KV("verifyAndSetSenderCost", verifyAndSetSender_time_cost)
+        << LOG_KV("execCost", exec_time_cost)
+        << LOG_KV("execPerTx", (float)exec_time_cost / (float)sealing.block.getTransactionSize())
+        << LOG_KV("totalCost", utcTime() - start_time);
 }
 
 /// check whether the block is empty
@@ -863,6 +885,8 @@ void PBFTEngine::checkAndCommit()
 /// check whether view and height is valid, if valid, then commit the block and clear the context
 void PBFTEngine::checkAndSave()
 {
+    auto start_commit_time = utcTime();
+    auto record_time = utcTime();
     size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
     size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
     if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
@@ -891,22 +915,34 @@ void PBFTEngine::checkAndSave()
             /// Block block(m_reqCache->prepareCache().block);
             std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
-            auto start_commit_time = utcTime();
+            auto genSig_time_cost = utcTime() - record_time;
+            record_time = utcTime();
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock((*p_block),
                 std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
+            auto commitBlock_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
                 dropHandledTransactions(*p_block);
+                auto dropTxs_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
+                auto noteSealing_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 PBFTENGINE_LOG(DEBUG)
                     << LOG_DESC("CommitBlock Succ")
                     << LOG_KV("blkNum", m_reqCache->prepareCache().height)
                     << LOG_KV("reqIdx", m_reqCache->prepareCache().idx)
                     << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                     << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
-                    << LOG_KV("time_cost", utcTime() - start_commit_time);
+                    << LOG_KV("genSigTimeCost", genSig_time_cost)
+                    << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                    << LOG_KV("dropTxsTimeCost", dropTxs_time_cost)
+                    << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
+                    << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
             }
             else

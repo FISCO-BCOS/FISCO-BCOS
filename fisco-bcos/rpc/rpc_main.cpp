@@ -30,6 +30,7 @@ using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
 using namespace dev::initializer;
+using namespace rpcdemo;
 
 
 using tcp = boost::asio::ip::tcp;

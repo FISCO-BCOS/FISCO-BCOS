@@ -39,7 +39,7 @@ public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable
+class MockMemoryDB : public dev::storage::MemoryTable<Serial>
 {
 public:
     virtual ~MockMemoryDB() {}

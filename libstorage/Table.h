@@ -20,7 +20,12 @@
 #include "Common.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/Guards.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
+#include <map>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace dev
@@ -49,6 +54,19 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
+    struct MyHashCompare
+    {
+        static size_t hash(const std::string& x)
+        {
+            size_t h = 0;
+            for (const char* s = x.c_str(); *s; ++s)
+                h = (h * 17) ^ *s;
+            return h;
+        }
+        //! True if strings are equal
+        static bool equal(const std::string& x, const std::string& y) { return x == y; }
+    };
+
     typedef std::shared_ptr<Entry> Ptr;
 
     enum Status
@@ -79,21 +97,17 @@ class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
+    typedef std::vector<Entry::Ptr> EntriesContainerType;
 
-    virtual ~Entries() {}
-
-    virtual Entry::Ptr get(size_t i);
-
-    virtual size_t size() const;
-
-    virtual void addEntry(Entry::Ptr entry);
-    virtual void removeEntry(size_t index);
-
+    Entry::Ptr get(size_t i);
+    size_t size() const;
+    void addEntry(Entry::Ptr entry);
     bool dirty() const;
     void setDirty(bool dirty);
+    void removeEntry(size_t index);
 
 private:
-    std::vector<Entry::Ptr> m_entries;
+    EntriesContainerType m_entries;
     bool m_dirty = false;
 };
 
@@ -134,7 +148,11 @@ private:
     size_t m_count = 0;
 };
 
+using Parallel = std::true_type;
+using Serial = std::false_type;
+
 class Table;
+
 struct Change
 {
     enum Kind : int
@@ -166,35 +184,52 @@ struct Change
     {}
 };
 
+class TableData
+{
+public:
+    typedef std::shared_ptr<TableData> Ptr;
+
+    std::string tableName;
+    std::map<std::string, Entries::Ptr> data;
+};
+
 // Construction of transaction execution
+class Storage;
 class Table : public std::enable_shared_from_this<Table>
 {
 public:
     typedef std::shared_ptr<Table> Ptr;
 
-    virtual ~Table() {}
+    virtual ~Table() = default;
 
+    virtual Entry::Ptr newEntry() { return std::make_shared<Entry>(); }
+    virtual Condition::Ptr newCondition() { return std::make_shared<Condition>(); }
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int insert(const std::string& key, Entry::Ptr entry,
-        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>(), bool needSelect = true) = 0;
     virtual int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
+    virtual bool checkAuthority(Address const& _origin) const = 0;
+    virtual h256 hash() = 0;
+    virtual void clear() = 0;
 
-    virtual Entry::Ptr newEntry();
-    virtual Condition::Ptr newCondition();
+    virtual bool dump(dev::storage::TableData::Ptr _data) = 0;
+    virtual void rollback(const Change& _change) = 0;
+    virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
             _recorder)
     {
         m_recorder = _recorder;
     }
-    virtual h256 hash() = 0;
-    virtual void clear() = 0;
-    // this map can't be changed, hash() need ordered data
-    virtual std::map<std::string, Entries::Ptr>* data() { return NULL; }
-    virtual bool checkAuthority(Address const& _origin) const = 0;
+
+    virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
+    virtual void setBlockHash(h256 blockHash) = 0;
+    virtual void setBlockNum(int blockNum) = 0;
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
+    virtual size_t cacheSize() { return 0; }
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
@@ -209,11 +244,11 @@ public:
 
     virtual ~StateDBFactory() {}
 
-    virtual Table::Ptr openTable(const std::string& table, bool authorityFlag = true) = 0;
+    virtual Table::Ptr openTable(
+        const std::string& table, bool authorityFlag = true, bool isPara = false) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
-        const std::string& valueField, bool authorityFlag, Address const& _origin = Address()) = 0;
-};
-
+        const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
+        bool isPara = false) = 0;
+};  // namespace storage
 }  // namespace storage
-
 }  // namespace dev

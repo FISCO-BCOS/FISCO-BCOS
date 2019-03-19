@@ -26,6 +26,7 @@
 #include <leveldb/db.h>
 #include <leveldb/status.h>
 #include <leveldb/write_batch.h>
+#include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <csignal>
 #include <memory>
@@ -40,15 +41,16 @@ class LevelDBWriteBatch : public WriteBatchFace
 public:
     void insert(Slice _key, Slice _value) override;
     void kill(Slice _key) override;
-
-    leveldb::WriteBatch const& writeBatch() const { return m_writeBatch; }
+    // void append(const LevelDBWriteBatch& _batch);
+    const leveldb::WriteBatch& writeBatch() const { return m_writeBatch; }
     leveldb::WriteBatch& writeBatch() { return m_writeBatch; }
 
     // For Encrypted level DB
-    virtual void insertSlice(leveldb::Slice _key, leveldb::Slice _value);
+    virtual void insertSlice(const leveldb::Slice& _key, const leveldb::Slice& _value);
 
 protected:
     leveldb::WriteBatch m_writeBatch;
+    dev::SharedMutex x_writeBatch;
 };
 
 class BasicLevelDB

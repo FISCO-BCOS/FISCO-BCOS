@@ -37,6 +37,8 @@
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
+#include <libsync/SyncStatus.h>
+
 namespace dev
 {
 namespace consensus
@@ -369,6 +371,15 @@ protected:
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
+        if (isSyncingHigherBlock(req))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Is Syncing higher number")
+                                  << LOG_KV("ReqNumber", req.height)
+                                  << LOG_KV(
+                                         "syncingNumber", m_blockSync->status().knownHighestNumber);
+            return CheckResult::INVALID;
+        }
+
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
@@ -428,6 +439,16 @@ protected:
         return false;
     }
 
+    /// in case of con-current execution of block
+    template <class T>
+    inline bool isSyncingHigherBlock(T const& req) const
+    {
+        if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number

@@ -24,6 +24,8 @@
 
 #include <cstdint>
 
+#undef MSIZE
+
 namespace dev
 {
 namespace eth

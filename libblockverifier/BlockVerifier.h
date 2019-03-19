@@ -23,6 +23,7 @@
 #include "BlockVerifierInterface.h"
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
+#include "Precompiled.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -56,11 +57,15 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier() {}
+    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel) {}
 
     virtual ~BlockVerifier() {}
 
     ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr serialExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelExecuteBlock(
+        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
@@ -83,6 +88,7 @@ public:
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
+    bool m_enableParallel;
 };
 
 }  // namespace blockverifier

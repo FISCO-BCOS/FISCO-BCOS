@@ -58,5 +58,14 @@ const int CODE_ADDRESS_AND_VERSION_EXIST = 51200;
 /// SystemConfigPrecompiled
 const int CODE_INVALID_CONFIGURATION_VALUES = 51300;
 
+/// DagTransferPrecompiled -70 ~ -79
+const int CODE_INVALID_USER_NAME = -70;
+const int CODE_INVALID_AMOUNT = -71;
+const int CODE_INVALID_USER_NOT_EXIST = -72;
+const int CODE_INVALID_USER_ALREADY_EXIST = -73;
+const int CODE_INVALID_INSUFFICIENT_BALANCE = -74;
+const int CODE_INVALID_BALANCE_OVERFLOW = -75;
+const int CODE_INVALID_OPENTALBLE_FAILED = -76;
+
 }  // namespace precompiled
 }  // namespace dev
