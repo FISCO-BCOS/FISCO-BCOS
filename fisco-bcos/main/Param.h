@@ -49,7 +49,7 @@ private:
     }
 
 private:
-    std::string m_configPath = "config.ini";
+    std::string m_configPath = "";
     boost::program_options::variables_map m_vmMap;
 };
 
@@ -65,10 +65,10 @@ void version()
 
 MainParams initCommandLine(int argc, const char* argv[])
 {
-    boost::program_options::options_description main_options("Main for FISCO-BCOS");
-    main_options.add_options()("help,h", "help of FISCO-BCOS")(
-        "version,v", "version of FISCO-BCOS")(
-        "config,c", boost::program_options::value<std::string>(), "configuration path");
+    boost::program_options::options_description main_options("Usage of FISCO-BCOS");
+    main_options.add_options()("help,h", "print help information")("version,v",
+        "version of FISCO-BCOS")("config,c", boost::program_options::value<std::string>(),
+        "[Required] configuration path, eg. config.ini");
     boost::program_options::variables_map vm;
     try
     {
@@ -92,6 +92,14 @@ MainParams initCommandLine(int argc, const char* argv[])
         version();
         exit(0);
     }
+
     MainParams m_params(vm);
+
+    if (m_params.configPath == "")
+    {
+        std::cerr << "Must set configuration path for FISCO BCOS!!!" << std::endl;
+        std::cout << main_options << std::endl;
+        exit(-1);
+    }
     return m_params;
 }
