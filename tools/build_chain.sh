@@ -696,10 +696,11 @@ else
 fi
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 if [ ! -z \${node_pid} ];then
-    echo " \${node} start successfully"
+    echo -e "\033[32m \${node} start successfully\033[0m"
 else
-    echo " \${node} start failed"
+    echo -e "\033[31m \${node} start failed\033[0m"
     cat nohup.out
+    exit 1
 fi
 EOF
     generate_script_template "$output/stop.sh"
