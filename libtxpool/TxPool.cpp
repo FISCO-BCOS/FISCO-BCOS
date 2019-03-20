@@ -257,7 +257,8 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     ///       need to use the thread pool to execute this callback
     if (needTriggerCallback && pReceipt)
     {
-        p_tx->second->tiggerRpcCallback(pReceipt);
+        Transaction tx = *p_tx->second;
+        m_callbackPool.enqueue([tx, pReceipt] { tx.tiggerRpcCallback(pReceipt); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
