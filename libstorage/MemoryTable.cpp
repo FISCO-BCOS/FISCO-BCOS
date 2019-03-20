@@ -282,6 +282,8 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition,
 								<< LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
 			return storage::CODE_NO_AUTHORIZED;
 		}
+
+
 	} catch (std::exception& e) {
 		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
 		<< LOG_DESC("Access MemoryTable failed for")
