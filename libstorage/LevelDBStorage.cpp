@@ -180,7 +180,7 @@ size_t LevelDBStorage::commit(
 
         		auto it = key2value.find(key);
         		if(it == key2value.end()) {
-        			it = key2value.insert(std::make_pair(key, Json::Value()));
+        			it = key2value.insert(std::make_pair(key, Json::Value())).first;
         		}
 
         		Json::Value value;
@@ -193,10 +193,14 @@ size_t LevelDBStorage::commit(
 				it->second["values"].append(value);
         	}
 
-        	std::stringstream ssOut;
-			ssOut << entry;
+        	for(auto it: key2value) {
+        		std::string entryKey = tableInfo->name + "_" + it.first;
+        		std::stringstream ssOut;
+				ssOut << it.second;
 
-			batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+				batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+        	}
+
         }
 #if 0
             TableData::Ptr tableData = datas[i];
@@ -242,14 +246,14 @@ size_t LevelDBStorage::commit(
 
             writeDB_time_cost += utcTime() - record_time;
             record_time = utcTime();
-#endif
 
         STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
                                    << LOG_KV("encodeTimeCost", encode_time_cost)
                                    << LOG_KV("writeDBTimeCost", writeDB_time_cost)
                                    << LOG_KV("totalTimeCost", utcTime() - start_time);
+#endif
 
-        return total.load();
+        return datas.size();
     }
     catch (std::exception& e)
     {

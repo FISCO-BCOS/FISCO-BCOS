@@ -89,7 +89,7 @@ public:
 			data->entries->addEntry(it.second);
 		}
 
-		for(int i=0; i<m_newEntries->size(); ++i) {
+		for(size_t i=0; i<m_newEntries->size(); ++i) {
 			data->entries->addEntry(m_newEntries->get(i));
 		}
 
