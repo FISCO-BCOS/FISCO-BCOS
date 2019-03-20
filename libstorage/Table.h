@@ -181,8 +181,8 @@ class TableData
 public:
     typedef std::shared_ptr<TableData> Ptr;
 
-    std::string tableName;
-    std::map<std::string, Entries::Ptr> data;
+    TableInfo::Ptr info;
+    Entries::Ptr entries;
 };
 
 // Construction of transaction execution
@@ -206,8 +206,8 @@ public:
     virtual bool checkAuthority(Address const& _origin) const = 0;
     virtual h256 hash() = 0;
     virtual void clear() = 0;
+    virtual TableData::Ptr dump() = 0;
 
-    virtual bool dump(dev::storage::TableData::Ptr _data) = 0;
     virtual bool empty() = 0;
     virtual void setRecorder(
         std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
@@ -220,7 +220,6 @@ public:
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
-    virtual size_t cacheSize() { return 0; }
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>

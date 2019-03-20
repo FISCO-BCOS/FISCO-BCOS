@@ -28,6 +28,8 @@
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <utility>
+#include <libdevcore/Common.h>
+#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -90,11 +92,11 @@ Table::Ptr MemoryTableFactory::openTable(
     Table::Ptr memoryTable = nullptr;
     if (isPara)
     {
-        memoryTable = std::make_shared<MemoryTable<Parallel>>();
+        memoryTable = std::make_shared<MemoryTable>();
     }
     else
     {
-        memoryTable = std::make_shared<MemoryTable<Serial>>();
+        memoryTable = std::make_shared<MemoryTable>();
     }
 
     memoryTable->setStateStorage(m_stateStorage);
@@ -219,7 +221,7 @@ void MemoryTableFactory::rollback(size_t _savepoint)
 
 void MemoryTableFactory::commit() {}
 
-void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory::commitDB(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -229,12 +231,9 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     {
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
-        dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
-        tableData->tableName = dbIt.first;
+        auto tableData = table->dump();
 
-        bool dirtyTable = table->dump(tableData);
-
-        if (!tableData->data.empty() && dirtyTable)
+        if (tableData->entries->size() > 0)
         {
             datas.push_back(tableData);
         }

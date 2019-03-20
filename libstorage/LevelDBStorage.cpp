@@ -26,6 +26,9 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/BasicLevelDB.h>
 #include <memory>
 #include <thread>
 
@@ -93,6 +96,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
     return Entries::Ptr();
 }
 
+#if 0
 size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
     TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to)
 {
@@ -144,11 +148,14 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 }
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
+#endif
+
 size_t LevelDBStorage::commit(
     h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
 {
     try
     {
+#if 0
         auto start_time = utcTime();
         auto record_time = utcTime();
         auto encode_time_cost = 0;
@@ -156,9 +163,42 @@ size_t LevelDBStorage::commit(
 
         std::atomic<size_t> total;
         total = 0;
+#endif
+        auto hex = hash.hex();
 
+        std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
         for (size_t i = 0; i < datas.size(); ++i)
         {
+        	std::map<std::string, Json::Value> key2value;
+
+        	auto tableInfo = datas[i]->info;
+        	auto entries = datas[i]->entries;
+
+        	for(size_t j=0; j<entries->size(); ++j) {
+        		auto entry = entries->get(j);
+        		auto key = entry->getField(tableInfo->key);
+
+        		auto it = key2value.find(key);
+        		if(it == key2value.end()) {
+        			it = key2value.insert(std::make_pair(key, Json::Value()));
+        		}
+
+        		Json::Value value;
+				for (auto& fieldIt : *(entry->fields()))
+				{
+					value[fieldIt.first] = fieldIt.second;
+				}
+				value["_hash_"] = hex;
+				value["_num_"] = num;
+				it->second["values"].append(value);
+        	}
+
+        	std::stringstream ssOut;
+			ssOut << entry;
+
+			batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+        }
+#if 0
             TableData::Ptr tableData = datas[i];
             size_t totalSize = tableData->data.size();
 
@@ -202,7 +242,8 @@ size_t LevelDBStorage::commit(
 
             writeDB_time_cost += utcTime() - record_time;
             record_time = utcTime();
-        }
+#endif
+
         STORAGE_LEVELDB_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Write to db")
                                    << LOG_KV("encodeTimeCost", encode_time_cost)
                                    << LOG_KV("writeDBTimeCost", writeDB_time_cost)

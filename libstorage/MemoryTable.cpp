@@ -24,9 +24,11 @@
 #include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <libdevcore/FixedHash.h>
 #include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <arpa/inet.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -61,36 +63,6 @@ Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr conditio
 			return entries;
 		}
 
-#if 0
-		typename Entries::Ptr entries = std::make_shared<Entries>();
-
-		CacheItr it;
-		it = m_cache.find(key);
-		if (it == m_cache.end()) {
-			if (m_remoteDB) {
-				entries = m_remoteDB->select(m_blockHash, m_blockNum,
-						m_tableInfo->name, key, condition);
-				m_cache.insert(std::make_pair(key, entries));
-				// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-				// selects")
-				//                    << LOG_KV("key", key) << LOG_KV("records",
-				//                    entries->size());
-			}
-		} else {
-			entries = it->second;
-		}
-
-		if (!entries) {
-			// STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
-			return std::make_shared<Entries>();
-		}
-		auto indexes = processEntries(entries, condition);
-		typename Entries::Ptr resultEntries = std::make_shared<Entries>();
-		for (auto& i : indexes) {
-			resultEntries->addEntry(entries->get(i));
-		}
-		return resultEntries;
-#endif
 	} catch (std::exception& e) {
 		 STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
 		                   << LOG_KV("msg", boost::diagnostic_information(e));
@@ -101,7 +73,7 @@ Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr conditio
 }
 
 int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) {
+            AccessOptions::Ptr options) {
 	try {
 		if (options->check && !checkAuthority(options->origin)) {
 			STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
@@ -130,62 +102,9 @@ int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr
 			}
 		}
 
+		 m_recorder(shared_from_this(), Change::Update, key, records);
+
 		return entries->size();
-#if 0
-		if (options->check && !checkAuthority(options->origin)) {
-			// STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update
-			// non-authorized")
-			//                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
-			//                     key);
-			return storage::CODE_NO_AUTHORIZED;
-		}
-		// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
-		// key);
-
-		typename Entries::Ptr entries = std::make_shared<Entries>();
-
-		CacheItr it;
-		{
-			// ReadGuard l(x_cache);
-			it = m_cache.find(key);
-		}
-		if (it == m_cache.end()) {
-			if (m_remoteDB) {
-				entries = m_remoteDB->select(m_blockHash, m_blockNum,
-						m_tableInfo->name, key, condition);
-				m_cache.insert(std::make_pair(key, entries));
-				// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-				// selects")
-				//                    << LOG_KV("key", key) << LOG_KV("records",
-				//                    entries->size());
-			}
-		} else {
-			entries = it->second;
-		}
-
-		if (!entries) {
-			// STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
-			return 0;
-		}
-		checkField(entry);
-		auto indexes = processEntries(entries, condition);
-		std::vector<Change::Record> records;
-
-		for (auto& i : indexes) {
-			Entry::Ptr updateEntry = entries->get(i);
-			for (auto& it : *(entry->fields())) {
-				records.emplace_back(i, it.first,
-						updateEntry->getField(it.first));
-				updateEntry->setField(it.first, it.second);
-			}
-		}
-		this->m_recorder(this->shared_from_this(), Change::Update, key,
-				records);
-
-		entries->setDirty(true);
-
-		return indexes.size();
-#endif
 	} catch (std::exception& e) {
 		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
 		<< LOG_DESC("Access MemoryTable failed for")
@@ -196,8 +115,7 @@ int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr
 }
 
 int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
-            bool needSelect = true) {
+            AccessOptions::Ptr options, bool needSelect) {
 	try {
 		(void)needSelect;
 
@@ -212,59 +130,10 @@ int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
 		Change::Record record(m_newEntries->size() + 1u);
 		m_newEntries->addEntry(entry);
 
+		std::vector<Change::Record> value{record};
+		m_recorder(shared_from_this(), Change::Insert, key, value);
+
 		return 1;
-#if 0
-		if (options->check && !checkAuthority(options->origin)) {
-			// STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert
-			// non-authorized")
-			//                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
-			//                     key);
-			return storage::CODE_NO_AUTHORIZED;
-		}
-		// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
-		// key);
-
-		typename Entries::Ptr entries = std::make_shared<Entries>();
-		Condition::Ptr condition = std::make_shared<Condition>();
-
-		CacheItr it;
-		{
-			// ReadGuard l(x_cache);
-			it = m_cache.find(key);
-		}
-		if (it == m_cache.end()) {
-			if (m_remoteDB) {
-				if (needSelect)
-					entries = m_remoteDB->select(m_blockHash, m_blockNum,
-							m_tableInfo->name, key, condition);
-				else
-					entries = std::make_shared<Entries>();
-
-				m_cache.insert(std::make_pair(key, entries));
-				// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-				// selects")
-				//                    << LOG_KV("key", key) << LOG_KV("records",
-				//                    entries->size());
-			}
-		} else {
-			entries = it->second;
-		}
-		checkField(entry);
-		Change::Record record(entries->size() + 1u);
-		std::vector<Change::Record> value { record };
-		this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
-		if (entries->size() == 0) {
-			entries->addEntry(entry);
-			{
-				// WriteGuard l(x_cache);
-				m_cache.insert(std::make_pair(key, entries));
-			}
-			return 1;
-		} else {
-			entries->addEntry(entry);
-			return 1;
-		}
-#endif
 	} catch (std::exception& e) {
 		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
 		<< LOG_DESC("Access MemoryTable failed for")
@@ -274,8 +143,7 @@ int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
 	return 0;
 }
 
-int MemoryTable::remove(const std::string& key, Condition::Ptr condition,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) {
+int MemoryTable::remove(const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options) {
 	try {
 		if (options->check && !checkAuthority(options->origin)) {
 			STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
@@ -283,99 +151,62 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition,
 			return storage::CODE_NO_AUTHORIZED;
 		}
 
+		auto entries = select(key, condition);
 
+		std::vector<Change::Record> records;
+		for(size_t i=0; i<entries->size(); ++i) {
+			auto removeEntry = entries->get(i);
+			removeEntry->setStatus(1);
+			records.emplace_back(i);
+
+			//if id equals to zero and not in the m_cache, must be new dirty entry
+			if(removeEntry->getID() != 0 && m_cache.find(removeEntry->getID()) == m_cache.end()) {
+				m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
+			}
+		}
+
+		m_recorder(shared_from_this(), Change::Remove, key, records);
+
+		return entries->size();
 	} catch (std::exception& e) {
 		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
 		<< LOG_DESC("Access MemoryTable failed for")
 		<< LOG_KV("msg", boost::diagnostic_information(e));
 	}
-#if 0
-	if (options->check && !checkAuthority(options->origin)) {
-		// STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
-		//                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
-		return storage::CODE_NO_AUTHORIZED;
-	}
-	// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key",
-	// key);
 
-	typename Entries::Ptr entries = std::make_shared<Entries>();
-
-	CacheItr it;
-	{
-		// ReadGuard l(x_cache);
-		it = m_cache.find(key);
-	}
-	if (it == m_cache.end()) {
-		if (m_remoteDB) {
-			entries = m_remoteDB->select(m_blockHash, m_blockNum,
-					m_tableInfo->name, key, condition);
-			m_cache.insert(std::make_pair(key, entries));
-			// STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-			//                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
-		}
-	} else {
-		entries = it->second;
-	}
-
-	auto indexes = processEntries(entries, condition);
-
-	std::vector<Change::Record> records;
-	for (auto& i : indexes) {
-		Entry::Ptr removeEntry = entries->get(i);
-
-		removeEntry->setStatus(1);
-		records.emplace_back(i);
-	}
-	this->m_recorder(this->shared_from_this(), Change::Remove, key, records);
-
-	entries->setDirty(true);
-
-	return indexes.size();
-#endif
 	return 0;
 }
 
 dev::h256 MemoryTable::hash() {
-	std::map<std::string, Entries::Ptr> tmpMap(m_cache.begin(), m_cache.end());
-#if 0
 	bytes data;
-	for (auto& it : tmpMap)
-	{
-		if (it.second->dirty())
-		{
-			// Entries = vector<Entry>
-			// LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entries") << LOG_KV(it.first,
-			// "--->");
-			data.insert(data.end(), it.first.begin(), it.first.end());
-			for (size_t i = 0; i < it.second->size(); ++i)
-			{
-				if (it.second->get(i)->dirty())
-				{
-					for (auto& fieldIt : *(it.second->get(i)->fields()))
-					{
-						// Field
-						// LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Field")
-						//          << LOG_KV(fieldIt.first, toHex(fieldIt.second));
-						if (isHashField(fieldIt.first))
-						{
-							data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-							data.insert(
-									data.end(), fieldIt.second.begin(), fieldIt.second.end());
-						}
-					}
-				}
+
+	for (auto it : m_cache) {
+		auto id = htonl(it.first);
+		data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
+		for(auto fieldIt: *(it.second->fields())) {
+			if(isHashField(fieldIt.first)) {
+				data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+				data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
 			}
 		}
 	}
 
-	if (data.empty())
-	{
+	for(size_t i=0; i<m_newEntries->size(); ++i) {
+		auto entry = m_newEntries->get(i);
+		for(auto fieldIt: *(entry->fields())) {
+			if(isHashField(fieldIt.first)) {
+				data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+				data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+			}
+		}
+	}
+
+	if(data.empty()) {
 		return h256();
 	}
+
 	bytesConstRef bR(data.data(), data.size());
 	h256 hash = dev::sha256(bR);
 
 	return hash;
-#endif
-	return dev::h256();
 }
