@@ -99,6 +99,8 @@ void Ledger::initConfig(std::string const& configPath)
         initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
+        /// init params related to genesis: timestamp
+        initGenesisConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -263,6 +265,24 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
 
+/// init genesis configuration
+void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
+{
+    std::string time_str = pt.get<std::string>("group.timestamp", "");
+    if (time_str == "")
+    {
+        m_param->mutableGenesisParam().timeStamp = 0;
+    }
+    else
+    {
+        struct tm time_tm;
+        strptime(time_str.c_str(), "%Y-%m-%d %H:%M:%S", &time_tm);
+        m_param->mutableGenesisParam().timeStamp = (uint64_t)mktime(&time_tm);
+    }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+                      << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
+}
+
 /// init mark of this group
 void Ledger::initMark()
 {
@@ -273,7 +293,8 @@ void Ledger::initMark()
     s << m_param->mutableStorageParam().type << "-";
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
-    s << m_param->mutableTxParam().txGasLimit;
+    s << m_param->mutableTxParam().txGasLimit
+      << m_param->mutableGenesisParam().timeStamp;  /// add timeStamp of the genesis block
     m_param->mutableGenesisParam().genesisMark = s.str();
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);
@@ -344,7 +365,7 @@ bool Ledger::initBlockChain()
     GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
         m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
         consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit};
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
     bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
     if (!ret)
     {

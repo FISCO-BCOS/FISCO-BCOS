@@ -422,7 +422,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
     if (block == nullptr)
     {
         block = std::make_shared<Block>();
-        block->setEmptyBlock();
+        /// modification 2019.3.20: set timestamp to block header
+        block->setEmptyBlock(initParam.timeStamp);
         block->header().appendExtraDataArray(asBytes(initParam.groupMark));
         shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);

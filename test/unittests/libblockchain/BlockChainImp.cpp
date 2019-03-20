@@ -221,10 +221,11 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
 #ifdef FISCO_GM
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("cec7b81608663f41fd87cc1159528409665e7ca843f644a72d67fb7d1a655e49"));
+        h256("39b4e98c07189c1a1cc53d8159b294c6b58753e660aa52d3a25c5241cc6225f9"));
 #else
+    /// modify the hash of the empty block since "timestamp" has been added into groupMark
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("0x88f55f09b1b525abbd579649b7b20e0769162a3603160ba396c6bab6d4d65cc8"));
+        h256("0xe5f13bd765640fefc097d5a4f3d1d26b4cb93ccdb6a19c55d00fef981bbd6dd7"));
 #endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());

@@ -378,7 +378,7 @@ Json::Value Rpc::getNodeIDList(int _groupID)
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
-            response.append(it->nodeID.hex());
+            response.append(it->nodeID().hex());
         }
 
         return response;

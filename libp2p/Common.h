@@ -40,6 +40,8 @@ struct P2PSessionInfo
         nodeIPEndpoint = _nodeIPEndpoint;
         topics = _topics;
     }
+
+    NodeID const& nodeID() const { return nodeInfo.nodeID; }
 };
 using P2PSessionInfos = std::vector<P2PSessionInfo>;
 
