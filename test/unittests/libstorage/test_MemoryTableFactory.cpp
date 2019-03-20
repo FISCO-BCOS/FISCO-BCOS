@@ -24,6 +24,9 @@
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
+#include <string>
+#include <thread>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
@@ -67,6 +70,7 @@ struct MemoryTableFactoryFixture
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)
 
+/*
 BOOST_AUTO_TEST_CASE(open_Table)
 {
     h256 blockHash(0x0101);
@@ -113,7 +117,47 @@ BOOST_AUTO_TEST_CASE(open_Table)
     table->select("balance", condition);
     memoryDBFactory->commitDB(h256(0), 2);
 }
+*/
 
+BOOST_AUTO_TEST_CASE(parallel_openTable)
+{
+    h256 blockHash(0x0101);
+    std::string tableName("t_test");
+    std::string keyField("key");
+    std::string valueField("value");
+    MemoryTable<Parallel>::Ptr table = std::dynamic_pointer_cast<MemoryTable<Parallel>>(
+        memoryDBFactory->createTable(tableName, keyField, valueField, false, Address(), true));
+
+
+    std::vector<std::thread> threads;
+    for (auto i = 0; i < 3; ++i)
+    {
+        threads.push_back(std::thread([this, i, table]() {
+            auto entry = table->newEntry();
+            entry->setField("key", "balance");
+            auto initBalance = std::to_string(500 + i);
+            entry->setField("value", initBalance);
+            auto key = std::to_string(i);
+            table->insert(key, entry);
+
+            auto entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+            auto changeLog = new std::vector<Change>();
+            memoryDBFactory->setChangeLog(changeLog);
+        }));
+    }
+
+    for (auto& t : threads)
+    {
+        t.join();
+    }
+    // auto savePoint = memoryDBFactory->savepoint();
+    memoryDBFactory->commitDB(h256(0), 2);
+}
+
+/*
 BOOST_AUTO_TEST_CASE(open_sysTables)
 {
     auto table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
@@ -131,6 +175,7 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 {
     memoryDBFactory->setBlockNum(2);
 }
+*/
 
 BOOST_AUTO_TEST_SUITE_END()
 

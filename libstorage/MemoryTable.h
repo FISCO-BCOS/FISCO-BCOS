@@ -256,7 +256,6 @@ public:
         }
         // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key",
         // key);
-
         typename Entries::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
