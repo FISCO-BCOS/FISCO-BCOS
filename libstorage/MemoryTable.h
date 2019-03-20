@@ -197,20 +197,17 @@ public:
             Condition::Ptr condition = std::make_shared<Condition>();
 
             CacheItr it;
-            {
-                // ReadGuard l(x_cache);
-                it = m_cache.find(key);
-            }
+            it = m_cache.find(key);
             if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     if (needSelect)
+                    {
                         entries =
                             m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    else
-                        entries = std::make_shared<Entries>();
-                    m_cache[key] = entries;
+                        m_cache[key] = entries;
+                    }
                     // m_cache.insert(std::make_pair(key, entries));
                     // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
                     // selects")
@@ -223,16 +220,13 @@ public:
                 entries = it->second;
             }
             checkField(entry);
-            Change::Record record(entries->size() + 1u);
+            Change::Record record(entries->size() + 0u);
             std::vector<Change::Record> value{record};
             this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
             if (entries->size() == 0)
             {
                 entries->addEntry(entry);
-                {
-                    // WriteGuard l(x_cache);
-                    m_cache.insert(std::make_pair(key, entries));
-                }
+                m_cache[key] = entries;
                 return 1;
             }
             else
@@ -346,7 +340,17 @@ public:
         return hash;
     }
     virtual void clear() override { m_cache.clear(); }
-    virtual bool empty() override { return m_cache.empty(); }
+    virtual bool empty() override
+    {
+        for (auto iter : m_cache)
+        {
+            if (iter.second != nullptr)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
@@ -383,6 +387,7 @@ public:
         }
         return dirtyTable;
     }
+
     virtual void rollback(const Change& _change) override
     {
         {

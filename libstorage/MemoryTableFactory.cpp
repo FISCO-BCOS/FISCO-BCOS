@@ -208,7 +208,7 @@ h256 MemoryTableFactory::hash()
 
 void MemoryTableFactory::rollback(size_t _savepoint)
 {
-    while(_savepoint < m_changeLog->size())
+    while (_savepoint < m_changeLog->size())
     {
         auto& change = m_changeLog->back();
 
