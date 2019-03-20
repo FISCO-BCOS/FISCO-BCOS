@@ -46,9 +46,6 @@ MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_CNS);
     m_sysTables.push_back(SYS_CONFIG);
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
-
-    auto changeLog = new vector<Change>();
-    setChangeLog(changeLog);
 }
 
 
@@ -130,7 +127,8 @@ Table::Ptr MemoryTableFactory::openTable(
     memoryTable->setTableInfo(tableInfo);
     memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
                                  std::vector<Change::Record>& _records) {
-        m_changeLog->emplace_back(_table, _kind, _key, _records);
+        auto& changeLog = getChangeLog();
+        changeLog.emplace_back(_table, _kind, _key, _records);
     });
 
     m_name2Table.insert({tableName, memoryTable});
@@ -169,6 +167,12 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     return openTable(tableName, authorityFlag, isPara);
 }
 
+size_t MemoryTableFactory::savepoint()
+{
+    auto& changeLog = getChangeLog();
+    return changeLog.size();
+};
+
 void MemoryTableFactory::setBlockHash(h256 blockHash)
 {
     m_blockHash = blockHash;
@@ -206,17 +210,33 @@ h256 MemoryTableFactory::hash()
     return m_hash;
 }
 
+std::vector<Change>& MemoryTableFactory::getChangeLog()
+{
+    auto changeLog = m_changeLog.get();
+    if (m_changeLog.get() != 0)
+    {
+        return *changeLog;
+    }
+    else
+    {
+        changeLog = new std::vector<Change>();
+        m_changeLog.reset(changeLog);
+        return *changeLog;
+    }
+}
+
 void MemoryTableFactory::rollback(size_t _savepoint)
 {
-    while (_savepoint < m_changeLog->size())
+    auto& changeLog = getChangeLog();
+    while (_savepoint < changeLog.size())
     {
-        auto& change = m_changeLog->back();
+        auto& change = changeLog.back();
 
         // Public MemoryTable API cannot be used here because it will add another
         // change log entry.
         change.table->rollback(change);
 
-        m_changeLog->pop_back();
+        changeLog.pop_back();
     }
 }
 

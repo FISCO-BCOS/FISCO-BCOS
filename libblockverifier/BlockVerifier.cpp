@@ -207,12 +207,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     for (unsigned int i = 0; i < m_threadNum; ++i)
     {
         threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory]() {
-            auto changeLog = new std::vector<Change>();
-            memoryTableFactory->setChangeLog(changeLog);
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
             {
                 txDag->executeUnit();
-                changeLog->clear();
             }
         }));
     }

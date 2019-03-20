@@ -70,7 +70,6 @@ struct MemoryTableFactoryFixture
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory, MemoryTableFactoryFixture)
 
-/*
 BOOST_AUTO_TEST_CASE(open_Table)
 {
     h256 blockHash(0x0101);
@@ -117,7 +116,6 @@ BOOST_AUTO_TEST_CASE(open_Table)
     table->select("balance", condition);
     memoryDBFactory->commitDB(h256(0), 2);
 }
-*/
 
 BOOST_AUTO_TEST_CASE(parallel_openTable)
 {
@@ -138,14 +136,56 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
             auto initBalance = std::to_string(500 + i);
             entry->setField("value", initBalance);
             auto key = std::to_string(i);
+
+            auto savepoint0 = memoryDBFactory->savepoint();
+            BOOST_TEST(savepoint0 == 0);
             table->insert(key, entry);
 
             auto entries = table->select(key, table->newCondition());
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getField("value") == initBalance);
 
-            auto changeLog = new std::vector<Change>();
-            memoryDBFactory->setChangeLog(changeLog);
+            std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
+
+            auto savepoint1 = memoryDBFactory->savepoint();
+            BOOST_TEST(savepoint1 == 1);
+
+            entry = table->newEntry();
+            entry->setField("key", "balance");
+            entry->setField("value", std::to_string((i + 1) * 100));
+            table->update(key, entry, table->newCondition());
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getField("value") == std::to_string((i + 1) * 100));
+
+            memoryDBFactory->rollback(savepoint1);
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+            memoryDBFactory->rollback(savepoint0);
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 0);
+
+            entry = table->newEntry();
+            entry->setField("key", "name");
+            entry->setField("value", "Vita");
+            table->insert(key, entry);
+
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+
+            auto savepoint2 = memoryDBFactory->savepoint();
+
+            table->remove(key, table->newCondition());
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getStatus() == 1);
+
+            memoryDBFactory->rollback(savepoint2);
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getStatus() == 0);
         }));
     }
 
@@ -153,11 +193,39 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
     {
         t.join();
     }
-    // auto savePoint = memoryDBFactory->savepoint();
+
+    threads.clear();
+
+    for (auto i = 0; i < 3; ++i)
+    {
+        threads.push_back(std::thread([this, i, table]() {
+            auto entry = table->newEntry();
+            entry->setField("key", "balance");
+            auto initBalance = std::to_string(500 + i);
+            entry->setField("value", initBalance);
+            auto key = std::to_string(i + 10);
+
+            auto savepoint0 = memoryDBFactory->savepoint();
+            BOOST_TEST(savepoint0 == 0);
+            table->insert(key, entry);
+
+            auto entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 1);
+            BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+            memoryDBFactory->rollback(savepoint0);
+            entries = table->select(key, table->newCondition());
+            BOOST_TEST(entries->size() == 0);
+        }));
+    }
+
+    for (auto& t : threads)
+    {
+        t.join();
+    }
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
-/*
 BOOST_AUTO_TEST_CASE(open_sysTables)
 {
     auto table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
@@ -175,7 +243,6 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 {
     memoryDBFactory->setBlockNum(2);
 }
-*/
 
 BOOST_AUTO_TEST_SUITE_END()
 

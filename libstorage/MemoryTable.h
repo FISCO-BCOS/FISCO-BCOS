@@ -147,6 +147,7 @@ public:
                 // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
                 return 0;
             }
+
             checkField(entry);
             auto indexes = processEntries(entries, condition);
             std::vector<Change::Record> records;
