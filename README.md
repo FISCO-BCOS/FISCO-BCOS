@@ -13,6 +13,10 @@ English / [中文](docs/README_CN.md)
 
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
 
+## Compatibility
+
+Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
+
 ## Developing & Contributing
 
 - Star our Github.
@@ -20,14 +24,14 @@ English / [中文](docs/README_CN.md)
 - [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
 - Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
-### Features
+## Features
 
 **Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
 **Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
 **Reliability**: Verified by multiple running cross-organization financial applications.
 **Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
 
-### Featured Cases
+## Featured Cases
 
 Since FISCO BCOS launched, dozens of applications have been implemented. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 
