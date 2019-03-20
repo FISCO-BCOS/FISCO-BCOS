@@ -37,10 +37,12 @@ class Block
 public:
     ///-----constructors of Block
     Block() = default;
-    explicit Block(
-        bytesConstRef _data, CheckTransaction const option = CheckTransaction::Everything);
-    explicit Block(
-        bytes const& _data, CheckTransaction const option = CheckTransaction::Everything);
+    explicit Block(bytesConstRef _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
+    explicit Block(bytes const& _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -67,13 +69,21 @@ public:
     void encode(bytes& _out) const;
 
     ///-----decode functions
-    void decode(bytesConstRef _block, CheckTransaction const option = CheckTransaction::Everything);
+    void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
+        bool _withReceipt = true, bool _withTxHash = false);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
     {
         bytes out;
         encode(out);
+        return out;
+    }
+
+    std::shared_ptr<bytes> rlpP() const
+    {
+        std::shared_ptr<bytes> out = std::make_shared<bytes>();
+        encode(*out);
         return out;
     }
 
@@ -168,6 +178,35 @@ public:
         noteReceiptChange();
     }
 
+    void resizeTransactionReceipt(size_t _totalReceipt)
+    {
+        m_transactionReceipts.resize(_totalReceipt);
+        noteChange();
+    }
+
+    void setTransactionReceipt(size_t _receiptId, TransactionReceipt const& _tran)
+    {
+        m_transactionReceipts[_receiptId] = _tran;
+        noteChange();
+    }
+
+    void updateSequenceReceiptGas()
+    {
+        u256 totalGas = 0;
+        for (auto& receipt : m_transactionReceipts)
+        {
+            totalGas += receipt.gasUsed();
+            receipt.setGasUsed(totalGas);
+        }
+    }
+
+    void setStateRootToAllReceipt(h256 const& _stateRoot)
+    {
+        for (auto& receipt : m_transactionReceipts)
+            receipt.setStateRoot(_stateRoot);
+        noteChange();
+    }
+
     void clearAllReceipts()
     {
         m_transactionReceipts.clear();
@@ -217,7 +256,7 @@ private:
     /// block header of the block (field 0)
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
-    Transactions m_transactions;
+    mutable Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;

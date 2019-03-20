@@ -35,9 +35,11 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <tbb/tbb.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
@@ -114,7 +116,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     try
     {
         Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
-                         << LOG_DESC("initTxPoolConfig/initSyncConfig")
+                         << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                          << LOG_KV("configFile", iniConfigFileName);
         ptree pt;
         /// read the configuration file for a specified group
@@ -123,6 +125,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         initTxPoolConfig(pt);
         /// init params related to sync
         initSyncConfig(pt);
+        initTxExecuteConfig(pt);
 
         /// init params releated to consensus(ttl)
         initConsensusIniConfig(pt);
@@ -132,6 +135,13 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
+}
+
+void Ledger::initTxExecuteConfig(ptree const& pt)
+{
+    m_param->mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+    Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
+                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 void Ledger::initTxPoolConfig(ptree const& pt)
@@ -296,7 +306,16 @@ bool Ledger::initBlockVerifier()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
         return false;
     }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
+
+    bool enableParallel = false;
+    if (m_param->mutableTxParam().enableParallel)
+    {
+        enableParallel = true;
+    }
+
+    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
+
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =

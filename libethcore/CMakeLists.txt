@@ -3,4 +3,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(ethcore ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(ethcore PUBLIC devcrypto)
+target_link_libraries(ethcore PUBLIC devcrypto TBB)

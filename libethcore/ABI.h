@@ -21,11 +21,13 @@
 
 #pragma once
 
+#include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <boost/algorithm/string.hpp>
 
 namespace dev
 {
@@ -150,26 +152,136 @@ public:
     }
 };
 
-
-class ContractABI
-{
-public:
-    template <class... T>
-    bytes abiIn(std::string _func, T const&... _t)
-    {
-        u256 dynamicDataOffset = MAX_BYTE_LENGTH * Length<T...>::value;
-    }
-
-    template <class... T>
-    void abiOut(bytesConstRef _data, T&... _t)
-    {}
-};
-
 }  // namespace abi
 
+class TypeMeta
+{
+public:
+    enum class TYPE
+    {
+        INVALID,  // invalid
+        BOOL,     // bool
+        INT,      // int8  ~ int256
+        UINT,     // uint8 ~ uint256
+        ADDR,     // address
+        BYTES,    // bytes
+        STRING,   // string
+        FIXED,    // fixed, unsupport now
+        UNFIXED   // unfixed, unsupport now
+    };
+
+public:
+    static void trim(std::string& _str)
+    {
+        _str.erase(0, _str.find_first_not_of(" "));
+        _str.erase(_str.find_last_not_of(" ") + 1);
+    }
+
+    static TYPE getTypeByStr(const std::string& _strType)
+    {
+        TYPE type = TYPE::INVALID;
+        if (_strType == strBool)
+        {
+            type = TYPE::BOOL;
+        }
+        else if (_strType == strAddr)
+        {
+            type = TYPE::ADDR;
+        }
+        else if (_strType == strString)
+        {
+            type = TYPE::STRING;
+        }
+        else if (_strType == strBytes)
+        {
+            type = TYPE::BYTES;
+        }
+        else if (setUint.find(_strType) != setUint.end())
+        {
+            type = TYPE::UINT;
+        }
+        else if (setInt.find(_strType) != setInt.end())
+        {
+            type = TYPE::INT;
+        }
+        else if (setByteN.find(_strType) != setByteN.end())
+        {
+            type = TYPE::BYTES;
+        }
+
+        return type;
+    }
+
+private:
+    // uint<M>: unsigned integer type of M bits, 0 < M <= 256, M % 8 == 0. e.g. uint32, uint8,
+    // uint256.
+    static const std::set<std::string> setUint;
+
+    // int<M>: two’s complement signed integer type of M bits, 0 < M <= 256, M % 8 == 0.
+    static const std::set<std::string> setInt;
+
+    // bytes<M>: binary type of M bytes, 0 < M <= 32.
+    static const std::set<std::string> setByteN;
+
+    // bool: equivalent to uint8 restricted to the values 0 and 1. For computing the function
+    // selector, bool is used.
+    static const std::string strBool;
+    // bytes: dynamic sized byte sequence.
+    static const std::string strBytes;
+    // bytes: dynamic sized byte sequence.
+    static const std::string strString;
+    // address: equivalent to uint160, except for the assumed interpretation and language typing.
+    // For computing the function selector, address is used.
+    static const std::string strAddr;
+};
+
+class AbiType
+{
+public:
+    AbiType(const std::string _str) : strType(_str) {}
+
+public:
+    // the number of dimensions of T or zero
+    std::size_t rank() { return extents.size(); }
+    // obtains the size of an array type along a specified dimension
+    std::size_t extent(std::size_t index) { return index > rank() ? 0 : extents[index - 1]; }
+    // parser strType
+    bool doParser();
+
+private:
+    bool valid() { return type != TypeMeta::TYPE::INVALID; }
+    void setType(TypeMeta::TYPE _type) { type = _type; }
+    void setExtents(std::vector<std::size_t> _extents) { _extents = extents; }
+
+    std::vector<std::size_t> extents;
+    TypeMeta::TYPE type{TypeMeta::TYPE::INVALID};
+    std::string strType;
+};
+
+class AbiFunction
+{
+private:
+    std::string strFuncsignature;
+    std::string strSelector;
+    std::string strName;
+    std::vector<std::string> allParamsTypes;
+    std::vector<AbiType> allInputTypes;
+
+public:
+    bool doParser(const std::string& _strSig = "");
+
+public:
+    inline std::string getSignature() const { return strFuncsignature; }
+    inline std::vector<std::string> getParamsTypes() const { return allParamsTypes; }
+    inline std::string getSelector() const { return strSelector; }
+    inline std::string getFuncName() const { return strName; }
+    inline void setSignature(const std::string& _sig) { strFuncsignature = _sig; }
+};
+
 class ContractABI
 {
 public:
+    void serialise(s256 const& _t) { fixedItems.push_back(h256(_t.convert_to<u256>()).asBytes()); }
     void serialise(u256 const& _t) { fixedItems.push_back(h256(_t).asBytes()); }
 
     void serialise(byte const& _t)
@@ -272,6 +384,24 @@ public:
         return 1;
     }
 
+    size_t deserialise(s256& out)
+    {
+        u256 u = fromBigEndian<u256>(data.cropped(getOffset(), 32));
+        if (u > u256("0x8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+        {
+            auto r =
+                (dev::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") -
+                    u) +
+                1;
+            out = s256("-" + r.str());
+        }
+        else
+        {
+            out = u.convert_to<s256>();
+        }
+        return 1;
+    }
+
     size_t deserialise(u160& out)
     {
         out = fromBigEndian<u160>(data.cropped(getOffset() + 12, 20));
@@ -333,6 +463,9 @@ public:
 
         abiOutAux(_t...);
     }
+
+    bool abiOutByFuncSelector(bytesConstRef _data, const std::vector<std::string>& _allTypes,
+        std::vector<std::string>& _out);
 
 private:
     struct DynamicItem

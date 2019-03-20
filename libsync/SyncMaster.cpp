@@ -124,16 +124,36 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     // Debug print
     if (isSyncing())
         printSyncInfo();
+    auto printSyncInfo_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
     // Always do
     maintainPeersConnection();
-    maintainDownloadingQueueBuffer();
-    maintainPeersStatus();
-    maintainBlocks();
+    auto maintainPeersConnection_time_cost = utcTime() - record_time;
+    record_time = utcTime();
 
+    maintainDownloadingQueueBuffer();
+    auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    maintainPeersStatus();
+    auto maintainPeersStatus_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    maintainDownloadingTransactions();
+    auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+    maintainBlocks();
+    auto maintainBlocks_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    auto maintainTransactions_time_cost = 0;
+    auto maintainBlockRequest_time_cost = 0;
     // Idle do
     if (!isSyncing())
     {
@@ -143,10 +163,15 @@ void SyncMaster::doWork()
             m_newTransactions = false;
             maintainTransactions();
         }
+        maintainTransactions_time_cost = utcTime() - record_time;
+        record_time = utcTime();
 
         maintainBlockRequest();
+        maintainBlockRequest_time_cost = utcTime() - record_time;
+        record_time = utcTime();
     }
 
+    auto maintainDownloadingQueue_time_cost = 0;
     // Not Idle do
     if (isSyncing())
     {
@@ -156,7 +181,24 @@ void SyncMaster::doWork()
             if (finished)
                 noteDownloadingFinish();
         }
+        maintainDownloadingQueue_time_cost = utcTime() - record_time;
+        record_time = utcTime();
     }
+
+    SYNC_LOG(DEBUG) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
+                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
+                    << LOG_KV("maintainPeersConnectionTimeCost", maintainPeersConnection_time_cost)
+                    << LOG_KV("maintainDownloadingQueueBufferTimeCost",
+                           maintainDownloadingQueueBuffer_time_cost)
+                    << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
+                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
+                    << LOG_KV("maintainDownloadingTransactionsTimeCost",
+                           maintainDownloadingTransactions_time_cost)
+                    << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
+                    << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
+                    << LOG_KV(
+                           "maintainDownloadingQueueTimeCost", maintainDownloadingQueue_time_cost)
+                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
 void SyncMaster::workLoop()
@@ -218,17 +260,17 @@ void SyncMaster::maintainTransactions()
         }
     }
 
-    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        bytes txRLPs;
+    m_syncStatus->foreachPeerRandom([&](shared_ptr<SyncPeerStatus> _p) {
+        std::vector<bytes> txRLPs;
         unsigned txsSize = peerTransactions[_p->nodeId].size();
         if (0 == txsSize)
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs += ts[i].rlp();
+            txRLPs.emplace_back(ts[i].rlp());
 
         SyncTransactionsPacket packet;
-        packet.encode(txsSize, txRLPs);
+        packet.encode(txRLPs);
 
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
@@ -239,6 +281,11 @@ void SyncMaster::maintainTransactions()
                         << LOG_KV("messageSize(B)", msg->buffer()->size());
         return true;
     });
+}
+
+void SyncMaster::maintainDownloadingTransactions()
+{
+    m_txQueue->pop2TxPool(m_txPool);
 }
 
 void SyncMaster::maintainBlocks()
@@ -298,7 +345,7 @@ void SyncMaster::maintainPeersStatus()
     // Not to start download when mining or no need
     {
         ReadGuard l(x_currentSealingNumber);
-        if (maxPeerNumber <= m_currentSealingNumber)
+        if (maxPeerNumber <= m_currentSealingNumber || maxPeerNumber == currentNumber)
         {
             // mining : maxPeerNumber - currentNumber == 1
             // no need: maxPeerNumber - currentNumber <= 0
@@ -313,7 +360,8 @@ void SyncMaster::maintainPeersStatus()
     // Skip downloading if last if not timeout
 
     uint64_t currentTime = utcTime();
-    if (currentTime - m_lastDownloadingRequestTime < c_downloadingRequestTimeout)
+    if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
+        (int64_t)c_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
                         << LOG_KV("currentNumber", currentNumber)
@@ -408,21 +456,36 @@ bool SyncMaster::maintainDownloadingQueue()
         {
             if (isNewBlock(topBlock))
             {
+                auto record_time = utcTime();
                 auto parentBlock =
                     m_blockChain->getBlockByNumber(topBlock->blockHeader().number() - 1);
                 BlockInfo parentBlockInfo{parentBlock->header().hash(),
                     parentBlock->header().number(), parentBlock->header().stateRoot()};
+                auto getBlockByNumber_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
                 ExecutiveContext::Ptr exeCtx =
                     m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                auto executeBlock_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
                 CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                auto commitBlock_time_cost = utcTime() - record_time;
+                record_time = utcTime();
                 if (ret == CommitResult::OK)
                 {
                     m_txPool->dropBlockTrans(*topBlock);
-                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                    << LOG_DESC("Download block commit")
-                                    << LOG_KV("number", topBlock->header().number())
-                                    << LOG_KV("txs", topBlock->transactions().size())
-                                    << LOG_KV("hash", topBlock->headerHash().abridged());
+                    auto dropBlockTrans_time_cost = utcTime() - record_time;
+                    SYNC_LOG(DEBUG)
+                        << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                        << LOG_DESC("Download block commit")
+                        << LOG_KV("number", topBlock->header().number())
+                        << LOG_KV("txs", topBlock->transactions().size())
+                        << LOG_KV("hash", topBlock->headerHash().abridged())
+                        << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
+                        << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
+                        << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                        << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
                 }
                 else
                 {
@@ -599,8 +662,9 @@ void SyncMaster::maintainBlockRequest()
             // Send block at sequence
             for (; number < numberLimit && utcTime() <= timeout; number++)
             {
-                shared_ptr<Block> block = m_blockChain->getBlockByNumber(number);
-                if (!block)
+                auto start_get_block_time = utcTime();
+                shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
+                if (!blockRLP)
                 {
                     SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                     << LOG_DESC("Get block for node failed")
@@ -608,17 +672,12 @@ void SyncMaster::maintainBlockRequest()
                                     << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
                 }
-                else if (block->header().number() != number)
-                {
-                    SYNC_LOG(TRACE)
-                        << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Get block for node failed")
-                        << LOG_KV("reason", "number incorrect") << LOG_KV("number", number)
-                        << LOG_KV("nodeId", _p->nodeId.abridged());
-                    break;
-                }
 
-                blockContainer.batchAndSend(block);
+                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                                << LOG_BADGE("BlockSync") << LOG_DESC("Batch blocks for sending")
+                                << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
+                                << LOG_KV("timeCost", utcTime() - start_get_block_time);
+                blockContainer.batchAndSend(blockRLP);
             }
 
             if (req.fromNumber < number)

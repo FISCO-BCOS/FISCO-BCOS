@@ -72,7 +72,8 @@ std::string decryptValue(const bytes& _dataKey, const std::string& _value)
 }  // namespace db
 }  // namespace dev
 
-void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice _value)
+void EncryptedLevelDBWriteBatch::insertSlice(
+    const leveldb::Slice& _key, const leveldb::Slice& _value)
 {
     string enData;
     try
@@ -91,6 +92,7 @@ void EncryptedLevelDBWriteBatch::insertSlice(leveldb::Slice _key, leveldb::Slice
         BOOST_THROW_EXCEPTION(EncryptedLevelDBEncryptFailed()
                               << errinfo_comment("EncryptedLevelDB batch encrypt error"));
     }
+    dev::WriteGuard l(x_writeBatch);
     m_writeBatch.Put(_key, leveldb::Slice(enData));
 }
 

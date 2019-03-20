@@ -50,6 +50,7 @@ include(EthCompilerSettings)
 include(EthDependencies)
 
 # install dependencies
+include(ProjectTBB)
 include(ProjectSnappy)
 include(ProjectLevelDB)
 include(ProjectMHD)

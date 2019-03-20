@@ -24,21 +24,25 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
 using namespace dev::executive;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev;
+using namespace std;
 
 bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
 {
     try
     {
+        /*
         EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
                                     << LOG_KV("blockHash", m_blockInfo.hash.abridged())
                                     << LOG_KV("number", m_blockInfo.number)
                                     << LOG_KV("address", address) << LOG_KV("param", toHex(param));
+                                    */
 
         auto p = getPrecompiled(address);
 
@@ -49,14 +53,18 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
         }
         else
         {
+            /*
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[#call]Can't find address") << LOG_KV("address", address);
+                */
         }
     }
     catch (std::exception& e)
     {
+        /*
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#call]Precompiled call error")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
+                                    */
 
         throw dev::eth::PrecompiledError();
     }
@@ -77,12 +85,13 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
     auto p = getPrecompiled(address);
-
-    if (p)
-    {
-        LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address", address);
-    }
-
+    /*
+        if (p)
+        {
+            LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address",
+       address);
+        }
+    */
     return p.get() != NULL;
 }
 
@@ -95,10 +104,19 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
         return itPrecompiled->second;
     }
     /// since non-precompile contracts will print this log, modify the log level to DEBUG
-    LOG(TRACE) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
+    // LOG(DEBUG) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address",
+    // address);
     return Precompiled::Ptr();
 }
-
+/*
+std::shared_ptr<storage::Table> ExecutiveContext::getTable(const Address& address)
+{
+    std::string tableName = "_contract_data_" + address.hex() + "_";
+    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
+        std::dynamic_pointer_cast<TableFactoryPrecompiled>(getPrecompiled(Address(0x1001)));
+    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
+}
+*/
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()
 {
     return m_stateFace;
@@ -129,4 +147,79 @@ void ExecutiveContext::dbCommit(Block& block)
 {
     m_stateFace->dbCommit(block.header().hash(), block.header().number());
     m_memoryTableFactory->commitDB(block.header().hash(), block.header().number());
+}
+
+std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const Transaction& _tx)
+{
+    if (_tx.isCreation())
+    {
+        // Not to parallel contract creation transaction
+        return nullptr;
+    }
+
+    auto p = getPrecompiled(_tx.receiveAddress());
+    if (p)
+    {
+        // Precompile transaction
+        if (p->isParallelPrecompiled())
+        {
+            return make_shared<vector<string>>(p->getParallelTag(ref(_tx.data())));
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        // Normal transaction
+        auto parallelConfigPrecompiled =
+            std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
+                getPrecompiled(Address(0x1007)));
+
+        uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+
+        auto config = parallelConfigPrecompiled->getParallelConfig(
+            shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
+
+        if (config == nullptr)
+        {
+            return nullptr;
+        }
+        else
+        {
+            {  // Testing code
+               // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+
+                AbiFunction af;
+                af.setSignature(config->functionName);
+                //
+                bool isOk = af.doParser();
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG)
+                        << LOG_DESC("[#getTxCriticals] parser function signature failed, ")
+                        << LOG_KV("func signature", config->functionName);
+
+                    return nullptr;
+                }
+
+                auto res = make_shared<vector<string>>();
+                ContractABI abi;
+                isOk = abi.abiOutByFuncSelector(ref(_tx.data()), af.getParamsTypes(), *res);
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
+                                                << LOG_KV("func signature", config->functionName)
+                                                << LOG_KV("input data", toHex(_tx.data()));
+
+                    return nullptr;
+                }
+
+                res->resize((size_t)config->criticalSize);
+
+                return res;
+            }
+        }
+    }
 }

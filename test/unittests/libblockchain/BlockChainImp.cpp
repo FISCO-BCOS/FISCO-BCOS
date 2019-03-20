@@ -59,7 +59,7 @@ static std::string const c_commonHash =
     "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public dev::storage::MemoryTable
+class MockTable : public dev::storage::MemoryTable<Serial>
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;
@@ -116,7 +116,7 @@ public:
         return entries;
     }
 
-    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr) override
+    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr, bool) override
     {
         m_fakeStorage[m_table].insert(std::make_pair(key, entry));
         return 0;
@@ -140,7 +140,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
 
-    Table::Ptr openTable(const std::string& _table, bool = true) override
+    virtual Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
     {
         m_mockTable->m_table = _table;
         return m_mockTable;

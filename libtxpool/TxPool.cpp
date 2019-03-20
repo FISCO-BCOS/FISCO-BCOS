@@ -23,6 +23,8 @@
  */
 #include "TxPool.h"
 #include <libethcore/Exceptions.h>
+#include <tbb/parallel_for.h>
+
 using namespace std;
 using namespace dev::p2p;
 using namespace dev::eth;
@@ -137,21 +139,41 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
 void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, trans_num), [&](const tbb::blocked_range<size_t>& _r) {
+            for (size_t i = _r.begin(); i != _r.end(); i++)
+            {
+                h256 txHash = block.transactions()[i].sha3();
+
+                /// force sender for the transaction
+                ReadGuard l(m_lock);
+                auto p_tx = m_txsHash.find(txHash);
+                l.unlock();
+
+                if (p_tx != m_txsHash.end())
+                {
+                    block.setSenderForTransaction(i, p_tx->second->sender());
+                }
+                /// verify the transaction
+                else
+                {
+                    block.setSenderForTransaction(i);
+                }
+            }
+        });
+}
+
+bool TxPool::txExists(dev::h256 const& txHash)
+{
     ReadGuard l(m_lock);
-    for (size_t i = 0; i < trans_num; i++)
+    /// can't submit to the transaction pull, return false
+    if (m_txsQueue.size() >= m_limit)
+        return true;
+    if (m_txsHash.count(txHash))
     {
-        /// force sender for the transaction
-        auto p_tx = m_txsHash.find(block.transactions()[i].sha3());
-        if (p_tx != m_txsHash.end())
-        {
-            block.setSenderForTransaction(i, p_tx->second->sender());
-        }
-        /// verify the transaction
-        else
-        {
-            block.setSenderForTransaction(i);
-        }
+        return true;
     }
+    return false;
 }
 
 /**

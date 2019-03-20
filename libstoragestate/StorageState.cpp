@@ -36,7 +36,7 @@ using namespace dev::executive;
 bool StorageState::addressInUse(Address const& _address) const
 {
     auto table = getTable(_address);
-    if (table && !table->data()->empty())
+    if (table && !table->empty())
     {
         return true;
     }
@@ -223,7 +223,6 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     }
-    m_cache[_address] = _code;
 }
 
 void StorageState::kill(Address _address)
@@ -250,11 +249,8 @@ void StorageState::kill(Address _address)
     clear();
 }
 
-bytes const& StorageState::code(Address const& _address) const
+bytes const StorageState::code(Address const& _address) const
 {
-    auto it = m_cache.find(_address);
-    if (it != m_cache.end())
-        return it->second;
     if (codeHash(_address) == EmptySHA3)
         return NullBytes;
     auto table = getTable(_address);
@@ -263,8 +259,7 @@ bytes const& StorageState::code(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE, table->newCondition());
         if (entries->size() != 0u)
         {
-            m_cache[_address] = fromHex(entries->get(0)->getField(STORAGE_VALUE));
-            return m_cache[_address];
+            return fromHex(entries->get(0)->getField(STORAGE_VALUE));
         }
     }
     return NullBytes;
@@ -397,7 +392,7 @@ void StorageState::rollback(size_t _savepoint)
 
 void StorageState::clear()
 {
-    m_cache.clear();
+    // m_cache.clear();
 }
 
 bool StorageState::checkAuthority(Address const& _origin, Address const& _contract) const

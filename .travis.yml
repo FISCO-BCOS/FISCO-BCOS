@@ -55,11 +55,13 @@ addons:
     - libssl-dev
     - clang
     # - ninja-build
+    - libomp-dev
     - openssl
   homebrew:
     packages:
     - openssl
     - clang-format
+    - clang-omp
 install: |
     bash tools/ci/check-commit.sh;
 script: |
