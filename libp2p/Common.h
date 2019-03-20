@@ -30,13 +30,13 @@ using NodeIDs = std::vector<NodeID>;
 
 struct P2PSessionInfo
 {
-    NodeID nodeID;
+    dev::network::NodeInfo nodeInfo;
     dev::network::NodeIPEndpoint nodeIPEndpoint;
     std::set<std::string> topics;
-    P2PSessionInfo(
-        NodeID _nodeID, dev::network::NodeIPEndpoint _nodeIPEndpoint, std::set<std::string> _topics)
+    P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
+        dev::network::NodeIPEndpoint const& _nodeIPEndpoint, std::set<std::string> const& _topics)
     {
-        nodeID = _nodeID;
+        nodeInfo = _nodeInfo;
         nodeIPEndpoint = _nodeIPEndpoint;
         topics = _topics;
     }

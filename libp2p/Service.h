@@ -54,7 +54,7 @@ public:
     virtual bool actived() { return m_run; }
     virtual NodeID id() const override { return m_alias.pub(); }
 
-    virtual void onConnect(dev::network::NetworkException e, NodeID nodeID,
+    virtual void onConnect(dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
         std::shared_ptr<dev::network::SessionFace> session);
     virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
