@@ -37,9 +37,11 @@ size_t SnappyCompress::compress(
     compressedData.resize(compress_len + offset);
 
     /// update the statistic
-    m_statistic->updateCompressValue(
-        inputData.size(), compress_len, (utcTimeUs() - start_t), forBroadCast);
-
+    if (m_statistic)
+    {
+        m_statistic->updateCompressValue(
+            inputData.size(), compress_len, (utcTimeUs() - start_t), forBroadCast);
+    }
     LOG(DEBUG) << LOG_BADGE("SnappyCompress") << LOG_DESC("Compress")
                << LOG_KV("org_len", inputData.size()) << LOG_KV("compressed_len", compress_len)
                << LOG_KV("ratio", (float)inputData.size() / (float)compressedData.size())
@@ -60,8 +62,12 @@ size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompres
         (const char*)compressedData.data(), compressedData.size(), (char*)&uncompressedData[0]);
     if (status)
     {
-        m_statistic->updateUncompressValue(
-            compressedData.size(), uncompressed_len, (utcTimeUs() - start_t));
+        if (m_statistic)
+        {
+            m_statistic->updateUncompressValue(
+                compressedData.size(), uncompressed_len, (utcTimeUs() - start_t));
+        }
+
 
         LOG(DEBUG) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress")
                    << LOG_KV("org_len", uncompressed_len)

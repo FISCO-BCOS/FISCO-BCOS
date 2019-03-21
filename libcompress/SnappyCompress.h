@@ -33,14 +33,15 @@ namespace compress
 class SnappyCompress : public CompressInterface
 {
 public:
-    SnappyCompress() { m_statistic = std::make_shared<CompressStatistic>(); }
+    SnappyCompress() {}
     size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0,
         bool forBroadCast = false) override;
     size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
     std::shared_ptr<CompressStatistic> statistic() override { return m_statistic; }
+    void createStatisticHandler() override { m_statistic = std::make_shared<CompressStatistic>(); }
 
 private:
-    std::shared_ptr<CompressStatistic> m_statistic;
+    std::shared_ptr<CompressStatistic> m_statistic = nullptr;
 };
 }  // namespace compress
 }  // namespace dev

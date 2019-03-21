@@ -409,9 +409,18 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 void Ledger::initCompressHandler(boost::property_tree::ptree const& pt)
 {
     std::string compress_algorithm = pt.get<std::string>("compress.algorithm", "");
+    Ledger_LOG(DEBUG) << LOG_BADGE("initCompressHandler")
+                      << LOG_KV("algorithm", compress_algorithm);
     if (dev::stringCmpIgnoreCase(compress_algorithm, "snappy") == 0)
     {
         m_compress = std::make_shared<SnappyCompress>();
+        bool enable_statistic = pt.get<bool>("compress.statistic", false);
+        Ledger_LOG(DEBUG) << LOG_BADGE("initCompressHandler")
+                          << LOG_KV("statistic_enabled", enable_statistic);
+        if (enable_statistic)
+        {
+            m_compress->createStatisticHandler();
+        }
     }
 }
 

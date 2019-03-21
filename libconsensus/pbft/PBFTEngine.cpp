@@ -137,7 +137,7 @@ void PBFTEngine::resetConfig()
             }
         }
         m_nodeNum = m_sealerList.size();
-        if (m_compressHandler)
+        if (m_compressHandler && m_compressHandler->statistic())
         {
             m_compressHandler->statistic()->setSealerSize(m_nodeNum);
         }
@@ -1057,7 +1057,9 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         m_reqCache->delCache(m_highestBlock.hash());
 
         /// output statistic compress related descriptions
-        if (m_blockChain->number() % m_statisticFreq == 0)
+        /// compressHandler and the statistic module is plugin-in
+        if (m_blockChain->number() % m_statisticFreq == 0 && m_compressHandler &&
+            m_compressHandler->statistic())
         {
             auto totalReceivedData = m_service->receivedData();
             auto totalSendData = m_service->sendData();

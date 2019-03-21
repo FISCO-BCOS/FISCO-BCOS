@@ -35,6 +35,7 @@ public:
         bool forBroadcast = false) = 0;
     virtual size_t uncompress(bytesConstRef compressedData, dev::bytes& uncompressedData) = 0;
     virtual std::shared_ptr<CompressStatistic> statistic() { return nullptr; }
+    virtual void createStatisticHandler() {}
 };
 }  // namespace compress
 }  // namespace dev

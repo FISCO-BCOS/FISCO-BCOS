@@ -501,6 +501,7 @@ function generate_group_ini()
     enable_parallel=true
 [compress]
     algorithm=snappy
+    ;statistic=false
 EOF
 }
 
