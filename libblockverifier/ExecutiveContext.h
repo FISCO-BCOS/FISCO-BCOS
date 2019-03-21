@@ -29,6 +29,7 @@
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>
+#include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <memory>
@@ -97,6 +98,9 @@ public:
 
     uint64_t txGasLimit() const { return m_txGasLimit; }
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
+
+    // Get transaction criticals, return nullptr if critical to all
+    std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
 
 private:
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;

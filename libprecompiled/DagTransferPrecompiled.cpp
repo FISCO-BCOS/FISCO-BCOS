@@ -153,6 +153,14 @@ Table::Ptr DagTransferPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
+
+    if (!tableFactoryPrecompiled)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
+                               << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
+        return nullptr;
+    }
+
     auto table =
         tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER, false, true);
     if (!table)
