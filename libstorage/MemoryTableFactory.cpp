@@ -167,7 +167,7 @@ size_t MemoryTableFactory::savepoint()
 {
     auto& changeLog = getChangeLog();
     return changeLog.size();
-};
+}
 
 void MemoryTableFactory::setBlockHash(h256 blockHash)
 {
