@@ -221,7 +221,7 @@ public:
                 entries = it->second;
             }
             checkField(entry);
-            Change::Record record(entries->size() + 0u);
+            Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
             if (entries->size() == 0)
