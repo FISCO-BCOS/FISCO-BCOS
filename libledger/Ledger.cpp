@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libcompress/LZ4Compress.h>
 #include <libcompress/SnappyCompress.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/pbft/PBFTEngine.h>
@@ -425,7 +426,7 @@ void Ledger::initCompressHandler(boost::property_tree::ptree const& pt)
     /// compress/uncompress with lz4
     if (dev::stringCmpIgnoreCase(compress_algorithm, "lz4") == 0)
     {
-        m_compress = std::make_shared<SnappyCompress>();
+        m_compress = std::make_shared<LZ4Compress>();
     }
     /// create compress statistic according to options
     if (m_compress)

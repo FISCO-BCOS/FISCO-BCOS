@@ -32,13 +32,16 @@ namespace compress
 class LZ4Compress : public CompressInterface
 {
 public:
-    LZ4Compress() {}
+    LZ4Compress() { m_dataLenFields = sizeof(size_t) / sizeof(char); }
     size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0,
         bool forBroadCast = false) override;
     size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
 
 private:
+    void saveOriginDataLen(bytesConstRef inputData, bytes& compressedData);
+    size_t loadOriginDataLen(bytesConstRef inputData);
     int m_speed = 1;
+    unsigned m_dataLenFields;
 };
 }  // namespace compress
 }  // namespace dev
