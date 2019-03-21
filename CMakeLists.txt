@@ -52,6 +52,7 @@ include(EthDependencies)
 # install dependencies
 include(ProjectTBB)
 include(ProjectSnappy)
+include(ProjectLZ4)
 include(ProjectLevelDB)
 include(ProjectMHD)
 include(ProjectCryptopp)
