@@ -132,8 +132,12 @@ public:
     void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything);
     void decode(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
     /// @returns the RLP serialisation of this transaction.
-    bytes rlp(IncludeSignature _sig = WithSignature) const
+    bytes rlp(IncludeSignature _sig = WithSignature, bool _useBuffer = false) const
     {
+        if (_useBuffer)
+        {
+            return m_rlpBuffer;
+        }
         bytes out;
         encode(out, _sig);
         return out;
@@ -268,6 +272,9 @@ protected:
     u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 
     RPCCallback m_rpcCallback;
+
+    bytes m_rlpBuffer;  /// < The buffer to cache origin RLP sequence. It will be reused when the tx
+                        /// < needs to be encocoded again;
 };
 
 /// Nice name for vector of Transaction.
