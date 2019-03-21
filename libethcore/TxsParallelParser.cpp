@@ -30,13 +30,12 @@ namespace dev
 {
 namespace eth
 {
-bytes TxsParallelParser::encode(Transactions& _txs)
+bytes TxsParallelParser::encode(Transactions& _txs, bool _useBuffer)
 {
     Offset_t txNum = _txs.size();
     if (txNum == 0)
         return bytes();
 
-    bytes txBytes;
     std::vector<Offset_t> offsets(txNum + 1, 0);
     std::vector<bytes> txRLPs(txNum, bytes());
 
@@ -45,8 +44,7 @@ bytes TxsParallelParser::encode(Transactions& _txs)
         tbb::blocked_range<size_t>(0, txNum), [&](const tbb::blocked_range<size_t>& _r) {
             for (Offset_t i = _r.begin(); i < _r.end(); ++i)
             {
-                bytes txByte;
-                _txs[i].encode(txByte);
+                bytes txByte = _txs[i].rlp(WithSignature, _useBuffer);
 
                 // record bytes size in offsets for caculating real offset
                 offsets[i + 1] = txByte.size();
@@ -55,7 +53,6 @@ bytes TxsParallelParser::encode(Transactions& _txs)
                 txRLPs[i] = txByte;
             }
         });
-
 
     // caculate real offset
     for (size_t i = 0; i < txNum; ++i)
