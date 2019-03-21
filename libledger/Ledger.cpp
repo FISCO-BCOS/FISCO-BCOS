@@ -171,10 +171,8 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
-    m_statisticFreq = pt.get<uint64_t>("consensus.statistic", 100);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
-                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
-                      << LOG_KV("statisticFreq", m_statisticFreq);
+                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
 }
 
 
@@ -420,6 +418,9 @@ void Ledger::initCompressHandler(boost::property_tree::ptree const& pt)
         if (enable_statistic)
         {
             m_compress->createStatisticHandler();
+            m_statisticFreq = pt.get<uint64_t>("compress.statistic_freq", 100);
+            Ledger_LOG(DEBUG) << LOG_BADGE("initCompressHandler")
+                              << LOG_KV("statistic_freq", m_statisticFreq);
         }
     }
 }

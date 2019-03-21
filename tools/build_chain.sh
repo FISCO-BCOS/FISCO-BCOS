@@ -493,7 +493,6 @@ function generate_group_ini()
 ; the ttl for broadcasting pbft message
 [consensus]
     ;ttl=2
-    ;statistic=100
 ;txpool limit
 [tx_pool]
     limit=150000
@@ -502,6 +501,7 @@ function generate_group_ini()
 [compress]
     algorithm=snappy
     ;statistic=false
+    ;statistic_freq=100
 EOF
 }
 

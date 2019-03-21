@@ -1058,8 +1058,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 
         /// output statistic compress related descriptions
         /// compressHandler and the statistic module is plugin-in
-        if (m_blockChain->number() % m_statisticFreq == 0 && m_compressHandler &&
-            m_compressHandler->statistic())
+        if (m_compressHandler && m_compressHandler->statistic() &&
+            m_blockChain->number() % m_statisticFreq == 0)
         {
             auto totalReceivedData = m_service->receivedData();
             auto totalSendData = m_service->sendData();
