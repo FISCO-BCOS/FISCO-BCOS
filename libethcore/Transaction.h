@@ -129,7 +129,8 @@ public:
     /// was not initialized void streamRLP(RLPStream& _s, IncludeSignature _sig =
     /// WithSignature) const;
     void encode(bytes& _trans, IncludeSignature _sig = WithSignature) const;
-    void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything);
+    void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything,
+        bool _buffer = false);
     void decode(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
     /// @returns the RLP serialisation of this transaction.
     bytes rlp(IncludeSignature _sig = WithSignature, bool _useBuffer = false) const

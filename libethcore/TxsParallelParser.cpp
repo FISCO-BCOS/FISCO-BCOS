@@ -115,8 +115,8 @@ inline void throwInvalidBlockFormat()
 }
 
 // parallel decode transactions
-void TxsParallelParser::decode(
-    Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
+void TxsParallelParser::decode(Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig,
+    bool _withHash, bool _buffer)
 {
     try
     {
@@ -157,7 +157,7 @@ void TxsParallelParser::decode(
                     if (offset > maxOffset)
                         exceptionHappen = true;
 
-                    _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
+                    _txs[i].decode(txBytes.cropped(offset, size), _checkSig, _buffer);
                     if (_withHash)
                     {
                         dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
