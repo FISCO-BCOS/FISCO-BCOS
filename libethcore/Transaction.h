@@ -221,7 +221,8 @@ public:
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
     void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
-    void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
+    RPCCallback rpcCallback() const { return m_rpcCallback; }
+    void triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
 
     void updateTransactionHashWithSig(dev::h256 const& txHash);
 
