@@ -134,7 +134,6 @@ private:
     uint64_t m_sendDataSize = 0;
 
     uint64_t m_savedSendData = 0;
-    uint64_t m_savedRecvData = 0;
 
     uint64_t m_compressTime = 0;
     uint64_t m_uncompressTime = 0;
