@@ -293,8 +293,8 @@ void Ledger::initMark()
     s << m_param->mutableStorageParam().type << "-";
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
-    s << m_param->mutableTxParam().txGasLimit
-      << m_param->mutableGenesisParam().timeStamp;  /// add timeStamp of the genesis block
+    s << m_param->mutableTxParam().txGasLimit << "-";
+    s << m_param->mutableGenesisParam().timeStamp;  /// add timeStamp of the genesis block
     m_param->mutableGenesisParam().genesisMark = s.str();
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);

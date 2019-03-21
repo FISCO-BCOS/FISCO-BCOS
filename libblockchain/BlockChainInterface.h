@@ -56,7 +56,7 @@ struct GenesisBlockParam
     std::string stateType;      // the type of state, now mpt/storage
     uint64_t txCountLimit;      // the maximum number of transactions recorded in a block
     uint64_t txGasLimit;        // the maximum gas required to execute a transaction
-    uint64_t timeStamp;
+    uint64_t timeStamp;         /// the timestamp of genesis block
 };
 class BlockChainInterface
 {

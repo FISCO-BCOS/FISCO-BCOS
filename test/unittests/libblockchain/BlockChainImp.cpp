@@ -186,7 +186,7 @@ struct EmptyFixture
         m_blockChainImp->setStateFactory(m_storageStateFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
-        GenesisBlockParam initParam;
+        GenesisBlockParam initParam{"", dev::h512s(), dev::h512s(), "", "", "", 0, 0, 0};
         m_blockChainImp->checkAndBuildGenesisBlock(initParam);
     }
 
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(emptyChain)
 #else
     /// modify the hash of the empty block since "timestamp" has been added into groupMark
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("0xe5f13bd765640fefc097d5a4f3d1d26b4cb93ccdb6a19c55d00fef981bbd6dd7"));
+        h256("0x2d1c730a81f92c9888f508a9c1a4cdeed7063b831f1a21d61a4d6d97584fc260"));
 #endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());

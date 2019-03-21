@@ -196,6 +196,7 @@ public:
             m_extraData[_index] = _content;
             return true;
         }
+        noteDirty();
     }
 
     bool setExtraData(bytes const& _content, unsigned int _index = 0)
