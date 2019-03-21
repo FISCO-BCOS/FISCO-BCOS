@@ -57,7 +57,7 @@ public:
 
             CacheItr it;
             it = m_cache.find(key);
-            // beacuse there is no inferface to erase element in tbb::concurrent_unordered_map,
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
             // so we set a value to nullptr as a flag to tell table to update it later when a
             // key-value is invalid
             if (it == m_cache.end() || it->second == nullptr)
@@ -108,7 +108,7 @@ public:
 
             CacheItr it;
             it = m_cache.find(key);
-            // beacuse there is no inferface to erase element in tbb::concurrent_unordered_map,
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
             // so we set a value to nullptr as a flag to tell table to update it later when a
             // key-value is invalid
             if (it == m_cache.end() || it->second == nullptr)
@@ -174,7 +174,7 @@ public:
 
             CacheItr it;
             it = m_cache.find(key);
-            // beacuse there is no inferface to erase element in tbb::concurrent_unordered_map,
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
             // so we set a value to nullptr as a flag to tell table to update it later when a
             // key-value is invalid
             if (it == m_cache.end() || it->second == nullptr)
@@ -231,7 +231,7 @@ public:
 
         CacheItr it;
         it = m_cache.find(key);
-        // beacuse there is no inferface to erase element in tbb::concurrent_unordered_map,
+        // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
         // so we set a value to nullptr as a flag to tell table to update it later when a
         // key-value is invalid
         if (it == m_cache.end() || it->second == nullptr)
