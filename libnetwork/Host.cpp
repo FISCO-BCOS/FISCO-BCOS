@@ -44,6 +44,8 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -60,7 +62,7 @@ using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
 
-std::string Host::split_char = "#";
+const std::string Host::split_char = "#";
 /**
  * @brief: accept connection requests, maily include procedures:
  *         1. async_accept: accept connection requests
@@ -198,6 +200,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                                << LOG_KV("nodeID", nodeID.substr(0, 4));
                 return false;
             }
+            /// return early when the certificate is invalid
             if (!preverified)
             {
                 return false;
@@ -223,6 +226,46 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             return preverified;
         }
     };
+}
+
+/**
+ * @brief: obtain the common name from the subject of certificate
+ *
+ * @param subject : the subject of the certificat
+ *   the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
+ * @return std::string: the common name of the certificate
+ */
+std::string Host::obtainCommonNameFromSubject(std::string const& subject)
+{
+    std::vector<std::string> fields;
+    boost::split(fields, subject, boost::is_any_of("/"), boost::token_compress_on);
+    for (auto field : fields)
+    {
+        std::size_t pos = field.find("CN");
+        if (pos != std::string::npos)
+        {
+            std::vector<std::string> cn_fields;
+            boost::split(cn_fields, field, boost::is_any_of("="), boost::token_compress_on);
+            /// use the whole fields as the common name
+            if (cn_fields.size() < 2)
+            {
+                return field;
+            }
+            /// return real common name
+            return cn_fields[1];
+        }
+    }
+    return subject;
+}
+
+/// obtain nodeInfo from given vector
+void Host::obtainNodeInfo(NodeInfo& info, std::string const& node_info)
+{
+    std::vector<std::string> node_info_vec;
+    boost::split(node_info_vec, node_info, boost::is_any_of(split_char), boost::token_compress_on);
+    info.nodeID = NodeID(node_info_vec[0]);
+    info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+    info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
 }
 
 

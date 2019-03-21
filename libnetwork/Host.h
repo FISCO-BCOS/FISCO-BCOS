@@ -25,8 +25,6 @@
 #include <libdevcore/Worker.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/ECDHE.h>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/strand.hpp>
 #include <chrono>
@@ -122,39 +120,13 @@ private:
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
 
-    std::string obtainCommonNameFromSubject(std::string const& subject)
-    {
-        std::vector<std::string> fields;
-        boost::split(fields, subject, boost::is_any_of("/"), boost::token_compress_on);
-        for (auto field : fields)
-        {
-            std::size_t pos = field.find("CN");
-            if (pos != std::string::npos)
-            {
-                std::vector<std::string> cn_fields;
-                boost::split(cn_fields, field, boost::is_any_of("="), boost::token_compress_on);
-                /// use the whole fields as the common name
-                if (cn_fields.size() < 2)
-                {
-                    return field;
-                }
-                /// return real common name
-                return cn_fields[1];
-            }
-        }
-        return subject;
-    }
+    /// obtain the common name from the subject:
+    /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
+    std::string obtainCommonNameFromSubject(std::string const& subject);
 
     /// obtain nodeInfo from given vector
-    void obtainNodeInfo(NodeInfo& info, std::string const& node_info)
-    {
-        std::vector<std::string> node_info_vec;
-        boost::split(
-            node_info_vec, node_info, boost::is_any_of(split_char), boost::token_compress_on);
-        info.nodeID = NodeID(node_info_vec[0]);
-        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
-        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
-    }
+    void obtainNodeInfo(NodeInfo& info, std::string const& node_info);
+
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
@@ -209,7 +181,7 @@ private:
     // certificate rejected list of nodeID
     std::vector<std::string> m_crl;
 
-    static std::string split_char;
+    static const std::string split_char;
 };
 }  // namespace network
 
