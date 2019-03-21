@@ -94,15 +94,17 @@ int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr
 
 		for(size_t i=0; i<entries->size(); ++i) {
 			auto updateEntry = entries->get(i);
-
-			for (auto& it : *(entry->fields())) {
-				records.emplace_back(i, it.first, updateEntry->getField(it.first));
-				updateEntry->setField(it.first, it.second);
-			}
+			size_t newIndex = 0;
 
 			//if id equals to zero and not in the m_cache, must be new dirty entry
 			if(updateEntry->getID() != 0 && m_cache.find(updateEntry->getID()) == m_cache.end()) {
+				newIndex = m_cache.size();
 				m_cache.insert(std::make_pair(updateEntry->getID(), updateEntry));
+			}
+
+			for (auto& it : *(entry->fields())) {
+				records.emplace_back(updateEntry->getID(), newIndex, it.first, updateEntry->getField(it.first));
+				updateEntry->setField(it.first, it.second);
 			}
 		}
 
@@ -131,7 +133,7 @@ int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
 
 		checkField(entry);
 
-		Change::Record record(m_newEntries->size() + 1u);
+		Change::Record record(0, m_newEntries->size());
 		m_newEntries->addEntry(entry);
 
 		std::vector<Change::Record> value{record};
@@ -160,13 +162,16 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition, Access
 		std::vector<Change::Record> records;
 		for(size_t i=0; i<entries->size(); ++i) {
 			auto removeEntry = entries->get(i);
+			size_t newIndex = 0;
+
 			removeEntry->setStatus(1);
-			records.emplace_back(i);
 
 			//if id equals to zero and not in the m_cache, must be new dirty entry
 			if(removeEntry->getID() != 0 && m_cache.find(removeEntry->getID()) == m_cache.end()) {
 				m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
 			}
+
+			records.emplace_back(removeEntry->getID(), newIndex);
 		}
 
 		m_recorder(shared_from_this(), Change::Remove, key, records);
@@ -213,4 +218,54 @@ dev::h256 MemoryTable::hash() {
 	h256 hash = dev::sha256(bR);
 
 	return hash;
+}
+
+void MemoryTable::rollback(const Change& _change)
+{
+	switch (_change.kind)
+	{
+	case Change::Insert:
+	{
+		m_newEntries->removeEntry(_change.value[0].id);
+		break;
+	}
+	case Change::Update:
+	{
+		for (auto& record : _change.value)
+		{
+			if(record.id) {
+				auto it = m_cache.find(record.id);
+				if(it != m_cache.end()) {
+					it->second->setField(record.key, record.oldValue);
+				}
+			}
+			else {
+				auto entry = m_newEntries->get(record.newIndex);
+				entry->setField(record.key, record.oldValue);
+			}
+		}
+		break;
+	}
+	case Change::Remove:
+	{
+		for (auto& record : _change.value)
+		{
+			if(record.id) {
+				auto it = m_cache.find(record.id);
+				if(it != m_cache.end()) {
+					it->second->setStatus(0);
+				}
+			}
+			else {
+				auto entry = m_newEntries->get(record.newIndex);
+				entry->setStatus(0);
+			}
+		}
+		break;
+	}
+	case Change::Select:
+
+	default:
+		break;
+	}
 }

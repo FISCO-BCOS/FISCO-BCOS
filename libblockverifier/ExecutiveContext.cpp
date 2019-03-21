@@ -188,21 +188,36 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         }
         else
         {
-            // TODO call perser to decode _tx.data()
-            // shared getParallelTagByFunctionName(_tx.data, config->functionName,
-            // config->criticalSize);
             {  // Testing code
-                bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
-                ContractABI abi;
-                string c0, c1;
-                abi.abiOut(data, c0, c1);
-                /*
-                LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("Get normal transaction criticals")
-                           << LOG_KV("c0", c0) << LOG_KV("c1", c1);
-*/
+               // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+
+                AbiFunction af;
+                af.setSignature(config->functionName);
+                //
+                bool isOk = af.doParser();
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG)
+                        << LOG_DESC("[#getTxCriticals] parser function signature failed, ")
+                        << LOG_KV("func signature", config->functionName);
+
+                    return nullptr;
+                }
+
                 auto res = make_shared<vector<string>>();
-                res->emplace_back(c0);
-                res->emplace_back(c1);
+                ContractABI abi;
+                isOk = abi.abiOutByFuncSelector(ref(_tx.data()), af.getParamsTypes(), *res);
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
+                                                << LOG_KV("func signature", config->functionName)
+                                                << LOG_KV("input data", toHex(_tx.data()));
+
+                    return nullptr;
+                }
+
+                res->resize((size_t)config->criticalSize);
+
                 return res;
             }
         }

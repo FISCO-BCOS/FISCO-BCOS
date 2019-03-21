@@ -59,7 +59,7 @@ static std::string const c_commonHash =
     "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public dev::storage::MemoryTable<Serial>
+class MockTable : public dev::storage::MemoryTable
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;

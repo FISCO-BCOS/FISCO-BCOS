@@ -64,7 +64,17 @@ public:
     virtual h256 hash() override;
 
     virtual void clear() override { m_cache.clear(); }
-    virtual bool empty() override { return m_cache.empty(); }
+    virtual bool empty() override
+    {
+        for (auto iter : m_cache)
+        {
+            if (iter.second != nullptr)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
@@ -97,6 +107,8 @@ public:
 
 		return data;
     }
+
+    virtual void rollback(const Change& _change) override;
 
 private:
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
@@ -224,7 +236,6 @@ private:
             return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
                     (_key == STATUS));
         }
-        // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Empty key error");
         return false;
     }
 
@@ -238,6 +249,7 @@ private:
                 STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
                                   << LOG_KV("table name", m_tableInfo->name)
                                   << LOG_KV("field", it.first);
+
                 throw std::invalid_argument("Invalid key.");
             }
         }

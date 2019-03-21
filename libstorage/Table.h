@@ -161,12 +161,13 @@ struct Change
     std::string key;
     struct Record
     {
-        size_t index;
+        size_t id;
+        size_t newIndex;
         std::string key;
         std::string oldValue;
         Record(
-            size_t _index, std::string _key = std::string(), std::string _oldValue = std::string())
-          : index(_index), key(_key), oldValue(_oldValue)
+            size_t _id, size_t index = 0, std::string _key = std::string(), std::string _oldValue = std::string())
+          : id(_id), newIndex(index), key(_key), oldValue(_oldValue)
         {}
     };
     std::vector<Record> value;
@@ -207,6 +208,7 @@ public:
     virtual h256 hash() = 0;
     virtual void clear() = 0;
     virtual TableData::Ptr dump() = 0;
+    virtual void rollback(const Change& _change) = 0;
 
     virtual bool empty() = 0;
     virtual void setRecorder(

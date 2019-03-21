@@ -50,7 +50,6 @@ void Entry::setID(uint32_t id) {
 
 std::string Entry::getField(const std::string& key) const
 {
-    // dev::ReadGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
