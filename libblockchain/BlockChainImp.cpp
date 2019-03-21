@@ -518,7 +518,6 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
-                assert(s.size() == 7);
                 initParam.consensusType = s[2];
                 initParam.storageType = s[3];
                 initParam.stateType = s[4];
