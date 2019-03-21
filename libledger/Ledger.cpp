@@ -417,9 +417,19 @@ void Ledger::initCompressHandler(boost::property_tree::ptree const& pt)
     std::string compress_algorithm = pt.get<std::string>("compress.algorithm", "");
     Ledger_LOG(DEBUG) << LOG_BADGE("initCompressHandler")
                       << LOG_KV("algorithm", compress_algorithm);
+    /// compress/uncompress with snappy
     if (dev::stringCmpIgnoreCase(compress_algorithm, "snappy") == 0)
     {
         m_compress = std::make_shared<SnappyCompress>();
+    }
+    /// compress/uncompress with lz4
+    if (dev::stringCmpIgnoreCase(compress_algorithm, "lz4") == 0)
+    {
+        m_compress = std::make_shared<SnappyCompress>();
+    }
+    /// create compress statistic according to options
+    if (m_compress)
+    {
         bool enable_statistic = pt.get<bool>("compress.statistic", false);
         Ledger_LOG(DEBUG) << LOG_BADGE("initCompressHandler")
                           << LOG_KV("statistic_enabled", enable_statistic);

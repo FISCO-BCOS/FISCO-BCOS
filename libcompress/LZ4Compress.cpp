@@ -14,31 +14,31 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief : complement compress and uncompress with snappy
+ * @brief : complement compress and uncompress with lz4
  *
  * @file SnappyCompress.cpp
  * @author: yujiechen
  * @date 2019-03-13
  */
-#include "SnappyCompress.h"
+#include "LZ4Compress.h"
 
 namespace dev
 {
 namespace compress
 {
-size_t SnappyCompress::compress(
+size_t LZ4Compress::compress(
     bytesConstRef inputData, bytes& compressedData, size_t offset, bool forBroadCast)
 {
-    size_t compressLen;
+    const size_t maxLen = LZ4_compressBound(inputData.size());
+    compressedData.resize(maxLen + offset);
+
     auto start_t = utcTimeUs();
-    compressedData.resize(snappy::MaxCompressedLength(inputData.size()) + offset);
-    snappy::RawCompress((const char*)inputData.data(), inputData.size(),
-        (char*)&compressedData[offset], &compressLen);
+    size_t compressLen = LZ4_compress_fast((const char*)inputData.data(),
+        (char*)(&compressedData[offset]), compressedData.size(), maxLen, m_speed);
     compressedData.resize(compressLen + offset);
-    /// compress failed
     if (compressLen < 1)
     {
-        LOG(ERROR) << LOG_BADGE("SnappyCompressio") << LOG_DESC("compress failed");
+        LOG(ERROR) << LOG_BADGE("LZ4Compress") << LOG_DESC("compress failed");
         return 0;
     }
     /// update the statistic
@@ -47,41 +47,39 @@ size_t SnappyCompress::compress(
         m_statistic->updateCompressValue(
             inputData.size(), compressLen, (utcTimeUs() - start_t), forBroadCast);
     }
-    LOG(DEBUG) << LOG_BADGE("SnappyCompress") << LOG_DESC("Compress")
+    LOG(DEBUG) << LOG_BADGE("LZ4Compress") << LOG_DESC("Compress")
                << LOG_KV("org_len", inputData.size()) << LOG_KV("compressed_len", compressLen)
                << LOG_KV("ratio", (float)inputData.size() / (float)compressedData.size())
                << LOG_KV("timecost", (utcTimeUs() - start_t));
-
-
     return compressLen;
 }
 
-size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
+size_t LZ4Compress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
 {
-    size_t uncompressedLen = 0;
+    uncompressedData.resize(LZ4_compressBound(compressedData.size()));
+
     auto start_t = utcTimeUs();
-    snappy::GetUncompressedLength(
-        (const char*)compressedData.data(), compressedData.size(), &uncompressedLen);
-    uncompressedData.resize(uncompressedLen);
-    bool status = snappy::RawUncompress(
-        (const char*)compressedData.data(), compressedData.size(), (char*)&uncompressedData[0]);
+    size_t uncompressLen = LZ4_decompress_fast(
+        (const char*)compressedData.data(), (char*)&uncompressedData[0], compressedData.size());
+    uncompressedData.resize(uncompressLen);
     /// uncompress failed
-    if (!status)
+    if (uncompressLen < 1)
     {
-        LOG(ERROR) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress failed");
+        LOG(ERROR) << LOG_BADGE("LZ4Compress") << LOG_DESC("uncompress failed");
         return 0;
     }
     if (m_statistic)
     {
         m_statistic->updateUncompressValue(
-            compressedData.size(), uncompressedLen, (utcTimeUs() - start_t));
+            compressedData.size(), uncompressLen, (utcTimeUs() - start_t));
     }
-    LOG(DEBUG) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress")
-               << LOG_KV("org_len", uncompressedLen)
-               << LOG_KV("compress_len", compressedData.size())
-               << LOG_KV("ratio", (float)uncompressedLen / (float)compressedData.size())
+    LOG(DEBUG) << LOG_BADGE("LZ4Compress") << LOG_DESC("uncompress")
+               << LOG_KV("org_len", uncompressLen) << LOG_KV("compressLen", compressedData.size())
+               << LOG_KV("ratio", (float)uncompressLen / (float)compressedData.size())
                << LOG_KV("timecost", (utcTimeUs() - start_t));
-    return uncompressedLen;
+
+    return uncompressLen;
 }
+
 }  // namespace compress
 }  // namespace dev

@@ -14,34 +14,31 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief : interface related to compress
+ * @brief : complement compress and uncompress with lz4
  *
- * @file CompressInterface.h
+ * @file LZ4Compress.h
  * @author: yujiechen
  * @date 2019-03-13
  */
 #pragma once
-#include "CompressStatistic.h"
-#include <libdevcore/Common.h>
+#include "CompressInterface.h"
+#include "lz4.h"
+#include <libdevcore/easylog.h>
 
 namespace dev
 {
 namespace compress
 {
-class CompressStatistic;
-class CompressInterface
+class LZ4Compress : public CompressInterface
 {
 public:
-    virtual size_t compress(bytesConstRef inputData, dev::bytes& compressedData, size_t offset = 0,
-        bool forBroadcast = false) = 0;
-    virtual size_t uncompress(bytesConstRef compressedData, dev::bytes& uncompressedData) = 0;
+    LZ4Compress() {}
+    size_t compress(bytesConstRef inputData, bytes& compressedData, size_t offset = 0,
+        bool forBroadCast = false) override;
+    size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
 
-    /// statistic related handlers
-    virtual std::shared_ptr<CompressStatistic> statistic() { return m_statistic; }
-    virtual void createStatisticHandler() { m_statistic = std::make_shared<CompressStatistic>(); }
-
-protected:
-    std::shared_ptr<CompressStatistic> m_statistic = nullptr;
+private:
+    int m_speed = 1;
 };
 }  // namespace compress
 }  // namespace dev
