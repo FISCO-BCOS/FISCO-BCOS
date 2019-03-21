@@ -70,11 +70,6 @@ Table::Ptr MemoryTableFactory::openTable(
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            /*
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory")
-                               << LOG_DESC("table doesn't exist in _sys_tables_")
-                               << LOG_KV("table name", tableName);
-                               */
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -197,8 +192,6 @@ h256 MemoryTableFactory::hash()
         }
 
         bytes tableHash = table->hash().asBytes();
-        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
-        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
 
         data.insert(data.end(), tableHash.begin(), tableHash.end());
     }
@@ -207,7 +200,6 @@ h256 MemoryTableFactory::hash()
         return h256();
     }
     m_hash = dev::sha256(&data);
-    // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("allTableHash") << LOG_KV("stateRoot", m_hash);
     return m_hash;
 }
 
@@ -268,7 +260,6 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 
     if (!datas.empty())
     {
-        /// STORAGE_LOG(DEBUG) << "Submit data:" << datas.size() << " hash:" << m_hash;
         stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
     }
     auto commit_time_cost = utcTime() - record_time;
