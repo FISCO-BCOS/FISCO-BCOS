@@ -42,15 +42,14 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
         auto& tx = _txs[id];
 
         // Is para transaction?
-        auto p = _ctx->getPrecompiled(tx.receiveAddress());
-        if (p && p->isParallelPrecompiled())
+        auto criticals = _ctx->getTxCriticals(tx);
+        if (criticals)
         {
             // DAG transaction: Conflict with certain critical fields
             // Get critical field
-            vector<string> criticals = p->getParallelTag(ref(tx.data()));
 
             // Add edge between critical transaction
-            for (string const& c : criticals)
+            for (string const& c : *criticals)
             {
                 ID pId = latestCriticals.get(c);
                 if (pId != INVALID_ID)
@@ -60,7 +59,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
                 }
             }
 
-            for (string const& c : criticals)
+            for (string const& c : *criticals)
             {
                 latestCriticals.update(c, id);
             }

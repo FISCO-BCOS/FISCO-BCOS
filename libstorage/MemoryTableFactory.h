@@ -46,10 +46,10 @@ public:
     MemoryTableFactory();
     virtual ~MemoryTableFactory() {}
     virtual Table::Ptr openTable(
-        const std::string& tableName, bool authorityFlag = true, bool isPara = false);
+        const std::string& tableName, bool authorityFlag = true, bool isPara = true);
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag = true,
-        Address const& _origin = Address(), bool isPara = false);
+        Address const& _origin = Address(), bool isPara = true);
 
     virtual Storage::Ptr stateStorage() { return m_stateStorage; }
     virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
@@ -77,6 +77,9 @@ private:
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;
+
+    // mutex
+    mutable RecursiveMutex x_name2Table;
 };
 
 }  // namespace storage
