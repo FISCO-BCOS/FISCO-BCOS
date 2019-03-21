@@ -24,6 +24,7 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/Guards.h>
+#include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 #include <memory>
@@ -54,21 +55,21 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
         Entries::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
-            // parse json
-            std::stringstream ssIn;
-            ssIn << value;
+            bytesConstRef frame = bytesConstRef(value);
+            RLP entriesRlps = RLP(frame);
 
-            Json::Value valueJson;
-            ssIn >> valueJson;
-
-            Json::Value values = valueJson["values"];
-            for (auto it = values.begin(); it != values.end(); ++it)
+            for (size_t i = 0; i < entriesRlps.itemCount(); i++)
             {
+                RLP entryRlp = entriesRlps[i];
                 Entry::Ptr entry = std::make_shared<Entry>();
+                entry->setField("_hash_", entryRlp[0].toHash<h256>().hex());
+                entry->setField("_num_", std::to_string(entryRlp[1].toPositiveInt64()));
 
-                for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
+                RLP fieldsRlp = entryRlp[2];  // fields
+                for (size_t j = 0; j < fieldsRlp.itemCount(); j++)
                 {
-                    entry->setField(valueIt.key().asString(), valueIt->asString());
+                    RLP fieldRlp = fieldsRlp[j];
+                    entry->setField(fieldRlp[0].toString(), fieldRlp[1].toString());
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL)
@@ -114,26 +115,37 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
         std::string entryKey = tableData->tableName + "_" + dataIt->first;
         Json::Value entry;
 
-        for (size_t i = 0; i < dataIt->second->size(); ++i)
+        size_t entriesSize = dataIt->second->size();
+        RLPStream rlps;
+        rlps.appendList(entriesSize);
+        for (size_t i = 0; i < entriesSize; ++i)
         {
-            Json::Value value;
+            rlps.appendList(3);
+            rlps.append(hash);
+            rlps.append(bigint(num));
+
+            size_t fiedsSize = dataIt->second->get(i)->fields()->size();
+            rlps.appendList(fiedsSize);
             for (auto& fieldIt : *(dataIt->second->get(i)->fields()))
             {
-                value[fieldIt.first] = fieldIt.second;
+                rlps.appendList(2);
+                rlps.append(fieldIt.first);
+                rlps.append(fieldIt.second);
             }
-            value["_hash_"] = hash.hex();
-            value["_num_"] = num;
-            entry["values"].append(value);
         }
 
-        std::stringstream ssOut;
-        ssOut << entry;
+        bytes rlpBytes;
+        rlps.swapOut(rlpBytes);
 
-        batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+        vector_ref<const char> refBytes =
+            vector_ref<const char>((const char*)rlpBytes.data(), rlpBytes.size());
+
+        batch->insertSlice(
+            leveldb::Slice(entryKey), leveldb::Slice(refBytes.data(), refBytes.size()));
         ++total;
         // ssOut.seekg(0, std::ios::end);
         STORAGE_LEVELDB_LOG(TRACE)
-            << LOG_KV("commit key", entryKey) << LOG_KV("entries", dataIt->second->size());
+            << LOG_KV("commit key", entryKey) << LOG_KV("entries", entriesSize);
         //<< LOG_KV("len", ssOut.tellg());
         dataIt++;
         from++;
