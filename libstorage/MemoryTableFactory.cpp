@@ -206,7 +206,7 @@ h256 MemoryTableFactory::hash()
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
     auto changeLog = m_changeLog.get();
-    if (m_changeLog.get() != 0)
+    if (m_changeLog.get() != nullptr)
     {
         return *changeLog;
     }
