@@ -24,3 +24,50 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
+
+bool ContractABI::abiOutByFuncSelector(
+    bytesConstRef _data, const std::vector<std::string>& _allTypes, std::vector<std::string>& _out)
+{
+    data = _data;
+    decodeOffset = 0;
+
+    for (const std::string& type : _allTypes)
+    {
+        size_t offset = 0;
+        if ("int" == type || "int256" == type)
+        {
+            s256 s;
+            offset = deserialise(s);
+            stringstream ss;
+            ss << s;
+            _out.push_back(ss.str());
+        }
+        else if ("uint" == type || "uint256" == type)
+        {
+            u256 u;
+            offset = deserialise(u);
+            stringstream ss;
+            ss << u;
+            _out.push_back(ss.str());
+        }
+        else if ("address" == type)
+        {
+            Address addr;
+            offset = deserialise(addr);
+            _out.push_back(addr.hex());
+        }
+        else if ("string" == type)
+        {
+            std::string str;
+            offset = deserialise(str);
+            _out.push_back(str);
+        }
+        else
+        {  // unsupport type
+            return false;
+        }
+        decodeOffset += offset;
+    }
+
+    return true;
+}
