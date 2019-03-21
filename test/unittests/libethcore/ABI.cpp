@@ -69,6 +69,64 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
     BOOST_CHECK_EQUAL(b, compareB);  // There are some bug of convert the byte
 }
 
+BOOST_AUTO_TEST_CASE(AbiFunctionTest0)
+{
+    AbiFunction af;
+    std::string strFuncSignature = "caculate(uint256, uint160,    string)";
+    af.setSignature(strFuncSignature);
+    bool isOk = af.doParser();
+    BOOST_CHECK(isOk == true);
+
+    auto funcSig = af.getSignature();
+    BOOST_CHECK(funcSig == "caculate(uint256,uint160,string)");
+    auto name = af.getFuncName();
+    BOOST_CHECK("caculate" == name);
+    auto types = af.getParamsTypes();
+    BOOST_CHECK(types.size() == 3);
+    BOOST_CHECK("uint256" == types[0]);
+    BOOST_CHECK("uint160" == types[1]);
+    BOOST_CHECK("string" == types[2]);
+}
+
+BOOST_AUTO_TEST_CASE(AbiFunctionTest1)
+{
+    AbiFunction af;
+    std::string strFuncSignature = "get( )";
+    af.setSignature(strFuncSignature);
+    bool isOk = af.doParser();
+    BOOST_CHECK(isOk == true);
+    auto name = af.getFuncName();
+    BOOST_CHECK("get" == name);
+    auto funcSig = af.getSignature();
+    BOOST_CHECK(funcSig == "get()");
+    auto types = af.getParamsTypes();
+    BOOST_CHECK(types.size() == 0);
+}
+
+BOOST_AUTO_TEST_CASE(abiOutByFuncSelectorTest)
+{
+    u256 u = 111111111;
+    std::string s = "test string";
+    ContractABI ct;
+    auto in = ct.abiIn("", u, s);
+
+    AbiFunction af;
+    af.setSignature("test(uint256,string)");
+    af.doParser();
+
+    auto allTypes = af.getParamsTypes();
+
+    BOOST_CHECK(allTypes.size() == 2);
+    BOOST_CHECK(allTypes[0] == "uint256");
+    BOOST_CHECK(allTypes[1] == "string");
+
+    std::vector<std::string> allOut;
+    ct.abiOutByFuncSelector(bytesConstRef(&in), allTypes, allOut);
+    BOOST_CHECK(allOut.size() == 2);
+    BOOST_CHECK(allOut[0] == "111111111");
+    BOOST_CHECK(allOut[1] == "test string");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
