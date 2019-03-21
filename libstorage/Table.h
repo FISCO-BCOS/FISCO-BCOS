@@ -89,7 +89,6 @@ class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
-    typedef std::vector<Entry::Ptr> EntriesContainerType;
 
     Entry::Ptr get(size_t i);
     size_t size() const;
@@ -99,7 +98,7 @@ public:
     void removeEntry(size_t index);
 
 private:
-    EntriesContainerType m_entries;
+    std::vector<Entry::Ptr> m_entries;
     bool m_dirty = false;
 };
 

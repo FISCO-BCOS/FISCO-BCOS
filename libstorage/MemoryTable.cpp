@@ -41,6 +41,7 @@ MemoryTable::MemoryTable() {
 Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr condition) {
 	try {
 		if(m_remoteDB) {
+			condition->EQ(m_tableInfo->key, key);
 			//query remoteDB anyway
 			Entries::Ptr dbEntries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
 
@@ -66,7 +67,6 @@ Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr conditio
 
 			return entries;
 		}
-
 	} catch (std::exception& e) {
 		 STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
 		                   << LOG_KV("msg", boost::diagnostic_information(e));
@@ -133,6 +133,7 @@ int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
 
 		checkField(entry);
 
+		entry->setField(m_tableInfo->key, key);
 		Change::Record record(0, m_newEntries->size());
 		m_newEntries->addEntry(entry);
 
@@ -226,7 +227,7 @@ void MemoryTable::rollback(const Change& _change)
 	{
 	case Change::Insert:
 	{
-		m_newEntries->removeEntry(_change.value[0].id);
+		m_newEntries->removeEntry(_change.value[0].newIndex);
 		break;
 	}
 	case Change::Update:

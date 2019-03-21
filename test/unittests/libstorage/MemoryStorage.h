@@ -126,6 +126,8 @@ public:
 
     virtual Entries::Ptr select(
             h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition) override {
+    	(void)hash;
+    	(void)num;
     	auto it = tableData.find(table);
 
     	if(it != tableData.end()) {
@@ -150,12 +152,30 @@ public:
         	auto table = it->info->name;
         	auto tableIt = tableData.find(table);
         	if(tableIt != tableData.end()) {
-        		for(size_t i=0; i<it->entries->size(); ++i) {
+        		size_t count = 0;
+        		auto countIt = tableCounter.find(table);
+        		if(countIt != tableCounter.end()) {
+        			count = countIt->second;
+        		}
 
+        		for(size_t i=0; i<it->entries->size(); ++i) {
+        			auto entry = it->entries->get(i);
+        			if(entry->getID() == 0) {
+        				entry->setID(++count);
+        				tableIt->second->entries->addEntry(entry);
+        			}
+        			else {
+        				for(size_t j=0; j<tableIt->second->entries->size(); ++j) {
+        					if(tableIt->second->entries->get(j)->getID() == entry->getID()) {
+								for(auto fieldIt: *(entry->fields())) {
+									tableIt->second->entries->get(j)->setField(fieldIt.first, fieldIt.second);
+								}
+								break;
+        					}
+        				}
+        			}
         		}
         	}
-        	//auto it = tableData.fi
-            data[it->tableName] = it;
         }
         return datas.size();
     }
