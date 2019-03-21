@@ -190,13 +190,15 @@ public:
     bool appendExtraDataItem(bytes const& _content, unsigned int _index = 0)
     {
         if (_index >= m_extraData.size())
+        {
             return false;
+        }
         else
         {
             m_extraData[_index] = _content;
+            noteDirty();
             return true;
         }
-        noteDirty();
     }
 
     bool setExtraData(bytes const& _content, unsigned int _index = 0)
