@@ -84,7 +84,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            cmake -DSTATIC_BUILD=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -120,7 +120,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON .. 
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON .. 
             make -j2
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Branch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".circleci/config.yml" }}
@@ -144,6 +144,11 @@ jobs:
     docker:
       - image: ubuntu:16.04
     steps:
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update 
+            apt-get install -qy ca-certificates clang
       - attach_workspace:
           at: /FISCO-BCOS/build/bin
       - run:
@@ -165,6 +170,11 @@ jobs:
     docker:
       - image: ubuntu:16.04
     steps:
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update 
+            apt-get install -qy ca-certificates clang
       - attach_workspace:
           at: /FISCO-BCOS/build/bin
       - run:
@@ -192,23 +202,15 @@ workflows:
       - build_static:
           filters:
             branches:
-              only: 
-                - /release-2.*/
-                - master
-                - dev
+              ignore: /^pull.*/
             tags:
-              only: 
-                - /v2.*/
+              ignore: /.*/
       - build_guomi:
           filters:
             branches:
-              only: 
-                - /release-2.*/
-                - master
-                - dev
+              ignore: /^pull.*/
             tags:
-              only: 
-                - /v2.*/
+              ignore: /.*/
       - deploy_static:
           requires:
             - build_static
