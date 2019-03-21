@@ -20,15 +20,13 @@
  */
 #include "BlockVerifier.h"
 #include "ExecutiveContext.h"
-//#include "TxCqDAG.h"
 #include "TxDAG.h"
-//#include "TxLevelDAG.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
-#include <algorithm>
+#include <libstorage/Table.h>
 #include <exception>
 #include <thread>
 
@@ -37,6 +35,7 @@ using namespace std;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::executive;
+using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -176,6 +175,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
                               << errinfo_comment("Error during initExecutiveContext"));
     }
+
+    auto memoryTableFactory = executiveContext->getMemoryTableFactory();
+
     auto initExeCtx_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -202,11 +204,13 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
     vector<thread> threads;
-    for (unsigned int i = 0; i < std::max(thread::hardware_concurrency(), (unsigned int)1); ++i)
+    for (unsigned int i = 0; i < m_threadNum; ++i)
     {
-        threads.push_back(std::thread([txDag, parallelTimeOut]() {
+        threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory]() {
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
+            {
                 txDag->executeUnit();
+            }
         }));
     }
 
@@ -214,6 +218,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     {
         t.join();
     }
+
     if (utcTime() >= parallelTimeOut)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
@@ -221,13 +226,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                                  << LOG_KV("txNum", block.transactions().size())
                                  << LOG_KV("blockNumber", block.blockHeader().number());
     }
-    /*
-    #pragma omp parallel
-        {
-            while (!txDag->hasFinished())
-                txDag->executeUnit();
-        }
-        */
+
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
