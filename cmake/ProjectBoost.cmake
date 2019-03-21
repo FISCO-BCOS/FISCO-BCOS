@@ -31,14 +31,15 @@ endif()
 
 set(BOOST_CXXFLAGS "")
 set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
-set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
+#set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
+set(BOOST_INSTALL_COMMAND ./b2 install)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 if (${BUILD_SHARED_LIBS})
     set(BOOST_CXXFLAGS "cxxflags=-fPIC")
 else()
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
+	    #set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
     endif()
 endif()
 
@@ -77,17 +78,21 @@ ExternalProject_Add(boost
         -j${CORES}
     LOG_BUILD 1
     LOG_INSTALL 1
-    INSTALL_COMMAND ""
-    # INSTALL_COMMAND ${BOOST_INSTALL_COMMAND}
+    #BOOST_INSTALL_COMMAND
+    #INSTALL_COMMAND ""
+    INSTALL_COMMAND ${BOOST_INSTALL_COMMAND} --prefix=<INSTALL_DIR>
     BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
 if (BUILD_GM)
     add_dependencies(boost tassl)
 endif()
 
+ExternalProject_Get_Property(boost INSTALL_DIR)
 ExternalProject_Get_Property(boost SOURCE_DIR)
-set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
-set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)
+#set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
+set(BOOST_INCLUDE_DIR ${INSTALL_DIR}/include)
+#set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)
+set(BOOST_LIB_DIR ${INSTALL_DIR}/lib)
 
 add_library(Boost::System STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::System PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_system${BOOST_LIBRARY_SUFFIX})

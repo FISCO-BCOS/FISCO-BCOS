@@ -45,6 +45,8 @@ public:
     using CacheItr = typename CacheType::iterator;
     using Ptr = std::shared_ptr<MemoryTable>;
 
+    MemoryTable();
+
     virtual ~MemoryTable(){};
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;

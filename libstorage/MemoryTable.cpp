@@ -34,6 +34,10 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
+MemoryTable::MemoryTable() {
+	m_newEntries = std::make_shared<Entries>();
+}
+
 Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr condition) {
 	try {
 		if(m_remoteDB) {

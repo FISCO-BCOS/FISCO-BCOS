@@ -429,6 +429,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         if (tb)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setField("number", lexical_cast<std::string>(block->blockHeader().number()));
             entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
         }
