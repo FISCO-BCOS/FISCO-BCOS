@@ -79,6 +79,7 @@ class EthcallGroupSig: public EthCallExecutor<vector_ref<char>,
                     break;
                 case UPDATEGSK:
                     ret = update_gsk_after_revoke(result, GroupSigMethod(group_method), param);
+                    break;
                 default:
                     unkown_op_type(op_type);
                     ret = RetCode::GroupSigStatusCode::OBTAIN_OPTYPE_FAILED;
