@@ -68,11 +68,6 @@ Table::Ptr MemoryTableFactory::openTable(
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
-            /*
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTableFactory")
-                               << LOG_DESC("table doesn't exist in _sys_tables_")
-                               << LOG_KV("table name", tableName);
-                               */
             return nullptr;
         }
         auto entry = tableEntries->get(0);
@@ -198,7 +193,6 @@ h256 MemoryTableFactory::hash()
         return h256();
     }
     m_hash = dev::sha256(&data);
-    // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("allTableHash") << LOG_KV("stateRoot", m_hash);
     return m_hash;
 }
 
