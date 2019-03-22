@@ -1,5 +1,5 @@
 version: 2
-jobs:            
+jobs:
   build_static_test:
     working_directory: /FISCO-BCOS
     docker:
@@ -24,16 +24,16 @@ jobs:
             mkdir -p build && cd build 
             cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON ..
             make -j2
-      - run:
-          name: Unit test
-          command: |
-            cd build
-            CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - save_cache:
           key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
+      - run:
+          name: Unit test
+          command: |
+            cd build
+            CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - run:
           name: Upload Coverage
           command: |
@@ -63,6 +63,11 @@ jobs:
             mkdir -p build && cd build
             cmake3 -DBUILD_GM=ON -DTESTS=ON -DEASYLOG=ON ..
             make -j2
+      - save_cache:
+          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          paths:
+            - deps
+            - /ccache
       - run:
           name: Unit test
           command: |
@@ -73,11 +78,6 @@ jobs:
           command: |
             cd build
             ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos -g && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [[ $(ps -ef| grep fisco-bcos |grep -v grep | wc -l) == 4 ]]
-      - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-          paths:
-            - deps
-            - /ccache
 
   build_static:
     working_directory: /FISCO-BCOS
@@ -240,7 +240,7 @@ workflows:
             - build_static
           filters:
             tags:
-              only: 
+              only:
                 - /v2.*/
             branches:
               ignore: /.*/
@@ -249,7 +249,7 @@ workflows:
             - build_guomi
           filters:
             tags:
-              only: 
+              only:
                 - /v2.*/
             branches:
               ignore: /.*/
