@@ -39,32 +39,32 @@ namespace executive
 enum class TransactionException : int
 {
     None = 0,
-    Unknown,
-    BadRLP,
-    InvalidFormat,
-    OutOfGasIntrinsic,  ///< Too little gas to pay for the base transaction cost.
-    InvalidSignature,
-    InvalidNonce,
-    NotEnoughCash,
-    OutOfGasBase,  ///< Too little gas to pay for the base transaction cost.
-    BlockGasLimitReached,
-    BadInstruction,
-    BadJumpDestination,
-    OutOfGas,    ///< Ran out of gas executing code of the transaction.
-    OutOfStack,  ///< Ran out of stack executing code of the transaction.
-    StackUnderflow,
-    NonceCheckFail,  // noncecheck ok() ==  false
-    BlockLimitCheckFail,
-    FilterCheckFail,
-    NoDeployPermission,
-    NoCallPermission,
-    NoTxPermission,
-    PrecompiledError,
-    RevertInstruction,
-    InvalidZeroSignatureFormat,
-    AddressAlreadyUsed,
-    PermissionDenied,
-    CallAddressError
+    Unknown = 1,
+    BadRLP = 2,
+    InvalidFormat = 3,
+    OutOfGasIntrinsic = 4,  ///< Too little gas to pay for the base transaction cost.
+    InvalidSignature = 5,
+    InvalidNonce = 6,
+    NotEnoughCash = 7,
+    OutOfGasBase = 8,  ///< Too little gas to pay for the base transaction cost.
+    BlockGasLimitReached = 9,
+    BadInstruction = 10,
+    BadJumpDestination = 11,
+    OutOfGas = 12,    ///< Ran out of gas executing code of the transaction.
+    OutOfStack = 13,  ///< Ran out of stack executing code of the transaction.
+    StackUnderflow = 14,
+    NonceCheckFail = 15,  // noncecheck ok() ==  false
+    BlockLimitCheckFail = 16,
+    FilterCheckFail = 17,
+    NoDeployPermission = 18,
+    NoCallPermission = 19,
+    NoTxPermission = 20,
+    PrecompiledError = 21,
+    RevertInstruction = 22,
+    InvalidZeroSignatureFormat = 23,
+    AddressAlreadyUsed = 24,
+    PermissionDenied = 25,
+    CallAddressError = 26
 };
 
 enum class CodeDeposit
