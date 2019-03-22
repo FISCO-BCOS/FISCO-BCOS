@@ -711,7 +711,7 @@ do
         exit 0
     fi
     [ ! -z \${node_pid} ] && kill \${node_pid}
-    sleep 0.4
+    sleep 0.5
     node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
     if [ -z \${node_pid} ];then
         echo " stop \${node} success."
@@ -727,7 +727,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/transTest.sh"
+    local file="${output}/.transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -788,7 +788,8 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
-        echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
+        echo "try to start \${directory}" 
+        bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
 done  
 EOF
@@ -797,7 +798,8 @@ EOF
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
-        echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
+        echo "try to stop \${directory}" 
+        bash \${SHELL_FOLDER}/\${directory}/stop.sh &
     fi  
 done  
 EOF
