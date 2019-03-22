@@ -50,12 +50,12 @@ public:
         if (forBroadcast)
         {
             m_sendDataSize += (compressedDataSize * getBroadcastSize());
-            m_savedSendData += (compressedDataSize * getBroadcastSize());
+            m_savedSendData += (orgDataSize - compressedDataSize) * getBroadcastSize();
         }
         else
         {
             m_sendDataSize += compressedDataSize;
-            m_savedSendData += compressedDataSize;
+            m_savedSendData += (orgDataSize - compressedDataSize);
         }
         m_compressOrgDataSize += orgDataSize;
         m_compressedDataSize += compressedDataSize;

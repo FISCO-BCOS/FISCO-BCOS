@@ -93,6 +93,46 @@ BOOST_AUTO_TEST_CASE(testCompressAlgorithm)
     compressFixture.checkCompressAlgorithm("snappy");
     compressFixture.checkCompressAlgorithm("lz4");
 }
+
+BOOST_AUTO_TEST_CASE(testCompressStatistic)
+{
+    std::shared_ptr<CompressStatistic> statisticHandler = std::make_shared<CompressStatistic>();
+    statisticHandler->setSealerSize(4);
+    BOOST_CHECK(statisticHandler->getBroadcastSize() == 3);
+
+    /// update and check the compress value
+    uint64_t orgDataSize = 1000;
+    uint64_t compressedDataSize = 500;
+    uint64_t compressTime = 600;
+    statisticHandler->updateCompressValue(orgDataSize, compressedDataSize, compressTime, false);
+    BOOST_CHECK(statisticHandler->orgCompressDataSize() == orgDataSize);
+    BOOST_CHECK(statisticHandler->compressDataSize() == compressedDataSize);
+    BOOST_CHECK(statisticHandler->compressTime() == compressTime);
+    BOOST_CHECK(statisticHandler->sendDataSize() == statisticHandler->compressDataSize());
+    BOOST_CHECK(statisticHandler->savedSendDataSize() == (orgDataSize - compressedDataSize));
+
+    /// update compressValue with broadcast option
+    statisticHandler->updateCompressValue(orgDataSize, compressedDataSize, compressTime, true);
+    BOOST_CHECK(statisticHandler->orgCompressDataSize() == 2 * orgDataSize);
+    BOOST_CHECK(statisticHandler->compressDataSize() == 2 * compressedDataSize);
+    BOOST_CHECK(statisticHandler->compressTime() == 2 * compressTime);
+    BOOST_CHECK(statisticHandler->sendDataSize() ==
+                (statisticHandler->getBroadcastSize() + 1) * compressedDataSize);
+    BOOST_CHECK(statisticHandler->savedSendDataSize() ==
+                (statisticHandler->getBroadcastSize() + 1) * (orgDataSize - compressedDataSize));
+
+    /// update uncompressValue
+    uint64_t uncompressTime = 300;
+    size_t freq = 2;
+    for (size_t i = 0; i < freq; i++)
+    {
+        statisticHandler->updateUncompressValue(compressedDataSize, orgDataSize, uncompressTime);
+    }
+    BOOST_CHECK(statisticHandler->orgUncompressDataSize() == freq * compressedDataSize);
+    BOOST_CHECK(statisticHandler->uncompressDataSize() == freq * orgDataSize);
+    BOOST_CHECK(statisticHandler->uncompressTime() == freq * uncompressTime);
+    BOOST_CHECK(statisticHandler->recvDataSize() == freq * compressedDataSize);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
