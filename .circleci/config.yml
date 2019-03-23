@@ -92,8 +92,6 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
@@ -133,8 +131,6 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
