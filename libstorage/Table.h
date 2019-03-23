@@ -71,6 +71,9 @@ public:
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
 
+    virtual size_t getTempIndex() const;
+    virtual void setTempIndex(size_t index);
+
     virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();
@@ -80,7 +83,8 @@ public:
     void setDirty(bool dirty);
 
 private:
-    uint32_t m_id;
+    uint32_t m_id = 0;
+    size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
 };

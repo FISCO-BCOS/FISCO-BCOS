@@ -128,8 +128,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
 
 
     std::vector<std::thread> threads;
-    //for (auto i = 0; i < 3; ++i)
-   	for (auto i = 0; i < 1; ++i)
+    for (auto i = 0; i < 3; ++i)
     {
         threads.push_back(std::thread([this, i, table]() {
             auto entry = table->newEntry();
@@ -200,8 +199,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
 
     threads.clear();
 
-    //for (auto i = 0; i < 3; ++i)
-    for (auto i = 0; i < 1; ++i)
+    for (auto i = 0; i < 3; ++i)
     {
         threads.push_back(std::thread([this, i, table]() {
             auto entry = table->newEntry();

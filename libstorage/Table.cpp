@@ -78,6 +78,14 @@ void Entry::setField(const std::string& key, const std::string& value)
     m_dirty = true;
 }
 
+size_t Entry::getTempIndex() const {
+	return m_tempIndex;
+}
+
+void Entry::setTempIndex(size_t index) {
+	m_tempIndex = index;
+}
+
 std::map<std::string, std::string>* Entry::fields()
 {
     return &m_fields;

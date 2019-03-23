@@ -51,6 +51,8 @@ public:
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
 
+    Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
+
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
             AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
@@ -255,6 +257,7 @@ private:
         }
     }
 
+    dev::SharedMutex m_mutex;
     Storage::Ptr m_remoteDB;
     TableInfo::Ptr m_tableInfo;
     std::map<uint32_t, Entry::Ptr> m_cache;

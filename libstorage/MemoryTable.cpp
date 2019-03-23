@@ -28,6 +28,7 @@
 #include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <libdevcore/Log.h>
 #include <arpa/inet.h>
 
 using namespace dev;
@@ -39,6 +40,12 @@ MemoryTable::MemoryTable() {
 }
 
 Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr condition) {
+	dev::ReadGuard lock(m_mutex);
+
+	return selectNoLock(key, condition);
+}
+
+Entries::Ptr MemoryTable::selectNoLock(const std::string& key, Condition::Ptr condition) {
 	try {
 		if(m_remoteDB) {
 			condition->EQ(m_tableInfo->key, key);
@@ -62,6 +69,7 @@ Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr conditio
 
 			auto indices = processEntries(m_newEntries, condition);
 			for(auto it : indices) {
+				m_newEntries->get(it)->setTempIndex(it);
 				entries->addEntry(m_newEntries->get(it));
 			}
 
@@ -71,7 +79,6 @@ Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr conditio
 		 STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
 		                   << LOG_KV("msg", boost::diagnostic_information(e));
 	}
-
 
 	return std::make_shared<Entries>();
 }
@@ -86,24 +93,23 @@ int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr
 			return storage::CODE_NO_AUTHORIZED;
 		}
 
+		dev::WriteGuard lock(m_mutex);
 		checkField(entry);
 
-		auto entries = select(key, condition);
+		auto entries = selectNoLock(key, condition);
 
 		std::vector<Change::Record> records;
 
 		for(size_t i=0; i<entries->size(); ++i) {
 			auto updateEntry = entries->get(i);
-			size_t newIndex = 0;
 
 			//if id equals to zero and not in the m_cache, must be new dirty entry
 			if(updateEntry->getID() != 0 && m_cache.find(updateEntry->getID()) == m_cache.end()) {
-				newIndex = m_cache.size();
 				m_cache.insert(std::make_pair(updateEntry->getID(), updateEntry));
 			}
 
 			for (auto& it : *(entry->fields())) {
-				records.emplace_back(updateEntry->getID(), newIndex, it.first, updateEntry->getField(it.first));
+				records.emplace_back(updateEntry->getID(), updateEntry->getTempIndex(), it.first, updateEntry->getField(it.first));
 				updateEntry->setField(it.first, it.second);
 			}
 		}
@@ -131,6 +137,7 @@ int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
 			return storage::CODE_NO_AUTHORIZED;
 		}
 
+		dev::WriteGuard lock(m_mutex);
 		checkField(entry);
 
 		entry->setField(m_tableInfo->key, key);
@@ -158,12 +165,12 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition, Access
 			return storage::CODE_NO_AUTHORIZED;
 		}
 
-		auto entries = select(key, condition);
+		dev::WriteGuard lock(m_mutex);
+		auto entries = selectNoLock(key, condition);
 
 		std::vector<Change::Record> records;
 		for(size_t i=0; i<entries->size(); ++i) {
 			auto removeEntry = entries->get(i);
-			size_t newIndex = 0;
 
 			removeEntry->setStatus(1);
 
@@ -172,7 +179,7 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition, Access
 				m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
 			}
 
-			records.emplace_back(removeEntry->getID(), newIndex);
+			records.emplace_back(removeEntry->getID(), removeEntry->getTempIndex());
 		}
 
 		m_recorder(shared_from_this(), Change::Remove, key, records);
@@ -188,6 +195,7 @@ int MemoryTable::remove(const std::string& key, Condition::Ptr condition, Access
 }
 
 dev::h256 MemoryTable::hash() {
+	dev::ReadGuard lock(m_mutex);
 	bytes data;
 
 	for (auto it : m_cache) {
@@ -223,17 +231,37 @@ dev::h256 MemoryTable::hash() {
 
 void MemoryTable::rollback(const Change& _change)
 {
+	dev::WriteGuard lock(m_mutex);
+	LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries->size();
+	for(size_t i=0; i<m_newEntries->size(); ++i) {
+		auto entry = m_newEntries->get(i);
+
+		std::stringstream ss;
+		ss << i;
+		ss << "," << entry->getStatus();
+
+		for(auto it: *(entry->fields())) {
+			ss << "," << it.first << ":" << it.second;
+		}
+		LOG(TRACE) << ss.str();
+	}
+
 	switch (_change.kind)
 	{
 	case Change::Insert:
 	{
-		m_newEntries->removeEntry(_change.value[0].newIndex);
+		LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].newIndex;
+
+		auto entry = m_newEntries->get(_change.value[0].newIndex);
+		entry->setStatus(1);
+		//m_newEntries->removeEntry(_change.value[0].newIndex);
 		break;
 	}
 	case Change::Update:
 	{
 		for (auto& record : _change.value)
 		{
+			LOG(TRACE) << "Rollback update record id: " << record.id << " newIndex: " << record.newIndex;
 			if(record.id) {
 				auto it = m_cache.find(record.id);
 				if(it != m_cache.end()) {
@@ -251,6 +279,7 @@ void MemoryTable::rollback(const Change& _change)
 	{
 		for (auto& record : _change.value)
 		{
+			LOG(TRACE) << "Rollback remove record id: " << record.id << " newIndex: " << record.newIndex;
 			if(record.id) {
 				auto it = m_cache.find(record.id);
 				if(it != m_cache.end()) {
@@ -268,5 +297,19 @@ void MemoryTable::rollback(const Change& _change)
 
 	default:
 		break;
+	}
+
+	LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
+	for(size_t i=0; i<m_newEntries->size(); ++i) {
+		auto entry = m_newEntries->get(i);
+
+		std::stringstream ss;
+		ss << i;
+		ss << "," << entry->getStatus();
+
+		for(auto it: *(entry->fields())) {
+			ss << "," << it.first << ":" << it.second;
+		}
+		LOG(TRACE) << ss.str();
 	}
 }
