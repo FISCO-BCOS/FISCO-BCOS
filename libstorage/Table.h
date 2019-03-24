@@ -83,7 +83,6 @@ public:
     void setDirty(bool dirty);
 
 private:
-    uint32_t m_id = 0;
     size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
@@ -185,6 +184,11 @@ class TableData
 public:
     typedef std::shared_ptr<TableData> Ptr;
 
+    TableData() {
+    	info = std::make_shared<TableInfo>();
+    	entries = std::make_shared<Entries>();
+    }
+
     TableInfo::Ptr info;
     Entries::Ptr entries;
 };
@@ -225,6 +229,8 @@ public:
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
+
+    static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>

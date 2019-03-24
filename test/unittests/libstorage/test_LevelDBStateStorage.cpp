@@ -226,6 +226,8 @@ BOOST_AUTO_TEST_CASE(commit)
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
     tableData->entries = entries;
     datas.push_back(tableData);
@@ -245,7 +247,10 @@ BOOST_AUTO_TEST_CASE(exception)
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "e";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
+    entries->get(0)->setField("Name", "Exception");
     tableData->entries = entries;
     datas.push_back(tableData);
     BOOST_CHECK_THROW(levelDB->commit(h, num, datas, blockHash), boost::exception);

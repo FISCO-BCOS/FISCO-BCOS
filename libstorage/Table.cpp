@@ -36,16 +36,35 @@ using namespace dev::storage;
 
 Entry::Entry()
 {
-	m_id = 0;
+	m_fields.insert(std::make_pair(ID_FIELD, "0"));
     m_fields.insert(std::make_pair(STATUS, "0"));
 }
 
 uint32_t Entry::getID() const {
-	return m_id;
+	// dev::ReadGuard l(x_fields);
+	auto it = m_fields.find(ID_FIELD);
+	if (it == m_fields.end())
+	{
+		return 0;
+	}
+	else
+	{
+		return boost::lexical_cast<uint32_t>(it->second);
+	}
 }
 
 void Entry::setID(uint32_t id) {
-	m_id = id;
+	auto it = m_fields.find(STATUS);
+	if (it == m_fields.end())
+	{
+		m_fields.insert(std::make_pair(ID_FIELD, boost::lexical_cast<std::string>(id)));
+	}
+	else
+	{
+		it->second = boost::lexical_cast<std::string>(id);
+	}
+
+	m_dirty = true;
 }
 
 std::string Entry::getField(const std::string& key) const
@@ -213,4 +232,99 @@ void Condition::limit(size_t offset, size_t count)
 std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
 {
     return &m_conditions;
+}
+
+bool Table::processCondition(Entry::Ptr entry, Condition::Ptr condition)
+{
+	try
+	{
+		for (auto& it : *condition->getConditions())
+		{
+			if (entry->getStatus() == Entry::Status::DELETED)
+			{
+				return false;
+			}
+
+			std::string lhs = entry->getField(it.first);
+			std::string rhs = it.second.second;
+
+			if (it.second.first == Condition::Op::eq)
+			{
+				if (lhs != rhs)
+				{
+					return false;
+				}
+			}
+			else if (it.second.first == Condition::Op::ne)
+			{
+				if (lhs == rhs)
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if (lhs.empty())
+				{
+					lhs = "0";
+				}
+				if (rhs.empty())
+				{
+					rhs = "0";
+				}
+
+				int lhsNum = boost::lexical_cast<int>(lhs);
+				int rhsNum = boost::lexical_cast<int>(rhs);
+
+				switch (it.second.first)
+				{
+				case Condition::Op::eq:
+				case Condition::Op::ne:
+				{
+					break;
+				}
+				case Condition::Op::gt:
+				{
+					if (lhsNum <= rhsNum)
+					{
+						return false;
+					}
+					break;
+				}
+				case Condition::Op::ge:
+				{
+					if (lhsNum < rhsNum)
+					{
+						return false;
+					}
+					break;
+				}
+				case Condition::Op::lt:
+				{
+					if (lhsNum >= rhsNum)
+					{
+						return false;
+					}
+					break;
+				}
+				case Condition::Op::le:
+				{
+					if (lhsNum > rhsNum)
+					{
+						return false;
+					}
+					break;
+				}
+				}
+			}
+		}
+	}
+	catch (std::exception& e)
+	{
+		STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
+						   << LOG_KV("msg", boost::diagnostic_information(e));
+		return false;
+	}
+
+	return true;
 }

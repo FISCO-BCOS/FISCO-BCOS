@@ -49,10 +49,10 @@ public:
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
-    size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
-        TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
+
+    const char* COUNTER_KEY = "_sys_counter_";
 };
 
 }  // namespace storage

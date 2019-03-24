@@ -39,7 +39,6 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
 {
     try
     {
-    	(void)condition;
         std::string entryKey = table;
         entryKey.append("_").append(key);
 
@@ -75,7 +74,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                if (entry->getStatus() == Entry::Status::NORMAL)
+                if (entry->getStatus() == Entry::Status::NORMAL && Table::processCondition(entry, condition))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -101,6 +100,13 @@ size_t LevelDBStorage::commit(
 {
     try
     {
+    	size_t counter = 0;
+    	std::string counterValue;
+    	auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(COUNTER_KEY), &counterValue);
+    	if(s.ok()) {
+    		counter = boost::lexical_cast<size_t>(counterValue);
+    	}
+
         auto hex = hash.hex();
 
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
@@ -117,7 +123,32 @@ size_t LevelDBStorage::commit(
 
         		auto it = key2value.find(key);
         		if(it == key2value.end()) {
-        			it = key2value.insert(std::make_pair(key, Json::Value())).first;
+        			std::string entryKey = tableInfo->name;
+					entryKey.append("_").append(key);
+
+					std::string value;
+					auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+					// l.unlock();
+					if (!s.ok() && !s.IsNotFound())
+					{
+						STORAGE_LEVELDB_LOG(ERROR)
+							<< LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+
+						BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
+					}
+
+					if(s.IsNotFound()) {
+						it = key2value.insert(std::make_pair(key, Json::Value())).first;
+					}
+					else {
+						std::stringstream ssIn;
+						ssIn << value;
+
+						Json::Value valueJson;
+						ssIn >> valueJson;
+
+						it = key2value.emplace(key, valueJson).first;
+					}
         		}
 
         		Json::Value value;
@@ -127,7 +158,20 @@ size_t LevelDBStorage::commit(
 				}
 				value["_hash_"] = hex;
 				value["_num_"] = num;
-				it->second["values"].append(value);
+				//value["_id_"] = ++counter;
+				//it->second["values"].append(value);
+
+				auto searchIt = std::lower_bound(it->second["values"].begin(), it->second["values"].end(), value, [](const Json::Value &lhs, const Json::Value &rhs){
+					return lhs["_id_"].asUInt64() < rhs["_id_"].asUInt64();
+				});
+
+				if(searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"]) {
+					*searchIt = value;
+				}
+				else {
+					value["_id_"] = ++counter;
+					it->second["values"].append(value);
+				}
         	}
 
         	for(auto it: key2value) {
@@ -137,8 +181,12 @@ size_t LevelDBStorage::commit(
 
 				batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
         	}
-
         }
+
+        counterValue = boost::lexical_cast<std::string>(counterValue);
+        batch->insertSlice(leveldb::Slice(COUNTER_KEY), leveldb::Slice(counterValue));
+
+        m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
         return datas.size();
     }
     catch (std::exception& e)
