@@ -50,8 +50,7 @@ const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
 const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
-DagTransferPrecompiled::DagTransferPrecompiled(
-    dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable)
+DagTransferPrecompiled::DagTransferPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context)
 {
     name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
@@ -62,12 +61,6 @@ DagTransferPrecompiled::DagTransferPrecompiled(
     name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_TRS_STR2_UINT);
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
-
-    // Create table before parallel execution
-    if (needOpenTable)
-    {
-        openTable(context, Address());
-    }
 }
 
 bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
