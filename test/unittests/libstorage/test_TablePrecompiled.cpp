@@ -53,6 +53,7 @@ struct TablePrecompiledFixture
         tablePrecompiled = std::make_shared<dev::blockverifier::TablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
+        info->fields.emplace_back("_id_");
         info->fields.emplace_back("name");
         info->fields.emplace_back("_status_");
         table->setTableInfo(info);
