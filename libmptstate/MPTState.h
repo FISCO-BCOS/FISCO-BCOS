@@ -91,7 +91,7 @@ public:
 
     void kill(Address _a) override;
 
-    bytes const& code(Address const& _addr) const override;
+    bytes const code(Address const& _addr) const override;
 
     h256 codeHash(Address const& _contract) const override;
 
