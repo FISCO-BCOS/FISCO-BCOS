@@ -45,7 +45,7 @@ public:
     Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
         std::shared_ptr<dev::p2p::P2PInterface> _service);
 
-    virtual RPCModules implementedModules() const override
+    RPCModules implementedModules() const override
     {
         return RPCModules{RPCModule{"FISCO BCOS", "2.0"}};
     }
@@ -54,45 +54,42 @@ public:
     std::string getSystemConfigByKey(int _groupID, std::string const& key) override;
 
     // consensus part
-    virtual std::string getBlockNumber(int _groupID) override;
-    virtual std::string getPbftView(int _groupID) override;
-    virtual Json::Value getSealerList(int _groupID) override;
-    virtual Json::Value getObserverList(int _groupID) override;
-    virtual Json::Value getConsensusStatus(int _groupID) override;
+    std::string getBlockNumber(int _groupID) override;
+    std::string getPbftView(int _groupID) override;
+    Json::Value getSealerList(int _groupID) override;
+    Json::Value getObserverList(int _groupID) override;
+    Json::Value getConsensusStatus(int _groupID) override;
 
     // sync part
-    virtual Json::Value getSyncStatus(int _groupID) override;
+    Json::Value getSyncStatus(int _groupID) override;
 
     // p2p part
-    virtual Json::Value getClientVersion() override;
-    virtual Json::Value getPeers(int _groupID) override;
-    virtual Json::Value getGroupPeers(int _groupID) override;
-    virtual Json::Value getGroupList() override;
-    virtual Json::Value getNodeIDList(int _groupID) override;
+    Json::Value getClientVersion() override;
+    Json::Value getPeers(int _groupID) override;
+    Json::Value getGroupPeers(int _groupID) override;
+    Json::Value getGroupList() override;
+    Json::Value getNodeIDList(int _groupID) override;
 
     // block part
-    virtual Json::Value getBlockByHash(
+    Json::Value getBlockByHash(
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
-    virtual Json::Value getBlockByNumber(
+    Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
-    virtual std::string getBlockHashByNumber(
-        int _groupID, const std::string& _blockNumber) override;
+    std::string getBlockHashByNumber(int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
-    virtual Json::Value getTransactionByHash(
-        int _groupID, const std::string& _transactionHash) override;
-    virtual Json::Value getTransactionByBlockHashAndIndex(
+    Json::Value getTransactionByHash(int _groupID, const std::string& _transactionHash) override;
+    Json::Value getTransactionByBlockHashAndIndex(
         int _groupID, const std::string& _blockHash, const std::string& _transactionIndex) override;
-    virtual Json::Value getTransactionByBlockNumberAndIndex(int _groupID,
-        const std::string& _blockNumber, const std::string& _transactionIndex) override;
-    virtual Json::Value getTransactionReceipt(
-        int _groupID, const std::string& _transactionHash) override;
-    virtual Json::Value getPendingTransactions(int _groupID) override;
-    virtual std::string getPendingTxSize(int _groupID) override;
-    virtual std::string getCode(int _groupID, const std::string& address) override;
-    virtual Json::Value getTotalTransactionCount(int _groupID) override;
-    virtual Json::Value call(int _groupID, const Json::Value& request) override;
-    virtual std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
+    Json::Value getTransactionByBlockNumberAndIndex(int _groupID, const std::string& _blockNumber,
+        const std::string& _transactionIndex) override;
+    Json::Value getTransactionReceipt(int _groupID, const std::string& _transactionHash) override;
+    Json::Value getPendingTransactions(int _groupID) override;
+    std::string getPendingTxSize(int _groupID) override;
+    std::string getCode(int _groupID, const std::string& address) override;
+    Json::Value getTotalTransactionCount(int _groupID) override;
+    Json::Value call(int _groupID, const Json::Value& request) override;
+    std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* callback)

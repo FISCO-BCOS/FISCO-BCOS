@@ -46,7 +46,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
+    -F <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -69,7 +69,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTd" option;do
+while getopts "f:l:o:p:e:t:icszhgTF" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -89,7 +89,7 @@ while getopts "f:l:o:p:e:t:icszhgTd" option;do
     T) debug_log="true"
     log_level="debug"
     ;;
-    d) auto_flush="false";;
+    F) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     h) help;;
@@ -191,7 +191,7 @@ dir_must_not_exists() {
 
 gen_chain_cert() {
     path="$2"
-    name=`getname "$path"`
+    name=$(getname "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -200,13 +200,7 @@ gen_chain_cert() {
     mkdir -p $chaindir
     openssl genrsa -out $chaindir/ca.key 2048
     openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
-    cp cert.cnf $chaindir
-
-    if [ $? -eq 0 ]; then
-        echo "build chain ca succussful!"
-    else
-        echo "please input at least Common Name!"
-    fi
+    mv cert.cnf $chaindir
 }
 
 gen_agency_cert() {
@@ -250,7 +244,7 @@ gen_cert_secp256k1() {
 }
 
 gen_node_cert() {
-    if [ "" == "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+    if [ "" == "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit $EXIT_CODE
     fi
@@ -696,10 +690,11 @@ else
 fi
 node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
 if [ ! -z \${node_pid} ];then
-    echo " \${node} start successfully"
+    echo -e "\033[32m \${node} start successfully\033[0m"
 else
-    echo " \${node} start failed"
+    echo -e "\033[31m \${node} start failed\033[0m"
     cat nohup.out
+    exit 1
 fi
 EOF
     generate_script_template "$output/stop.sh"
@@ -716,7 +711,7 @@ do
         exit 0
     fi
     [ ! -z \${node_pid} ] && kill \${node_pid}
-    sleep 0.4
+    sleep 0.5
     node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
     if [ -z \${node_pid} ];then
         echo " stop \${node} success."
@@ -724,7 +719,7 @@ do
     fi
     ((i=i+1))
 done
-
+echo " stop \${node} failed, exceed maximum number of retries."
 EOF
 }
 
@@ -732,7 +727,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/transTest.sh"
+    local file="${output}/.transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -793,18 +788,20 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
-        echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
+        echo "try to start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
+sleep 3
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
-        echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
+        echo "try to stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
+sleep 3
 EOF
 }
 
@@ -813,12 +810,12 @@ parse_ip_config()
     local config=$1
     n=0
     while read line;do
-        ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
-        agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
-        group_array[n]=`echo ${line} | cut -d ' ' -f 3`
+        ip_array[n]=$(echo ${line} | cut -d ' ' -f 1)
+        agency_array[n]=$(echo ${line} | cut -d ' ' -f 2)
+        group_array[n]=$(echo ${line} | cut -d ' ' -f 3)
         if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
             LOG_WARN "Please check ${config}, make sure there is no empty line!"
-            return -1
+            return 1
         fi
         ((++n))
     done < ${config}
@@ -826,13 +823,12 @@ parse_ip_config()
 
 main()
 {
-output_dir="`pwd`/${output_dir}"
+output_dir="$(pwd)/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
 if [ "${use_ip_param}" == "true" ];then
     ip_array=(${ip_param//,/ })
 elif [ "${use_ip_param}" == "false" ];then
-    parse_ip_config $ip_file
-    if [ $? -ne 0 ];then 
+    if ! parse_ip_config $ip_file ;then 
         echo "Parse $ip_file error!"
         exit 1
     fi
@@ -881,7 +877,7 @@ else
 fi
 
 if [ "${use_ip_param}" == "true" ];then
-    for i in `seq 0 ${#ip_array[*]}`;do
+    for i in $(seq 0 ${#ip_array[*]});do
         agency_array[i]="agency"
         group_array[i]=1
     done
@@ -936,7 +932,7 @@ for line in ${ip_array[*]};do
     if [ -z "${checkIP}" ];then
         LOG_WARN "Please check IP address: ${ip}"
     fi
-    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     for ((i=0;i<num;++i));do
@@ -1040,7 +1036,7 @@ server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
@@ -1065,10 +1061,10 @@ for line in ${ip_array[*]};do
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
 done 
-rm ${output_dir}/${logfile} #${output_dir}/cert.cnf
+rm ${output_dir}/${logfile}
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
-    for l in `seq 0 ${#groups_count[@]}`;do
+    for l in $(seq 0 ${#groups_count[@]});do
         if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
     done
 fi
