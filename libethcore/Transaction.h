@@ -71,7 +71,8 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes())
     {}
 
     /// Constructs an unsigned contract-creation transaction.
@@ -83,7 +84,8 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes())
     {}
 
     /// Constructs a transaction from the given RLP.
@@ -134,6 +136,10 @@ public:
     /// @returns the RLP serialisation of this transaction.
     bytes rlp(IncludeSignature _sig = WithSignature) const
     {
+        if (m_rlpBuffer != bytes())
+        {
+            return m_rlpBuffer;
+        }
         bytes out;
         encode(out, _sig);
         return out;
@@ -176,6 +182,7 @@ public:
         clearSignature();
         m_nonce = _n;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     void setBlockLimit(u256 const& _blockLimit)
@@ -183,6 +190,7 @@ public:
         clearSignature();
         m_blockLimit = _blockLimit;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     /// @returns the latest block number to be packaged for transaction.
@@ -209,6 +217,7 @@ public:
         m_vrs = sig;
         m_hashWith = h256(0);
         m_sender = Address();
+        m_rlpBuffer = bytes();
     }
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const
@@ -268,6 +277,9 @@ protected:
     u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 
     RPCCallback m_rpcCallback;
+
+    bytes m_rlpBuffer;  /// < The buffer to cache origin RLP sequence. It will be reused when the tx
+                        /// < needs to be encocoded again;
 };
 
 /// Nice name for vector of Transaction.
