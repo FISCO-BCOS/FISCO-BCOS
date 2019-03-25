@@ -81,7 +81,7 @@ void checkParam(std::shared_ptr<LedgerParam> param)
                 "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3"
                 "da6fc491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1");
     /// check tx params
-    BOOST_CHECK(param->mutableTxPoolParam().txPoolLimit == 1020000);
+    BOOST_CHECK(param->mutableTxPoolParam().txPoolLimit == 1000);
     /// check sync params
     BOOST_CHECK(param->mutableSyncParam().idleWaitMs == 100);
     /// check state DB param
@@ -91,7 +91,6 @@ void checkParam(std::shared_ptr<LedgerParam> param)
 /// test initConfig
 BOOST_AUTO_TEST_CASE(testInitConfig)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     dev::GROUP_ID group_id = 10;
@@ -102,13 +101,25 @@ BOOST_AUTO_TEST_CASE(testInitConfig)
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
     checkParam(param);
-#endif
+
+    /// check timestamp
+    /// init genesis configuration
+    boost::property_tree::ptree pt;
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    /// check with invalid timestamp
+    pt.put("group.timestamp", "2019-03-20 16");
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    /// check with valid timestamp
+    pt.put("group.timestamp", "2019-03-25 21:34:15");
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
 }
 
 /// test initLedgers of LedgerManager
 BOOST_AUTO_TEST_CASE(testInitLedger)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager =
@@ -126,7 +137,6 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     populateBlock.resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(group_id)->number() == 1);
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -140,6 +140,7 @@ protected:
     virtual bool consensusInitFactory();
     /// init the blockSync
     virtual bool initSync();
+    void initGenesisConfig(boost::property_tree::ptree const& pt);
 
 private:
     /// create PBFTConsensus
@@ -152,7 +153,6 @@ private:
     void initTxExecuteConfig(boost::property_tree::ptree const& pt);
 
     void initConsensusConfig(boost::property_tree::ptree const& pt);
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
 
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
 
