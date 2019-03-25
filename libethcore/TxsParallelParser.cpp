@@ -105,7 +105,7 @@ bytes TxsParallelParser::encode(std::vector<bytes> const& _txs)
     return ret;
 }
 
-inline void throwInvalidBlockFormat(std::string _reason)
+inline void throwInvalidBlockFormat(const std::string& _reason)
 {
     BOOST_THROW_EXCEPTION(
         InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid: " + _reason));
