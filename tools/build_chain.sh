@@ -69,7 +69,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTd" option;do
+while getopts "f:l:o:p:e:t:icszhgTF" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -788,8 +788,7 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
-        echo "try to start \${directory}" 
-        bash \${SHELL_FOLDER}/\${directory}/start.sh &
+        echo "try to start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
 sleep 3
@@ -799,8 +798,7 @@ EOF
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
-        echo "try to stop \${directory}" 
-        bash \${SHELL_FOLDER}/\${directory}/stop.sh &
+        echo "try to stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
 sleep 3
