@@ -677,14 +677,19 @@ EOF
 generate_node_scripts()
 {
     local output=$1
+    local docker_tag="latest"
     generate_script_template "$output/start.sh"
-    ps_cmd="\`ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$1}'\`"
-    start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
-    stop_cmd="kill \${node_pid}"
+    local ps_cmd="\`ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}'\`"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
+    local stop_cmd="kill \${node_pid}"
+    local pid="pid"
+    local log_cmd="cat nohup.out"
     if [ ! -z ${docker_mode} ];then
         ps_cmd="\`docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}'\`"
-        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos -c config.ini"
-        stop_cmd="docker kill \${node_pid}"
+        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini >>nohup.out"
+        stop_cmd="docker kill \${node_pid} 2>/dev/null"
+        pid="container id"
+        log_cmd="docker logs \${SHELL_FOLDER//\//}"
     fi
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
@@ -692,18 +697,18 @@ cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
-    echo " \${node} is running, pid is \$node_pid."
+    echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else 
     ${start_cmd} &
-    sleep 0.8
+    sleep 1
 fi
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo -e "\033[32m \${node} start successfully\033[0m"
 else
     echo -e "\033[31m \${node} start failed\033[0m"
-    cat nohup.out
+    ${log_cmd}
     exit 1
 fi
 EOF

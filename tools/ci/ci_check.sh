@@ -1,5 +1,6 @@
-# !/bin/bash
+#!/bin/bash
 
+set -e
 LOG_ERROR()
 {
     local content=${1}
@@ -25,9 +26,10 @@ fi
 LOG_INFO "==============send a transaction is ok"
 
 LOG_INFO "==============check report block"
-sleep 0.5
-if [ $(cat node*/log/* | grep Report | wc -l) -ne 8 ];then
-    LOG_ERROR "check report block failed!"
+sleep 1
+num=$(cat node*/log/* | grep Report | wc -l)
+if [ ${num} -ne 8 ];then
+    LOG_ERROR "check report block failed! ${num} != 8"
     exit 1
 fi
 LOG_INFO "==============check report block is ok"
@@ -36,9 +38,10 @@ LOG_INFO "==============check sync block"
 bash stop_all.sh
 rm -rf node0/data node0/log
 bash start_all.sh
-sleep 1
-if [ $(cat node*/log/* | grep Report | wc -l) -ne 11 ];then
-    LOG_ERROR "sync block failed!"
+sleep 5
+num=$(cat node*/log/* | grep Report | wc -l)
+if [ ${num} -ne 11 ];then
+    LOG_ERROR "sync block failed! ${num} != 11"
     exit 1
 fi
 LOG_INFO "==============check sync block is ok"
