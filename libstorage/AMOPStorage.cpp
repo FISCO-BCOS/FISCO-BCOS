@@ -19,12 +19,12 @@ using namespace dev;
 using namespace dev::storage;
 
 AMOPStorage::AMOPStorage() {
-  _fatalHandler = [](std::exception &e) { exit(-1); };
+  _fatalHandler = [](std::exception &e) { (void)e; exit(-1); };
 }
 
 Entries::Ptr AMOPStorage::select(h256 hash, int num,
                                       const std::string &table,
-                                      const std::string &key) {
+                                      const std::string &key, Condition::Ptr condition) {
   try {
     LOG(DEBUG) << "Query AMOPDB data";
 
@@ -35,6 +35,14 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
     requestJson["params"]["num"] = num;
     requestJson["params"]["table"] = table;
     requestJson["params"]["key"] = key;
+
+    for(auto it: *(condition->getConditions())) {
+    	Json::Value cond;
+    	cond.append(it.first);
+    	cond.append(it.second.first);
+    	cond.append(it.second.second);
+    	requestJson["params"]["condition"].append(cond);
+    }
 
     Json::Value responseJson = requestDB(requestJson);
 
@@ -66,7 +74,7 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
         entry->setField(columns[j], fieldValue);
       }
 
-      entry->setStatus(boost::lexical_cast<int>(entry->getField(STORAGE_STATUS)));
+      //entry->setStatus(boost::lexical_cast<int>(entry->getField(STATUS)));
       if (entry->getStatus() == 0) {
         entry->setDirty(false);
         entries->addEntry(entry);
@@ -84,10 +92,11 @@ Entries::Ptr AMOPStorage::select(h256 hash, int num,
   return Entries::Ptr();
 }
 
-size_t AMOPStorage::commit(h256 hash, int num,
-                                const std::vector<TableData::Ptr> &datas,
-                                h256 blockHash) {
+size_t AMOPStorage::commit(h256 hash, int64_t num,
+        const std::vector<TableData::Ptr> &datas,
+        h256 const& blockHash) {
   try {
+	  (void)blockHash;
     LOG(DEBUG) << "Commit data to database:" << datas.size();
 
     if (datas.size() == 0) {
@@ -104,9 +113,36 @@ size_t AMOPStorage::commit(h256 hash, int num,
 
     for (auto it : datas) {
       Json::Value tableData;
-      tableData["table"] = it->tableName;
+      auto tableInfo = it->info;
+      tableData["table"] = tableInfo->name;
 
-      for (auto entriesIt : it->data) {
+      for(size_t i=0; i<it->entries->size(); ++i) {
+    	  auto entry = it->entries->get(i);
+
+    	  Json::Value value;
+
+		  for (auto fieldIt : *entry->fields()) {
+			  value[fieldIt.first] = fieldIt.second;
+		  }
+
+		  tableData["entries"].append(value);
+
+#if 0
+    	  for (size_t i = 0; i < entriesIt.second->size(); ++i) {
+		  if (entriesIt.second->get(i)->dirty()) {
+			Json::Value value;
+			for (auto fieldIt : *(entriesIt.second->get(i)->fields())) {
+			  value[fieldIt.first] = fieldIt.second;
+			}
+			entry["values"].append(value);
+		  }
+		}
+#endif
+      }
+
+
+#if 0
+      for (auto entriesIt : it->entries) {
         if (entriesIt.second->dirty()) {
           Json::Value entry;
           entry["key"] = entriesIt.first;
@@ -124,6 +160,7 @@ size_t AMOPStorage::commit(h256 hash, int num,
           tableData["entries"].append(entry);
         }
       }
+#endif
 
       if (!tableData["entries"].empty()) {
         requestJson["params"]["data"].append(tableData);
