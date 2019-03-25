@@ -241,6 +241,12 @@ bool TxPool::isBlockLimitOrNonceOk(Transaction const& _tx, bool _needInsert) con
     return true;
 }
 
+struct TxCallback
+{
+    RPCCallback call;
+    dev::eth::LocalisedTransactionReceipt::Ptr pReceipt;
+};
+
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
@@ -252,12 +258,13 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     {
         return false;
     }
-    /// trigger callback from RPC
-    /// todo: there is performace problem here,
-    ///       need to use the thread pool to execute this callback
-    if (needTriggerCallback && pReceipt)
+
+    if (needTriggerCallback && pReceipt && p_tx->second->rpcCallback())
     {
-        p_tx->second->tiggerRpcCallback(pReceipt);
+        // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
+        // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+        TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
+        m_callbackPool.enqueue([callback] { callback.call(callback.pReceipt); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);

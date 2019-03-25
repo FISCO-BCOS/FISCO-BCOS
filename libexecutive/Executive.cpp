@@ -122,10 +122,10 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
     m_savepoint = m_s->savepoint();
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
+    m_gas = _p.gas;
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
-        m_gas = _p.gas;
         bytes output;
         bool success;
         tie(success, output) =
@@ -136,24 +136,22 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     else if (m_envInfo.precompiledEngine() &&
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
     {
-        m_gas = _p.gas;
-
         // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
 
         auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
         m_output = owning_bytes_ref{std::move(result), 0, outputSize};
     }
+    else if (m_s->addressHasCode(_p.codeAddress))
+    {
+        bytes const& c = m_s->code(_p.codeAddress);
+        h256 codeHash = m_s->codeHash(_p.codeAddress);
+        m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
+            _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+    }
     else
     {
-        m_gas = _p.gas;
-        if (m_s->addressHasCode(_p.codeAddress))
-        {
-            bytes const& c = m_s->code(_p.codeAddress);
-            h256 codeHash = m_s->codeHash(_p.codeAddress);
-            m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-                _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
-        }
+        m_excepted = TransactionException::CallAddressError;
     }
 
     // Transfer ether.
