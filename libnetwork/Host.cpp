@@ -62,7 +62,6 @@ using namespace dev::network;
 using namespace dev::eth;
 using namespace dev::crypto;
 
-const std::string Host::split_char = "#";
 /**
  * @brief: accept connection requests, maily include procedures:
  *         1. async_accept: accept connection requests
@@ -211,9 +210,9 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             /// get issuer name
             const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
             /// format: {nodeID}#{issuer-name}#{cert-name}
-            nodeIDOut->append(split_char);
+            nodeIDOut->append("#");
             nodeIDOut->append(issuerName);
-            nodeIDOut->append(split_char);
+            nodeIDOut->append("#");
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
@@ -261,10 +260,19 @@ std::string Host::obtainCommonNameFromSubject(std::string const& subject)
 void Host::obtainNodeInfo(NodeInfo& info, std::string const& node_info)
 {
     std::vector<std::string> node_info_vec;
-    boost::split(node_info_vec, node_info, boost::is_any_of(split_char), boost::token_compress_on);
-    info.nodeID = NodeID(node_info_vec[0]);
-    info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
-    info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+    boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
+    if (node_info_vec.size() > 0)
+    {
+        info.nodeID = NodeID(node_info_vec[0]);
+    }
+    if (node_info_vec.size() > 1)
+    {
+        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+    }
+    if (node_info_vec.size() > 2)
+    {
+        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+    }
 }
 
 
@@ -297,8 +305,8 @@ void Host::handshakeServer(const boost::system::error_code& error,
     }
     if (m_run)
     {
-        /// node info splitted with split_char
-        /// format: {nodeId}{split_char}{agencyName}{split_char}{nodeName}
+        /// node info splitted with #
+        /// format: {nodeId}{#}{agencyName}{#}{nodeName}
         std::string node_info(*endpointPublicKey);
         NodeInfo info;
         obtainNodeInfo(info, node_info);
