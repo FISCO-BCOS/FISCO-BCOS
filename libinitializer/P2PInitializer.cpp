@@ -22,7 +22,6 @@
 
 #include "P2PInitializer.h"
 #include "libp2p/P2PMessage.h"
-#include <libcompress/LZ4Compress.h>
 #include <libcompress/SnappyCompress.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
@@ -113,15 +112,11 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         }
 
         /// compress related option
-        std::string compressAlogrithm = pt.get<std::string>("compress.algorithm", "");
+        bool enableCompress = _pt.get<bool>("compress.enable", false);
         std::shared_ptr<dev::compress::CompressInterface> compressHandler = nullptr;
-        if (dev::stringCmpIgnoreCase(compressAlogrithm, "snappy") == 0)
+        if (enableCompress)
         {
             compressHandler = std::make_shared<dev::compress::SnappyCompress>();
-        }
-        if (dev::stringCmpIgnoreCase(compressAlogrithm, "lz4") == 0)
-        {
-            compressHandler = std::make_shared<dev::compress::LZ4Compress>();
         }
 
         auto asioInterface = std::make_shared<dev::network::ASIOInterface>();

@@ -14,14 +14,13 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: UT for SnappyCompress and LZ4Compress
+ * @brief: UT for SnappyCompress
  *
  * @file CompressTest.cpp
  * @author: yujiechen
  * @date 2019-03-21
  */
 
-#include <libcompress/LZ4Compress.h>
 #include <libcompress/SnappyCompress.h>
 #include <libdevcore/CommonData.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -45,11 +44,6 @@ public:
         if (algorithm == "snappy")
         {
             m_compressHandler = std::make_shared<SnappyCompress>();
-        }
-        else
-        {
-            m_compressHandler = std::make_shared<LZ4Compress>();
-            dataLenFields = sizeof(size_t) / sizeof(char);
         }
 
         std::string inputData = "abc21324";
@@ -76,7 +70,6 @@ BOOST_AUTO_TEST_CASE(testCompressAlgorithm)
 {
     CompressTestFixture compressFixture;
     compressFixture.checkCompressAlgorithm("snappy");
-    compressFixture.checkCompressAlgorithm("lz4");
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

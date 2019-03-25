@@ -602,7 +602,7 @@ bool Service::compressBroadcastMessage(
         return false;
     }
     /// the network packet is too small to compress
-    if (message->buffer()->size() < g_BCOSConfig.c_compressThreshold)
+    if (message->buffer()->size() <= g_BCOSConfig.c_compressThreshold)
     {
         return false;
     }
@@ -624,7 +624,7 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr
         std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
         if (compressBroadcastMessage(message, compressData))
         {
-            message->setProtocolID(message->protocolID() || dev::eth::CompressFlag);
+            message->setProtocolID(message->protocolID() | dev::eth::CompressFlag);
             message->setBuffer(compressData);
         }
         /// if(m_compressHandler && )

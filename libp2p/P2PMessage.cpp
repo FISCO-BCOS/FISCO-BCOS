@@ -21,7 +21,6 @@
 
 #include "P2PMessage.h"
 #include "Common.h"
-#include <libcompress/LZ4Compress.h>
 #include <libcompress/SnappyCompress.h>
 #include <libconfig/GlobalConfigure.h>
 
@@ -44,6 +43,12 @@ void P2PMessage::encode(bytes& buffer)
     }
 }
 
+/**
+ * @brief: encode the message into bytes to send
+ * @param buffer: the encoded data
+ * @param encodeBuffer: the message should be encoded
+ * @param protocol: the protocol ID that should be encoded into the buffer
+ */
 void P2PMessage::encode(
     bytes& buffer, std::shared_ptr<bytes> encodeBuffer, PROTOCOL_ID const& protocol)
 {
@@ -59,13 +64,13 @@ void P2PMessage::encode(
     buffer.insert(buffer.end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
     buffer.insert(buffer.end(), (byte*)&packetType, (byte*)&packetType + sizeof(packetType));
     buffer.insert(buffer.end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
-    buffer.insert(buffer.end(), m_buffer->begin(), m_buffer->end());
+    buffer.insert(buffer.end(), encodeBuffer->begin(), encodeBuffer->end());
 }
 
 /// compress the data to be sended
 bool P2PMessage::compress(std::shared_ptr<bytes> compressData, PROTOCOL_ID& compressProtocol)
 {
-    if (!m_compressHandler || m_buffer->size() > g_BCOSConfig.c_compressThreshold)
+    if (!m_compressHandler || m_buffer->size() <= g_BCOSConfig.c_compressThreshold)
     {
         return false;
     }
@@ -79,7 +84,7 @@ bool P2PMessage::compress(std::shared_ptr<bytes> compressData, PROTOCOL_ID& comp
     {
         return false;
     }
-    compressProtocol = m_protocolID || dev::eth::CompressFlag;
+    compressProtocol = m_protocolID | dev::eth::CompressFlag;
     return true;
 }
 
@@ -110,8 +115,10 @@ ssize_t P2PMessage::decode(const byte* buffer, size_t size)
     {
         /// uncompress data
         m_compressHandler->uncompress(
-            bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length), *m_buffer);
-        m_length = m_buffer->size();
+            bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
+            *m_buffer);
+        /// update the protocolID
+        m_protocolID = m_protocolID & (~dev::eth::CompressFlag);
     }
     else
     {

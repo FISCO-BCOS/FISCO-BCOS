@@ -42,7 +42,7 @@ enum ProtocolID
     BlockSync = 9,
     TxPool = 10,
     Raft = 11,
-    CompressFlag = 0x80  /// compressFlag
+    CompressFlag = 0x0080  /// compressFlag
 };
 
 enum ExtraIndex
