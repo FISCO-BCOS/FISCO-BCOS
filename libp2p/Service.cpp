@@ -22,6 +22,7 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
@@ -586,12 +587,47 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
 }
 
+void Service::setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> _compressHandler)
+{
+    m_compressHandler = _compressHandler;
+    P2PMessage::setCompressHandler(_compressHandler);
+}
+
+bool Service::compressBroadcastMessage(
+    std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData)
+{
+    /// no compress enabled
+    if (!m_compressHandler)
+    {
+        return false;
+    }
+    /// the network packet is too small to compress
+    if (message->buffer()->size() < g_BCOSConfig.c_compressThreshold)
+    {
+        return false;
+    }
+    size_t compressLen = m_compressHandler->compress(ref(*message->buffer()), *compressData);
+    /// compress failed
+    if (compressLen < 1)
+    {
+        return false;
+    }
+    return true;
+}
+
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
 {
     SERVICE_LOG(TRACE) << "asyncMulticastMessageByNodeIDList"
                        << LOG_KV("nodes size", nodeIDs.size());
     try
     {
+        std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
+        if (compressBroadcastMessage(message, compressData))
+        {
+            message->setProtocolID(message->protocolID() || dev::eth::CompressFlag);
+            message->setBuffer(compressData);
+        }
+        /// if(m_compressHandler && )
         for (auto nodeID : nodeIDs)
         {
             asyncSendMessageByNodeID(

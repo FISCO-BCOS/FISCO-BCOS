@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <libcompress/CompressInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
@@ -71,6 +72,12 @@ public:
 
     virtual void encode(bytes& buffer) override;
 
+    /// encode the given buffer
+    void encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer, PROTOCOL_ID const& protocol);
+
+    /// compress the data to be sended
+    bool compress(std::shared_ptr<bytes>, PROTOCOL_ID&);
+
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
     virtual ssize_t decode(const byte* buffer, size_t size) override;
@@ -80,6 +87,12 @@ public:
     void encodeAMOPBuffer(std::string const& topic);
     virtual ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
 
+    static void setCompressHandler(
+        std::shared_ptr<dev::compress::CompressInterface> _compressHandler)
+    {
+        m_compressHandler = _compressHandler;
+    }
+
 private:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
@@ -87,6 +100,7 @@ private:
     PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
+    static std::shared_ptr<dev::compress::CompressInterface> m_compressHandler;
 };
 
 enum AMOPPacketType

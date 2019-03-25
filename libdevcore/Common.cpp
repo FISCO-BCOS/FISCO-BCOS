@@ -58,4 +58,13 @@ uint64_t utcTime()
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
+
+/// get utc time(ms)
+uint64_t utcTimeUs()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
 }  // namespace dev

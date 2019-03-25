@@ -50,6 +50,9 @@ public:
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
+
+    /// default compress threshold: 1KB
+    const uint64_t c_compressThreshold = 1024;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()
