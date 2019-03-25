@@ -5,10 +5,10 @@ LABEL maintainer service@fisco.com.cn
 WORKDIR /
 
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
-    git clang make build-essential cmake libssl-dev libleveldb-dev libsnappy-dev \
+    git clang make build-essential cmake libssl-dev \
     ca-certificates \
     && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git \
-    && cd FISCO-BCOS \
+    && cd FISCO-BCOS && git checkout master \
     && mkdir build && cd build \ 
     && cmake .. \
     && make \

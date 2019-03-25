@@ -63,7 +63,8 @@ enum class TransactionException : int
     RevertInstruction,
     InvalidZeroSignatureFormat,
     AddressAlreadyUsed,
-    PermissionDenied
+    PermissionDenied,
+    CallAddressError
 };
 
 enum class CodeDeposit
