@@ -173,7 +173,7 @@ void TxsParallelParser::decode(
             throw;
         }
     }
-    catch (Exception e)
+    catch (Exception& e)
     {
         throwInvalidBlockFormat(e.what());
     }
