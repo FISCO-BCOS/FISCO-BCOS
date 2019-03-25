@@ -276,25 +276,8 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
 /// init genesis configuration
 void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
 {
-    std::string time_str = pt.get<std::string>("group.timestamp", "");
-    if (time_str == "")
-    {
-        m_param->mutableGenesisParam().timeStamp = 0;
-    }
-    else
-    {
-        struct tm time_tm;
-        char* result = strptime(time_str.c_str(), "%Y-%m-%d %H:%M:%S", &time_tm);
-        if (result)
-        {
-            m_param->mutableGenesisParam().timeStamp = (uint64_t)mktime(&time_tm);
-        }
-        /// the case with illegal timestamp
-        else
-        {
-            m_param->mutableGenesisParam().timeStamp = 0;
-        }
-    }
+    /// use UTCTime directly as timeStamp in case of the clock differences between machines
+    m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", 0);
     Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
                       << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
 }

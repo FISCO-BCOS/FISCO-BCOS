@@ -109,11 +109,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
     /// check with invalid timestamp
-    pt.put("group.timestamp", "2019-03-20 16");
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
     /// check with valid timestamp
-    pt.put("group.timestamp", "2019-03-25 21:34:15");
+    pt.put("group.timestamp", 1553520855);
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
 
