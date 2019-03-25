@@ -68,8 +68,7 @@ void DownloadingTxsQueue::pop2TxPool(
         record_time = utcTime();
 
         // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
-        dev::eth::TxsParallelParser::decode(
-            txs, txsBytesRLP.toBytesConstRef(), _checkSig, true, true);
+        dev::eth::TxsParallelParser::decode(txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
         auto decode_time_cost = utcTime() - record_time;
         record_time = utcTime();
 

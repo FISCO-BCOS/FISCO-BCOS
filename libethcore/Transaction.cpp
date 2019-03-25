@@ -36,12 +36,9 @@ Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
     decode(_rlpData, _checkSig);
 }
 
-void Transaction::decode(bytesConstRef tx_bytes, CheckTransaction _checkSig, bool _buffer)
+void Transaction::decode(bytesConstRef tx_bytes, CheckTransaction _checkSig)
 {
-    if (_buffer)
-    {
-        m_rlpBuffer.assign(tx_bytes.data(), tx_bytes.data() + tx_bytes.size());
-    }
+    m_rlpBuffer.assign(tx_bytes.data(), tx_bytes.data() + tx_bytes.size());
     RLP const rlp(tx_bytes);
     decode(rlp, _checkSig);
 }

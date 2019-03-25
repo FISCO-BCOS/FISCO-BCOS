@@ -30,7 +30,7 @@ namespace dev
 {
 namespace eth
 {
-bytes TxsParallelParser::encode(Transactions& _txs, bool _useBuffer)
+bytes TxsParallelParser::encode(Transactions& _txs)
 {
     Offset_t txNum = _txs.size();
     if (txNum == 0)
@@ -44,7 +44,7 @@ bytes TxsParallelParser::encode(Transactions& _txs, bool _useBuffer)
         tbb::blocked_range<size_t>(0, txNum), [&](const tbb::blocked_range<size_t>& _r) {
             for (Offset_t i = _r.begin(); i < _r.end(); ++i)
             {
-                bytes txByte = _txs[i].rlp(WithSignature, _useBuffer);
+                bytes txByte = _txs[i].rlp(WithSignature);
 
                 // record bytes size in offsets for caculating real offset
                 offsets[i + 1] = txByte.size();
@@ -105,15 +105,15 @@ bytes TxsParallelParser::encode(std::vector<bytes> const& _txs)
     return ret;
 }
 
-inline void throwInvalidBlockFormat()
+inline void throwInvalidBlockFormat(std::string _reason)
 {
     BOOST_THROW_EXCEPTION(
-        InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid"));
+        InvalidBlockFormat() << errinfo_comment("Block transactions bytes is invalid: " + _reason));
 }
 
 // parallel decode transactions
-void TxsParallelParser::decode(Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig,
-    bool _withHash, bool _buffer)
+void TxsParallelParser::decode(
+    Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
 {
     try
     {
@@ -125,7 +125,9 @@ void TxsParallelParser::decode(Transactions& _txs, bytesConstRef _bytes, CheckTr
         // check txNum
         size_t objectStart = sizeof(Offset_t) * (txNum + 2);
         if (objectStart >= bytesSize)
-            throwInvalidBlockFormat();
+        {
+            throwInvalidBlockFormat("objectStart >= bytesSize");
+        }
 
         // Get offsets space
         vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
@@ -136,43 +138,44 @@ void TxsParallelParser::decode(Transactions& _txs, bytesConstRef _bytes, CheckTr
 
         // check objects space
         if (offsets.size() == 0 || txBytes.size() == 0)
-            throwInvalidBlockFormat();
+            throwInvalidBlockFormat("offsets.size() == 0 || txBytes.size() == 0");
 
         // parallel decoding
         size_t maxOffset = bytesSize - objectStart - 1;
-        bool exceptionHappen = false;
-        tbb::parallel_for(
-            tbb::blocked_range<Offset_t>(0, txNum), [&](const tbb::blocked_range<Offset_t>& _r) {
-                for (Offset_t i = _r.begin(); i != _r.end(); ++i)
-                {
-                    if (exceptionHappen)
-                        continue;
-
-                    Offset_t offset = offsets[i];
-                    Offset_t size = offsets[i + 1] - offsets[i];
-
-                    if (offset > maxOffset)
-                        exceptionHappen = true;
-
-                    _txs[i].decode(txBytes.cropped(offset, size), _checkSig, _buffer);
-                    if (_withHash)
+        try
+        {
+            tbb::parallel_for(tbb::blocked_range<Offset_t>(0, txNum),
+                [&](const tbb::blocked_range<Offset_t>& _r) {
+                    for (Offset_t i = _r.begin(); i != _r.end(); ++i)
                     {
-                        dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
-                        _txs[i].updateTransactionHashWithSig(txHash);
-                    } /*
-                     LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i", i)
-                                << LOG_KV("offset", offset)
-                                << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
-                                */
-                }
-            });
+                        Offset_t offset = offsets[i];
+                        Offset_t size = offsets[i + 1] - offsets[i];
 
-        if (exceptionHappen)
-            throwInvalidBlockFormat();
+                        if (offset > maxOffset)
+                            throwInvalidBlockFormat("offset > maxOffset");
+
+                        _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
+                        if (_withHash)
+                        {
+                            dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
+                            _txs[i].updateTransactionHashWithSig(txHash);
+                        } /*
+                         LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i",
+                         i)
+                                    << LOG_KV("offset", offset)
+                                    << LOG_KV("code", toHex(txBytes.cropped(offset, size)));
+                                    */
+                    }
+                });
+        }
+        catch (...)
+        {
+            throw;
+        }
     }
-    catch (...)
+    catch (Exception e)
     {
-        throwInvalidBlockFormat();
+        throwInvalidBlockFormat(e.what());
     }
 }
 

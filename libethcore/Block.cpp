@@ -111,7 +111,7 @@ void Block::calTransactionRoot(bool update) const
     txs.appendList(m_transactions.size());
     if (m_txsCache == bytes())
     {
-        m_txsCache = TxsParallelParser::encode(m_transactions, true);
+        m_txsCache = TxsParallelParser::encode(m_transactions);
         m_transRootCache = sha3(m_txsCache);
     }
     if (update == true)

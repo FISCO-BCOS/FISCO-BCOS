@@ -267,7 +267,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(ts[i].rlp(WithSignature, true));
+            txRLPs.emplace_back(ts[i].rlp(WithSignature));
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);

@@ -43,11 +43,10 @@ class TxsParallelParser
     using Offset_t = uint32_t;
 
 public:
-    static bytes encode(Transactions& _txs, bool _useBuffer = false);
+    static bytes encode(Transactions& _txs);
     static bytes encode(std::vector<bytes> const& _txs);
     static void decode(Transactions& _txs, bytesConstRef _bytes,
-        CheckTransaction _checkSig = CheckTransaction::Everything, bool _withHash = false,
-        bool _buffer = false);
+        CheckTransaction _checkSig = CheckTransaction::Everything, bool _withHash = false);
 
 private:
     static inline bytes toBytes(Offset_t _num)

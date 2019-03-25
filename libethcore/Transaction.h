@@ -71,7 +71,8 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes())
     {}
 
     /// Constructs an unsigned contract-creation transaction.
@@ -83,7 +84,8 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes())
     {}
 
     /// Constructs a transaction from the given RLP.
@@ -129,13 +131,12 @@ public:
     /// was not initialized void streamRLP(RLPStream& _s, IncludeSignature _sig =
     /// WithSignature) const;
     void encode(bytes& _trans, IncludeSignature _sig = WithSignature) const;
-    void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything,
-        bool _buffer = false);
+    void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything);
     void decode(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
     /// @returns the RLP serialisation of this transaction.
-    bytes rlp(IncludeSignature _sig = WithSignature, bool _useBuffer = false) const
+    bytes rlp(IncludeSignature _sig = WithSignature) const
     {
-        if (_useBuffer)
+        if (m_rlpBuffer != bytes())
         {
             return m_rlpBuffer;
         }
@@ -181,6 +182,7 @@ public:
         clearSignature();
         m_nonce = _n;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     void setBlockLimit(u256 const& _blockLimit)
@@ -188,6 +190,7 @@ public:
         clearSignature();
         m_blockLimit = _blockLimit;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     /// @returns the latest block number to be packaged for transaction.
@@ -214,6 +217,7 @@ public:
         m_vrs = sig;
         m_hashWith = h256(0);
         m_sender = Address();
+        m_rlpBuffer = bytes();
     }
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const
