@@ -48,7 +48,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
+    -F <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -71,7 +71,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTd" option;do
+while getopts "f:l:o:p:e:t:icszhgTF" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -91,7 +91,7 @@ while getopts "f:l:o:p:e:t:icszhgTd" option;do
     T) debug_log="true"
     log_level="debug"
     ;;
-    d) auto_flush="false";;
+    F) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     h) help;;
@@ -202,7 +202,7 @@ gen_chain_cert() {
     mkdir -p $chaindir
     openssl genrsa -out $chaindir/ca.key 2048
     openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
-    cp cert.cnf $chaindir
+    mv cert.cnf $chaindir
 }
 
 gen_agency_cert() {
@@ -714,7 +714,7 @@ do
         exit 0
     fi
     [ ! -z \${node_pid} ] && kill \${node_pid}
-    sleep 0.4
+    sleep 0.5
     node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
     if [ -z \${node_pid} ];then
         echo " stop \${node} success."
@@ -722,7 +722,7 @@ do
     fi
     ((i=i+1))
 done
-
+echo " stop \${node} failed, exceed maximum number of retries."
 EOF
 }
 
@@ -730,7 +730,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/transTest.sh"
+    local file="${output}/.transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -791,18 +791,20 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
-        echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
+        echo "try to start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
     fi  
 done  
+sleep 3
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
-        echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
+        echo "try to stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
     fi  
 done  
+sleep 3
 EOF
 }
 
@@ -1062,7 +1064,7 @@ for line in ${ip_array[*]};do
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
 done 
-rm ${output_dir}/${logfile} #${output_dir}/cert.cnf
+rm ${output_dir}/${logfile}
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in $(seq 0 ${#groups_count[@]});do

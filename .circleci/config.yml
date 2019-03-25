@@ -17,7 +17,6 @@ jobs:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
-            - dependency-cache-{{ arch }}-
       - run:
           name: Compile
           command: |
@@ -56,7 +55,6 @@ jobs:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
-            - dependency-cache-{{ arch }}-
       - run:
           name: Compile
           command: |
@@ -94,9 +92,6 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
-            - dependency-cache-{{ arch }}-
       - run:
           name: Compile
           command: |
@@ -136,9 +131,6 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
-            - dependency-cache-{{ arch }}-
       - run:
           name: Compile
           command: |
@@ -219,20 +211,26 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - build_static_test
-      - build_test_guomi
+      - build_static_test:
+          filters:
+            branches:
+              only: /^pull.*/
+            tags:
+              ignore: /.*/
+      - build_test_guomi:
+          filters:
+            branches:
+              only: /^pull.*/
+            tags:
+              ignore: /.*/
   deploy:
     jobs:
       - build_static:
           filters:
-            branches:
-              ignore: /^pull.*/
             tags:
               ignore: /.*/
       - build_guomi:
           filters:
-            branches:
-              ignore: /^pull.*/
             tags:
               ignore: /.*/
       - deploy_static:

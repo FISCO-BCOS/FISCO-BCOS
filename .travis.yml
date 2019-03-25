@@ -71,7 +71,7 @@ install: |
     bash tools/ci/check-commit.sh;
 script: |
     mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2 && \
-    ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
+    ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash .transTest.sh | grep "result" | wc -l) -eq 1 ]
 after_success:
     # if [ $TRAVIS_OS_NAME == linux ]; then
     #   cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)
