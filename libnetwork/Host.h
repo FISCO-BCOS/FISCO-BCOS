@@ -180,8 +180,6 @@ private:
 
     // certificate rejected list of nodeID
     std::vector<std::string> m_crl;
-
-    static const std::string split_char;
 };
 }  // namespace network
 

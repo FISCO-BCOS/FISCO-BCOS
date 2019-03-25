@@ -284,8 +284,16 @@ void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
     else
     {
         struct tm time_tm;
-        strptime(time_str.c_str(), "%Y-%m-%d %H:%M:%S", &time_tm);
-        m_param->mutableGenesisParam().timeStamp = (uint64_t)mktime(&time_tm);
+        char* result = strptime(time_str.c_str(), "%Y-%m-%d %H:%M:%S", &time_tm);
+        if (result)
+        {
+            m_param->mutableGenesisParam().timeStamp = (uint64_t)mktime(&time_tm);
+        }
+        /// the case with illegal timestamp
+        else
+        {
+            m_param->mutableGenesisParam().timeStamp = 0;
+        }
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
                       << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);

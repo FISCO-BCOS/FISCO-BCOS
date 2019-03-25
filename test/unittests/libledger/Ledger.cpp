@@ -61,18 +61,22 @@ public:
         FakeLedger::initSync();
         return true;
     }
+
+    void initGenesisConfig(boost::property_tree::ptree const& pt)
+    {
+        FakeLedger::initGenesisConfig(pt);
+    }
+
+    void initMark() { FakeLedger::initMark(); }
+
     std::string const& configFileName() { return m_configFileName; }
 };
 
 BOOST_FIXTURE_TEST_SUITE(LedgerTest, TestOutputHelperFixture)
-void checkParam(std::shared_ptr<LedgerParam> param)
+void checkGenesisParam(std::shared_ptr<LedgerParam> param)
 {
-    /// check basic directories
-    BOOST_CHECK(param->baseDir() == "./group10/data");
-
     /// check consensus params
     BOOST_CHECK(param->mutableConsensusParam().consensusType == "raft");
-    /// BOOST_CHECK(param->mutableConsensusParam().intervalBlockTime == 2000);
     BOOST_CHECK(param->mutableConsensusParam().maxTransactions == 2000);
     BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[0]) ==
                 "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe63"
@@ -80,45 +84,63 @@ void checkParam(std::shared_ptr<LedgerParam> param)
     BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[1]) ==
                 "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3"
                 "da6fc491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1");
-    /// check tx params
-    BOOST_CHECK(param->mutableTxPoolParam().txPoolLimit == 1020000);
-    /// check sync params
-    BOOST_CHECK(param->mutableSyncParam().idleWaitMs == 100);
     /// check state DB param
     BOOST_CHECK(param->mutableStorageParam().type == "sql");
     BOOST_CHECK(param->mutableStateParam().type == "mpt");
 }
+
 /// test initConfig
-BOOST_AUTO_TEST_CASE(testInitConfig)
+BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     dev::GROUP_ID group_id = 10;
-    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
     FakeLedgerForTest fakeLedger(
         txpool_creator.m_topicService, group_id, key_pair, "", configurationPath);
     BOOST_CHECK(fakeLedger.configFileName() == configurationPath);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
-    checkParam(param);
-#endif
+    checkGenesisParam(param);
+
+    /// check timestamp
+    /// init genesis configuration
+    boost::property_tree::ptree pt;
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    /// check with invalid timestamp
+    pt.put("group.timestamp", "2019-03-20 16");
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    /// check with valid timestamp
+    pt.put("group.timestamp", "2019-03-25 21:34:15");
+    fakeLedger.initGenesisConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
+
+
+    /// check groupMark
+    fakeLedger.initMark();
+    std::string mark =
+        "10-"
+        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
+        "f4746846c0db2604adebf9c70c7f418d4d5a61,"
+        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
+        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-sql-mpt-2000-300000000-1553520855";
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().genesisMark == mark);
 }
 
 /// test initLedgers of LedgerManager
 BOOST_AUTO_TEST_CASE(testInitLedger)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager =
         std::make_shared<LedgerManager>(txpool_creator.m_topicService, key_pair);
     dev::GROUP_ID group_id = 10;
-    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/config.group10.ini";
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
     ledgerManager->initSingleLedger<FakeLedgerForTest>(group_id, "", configurationPath);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(group_id));
-    checkParam(param);
     /// check BlockChain
     std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(group_id);
     std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
@@ -126,7 +148,6 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     populateBlock.resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(group_id)->number() == 1);
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()
