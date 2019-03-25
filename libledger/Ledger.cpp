@@ -139,7 +139,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxExecuteConfig(ptree const& pt)
 {
-    if (m_param->mutableStorageParam().type != "storage")
+    if (m_param->mutableStateParam().type != "storage")
     {
         m_param->mutableTxParam().enableParallel = false;
     }
