@@ -132,6 +132,11 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
     return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
         try
         {
+            /// return early when the certificate is invalid
+            if (!preverified)
+            {
+                return false;
+            }
             /// get the object points to certificate
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
@@ -200,12 +205,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                                << LOG_KV("nodeID", nodeID.substr(0, 4));
                 return false;
             }
-            /// return early when the certificate is invalid
-            if (!preverified)
-            {
-                return false;
-            }
-
             /// append cert-name and issuer name after node ID
             /// get subject name
             const char* certName = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
