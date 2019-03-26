@@ -144,6 +144,9 @@ protected:
     /// make these functions protected for UT
     void initGenesisConfig(boost::property_tree::ptree const& pt);
     void initMark();
+    /// load ini config of group
+    void initIniConfig(std::string const& iniConfigFileName);
+    void initDBConfig(boost::property_tree::ptree const& pt);
 
 private:
     /// create PBFTConsensus
@@ -159,11 +162,8 @@ private:
 
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
-    void initDBConfig(boost::property_tree::ptree const& pt);
-    void initTxConfig(boost::property_tree::ptree const& pt);
 
-    /// load ini config of group
-    void initIniConfig(std::string const& iniConfigFileName);
+    void initTxConfig(boost::property_tree::ptree const& pt);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

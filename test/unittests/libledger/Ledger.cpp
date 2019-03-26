@@ -68,6 +68,15 @@ public:
     }
 
     void initMark() { FakeLedger::initMark(); }
+    void initIniConfig(std::string const& iniConfigFileName)
+    {
+        return FakeLedger::initIniConfig(iniConfigFileName);
+    }
+
+    void initDBConfig(boost::property_tree::ptree const& pt)
+    {
+        return FakeLedger::initDBConfig(pt);
+    }
 
     std::string const& configFileName() { return m_configFileName; }
 };
@@ -89,7 +98,7 @@ void checkGenesisParam(std::shared_ptr<LedgerParam> param)
     BOOST_CHECK(param->mutableStateParam().type == "mpt");
 }
 
-/// test initConfig
+/// test init ini config and genesis config
 BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
     TxPoolFixture txpool_creator;
@@ -126,6 +135,20 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
         "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
         "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-sql-mpt-2000-300000000-1553520855";
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().genesisMark == mark);
+
+    /// init ini config
+    configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
+    fakeLedger.initIniConfig(configurationPath);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
+    BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
+
+    /// modify state to storage
+    fakeLedger.initDBConfig(pt);
+    BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "LevelDB");
+    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
+    fakeLedger.initIniConfig(configurationPath);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 }
 
 /// test initLedgers of LedgerManager
