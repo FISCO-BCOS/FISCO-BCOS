@@ -877,7 +877,8 @@ void RaftEngine::broadcastVoteReq()
 P2PMessage::Ptr RaftEngine::transDataToMessage(
     bytesConstRef _data, RaftPacketType const& _packetType, PROTOCOL_ID const& _protocolId)
 {
-    dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
+    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+        m_service->p2pMessageFactory()->buildMessage());
     std::shared_ptr<dev::bytes> dataPtr = std::make_shared<dev::bytes>();
     RaftMsgPacket packet;
 

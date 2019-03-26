@@ -25,6 +25,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
+#include <libdevcore/SnappyCompress.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
@@ -33,6 +34,7 @@
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::compress;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
@@ -587,17 +589,11 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
 }
 
-void Service::setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> _compressHandler)
-{
-    m_compressHandler = _compressHandler;
-    P2PMessage::setCompressHandler(_compressHandler);
-}
-
 bool Service::compressBroadcastMessage(
     std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData)
 {
     /// no compress enabled
-    if (!m_compressHandler)
+    if (!g_BCOSConfig.compressEnabled())
     {
         return false;
     }
@@ -606,7 +602,7 @@ bool Service::compressBroadcastMessage(
     {
         return false;
     }
-    size_t compressLen = m_compressHandler->compress(ref(*message->buffer()), *compressData);
+    size_t compressLen = SnappyCompress::compress(ref(*message->buffer()), *compressData);
     /// compress failed
     if (compressLen < 1)
     {
@@ -622,12 +618,13 @@ void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr
     try
     {
         std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
-        if (compressBroadcastMessage(message, compressData))
+        /// not enable compress if the node is rc1 version
+        if ((g_BCOSConfig.version() > dev::RC1_VERSION) &&
+            compressBroadcastMessage(message, compressData))
         {
-            message->setProtocolID(message->protocolID() | dev::eth::CompressFlag);
+            message->setVersion(message->version() | dev::eth::CompressFlag);
             message->setBuffer(compressData);
         }
-        /// if(m_compressHandler && )
         for (auto nodeID : nodeIDs)
         {
             asyncSendMessageByNodeID(

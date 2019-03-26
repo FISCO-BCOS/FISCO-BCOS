@@ -21,20 +21,19 @@
  * @date 2019-03-13
  */
 #pragma once
-#include "CompressInterface.h"
+#include "Common.h"
+#include "easylog.h"
 #include "snappy.h"
-#include <libdevcore/easylog.h>
 
 namespace dev
 {
 namespace compress
 {
-class SnappyCompress : public CompressInterface
+class SnappyCompress
 {
 public:
-    SnappyCompress() {}
-    size_t compress(bytesConstRef inputData, bytes& compressedData) override;
-    size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData) override;
+    static size_t compress(bytesConstRef inputData, bytes& compressedData);
+    static size_t uncompress(bytesConstRef compressedData, bytes& uncompressedData);
 };
 }  // namespace compress
 }  // namespace dev

@@ -27,6 +27,7 @@
 #include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 
 namespace dev
@@ -36,7 +37,7 @@ namespace sync
 class SyncMsgPacket
 {
 public:
-    SyncMsgPacket() {}
+    SyncMsgPacket() { m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>(); }
     /// Extract data by decoding the message
     bool decode(
         std::shared_ptr<dev::p2p::P2PSession> _session, std::shared_ptr<dev::p2p::P2PMessage> _msg);
@@ -57,6 +58,7 @@ public:
 protected:
     RLP m_rlp;              /// The result of decode
     RLPStream m_rlpStream;  // The result of encode
+    std::shared_ptr<dev::p2p::P2PMessageFactory> m_p2pFactory;
 
 private:
     bool checkPacket(bytesConstRef _msg);

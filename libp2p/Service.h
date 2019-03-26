@@ -25,8 +25,8 @@
 
 #pragma once
 #include "P2PInterface.h"
+#include "P2PMessageFactory.h"
 #include "P2PSession.h"
-#include <libcompress/CompressInterface.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
@@ -137,8 +137,6 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
-    void setCompressHandler(std::shared_ptr<dev::compress::CompressInterface> _compressHandler);
-
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
@@ -178,8 +176,6 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
-
-    std::shared_ptr<dev::compress::CompressInterface> m_compressHandler = nullptr;
 };
 
 }  // namespace p2p

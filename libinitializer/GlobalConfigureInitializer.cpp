@@ -37,10 +37,21 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     g_BCOSConfig.diskEncryption.cipherDataKey =
         _pt.get<std::string>("data_secure.cipher_data_key", "");
 
+    /// init version
+    std::string version = _pt.get<std::string>("compatibility.version", "");
+    g_BCOSConfig.setVersion(version);
+
+    /// compress related option, default enable
+    bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
+    g_BCOSConfig.setCompress(enableCompress);
+
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
                            << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
                            << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                            << LOG_KV("url.port",
                                   std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                           << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey);
+                           << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
+                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
+                           << LOG_KV("version_str", version)
+                           << LOG_KV("version", g_BCOSConfig.version());
 }
