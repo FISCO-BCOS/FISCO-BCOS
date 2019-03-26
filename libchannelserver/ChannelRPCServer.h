@@ -154,6 +154,9 @@ private:
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
 
+    //boost::atomic_int m_seq;
+    std::atomic<size_t> m_seq;
+
     int _sessionCount = 1;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
