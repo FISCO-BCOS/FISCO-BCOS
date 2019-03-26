@@ -125,7 +125,13 @@ void DBInitializer::initAMOPStorage()
 
 	auto amopStorage = std::make_shared<AMOPStorage>();
 	amopStorage->setChannelRPCServer(m_channelRPCServer);
-	amopStorage->setTopic("DB");
+	amopStorage->setTopic(m_param->mutableStorageParam().topic);
+	amopStorage->setFatalHandler([](std::exception &e) {
+		(void)e;
+		LOG(FATAL) << "Access amdb failed, exit";
+		exit(1);
+	});
+	amopStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
 	m_storage = amopStorage;
 }

@@ -256,6 +256,9 @@ void Ledger::initDBConfig(ptree const& pt)
     /// set storage db related param
     m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
+    m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+    m_param->mutableStorageParam().maxRetry = pt.get<size_t>("storage.maxRetry", 10);
+
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
