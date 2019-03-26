@@ -46,6 +46,7 @@ public:
     {
         m_p2pService = _p2pService;
     }
+    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
     ~LedgerInitializer() { stopAll(); }
@@ -68,6 +69,7 @@ private:
 
     std::shared_ptr<LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> m_p2pService;
+    ChannelRPCServer::Ptr m_channelRPCServer;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
 };

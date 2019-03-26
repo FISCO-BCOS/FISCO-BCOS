@@ -433,6 +433,7 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
+//class FakeLedger : public LedgerInterface
 class FakeLedger : public LedgerInterface
 {
 public:
@@ -473,7 +474,7 @@ public:
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    void initBlockChain()
+    virtual void initBlockChain()
     {
         m_blockChain = std::make_shared<MockBlockChain>();
         dev::h512s sealerList;
@@ -484,10 +485,10 @@ public:
             "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
-    void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
-    void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
-    void initLedgerParam()
+    virtual void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    virtual void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    virtual void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual void initLedgerParam()
     {
         m_param = std::make_shared<LedgerParam>();
         m_param->mutableConsensusParam().consensusType = "pbft";

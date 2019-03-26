@@ -29,6 +29,7 @@
 #include <libethcore/Protocol.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libchannelserver/ChannelRPCServer.h>
 #include <memory>
 namespace dev
 {
@@ -52,6 +53,8 @@ public:
     virtual std::shared_ptr<LedgerParamInterface> getParam() const = 0;
     virtual void startAll() = 0;
     virtual void stopAll() = 0;
+
+    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { (void)channelRPCServer; };
 };
 }  // namespace ledger
 }  // namespace dev

@@ -75,6 +75,7 @@ public:
         std::shared_ptr<LedgerInterface> ledger =
             std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
         LedgerManager_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
+        ledger->setChannelRPCServer(m_channelRPCServer);
         bool succ = ledger->initLedger();
         if (!succ)
             return false;
@@ -185,6 +186,8 @@ public:
         return m_groupListCache;
     }
 
+    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
+
 private:
     mutable SharedMutex x_groupListCache;
     /// cache for the group List
@@ -193,6 +196,7 @@ private:
     std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
     /// p2p service shared by all the ledgers
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    ChannelRPCServer::Ptr m_channelRPCServer;
     /// keyPair shared by all the ledgers
     dev::KeyPair m_keyPair;
 };

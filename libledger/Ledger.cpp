@@ -57,6 +57,8 @@ bool Ledger::initLedger()
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+    m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
+    //m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();

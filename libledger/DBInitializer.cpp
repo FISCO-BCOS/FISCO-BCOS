@@ -28,6 +28,7 @@
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
+#include <libstorage/AMOPStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -46,13 +47,19 @@ namespace ledger
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
-    /// TODO: implement AMOP storage
-    if (dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB") != 0)
-    {
-        DBInitializer_LOG(ERROR) << LOG_DESC(
-            "Unsupported dbType, current version only supports levelDB");
+
+    if(!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External")) {
+    	initAMOPStorage();
     }
-    initLevelDBStorage();
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
+    {
+    	initLevelDBStorage();
+    }
+    else {
+    	DBInitializer_LOG(ERROR) << LOG_DESC(
+    	            "Unsupported dbType, current version only supports levelDB");
+    	BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
+    }
 }
 
 /// init the storage with leveldb
@@ -89,7 +96,6 @@ void DBInitializer::initLevelDBStorage()
                 BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         }
 
-
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR)
@@ -113,10 +119,14 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-/// TODO: init AMOP Storage
 void DBInitializer::initAMOPStorage()
 {
-    DBInitializer_LOG(INFO) << LOG_DESC("[#initAMOPStorage/Unimplemented] ...");
+	DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
+
+	auto amopStorage = std::make_shared<AMOPStorage>();
+	amopStorage->setChannelRPCServer(m_channelRPCServer);
+
+	m_storage = amopStorage;
 }
 
 /// create ExecutiveContextFactory

@@ -24,12 +24,14 @@
 #pragma once
 #include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
+#include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <memory>
+
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[#DBINITIALIZER] "
 namespace dev
 {
@@ -60,6 +62,8 @@ public:
         return m_executiveContextFac;
     }
 
+    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
+
 protected:
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
@@ -80,6 +84,7 @@ private:
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;
     std::shared_ptr<dev::blockverifier::ExecutiveContextFactory> m_executiveContextFac;
+    std::shared_ptr<ChannelRPCServer> m_channelRPCServer;
 };
 }  // namespace ledger
 }  // namespace dev
