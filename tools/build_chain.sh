@@ -28,6 +28,7 @@ current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
+enable_compress="false"
 
 
 help() {
@@ -41,6 +42,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -C <enable compress>                Default disable. If set -C, enable compress
     -s <State type>                     Default storage. if set -s, use mpt 
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -69,7 +71,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTF" option;do
+while getopts "f:l:o:p:e:t:icszhgTFC" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -86,6 +88,7 @@ while getopts "f:l:o:p:e:t:icszhgTF" option;do
     s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
+    C) enable_compress="true";;
     T) debug_log="true"
     log_level="debug"
     ;;
@@ -433,6 +436,10 @@ generate_config_ini()
     cert=${prefix}node.crt
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
+
+;enable/disable network compress
+[compress]
+    enable=${enable_compress}
 
 ;log configurations
 [log]
