@@ -21,8 +21,8 @@
  * @date 2019-03-21
  */
 
-#include <libcompress/SnappyCompress.h>
 #include <libdevcore/CommonData.h>
+#include <libdevcore/SnappyCompress.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -40,30 +40,21 @@ class CompressTestFixture
 public:
     void checkCompressAlgorithm(std::string algorithm)
     {
-        size_t dataLenFields = 0;
-        if (algorithm == "snappy")
-        {
-            m_compressHandler = std::make_shared<SnappyCompress>();
-        }
-
         std::string inputData = "abc21324";
         bytes compressedData;
         bytes inputDataBytes(inputData.begin(), inputData.end());
 
         /// compress test
-        size_t compressLen = m_compressHandler->compress(ref(inputDataBytes), compressedData);
-        BOOST_CHECK((compressLen + dataLenFields) == compressedData.size());
+        size_t compressLen = SnappyCompress::compress(ref(inputDataBytes), compressedData);
+        BOOST_CHECK((compressLen) == compressedData.size());
 
         /// uncompress test
         bytes uncompressData;
-        size_t uncompressLen = m_compressHandler->uncompress(ref(compressedData), uncompressData);
+        size_t uncompressLen = SnappyCompress::uncompress(ref(compressedData), uncompressData);
         BOOST_CHECK(uncompressData.size() == uncompressLen);
         BOOST_CHECK(toHex(uncompressData) == toHex(inputDataBytes));
         BOOST_CHECK(asString(uncompressData) == inputData);
     }
-
-private:
-    std::shared_ptr<CompressInterface> m_compressHandler;
 };
 
 BOOST_AUTO_TEST_CASE(testCompressAlgorithm)

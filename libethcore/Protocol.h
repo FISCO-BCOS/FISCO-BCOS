@@ -27,11 +27,12 @@
 
 namespace dev
 {
-typedef int8_t GROUP_ID;
-typedef uint8_t MODULE_ID;
-typedef int16_t PROTOCOL_ID;
+typedef int16_t GROUP_ID;
+typedef uint16_t MODULE_ID;
+typedef int32_t PROTOCOL_ID;
 typedef uint16_t PACKET_TYPE;
-static const GROUP_ID maxGroupID = 127;
+typedef uint16_t VERSION_TYPE;
+static const GROUP_ID maxGroupID = 32767;
 namespace eth
 {
 enum ProtocolID
@@ -41,8 +42,12 @@ enum ProtocolID
     PBFT = 8,
     BlockSync = 9,
     TxPool = 10,
-    Raft = 11,
-    CompressFlag = 0x0080  /// compressFlag
+    Raft = 11
+};
+
+enum VersionFlag
+{
+    CompressFlag = 0x8000  /// compressFlag
 };
 
 enum ExtraIndex
