@@ -131,7 +131,10 @@ public:
     virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
-    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) override { m_channelRPCServer = channelRPCServer; }
+    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) override
+    {
+        m_channelRPCServer = channelRPCServer;
+    }
 
 protected:
     /// load genesis config of group

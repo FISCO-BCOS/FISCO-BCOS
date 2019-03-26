@@ -87,7 +87,7 @@ void ExecutiveContextFactory::setStateFactory(
 
 void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr context)
 {
-	(void)context;
+    (void)context;
 #if 0
     // get value from db
     try

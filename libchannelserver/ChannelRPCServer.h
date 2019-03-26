@@ -154,7 +154,7 @@ private:
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
 
-    //boost::atomic_int m_seq;
+    // boost::atomic_int m_seq;
     std::atomic<size_t> m_seq;
 
     int _sessionCount = 1;

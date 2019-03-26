@@ -21,295 +21,347 @@
 #include "MemoryTable.h"
 #include "Common.h"
 #include "Table.h"
+#include <arpa/inet.h>
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
+#include <libdevcore/Log.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
-#include <libdevcore/FixedHash.h>
 #include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
-#include <libdevcore/Log.h>
-#include <arpa/inet.h>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-MemoryTable::MemoryTable() {
-	m_newEntries = std::make_shared<Entries>();
+MemoryTable::MemoryTable()
+{
+    m_newEntries = std::make_shared<Entries>();
 }
 
-Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr condition) {
-	dev::ReadGuard lock(m_mutex);
+Entries::Ptr MemoryTable::select(const std::string& key, Condition::Ptr condition)
+{
+    dev::ReadGuard lock(m_mutex);
 
-	return selectNoLock(key, condition);
+    return selectNoLock(key, condition);
 }
 
-Entries::Ptr MemoryTable::selectNoLock(const std::string& key, Condition::Ptr condition) {
-	try {
-		if(m_remoteDB) {
-			condition->EQ(m_tableInfo->key, key);
-			//query remoteDB anyway
-			Entries::Ptr dbEntries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
+Entries::Ptr MemoryTable::selectNoLock(const std::string& key, Condition::Ptr condition)
+{
+    try
+    {
+        if (m_remoteDB)
+        {
+            condition->EQ(m_tableInfo->key, key);
+            // query remoteDB anyway
+            Entries::Ptr dbEntries =
+                m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
 
-			if(!dbEntries) {
-				return std::make_shared<Entries>();
-			}
+            if (!dbEntries)
+            {
+                return std::make_shared<Entries>();
+            }
 
-			auto entries = std::make_shared<Entries>();
-			for(size_t i=0; i<dbEntries->size(); ++i) {
-				auto entryIt = m_cache.find(dbEntries->get(i)->getID());
-				if(entryIt != m_cache.end()) {
-					entries->addEntry(entryIt->second);
-				}
-				else {
-					entries->addEntry(dbEntries->get(i));
-				}
-			}
+            auto entries = std::make_shared<Entries>();
+            for (size_t i = 0; i < dbEntries->size(); ++i)
+            {
+                auto entryIt = m_cache.find(dbEntries->get(i)->getID());
+                if (entryIt != m_cache.end())
+                {
+                    entries->addEntry(entryIt->second);
+                }
+                else
+                {
+                    entries->addEntry(dbEntries->get(i));
+                }
+            }
 
-			auto indices = processEntries(m_newEntries, condition);
-			for(auto it : indices) {
-				m_newEntries->get(it)->setTempIndex(it);
-				entries->addEntry(m_newEntries->get(it));
-			}
+            auto indices = processEntries(m_newEntries, condition);
+            for (auto it : indices)
+            {
+                m_newEntries->get(it)->setTempIndex(it);
+                entries->addEntry(m_newEntries->get(it));
+            }
 
-			return entries;
-		}
-	} catch (std::exception& e) {
-		 STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
-		                   << LOG_KV("msg", boost::diagnostic_information(e));
-	}
+            return entries;
+        }
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
+                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 
-	return std::make_shared<Entries>();
+    return std::make_shared<Entries>();
 }
 
-int MemoryTable::update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
-            AccessOptions::Ptr options) {
-	try {
-		if (options->check && !checkAuthority(options->origin)) {
-			STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
-			<< LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+int MemoryTable::update(
+    const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
+{
+    try
+    {
+        if (options->check && !checkAuthority(options->origin))
+        {
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update non-authorized")
+                                 << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
 
-			return storage::CODE_NO_AUTHORIZED;
-		}
+            return storage::CODE_NO_AUTHORIZED;
+        }
 
-		dev::WriteGuard lock(m_mutex);
-		checkField(entry);
+        dev::WriteGuard lock(m_mutex);
+        checkField(entry);
 
-		auto entries = selectNoLock(key, condition);
+        auto entries = selectNoLock(key, condition);
 
-		std::vector<Change::Record> records;
+        std::vector<Change::Record> records;
 
-		for(size_t i=0; i<entries->size(); ++i) {
-			auto updateEntry = entries->get(i);
+        for (size_t i = 0; i < entries->size(); ++i)
+        {
+            auto updateEntry = entries->get(i);
 
-			//if id equals to zero and not in the m_cache, must be new dirty entry
-			if(updateEntry->getID() != 0 && m_cache.find(updateEntry->getID()) == m_cache.end()) {
-				m_cache.insert(std::make_pair(updateEntry->getID(), updateEntry));
-			}
+            // if id equals to zero and not in the m_cache, must be new dirty entry
+            if (updateEntry->getID() != 0 && m_cache.find(updateEntry->getID()) == m_cache.end())
+            {
+                m_cache.insert(std::make_pair(updateEntry->getID(), updateEntry));
+            }
 
-			for (auto& it : *(entry->fields())) {
-				records.emplace_back(updateEntry->getID(), updateEntry->getTempIndex(), it.first, updateEntry->getField(it.first));
-				updateEntry->setField(it.first, it.second);
-			}
-		}
+            for (auto& it : *(entry->fields()))
+            {
+                records.emplace_back(updateEntry->getID(), updateEntry->getTempIndex(), it.first,
+                    updateEntry->getField(it.first));
+                updateEntry->setField(it.first, it.second);
+            }
+        }
 
-		 m_recorder(shared_from_this(), Change::Update, key, records);
+        m_recorder(shared_from_this(), Change::Update, key, records);
 
-		return entries->size();
-	} catch (std::exception& e) {
-		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
-		<< LOG_DESC("Access MemoryTable failed for")
-		<< LOG_KV("msg", boost::diagnostic_information(e));
-	}
+        return entries->size();
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
+                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 
-	return 0;
+    return 0;
 }
 
-int MemoryTable::insert(const std::string& key, Entry::Ptr entry,
-            AccessOptions::Ptr options, bool needSelect) {
-	try {
-		(void)needSelect;
+int MemoryTable::insert(
+    const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool needSelect)
+{
+    try
+    {
+        (void)needSelect;
 
-		if (options->check && !checkAuthority(options->origin)) {
-			STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert non-authorized")
-			<< LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
-			return storage::CODE_NO_AUTHORIZED;
-		}
+        if (options->check && !checkAuthority(options->origin))
+        {
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert non-authorized")
+                                 << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+            return storage::CODE_NO_AUTHORIZED;
+        }
 
-		dev::WriteGuard lock(m_mutex);
-		checkField(entry);
+        dev::WriteGuard lock(m_mutex);
+        checkField(entry);
 
-		entry->setField(m_tableInfo->key, key);
-		Change::Record record(0, m_newEntries->size());
-		m_newEntries->addEntry(entry);
+        entry->setField(m_tableInfo->key, key);
+        Change::Record record(0, m_newEntries->size());
+        m_newEntries->addEntry(entry);
 
-		std::vector<Change::Record> value{record};
-		m_recorder(shared_from_this(), Change::Insert, key, value);
+        std::vector<Change::Record> value{record};
+        m_recorder(shared_from_this(), Change::Insert, key, value);
 
-		return 1;
-	} catch (std::exception& e) {
-		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
-		<< LOG_DESC("Access MemoryTable failed for")
-		<< LOG_KV("msg", boost::diagnostic_information(e));
-	}
+        return 1;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
+                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 
-	return 0;
+    return 0;
 }
 
-int MemoryTable::remove(const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options) {
-	try {
-		if (options->check && !checkAuthority(options->origin)) {
-			STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
-								<< LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
-			return storage::CODE_NO_AUTHORIZED;
-		}
+int MemoryTable::remove(
+    const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
+{
+    try
+    {
+        if (options->check && !checkAuthority(options->origin))
+        {
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
+                                 << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
+            return storage::CODE_NO_AUTHORIZED;
+        }
 
-		dev::WriteGuard lock(m_mutex);
-		auto entries = selectNoLock(key, condition);
+        dev::WriteGuard lock(m_mutex);
+        auto entries = selectNoLock(key, condition);
 
-		std::vector<Change::Record> records;
-		for(size_t i=0; i<entries->size(); ++i) {
-			auto removeEntry = entries->get(i);
+        std::vector<Change::Record> records;
+        for (size_t i = 0; i < entries->size(); ++i)
+        {
+            auto removeEntry = entries->get(i);
 
-			removeEntry->setStatus(1);
+            removeEntry->setStatus(1);
 
-			//if id equals to zero and not in the m_cache, must be new dirty entry
-			if(removeEntry->getID() != 0 && m_cache.find(removeEntry->getID()) == m_cache.end()) {
-				m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
-			}
+            // if id equals to zero and not in the m_cache, must be new dirty entry
+            if (removeEntry->getID() != 0 && m_cache.find(removeEntry->getID()) == m_cache.end())
+            {
+                m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
+            }
 
-			records.emplace_back(removeEntry->getID(), removeEntry->getTempIndex());
-		}
+            records.emplace_back(removeEntry->getID(), removeEntry->getTempIndex());
+        }
 
-		m_recorder(shared_from_this(), Change::Remove, key, records);
+        m_recorder(shared_from_this(), Change::Remove, key, records);
 
-		return entries->size();
-	} catch (std::exception& e) {
-		STORAGE_LOG(ERROR)<< LOG_BADGE("MemoryTable")
-		<< LOG_DESC("Access MemoryTable failed for")
-		<< LOG_KV("msg", boost::diagnostic_information(e));
-	}
+        return entries->size();
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
+                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
 
-	return 0;
+    return 0;
 }
 
-dev::h256 MemoryTable::hash() {
-	dev::ReadGuard lock(m_mutex);
-	bytes data;
+dev::h256 MemoryTable::hash()
+{
+    dev::ReadGuard lock(m_mutex);
+    bytes data;
 
-	for (auto it : m_cache) {
-		auto id = htonl(it.first);
-		data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
-		for(auto fieldIt: *(it.second->fields())) {
-			if(isHashField(fieldIt.first)) {
-				data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-				data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-			}
-		}
-	}
+    for (auto it : m_cache)
+    {
+        auto id = htonl(it.first);
+        data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
+        for (auto fieldIt : *(it.second->fields()))
+        {
+            if (isHashField(fieldIt.first))
+            {
+                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+            }
+        }
+    }
 
-	for(size_t i=0; i<m_newEntries->size(); ++i) {
-		auto entry = m_newEntries->get(i);
-		for(auto fieldIt: *(entry->fields())) {
-			if(isHashField(fieldIt.first)) {
-				data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-				data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-			}
-		}
-	}
+    for (size_t i = 0; i < m_newEntries->size(); ++i)
+    {
+        auto entry = m_newEntries->get(i);
+        for (auto fieldIt : *(entry->fields()))
+        {
+            if (isHashField(fieldIt.first))
+            {
+                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+            }
+        }
+    }
 
-	if(data.empty()) {
-		return h256();
-	}
+    if (data.empty())
+    {
+        return h256();
+    }
 
-	bytesConstRef bR(data.data(), data.size());
-	h256 hash = dev::sha256(bR);
+    bytesConstRef bR(data.data(), data.size());
+    h256 hash = dev::sha256(bR);
 
-	return hash;
+    return hash;
 }
 
 void MemoryTable::rollback(const Change& _change)
 {
-	dev::WriteGuard lock(m_mutex);
-	LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries->size();
-	for(size_t i=0; i<m_newEntries->size(); ++i) {
-		auto entry = m_newEntries->get(i);
+    dev::WriteGuard lock(m_mutex);
+    LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries->size();
+    for (size_t i = 0; i < m_newEntries->size(); ++i)
+    {
+        auto entry = m_newEntries->get(i);
 
-		std::stringstream ss;
-		ss << i;
-		ss << "," << entry->getStatus();
+        std::stringstream ss;
+        ss << i;
+        ss << "," << entry->getStatus();
 
-		for(auto it: *(entry->fields())) {
-			ss << "," << it.first << ":" << it.second;
-		}
-		LOG(TRACE) << ss.str();
-	}
+        for (auto it : *(entry->fields()))
+        {
+            ss << "," << it.first << ":" << it.second;
+        }
+        LOG(TRACE) << ss.str();
+    }
 
-	switch (_change.kind)
-	{
-	case Change::Insert:
-	{
-		LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].newIndex;
+    switch (_change.kind)
+    {
+    case Change::Insert:
+    {
+        LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].newIndex;
 
-		auto entry = m_newEntries->get(_change.value[0].newIndex);
-		entry->setStatus(1);
-		//m_newEntries->removeEntry(_change.value[0].newIndex);
-		break;
-	}
-	case Change::Update:
-	{
-		for (auto& record : _change.value)
-		{
-			LOG(TRACE) << "Rollback update record id: " << record.id << " newIndex: " << record.newIndex;
-			if(record.id) {
-				auto it = m_cache.find(record.id);
-				if(it != m_cache.end()) {
-					it->second->setField(record.key, record.oldValue);
-				}
-			}
-			else {
-				auto entry = m_newEntries->get(record.newIndex);
-				entry->setField(record.key, record.oldValue);
-			}
-		}
-		break;
-	}
-	case Change::Remove:
-	{
-		for (auto& record : _change.value)
-		{
-			LOG(TRACE) << "Rollback remove record id: " << record.id << " newIndex: " << record.newIndex;
-			if(record.id) {
-				auto it = m_cache.find(record.id);
-				if(it != m_cache.end()) {
-					it->second->setStatus(0);
-				}
-			}
-			else {
-				auto entry = m_newEntries->get(record.newIndex);
-				entry->setStatus(0);
-			}
-		}
-		break;
-	}
-	case Change::Select:
+        auto entry = m_newEntries->get(_change.value[0].newIndex);
+        entry->setStatus(1);
+        // m_newEntries->removeEntry(_change.value[0].newIndex);
+        break;
+    }
+    case Change::Update:
+    {
+        for (auto& record : _change.value)
+        {
+            LOG(TRACE) << "Rollback update record id: " << record.id
+                       << " newIndex: " << record.newIndex;
+            if (record.id)
+            {
+                auto it = m_cache.find(record.id);
+                if (it != m_cache.end())
+                {
+                    it->second->setField(record.key, record.oldValue);
+                }
+            }
+            else
+            {
+                auto entry = m_newEntries->get(record.newIndex);
+                entry->setField(record.key, record.oldValue);
+            }
+        }
+        break;
+    }
+    case Change::Remove:
+    {
+        for (auto& record : _change.value)
+        {
+            LOG(TRACE) << "Rollback remove record id: " << record.id
+                       << " newIndex: " << record.newIndex;
+            if (record.id)
+            {
+                auto it = m_cache.find(record.id);
+                if (it != m_cache.end())
+                {
+                    it->second->setStatus(0);
+                }
+            }
+            else
+            {
+                auto entry = m_newEntries->get(record.newIndex);
+                entry->setStatus(0);
+            }
+        }
+        break;
+    }
+    case Change::Select:
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 
-	LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
-	for(size_t i=0; i<m_newEntries->size(); ++i) {
-		auto entry = m_newEntries->get(i);
+    LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
+    for (size_t i = 0; i < m_newEntries->size(); ++i)
+    {
+        auto entry = m_newEntries->get(i);
 
-		std::stringstream ss;
-		ss << i;
-		ss << "," << entry->getStatus();
+        std::stringstream ss;
+        ss << i;
+        ss << "," << entry->getStatus();
 
-		for(auto it: *(entry->fields())) {
-			ss << "," << it.first << ":" << it.second;
-		}
-		LOG(TRACE) << ss.str();
-	}
+        for (auto it : *(entry->fields()))
+        {
+            ss << "," << it.first << ":" << it.second;
+        }
+        LOG(TRACE) << ss.str();
+    }
 }

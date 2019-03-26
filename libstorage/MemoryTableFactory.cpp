@@ -23,13 +23,13 @@
 #include "MemoryTable.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <utility>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
 #include <vector>
 
 using namespace dev;

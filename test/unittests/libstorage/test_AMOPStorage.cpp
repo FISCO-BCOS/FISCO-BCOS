@@ -6,86 +6,95 @@
  */
 
 #include "libstorage/AMOPStorage.h"
-#include <boost/test/unit_test.hpp>
-#include <libstorage/AMOPStorage.h>
-#include <libstorage/Table.h>
-#include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelRPCServer.h>
+#include <libdevcore/FixedHash.h>
+#include <libstorage/AMOPStorage.h>
 #include <libstorage/StorageException.h>
+#include <libstorage/Table.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::storage;
 
 namespace test_AMOPStateStorage
 {
-
-class MockChannelRPCServer: public dev::ChannelRPCServer {
+class MockChannelRPCServer : public dev::ChannelRPCServer
+{
 public:
-	virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
-	        dev::channel::TopicChannelMessage::Ptr message) override {
-		std::string jsonStr(message->data(), message->data() + message->dataSize());
+    virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
+        dev::channel::TopicChannelMessage::Ptr message) override
+    {
+        std::string jsonStr(message->data(), message->data() + message->dataSize());
 
-		std::stringstream ssIn;
-		ssIn << jsonStr;
+        std::stringstream ssIn;
+        ssIn << jsonStr;
 
-		Json::Value requestJson;
-		ssIn >> requestJson;
+        Json::Value requestJson;
+        ssIn >> requestJson;
 
-		Json::Value responseJson;
+        Json::Value responseJson;
 
 
+        if (requestJson["op"].asString() == "select")
+        {
+            if (requestJson["params"]["table"].asString() == "e")
+            {
+                BOOST_THROW_EXCEPTION(StorageException(-1, "mock exception"));
+            }
 
-		if(requestJson["op"].asString() == "select") {
-			if(requestJson["params"]["table"].asString() == "e") {
-				BOOST_THROW_EXCEPTION(StorageException(-1, "mock exception"));
-			}
+            if (requestJson["params"]["key"].asString() != "LiSi")
+            {
+                responseJson["code"] = 0;
+            }
+            else if (requestJson["params"]["condition"].isArray() &&
+                     requestJson["params"]["condition"][0][2].asString() == "2")
+            {
+                responseJson["code"] = 0;
+            }
+            else
+            {
+                Json::Value resultJson;
+                resultJson["columns"].append("Name");
+                resultJson["columns"].append("id");
 
-			if(requestJson["params"]["key"].asString() != "LiSi") {
-				responseJson["code"] = 0;
-			}
-			else if(requestJson["params"]["condition"].isArray() && requestJson["params"]["condition"][0][2].asString() == "2") {
-				responseJson["code"] = 0;
-			}
-			else {
-				Json::Value resultJson;
-				resultJson["columns"].append("Name");
-				resultJson["columns"].append("id");
+                Json::Value entry;
+                entry.append("LiSi");
+                entry.append("1");
 
-				Json::Value entry;
-				entry.append("LiSi");
-				entry.append("1");
+                resultJson["data"].append(entry);
 
-				resultJson["data"].append(entry);
+                responseJson["code"] = 0;
+                responseJson["result"] = resultJson;
+            }
+        }
+        else if (requestJson["op"].asString() == "commit")
+        {
+            size_t count = 0;
+            for (auto it : requestJson["params"]["data"])
+            {
+                ++count;
+                if (it["table"] == "e")
+                {
+                    BOOST_THROW_EXCEPTION(StorageException(-1, "mock exception"));
+                }
+            }
 
-				responseJson["code"] = 0;
-				responseJson["result"] = resultJson;
-			}
-		}
-		else if(requestJson["op"].asString() == "commit") {
-			size_t count = 0;
-			for(auto it: requestJson["params"]["data"]) {
-				++count;
-				if(it["table"] == "e") {
-					BOOST_THROW_EXCEPTION(StorageException(-1, "mock exception"));
-				}
-			}
+            responseJson["result"]["count"] = count;
+            responseJson["code"] = 0;
+        }
 
-			responseJson["result"]["count"] = count;
-			responseJson["code"] = 0;
-		}
+        std::string responseStr = responseJson.toStyledString();
+        LOG(TRACE) << "AMOP Storage response:" << responseStr;
 
-		std::string responseStr = responseJson.toStyledString();
-		LOG(TRACE) << "AMOP Storage response:" << responseStr;
+        auto response = std::make_shared<dev::channel::TopicChannelMessage>();
+        response->setResult(0);
+        response->setSeq(message->seq());
+        response->setTopic(message->topic());
+        response->setType(0x31);
+        response->setData((const unsigned char*)responseStr.data(), responseStr.size());
 
-		auto response = std::make_shared<dev::channel::TopicChannelMessage>();
-		response->setResult(0);
-		response->setSeq(message->seq());
-		response->setTopic(message->topic());
-		response->setType(0x31);
-		response->setData((const unsigned char*)responseStr.data(), responseStr.size());
-
-		return response;
-	}
+        return response;
+    }
 };
 
 struct AMOPFixture
@@ -93,7 +102,8 @@ struct AMOPFixture
     AMOPFixture()
     {
         AMOP = std::make_shared<dev::storage::AMOPStorage>();
-        std::shared_ptr<MockChannelRPCServer> mockChannel = std::make_shared<MockChannelRPCServer>();
+        std::shared_ptr<MockChannelRPCServer> mockChannel =
+            std::make_shared<MockChannelRPCServer>();
         AMOP->setChannelRPCServer(mockChannel);
     }
     Entries::Ptr getEntries()
@@ -126,19 +136,20 @@ BOOST_AUTO_TEST_CASE(empty_select)
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
-BOOST_AUTO_TEST_CASE(select_condition) {
-	h256 h(0x01);
-	int num = 1;
-	std::string table("t_test");
-	auto condition = std::make_shared<Condition>();
-	condition->EQ("id", "2");
-	Entries::Ptr entries = AMOP->select(h, num, table, "LiSi", condition);
-	BOOST_CHECK_EQUAL(entries->size(), 0u);
+BOOST_AUTO_TEST_CASE(select_condition)
+{
+    h256 h(0x01);
+    int num = 1;
+    std::string table("t_test");
+    auto condition = std::make_shared<Condition>();
+    condition->EQ("id", "2");
+    Entries::Ptr entries = AMOP->select(h, num, table, "LiSi", condition);
+    BOOST_CHECK_EQUAL(entries->size(), 0u);
 
-	condition = std::make_shared<Condition>();
-	condition->EQ("id", "1");
-	entries = AMOP->select(h, num, table, "LiSi", condition);
-	BOOST_CHECK_EQUAL(entries->size(), 1u);
+    condition = std::make_shared<Condition>();
+    condition->EQ("id", "1");
+    entries = AMOP->select(h, num, table, "LiSi", condition);
+    BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
 BOOST_AUTO_TEST_CASE(commit)

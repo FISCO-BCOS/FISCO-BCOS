@@ -46,7 +46,10 @@ public:
     {
         m_p2pService = _p2pService;
     }
-    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
+    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
+    {
+        m_channelRPCServer = channelRPCServer;
+    }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
     ~LedgerInitializer() { stopAll(); }

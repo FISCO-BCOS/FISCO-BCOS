@@ -62,7 +62,10 @@ public:
         return m_executiveContextFac;
     }
 
-    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
+    virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
+    {
+        m_channelRPCServer = channelRPCServer;
+    }
 
 protected:
     /// create stateStorage (mpt or storageState options)

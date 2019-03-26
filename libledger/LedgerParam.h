@@ -73,7 +73,7 @@ struct StorageParam
     std::string type;
     std::string path;
 
-    //for amop storage
+    // for amop storage
     std::string topic;
     size_t timeout;
     size_t maxRetry;

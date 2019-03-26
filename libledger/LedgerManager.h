@@ -186,7 +186,10 @@ public:
         return m_groupListCache;
     }
 
-    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) { m_channelRPCServer = channelRPCServer; }
+    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
+    {
+        m_channelRPCServer = channelRPCServer;
+    }
 
 private:
     mutable SharedMutex x_groupListCache;
