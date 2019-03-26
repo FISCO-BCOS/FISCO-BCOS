@@ -133,6 +133,13 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     const std::string& keyField, const std::string& valueField, bool authorityFlag,
     Address const& _origin, bool isPara)
 {
+    RecursiveGuard l(x_name2Table);
+    auto table = openTable(tableName, authorityFlag, isPara);
+    if (table)
+    {
+        return table;
+    }
+
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
