@@ -189,9 +189,10 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         else
         {
             {  // Testing code
-               // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                auto res = make_shared<vector<string>>();
 
-                AbiFunction af;
+                /*ABIFunc af;
                 af.setSignature(config->functionName);
                 //
                 bool isOk = af.doParser();
@@ -204,7 +205,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                     return nullptr;
                 }
 
-                auto res = make_shared<vector<string>>();
+
                 ContractABI abi;
                 isOk = abi.abiOutByFuncSelector(ref(_tx.data()), af.getParamsTypes(), *res);
                 if (!isOk)
@@ -217,7 +218,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 }
 
                 res->resize((size_t)config->criticalSize);
-
+*/
                 return res;
             }
         }

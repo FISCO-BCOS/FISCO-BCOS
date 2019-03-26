@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest)
 
 BOOST_AUTO_TEST_CASE(AbiFunctionTest0)
 {
-    AbiFunction af;
+    ABIFunc af;
     std::string strFuncSignature = "caculate(uint256, uint160,    string)";
     af.setSignature(strFuncSignature);
     bool isOk = af.doParser();
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(AbiFunctionTest0)
 
 BOOST_AUTO_TEST_CASE(AbiFunctionTest1)
 {
-    AbiFunction af;
+    ABIFunc af;
     std::string strFuncSignature = "get( )";
     af.setSignature(strFuncSignature);
     bool isOk = af.doParser();
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(abiOutByFuncSelectorTest)
     ContractABI ct;
     auto in = ct.abiIn("", s, u);
 
-    AbiFunction af;
+    ABIFunc af;
     af.setSignature("test(uint256,string)");
     af.doParser();
 

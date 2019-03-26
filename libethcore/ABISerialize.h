@@ -134,97 +134,109 @@ public:
 
 namespace abi
 {
-//
+// check if T type of uint256, int256, bool, string , bytes32
 template <class T>
-struct is_element_type : std::true_type
+struct Element : std::true_type
 {
 };
 
 // a fixed-length array of N elements of type T.
 template <class T, std::size_t N>
-struct is_element_type<T[N]> : std::false_type
+struct Element<T[N]> : std::false_type
 {
 };
 
 // a variable-length array of elements of type T.
 template <class T>
-struct is_element_type<std::vector<T>> : std::false_type
+struct Element<std::vector<T>> : std::false_type
 {
 };
 
+// check if T type of string
 template <class T>
-struct is_string : std::false_type
+struct String : std::false_type
 {
 };
 
 template <>
-struct is_string<string> : std::true_type
+struct String<std::string> : std::true_type
 {
 };
 
-//
+// check if type of static array
 template <class T>
-struct is_static_array : std::false_type
+struct StaticArray : std::false_type
 {
 };
 
 // a fixed-length array of N elements of type T.
 template <class T, std::size_t N>
-struct is_static_array<T[N]> : std::true_type
+struct StaticArray<T[N]> : std::true_type
 {
 };
 
-//
+// check if type of dynamic array
 template <class T>
-struct is_dynamic_array : std::false_type
+struct DynamicArray : std::false_type
 {
 };
 
 // a fixed-length array of N elements of type T.
 template <class T>
-struct is_dynamic_array<std::vector<T>> : std::true_type
+struct DynamicArray<std::vector<T>> : std::true_type
+{
+};
+
+// check if type of dynamic
+template <class T, class Enable = void>
+struct Dynamic : std::false_type
 {
 };
 
 template <class T>
-struct is_dynamic : false_type
+struct Dynamic<T,
+    typename std::enable_if<String<typename std::remove_all_extents<T>::type>::value ||
+                            DynamicArray<typename std::remove_all_extents<T>::type>::value>::type>
+  : std::true_type
 {
 };
 
-template <class T>
-class Length
-{
-    enum
-    {
-        value = 1
-    }
-};
-
-template <class T, std::enable_if<is_static_array<typename std::remove_all_extents<T>::type>::value,
-                       typename std::remove_all_extents<T>::type>>
+template <class T, class Enable = void>
 struct Length
 {
     enum
     {
-        value = std::extent<T>::value
-    }
-};
-
-template <class Array, int N>
-struct Length<Array[N]>
-{
-    enum
-    {
-        value = N * Length<Array>::value
+        value = 1
     };
 };
 
-template <class First, class... Rest>
-struct Length<First, Rest...>
+template <class T>
+struct Length<T, typename std::enable_if<StaticArray<T>::value && !Dynamic<T>::value>::type>
 {
     enum
     {
-        value = Length<First>::value + Length<Rest...>::value
+        value = std::extent<T>::value * Length<typename std::remove_extent<T>::type>::value
+    };
+};
+
+template <class... Args>
+struct Offset;
+
+template <class T, class... List>
+struct Offset<T, List...>
+{
+    enum
+    {
+        value = Offset<T>::value + Offset<List...>::value
+    };
+};
+
+template <class T>
+struct Offset<T>
+{
+    enum
+    {
+        value = Length<T>::value
     };
 };
 
@@ -233,23 +245,22 @@ struct ABITool
     static const int MAX_BIT_LENGTH = (256);
     static const int MAX_BYTE_LENGTH = (MAX_BIT_LENGTH / 8);
 
-public:
     // unsigned integer type uint256.
-    bytes serialise(const u256& _u) { return h256(_u).asBytes(); }
+    static bytes serialise(const u256& _u) { return h256(_u).asBytes(); }
 
     // two’s complement signed integer type int256.
-    bytes serialise(const s256& _i) { return h256(_i.convert_to<u256>()).asBytes(); }
+    static bytes serialise(const s256& _i) { return h256(_i.convert_to<u256>()).asBytes(); }
 
     // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
     // bool is used.
-    bytes serialise(bool _b) { return h256(u256(_b ? 1 : 0)).asBytes(); }
+    static bytes serialise(bool _b) { return h256(u256(_b ? 1 : 0)).asBytes(); }
 
     // equivalent to uint160, except for the assumed interpretation and language typing. For
     // computing the function selector, address is used.
-    bytes serialise(const Address& _addr) { return bytes(12, 0) + _addr.asBytes(); }
+    static bytes serialise(const Address& _addr) { return bytes(12, 0) + _addr.asBytes(); }
 
     // binary type of 32 bytes
-    bytes serialise(const string32& _s)
+    static bytes serialise(const string32& _s)
     {
         bytes ret(32, 0);
         bytesConstRef((byte const*)_s.data(), 32).populate(bytesRef(&ret));
@@ -257,7 +268,7 @@ public:
     }
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
-    bytes serialise(const std::string& _s)
+    static bytes serialise(const std::string& _s)
     {
         bytes ret;
         ret = h256(u256(_s.size())).asBytes();
@@ -268,7 +279,7 @@ public:
 
     // a fixed-length array of M elements, M >= 0, of the given type.
     template <class T, std::size_t N>
-    bytes serialise(const T (&_t)[N])
+    static bytes serialise(const T (&_t)[N])
     {
         bytes ret;
         for (std::size_t index = 0; index < N; index++)
@@ -280,7 +291,7 @@ public:
 
     // a variable-length array of elements of the given type.
     template <class T>
-    bytes serialise(const std::vector<T>& _vt)
+    static bytes serialise(const std::vector<T>& _vt)
     {
         bytes ret;
         ret += serialise(u256(_vt.size()));
