@@ -93,6 +93,18 @@ private:
     /// reset block when view changes
     void resetBlockForViewChange()
     {
+        /// in case of that:
+        /// time1: checkTimeout, blockNumber = n - 1
+        /// time2: Report block, blockNumber = n
+        /// time2: handleBlock, seal a new block, blockNumber(m_sealing) = n + 1, and broadcast the
+        /// prepare request time3: callback onViewChange, reset the sealed block time4: seal again,
+        /// blockNumber(m_sealing) = n + 1 the result is: generate two block with the same block in
+        /// a period solution: if there has been  a higher sealed block, return directly without
+        /// reset
+        if (m_sealing.block.isSealed() && shouldHandleBlock())
+        {
+            return;
+        }
         {
             DEV_WRITE_GUARDED(x_sealing)
             resetSealingBlock();

@@ -508,10 +508,9 @@ protected:
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-    void changeViewForEmptyBlock()
+    void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
-        m_timeManager.m_changeCycle = 0;
         m_fastViewChange = true;
         m_signalled.notify_all();
     }
