@@ -70,7 +70,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext, true);
     }
     catch (exception& e)
     {
@@ -165,7 +165,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext, true);
     }
     catch (exception& e)
     {
@@ -283,7 +283,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            blockInfo, blockHeader.stateRoot(), executiveContext);
+            blockInfo, blockHeader.stateRoot(), executiveContext, true);
     }
     catch (exception& e)
     {

@@ -29,6 +29,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>
 #include <memory>
+#include <thread>
 #include <type_traits>
 
 namespace dev
@@ -39,11 +40,19 @@ class ExecutiveContext;
 }
 namespace storage
 {
+class ChangeLog : public std::vector<Change>
+{
+public:
+    ChangeLog() { std::cout << std::this_thread::get_id() << " change log allocated" << std::endl; }
+
+    ~ChangeLog() { std::cout << std::this_thread::get_id() << " change log freed" << std::endl; }
+};
+
 class MemoryTableFactory : public StateDBFactory
 {
 public:
     typedef std::shared_ptr<MemoryTableFactory> Ptr;
-    MemoryTableFactory();
+    MemoryTableFactory(bool _needRollback = false);
     virtual ~MemoryTableFactory() {}
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = true);
@@ -74,10 +83,11 @@ private:
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
     // boost::thread_specific_ptr<std::vector<Change>> m_changeLog;
-    thread_local static std::vector<Change> s_changeLog;
+    thread_local static ChangeLog s_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
     int createTableCode;
+    bool m_needRollback;
 
     // mutex
     mutable RecursiveMutex x_name2Table;

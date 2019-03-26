@@ -42,10 +42,10 @@ static void desc(std::vector<Change>* ptr)
 }
 */
 
-thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
+thread_local ChangeLog MemoryTableFactory::s_changeLog = ChangeLog();
 
-MemoryTableFactory::MemoryTableFactory()
-  : m_blockHash(h256(0)), m_blockNum(0)  //, m_changeLog(desc)
+MemoryTableFactory::MemoryTableFactory(bool _needRollback)
+  : m_blockHash(h256(0)), m_blockNum(0), m_needRollback(_needRollback)
 {
     m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
@@ -132,10 +132,13 @@ Table::Ptr MemoryTableFactory::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
-                                 std::vector<Change::Record>& _records) {
-        auto& changeLog = getChangeLog();
-        changeLog.emplace_back(_table, _kind, _key, _records);
+    memoryTable->setRecorder([&, this](Table::Ptr _table, Change::Kind _kind,
+                                 std::string const& _key, std::vector<Change::Record>& _records) {
+        if (m_needRollback)
+        {
+            auto& changeLog = getChangeLog();
+            changeLog.emplace_back(_table, _kind, _key, _records);
+        }
     });
 
     m_name2Table.insert({tableName, memoryTable});
