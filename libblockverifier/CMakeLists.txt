@@ -7,4 +7,5 @@ add_library(blockverifier ${SRC_LIST} ${HEADERS})
 
 target_include_directories(blockverifier PRIVATE ..)
 target_link_libraries(blockverifier PUBLIC executivecontext devcore TBB)
-target_link_libraries(blockverifier PRIVATE storage precompiled extension)
+target_link_libraries(blockverifier PRIVATE storage precompiled)
+target_compile_options(blockverifier BEFORE PRIVATE -Wno-unused-parameter)
