@@ -27,6 +27,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+#include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 #include <memory>

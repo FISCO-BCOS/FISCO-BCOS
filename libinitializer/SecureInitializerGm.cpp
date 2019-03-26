@@ -44,7 +44,7 @@ struct ConfigResult
 
 ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
 {
-    std::string dataPath = pt.get<std::string>("secure.data_path", "./conf/");
+    std::string dataPath = pt.get<std::string>("secure.data_path", "conf/");
     std::string originDataPath =
         pt.get<std::string>("secure.origin_data_path", dataPath + std::string("/origin_cert/"));
     std::string key = originDataPath + pt.get<std::string>("secure.origin_key", "node.key");
@@ -178,7 +178,7 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
 
 ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 {
-    std::string dataPath = pt.get<std::string>("secure.data_path", "./conf/");
+    std::string dataPath = pt.get<std::string>("secure.data_path", "conf/");
     std::string key = dataPath + pt.get<std::string>("secure.key", "gmnode.key");
     std::string enKey = dataPath + pt.get<std::string>("secure.en_key", "gmennode.key");
     std::string enCert = dataPath + pt.get<std::string>("secure.en_cert", "gmennode.crt");

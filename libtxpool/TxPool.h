@@ -25,12 +25,14 @@
 #include "TransactionNonceCheck.h"
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
+
 using namespace dev::eth;
 using namespace dev::p2p;
 
@@ -70,7 +72,8 @@ public:
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
-        m_protocolId(_protocolId)
+        m_protocolId(_protocolId),
+        m_callbackPool("txPoolCallback-" + std::to_string(_protocolId), 2)
     {
         assert(m_service && m_blockChain);
         if (m_protocolId == 0)
@@ -214,6 +217,8 @@ private:
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
+
+    dev::ThreadPool m_callbackPool;
 };
 }  // namespace txpool
 }  // namespace dev

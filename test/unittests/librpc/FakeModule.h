@@ -153,8 +153,8 @@ public:
 
     virtual ~MockBlockChain() {}
 
-    virtual int64_t number() override { return m_blockNumber; }
-    virtual std::pair<int64_t, int64_t> totalTransactionCount() override
+    int64_t number() override { return m_blockNumber; }
+    std::pair<int64_t, int64_t> totalTransactionCount() override
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
@@ -198,7 +198,7 @@ public:
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
-    virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
@@ -215,7 +215,7 @@ public:
         return getBlockRLPByHash(numberHash(_i));
     }
 
-    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction(transaction, blockHash, 0, 0);
     }
@@ -239,7 +239,7 @@ public:
 
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
 
-    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
     {
         LogEntries entries;
         LogEntry entry;
@@ -297,8 +297,8 @@ public:
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
@@ -339,38 +339,34 @@ public:
         transactions.push_back(transaction);
     };
     virtual ~MockTxPool(){};
-    virtual dev::eth::Transactions pendingList() const override { return transactions; };
-    virtual size_t pendingSize() override { return 1; }
-    virtual dev::eth::Transactions topTransactions(
-        uint64_t const&, h256Hash&, bool = false) override
+    dev::eth::Transactions pendingList() const override { return transactions; };
+    size_t pendingSize() override { return 1; }
+    dev::eth::Transactions topTransactions(uint64_t const&, h256Hash&, bool = false) override
     {
         return transactions;
     }
-    virtual dev::eth::Transactions topTransactions(uint64_t const&) override
-    {
-        return transactions;
-    }
-    virtual bool drop(h256 const&) override { return true; }
-    virtual bool dropBlockTrans(dev::eth::Block const&) override { return true; }
+    dev::eth::Transactions topTransactions(uint64_t const&) override { return transactions; }
+    bool drop(h256 const&) override { return true; }
+    bool dropBlockTrans(dev::eth::Block const&) override { return true; }
     bool handleBadBlock(Block const&) override { return true; }
-    virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
-    virtual TxPoolStatus status() const override
+    PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
+    TxPoolStatus status() const override
     {
         TxPoolStatus status;
         status.current = 1;
         status.dropped = 0;
         return status;
     }
-    virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
+    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
     {
         return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
     }
-    virtual dev::eth::ImportResult import(
+    dev::eth::ImportResult import(
         dev::eth::Transaction&, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
-    virtual dev::eth::ImportResult import(
+    dev::eth::ImportResult import(
         bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
@@ -451,22 +447,18 @@ public:
         /// init
         initLedgerParam();
     }
-    virtual bool initLedger() override { return true; };
-    virtual void initConfig(std::string const&) override{};
-    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
-    {
-        return m_txPool;
-    }
-    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier()
-        const override
+    bool initLedger() override { return true; };
+    void initConfig(std::string const&) override{};
+    std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
     }
-    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
     {
         return m_blockChain;
     }
-    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
+    std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
         std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
@@ -493,10 +485,10 @@ public:
         m_param = std::make_shared<LedgerParam>();
         m_param->mutableConsensusParam().consensusType = "pbft";
     }
-    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
-    virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
-    virtual void startAll() override {}
-    virtual void stopAll() override {}
+    dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
+    void startAll() override {}
+    void stopAll() override {}
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

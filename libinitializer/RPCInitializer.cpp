@@ -96,6 +96,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+        // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_channelRPCHttpServer->StartListening())
         {
             INITIALIZER_LOG(ERROR)
@@ -144,6 +145,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
+        // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_jsonrpcHttpServer->StartListening())
         {
             INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")

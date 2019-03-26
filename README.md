@@ -4,18 +4,18 @@ English / [中文](docs/README_CN.md)
 
 **FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Based on BCOS platform, FISCO BCOS strives to integrate and coordinate research resources to advance financial blockchain technology, as well as promote synergy and collaboration for blockchain-based financial application research. With these establishments, it seeks to facilitate the members' R&D capabilities to apply financial consortium blockchain in business scenarios.
 
- [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![](https://img.shields.io/github/issues-pr/FISCO-BCOS/FISCO-BCOS.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS/pulls) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
+ [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)  [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
 
-## Quick Start
-
-Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/docs/quick_start.html).
 
 ## Documentation
 
-- [English](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
-- [中文](https://fisco-bcos-documentation.readthedocs.io/zh_CN/feature-2.0.0/)
+- [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
+
+## Compatibility
+
+Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
 
 ## Developing & Contributing
 
@@ -24,15 +24,14 @@ Read the [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/fea
 - [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
 - Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
-### Features
+## Features
 
-- **Security**: Comprehensive security coverage includes role-based access control, certificate authorities and key management
-- **Privacy**: Authority management, guomi algorithm, zero-knowledge proof, homomorphic encryption, group signature, ring signature
-- **Performance**: Parallel computation, efficient consensus mechanism
-- **Usability**: More convenient to deploy and manage your consortium blockchain, including contract development framework(web3sdk), sample implementation, deployment guide, monitoring and auditing tools
-- **Reliability**: Several applications in production environment work stability
+**Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
+**Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
+**Reliability**: Verified by multiple running cross-organization financial applications.
+**Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
 
-### Featured Cases
+## Featured Cases
 
 Since FISCO BCOS launched, dozens of applications have been implemented. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 

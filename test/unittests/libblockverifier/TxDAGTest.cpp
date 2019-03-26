@@ -87,7 +87,7 @@ public:
     {
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
-            Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>(ctx, false));
+            Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>());
         ctx->setAddress2Precompiled(
             Address(0x1007), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
         return ctx;
