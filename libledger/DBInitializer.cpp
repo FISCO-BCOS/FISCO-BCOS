@@ -125,6 +125,7 @@ void DBInitializer::initAMOPStorage()
 
 	auto amopStorage = std::make_shared<AMOPStorage>();
 	amopStorage->setChannelRPCServer(m_channelRPCServer);
+	amopStorage->setTopic("DB");
 
 	m_storage = amopStorage;
 }
