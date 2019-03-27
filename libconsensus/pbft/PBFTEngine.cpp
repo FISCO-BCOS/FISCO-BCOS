@@ -443,9 +443,9 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID.abridged());
-        nodeIdList.push_back(session.nodeID);
-        broadcastMark(session.nodeID, packetType, key);
+                              << LOG_KV("myNode", session.nodeID().abridged());
+        nodeIdList.push_back(session.nodeID());
+        broadcastMark(session.nodeID(), packetType, key);
     }
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
