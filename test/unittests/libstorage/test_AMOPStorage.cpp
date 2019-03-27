@@ -21,9 +21,9 @@
  * @date 2019-03-27
  */
 
-#include <libstorage/SQLStorage.h>
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/FixedHash.h>
+#include <libstorage/SQLStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
