@@ -403,8 +403,8 @@ generate_config_ini()
         prefix="gm"
     fi
     cat << EOF > ${output}
-[compatibility]
-;version=
+[supported_compatibility]
+;version=2.0.0-rc1
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
