@@ -77,9 +77,9 @@ private:
     thread_local static std::vector<Change> s_changeLog;
     h256 m_hash;
     // sys tables
-    const static std::vector<std::string> s_sysTables;
+    const static std::vector<std::string> c_sysTables;
     // sys tables without access control, which means they don't need any rollback records
-    const static std::vector<std::string> s_sysAccessTables;
+    const static std::vector<std::string> c_sysAccessTables;
     int m_createTableCode;
 
     // mutex

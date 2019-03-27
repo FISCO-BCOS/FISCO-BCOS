@@ -36,13 +36,13 @@ using namespace std;
 
 thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
 
-const std::vector<string> MemoryTableFactory::s_sysTables = std::vector<string>{SYS_CONSENSUS,
+const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
     SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
     SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES};
 
 // according to
 // https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
-const std::vector<string> MemoryTableFactory::s_sysAccessTables =
+const std::vector<string> MemoryTableFactory::c_sysAccessTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
@@ -60,7 +60,7 @@ Table::Ptr MemoryTableFactory::openTable(
     }
     auto tableInfo = std::make_shared<storage::TableInfo>();
 
-    if (s_sysTables.end() != find(s_sysTables.begin(), s_sysTables.end(), tableName))
+    if (c_sysTables.end() != find(c_sysTables.begin(), c_sysTables.end(), tableName))
     {
         tableInfo = getSysTableInfo(tableName);
     }
@@ -122,8 +122,8 @@ Table::Ptr MemoryTableFactory::openTable(
 
     memoryTable->setTableInfo(tableInfo);
 
-    if (std::find(s_sysAccessTables.begin(), s_sysAccessTables.end(), tableName) ==
-        s_sysAccessTables.end())
+    if (std::find(c_sysAccessTables.begin(), c_sysAccessTables.end(), tableName) ==
+        c_sysAccessTables.end())
     {
         memoryTable->setRecorder(
             [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
