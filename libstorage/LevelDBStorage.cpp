@@ -146,7 +146,9 @@ size_t LevelDBStorage::commit(
 
                     if (s.IsNotFound())
                     {
-                        it = key2value.insert(std::make_pair(key, Json::Value())).first;
+                        Json::Value entriesJson;
+                        entriesJson["values"] = Json::Value(Json::arrayValue);
+                        it = key2value.insert(std::make_pair(key, entriesJson)).first;
                     }
                     else
                     {
