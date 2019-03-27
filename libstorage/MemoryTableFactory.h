@@ -80,7 +80,7 @@ private:
     const static std::vector<std::string> s_sysTables;
     // sys tables without access control, which means they don't need any rollback records
     const static std::vector<std::string> s_sysAccessTables;
-    int createTableCode;
+    int m_createTableCode;
 
     // mutex
     mutable RecursiveMutex x_name2Table;

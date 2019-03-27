@@ -46,7 +46,8 @@ const std::vector<string> MemoryTableFactory::s_sysAccessTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0), m_createTableCode(0)
+{}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -148,7 +149,7 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-        createTableCode = 0;
+        m_createTableCode = 0;
         return nullptr;
     }
     // Write table entry
@@ -156,9 +157,9 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     tableEntry->setField("table_name", tableName);
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
-    createTableCode = sysTable->insert(
+    m_createTableCode = sysTable->insert(
         tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
-    if (createTableCode == storage::CODE_NO_AUTHORIZED)
+    if (m_createTableCode == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
                              << LOG_DESC("create table non-authorized")
