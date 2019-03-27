@@ -55,7 +55,7 @@ public:
 
     ExecutiveContext() {}
 
-    virtual ~ExecutiveContext(){};
+    virtual ~ExecutiveContext() { m_memoryTableFactory->getChangeLog().clear(); };
 
     virtual bytes call(Address const& origin, Address address, bytesConstRef param);
 

@@ -70,7 +70,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext, true);
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
     }
     catch (exception& e)
     {
@@ -165,7 +165,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext, true);
+            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
     }
     catch (exception& e)
     {
@@ -210,6 +210,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
             {
                 txDag->executeUnit();
+                memoryTableFactory->getChangeLog().clear();
             }
         }));
     }
@@ -283,7 +284,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     try
     {
         m_executiveContextFactory->initExecutiveContext(
-            blockInfo, blockHeader.stateRoot(), executiveContext, true);
+            blockInfo, blockHeader.stateRoot(), executiveContext);
     }
     catch (exception& e)
     {

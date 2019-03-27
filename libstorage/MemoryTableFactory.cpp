@@ -34,31 +34,19 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-/*
-static void desc(std::vector<Change>* ptr)
-{
-    std::cout << "desc ptr " << ptr << std::endl;
-    delete ptr;
-}
-*/
+thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
 
-thread_local ChangeLog MemoryTableFactory::s_changeLog = ChangeLog();
+const std::vector<string> MemoryTableFactory::s_sysTables = std::vector<string>{SYS_CONSENSUS,
+    SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
+    SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory(bool _needRollback)
-  : m_blockHash(h256(0)), m_blockNum(0), m_needRollback(_needRollback)
-{
-    m_sysTables.push_back(SYS_CONSENSUS);
-    m_sysTables.push_back(SYS_TABLES);
-    m_sysTables.push_back(SYS_ACCESS_TABLE);
-    m_sysTables.push_back(SYS_CURRENT_STATE);
-    m_sysTables.push_back(SYS_NUMBER_2_HASH);
-    m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
-    m_sysTables.push_back(SYS_HASH_2_BLOCK);
-    m_sysTables.push_back(SYS_CNS);
-    m_sysTables.push_back(SYS_CONFIG);
-    m_sysTables.push_back(SYS_BLOCK_2_NONCES);
-}
+// according to
+// https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
+const std::vector<string> MemoryTableFactory::s_sysAccessTables =
+    std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
+        SYS_BLOCK_2_NONCES};
 
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -71,7 +59,7 @@ Table::Ptr MemoryTableFactory::openTable(
     }
     auto tableInfo = std::make_shared<storage::TableInfo>();
 
-    if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    if (s_sysTables.end() != find(s_sysTables.begin(), s_sysTables.end(), tableName))
     {
         tableInfo = getSysTableInfo(tableName);
     }
@@ -132,14 +120,17 @@ Table::Ptr MemoryTableFactory::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&, this](Table::Ptr _table, Change::Kind _kind,
-                                 std::string const& _key, std::vector<Change::Record>& _records) {
-        if (m_needRollback)
-        {
-            auto& changeLog = getChangeLog();
-            changeLog.emplace_back(_table, _kind, _key, _records);
-        }
-    });
+
+    if (std::find(s_sysAccessTables.begin(), s_sysAccessTables.end(), tableName) ==
+        s_sysAccessTables.end())
+    {
+        memoryTable->setRecorder(
+            [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
+                std::vector<Change::Record>& _records) {
+                auto& changeLog = getChangeLog();
+                changeLog.emplace_back(_table, _kind, _key, _records);
+            });
+    }
 
     m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
@@ -220,19 +211,6 @@ h256 MemoryTableFactory::hash()
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
     return s_changeLog;
-    /*
-    auto changeLog = m_changeLog.get();
-    if (m_changeLog.get() != nullptr)
-    {
-        return *changeLog;
-    }
-    else
-    {
-        changeLog = new std::vector<Change>();
-        m_changeLog.reset(changeLog);
-        return *changeLog;
-    }
-    */
 }
 
 void MemoryTableFactory::rollback(size_t _savepoint)
@@ -250,7 +228,10 @@ void MemoryTableFactory::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory::commit() {}
+void MemoryTableFactory::commit()
+{
+    getChangeLog().clear();
+}
 
 void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {
