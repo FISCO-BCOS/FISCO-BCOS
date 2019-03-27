@@ -40,6 +40,7 @@ namespace precompiled
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
 
 /// correct return: code great or equal 0
+const int CODE_SUCCESS = 0;
 
 /// note: abi.abiOut will return a positive number related to the negative number.
 /// It maybe coincide with the positive number that should have been returned.

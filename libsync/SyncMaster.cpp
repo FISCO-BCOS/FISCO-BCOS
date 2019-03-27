@@ -267,7 +267,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(ts[i].rlp());
+            txRLPs.emplace_back(ts[i].rlp(WithSignature));
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);
@@ -535,7 +535,7 @@ bool SyncMaster::maintainDownloadingQueue()
                         << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
 
         if (m_syncStatus->knownLatestHash != latestHash)
-            SYNC_LOG(FATAL)
+            SYNC_LOG(ERROR)
                 << LOG_BADGE("Download")
                 << LOG_DESC(
                        "State error: This node's version is not compatable with others! All data "

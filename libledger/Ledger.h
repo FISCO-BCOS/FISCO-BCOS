@@ -86,6 +86,8 @@ public:
         /// load ini config of group for TxPool/Sync modules
         std::string iniConfigFileName = m_configFileName;
         boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+
+        /// you should invoke initConfig first before invoke initIniConfig
         initIniConfig(iniConfigFileName);
         initMark();
     }

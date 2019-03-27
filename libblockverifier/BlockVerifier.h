@@ -35,7 +35,10 @@
 #include <libexecutive/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
+#include <algorithm>
 #include <memory>
+#include <thread>
+
 namespace dev
 {
 namespace eth
@@ -57,7 +60,13 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel) {}
+    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel)
+    {
+        if (_enableParallel)
+        {
+            m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
+        }
+    }
 
     virtual ~BlockVerifier() {}
 
@@ -89,6 +98,7 @@ private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
     bool m_enableParallel;
+    unsigned int m_threadNum = -1;
 };
 
 }  // namespace blockverifier
