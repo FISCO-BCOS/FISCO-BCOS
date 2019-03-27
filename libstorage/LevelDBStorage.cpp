@@ -173,7 +173,13 @@ size_t LevelDBStorage::commit(
                 auto searchIt =
                     std::lower_bound(it->second["values"].begin(), it->second["values"].end(),
                         value, [](const Json::Value& lhs, const Json::Value& rhs) {
-                            return lhs["_id_"].asUInt64() < rhs["_id_"].asUInt64();
+                			if(!lhs["_id_"].isNull() && !rhs["_id_"].isNull()) {
+                				return lhs["_id_"].asUInt64() < rhs["_id_"].asUInt64();
+                			}
+                			else {
+                				LOG(ERROR) << "no id lhs: " << lhs.toStyledString() << "no id rhs: " << rhs.toStyledString();
+                			}
+                			return false;
                         });
 
                 if (searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"])
