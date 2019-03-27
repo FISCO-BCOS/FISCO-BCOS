@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "ExecutiveContextFactory.h"
+#include "include/UserPrecompiled.h"
 #include <libdevcore/Common.h>
 #include <libprecompiled/AuthorityPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
@@ -27,7 +28,6 @@
 #include <libprecompiled/DagTransferPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
-#include <libprecompiled/extension/HelloWorldPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
@@ -64,10 +64,9 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1007), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
+    // register User developed Precompiled contract
+    registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
-
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
