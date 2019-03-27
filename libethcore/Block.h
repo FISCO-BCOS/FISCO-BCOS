@@ -163,11 +163,12 @@ public:
         noteReceiptChange();
     }
 
-    void setEmptyBlock()
+    void setEmptyBlock(uint64_t timeStamp)
     {
         m_blockHeader.setNumber(0);
         m_blockHeader.setGasUsed(u256(0));
         m_blockHeader.setSealer(u256(0));
+        m_blockHeader.setTimestamp(timeStamp);
         noteChange();
         noteReceiptChange();
     }
