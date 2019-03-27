@@ -106,7 +106,7 @@ size_t LevelDBStorage::commit(
         size_t counter = 0;
         std::string counterValue;
         auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(COUNTER_KEY), &counterValue);
-        if (s.ok())
+        if (s.ok() && !s.IsNotFound())
         {
             counter = boost::lexical_cast<size_t>(counterValue);
         }
@@ -146,9 +146,7 @@ size_t LevelDBStorage::commit(
 
                     if (s.IsNotFound())
                     {
-                        Json::Value entriesJson;
-                        entriesJson["values"] = Json::Value(Json::arrayValue);
-                        it = key2value.insert(std::make_pair(key, entriesJson)).first;
+                        it = key2value.insert(std::make_pair(key, Json::Value())).first;
                     }
                     else
                     {
@@ -169,8 +167,8 @@ size_t LevelDBStorage::commit(
                 }
                 value["_hash_"] = hex;
                 value["_num_"] = num;
-                // value["_id_"] = ++counter;
-                // it->second["values"].append(value);
+                //value["_id_"] = ++counter;
+                //it->second["values"].append(value);
 
                 auto searchIt =
                     std::lower_bound(it->second["values"].begin(), it->second["values"].end(),
