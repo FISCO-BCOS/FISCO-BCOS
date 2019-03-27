@@ -63,10 +63,12 @@ struct SyncParam
     unsigned idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
 };
 
+/// modification 2019.03.20: add timeStamp field to GenesisParam
 struct GenesisParam
 {
     std::string genesisMark;
     std::string nodeListMark;
+    uint64_t timeStamp;
 };
 struct StorageParam
 {

@@ -60,7 +60,8 @@ public:
     virtual void stop();
 
     virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback);
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
+            callback);
 
     virtual bool haveNetwork() const { return m_run; }
 
@@ -72,13 +73,13 @@ public:
         m_listenPort = port;
     }
 
-    virtual std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>
+    virtual std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
     connectionHandler()
     {
         return m_connectionHandler;
     }
     virtual void setConnectionHandler(
-        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
             connectionHandler)
     {
         m_connectionHandler = connectionHandler;
@@ -118,18 +119,28 @@ private:
     /// @return: node id of the connected peer
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
+
+    /// obtain the common name from the subject:
+    /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
+    std::string obtainCommonNameFromSubject(std::string const& subject);
+
+    /// obtain nodeInfo from given vector
+    void obtainNodeInfo(NodeInfo& info, std::string const& node_info);
+
     /// server calls handshakeServer to after handshake, mainly calls RLPxHandshake to obtain
     /// informations(client version, caps, etc),start peer session and start accepting procedure
     /// repeatedly
     void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string>& endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    void startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> handler);
+    void startPeerSession(NodeInfo const& nodeInfo, std::shared_ptr<SocketFace> const& socket,
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
+            handler);
 
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string>& endpointPublicKey,
-        std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
+            callback,
         NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
 
     void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
@@ -160,7 +171,8 @@ private:
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
 
-    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> m_connectionHandler;
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
+        m_connectionHandler;
 
     bool m_run = false;
 

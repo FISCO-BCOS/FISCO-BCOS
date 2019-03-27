@@ -391,16 +391,16 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
     }
     for (auto session : sessions)
     {
-        if (session.nodeID == nodeId)
+        if (session.nodeID() == nodeId)
         {
             m_service->asyncSendMessageByNodeID(
-                session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
+                session.nodeID(), transDataToMessage(data, packetType, ttl), nullptr);
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
                                   << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
                                   << LOG_KV("nodeIdx", nodeIdx())
                                   << LOG_KV("myNode", m_keyPair.pub().abridged());
-            broadcastMark(session.nodeID, packetType, key);
+            broadcastMark(session.nodeID(), packetType, key);
             return true;
         }
     }
@@ -427,25 +427,25 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
-        if (getIndexBySealer(session.nodeID) < 0)
+        if (getIndexBySealer(session.nodeID()) < 0)
             continue;
         /// peer is in the _filter list ?
-        if (filter.count(session.nodeID))
+        if (filter.count(session.nodeID()))
         {
-            broadcastMark(session.nodeID, packetType, key);
+            broadcastMark(session.nodeID(), packetType, key);
             continue;
         }
         /// packet has been broadcasted?
-        if (broadcastFilter(session.nodeID, packetType, key))
+        if (broadcastFilter(session.nodeID(), packetType, key))
             continue;
         PBFTENGINE_LOG(TRACE) << LOG_DESC("broadcastMsg") << LOG_KV("packetType", packetType)
-                              << LOG_KV("dstNodeId", session.nodeID.abridged())
+                              << LOG_KV("dstNodeId", session.nodeID().abridged())
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID.abridged());
-        nodeIdList.push_back(session.nodeID);
-        broadcastMark(session.nodeID, packetType, key);
+                              << LOG_KV("myNode", session.nodeID().abridged());
+        nodeIdList.push_back(session.nodeID());
+        broadcastMark(session.nodeID(), packetType, key);
     }
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
