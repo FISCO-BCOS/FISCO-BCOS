@@ -38,6 +38,7 @@ Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 
 void Transaction::decode(bytesConstRef tx_bytes, CheckTransaction _checkSig)
 {
+    m_rlpBuffer.assign(tx_bytes.data(), tx_bytes.data() + tx_bytes.size());
     RLP const rlp(tx_bytes);
     decode(rlp, _checkSig);
 }
@@ -191,7 +192,7 @@ void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
     m_hashWith = txHash;
 }
 
-void Transaction::tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
 {
     try
     {

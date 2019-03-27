@@ -50,8 +50,7 @@ const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
 const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
-DagTransferPrecompiled::DagTransferPrecompiled(
-    dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable)
+DagTransferPrecompiled::DagTransferPrecompiled()
 {
     name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
@@ -62,12 +61,6 @@ DagTransferPrecompiled::DagTransferPrecompiled(
     name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_TRS_STR2_UINT);
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
-
-    // Create table before parallel execution
-    if (needOpenTable)
-    {
-        openTable(context, Address());
-    }
 }
 
 bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
@@ -153,6 +146,14 @@ Table::Ptr DagTransferPrecompiled::openTable(
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
+
+    if (!tableFactoryPrecompiled)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
+                               << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
+        return nullptr;
+    }
+
     auto table =
         tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER, false, true);
     if (!table)

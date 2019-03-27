@@ -25,6 +25,7 @@
 #include <libethcore/ABI.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/DagTransferPrecompiled.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -58,11 +59,8 @@ public:
         u256 nonce = u256(utcTime() + rand());
 
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
-
         tx.setBlockLimit(500);
-        tx.updateSignature(SignatureStruct(sig));
+        tx.forceSender(Address(0x2333));
 
         return tx;
     }
@@ -79,11 +77,8 @@ public:
         u256 nonce = u256(utcTime() + rand());
 
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
-
         tx.setBlockLimit(500);
-        tx.updateSignature(SignatureStruct(sig));
+        tx.forceSender(Address(0x2333));
 
         return tx;
     }
@@ -92,7 +87,9 @@ public:
     {
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
-            Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>(ctx, false));
+            Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>());
+        ctx->setAddress2Precompiled(
+            Address(0x1007), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
         return ctx;
     }
 
