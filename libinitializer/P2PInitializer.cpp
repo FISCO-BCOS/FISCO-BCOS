@@ -115,7 +115,15 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         asioInterface->setSSLContext(m_SSLContext);
         asioInterface->setType(dev::network::ASIOInterface::SSL);
 
-        auto messageFactory = std::make_shared<P2PMessageFactory>();
+        std::shared_ptr<P2PMessageFactory> messageFactory = nullptr;
+        if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        {
+            messageFactory = std::make_shared<P2PMessageFactory>();
+        }
+        else
+        {
+            messageFactory = std::make_shared<P2PMessageFactoryRC2>();
+        }
 
         auto host = std::make_shared<dev::network::Host>();
         host->setASIOInterface(asioInterface);

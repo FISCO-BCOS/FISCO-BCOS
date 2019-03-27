@@ -37,7 +37,20 @@ namespace sync
 class SyncMsgPacket
 {
 public:
-    SyncMsgPacket() { m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>(); }
+    SyncMsgPacket()
+    {
+        /// TODO:
+        /// 1. implement these packet with SyncMsgPacketFactory
+        /// 2. modify sync and PBFT related packet from reference to pointer
+        if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        {
+            m_p2pFactory = std::make_shared<P2PMessageFactory>();
+        }
+        else
+        {
+            m_p2pFactory = std::make_shared<P2PMessageFactoryRC2>();
+        }
+    }
     /// Extract data by decoding the message
     bool decode(
         std::shared_ptr<dev::p2p::P2PSession> _session, std::shared_ptr<dev::p2p::P2PMessage> _msg);

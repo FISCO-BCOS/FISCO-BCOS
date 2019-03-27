@@ -34,15 +34,7 @@ public:
     virtual ~P2PMessageFactory() {}
     virtual dev::network::Message::Ptr buildMessage() override
     {
-        std::shared_ptr<dev::network::Message> message = nullptr;
-        if (g_BCOSConfig.version() <= dev::RC1_VERSION)
-        {
-            message = std::make_shared<P2PMessage>();
-        }
-        else
-        {
-            message = std::make_shared<P2PMessageRC2>();
-        }
+        auto message = std::make_shared<P2PMessage>();
         return message;
     }
 
@@ -53,5 +45,16 @@ public:
     }
     std::atomic<uint32_t> m_seq = {1};
 };
+
+class P2PMessageFactoryRC2 : public P2PMessageFactory
+{
+    virtual ~P2PMessageFactoryRC2() {}
+    virtual dev::network::Message::Ptr buildMessage() override
+    {
+        auto message = std::make_shared<P2PMessageRC2>();
+        return message;
+    }
+};
+
 }  // namespace p2p
 }  // namespace dev
