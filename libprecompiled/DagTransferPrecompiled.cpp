@@ -253,7 +253,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
 
-        auto count = table->insert(user, entry, getOptions(origin));
+        auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -329,7 +329,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
 
-            auto count = table->insert(user, entry, getOptions(origin));
+            auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -355,7 +355,8 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-            auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
+            auto count = table->update(
+                user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -442,7 +443,8 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-        auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
+        auto count = table->update(
+            user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -599,7 +601,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, dev::u256(0).str());
 
-            auto count = table->insert(toUser, entry, getOptions(origin));
+            auto count = table->insert(toUser, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -628,7 +630,8 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         auto entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, fromUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
-        auto count = table->update(fromUser, entry, table->newCondition(), getOptions(origin));
+        auto count = table->update(
+            fromUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -640,7 +643,8 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
-        count = table->update(toUser, entry, table->newCondition(), getOptions(origin));
+        count = table->update(
+            toUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
 
         // end with success
         ret = 0;

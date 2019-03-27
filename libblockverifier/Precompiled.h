@@ -71,11 +71,6 @@ protected:
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& tableName);
-    virtual dev::storage::AccessOptions::Ptr getOptions(Address const& origin)
-    {
-        return std::make_shared<dev::storage::AccessOptions>(origin);
-    }
-
     std::shared_ptr<dev::storage::Table> createTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
