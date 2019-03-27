@@ -64,8 +64,8 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1007), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
+    // register User developed Precompiled contract
+    registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
