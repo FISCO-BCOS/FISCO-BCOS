@@ -2,11 +2,12 @@ English / [中文](docs/README_CN.md)
 
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS** is an open-sourced, cross-industry, collaborative, and secure blockchain platform. Based on BCOS platform, FISCO BCOS strives to integrate and coordinate research resources to advance financial blockchain technology, as well as promote synergy and collaboration for blockchain-based financial application research. With these establishments, it seeks to facilitate the members' R&D capabilities to apply financial consortium blockchain in business scenarios.
+**FISCO BCOS** is a collaborative, secure, and high-performance open-source blockchain platform led by FISCO community. Evolved from BCOS project, FISCO BCOS strives to advance blockchain technology to promote effortless collaboration and innovation of blockchain-based financial applications. By focusing on performance, security and privacy, application adaptability, and operation optimization, FISCO BCOS helps community members to explore new business scenarios with state-of-the-art consortium blockchain technology.
 
  [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)  [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
+[![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
 
 ## Documentation
@@ -19,25 +20,28 @@ Version 2.0 introduces new internal block data formats and network protocols for
 
 ## Developing & Contributing
 
-- Star our Github.
-- Pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
+- Star our project.
+- Submit pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
 - [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
-- Discuss in [WeChat group](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
+- Join the discussion in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Features
 
 **Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
+
 **Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
+
 **Reliability**: Verified by multiple running cross-organization financial applications.
+
 **Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
 
 ## Featured Cases
 
-Since FISCO BCOS launched, dozens of applications have been implemented. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
+Since FISCO BCOS launched, dozens of applications have been implemented and launched. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 
 ## Community
 
-By the end of 2018, Financial Blockchain Shenzhen Consortium (FISCO) has attracted and admitted more than 100 members from 6 sectors including banking, fund management, securities brokerage, insurance, regional equity exchanges, and financial information service companies. The first members include the following organizations: Beyondsoft, Huawei, Shenzhen Securities Communications, Digital China, Forms Syntron, Tencent, WeBank, Yuexiu FinTech.
+By 2019, Financial Blockchain Shenzhen Consortium (FISCO) has been well recognized by more than 100 members from 6 industrial sectors including banking, fund management, securities brokerage, insurance, regional equity exchanges, and financial information service companies. The first group of members includes the following organizations: Beyondsoft, Huawei, Shenzhen Securities Communications, Digital China, Forms Syntron, Tencent, WeBank, and Yuexiu FinTech.
 
 - Join our WeChat [![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](docs/images/WeChatQR.jpeg) 
 

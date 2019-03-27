@@ -43,7 +43,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _sealerList = h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
@@ -93,6 +93,18 @@ private:
     /// reset block when view changes
     void resetBlockForViewChange()
     {
+        /// in case of that:
+        /// time1: checkTimeout, blockNumber = n - 1
+        /// time2: Report block, blockNumber = n
+        /// time2: handleBlock, seal a new block, blockNumber(m_sealing) = n + 1, and broadcast the
+        /// prepare request time3: callback onViewChange, reset the sealed block time4: seal again,
+        /// blockNumber(m_sealing) = n + 1 the result is: generate two block with the same block in
+        /// a period solution: if there has been  a higher sealed block, return directly without
+        /// reset
+        if (m_sealing.block.isSealed() && shouldHandleBlock())
+        {
+            return;
+        }
         {
             DEV_WRITE_GUARDED(x_sealing)
             resetSealingBlock();
