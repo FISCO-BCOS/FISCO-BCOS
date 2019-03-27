@@ -29,6 +29,7 @@ current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
+timestamp=$(date +%s)
 enable_compress="true"
 
 
@@ -487,6 +488,7 @@ generate_group_genesis()
     gas_limit=300000000
 [group]
     id=${index}
+    timestamp=${timestamp}
 EOF
 }
 
