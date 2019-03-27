@@ -25,6 +25,7 @@
 
 #pragma once
 #include "P2PInterface.h"
+#include "P2PMessageFactory.h"
 #include "P2PSession.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
@@ -140,6 +141,9 @@ private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
+
+    bool compressBroadcastMessage(
+        std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData);
 
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;

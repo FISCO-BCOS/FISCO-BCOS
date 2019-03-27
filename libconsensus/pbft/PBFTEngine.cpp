@@ -257,7 +257,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
         {
             m_leaderFailed = true;
-            changeViewForEmptyBlock();
+            changeViewForFastViewChange();
             return true;
         }
         handlePrepareMsg(prepare_req);
@@ -423,6 +423,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
+    NodeIDs nodeIdList;
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
@@ -442,12 +443,13 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID().abridged());
-        /// send messages
-        m_service->asyncSendMessageByNodeID(
-            session.nodeID(), transDataToMessage(data, packetType, ttl), nullptr);
-        broadcastMark(session.nodeID(), packetType, key);
+                              << LOG_KV("myNode", session.nodeID.abridged());
+        nodeIdList.push_back(session.nodeID);
+        broadcastMark(session.nodeID, packetType, key);
     }
+    /// send messages according to node id
+    m_service->asyncMulticastMessageByNodeIDList(
+        nodeIdList, transDataToMessage(data, packetType, ttl));
     return true;
 }
 
@@ -809,7 +811,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// whether to omit empty block
     if (needOmit(workingSealing))
     {
-        changeViewForEmptyBlock();
+        changeViewForFastViewChange();
         return true;
     }
 
@@ -1190,13 +1192,11 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             min_view, m_f, m_toView, m_highestBlock, m_consensusBlockNumber);
         if (should_trigger)
         {
-            m_timeManager.changeView();
             m_toView = min_view - 1;
-            m_fastViewChange = true;
             PBFTENGINE_LOG(INFO) << LOG_DESC("Trigger fast-viewchange") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("minView", min_view)
                                  << LOG_KV("INFO", oss.str());
-            m_signalled.notify_all();
+            changeViewForFastViewChange();
         }
     }
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ ") << oss.str();
