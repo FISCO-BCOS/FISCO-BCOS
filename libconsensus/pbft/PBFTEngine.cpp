@@ -423,6 +423,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
+    NodeIDs nodeIdList;
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
@@ -443,11 +444,12 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", session.nodeID.abridged());
-        /// send messages
-        m_service->asyncSendMessageByNodeID(
-            session.nodeID, transDataToMessage(data, packetType, ttl), nullptr);
+        nodeIdList.push_back(session.nodeID);
         broadcastMark(session.nodeID, packetType, key);
     }
+    /// send messages according to node id
+    m_service->asyncMulticastMessageByNodeIDList(
+        nodeIdList, transDataToMessage(data, packetType, ttl));
     return true;
 }
 

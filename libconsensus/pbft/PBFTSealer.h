@@ -43,7 +43,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _sealerList = h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
