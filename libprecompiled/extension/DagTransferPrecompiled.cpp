@@ -215,7 +215,6 @@ bytes DagTransferPrecompiled::call(
 void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {  // userAdd(string,uint256)
-
     std::string user;
     dev::u256 amount;
     dev::eth::ContractABI abi;
@@ -263,7 +262,6 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
 
         // end success
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -365,7 +363,6 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         }
 
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -451,7 +448,6 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         }
 
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -509,7 +505,6 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         // only one record for every user
         balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -529,8 +524,8 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
     out = abi.abiIn("", ret, balance);
 }
 
-void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userTransferCall(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string fromUser, toUser;
     dev::u256 amount;
@@ -644,7 +639,6 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
 
         // end with success
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
