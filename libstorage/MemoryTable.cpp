@@ -24,7 +24,6 @@
 #include <arpa/inet.h>
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/Log.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
