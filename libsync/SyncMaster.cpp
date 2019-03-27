@@ -553,7 +553,7 @@ void SyncMaster::maintainPeersConnection()
     set<NodeID> activePeers;
     for (auto const& session : sessions)
     {
-        activePeers.insert(session.nodeID);
+        activePeers.insert(session.nodeID());
     }
 
     // Get sealers and observer

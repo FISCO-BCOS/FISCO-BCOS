@@ -59,11 +59,13 @@ public:
     {
         NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        P2PSessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        dev::network::NodeInfo node_info;
+        node_info.nodeID = nodeID;
+        P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
         std::set<std::string> topics;
         std::string topic = "Topic1";
         topics.insert(topic);
-        m_sessionInfos.push_back(P2PSessionInfo(nodeID, m_endpoint, topics));
+        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topics));
         h512s nodeList;
         nodeList.push_back(
             h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
@@ -474,7 +476,7 @@ public:
             dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                       "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
         GenesisBlockParam initParam = {
-            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000};
+            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
     virtual void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
