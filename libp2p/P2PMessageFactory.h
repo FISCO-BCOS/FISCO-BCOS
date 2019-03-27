@@ -32,7 +32,7 @@ class P2PMessageFactory : public dev::network::MessageFactory
 {
 public:
     virtual ~P2PMessageFactory() {}
-    virtual dev::network::Message::Ptr buildMessage() override
+    dev::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;
@@ -49,7 +49,7 @@ public:
 class P2PMessageFactoryRC2 : public P2PMessageFactory
 {
     virtual ~P2PMessageFactoryRC2() {}
-    virtual dev::network::Message::Ptr buildMessage() override
+    dev::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessageRC2>();
         return message;
