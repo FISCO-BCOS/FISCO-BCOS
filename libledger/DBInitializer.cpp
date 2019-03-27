@@ -27,8 +27,8 @@
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libstorage/LevelDBStorage.h>
 #include <libstorage/AMOPStorage.h>
+#include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -48,17 +48,19 @@ void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
 
-    if(!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External")) {
-    	initAMOPStorage();
+    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
+    {
+        initAMOPStorage();
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
-    	initLevelDBStorage();
+        initLevelDBStorage();
     }
-    else {
-    	DBInitializer_LOG(ERROR) << LOG_DESC(
-    	            "Unsupported dbType, current version only supports levelDB");
-    	BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
+    else
+    {
+        DBInitializer_LOG(ERROR) << LOG_DESC(
+            "Unsupported dbType, current version only supports levelDB");
+        BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
     }
 }
 
@@ -121,13 +123,19 @@ void DBInitializer::initLevelDBStorage()
 
 void DBInitializer::initAMOPStorage()
 {
-	DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
 
-	auto amopStorage = std::make_shared<AMOPStorage>();
-	amopStorage->setChannelRPCServer(m_channelRPCServer);
-	amopStorage->setTopic("DB");
+    auto amopStorage = std::make_shared<AMOPStorage>();
+    amopStorage->setChannelRPCServer(m_channelRPCServer);
+    amopStorage->setTopic(m_param->mutableStorageParam().topic);
+    amopStorage->setFatalHandler([](std::exception& e) {
+        (void)e;
+        LOG(FATAL) << "Access amdb failed, exit";
+        exit(1);
+    });
+    amopStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
-	m_storage = amopStorage;
+    m_storage = amopStorage;
 }
 
 /// create ExecutiveContextFactory

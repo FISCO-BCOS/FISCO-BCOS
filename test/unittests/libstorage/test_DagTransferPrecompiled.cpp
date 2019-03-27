@@ -51,7 +51,7 @@ struct DagTransferPrecompiledFixture
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
-        dtPrecompiled = std::make_shared<DagTransferPrecompiled>(context);
+        dtPrecompiled = std::make_shared<DagTransferPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
     }
 

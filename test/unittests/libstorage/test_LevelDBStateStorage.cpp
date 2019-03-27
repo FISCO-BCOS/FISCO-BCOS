@@ -18,9 +18,9 @@
 #include "libstorage/LevelDBStorage.h"
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/LevelDB.h>
 #include <boost/test/unit_test.hpp>
-#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -257,7 +257,8 @@ BOOST_AUTO_TEST_CASE(exception)
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(levelDB->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+    BOOST_CHECK_THROW(
+        levelDB->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

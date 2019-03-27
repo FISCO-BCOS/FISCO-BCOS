@@ -23,13 +23,13 @@
 #include "MemoryTable.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <utility>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
 #include <vector>
 
 using namespace dev;
@@ -194,7 +194,9 @@ h256 MemoryTableFactory::hash()
             continue;
         }
 
-        bytes tableHash = table->hash().asBytes();
+        bytes tableHash = hash.asBytes();
+        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
+        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
 
         data.insert(data.end(), tableHash.begin(), tableHash.end());
     }
@@ -209,7 +211,7 @@ h256 MemoryTableFactory::hash()
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
     auto changeLog = m_changeLog.get();
-    if (m_changeLog.get() != 0)
+    if (m_changeLog.get() != nullptr)
     {
         return *changeLog;
     }

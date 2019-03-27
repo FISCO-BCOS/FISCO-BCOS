@@ -61,7 +61,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>(context));
+        Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1007), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
     context->setAddress2Precompiled(
@@ -87,7 +87,7 @@ void ExecutiveContextFactory::setStateFactory(
 
 void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr context)
 {
-	(void)context;
+    (void)context;
 #if 0
     // get value from db
     try

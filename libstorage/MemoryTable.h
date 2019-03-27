@@ -37,7 +37,6 @@ namespace dev
 {
 namespace storage
 {
-
 class MemoryTable : public Table
 {
 public:
@@ -54,14 +53,14 @@ public:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
     virtual int insert(const std::string& key, Entry::Ptr entry,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
-            bool needSelect = true) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
+        bool needSelect = true) override;
 
     virtual int remove(const std::string& key, Condition::Ptr condition,
-            AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
+        AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
     virtual h256 hash() override;
 
@@ -93,21 +92,22 @@ public:
     }
 
     virtual TableData::Ptr dump() override
-	{
-    	auto data = std::make_shared<TableData>();
+    {
+        auto data = std::make_shared<TableData>();
 
-		data->info = m_tableInfo;
-		data->entries = std::make_shared<Entries>();
-		for (auto it : m_cache)
-		{
-			data->entries->addEntry(it.second);
-		}
+        data->info = m_tableInfo;
+        data->entries = std::make_shared<Entries>();
+        for (auto it : m_cache)
+        {
+            data->entries->addEntry(it.second);
+        }
 
-		for(size_t i=0; i<m_newEntries->size(); ++i) {
-			data->entries->addEntry(m_newEntries->get(i));
-		}
+        for (size_t i = 0; i < m_newEntries->size(); ++i)
+        {
+            data->entries->addEntry(m_newEntries->get(i));
+        }
 
-		return data;
+        return data;
     }
 
     virtual void rollback(const Change& _change) override;
@@ -248,9 +248,9 @@ private:
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
-                STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
-                                  << LOG_KV("table name", m_tableInfo->name)
-                                  << LOG_KV("field", it.first);
+                STORAGE_LOG(ERROR)
+                    << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
+                    << LOG_KV("table name", m_tableInfo->name) << LOG_KV("field", it.first);
 
                 throw std::invalid_argument("Invalid key.");
             }

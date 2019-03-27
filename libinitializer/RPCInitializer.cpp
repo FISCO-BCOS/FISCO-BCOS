@@ -25,36 +25,37 @@
 using namespace dev;
 using namespace dev::initializer;
 
-void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt) {
-	std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
-	int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
-	int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
+void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt)
+{
+    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
+    int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
 
-	if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
-	{
-		ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
-					 << LOG_DESC(
-							"initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
-					 << std::endl;
-		exit(1);
-	}
+    if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
+    {
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                     << LOG_DESC(
+                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
+                     << std::endl;
+        exit(1);
+    }
 
-	m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
-	m_channelRPCServer->setListenAddr(listenIP);
-	m_channelRPCServer->setListenPort(listenPort);
-	m_channelRPCServer->setSSLContext(m_sslContext);
-	m_channelRPCServer->setService(m_p2pService);
+    m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
+    m_channelRPCServer->setListenAddr(listenIP);
+    m_channelRPCServer->setListenPort(listenPort);
+    m_channelRPCServer->setSSLContext(m_sslContext);
+    m_channelRPCServer->setService(m_p2pService);
 
-	auto ioService = std::make_shared<boost::asio::io_service>();
+    auto ioService = std::make_shared<boost::asio::io_service>();
 
-	auto server = std::make_shared<dev::channel::ChannelServer>();
-	server->setIOService(ioService);
-	server->setSSLContext(m_sslContext);
-	server->setEnableSSL(true);
-	server->setBind(listenIP, listenPort);
-	server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
+    auto server = std::make_shared<dev::channel::ChannelServer>();
+    server->setIOService(ioService);
+    server->setSSLContext(m_sslContext);
+    server->setEnableSSL(true);
+    server->setBind(listenIP, listenPort);
+    server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
-	m_channelRPCServer->setChannelServer(server);
+    m_channelRPCServer->setChannelServer(server);
 }
 
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
@@ -95,6 +96,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+        // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_channelRPCHttpServer->StartListening())
         {
             INITIALIZER_LOG(ERROR)
@@ -143,6 +145,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
+        // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_jsonrpcHttpServer->StartListening())
         {
             INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")

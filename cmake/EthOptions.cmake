@@ -51,6 +51,8 @@ macro(configure_project)
     eth_default_option(ARCH_TYPE OFF)
     # unit tests
     eth_default_option(TESTS OFF)
+    # mini demos
+    eth_default_option(DEMO OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
     # log control
@@ -100,7 +102,7 @@ endmacro()
 macro(print_config NAME)
     message("")
     message("------------------------------------------------------------------------")
-    message("-- Configuring ${NAME}")
+    message("-- Configuring ${NAME} ${PROJECT_VERSION}${VERSION_SUFFIX}")
     message("------------------------------------------------------------------------")
     message("-- CMake ${CMAKE_VERSION} (${CMAKE_COMMAND})")
     message("-- CMAKE_BUILD_TYPE Build type                               ${CMAKE_BUILD_TYPE}")

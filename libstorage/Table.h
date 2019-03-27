@@ -167,8 +167,8 @@ struct Change
         size_t newIndex;
         std::string key;
         std::string oldValue;
-        Record(
-            size_t _id, size_t index = 0, std::string _key = std::string(), std::string _oldValue = std::string())
+        Record(size_t _id, size_t index = 0, std::string _key = std::string(),
+            std::string _oldValue = std::string())
           : id(_id), newIndex(index), key(_key), oldValue(_oldValue)
         {}
     };
@@ -184,9 +184,10 @@ class TableData
 public:
     typedef std::shared_ptr<TableData> Ptr;
 
-    TableData() {
-    	info = std::make_shared<TableInfo>();
-    	entries = std::make_shared<Entries>();
+    TableData()
+    {
+        info = std::make_shared<TableInfo>();
+        entries = std::make_shared<Entries>();
     }
 
     TableInfo::Ptr info;

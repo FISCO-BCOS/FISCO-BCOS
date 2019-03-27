@@ -58,7 +58,7 @@ bool Ledger::initLedger()
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
-    //m_dbInitializer
+    // m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
@@ -141,7 +141,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxExecuteConfig(ptree const& pt)
 {
-    if (m_param->mutableStorageParam().type != "storage")
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") != 0)
     {
         m_param->mutableTxParam().enableParallel = false;
     }
@@ -256,6 +256,9 @@ void Ledger::initDBConfig(ptree const& pt)
     /// set storage db related param
     m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
+    m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+    m_param->mutableStorageParam().maxRetry = pt.get<size_t>("storage.maxRetry", 10);
+
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
