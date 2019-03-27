@@ -11,6 +11,8 @@ namespace dev
 {
 namespace eth
 {
+namespace abi
+{
 class Meta
 {
 public:
@@ -126,17 +128,46 @@ public:
     bool parser(const std::string& _sig);
 
 public:
-    std::string getSelector();
+    // std::string getSelector();
     std::vector<std::string> getParamsTypes() const;
     inline std::string getSignature() const { return strFuncSignature; }
     inline std::string getFuncName() const { return strName; }
 };
 
-namespace abi
-{
+
 // check if T type of uint256, int256, bool, string , bytes32
 template <class T>
-struct Element : std::true_type
+struct Element : std::false_type
+{
+};
+
+// string
+template <>
+struct Element<std::string> : std::true_type
+{
+};
+
+// uint256
+template <>
+struct Element<u256> : std::true_type
+{
+};
+
+// int256
+template <>
+struct Element<s256> : std::true_type
+{
+};
+
+// bool
+template <>
+struct Element<bool> : std::true_type
+{
+};
+
+// byte32
+template <>
+struct Element<string32> : std::true_type
 {
 };
 
@@ -240,76 +271,81 @@ struct Offset<T>
     };
 };
 
-struct ABITool
+class ABISerialize
 {
-    static const int MAX_BIT_LENGTH = (256);
-    static const int MAX_BYTE_LENGTH = (MAX_BIT_LENGTH / 8);
+private:
+    static const int MAX_BYTE_LENGTH = 32;
+    std::size_t offset{0};
+    bytes fixed;
+    bytes dynamic;
 
+public:
     // unsigned integer type uint256.
-    static bytes serialise(const u256& _u) { return h256(_u).asBytes(); }
+    bytes serialize(const u256& _u);
 
     // two’s complement signed integer type int256.
-    static bytes serialise(const s256& _i) { return h256(_i.convert_to<u256>()).asBytes(); }
+    bytes serialize(const s256& _i);
 
     // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
-    // bool is used.
-    static bytes serialise(bool _b) { return h256(u256(_b ? 1 : 0)).asBytes(); }
+    // bool is used
+    bytes serialize(const bool& _b);
 
     // equivalent to uint160, except for the assumed interpretation and language typing. For
     // computing the function selector, address is used.
-    static bytes serialise(const Address& _addr) { return bytes(12, 0) + _addr.asBytes(); }
+    // bool is used.
+    bytes serialize(const Address& _addr);
 
     // binary type of 32 bytes
-    static bytes serialise(const string32& _s)
-    {
-        bytes ret(32, 0);
-        bytesConstRef((byte const*)_s.data(), 32).populate(bytesRef(&ret));
-        return ret;
-    }
+    bytes serialize(const string32& _s);
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
-    static bytes serialise(const std::string& _s)
-    {
-        bytes ret;
-        ret = h256(u256(_s.size())).asBytes();
-        ret.resize(ret.size() + (_s.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
-        bytesConstRef(&_s).populate(bytesRef(&ret).cropped(32));
-        return ret;
-    }
+    bytes serialize(const std::string& _s);
 
-    // a fixed-length array of M elements, M >= 0, of the given type.
     template <class T, std::size_t N>
-    static bytes serialise(const T (&_t)[N])
-    {
-        bytes ret;
-        for (std::size_t index = 0; index < N; index++)
-        {
-            ret += serialise(_t[index]);
-        }
-        return ret;
-    }
-
-    // a variable-length array of elements of the given type.
+    bytes serialize(const T (&_t)[N]);
     template <class T>
-    static bytes serialise(const std::vector<T>& _vt)
+    bytes serialize(const std::vector<T>& _vt);
+    template <std::size_t N>
+    bytes serialize(const std::string (&_t)[N]);
+
+    inline void abiInAux() { return; }
+
+    template <class T, class... U>
+    void abiInAux(T const& _t, U const&... _u)
     {
-        bytes ret;
-        ret += serialise(u256(_vt.size()));
-        for (const auto& _v : _vt)
-        {
-            ret += serialise(_v);
+        bytes out = serialize(_t);
+
+        if (Dynamic<T>::value)
+        {  // dynamic type
+            dynamic += out;
+            fixed += serialize((u256)offset);
+            offset += out.size();
         }
-        return ret;
+        else
+        {  // static type
+            fixed += out;
+        }
+
+        abiInAux(_u...);
     }
-};
 
-}  // namespace abi
-
-class ABISerialize
-{
 public:
     template <class... T>
-    std::pair<bool, bytes> abiIn(std::string _sig, T const&... _t);
+    bytes abiIn(const std::string& _sig, T const&... _t)
+    {
+        offset = Offset<T...>::value * MAX_BYTE_LENGTH;
+        fixed.clear();
+        dynamic.clear();
+
+        return _sig.empty() ? abiInAux(_t...) :
+                              sha3(_sig).ref().cropped(0, 4).toBytes() + abiInAux(_t...);
+    }
+
+    template <class... T>
+    std::string abiInHex(const std::string& _sig, T const&... _t)
+    {
+        return toHex(abiIn(_sig, _t...));
+    }
 
     template <class... T>
     bool abiOut(bytesConstRef _data, T&... _t);
@@ -317,5 +353,92 @@ public:
     bool abiOut(bytesConstRef _data, const std::string& _signature, std::vector<std::string>& _out);
 };
 
+
+template <class T, std::size_t N>
+bytes ABISerialize::serialize(const T (&_t)[N])
+{
+    bytes offset_bytes;
+    bytes content;
+
+    auto offset = N * MAX_BYTE_LENGTH;
+
+    for (const auto& e : _t)
+    {
+        bytes out = serialize(e);
+        content += out;
+        if (Dynamic<T[N]>::value)
+        {  // dynamic
+            offset_bytes += serialize(u256(offset));
+            offset += out.size();
+        }
+    }
+
+    return offset_bytes + content;
+}
+
+// a variable-length array of elements of the given type.
+template <class T>
+bytes ABISerialize::serialize(const std::vector<T>& _vt)
+{
+    bytes offset_bytes;
+    bytes content;
+
+    auto offset = _vt.size() * MAX_BYTE_LENGTH;
+
+    offset_bytes += serialize(u256(_vt.size()));
+    for (const auto& t : _vt)
+    {
+        offset_bytes += serialize(u256(offset));
+        bytes out = serialize(t);
+        offset += out.size();
+        content += out;
+    }
+
+    return offset_bytes + content;
+}
+
+/*
+// a fixed-length array of elements of string.
+template <std::size_t N>
+bytes ABISerialize::serialize(const std::string (&_st)[N])
+{
+    bytes offset_bytes;
+    bytes content;
+    auto offset = _st.size() * MAX_BYTE_LENGTH;
+
+    for (const auto& s : _st)
+    {
+        offset_bytes += serialize(u256(offset));
+        bytes out = serialize(s);
+        offset += out.size();
+        content += out;
+    }
+
+    return offset_bytes + content;
+}
+
+// a variable-length array of elements of string.
+template <>
+bytes ABISerialize::serialize<std::string>(const std::vector<std::string>& _st)
+{
+    bytes offset_bytes;
+    bytes content;
+
+    auto offset = _st.size() * MAX_BYTE_LENGTH;
+
+    offset_bytes += serialize(u256(_st.size()));
+    for (const auto& s : _st)
+    {
+        offset_bytes += serialize(u256(offset));
+        bytes out = serialize(s);
+        offset += out.size();
+        content += out;
+    }
+
+    return offset_bytes + content;
+}
+*/
+
+}  // namespace abi
 }  // namespace eth
 }  // namespace dev

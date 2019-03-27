@@ -7,8 +7,7 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::eth::abi;
 
-const int ABITool::MAX_BIT_LENGTH;
-const int ABITool::MAX_BYTE_LENGTH;
+const int ABISerialize::MAX_BYTE_LENGTH;
 
 const std::string Meta::strBool{"bool"};
 const std::string Meta::strBytes{"bytes"};
@@ -98,11 +97,11 @@ bool ABIType::removeExtent()
 
     return false;
 }
-
-std::string ABIFunc::getSelector()
+/*
+bytes ABIFunc::getSelector()
 {
-    return "0x" + dev::sha3(strFuncSignature).hex().substr(0, 8);
-}
+    return dev::sha3(strFuncSignature).toHex().substr(0, 8);
+}*/
 
 std::vector<std::string> ABIFunc::getParamsTypes() const
 {
@@ -168,4 +167,49 @@ bool ABIFunc::parser(const std::string& _sig)
     }
 
     return false;
+}
+
+// unsigned integer type uint256.
+bytes ABISerialize::serialize(const u256& _u)
+{
+    return h256(_u).asBytes();
+}
+
+// two’s complement signed integer type int256.
+bytes ABISerialize::serialize(const s256& _i)
+{
+    return h256(_i.convert_to<u256>()).asBytes();
+}
+
+// equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
+// bool is used
+bytes ABISerialize::serialize(const bool& _b)
+{
+    return h256(u256(_b ? 1 : 0)).asBytes();
+}
+
+// equivalent to uint160, except for the assumed interpretation and language typing. For
+// computing the function selector, address is used.
+// bool is used.
+bytes ABISerialize::serialize(const Address& _addr)
+{
+    return bytes(12, 0) + _addr.asBytes();
+}
+
+// binary type of 32 bytes
+bytes ABISerialize::serialize(const string32& _s)
+{
+    bytes ret(32, 0);
+    bytesConstRef((byte const*)_s.data(), 32).populate(bytesRef(&ret));
+    return ret;
+}
+
+// dynamic sized unicode string assumed to be UTF-8 encoded.
+bytes ABISerialize::serialize(const std::string& _s)
+{
+    bytes ret;
+    ret = h256(u256(_s.size())).asBytes();
+    ret.resize(ret.size() + (_s.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    bytesConstRef(&_s).populate(bytesRef(&ret).cropped(32));
+    return ret;
 }
