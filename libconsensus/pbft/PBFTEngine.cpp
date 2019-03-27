@@ -257,7 +257,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
         {
             m_leaderFailed = true;
-            changeViewForEmptyBlock();
+            changeViewForFastViewChange();
             return true;
         }
         handlePrepareMsg(prepare_req);
@@ -811,7 +811,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// whether to omit empty block
     if (needOmit(workingSealing))
     {
-        changeViewForEmptyBlock();
+        changeViewForFastViewChange();
         return true;
     }
 
@@ -1192,13 +1192,11 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
             min_view, m_f, m_toView, m_highestBlock, m_consensusBlockNumber);
         if (should_trigger)
         {
-            m_timeManager.changeView();
             m_toView = min_view - 1;
-            m_fastViewChange = true;
             PBFTENGINE_LOG(INFO) << LOG_DESC("Trigger fast-viewchange") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("minView", min_view)
                                  << LOG_KV("INFO", oss.str());
-            m_signalled.notify_all();
+            changeViewForFastViewChange();
         }
     }
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleViewChangeMsg Succ ") << oss.str();
