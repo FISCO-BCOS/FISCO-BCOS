@@ -56,6 +56,10 @@ public:
         setLeaderFailed(false);
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         setHighest(highest);
+        setOmitEmpty(true);
+        setStorage(nullptr);
+        setMaxTTL(1);
+        setIntervalBlockTime(1000);
         setNodeNum(3);
     }
     void updateConsensusNodeList() override {}

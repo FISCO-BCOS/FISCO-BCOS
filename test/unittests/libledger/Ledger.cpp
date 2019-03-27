@@ -51,6 +51,9 @@ public:
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        BOOST_CHECK(m_dbInitializer->storage() == nullptr);
+        BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
+        BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
         /// init blockChain
         FakeLedger::initBlockChain();
         /// intit blockVerifier
