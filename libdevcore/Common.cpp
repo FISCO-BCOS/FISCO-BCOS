@@ -59,7 +59,7 @@ uint64_t utcTime()
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-/// get utc time(ms)
+/// get utc time(us)
 uint64_t utcTimeUs()
 {
     struct timeval tv;

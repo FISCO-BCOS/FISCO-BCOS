@@ -38,7 +38,7 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
         _pt.get<std::string>("data_secure.cipher_data_key", "");
 
     /// init version
-    std::string version = _pt.get<std::string>("compatibility.version", "");
+    std::string version = _pt.get<std::string>("supported_compatibility.version", "");
     g_BCOSConfig.setVersion(version);
 
     /// compress related option, default enable

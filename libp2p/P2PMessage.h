@@ -44,10 +44,10 @@ public:
 
     virtual ~P2PMessage() {}
 
-    virtual void encode(bytes& buffer);
+    void encode(bytes& buffer) override;
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
-    virtual ssize_t decode(const byte* buffer, size_t size);
+    ssize_t decode(const byte* buffer, size_t size) override;
 
     virtual void setVersion(VERSION_TYPE const& version) { m_version = version; }
     virtual VERSION_TYPE version() const { return m_version; }
