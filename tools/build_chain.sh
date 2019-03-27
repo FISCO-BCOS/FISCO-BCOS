@@ -23,6 +23,7 @@ logfile=build.log
 listen_ip="127.0.0.1"
 bcos_bin_name=fisco-bcos
 guomi_mode=
+docker_mode=
 gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
@@ -46,7 +47,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -d <Disable log auto flush>         Default on. If set -d, disable log auto flush
+    -F <Disable log auto flush>         Default on. If set -d, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -69,7 +70,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTd" option;do
+while getopts "f:l:o:p:e:t:icszhgTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -89,9 +90,10 @@ while getopts "f:l:o:p:e:t:icszhgTd" option;do
     T) debug_log="true"
     log_level="debug"
     ;;
-    d) auto_flush="false";;
+    F) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
+    d) docker_mode="yes";;
     h) help;;
     esac
 done
@@ -191,7 +193,7 @@ dir_must_not_exists() {
 
 gen_chain_cert() {
     path="$2"
-    name=`getname "$path"`
+    name=$(getname "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -200,13 +202,7 @@ gen_chain_cert() {
     mkdir -p $chaindir
     openssl genrsa -out $chaindir/ca.key 2048
     openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
-    cp cert.cnf $chaindir
-
-    if [ $? -eq 0 ]; then
-        echo "build chain ca succussful!"
-    else
-        echo "please input at least Common Name!"
-    fi
+    mv cert.cnf $chaindir
 }
 
 gen_agency_cert() {
@@ -250,7 +246,7 @@ gen_cert_secp256k1() {
 }
 
 gen_node_cert() {
-    if [ "" == "`openssl ecparam -list_curves 2>&1 | grep secp256k1`" ]; then
+    if [ "" == "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit $EXIT_CODE
     fi
@@ -681,32 +677,46 @@ EOF
 generate_node_scripts()
 {
     local output=$1
+    local docker_tag="latest"
     generate_script_template "$output/start.sh"
+    local ps_cmd="\`ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}'\`"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
+    local stop_cmd="kill \${node_pid}"
+    local pid="pid"
+    local log_cmd="cat nohup.out"
+    if [ ! -z ${docker_mode} ];then
+        ps_cmd="\`docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}'\`"
+        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini >>nohup.out"
+        stop_cmd="docker kill \${node_pid} 2>/dev/null"
+        pid="container id"
+        log_cmd="docker logs \${SHELL_FOLDER//\//}"
+    fi
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
-node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
-    echo " \${node} is running, pid is \$node_pid."
+    echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else 
-    nohup \${fisco_bcos} -c config.ini 2>>nohup.out &
-    sleep 0.5
+    ${start_cmd} &
+    sleep 1
 fi
-node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
-    echo " \${node} start successfully"
+    echo -e "\033[32m \${node} start successfully\033[0m"
 else
-    echo " \${node} start failed"
-    cat nohup.out
+    echo -e "\033[31m \${node} start failed\033[0m"
+    ${log_cmd}
+    exit 1
 fi
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${SHELL_FOLDER})
-node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+node_pid=${ps_cmd}
 try_times=5
 i=0
 while [ \$i -lt \${try_times} ]
@@ -715,16 +725,16 @@ do
         echo " \${node} isn't running."
         exit 0
     fi
-    [ ! -z \${node_pid} ] && kill \${node_pid}
-    sleep 0.4
-    node_pid=\`ps aux|grep "\${fisco_bcos}"|grep -v grep|awk '{print \$2}'\`
+    [ ! -z \${node_pid} ] && ${stop_cmd} 2> /dev/null
+    sleep 0.6
+    node_pid=${ps_cmd}
     if [ -z \${node_pid} ];then
-        echo " stop \${node} success."
+        echo -e "\033[32m stop \${node} success.\033[0m"
         exit 0
     fi
     ((i=i+1))
 done
-
+echo " stop \${node} failed, exceed maximum number of retries."
 EOF
 }
 
@@ -732,7 +742,7 @@ EOF
 genTransTest()
 {
     local output=$1
-    local file="${output}/transTest.sh"
+    local file="${output}/.transTest.sh"
     generate_script_template "${file}"
     cat << EOF > "${file}"
 # This script only support for block number smaller than 65535 - 256
@@ -793,18 +803,22 @@ generate_server_scripts()
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
-        echo "start \${directory}" && bash \${SHELL_FOLDER}/\${directory}/start.sh
+        echo "try to start \${directory}"
+        bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
 done  
+sleep 3
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
-        echo "stop \${directory}" && bash \${SHELL_FOLDER}/\${directory}/stop.sh
+        echo "try to stop \${directory}"
+        bash \${SHELL_FOLDER}/\${directory}/stop.sh &
     fi  
 done  
+sleep 3
 EOF
 }
 
@@ -813,12 +827,12 @@ parse_ip_config()
     local config=$1
     n=0
     while read line;do
-        ip_array[n]=`echo ${line} | cut -d ' ' -f 1`
-        agency_array[n]=`echo ${line} | cut -d ' ' -f 2`
-        group_array[n]=`echo ${line} | cut -d ' ' -f 3`
+        ip_array[n]=$(echo ${line} | awk '{print $1}')
+        agency_array[n]=$(echo ${line} | awk '{print $2}')
+        group_array[n]=$(echo ${line} | awk '{print $3}')
         if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
             LOG_WARN "Please check ${config}, make sure there is no empty line!"
-            return -1
+            return 1
         fi
         ((++n))
     done < ${config}
@@ -826,13 +840,12 @@ parse_ip_config()
 
 main()
 {
-output_dir="`pwd`/${output_dir}"
+output_dir="$(pwd)/${output_dir}"
 [ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
 if [ "${use_ip_param}" == "true" ];then
     ip_array=(${ip_param//,/ })
 elif [ "${use_ip_param}" == "false" ];then
-    parse_ip_config $ip_file
-    if [ $? -ne 0 ];then 
+    if ! parse_ip_config $ip_file ;then 
         echo "Parse $ip_file error!"
         exit 1
     fi
@@ -845,32 +858,34 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # download fisco-bcos and check it
-if [ -z ${bin_path} ];then
-    bin_path=${output_dir}/${bcos_bin_name}
-    package_name="fisco-bcos.tar.gz"
-    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-    version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
-    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
-    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
-    curl -LO ${Download_Link}
-    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
-    chmod a+x ${bin_path}
-else
-    echo "Checking fisco-bcos binary..."
-    bin_version=$(${bin_path} -v)
-    if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
-        LOG_WARN "${bin_path} is wrong. Please correct it and try again."
-        exit 1
+if [ -z ${docker_mode} ];then
+    if [ -z ${bin_path} ];then
+        bin_path=${output_dir}/${bcos_bin_name}
+        package_name="fisco-bcos.tar.gz"
+        [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+        version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
+        LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+        curl -LO ${Download_Link}
+        tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
+        chmod a+x ${bin_path}
+    else
+        echo "Checking fisco-bcos binary..."
+        bin_version=$(${bin_path} -v)
+        if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
+            LOG_WARN "${bin_path} is wrong. Please correct it and try again."
+            exit 1
+        fi
+        if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
+            LOG_WARN "${bin_path} isn't gm version. Please correct it and try again."
+            exit 1
+        fi
+        if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
+            LOG_WARN "${bin_path} isn't standard version. Please correct it and try again."
+            exit 1
+        fi
+        echo "Binary check passed."
     fi
-    if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
-        LOG_WARN "${bin_path} isn't gm version. Please correct it and try again."
-        exit 1
-    fi
-    if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
-        LOG_WARN "${bin_path} isn't standard version. Please correct it and try again."
-        exit 1
-    fi
-    echo "Binary check passed."
 fi
 
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
@@ -881,7 +896,7 @@ else
 fi
 
 if [ "${use_ip_param}" == "true" ];then
-    for i in `seq 0 ${#ip_array[*]}`;do
+    for i in $(seq 0 ${#ip_array[*]});do
         agency_array[i]="agency"
         group_array[i]=1
     done
@@ -936,7 +951,7 @@ for line in ${ip_array[*]};do
     if [ -z "${checkIP}" ];then
         LOG_WARN "Please check IP address: ${ip}"
     fi
-    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     for ((i=0;i<num;++i));do
@@ -1040,7 +1055,7 @@ server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    [ "$num" == "$ip" -o -z "${num}" ] && num=${node_num}
+    [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
@@ -1061,14 +1076,14 @@ for line in ${ip_array[*]};do
         ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
-    cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"
+    if [ -z ${docker_mode} ];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
 done 
-rm ${output_dir}/${logfile} #${output_dir}/cert.cnf
+rm ${output_dir}/${logfile}
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
-    for l in `seq 0 ${#groups_count[@]}`;do
+    for l in $(seq 0 ${#groups_count[@]});do
         if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
     done
 fi

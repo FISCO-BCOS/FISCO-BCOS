@@ -63,6 +63,7 @@ private:
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
+    void registerUserPrecompiled(ExecutiveContext::Ptr context);
 };
 
 }  // namespace blockverifier

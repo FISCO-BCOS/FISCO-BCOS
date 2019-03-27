@@ -197,7 +197,9 @@ h256 MemoryTableFactory::hash()
             continue;
         }
 
-        bytes tableHash = table->hash().asBytes();
+        bytes tableHash = hash.asBytes();
+        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
+        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
 
         data.insert(data.end(), tableHash.begin(), tableHash.end());
     }

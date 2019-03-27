@@ -192,7 +192,7 @@ void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
     m_hashWith = txHash;
 }
 
-void Transaction::tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
 {
     try
     {
