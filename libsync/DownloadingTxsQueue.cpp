@@ -67,8 +67,21 @@ void DownloadingTxsQueue::pop2TxPool(
         auto constructRLP_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
-        // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
-        dev::eth::TxsParallelParser::decode(txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
+        if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            unsigned txNum = txsBytesRLP.itemCount();
+            txs.resize(txNum) for (unsigned j = 0; j < txNum; j++)
+            {
+                txs[j].decode(txsBytesRLP[j]);
+            }
+        }
+        else
+        {
+            // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
+            dev::eth::TxsParallelParser::decode(
+                txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
+        }
+
         auto decode_time_cost = utcTime() - record_time;
         record_time = utcTime();
 

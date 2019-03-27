@@ -81,6 +81,26 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
 
 void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
 {
+    if (g_BCOSConfig.version() <= RC1_VERSION)
+    {
+        m_rlpStream.clear();
+        bytes txRLPS;
+        unsigned txsSize = unsigned(_txRLPs.size());
+        for (size_t i = 0; i < _txRLPs.size(); i++)
+        {
+            txRLPS += _txRLPs[i];
+        }
+        prep(m_rlpStream, TransactionsPacket, _txsSize).appendRaw(txRLPS, txsSize);
+    }
+    else
+    {
+        encodeRC2(_txRLPs);
+        return;
+    }
+}
+
+void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
+{
     m_rlpStream.clear();
     bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
     prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));

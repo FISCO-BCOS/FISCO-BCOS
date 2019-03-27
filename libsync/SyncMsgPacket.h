@@ -90,6 +90,7 @@ class SyncTransactionsPacket : public SyncMsgPacket
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
     void encode(std::vector<bytes> const& _txRLPs);
+    void encodeRC2(std::vector<bytes> const& _txRLPs);
 };
 
 class SyncBlocksPacket : public SyncMsgPacket
