@@ -22,6 +22,7 @@
  * @date: 2018-10-24
  */
 #include "DBInitializer.h"
+#include "../libstorage/SQLStorage.h"
 #include "LedgerParam.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
@@ -29,7 +30,6 @@
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
-#include "../libstorage/SQLStorage.h"
 
 using namespace dev;
 using namespace dev::storage;
@@ -50,7 +50,7 @@ void DBInitializer::initStorageDB()
 
     if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
     {
-        initAMOPStorage();
+        initSQLStorage();
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
@@ -121,21 +121,21 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-void DBInitializer::initAMOPStorage()
+void DBInitializer::initSQLStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
 
-    auto amopStorage = std::make_shared<SQLStorage>();
-    amopStorage->setChannelRPCServer(m_channelRPCServer);
-    amopStorage->setTopic(m_param->mutableStorageParam().topic);
-    amopStorage->setFatalHandler([](std::exception& e) {
+    auto sqlStorage = std::make_shared<SQLStorage>();
+    sqlStorage->setChannelRPCServer(m_channelRPCServer);
+    sqlStorage->setTopic(m_param->mutableStorageParam().topic);
+    sqlStorage->setFatalHandler([](std::exception& e) {
         (void)e;
         LOG(FATAL) << "Access amdb failed, exit";
         exit(1);
     });
-    amopStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
+    sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
-    m_storage = amopStorage;
+    m_storage = sqlStorage;
 }
 
 /// create ExecutiveContextFactory

@@ -75,7 +75,7 @@ protected:
 
 private:
     /// TODO: init AMOP storage
-    void initAMOPStorage();
+    void initSQLStorage();
     /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
     /// TOCHECK: create storage/mpt state
