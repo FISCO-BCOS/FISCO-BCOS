@@ -183,7 +183,6 @@ EncryptFile::EncryptFile(int encryptType,const string& superKey,const string& ke
 	{
 		LOG(WARNING)<<"DataDir is not set";
 	}
-	LOG(DEBUG)<<"FilePath:"<< dataDir+"/gmnode.key";
 #if ETH_ENCRYPTTYPE
 	filePath[FILE_NODECERTKEY] = dataDir+"/gmnode.key";
 	enFilePath[FILE_NODECERTKEY] = dataDir+"/gmnode.key.encrypt";

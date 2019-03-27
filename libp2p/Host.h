@@ -225,11 +225,6 @@ namespace dev
 			{
 				return m_clientVersion;
 			}
-			void reconnectNow()
-			{
-				Guard l(x_reconnectnow);
-				m_reconnectnow=true;
-			}
 			RecursiveMutex& xSessions()
 			{
 				return x_sessions;
@@ -274,7 +269,6 @@ namespace dev
 			Mutex x_requiredPeers;
 			mutable std::unordered_map<NodeID, std::weak_ptr<SessionFace>> m_sessions;
 			mutable RecursiveMutex x_sessions;
-			bool m_reconnectnow=true;
 			unsigned m_idealPeerCount = 128;                                                         ///< Ideal number of peers to be connected to.
 			unsigned m_stretchPeers = 7;                                                            ///< Accepted connection multiplier (max peers = ideal*stretch).
 			std::map<CapDesc, std::shared_ptr<HostCapabilityFace>> m_capabilities;  ///< Each of the capabilities we support.
@@ -284,7 +278,6 @@ namespace dev
 			std::chrono::steady_clock::time_point m_lastReconnect;                                  ///< Time we sent the last ping to all peers.
 			bool m_accepting = false;
 			bool m_dropPeers = false;
-			Mutex x_reconnectnow;
 			ReputationManager m_repMan;
 			boost::asio::io_service::strand m_strand;
 		};
