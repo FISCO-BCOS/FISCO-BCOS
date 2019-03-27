@@ -14,37 +14,46 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file P2PMessageRC1.h
- *  @author monan
- *  @date 20181112
+/** @file P2PMessageRC2.h
+ *  @author yujiechen
+ *  @date 2019.03.26
  */
 
 #pragma once
+
 #include "P2PMessage.h"
 
 namespace dev
 {
 namespace p2p
 {
-class P2PMessageRC1 : public P2PMessage
+class P2PMessageRC2 : public P2PMessage
 {
 public:
-    const static size_t HEADER_LENGTH = 12;
+    /// m_length(4bytes) + m_version(2bytes) + m_protocolID(2bytes) + m_groupID(2bytes) +
+    /// m_packetType(2bytes) + m_seq(4bytes)
+    const static size_t HEADER_LENGTH = 16;
     const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
-    P2PMessageRC1() { m_buffer = std::make_shared<bytes>(); }
-    virtual ~P2PMessageRC1() {}
+    P2PMessageRC2() { m_buffer = std::make_shared<bytes>(); }
 
+    virtual ~P2PMessageRC2() {}
     void encode(bytes& buffer) override;
     /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
     /// returned.
     ssize_t decode(const byte* buffer, size_t size) override;
-};
-enum AMOPPacketType
-{
-    SendTopicSeq = 1,
-    RequestTopics = 2,
-    SendTopics = 3
+
+    void setVersion(VERSION_TYPE const& version) override { m_version = version; }
+    VERSION_TYPE version() const override { return m_version; }
+
+protected:
+    virtual void encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer);
+
+    VERSION_TYPE m_version = 0;
+
+private:
+    /// compress the data to be sended
+    bool compress(std::shared_ptr<bytes>);
 };
 }  // namespace p2p
 }  // namespace dev

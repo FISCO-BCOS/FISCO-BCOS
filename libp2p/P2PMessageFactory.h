@@ -21,7 +21,7 @@
 #pragma once
 
 #include "P2PMessage.h"
-#include "P2PMessageRC1.h"
+#include "P2PMessageRC2.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libnetwork/Common.h>
 namespace dev
@@ -37,11 +37,11 @@ public:
         std::shared_ptr<dev::network::Message> message = nullptr;
         if (g_BCOSConfig.version() <= dev::RC1_VERSION)
         {
-            message = std::make_shared<P2PMessageRC1>();
+            message = std::make_shared<P2PMessage>();
         }
         else
         {
-            message = std::make_shared<P2PMessage>();
+            message = std::make_shared<P2PMessageRC2>();
         }
         return message;
     }
