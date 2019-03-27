@@ -92,7 +92,7 @@ bytes ParallelConfigPrecompiled::call(
 }
 
 Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,
-    Address const& contractAddress, Address const& origin)
+    Address const& contractAddress, Address const& origin, bool needCreate)
 {
     string tableName = "_contract_parallel_func_" + contractAddress.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
@@ -107,7 +107,8 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
 
     auto table =
         tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName, false, false);
-    if (!table)
+
+    if (!table && needCreate)
     {  //__dat_transfer__ is not exist, then create it first.
         table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
             tableName, PARA_KEY_NAME, PARA_VALUE_NAMES, false, origin, false);
@@ -195,7 +196,7 @@ ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& contractAddress,
     uint32_t selector, Address const& origin)
 {
-    Table::Ptr table = openTable(context, contractAddress, origin);
+    Table::Ptr table = openTable(context, contractAddress, origin, false);
     if (!table || !table.get())
     {
         return nullptr;

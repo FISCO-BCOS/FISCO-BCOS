@@ -36,16 +36,19 @@ matrix:
           env: 
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
+            - CCACHE_DIR=$TRAVIS_BUILD_DIR/ccache
         - os: osx
           osx_image: xcode9.4
-          env: CACHE_NAME=osx
+          env: 
+            - CACHE_NAME=osx
+            - CCACHE_DIR=$TRAVIS_BUILD_DIR/ccache
 git:
     depth: 1
 compiler: clang
 cache:
   directories:
   - $TRAVIS_BUILD_DIR/deps
-#   - $TRAVIS_BUILD_DIR/build
+  - $TRAVIS_BUILD_DIR/ccache
 before_cache:
     #   - rm -rf $TRAVIS_BUILD_DIR/build/nodes $TRAVIS_BUILD_DIR/build/bin
 addons:
@@ -54,6 +57,7 @@ addons:
     - cmake
     - libssl-dev
     - clang
+    - ccache
     # - ninja-build
     - libomp-dev
     - openssl
@@ -62,11 +66,12 @@ addons:
     - openssl
     - clang-format
     - clang-omp
+    - ccache
 install: |
     bash tools/ci/check-commit.sh;
 script: |
     mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2 && \
-    ../tools/build_chain.sh -l "127.0.0.1:4" -e bin/fisco-bcos && cd nodes/127.0.0.1 && bash start_all.sh && sleep 2 && [ $(bash transTest.sh | grep "result" | wc -l) -eq 1 ]
+    cd ../tools && bash ci/ci_check.sh
 after_success:
     # if [ $TRAVIS_OS_NAME == linux ]; then
     #   cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)

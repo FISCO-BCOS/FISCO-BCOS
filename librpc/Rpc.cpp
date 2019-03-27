@@ -924,8 +924,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
-                      << LOG_KV("callParams", request.toStyledString());
+        RPC_LOG(TRACE) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("callParams", request.toStyledString());
 
         checkRequest(_groupID);
         if (request["from"].empty() || request["from"].asString().empty())
