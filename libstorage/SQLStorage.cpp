@@ -25,9 +25,9 @@
 #include <libdevcore/easylog.h>
 
 #include "Common.h"
+#include "SQLStorage.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
-#include "SQLStorage.h"
 
 using namespace dev;
 using namespace dev::storage;
