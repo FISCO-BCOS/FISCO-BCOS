@@ -95,7 +95,6 @@ Entries::Ptr SQLStorage::select(
                 entry->setField(columns[j], fieldValue);
             }
 
-            // entry->setStatus(boost::lexical_cast<int>(entry->getField(STATUS)));
             if (entry->getStatus() == 0)
             {
                 entry->setDirty(false);
@@ -155,41 +154,8 @@ size_t SQLStorage::commit(
                 }
 
                 tableData["entries"].append(value);
-
-#if 0
-    	  for (size_t i = 0; i < entriesIt.second->size(); ++i) {
-		  if (entriesIt.second->get(i)->dirty()) {
-			Json::Value value;
-			for (auto fieldIt : *(entriesIt.second->get(i)->fields())) {
-			  value[fieldIt.first] = fieldIt.second;
-			}
-			entry["values"].append(value);
-		  }
-		}
-#endif
             }
 
-
-#if 0
-      for (auto entriesIt : it->entries) {
-        if (entriesIt.second->dirty()) {
-          Json::Value entry;
-          entry["key"] = entriesIt.first;
-
-          for (size_t i = 0; i < entriesIt.second->size(); ++i) {
-            if (entriesIt.second->get(i)->dirty()) {
-              Json::Value value;
-              for (auto fieldIt : *(entriesIt.second->get(i)->fields())) {
-                value[fieldIt.first] = fieldIt.second;
-              }
-              entry["values"].append(value);
-            }
-          }
-
-          tableData["entries"].append(entry);
-        }
-      }
-#endif
 
             if (!tableData["entries"].empty())
             {
@@ -334,16 +300,6 @@ void SQLStorage::setTopic(const std::string& topic)
 {
     m_topic = topic;
 }
-
-#if 0
-void SQLStorage::setBlockHash(h256 blockHash) {
-	_blockHash = blockHash;
-}
-
-void SQLStorage::setNum(int num) {
-	_num = num;
-}
-#endif
 
 void SQLStorage::setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer)
 {
