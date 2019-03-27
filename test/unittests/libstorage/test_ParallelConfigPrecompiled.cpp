@@ -73,7 +73,7 @@ public:
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
         parallelConfigPrecompiled = std::dynamic_pointer_cast<ParallelConfigPrecompiled>(
-            context->getPrecompiled(Address(0x1007)));
+            context->getPrecompiled(Address(0x1006)));
     };
 
     virtual ~ParallelConfigPrecompiledFixture(){};

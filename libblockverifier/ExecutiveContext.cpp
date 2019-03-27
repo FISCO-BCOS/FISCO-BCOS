@@ -158,7 +158,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         // Normal transaction
         auto parallelConfigPrecompiled =
             std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
-                getPrecompiled(Address(0x1007)));
+                getPrecompiled(Address(0x1006)));
 
         uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
 
