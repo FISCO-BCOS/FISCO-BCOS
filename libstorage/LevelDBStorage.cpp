@@ -166,16 +166,18 @@ size_t LevelDBStorage::commit(
                     value[fieldIt.first] = fieldIt.second;
                 }
                 value["_hash_"] = hex;
-                value["_num_"] = num;
-                //value["_id_"] = ++counter;
-                //it->second["values"].append(value);
+                value["_num_"] = boost::lexical_cast<std::string>(num);
+                // value["_id_"] = ++counter;
+                // it->second["values"].append(value);
 
                 auto searchIt =
                     std::lower_bound(it->second["values"].begin(), it->second["values"].end(),
                         value, [](const Json::Value& lhs, const Json::Value& rhs) {
-                				LOG(ERROR) << "lhs: " << lhs.toStyledString() << "rhs: " << rhs.toStyledString();
-                				return lhs["_id_"].asUInt64() < rhs["_id_"].asUInt64();
-                			return false;
+                            // LOG(ERROR) << "lhs: " << lhs.toStyledString() << "rhs: " <<
+                            // rhs.toStyledString();
+                            return boost::lexical_cast<size_t>(lhs["_id_"].asString()) <
+                                   boost::lexical_cast<size_t>(rhs["_id_"].asString());
+                            return false;
                         });
 
                 if (searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"])
