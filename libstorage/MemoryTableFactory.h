@@ -63,7 +63,7 @@ public:
     void rollback(size_t _savepoint);
     void commit();
     void commitDB(h256 const& _blockHash, int64_t _blockNumber);
-    int getCreateTableCode() { return createTableCode; }
+    int getCreateTableCode() { return m_createTableCode; }
     std::vector<Change>& getChangeLog();
 
 private:
