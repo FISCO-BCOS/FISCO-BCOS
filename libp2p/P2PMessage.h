@@ -15,8 +15,8 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /** @file P2PMessage.h
- *  @author monan
- *  @date 20181112
+ *  @author yujiechen
+ *  @date 2019.03.26
  */
 
 #pragma once
@@ -24,6 +24,7 @@
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
 #include <memory>
+
 
 namespace dev
 {
@@ -33,16 +34,23 @@ class P2PMessage : public dev::network::Message
 {
 public:
     typedef std::shared_ptr<P2PMessage> Ptr;
-    /// m_length: 4bytes
-    /// pid + gid: 2bytes
-    /// packetType: 2bytes
-    /// seq: 4 bytes
-    const static size_t HEADER_LENGTH = 12;
+
+    /// m_length(4bytes) + m_version(2bytes) + m_protocolID(2bytes) + m_groupID(2bytes) +
+    /// m_packetType(2bytes) + m_seq(4bytes)
+    const static size_t HEADER_LENGTH = 16;
     const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
     P2PMessage() { m_buffer = std::make_shared<bytes>(); }
 
     virtual ~P2PMessage() {}
+
+    virtual void encode(bytes& buffer);
+    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
+    /// returned.
+    virtual ssize_t decode(const byte* buffer, size_t size);
+
+    virtual void setVersion(VERSION_TYPE const& version) { m_version = version; }
+    virtual VERSION_TYPE version() const { return m_version; }
 
     virtual uint32_t length() override { return m_length; }
     virtual void setLength(uint32_t _length) { m_length = _length; }
@@ -71,33 +79,20 @@ public:
             return 0;
     }
 
-    virtual void encode(bytes& buffer) override;
-
-    /// < If the decoding is successful, the length of the decoded data is returned; otherwise, 0 is
-    /// returned.
-    virtual ssize_t decode(const byte* buffer, size_t size) override;
-
-    ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
-    ///< be encoded in buffer.
-    void encodeAMOPBuffer(std::string const& topic);
-    virtual ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
-
-    virtual void setVersion(VERSION_TYPE const&) {}
-    virtual VERSION_TYPE version() const { return 0; }
-
 protected:
+    virtual void encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer);
+
+    VERSION_TYPE m_version = 0;
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
                                       ///< greater than 0 is the ID of the request package.
     PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
-};
-enum AMOPPacketType
-{
-    SendTopicSeq = 1,
-    RequestTopics = 2,
-    SendTopics = 3
+
+private:
+    /// compress the data to be sended
+    bool compress(std::shared_ptr<bytes>);
 };
 }  // namespace p2p
 }  // namespace dev
