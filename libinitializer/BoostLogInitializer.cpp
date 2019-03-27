@@ -53,13 +53,16 @@ void LogInitializer::initLog(
 {
     /// set file name
     std::string logDir = pt.get<std::string>("log.log_path", "log");
-    std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M.log";
+    //std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M.log";
+    std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.log";
     boost::shared_ptr<boost::log::sinks::text_file_backend> backend(
         new boost::log::sinks::text_file_backend(boost::log::keywords::file_name = fileName,
-            boost::log::keywords::open_mode = std::ios::app,
+            boost::log::keywords::open_mode = std::ios::app | std::ios::out,
             boost::log::keywords::time_based_rotation = &canRotate,
+			boost::log::keywords::rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576,
             boost::log::keywords::channel = channel));
     boost::shared_ptr<sink_t> sink(new sink_t(backend));
+
     /// set rotation size MB
     uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576;
     sink->locked_backend()->set_rotation_size(rotation_size);

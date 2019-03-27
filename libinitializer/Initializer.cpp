@@ -58,6 +58,7 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer->setSSLContext(
             m_secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
         m_rpcInitializer->initChannelRPCServer(pt);
+        m_rpcInitializer->channelRPCServer()->StartListening();
 
         m_ledgerInitializer = std::make_shared<LedgerInitializer>();
         m_ledgerInitializer->setP2PService(m_p2pInitializer->p2pService());

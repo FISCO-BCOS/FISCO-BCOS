@@ -1,32 +1,46 @@
 /*
- * AMOPStorage.cpp
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- *  Created on: 2019年3月24日
- *      Author: monan
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+/** @file SQLStorage.cpp
+ *  @author ancelmo
+ *  @date 20190324
  */
 
 #include "StorageException.h"
 
-#include "AMOPStorage.h"
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/easylog.h>
 
 #include "Common.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
+#include "SQLStorage.h"
 
 using namespace dev;
 using namespace dev::storage;
 
-AMOPStorage::AMOPStorage()
+SQLStorage::SQLStorage()
 {
-    _fatalHandler = [](std::exception& e) {
+    m_fatalHandler = [](std::exception& e) {
         (void)e;
         exit(-1);
     };
 }
 
-Entries::Ptr AMOPStorage::select(
+Entries::Ptr SQLStorage::select(
     h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition)
 {
     try
@@ -102,7 +116,7 @@ Entries::Ptr AMOPStorage::select(
     return Entries::Ptr();
 }
 
-size_t AMOPStorage::commit(
+size_t SQLStorage::commit(
     h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const& blockHash)
 {
     try
@@ -208,12 +222,12 @@ size_t AMOPStorage::commit(
     return 0;
 }
 
-bool AMOPStorage::onlyDirty()
+bool SQLStorage::onlyDirty()
 {
     return true;
 }
 
-Json::Value AMOPStorage::requestDB(const Json::Value& value)
+Json::Value SQLStorage::requestDB(const Json::Value& value)
 {
     int retry = 0;
 
@@ -224,7 +238,7 @@ Json::Value AMOPStorage::requestDB(const Json::Value& value)
             dev::channel::TopicChannelMessage::Ptr request =
                 std::make_shared<dev::channel::TopicChannelMessage>();
             request->setType(0x30);
-            request->setSeq(_channelRPCServer->newSeq());
+            request->setSeq(m_channelRPCServer->newSeq());
 
             std::stringstream ssOut;
             ssOut << value;
@@ -232,13 +246,13 @@ Json::Value AMOPStorage::requestDB(const Json::Value& value)
             auto str = ssOut.str();
             LOG(DEBUG) << "Request AMOPDB:" << request->seq() << " " << str;
 
-            request->setTopic(_topic);
+            request->setTopic(m_topic);
 
             dev::channel::TopicChannelMessage::Ptr response;
 
             LOG(TRACE) << "Retry Request amdb :" << retry;
             request->setData((const byte*)str.data(), str.size());
-            response = _channelRPCServer->pushChannelMessage(request);
+            response = m_channelRPCServer->pushChannelMessage(request);
             if (response.get() == NULL || response->result() != 0)
             {
                 LOG(ERROR) << "requestDB error:" << response->result();
@@ -300,14 +314,14 @@ Json::Value AMOPStorage::requestDB(const Json::Value& value)
         }
 
         ++retry;
-        if (_maxRetry != 0 && retry >= _maxRetry)
+        if (m_maxRetry != 0 && retry >= m_maxRetry)
         {
             LOG(ERROR) << "Reach max retry:" << retry;
 
             //存储无法正常使用，退出程序
             auto e = StorageException(-1, "Reach max retry");
 
-            _fatalHandler(e);
+            m_fatalHandler(e);
 
             BOOST_THROW_EXCEPTION(e);
         }
@@ -316,27 +330,27 @@ Json::Value AMOPStorage::requestDB(const Json::Value& value)
     }
 }
 
-void AMOPStorage::setTopic(const std::string& topic)
+void SQLStorage::setTopic(const std::string& topic)
 {
-    _topic = topic;
+    m_topic = topic;
 }
 
 #if 0
-void AMOPStorage::setBlockHash(h256 blockHash) {
+void SQLStorage::setBlockHash(h256 blockHash) {
 	_blockHash = blockHash;
 }
 
-void AMOPStorage::setNum(int num) {
+void SQLStorage::setNum(int num) {
 	_num = num;
 }
 #endif
 
-void AMOPStorage::setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer)
+void SQLStorage::setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer)
 {
-    _channelRPCServer = channelRPCServer;
+    m_channelRPCServer = channelRPCServer;
 }
 
-void AMOPStorage::setMaxRetry(int maxRetry)
+void SQLStorage::setMaxRetry(int maxRetry)
 {
-    _maxRetry = maxRetry;
+    m_maxRetry = maxRetry;
 }

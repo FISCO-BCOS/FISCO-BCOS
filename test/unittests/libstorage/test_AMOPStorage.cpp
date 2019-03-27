@@ -5,13 +5,13 @@
  *      Author: ancelmo
  */
 
-#include "libstorage/AMOPStorage.h"
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/FixedHash.h>
-#include <libstorage/AMOPStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
+#include "../../../libstorage/SQLStorage.h"
+#include "../../../libstorage/SQLStorage.h"
 
 using namespace dev;
 using namespace dev::storage;
@@ -101,7 +101,7 @@ struct AMOPFixture
 {
     AMOPFixture()
     {
-        AMOP = std::make_shared<dev::storage::AMOPStorage>();
+        AMOP = std::make_shared<dev::storage::SQLStorage>();
         std::shared_ptr<MockChannelRPCServer> mockChannel =
             std::make_shared<MockChannelRPCServer>();
         AMOP->setChannelRPCServer(mockChannel);
@@ -115,7 +115,7 @@ struct AMOPFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::AMOPStorage::Ptr AMOP;
+    dev::storage::SQLStorage::Ptr AMOP;
 };
 
 BOOST_FIXTURE_TEST_SUITE(AMOP, AMOPFixture)

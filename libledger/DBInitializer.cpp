@@ -27,9 +27,9 @@
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libstorage/AMOPStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include "../libstorage/SQLStorage.h"
 
 using namespace dev;
 using namespace dev::storage;
@@ -125,7 +125,7 @@ void DBInitializer::initAMOPStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
 
-    auto amopStorage = std::make_shared<AMOPStorage>();
+    auto amopStorage = std::make_shared<SQLStorage>();
     amopStorage->setChannelRPCServer(m_channelRPCServer);
     amopStorage->setTopic(m_param->mutableStorageParam().topic);
     amopStorage->setFatalHandler([](std::exception& e) {
