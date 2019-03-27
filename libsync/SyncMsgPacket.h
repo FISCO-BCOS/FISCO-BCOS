@@ -44,11 +44,11 @@ public:
         /// 2. modify sync and PBFT related packet from reference to pointer
         if (g_BCOSConfig.version() <= dev::RC1_VERSION)
         {
-            m_p2pFactory = std::make_shared<P2PMessageFactory>();
+            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
         }
         else
         {
-            m_p2pFactory = std::make_shared<P2PMessageFactoryRC2>();
+            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactoryRC2>();
         }
     }
     /// Extract data by decoding the message

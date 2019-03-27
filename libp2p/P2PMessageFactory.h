@@ -48,6 +48,7 @@ public:
 
 class P2PMessageFactoryRC2 : public P2PMessageFactory
 {
+public:
     virtual ~P2PMessageFactoryRC2() {}
     dev::network::Message::Ptr buildMessage() override
     {
