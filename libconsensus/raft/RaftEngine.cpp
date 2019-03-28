@@ -877,7 +877,8 @@ void RaftEngine::broadcastVoteReq()
 P2PMessage::Ptr RaftEngine::transDataToMessage(
     bytesConstRef _data, RaftPacketType const& _packetType, PROTOCOL_ID const& _protocolId)
 {
-    dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
+    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+        m_service->p2pMessageFactory()->buildMessage());
     std::shared_ptr<dev::bytes> dataPtr = std::make_shared<dev::bytes>();
     RaftMsgPacket packet;
 
@@ -900,14 +901,14 @@ void RaftEngine::broadcastMsg(P2PMessage::Ptr _data)
     m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
-        if (getIndexBySealer(session.nodeID) < 0)
+        if (getIndexBySealer(session.nodeID()) < 0)
         {
             continue;
         }
 
-        m_service->asyncSendMessageByNodeID(session.nodeID, _data, nullptr);
+        m_service->asyncSendMessageByNodeID(session.nodeID(), _data, nullptr);
         RAFTENGINE_LOG(TRACE) << LOG_DESC("[#broadcastMsg]Raft msg sent")
-                              << LOG_KV("peer", session.nodeID);
+                              << LOG_KV("peer", session.nodeID());
     }
 }
 
@@ -1214,13 +1215,13 @@ bool RaftEngine::sendResponse(
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     for (auto session : sessions)
     {
-        if (session.nodeID != _node || getIndexBySealer(session.nodeID) < 0)
+        if (session.nodeID() != _node || getIndexBySealer(session.nodeID()) < 0)
         {
             continue;
         }
 
-        m_service->asyncSendMessageByNodeID(
-            session.nodeID, transDataToMessage(ref(ts.out()), _packetType, m_protocolId), nullptr);
+        m_service->asyncSendMessageByNodeID(session.nodeID(),
+            transDataToMessage(ref(ts.out()), _packetType, m_protocolId), nullptr);
         RAFTENGINE_LOG(TRACE) << LOG_DESC("[#sendResponse]Response sent");
         return true;
     }

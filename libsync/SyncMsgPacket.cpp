@@ -22,7 +22,6 @@
  */
 
 #include "SyncMsgPacket.h"
-#include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -51,7 +50,7 @@ bool SyncMsgPacket::decode(
 
 P2PMessage::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
 {
-    P2PMessage::Ptr msg = std::make_shared<P2PMessage>();
+    P2PMessage::Ptr msg = std::dynamic_pointer_cast<P2PMessage>(m_p2pFactory->buildMessage());
 
     std::shared_ptr<bytes> b = std::make_shared<bytes>();
     m_rlpStream.swapOut(*b);

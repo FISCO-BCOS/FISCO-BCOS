@@ -19,8 +19,8 @@
  *  @date 20190111
  */
 #pragma once
-#include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libprecompiled/Common.h>
 
 #include <libdevcore/Common.h>
 #include <libethcore/Common.h>
@@ -38,8 +38,7 @@ class DagTransferPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
     typedef std::shared_ptr<DagTransferPrecompiled> Ptr;
-    DagTransferPrecompiled(
-        dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable = true);
+    DagTransferPrecompiled();
     virtual ~DagTransferPrecompiled(){};
 
     std::string toString() override;

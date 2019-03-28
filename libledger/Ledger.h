@@ -86,6 +86,8 @@ public:
         /// load ini config of group for TxPool/Sync modules
         std::string iniConfigFileName = m_configFileName;
         boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+
+        /// you should invoke initConfig first before invoke initIniConfig
         initIniConfig(iniConfigFileName);
         initMark();
     }
@@ -141,6 +143,13 @@ protected:
     /// init the blockSync
     virtual bool initSync();
 
+    /// make these functions protected for UT
+    void initGenesisConfig(boost::property_tree::ptree const& pt);
+    void initMark();
+    /// load ini config of group
+    void initIniConfig(std::string const& iniConfigFileName);
+    void initDBConfig(boost::property_tree::ptree const& pt);
+
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
@@ -152,14 +161,11 @@ private:
     void initTxExecuteConfig(boost::property_tree::ptree const& pt);
 
     void initConsensusConfig(boost::property_tree::ptree const& pt);
-    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
 
+    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
-    void initDBConfig(boost::property_tree::ptree const& pt);
+
     void initTxConfig(boost::property_tree::ptree const& pt);
-    void initMark();
-    /// load ini config of group
-    void initIniConfig(std::string const& iniConfigFileName);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

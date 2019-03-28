@@ -24,8 +24,8 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Transaction.h>
-#include <libprecompiled/DagTransferPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -51,7 +51,7 @@ public:
         u256 value = 0;
         u256 gasPrice = 0;
         u256 gas = 10000000;
-        Address dest = Address(0x1006);  // DagTransfer precompile address
+        Address dest = Address(0x5002);  // DagTransfer precompile address
 
         dev::eth::ContractABI abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", _userFrom, _userTo,
@@ -87,9 +87,9 @@ public:
     {
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
-            Address(0x1006), make_shared<dev::precompiled::DagTransferPrecompiled>(ctx, false));
+            Address(0x5002), make_shared<dev::precompiled::DagTransferPrecompiled>());
         ctx->setAddress2Precompiled(
-            Address(0x1007), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+            Address(0x1006), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
         return ctx;
     }
 

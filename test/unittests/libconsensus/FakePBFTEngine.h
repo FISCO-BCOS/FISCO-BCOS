@@ -56,6 +56,10 @@ public:
         setLeaderFailed(false);
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         setHighest(highest);
+        setOmitEmpty(true);
+        setStorage(nullptr);
+        setMaxTTL(1);
+        setIntervalBlockTime(1000);
         setNodeNum(3);
     }
     void updateConsensusNodeList() override {}
@@ -208,7 +212,9 @@ public:
         for (size_t i = 0; i < m_sealerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            P2PSessionInfo info(m_sealerList[i], m_endpoint, std::set<std::string>());
+            dev::network::NodeInfo node_info;
+            node_info.nodeID = m_sealerList[i];
+            P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }

@@ -145,10 +145,10 @@ BOOST_AUTO_TEST_CASE(testMessage)
     BOOST_CHECK(message->seq() == 1);
     BOOST_CHECK(message->getResponceProtocolID() == -2);
 
-    msg->encodeAMOPBuffer("topic");
+    /*msg->encodeAMOPBuffer("topic");
     std::string t;
     msg->decodeAMOPBuffer(buffer, t);
-    BOOST_CHECK_EQUAL("topic", t);
+    BOOST_CHECK_EQUAL("topic", t);*/
 }
 
 BOOST_AUTO_TEST_SUITE_END()

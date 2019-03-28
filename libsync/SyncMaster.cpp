@@ -185,7 +185,7 @@ void SyncMaster::doWork()
         record_time = utcTime();
     }
 
-    SYNC_LOG(DEBUG) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
+    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
                     << LOG_KV("maintainPeersConnectionTimeCost", maintainPeersConnection_time_cost)
                     << LOG_KV("maintainDownloadingQueueBufferTimeCost",
@@ -267,7 +267,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(ts[i].rlp());
+            txRLPs.emplace_back(ts[i].rlp(WithSignature));
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);
@@ -535,7 +535,7 @@ bool SyncMaster::maintainDownloadingQueue()
                         << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
 
         if (m_syncStatus->knownLatestHash != latestHash)
-            SYNC_LOG(FATAL)
+            SYNC_LOG(ERROR)
                 << LOG_BADGE("Download")
                 << LOG_DESC(
                        "State error: This node's version is not compatable with others! All data "
@@ -553,7 +553,7 @@ void SyncMaster::maintainPeersConnection()
     set<NodeID> activePeers;
     for (auto const& session : sessions)
     {
-        activePeers.insert(session.nodeID);
+        activePeers.insert(session.nodeID());
     }
 
     // Get sealers and observer

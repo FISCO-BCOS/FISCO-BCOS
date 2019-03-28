@@ -41,10 +41,6 @@ template <typename Mode = Serial>
 class MemoryTable : public Table
 {
 public:
-    /*
-    using CacheType = typename std::conditional<Mode::value,
-        eth::ThreadSafeMap<std::string, Entries::Ptr>, std::map<std::string, Entries::Ptr>>::type;
-    */
     using CacheType = typename std::conditional<Mode::value,
         tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
         std::map<std::string, Entries::Ptr>>::type;
@@ -61,16 +57,15 @@ public:
 
             CacheItr it;
             it = m_cache.find(key);
-            if (it == m_cache.end())
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
+            // so we set a value to nullptr as a flag to tell table to update it later when a
+            // key-value is invalid
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache.insert(std::make_pair(key, entries));
-                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-                    // selects")
-                    //                    << LOG_KV("key", key) << LOG_KV("records",
-                    //                    entries->size());
+                    m_cache[key] = entries;
                 }
             }
             else
@@ -80,7 +75,6 @@ public:
 
             if (!entries)
             {
-                // STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
                 return std::make_shared<Entries>();
             }
             auto indexes = processEntries(entries, condition);
@@ -93,8 +87,8 @@ public:
         }
         catch (std::exception& e)
         {
-            // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
-            //                   << LOG_KV("msg", boost::diagnostic_information(e));
+            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed for")
+                               << LOG_KV("msg", boost::diagnostic_information(e));
         }
 
         return std::make_shared<Entries>();
@@ -107,32 +101,22 @@ public:
         {
             if (options->check && !checkAuthority(options->origin))
             {
-                // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update
-                // non-authorized")
-                //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
-                //                     key);
                 return storage::CODE_NO_AUTHORIZED;
             }
-            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("update") << LOG_KV("key",
-            // key);
 
             typename Entries::Ptr entries = std::make_shared<Entries>();
 
             CacheItr it;
-            {
-                // ReadGuard l(x_cache);
-                it = m_cache.find(key);
-            }
-            if (it == m_cache.end())
+            it = m_cache.find(key);
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
+            // so we set a value to nullptr as a flag to tell table to update it later when a
+            // key-value is invalid
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache.insert(std::make_pair(key, entries));
-                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-                    // selects")
-                    //                    << LOG_KV("key", key) << LOG_KV("records",
-                    //                    entries->size());
+                    m_cache[key] = entries;
                 }
             }
             else
@@ -142,9 +126,9 @@ public:
 
             if (!entries)
             {
-                // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Can't find data");
                 return 0;
             }
+
             checkField(entry);
             auto indexes = processEntries(entries, condition);
             std::vector<Change::Record> records;
@@ -182,38 +166,27 @@ public:
         {
             if (options->check && !checkAuthority(options->origin))
             {
-                // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert
-                // non-authorized")
-                //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key",
-                //                     key);
                 return storage::CODE_NO_AUTHORIZED;
             }
-            // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("insert") << LOG_KV("key",
-            // key);
 
             typename Entries::Ptr entries = std::make_shared<Entries>();
             Condition::Ptr condition = std::make_shared<Condition>();
 
             CacheItr it;
-            {
-                // ReadGuard l(x_cache);
-                it = m_cache.find(key);
-            }
-            if (it == m_cache.end())
+            it = m_cache.find(key);
+            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
+            // so we set a value to nullptr as a flag to tell table to update it later when a
+            // key-value is invalid
+            if (it == m_cache.end() || it->second == nullptr)
             {
                 if (m_remoteDB)
                 {
                     if (needSelect)
+                    {
                         entries =
                             m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    else
-                        entries = std::make_shared<Entries>();
-
-                    m_cache.insert(std::make_pair(key, entries));
-                    // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB
-                    // selects")
-                    //                    << LOG_KV("key", key) << LOG_KV("records",
-                    //                    entries->size());
+                        m_cache[key] = entries;
+                    }
                 }
             }
             else
@@ -221,16 +194,13 @@ public:
                 entries = it->second;
             }
             checkField(entry);
-            Change::Record record(entries->size() + 1u);
+            Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
             if (entries->size() == 0)
             {
                 entries->addEntry(entry);
-                {
-                    // WriteGuard l(x_cache);
-                    m_cache.insert(std::make_pair(key, entries));
-                }
+                m_cache[key] = entries;
                 return 1;
             }
             else
@@ -254,28 +224,22 @@ public:
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            // STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove non-authorized")
-            //                     << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
-        // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remove") << LOG_KV("key",
-        // key);
 
         typename Entries::Ptr entries = std::make_shared<Entries>();
 
         CacheItr it;
-        {
-            // ReadGuard l(x_cache);
-            it = m_cache.find(key);
-        }
-        if (it == m_cache.end())
+        it = m_cache.find(key);
+        // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
+        // so we set a value to nullptr as a flag to tell table to update it later when a
+        // key-value is invalid
+        if (it == m_cache.end() || it->second == nullptr)
         {
             if (m_remoteDB)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache.insert(std::make_pair(key, entries));
-                // STORAGE_LOG(TRACE) << LOG_BADGE("MemoryTable") << LOG_DESC("remoteDB selects")
-                //                    << LOG_KV("key", key) << LOG_KV("records", entries->size());
+                m_cache[key] = entries;
             }
         }
         else
@@ -302,15 +266,12 @@ public:
 
     virtual h256 hash() override
     {
-        std::map<std::string, Entries::Ptr> tmpMap(m_cache.begin(), m_cache.end());
+        std::map<std::string, Entries::Ptr> tmpOrderedCache(m_cache.begin(), m_cache.end());
         bytes data;
-        for (auto& it : tmpMap)
+        for (auto& it : tmpOrderedCache)
         {
             if (it.second->dirty())
             {
-                // Entries = vector<Entry>
-                // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Entries") << LOG_KV(it.first,
-                // "--->");
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
                 {
@@ -318,9 +279,6 @@ public:
                     {
                         for (auto& fieldIt : *(it.second->get(i)->fields()))
                         {
-                            // Field
-                            // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("Field")
-                            //          << LOG_KV(fieldIt.first, toHex(fieldIt.second));
                             if (isHashField(fieldIt.first))
                             {
                                 data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
@@ -343,7 +301,17 @@ public:
         return hash;
     }
     virtual void clear() override { m_cache.clear(); }
-    virtual bool empty() override { return m_cache.empty(); }
+    virtual bool empty() override
+    {
+        for (auto iter : m_cache)
+        {
+            if (iter.second != nullptr)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
@@ -361,7 +329,10 @@ public:
 
     virtual void setRecorder(std::function<void(
             Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-            _recorder) override;
+            _recorder) override
+    {
+        m_recorder = _recorder;
+    }
 
     virtual bool dump(TableData::Ptr _data) override
     {
@@ -377,7 +348,49 @@ public:
         }
         return dirtyTable;
     }
-    virtual void rollback(const Change& _change) override;
+
+    virtual void rollback(const Change& _change) override
+    {
+        {
+            switch (_change.kind)
+            {
+            case Change::Insert:
+            {
+                auto entries = m_cache[_change.key];
+                entries->removeEntry(_change.value[0].index);
+                if (entries->size() == 0u)
+                {
+                    m_cache[_change.key] = nullptr;
+                }
+                break;
+            }
+            case Change::Update:
+            {
+                auto entries = m_cache[_change.key];
+                for (auto& record : _change.value)
+                {
+                    auto entry = entries->get(record.index);
+                    entry->setField(record.key, record.oldValue);
+                }
+                break;
+            }
+            case Change::Remove:
+            {
+                auto entries = m_cache[_change.key];
+                for (auto& record : _change.value)
+                {
+                    auto entry = entries->get(record.index);
+                    entry->setStatus(0);
+                }
+                break;
+            }
+            case Change::Select:
+
+            default:
+                break;
+            }
+        }
+    }
 
     size_t cacheSize() override { return m_cache.size(); }
 
@@ -507,7 +520,6 @@ private:
             return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
                     (_key == STATUS));
         }
-        // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Empty key error");
         return false;
     }
 
@@ -518,10 +530,6 @@ private:
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
-                // STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not
-                // exist")
-                //                   << LOG_KV("table name", m_tableInfo->name)
-                //                   << LOG_KV("field", it.first);
                 throw std::invalid_argument("Invalid key.");
             }
         }
@@ -534,68 +542,6 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
-};  // namespace storage
-
-template <>
-inline void MemoryTable<Serial>::setRecorder(
-    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
-        _recorder)
-{
-    m_recorder = _recorder;
-}
-
-template <>
-inline void MemoryTable<Parallel>::setRecorder(
-    std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>)
-{
-    m_recorder = [](Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&) {};
-}
-
-template <>
-inline void MemoryTable<Serial>::rollback(const Change& _change)
-{
-    // Public MemoryTable API cannot be used here because it will add another
-    // change log entry.
-    switch (_change.kind)
-    {
-    case Change::Insert:
-    {
-        auto entries = m_cache[_change.key];
-        entries->removeEntry(_change.value[0].index);
-        if (entries->size() == 0u)
-        {
-            m_cache.erase(_change.key);
-        }
-        break;
-    }
-    case Change::Update:
-    {
-        auto entries = m_cache[_change.key];
-        for (auto& record : _change.value)
-        {
-            auto entry = entries->get(record.index);
-            entry->setField(record.key, record.oldValue);
-        }
-        break;
-    }
-    case Change::Remove:
-    {
-        auto entries = m_cache[_change.key];
-        for (auto& record : _change.value)
-        {
-            auto entry = entries->get(record.index);
-            entry->setStatus(0);
-        }
-        break;
-    }
-    case Change::Select:
-
-    default:
-        break;
-    }
-}
-template <>
-inline void MemoryTable<Parallel>::rollback(const Change&)
-{}
+};
 }  // namespace storage
 }  // namespace dev

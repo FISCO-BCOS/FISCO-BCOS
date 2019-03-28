@@ -22,8 +22,10 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
+#include <libdevcore/SnappyCompress.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
@@ -32,6 +34,7 @@
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::compress;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
@@ -50,14 +53,15 @@ void Service::start()
         m_run = true;
 
         auto self = std::weak_ptr<Service>(shared_from_this());
-        m_host->setConnectionHandler([self](dev::network::NetworkException e, NodeID nodeID,
-                                         std::shared_ptr<dev::network::SessionFace> session) {
-            auto service = self.lock();
-            if (service)
-            {
-                service->onConnect(e, nodeID, session);
-            }
-        });
+        m_host->setConnectionHandler(
+            [self](dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
+                std::shared_ptr<dev::network::SessionFace> session) {
+                auto service = self.lock();
+                if (service)
+                {
+                    service->onConnect(e, nodeInfo, session);
+                }
+            });
         m_host->start();
 
         heartBeat();
@@ -171,9 +175,10 @@ void Service::updateStaticNodes(
     }
 }
 
-void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID nodeID,
+void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
     std::shared_ptr<dev::network::SessionFace> session)
 {
+    NodeID nodeID = nodeInfo.nodeID;
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
@@ -204,7 +209,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
 
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
-    p2pSession->setNodeID(nodeID);
+    p2pSession->setNodeInfo(nodeInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
@@ -586,12 +591,42 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
 }
 
+bool Service::compressBroadcastMessage(
+    std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData)
+{
+    /// no compress enabled
+    if (!g_BCOSConfig.compressEnabled())
+    {
+        return false;
+    }
+    /// the network packet is too small to compress
+    if (message->buffer()->size() <= g_BCOSConfig.c_compressThreshold)
+    {
+        return false;
+    }
+    size_t compressLen = SnappyCompress::compress(ref(*message->buffer()), *compressData);
+    /// compress failed
+    if (compressLen < 1)
+    {
+        return false;
+    }
+    return true;
+}
+
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
 {
     SERVICE_LOG(TRACE) << "asyncMulticastMessageByNodeIDList"
                        << LOG_KV("nodes size", nodeIDs.size());
     try
     {
+        std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
+        /// not enable compress if the node is rc1 version
+        if ((g_BCOSConfig.version() > dev::RC1_VERSION) &&
+            compressBroadcastMessage(message, compressData))
+        {
+            message->setVersion(message->version() | dev::eth::CompressFlag);
+            message->setBuffer(compressData);
+        }
         for (auto nodeID : nodeIDs)
         {
             asyncSendMessageByNodeID(
@@ -675,7 +710,7 @@ P2PSessionInfos Service::sessionInfos()
         for (auto const& i : s)
         {
             infos.push_back(P2PSessionInfo(
-                i.first, i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                i.second->nodeInfo(), i.second->session()->nodeIPEndpoint(), (i.second->topics())));
         }
     }
     catch (std::exception& e)
@@ -711,8 +746,8 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             }
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
-                infos.push_back(P2PSessionInfo(
-                    i.first, i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                infos.push_back(P2PSessionInfo(i.second->nodeInfo(),
+                    i.second->session()->nodeIPEndpoint(), (i.second->topics())));
             }
         }
     }

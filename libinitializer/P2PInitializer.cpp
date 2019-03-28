@@ -21,7 +21,7 @@
  */
 
 #include "P2PInitializer.h"
-#include "libp2p/P2PMessage.h"
+#include "libp2p/P2PMessageFactory.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <boost/algorithm/algorithm.hpp>
@@ -115,7 +115,16 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         asioInterface->setSSLContext(m_SSLContext);
         asioInterface->setType(dev::network::ASIOInterface::SSL);
 
-        auto messageFactory = std::make_shared<P2PMessageFactory>();
+        std::shared_ptr<P2PMessageFactory> messageFactory = nullptr;
+
+        if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+        {
+            messageFactory = std::make_shared<P2PMessageFactoryRC2>();
+        }
+        else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        {
+            messageFactory = std::make_shared<P2PMessageFactory>();
+        }
 
         auto host = std::make_shared<dev::network::Host>();
         host->setASIOInterface(asioInterface);
@@ -130,7 +139,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_p2pService->setStaticNodes(nodes);
         m_p2pService->setKeyPair(m_keyPair);
         m_p2pService->setP2PMessageFactory(messageFactory);
-
         m_p2pService->start();
     }
     catch (std::exception& e)
