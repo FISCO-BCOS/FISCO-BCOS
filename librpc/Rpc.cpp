@@ -339,9 +339,12 @@ Json::Value Rpc::getPeers(int _groupID)
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
             Json::Value node;
-            node["NodeID"] = it->nodeID.hex();
+            node["NodeID"] = it->nodeInfo.nodeID.hex();
             node["IPAndPort"] = it->nodeIPEndpoint.name();
+            node["Agency"] = it->nodeInfo.agencyName;
+            node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
+
             for (std::string topic : it->topics)
                 node["Topic"].append(topic);
             response.append(node);
@@ -375,7 +378,7 @@ Json::Value Rpc::getNodeIDList(int _groupID)
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
-            response.append(it->nodeID.hex());
+            response.append(it->nodeID().hex());
         }
 
         return response;

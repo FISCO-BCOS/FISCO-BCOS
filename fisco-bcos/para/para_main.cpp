@@ -54,7 +54,7 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         u256 value = 0;
         u256 gasPrice = 0;
         u256 gas = 10000000;
-        Address dest = Address(0x1006);
+        Address dest = Address(0x5002);
         string user = to_string(i);
         u256 money = 1000000000;
         dev::eth::ContractABI abi;
@@ -96,7 +96,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         u256 value = 0;
         u256 gasPrice = 0;
         u256 gas = 10000000;
-        Address dest = Address(0x1006);
+        Address dest = Address(0x5002);
         string userFrom;
         string userTo;
 
@@ -155,7 +155,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     blockChain->setStateStorage(dbInitializer->storage());
 
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
-        "stateType", 5000, 300000000};
+        "stateType", 5000, 300000000, 0};
     bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
     assert(ret == true);
 

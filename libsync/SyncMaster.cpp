@@ -185,7 +185,7 @@ void SyncMaster::doWork()
         record_time = utcTime();
     }
 
-    SYNC_LOG(DEBUG) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
+    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
                     << LOG_KV("maintainPeersConnectionTimeCost", maintainPeersConnection_time_cost)
                     << LOG_KV("maintainDownloadingQueueBufferTimeCost",
@@ -553,7 +553,7 @@ void SyncMaster::maintainPeersConnection()
     set<NodeID> activePeers;
     for (auto const& session : sessions)
     {
-        activePeers.insert(session.nodeID);
+        activePeers.insert(session.nodeID());
     }
 
     // Get sealers and observer

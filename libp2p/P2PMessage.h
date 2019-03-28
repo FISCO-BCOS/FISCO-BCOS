@@ -20,7 +20,6 @@
  */
 
 #pragma once
-
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
@@ -34,7 +33,10 @@ class P2PMessage : public dev::network::Message
 {
 public:
     typedef std::shared_ptr<P2PMessage> Ptr;
-
+    /// m_length: 4bytes
+    /// pid + gid: 2bytes
+    /// packetType: 2bytes
+    /// seq: 4 bytes
     const static size_t HEADER_LENGTH = 12;
     const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
@@ -75,12 +77,10 @@ public:
     /// returned.
     virtual ssize_t decode(const byte* buffer, size_t size) override;
 
-    ///< This buffer param is the m_buffer member stored in struct Messger, and the topic info will
-    ///< be encoded in buffer.
-    void encodeAMOPBuffer(std::string const& topic);
-    virtual ssize_t decodeAMOPBuffer(std::shared_ptr<bytes> buffer, std::string& topic);
+    virtual void setVersion(VERSION_TYPE const&) {}
+    virtual VERSION_TYPE version() const { return 0; }
 
-private:
+protected:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
                                       ///< greater than 0 is the ID of the request package.
@@ -88,33 +88,11 @@ private:
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
 };
-
 enum AMOPPacketType
 {
     SendTopicSeq = 1,
     RequestTopics = 2,
     SendTopics = 3
 };
-
-class P2PMessageFactory : public dev::network::MessageFactory
-{
-public:
-    virtual ~P2PMessageFactory() {}
-    virtual dev::network::Message::Ptr buildMessage() override
-    {
-        auto message = std::make_shared<P2PMessage>();
-
-        return message;
-    }
-
-    virtual uint32_t newSeq()
-    {
-        uint32_t seq = ++m_seq;
-        return seq;
-    }
-
-    std::atomic<uint32_t> m_seq = {1};
-};
-
 }  // namespace p2p
 }  // namespace dev

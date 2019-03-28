@@ -53,8 +53,10 @@ public:
         m_session = session;
     }
 
-    virtual NodeID nodeID() { return m_nodeID; }
-    virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
+    virtual NodeID nodeID() { return m_nodeInfo.nodeID; }
+    virtual void setNodeInfo(dev::network::NodeInfo const& nodeInfo) { m_nodeInfo = nodeInfo; }
+    virtual dev::network::NodeInfo const& nodeInfo() const& { return m_nodeInfo; }
+    /// virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
     virtual std::set<std::string> topics()
     {
@@ -76,7 +78,8 @@ public:
 
 private:
     dev::network::SessionFace::Ptr m_session;
-    NodeID m_nodeID;
+    /// NodeID m_nodeID;
+    dev::network::NodeInfo m_nodeInfo;
 
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;

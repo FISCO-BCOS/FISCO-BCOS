@@ -99,6 +99,8 @@ void Ledger::initConfig(std::string const& configPath)
         initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
+        /// init params related to genesis: timestamp
+        initGenesisConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -271,6 +273,15 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
 
+/// init genesis configuration
+void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
+{
+    /// use UTCTime directly as timeStamp in case of the clock differences between machines
+    m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", 0);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+                      << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
+}
+
 /// init mark of this group
 void Ledger::initMark()
 {
@@ -281,7 +292,8 @@ void Ledger::initMark()
     s << m_param->mutableStorageParam().type << "-";
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
-    s << m_param->mutableTxParam().txGasLimit;
+    s << m_param->mutableTxParam().txGasLimit << "-";
+    s << m_param->mutableGenesisParam().timeStamp;  /// add timeStamp of the genesis block
     m_param->mutableGenesisParam().genesisMark = s.str();
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);
@@ -352,7 +364,7 @@ bool Ledger::initBlockChain()
     GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
         m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
         consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit};
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
     bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
     if (!ret)
     {

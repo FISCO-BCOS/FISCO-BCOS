@@ -90,6 +90,10 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_CHECK_THROW(
         assertThrow(false, ExternalFunctionFailure, "Throw ExternalFunctionFailure Exception"),
         ExternalFunctionFailure);
+    BOOST_CHECK_THROW(assertThrow(false, InitLedgerConfigFailed, "Init ledger config failed"),
+        InitLedgerConfigFailed);
+    BOOST_CHECK_THROW(
+        assertThrow(false, OpenLevelDBFailed, "OpenLevelDBFailed"), OpenLevelDBFailed);
 }
 
 /// test error_info
