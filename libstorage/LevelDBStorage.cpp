@@ -33,7 +33,8 @@
 using namespace dev;
 using namespace dev::storage;
 /*
-Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
+Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key,
+Condition::Ptr condition)
 {
     (void)condition;
     try
@@ -156,8 +157,10 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 }
 */
 //*
-Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
+Entries::Ptr LevelDBStorage::select(
+    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
 {
+    (void)condition;
     try
     {
         std::string entryKey = table;
