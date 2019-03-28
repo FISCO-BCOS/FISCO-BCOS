@@ -170,6 +170,12 @@ bool ABIFunc::parser(const std::string& _sig)
 }
 
 // unsigned integer type uint256.
+bytes ABISerialize::serialise(const int& _in)
+{
+    return serialise((s256)_in);
+}
+
+// unsigned integer type uint256.
 bytes ABISerialize::serialise(const u256& _in)
 {
     return h256(_in).asBytes();

@@ -388,6 +388,9 @@ public:
         static_assert(Element<T>::value, "ABI not support type.");
         return bytes{};
     }
+     // unsigned integer type int.
+    bytes serialise(const int& _in);
+
     // unsigned integer type uint256.
     bytes serialise(const u256& _in);
 
