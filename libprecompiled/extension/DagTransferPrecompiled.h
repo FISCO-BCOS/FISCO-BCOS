@@ -19,8 +19,8 @@
  *  @date 20190111
  */
 #pragma once
-#include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libprecompiled/Common.h>
 
 #include <libdevcore/Common.h>
 #include <libethcore/Common.h>
