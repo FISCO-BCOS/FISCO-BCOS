@@ -96,7 +96,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
                                << LOG_DESC("Should init at least one group");
         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
-                              << errinfo_comment("[#LedgerInitializer]: Should init at least on "
+                              << errinfo_comment("[#LedgerInitializer]: Should init at least one "
                                                  "group! Please check configuration!"));
     }
 }

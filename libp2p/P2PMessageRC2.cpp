@@ -30,16 +30,21 @@ using namespace dev::compress;
 
 void P2PMessageRC2::encode(bytes& buffer)
 {
-    std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
-    /// compress success
-    if (compress(compressData))
+    /// re-encode when m_cache is dirty
+    if (dirty() || m_cache->size() == 0)
     {
-        encode(buffer, compressData);
+        std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
+        /// compress success
+        if (compress(compressData))
+        {
+            encode(compressData);
+        }
+        else
+        {
+            encode(m_buffer);
+        }
     }
-    else
-    {
-        encode(buffer, m_buffer);
-    }
+    buffer = *m_cache;
 }
 
 /**
@@ -48,9 +53,9 @@ void P2PMessageRC2::encode(bytes& buffer)
  * @param encodeBuffer: the message should be encoded
  * @param protocol: the protocol ID that should be encoded into the buffer
  */
-void P2PMessageRC2::encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer)
+void P2PMessageRC2::encode(std::shared_ptr<bytes> encodeBuffer)
 {
-    buffer.clear();  ///< It is not allowed to be assembled outside.
+    m_cache->clear();  ///< It is not allowed to be assembled outside.
     m_length = HEADER_LENGTH + encodeBuffer->size();
 
     uint32_t length = htonl(m_length);
@@ -59,12 +64,13 @@ void P2PMessageRC2::encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer)
     PACKET_TYPE packetType = htons(m_packetType);
     uint32_t seq = htonl(m_seq);
 
-    buffer.insert(buffer.end(), (byte*)&length, (byte*)&length + sizeof(length));
-    buffer.insert(buffer.end(), (byte*)&versionType, (byte*)&versionType + sizeof(versionType));
-    buffer.insert(buffer.end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
-    buffer.insert(buffer.end(), (byte*)&packetType, (byte*)&packetType + sizeof(packetType));
-    buffer.insert(buffer.end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
-    buffer.insert(buffer.end(), encodeBuffer->begin(), encodeBuffer->end());
+    m_cache->insert(m_cache->end(), (byte*)&length, (byte*)&length + sizeof(length));
+    m_cache->insert(m_cache->end(), (byte*)&versionType, (byte*)&versionType + sizeof(versionType));
+    m_cache->insert(m_cache->end(), (byte*)&protocolID, (byte*)&protocolID + sizeof(protocolID));
+    m_cache->insert(m_cache->end(), (byte*)&packetType, (byte*)&packetType + sizeof(packetType));
+    m_cache->insert(m_cache->end(), (byte*)&seq, (byte*)&seq + sizeof(seq));
+    m_cache->insert(m_cache->end(), encodeBuffer->begin(), encodeBuffer->end());
+    m_dirty = false;
 }
 
 /// compress the data to be sended

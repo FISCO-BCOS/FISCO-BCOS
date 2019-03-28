@@ -57,8 +57,10 @@ public:
 
 private:
     void completePath(std::string& _path);
+    void setSectionName(const boost::property_tree::ptree& _pt);
     KeyPair m_key;
     std::map<Usage, std::shared_ptr<boost::asio::ssl::context>> m_sslContexts;
+    std::string m_sectionName = "secure";
 };
 
 }  // namespace initializer
