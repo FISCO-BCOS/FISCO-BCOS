@@ -14,16 +14,18 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MemoryTableFactory.h
+/** @file MemoryTableFactory2.h
  *  @author ancelmo
  *  @date 20180921
  */
-#include "MemoryTableFactory.h"
+#include "MemoryTableFactory2.h"
 #include "Common.h"
-#include "MemoryTable.h"
+#include "MemoryTable2.h"
 #include "StorageException.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/Common.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
@@ -35,22 +37,22 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
+MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
+{
+    m_sysTables.push_back(SYS_CONSENSUS);
+    m_sysTables.push_back(SYS_TABLES);
+    m_sysTables.push_back(SYS_ACCESS_TABLE);
+    m_sysTables.push_back(SYS_CURRENT_STATE);
+    m_sysTables.push_back(SYS_NUMBER_2_HASH);
+    m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_HASH_2_BLOCK);
+    m_sysTables.push_back(SYS_CNS);
+    m_sysTables.push_back(SYS_CONFIG);
+    m_sysTables.push_back(SYS_BLOCK_2_NONCES);
+}
 
-const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
-    SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
-    SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES};
 
-// according to
-// https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
-const std::vector<string> MemoryTableFactory::c_sysAccessTables =
-    std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
-        SYS_BLOCK_2_NONCES};
-
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0), m_createTableCode(0)
-{}
-
-Table::Ptr MemoryTableFactory::openTable(
+Table::Ptr MemoryTableFactory2::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
 {
     RecursiveGuard l(x_name2Table);
@@ -61,7 +63,7 @@ Table::Ptr MemoryTableFactory::openTable(
     }
     auto tableInfo = std::make_shared<storage::TableInfo>();
 
-    if (c_sysTables.end() != find(c_sysTables.begin(), c_sysTables.end(), tableName))
+    if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
     {
         tableInfo = getSysTableInfo(tableName);
     }
@@ -83,15 +85,16 @@ Table::Ptr MemoryTableFactory::openTable(
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back("_hash_");
     tableInfo->fields.emplace_back("_num_");
+    tableInfo->fields.emplace_back("_id_");
 
     Table::Ptr memoryTable = nullptr;
     if (isPara)
     {
-        memoryTable = std::make_shared<MemoryTable<Parallel>>();
+        memoryTable = std::make_shared<MemoryTable2>();
     }
     else
     {
-        memoryTable = std::make_shared<MemoryTable<Serial>>();
+        memoryTable = std::make_shared<MemoryTable2>();
     }
 
     memoryTable->setStateStorage(m_stateStorage);
@@ -122,42 +125,28 @@ Table::Ptr MemoryTableFactory::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-
-    if (std::find(c_sysAccessTables.begin(), c_sysAccessTables.end(), tableName) ==
-        c_sysAccessTables.end())
-    {
-        memoryTable->setRecorder(
-            [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
-                std::vector<Change::Record>& _records) {
-                auto& changeLog = getChangeLog();
-                changeLog.emplace_back(_table, _kind, _key, _records);
-            });
-    }
+    memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
+                                 std::vector<Change::Record>& _records) {
+        auto& changeLog = getChangeLog();
+        changeLog.emplace_back(_table, _kind, _key, _records);
+    });
 
     m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
 }
 
-Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
+Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
     const std::string& keyField, const std::string& valueField, bool authorityFlag,
     Address const& _origin, bool isPara)
 {
-    RecursiveGuard l(x_name2Table);
-    auto table = openTable(tableName, authorityFlag, isPara);
-    if (table)
-    {
-        return table;
-    }
-
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
     if (tableEntries->size() != 0)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory2")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-
         return nullptr;
     }
     // Write table entry
@@ -169,33 +158,37 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
     if (result == storage::CODE_NO_AUTHORIZED)
     {
-        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
+        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory2")
                              << LOG_DESC("create table non-authorized")
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
-
         BOOST_THROW_EXCEPTION(StorageException(result, "create table non-authorized"));
         return nullptr;
     }
     return openTable(tableName, authorityFlag, isPara);
 }
 
-size_t MemoryTableFactory::savepoint()
+size_t MemoryTableFactory2::savepoint()
 {
     auto& changeLog = getChangeLog();
     return changeLog.size();
 }
 
-void MemoryTableFactory::setBlockHash(h256 blockHash)
+void MemoryTableFactory2::commit()
+{
+    getChangeLog().clear();
+}
+
+void MemoryTableFactory2::setBlockHash(h256 blockHash)
 {
     m_blockHash = blockHash;
 }
 
-void MemoryTableFactory::setBlockNum(int64_t blockNum)
+void MemoryTableFactory2::setBlockNum(int64_t blockNum)
 {
     m_blockNum = blockNum;
 }
 
-h256 MemoryTableFactory::hash()
+h256 MemoryTableFactory2::hash()
 {
     bytes data;
     for (auto& it : m_name2Table)
@@ -221,17 +214,27 @@ h256 MemoryTableFactory::hash()
     return m_hash;
 }
 
-std::vector<Change>& MemoryTableFactory::getChangeLog()
+std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-    return s_changeLog;
+    auto changeLog = m_changeLog.get();
+    if (m_changeLog.get() != nullptr)
+    {
+        return *changeLog;
+    }
+    else
+    {
+        changeLog = new std::vector<Change>();
+        m_changeLog.reset(changeLog);
+        return *changeLog;
+    }
 }
 
-void MemoryTableFactory::rollback(size_t _savepoint)
+void MemoryTableFactory2::rollback(size_t _savepoint)
 {
     auto& changeLog = getChangeLog();
     while (_savepoint < changeLog.size())
     {
-        auto& change = changeLog.back();
+        auto change = changeLog.back();
 
         // Public MemoryTable API cannot be used here because it will add another
         // change log entry.
@@ -241,12 +244,7 @@ void MemoryTableFactory::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory::commit()
-{
-    getChangeLog().clear();
-}
-
-void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -256,12 +254,10 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     {
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
-        dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
-        tableData->tableName = dbIt.first;
+        auto tableData = std::make_shared<TableData>();
+        table->dump(tableData);
 
-        bool dirtyTable = table->dump(tableData);
-
-        if (!tableData->data.empty() && dirtyTable)
+        if (tableData->entries->size() > 0)
         {
             datas.push_back(tableData);
         }
@@ -285,7 +281,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
                        << LOG_KV("totalTimeCost", utcTime() - start_time);
 }
 
-storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
+storage::TableInfo::Ptr MemoryTableFactory2::getSysTableInfo(const std::string& tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;
@@ -343,7 +339,7 @@ storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& t
 }
 
 
-void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
+void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
     typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
     if (accessTable)

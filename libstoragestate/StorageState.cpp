@@ -1,4 +1,4 @@
-/*
+/*7
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 #include "StorageState.h"
 #include "libdevcrypto/Hash.h"
 #include "libethcore/Exceptions.h"
-#include "libstorage/MemoryTableFactory.h"
+#include "libstorage/Table.h"
 
 using namespace dev;
 using namespace dev::eth;
@@ -36,7 +36,8 @@ using namespace dev::executive;
 bool StorageState::addressInUse(Address const& _address) const
 {
     auto table = getTable(_address);
-    if (table && !table->empty())
+    // if (table && !table->empty())
+    if (table)
     {
         return true;
     }
@@ -349,7 +350,7 @@ h256 StorageState::rootHash(bool needCalculate) const
 
 void StorageState::commit()
 {
-    m_memoryTableFactory->commit();
+    // m_memoryTableFactory->commit();
 }
 
 void StorageState::dbCommit(h256 const&, int64_t)
