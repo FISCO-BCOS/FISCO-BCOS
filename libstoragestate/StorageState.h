@@ -166,8 +166,7 @@ public:
 
     bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
-    void setMemoryTableFactory(
-        std::shared_ptr<dev::storage::TableFactory> _memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> _memoryTableFactory)
     {
         m_memoryTableFactory = _memoryTableFactory;
     }

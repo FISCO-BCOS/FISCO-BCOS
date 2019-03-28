@@ -249,4 +249,4 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_MemoryTableFactory
+}  // namespace test_MemoryTableFactory2

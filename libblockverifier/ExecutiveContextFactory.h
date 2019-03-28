@@ -59,7 +59,10 @@ public:
     virtual void setStateFactory(
         std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface);
 
-    virtual void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory) { m_tableFactoryFactory = tableFactoryFactory; }
+    virtual void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
+    {
+        m_tableFactoryFactory = tableFactoryFactory;
+    }
 
 private:
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;

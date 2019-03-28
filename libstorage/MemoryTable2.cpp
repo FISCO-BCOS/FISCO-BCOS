@@ -50,8 +50,8 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
 {
     try
     {
-    	auto entries = std::make_shared<Entries>();
-    	condition->EQ(m_tableInfo->key, key);
+        auto entries = std::make_shared<Entries>();
+        condition->EQ(m_tableInfo->key, key);
         if (m_remoteDB)
         {
             // query remoteDB anyway
@@ -78,14 +78,14 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
             }
         }
 
-		auto indices = processEntries(m_newEntries, condition);
-		for (auto it : indices)
-		{
-			m_newEntries->get(it)->setTempIndex(it);
-			entries->addEntry(m_newEntries->get(it));
-		}
+        auto indices = processEntries(m_newEntries, condition);
+        for (auto it : indices)
+        {
+            m_newEntries->get(it)->setTempIndex(it);
+            entries->addEntry(m_newEntries->get(it));
+        }
 
-		return entries;
+        return entries;
     }
     catch (std::exception& e)
     {
@@ -140,7 +140,8 @@ int MemoryTable2::update(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
+                           << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
@@ -175,7 +176,8 @@ int MemoryTable2::insert(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
+                           << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
@@ -219,7 +221,8 @@ int MemoryTable2::remove(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
+                           << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
 

@@ -163,11 +163,10 @@ struct Change
     std::string key;
     struct Record
     {
-        
         size_t index;
         std::string key;
         std::string oldValue;
-	size_t id;
+        size_t id;
         Record(size_t _index, std::string _key = std::string(),
             std::string _oldValue = std::string(), size_t _id = 0)
           : index(_index), key(_key), oldValue(_oldValue), id(_id)
@@ -191,11 +190,11 @@ public:
         entries = std::make_shared<Entries>();
     }
 
-	//for memorytable2
+    // for memorytable2
     TableInfo::Ptr info;
     Entries::Ptr entries;
 
-	//for memorytable
+    // for memorytable
     std::string tableName;
     std::map<std::string, Entries::Ptr> data;
 };
@@ -236,7 +235,7 @@ public:
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
-	virtual size_t cacheSize() { return 0; }
+    virtual size_t cacheSize() { return 0; }
 
     static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
@@ -261,17 +260,18 @@ public:
 
     virtual h256 hash() = 0;
     virtual size_t savepoint() = 0;
-	virtual void rollback(size_t _savepoint) = 0;
-	virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) = 0;
+    virtual void rollback(size_t _savepoint) = 0;
+    virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) = 0;
 };
 
-class TableFactoryFactory : public std::enable_shared_from_this<TableFactoryFactory> {
+class TableFactoryFactory : public std::enable_shared_from_this<TableFactoryFactory>
+{
 public:
-	typedef std::shared_ptr<TableFactoryFactory> Ptr;
+    typedef std::shared_ptr<TableFactoryFactory> Ptr;
 
-	virtual ~TableFactoryFactory() {};
+    virtual ~TableFactoryFactory(){};
 
-	virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) = 0;
+    virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) = 0;
 };
 
 }  // namespace storage

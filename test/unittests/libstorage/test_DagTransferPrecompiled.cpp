@@ -27,9 +27,9 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
-#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::blockverifier;

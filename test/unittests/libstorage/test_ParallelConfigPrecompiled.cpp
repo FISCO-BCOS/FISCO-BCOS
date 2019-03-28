@@ -27,10 +27,10 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <string>

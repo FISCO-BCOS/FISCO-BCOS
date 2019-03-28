@@ -263,4 +263,4 @@ BOOST_AUTO_TEST_CASE(exception)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_LevelDBStateStorage
+}  // namespace test_LevelDBStateStorage2

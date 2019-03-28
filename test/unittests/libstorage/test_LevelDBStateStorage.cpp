@@ -230,7 +230,7 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->data.insert(std::make_pair(std::string("LiSi"), entries));
     if (!tableData->data.empty())
     {
-    datas.push_back(tableData);
+        datas.push_back(tableData);
     }
     size_t c = levelDB->commit(h, num, datas, blockHash);
     BOOST_CHECK_EQUAL(c, 1u);

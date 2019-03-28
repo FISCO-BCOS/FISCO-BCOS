@@ -183,4 +183,4 @@ BOOST_AUTO_TEST_CASE(call_update2)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_TablePrecompiled
+}  // namespace test_TablePrecompiled2

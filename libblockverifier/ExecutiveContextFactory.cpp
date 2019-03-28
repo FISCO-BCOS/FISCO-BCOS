@@ -47,7 +47,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     memoryTableFactory->setBlockHash(blockInfo.hash);
     memoryTableFactory->setBlockNum(blockInfo.number);
 #endif
-    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
+    auto memoryTableFactory =
+        m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
     auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);

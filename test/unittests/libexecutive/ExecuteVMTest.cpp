@@ -29,9 +29,9 @@
 #include <libexecutive/Executive.h>
 #include <libexecutive/ExtVM.h>
 #include <libmptstate/MPTState.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-#include <libstorage/MemoryTableFactory.h>
 #include <iostream>
 
 

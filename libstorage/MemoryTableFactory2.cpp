@@ -21,8 +21,8 @@
 #include "MemoryTableFactory2.h"
 #include "Common.h"
 #include "MemoryTable2.h"
-#include "TablePrecompiled.h"
 #include "StorageException.h"
+#include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>

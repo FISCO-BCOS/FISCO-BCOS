@@ -7,8 +7,8 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTable.h>
-#include <boost/test/unit_test.hpp>
 #include <libstorage/MemoryTableFactoryFactory2.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::blockverifier;

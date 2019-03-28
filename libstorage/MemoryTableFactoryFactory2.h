@@ -21,34 +21,34 @@
 
 #pragma once
 
-#include "Table.h"
-#include "Storage.h"
 #include "MemoryTableFactory2.h"
+#include "Storage.h"
+#include "Table.h"
 #include <libdevcore/FixedHash.h>
 
-namespace dev {
-
-namespace storage {
-
-class MemoryTableFactoryFactory2: public TableFactoryFactory {
+namespace dev
+{
+namespace storage
+{
+class MemoryTableFactoryFactory2 : public TableFactoryFactory
+{
 public:
-	virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) override {
-		MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
-		tableFactory->setStateStorage(m_stroage);
-		tableFactory->setBlockHash(hash);
-		tableFactory->setBlockNum(number);
+    virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) override
+    {
+        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        tableFactory->setStateStorage(m_stroage);
+        tableFactory->setBlockHash(hash);
+        tableFactory->setBlockNum(number);
 
-		return tableFactory;
-	}
+        return tableFactory;
+    }
 
-	void setStorage(dev::storage::Storage::Ptr storage) {
-		m_stroage = storage;
-	}
+    void setStorage(dev::storage::Storage::Ptr storage) { m_stroage = storage; }
 
 private:
-	dev::storage::Storage::Ptr m_stroage;
+    dev::storage::Storage::Ptr m_stroage;
 };
 
-}
+}  // namespace storage
 
-}
+}  // namespace dev

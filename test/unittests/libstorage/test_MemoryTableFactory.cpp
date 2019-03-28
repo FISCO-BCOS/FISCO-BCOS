@@ -39,7 +39,8 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries::Ptr select(h256, int, const std::string&, const std::string&, Condition::Ptr) override
+    virtual Entries::Ptr select(
+        h256, int, const std::string&, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;

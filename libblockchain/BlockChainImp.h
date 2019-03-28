@@ -105,7 +105,10 @@ public:
     void getNonces(
         std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override;
 
-    void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory) { m_tableFactoryFactory = tableFactoryFactory; }
+    void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
+    {
+        m_tableFactoryFactory = tableFactoryFactory;
+    }
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);

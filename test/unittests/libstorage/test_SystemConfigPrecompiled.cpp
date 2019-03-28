@@ -7,9 +7,9 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
-#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -32,7 +32,7 @@ struct SystemConfigPrecompiledFixture
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
-                factory.setTableFactoryFactory(tableFactoryFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();

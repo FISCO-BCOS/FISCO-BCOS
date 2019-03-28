@@ -22,16 +22,16 @@
  * @date: 2018-10-24
  */
 #include "DBInitializer.h"
-#include <libstorage/SQLStorage.h>
 #include "LedgerParam.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
-#include <libstoragestate/StorageStateFactory.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/SQLStorage.h>
+#include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -145,9 +145,9 @@ void DBInitializer::initSQLStorage()
     m_storage = sqlStorage;
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-	tableFactoryFactory->setStorage(m_storage);
+    tableFactoryFactory->setStorage(m_storage);
 
-	m_tableFactoryFactory = tableFactoryFactory;
+    m_tableFactoryFactory = tableFactoryFactory;
 }
 
 /// create ExecutiveContextFactory

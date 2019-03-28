@@ -24,7 +24,7 @@
 #include "libstoragestate/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
 #include "libdevcrypto/Hash.h"
-#include "libstorage/MemoryTableFactory.h"
+#include "libstorage/MemoryTableFactory2.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -36,7 +36,7 @@ struct StorageStateFixture
     StorageStateFixture() : m_state(dev::u256(0))
     {
         auto storage = std::make_shared<dev::storage::MemoryStorage>();
-        auto tableFactory = std::make_shared<dev::storage::MemoryTableFactory>();
+        auto tableFactory = std::make_shared<dev::storage::MemoryTableFactory2>();
         tableFactory->setStateStorage(storage);
         m_state.setMemoryTableFactory(tableFactory);
     }
