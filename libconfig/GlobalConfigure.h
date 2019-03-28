@@ -50,9 +50,10 @@ public:
         {
             m_version = RC2_VERSION;
         }
+        /// default is RC1
         else
         {
-            m_version = LATEST_VERSION;
+            m_version = RC1_VERSION;
         }
     }
 
