@@ -64,22 +64,23 @@ BOOST_AUTO_TEST_CASE(getCondition)
 BOOST_AUTO_TEST_CASE(call)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("EQ(string,int256)", "price", 256);
+
+    bytes in = abi.abiIn("EQ(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("EQ(string,string)", "item", "spaceship");
+    in = abi.abiIn("EQ(string,string)", std::string("item"), std::string("spaceship"));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("GE(string,int256)", "price", 256);
+    in = abi.abiIn("GE(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("GT(string,int256)", "price", 256);
+    in = abi.abiIn("GT(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("LE(string,int256)", "price", 256);
+    in = abi.abiIn("LE(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("LT(string,int256)", "price", 256);
+    in = abi.abiIn("LT(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("NE(string,int256)", "price", 256);
+    in = abi.abiIn("NE(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));
-    in = abi.abiIn("NE(string,string)", "name", "WangWu");
+    in = abi.abiIn("NE(string,string)", std::string("name"), std::string("WangWu"));
     conditionPrecompiled->call(context, bytesConstRef(&in));
     in = abi.abiIn("limit(int256)", u256(123));
     conditionPrecompiled->call(context, bytesConstRef(&in));

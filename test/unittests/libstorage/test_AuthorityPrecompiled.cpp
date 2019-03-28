@@ -146,8 +146,9 @@ BOOST_AUTO_TEST_CASE(queryByName)
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
     BOOST_TEST(retJson.get_array().size() == 1);
 
+    std::string keyName = "test";
     // queryByName by a no existing key
-    in = abi.abiIn("queryByName(string)", "test");
+    in = abi.abiIn("queryByName(string)", keyName);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);

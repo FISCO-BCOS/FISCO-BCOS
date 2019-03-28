@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(testGetInt)
     entry->setField("keyInt", "100");
     ContractABI abi;
 
-    bytes bint = abi.abiIn("getInt(string)", "keyInt");
+    bytes bint = abi.abiIn("getInt(string)", std::string("keyInt"));
     bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&bint));
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(testGetAddress)
 {
     ContractABI abi;
     entry->setField("keyAddress", "1000");
-    bytes gstr = abi.abiIn("getAddress(string)", "keyAddress");
+    bytes gstr = abi.abiIn("getAddress(string)", std::string("keyAddress"));
     bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&gstr));
     Address address;
     abi.abiOut(bytesConstRef(&out), address);
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(testGetAddress)
 BOOST_AUTO_TEST_CASE(testSetInt)
 {
     ContractABI abi;
-    bytes sstr = abi.abiIn("set(string,int256)", "keyInt", u256(200));
+    bytes sstr = abi.abiIn("set(string,int256)", std::string("keyInt"), u256(200));
     entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     BOOST_TEST_TRUE(entry->getField("keyInt") == boost::lexical_cast<std::string>(200));
 }
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(testSetInt)
 BOOST_AUTO_TEST_CASE(testSetString)
 {
     ContractABI abi;
-    bytes sstr = abi.abiIn("set(string,string)", "keyString", "you");
+    bytes sstr = abi.abiIn("set(string,string)", std::string("keyString"), std::string("you"));
     entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     BOOST_TEST_TRUE(entry->getField("keyString") == "you");
 }
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(testGetBytes64)
 {
     entry->setField("keyString", "1000");
     ContractABI abi;
-    bytes sstr = abi.abiIn("getBytes64(string)", "keyString");
+    bytes sstr = abi.abiIn("getBytes64(string)", std::string("keyString"));
     bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     string64 retout;
     abi.abiOut(bytesConstRef(&out), retout);
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(testGetBytes32)
 {
     entry->setField("keyString", "1000");
     ContractABI abi;
-    bytes sstr = abi.abiIn("getBytes32(string)", "keyString");
+    bytes sstr = abi.abiIn("getBytes32(string)", std::string("keyString"));
     bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     string32 retout;
     abi.abiOut(bytesConstRef(&out), retout);

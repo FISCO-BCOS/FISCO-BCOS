@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(select)
     BOOST_TEST(retJson.get_array().size() == 2);
 
     // select no existing keys
-    in = abi.abiIn("selectByName(string)", "Ok2");
+    in = abi.abiIn("selectByName(string)", std::string("Ok2"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
@@ -155,13 +155,13 @@ BOOST_AUTO_TEST_CASE(select)
     BOOST_TEST(retJson.get_array().size() == 1);
 
     // select no existing keys and version
-    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, "3.0");
+    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, std::string("3.0"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
     BOOST_TEST(retJson.get_array().size() == 0);
-    in = abi.abiIn("selectByNameAndVersion(string,string)", "Ok2", contractVersion);
+    in = abi.abiIn("selectByNameAndVersion(string,string)", std::string("Ok2"), contractVersion);
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("insert(string)", "test");
+    bytes in = abi.abiIn("insert(string)", std::string("test"));
     bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
 }
 

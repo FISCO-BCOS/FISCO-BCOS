@@ -186,17 +186,17 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
@@ -227,19 +227,19 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 157u);
+    BOOST_TEST(count == CODE_LAST_SEALER);
 
     in = abi.abiIn("addObserver(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 157u);
+    BOOST_TEST(count == CODE_LAST_SEALER);
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("add(string)", "test");
+    bytes in = abi.abiIn("add(string)", std::string("test"));
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
 }
 
