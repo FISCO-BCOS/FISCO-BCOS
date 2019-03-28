@@ -35,10 +35,6 @@ public:
     typedef std::shared_ptr<GlobalConfigureInitializer> Ptr;
 
     void initConfig(const boost::property_tree::ptree& _pt);
-
-private:
-    void setSectionName();
-    std::string m_sectionName = "data_secure";
 };
 
 }  // namespace initializer

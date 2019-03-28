@@ -38,7 +38,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    setSectionsName();
+    setSectionsName(_pt);
     try
     {
         std::map<NodeIPEndpoint, NodeID> nodes;
@@ -157,14 +157,10 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
 }
 
-void P2PInitializer::setSectionsName()
+void P2PInitializer::setSectionsName(boost::property_tree::ptree const& _pt)
 {
-    if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+    if (_pt.get_child_optional("certificate_blacklist"))
     {
         m_certBlacklistSection = "certificate_blacklist";
-    }
-    else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
-    {
-        m_certBlacklistSection = "crl";
     }
 }

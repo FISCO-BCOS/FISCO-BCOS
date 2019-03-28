@@ -56,7 +56,7 @@ public:
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
 private:
-    void setSectionsName();
+    void setSectionsName(boost::property_tree::ptree const& _pt);
     std::shared_ptr<Service> m_p2pService;
     std::shared_ptr<bas::context> m_SSLContext;
     KeyPair m_keyPair;

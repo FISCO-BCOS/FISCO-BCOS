@@ -37,7 +37,7 @@ using namespace dev::initializer;
 
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
-    setSectionName();
+    setSectionName(pt);
     std::string dataPath = pt.get<std::string>(m_sectionName + ".data_path", "./conf/");
     std::string key = dataPath + "/" + pt.get<std::string>(m_sectionName + ".key", "node.key");
     std::string cert = dataPath + "/" + pt.get<std::string>(m_sectionName + ".cert", "node.crt");
@@ -189,15 +189,11 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 }
 
 /// setSectionName for version control
-void SecureInitializer::setSectionName()
+void SecureInitializer::setSectionName(const boost::property_tree::ptree& _pt)
 {
-    if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+    if (_pt.get_child_optional("network_security"))
     {
         m_sectionName = "network_security";
-    }
-    else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
-    {
-        m_sectionName = "secure";
     }
 }
 
