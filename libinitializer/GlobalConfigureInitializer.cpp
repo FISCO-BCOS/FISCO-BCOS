@@ -30,8 +30,16 @@ using namespace dev::initializer;
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
     /// init version
-    std::string version = _pt.get<std::string>("supported_compatibility.version", "");
-    g_BCOSConfig.setVersion(version);
+    std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
+    if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
+    {
+        g_BCOSConfig.setVersion(RC2_VERSION);
+    }
+    /// default is RC1
+    else
+    {
+        g_BCOSConfig.setVersion(RC1_VERSION);
+    }
 
     setSectionName();
 

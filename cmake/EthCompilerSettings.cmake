@@ -118,19 +118,19 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") 
             set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
             set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
+            set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
+            set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
         elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             add_compile_options(-Wno-unused-command-line-argument)
             set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
             set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
         endif()
-        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
         find_program(LCOV_TOOL lcov)
         message(STATUS "lcov tool: ${LCOV_TOOL}")
         if (LCOV_TOOL)
             add_custom_target(coverage
-                COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -c -d ${CMAKE_BINARY_DIR}
-                COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info -r ${CMAKE_BINARY_DIR}/coverage.info '/usr*' '${CMAKE_BINARY_DIR}/deps/*' '${CMAKE_SOURCE_DIR}/deps/*' '*evmc*'
+                COMMAND ${LCOV_TOOL} -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
+                COMMAND ${LCOV_TOOL} -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '${CMAKE_SOURCE_DIR}/deps**' '${CMAKE_SOURCE_DIR}/evmc*' ‘${CMAKE_SOURCE_DIR}/utils*’  -o ${CMAKE_BINARY_DIR}/coverage.info
                 COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
         endif()
     endif ()

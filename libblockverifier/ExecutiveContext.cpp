@@ -158,7 +158,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         // Normal transaction
         auto parallelConfigPrecompiled =
             std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
-                getPrecompiled(Address(0x1007)));
+                getPrecompiled(Address(0x1006)));
 
         uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
 
@@ -189,7 +189,8 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
 
                 auto res = make_shared<vector<string>>();
                 ContractABI abi;
-                isOk = abi.abiOutByFuncSelector(ref(_tx.data()), af.getParamsTypes(), *res);
+                isOk =
+                    abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), af.getParamsTypes(), *res);
                 if (!isOk)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
