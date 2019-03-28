@@ -78,7 +78,10 @@ public:
 
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
-    std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() { return m_messageFactory; }
+    std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override
+    {
+        return m_messageFactory;
+    }
 
 private:
     P2PSessionInfos m_sessionInfos;

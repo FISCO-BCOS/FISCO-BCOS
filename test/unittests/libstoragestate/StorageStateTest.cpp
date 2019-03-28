@@ -169,8 +169,6 @@ BOOST_AUTO_TEST_CASE(Operate)
     auto savepoint2 = m_state.savepoint();
     BOOST_TEST(savepoint1 < savepoint2);
 
-    m_state.commit();
-
     m_state.addBalance(addr1, u256(10));
     BOOST_TEST(m_state.balance(addr1) == u256(30));
     m_state.rollback(savepoint2);
@@ -183,6 +181,8 @@ BOOST_AUTO_TEST_CASE(Operate)
     m_state.dbCommit(h256(), 5u);
     m_state.clear();
     m_state.setRoot(h256());
+
+    m_state.commit();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
