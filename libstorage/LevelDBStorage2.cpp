@@ -186,7 +186,7 @@ size_t LevelDBStorage2::commit(
                 }
                 else
                 {
-                    value["_id_"] = ++counter;
+                    value["_id_"] = (Json::UInt64)++counter;
                     it->second["values"].append(value);
                 }
             }

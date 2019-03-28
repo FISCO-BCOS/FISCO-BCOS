@@ -55,7 +55,13 @@ public:
 
     ExecutiveContext() {}
 
-    virtual ~ExecutiveContext() { m_memoryTableFactory->commit(); };
+    virtual ~ExecutiveContext()
+    {
+        if (m_memoryTableFactory)
+        {
+            m_memoryTableFactory->commit();
+        }
+    };
 
     virtual bytes call(Address const& origin, Address address, bytesConstRef param);
 
