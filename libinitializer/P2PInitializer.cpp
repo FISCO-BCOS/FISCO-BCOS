@@ -161,7 +161,7 @@ void P2PInitializer::setSectionsName()
 {
     if (g_BCOSConfig.version() >= dev::RC2_VERSION)
     {
-        m_certBlacklistSection = "certificate_blacklist"
+        m_certBlacklistSection = "certificate_blacklist";
     }
     else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
     {
