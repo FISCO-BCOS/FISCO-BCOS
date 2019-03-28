@@ -142,10 +142,16 @@ public:
 
     virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
 
+    virtual size_t getOffset();
+    virtual size_t getCount();
+    virtual bool isDirty();
+
+
 private:
     std::map<std::string, std::pair<Op, std::string> > m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
+    bool m_dirty = false;
 };
 
 using Parallel = std::true_type;

@@ -399,7 +399,7 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
-        if (condition->getConditions()->empty())
+        if (condition->getConditions()->empty() && !condition->isDirty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
                 indexes.emplace_back(i);
@@ -414,8 +414,30 @@ private:
                 indexes.push_back(i);
             }
         }
-
-        return indexes;
+        if (condition->isDirty())
+        {
+            size_t offset = condition->getOffset();
+            size_t count = condition->getCount();
+            std::vector<size_t> limitedIndex;
+            size_t size = indexes.size();
+            if (offset >= size)
+            {
+                return limitedIndex;
+            }
+            if (offset + count > size)
+            {
+                count = size - offset;
+            }
+            for (size_t j = offset; j < offset + count && j < size; j++)
+            {
+                limitedIndex.push_back(indexes[j]);
+            }
+            return limitedIndex;
+        }
+        else
+        {
+            return indexes;
+        }
     }
 
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
