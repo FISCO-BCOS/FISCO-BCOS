@@ -261,6 +261,7 @@ public:
     virtual h256 hash() = 0;
     virtual size_t savepoint() = 0;
     virtual void rollback(size_t _savepoint) = 0;
+    virtual void commit() = 0;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) = 0;
 };
 

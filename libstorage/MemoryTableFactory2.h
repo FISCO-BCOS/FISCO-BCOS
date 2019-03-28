@@ -59,6 +59,7 @@ public:
 
     virtual h256 hash() override;
     virtual size_t savepoint() override;
+    virtual void commit() override;
     virtual void rollback(size_t _savepoint) override;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 

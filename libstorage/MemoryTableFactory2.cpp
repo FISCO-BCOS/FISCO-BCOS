@@ -173,6 +173,11 @@ size_t MemoryTableFactory2::savepoint()
     return changeLog.size();
 }
 
+void MemoryTableFactory2::commit()
+{
+    getChangeLog().clear();
+}
+
 void MemoryTableFactory2::setBlockHash(h256 blockHash)
 {
     m_blockHash = blockHash;
