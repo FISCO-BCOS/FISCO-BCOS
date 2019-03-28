@@ -406,7 +406,7 @@ generate_config_ini()
     fi
     cat << EOF > ${output}
 [supported_compatibility]
-version=${latest_version}
+    version=${latest_version}
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
@@ -898,7 +898,7 @@ if [ -z ${docker_mode} ];then
         echo "Binary check passed."
     fi
 fi
-latest_version=`${bin_path} --version | grep "FISCO-BCOS Version" | cut -d':' -f2 | sed s/[[:space:]]//g`
+latest_version=$(${bin_path} --version | grep "FISCO-BCOS Version" | cut -d':' -f2 | sed s/[[:space:]]//g)
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
     # CertConfig="${output_dir}/cert.cnf"
     generate_cert_conf "cert.cnf"
