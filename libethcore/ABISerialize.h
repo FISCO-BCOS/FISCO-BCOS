@@ -253,6 +253,15 @@ struct Length
     };
 };
 
+template <>
+struct Length<string64>
+{
+    enum
+    {
+        value = 2
+    };
+};
+
 template <class T>
 struct Length<T, typename std::enable_if<StaticArray<T>::value && !Dynamic<T>::value>::type>
 {
@@ -329,6 +338,8 @@ public:
 
     void deserialise(string32& _out, std::size_t _offset);
 
+    void deserialise(string64& _out, std::size_t _offset);
+
     void deserialise(std::string& _out, std::size_t _offset);
 
     template <class T, std::size_t N>
@@ -388,7 +399,7 @@ public:
         static_assert(Element<T>::value, "ABI not support type.");
         return bytes{};
     }
-     // unsigned integer type int.
+    // unsigned integer type int.
     bytes serialise(const int& _in);
 
     // unsigned integer type uint256.
@@ -408,6 +419,9 @@ public:
 
     // binary type of 32 bytes
     bytes serialise(const string32& _in);
+
+    // binary type of 64 bytes
+    bytes serialise(const string64& _in);
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
     bytes serialise(const std::string& _in);

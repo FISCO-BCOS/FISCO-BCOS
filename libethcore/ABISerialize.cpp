@@ -210,6 +210,18 @@ bytes ABISerialize::serialise(const string32& _in)
     return ret;
 }
 
+// binary type of 64 bytes
+bytes ABISerialize::serialise(const string64& _in)
+{
+    bytes ret1(32, 0);
+    bytesConstRef((byte const*)_in.data(), 32).populate(bytesRef(&ret1));
+
+    bytes ret2(32, 0);
+    bytesConstRef((byte const*)_in.data() + 32, 32).populate(bytesRef(&ret2));
+
+    return ret1 + ret2;
+}
+
 // dynamic sized unicode string assumed to be UTF-8 encoded.
 bytes ABISerialize::serialise(const std::string& _in)
 {
@@ -264,6 +276,13 @@ void ABISerialize::deserialise(string32& _out, std::size_t _offset)
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
     data.cropped(_offset, MAX_BYTE_LENGTH).populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
+}
+
+void ABISerialize::deserialise(string64& out, std::size_t _offset)
+{
+    validOffset(_offset + 2 * MAX_BYTE_LENGTH - 1);
+
+    data.cropped(_offset, 64).populate(bytesRef((byte*)out.data(), 2 * MAX_BYTE_LENGTH));
 }
 
 void ABISerialize::deserialise(std::string& _out, std::size_t _offset)
