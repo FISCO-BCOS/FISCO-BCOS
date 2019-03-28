@@ -142,9 +142,6 @@ private:
 
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
 
-    bool compressBroadcastMessage(
-        std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData);
-
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 

@@ -45,21 +45,38 @@ public:
     virtual ~P2PMessage() {}
 
     virtual uint32_t length() override { return m_length; }
-    virtual void setLength(uint32_t _length) { m_length = _length; }
+    virtual void setLength(uint32_t _length)
+    {
+        m_length = _length;
+        setDirty(m_length, _length);
+    }
 
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
-    virtual void setProtocolID(PROTOCOL_ID _protocolID) { m_protocolID = _protocolID; }
+    virtual void setProtocolID(PROTOCOL_ID _protocolID)
+    {
+        m_protocolID = _protocolID;
+        setDirty(m_protocolID, _protocolID);
+    }
     virtual PACKET_TYPE packetType() { return m_packetType; }
-    virtual void setPacketType(PACKET_TYPE _packetType) { m_packetType = _packetType; }
+    virtual void setPacketType(PACKET_TYPE _packetType)
+    {
+        m_packetType = _packetType;
+        setDirty(m_packetType, _packetType);
+    }
 
     virtual uint32_t seq() override { return m_seq; }
-    virtual void setSeq(uint32_t _seq) { m_seq = _seq; }
+    virtual void setSeq(uint32_t _seq)
+    {
+        m_seq = _seq;
+        setDirty(m_seq, _seq);
+    }
 
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
     virtual void setBuffer(std::shared_ptr<bytes> _buffer)
     {
         m_buffer.reset();
         m_buffer = _buffer;
+        m_dirty = true;
     }
 
     virtual bool isRequestPacket() override { return (m_protocolID > 0); }
@@ -77,8 +94,14 @@ public:
     /// returned.
     virtual ssize_t decode(const byte* buffer, size_t size) override;
 
-    virtual void setVersion(VERSION_TYPE const&) {}
-    virtual VERSION_TYPE version() const { return 0; }
+    /// update m_dirty according to updatedData
+    template <class T>
+    void setDirty(T const& originValue, T const& updatedValue)
+    {
+        m_dirty = (originValue == updatedValue ? false : true);
+    }
+
+    bool dirty() const { return m_dirty; }
 
 protected:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
@@ -87,6 +110,7 @@ protected:
     PACKET_TYPE m_packetType = 0;     ///< message sub type, the second two bytes of information
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
+    bool m_dirty = true;
 };
 enum AMOPPacketType
 {

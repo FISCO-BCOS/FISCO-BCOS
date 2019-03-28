@@ -35,7 +35,11 @@ public:
     const static size_t HEADER_LENGTH = 16;
     const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
-    P2PMessageRC2() { m_buffer = std::make_shared<bytes>(); }
+    P2PMessageRC2()
+    {
+        m_buffer = std::make_shared<bytes>();
+        m_cache = std::make_shared<bytes>();
+    }
 
     virtual ~P2PMessageRC2() {}
     void encode(bytes& buffer) override;
@@ -43,17 +47,22 @@ public:
     /// returned.
     ssize_t decode(const byte* buffer, size_t size) override;
 
-    void setVersion(VERSION_TYPE const& version) override { m_version = version; }
-    VERSION_TYPE version() const override { return m_version; }
+    virtual void setVersion(VERSION_TYPE const& version)
+    {
+        m_version = version;
+        setDirty(m_version, version);
+    }
+    virtual VERSION_TYPE version() const { return m_version; }
 
 protected:
-    virtual void encode(bytes& buffer, std::shared_ptr<bytes> encodeBuffer);
+    virtual void encode(std::shared_ptr<bytes> encodeBuffer);
 
     VERSION_TYPE m_version = 0;
 
 private:
     /// compress the data to be sended
     bool compress(std::shared_ptr<bytes>);
+    std::shared_ptr<dev::bytes> m_cache;
 };
 }  // namespace p2p
 }  // namespace dev

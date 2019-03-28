@@ -25,7 +25,6 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/SnappyCompress.h>
 #include <libdevcore/easylog.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
@@ -34,7 +33,6 @@
 
 using namespace dev;
 using namespace dev::p2p;
-using namespace dev::compress;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
@@ -591,42 +589,12 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
     }
 }
 
-bool Service::compressBroadcastMessage(
-    std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData)
-{
-    /// no compress enabled
-    if (!g_BCOSConfig.compressEnabled())
-    {
-        return false;
-    }
-    /// the network packet is too small to compress
-    if (message->buffer()->size() <= g_BCOSConfig.c_compressThreshold)
-    {
-        return false;
-    }
-    size_t compressLen = SnappyCompress::compress(ref(*message->buffer()), *compressData);
-    /// compress failed
-    if (compressLen < 1)
-    {
-        return false;
-    }
-    return true;
-}
-
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
 {
     SERVICE_LOG(TRACE) << "asyncMulticastMessageByNodeIDList"
                        << LOG_KV("nodes size", nodeIDs.size());
     try
     {
-        std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
-        /// not enable compress if the node is rc1 version
-        if ((g_BCOSConfig.version() > dev::RC1_VERSION) &&
-            compressBroadcastMessage(message, compressData))
-        {
-            message->setVersion(message->version() | dev::eth::CompressFlag);
-            message->setBuffer(compressData);
-        }
         for (auto nodeID : nodeIDs)
         {
             asyncSendMessageByNodeID(
