@@ -173,7 +173,7 @@ struct Element<string32> : std::true_type
 
 // a fixed-length array of N elements of type T.
 template <class T, std::size_t N>
-struct Element<T[N]> : std::false_type
+struct Element<std::array<T, N>> : std::false_type
 {
 };
 
@@ -202,7 +202,7 @@ struct StaticArray : std::false_type
 
 // a fixed-length array of N elements of type T.
 template <class T, std::size_t N>
-struct StaticArray<T[N]> : std::true_type
+struct StaticArray<std::array<T, N>> : std::true_type
 {
 };
 
@@ -225,9 +225,21 @@ struct Dynamic : std::false_type
 };
 
 template <class T>
+struct remove_dimension
+{
+    typedef T type;
+};
+
+template <class T, std::size_t N>
+struct remove_dimension<std::array<T, N>>
+{
+    typedef typename remove_dimension<T>::type type;
+};
+
+template <class T>
 struct Dynamic<T,
-    typename std::enable_if<String<typename std::remove_all_extents<T>::type>::value ||
-                            DynamicArray<typename std::remove_all_extents<T>::type>::value>::type>
+    typename std::enable_if<String<typename remove_dimension<T>::type>::value ||
+                            DynamicArray<typename remove_dimension<T>::type>::value>::type>
   : std::true_type
 {
 };
@@ -246,7 +258,7 @@ struct Length<T, typename std::enable_if<StaticArray<T>::value && !Dynamic<T>::v
 {
     enum
     {
-        value = std::extent<T>::value * Length<typename std::remove_extent<T>::type>::value
+        value = std::tuple_size<T>::value * Length<typename std::tuple_element<0, T>::type>::value
     };
 };
 
@@ -275,50 +287,144 @@ class ABISerialize
 {
 private:
     static const int MAX_BYTE_LENGTH = 32;
+    // encode or decode offset
     std::size_t offset{0};
+    // encode temp bytes
     bytes fixed;
     bytes dynamic;
 
+    // decode data
+    bytesConstRef data;
+
+    size_t getOffset() { return offset; }
+    // check if offset valid and std::length_error will be throw
+    void validOffset(std::size_t _offset)
+    {
+        if (_offset >= data.size())
+        {
+            std::stringstream ss;
+            ss << " deserialise failed, invalid offset , offset is " << _offset
+               << " , data length is " << data.size();
+
+            throw std::length_error(ss.str().c_str());
+        }
+    }
+
 public:
+    /*template <class T>
+    void deserialise(const T& _t, std::size_t _offset)
+    {
+        (void)_t;
+        (void)_offset;
+        static_assert(false, "ABI not support type.");
+    }*/
+
+    void deserialise(s256& out, std::size_t _offset);
+
+    void deserialise(u256& _out, std::size_t _offset);
+
+    void deserialise(bool& _out, std::size_t _offset);
+
+    void deserialise(Address& _out, std::size_t _offset);
+
+    void deserialise(string32& _out, std::size_t _offset);
+
+    void deserialise(std::string& _out, std::size_t _offset);
+
+    template <class T, std::size_t N>
+    void deserialise(std::array<T, N>& _out, std::size_t _offset);
+    template <class T>
+    void deserialise(std::vector<T>& _out, std::size_t _offset);
+
+    void abiOutAux() { return; }
+
+    template <class T, class... U>
+    void abiOutAux(T& _t, U&... _u)
+    {
+        std::size_t _offset = offset;
+        // dynamic type, offset position
+        if (Dynamic<T>::value)
+        {
+            u256 dynamicOffset;
+            deserialise(dynamicOffset, offset);
+            _offset = static_cast<std::size_t>(dynamicOffset);
+        }
+
+        deserialise(_t, _offset);
+        // update offset
+        offset = offset + Offset<T>::value * MAX_BYTE_LENGTH;
+        // decode next element
+        abiOutAux(_u...);
+    }
+
+    template <class... T>
+    bool abiOut(bytesConstRef _data, T&... _t)
+    {
+        data = _data;
+        offset = 0;
+        try
+        {
+            abiOutAux(_t...);
+            return true;
+        }
+        catch (...)
+        {  // error occur
+            return false;
+        }
+    }
+
+    template <class... T>
+    bool abiOutHex(const std::string& _data, T&... _t)
+    {
+        auto data = fromHex(_data);
+        abiOut(bytesConstRef(&data), _t...);
+    }
+
+public:
+    /*template <class T>
+    bytes serialise(const T& _t)
+    {
+        (void)_t;
+        static_assert(false, "ABI not support type.");
+        return bytes{};
+    }*/
     // unsigned integer type uint256.
-    bytes serialize(const u256& _u);
+    bytes serialise(const u256& _in);
 
     // two’s complement signed integer type int256.
-    bytes serialize(const s256& _i);
+    bytes serialise(const s256& _in);
 
     // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
     // bool is used
-    bytes serialize(const bool& _b);
+    bytes serialise(const bool& _in);
 
     // equivalent to uint160, except for the assumed interpretation and language typing. For
     // computing the function selector, address is used.
     // bool is used.
-    bytes serialize(const Address& _addr);
+    bytes serialise(const Address& _in);
 
     // binary type of 32 bytes
-    bytes serialize(const string32& _s);
+    bytes serialise(const string32& _in);
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
-    bytes serialize(const std::string& _s);
+    bytes serialise(const std::string& _in);
 
     template <class T, std::size_t N>
-    bytes serialize(const T (&_t)[N]);
+    bytes serialise(const std::array<T, N>& _in);
     template <class T>
-    bytes serialize(const std::vector<T>& _vt);
-    template <std::size_t N>
-    bytes serialize(const std::string (&_t)[N]);
+    bytes serialise(const std::vector<T>& _in);
 
     inline void abiInAux() { return; }
 
     template <class T, class... U>
     void abiInAux(T const& _t, U const&... _u)
     {
-        bytes out = serialize(_t);
+        bytes out = serialise(_t);
 
         if (Dynamic<T>::value)
         {  // dynamic type
             dynamic += out;
-            fixed += serialize((u256)offset);
+            fixed += serialise((u256)offset);
             offset += out.size();
         }
         else
@@ -337,8 +443,10 @@ public:
         fixed.clear();
         dynamic.clear();
 
-        return _sig.empty() ? abiInAux(_t...) :
-                              sha3(_sig).ref().cropped(0, 4).toBytes() + abiInAux(_t...);
+        abiInAux(_t...);
+
+        return _sig.empty() ? fixed + dynamic :
+                              sha3(_sig).ref().cropped(0, 4).toBytes() + fixed + dynamic;
     }
 
     template <class... T>
@@ -346,30 +454,25 @@ public:
     {
         return toHex(abiIn(_sig, _t...));
     }
-
-    template <class... T>
-    bool abiOut(bytesConstRef _data, T&... _t);
-
-    bool abiOut(bytesConstRef _data, const std::string& _signature, std::vector<std::string>& _out);
 };
 
-
+// a fixed-length array of elements of the given type.
 template <class T, std::size_t N>
-bytes ABISerialize::serialize(const T (&_t)[N])
+bytes ABISerialize::serialise(const std::array<T, N>& _in)
 {
     bytes offset_bytes;
     bytes content;
 
-    auto offset = N * MAX_BYTE_LENGTH;
+    auto length = N * MAX_BYTE_LENGTH;
 
-    for (const auto& e : _t)
+    for (const auto& e : _in)
     {
-        bytes out = serialize(e);
+        bytes out = serialise(e);
         content += out;
-        if (Dynamic<T[N]>::value)
+        if (Dynamic<T>::value)
         {  // dynamic
-            offset_bytes += serialize(u256(offset));
-            offset += out.size();
+            offset_bytes += serialise(static_cast<u256>(length));
+            length += out.size();
         }
     }
 
@@ -378,66 +481,77 @@ bytes ABISerialize::serialize(const T (&_t)[N])
 
 // a variable-length array of elements of the given type.
 template <class T>
-bytes ABISerialize::serialize(const std::vector<T>& _vt)
+bytes ABISerialize::serialise(const std::vector<T>& _in)
 {
     bytes offset_bytes;
     bytes content;
 
-    auto offset = _vt.size() * MAX_BYTE_LENGTH;
+    auto length = _in.size() * MAX_BYTE_LENGTH;
 
-    offset_bytes += serialize(u256(_vt.size()));
-    for (const auto& t : _vt)
+    offset_bytes += serialise(static_cast<u256>(_in.size()));
+    for (const auto& t : _in)
     {
-        offset_bytes += serialize(u256(offset));
-        bytes out = serialize(t);
-        offset += out.size();
+        bytes out = serialise(t);
         content += out;
+        if (Dynamic<T>::value)
+        {  // dynamic
+            offset_bytes += serialise(static_cast<u256>(length));
+            length += out.size();
+        }
     }
 
     return offset_bytes + content;
 }
 
-/*
-// a fixed-length array of elements of string.
-template <std::size_t N>
-bytes ABISerialize::serialize(const std::string (&_st)[N])
+template <class T, std::size_t N>
+void ABISerialize::deserialise(std::array<T, N>& _out, std::size_t _offset)
 {
-    bytes offset_bytes;
-    bytes content;
-    auto offset = _st.size() * MAX_BYTE_LENGTH;
-
-    for (const auto& s : _st)
+    for (std::size_t u = 0; u < N; ++u)
     {
-        offset_bytes += serialize(u256(offset));
-        bytes out = serialize(s);
-        offset += out.size();
-        content += out;
-    }
+        auto thisOffset = _offset;
 
-    return offset_bytes + content;
+        if (Dynamic<T>::value)
+        {  // dynamic type
+            // N element offset
+            u256 length;
+            deserialise(length, _offset + u * Offset<T>::value * MAX_BYTE_LENGTH);
+            thisOffset = thisOffset + static_cast<std::size_t>(length);
+        }
+        else
+        {
+            thisOffset = _offset + u * Offset<T>::value * MAX_BYTE_LENGTH;
+        }
+        deserialise(_out[u], thisOffset);
+    }
 }
 
-// a variable-length array of elements of string.
-template <>
-bytes ABISerialize::serialize<std::string>(const std::vector<std::string>& _st)
+template <class T>
+void ABISerialize::deserialise(std::vector<T>& _out, std::size_t _offset)
 {
-    bytes offset_bytes;
-    bytes content;
+    u256 length;
+    // vector length
+    deserialise(length, _offset);
+    _offset += MAX_BYTE_LENGTH;
+    _out.resize(static_cast<std::size_t>(length));
 
-    auto offset = _st.size() * MAX_BYTE_LENGTH;
-
-    offset_bytes += serialize(u256(_st.size()));
-    for (const auto& s : _st)
+    for (std::size_t u = 0; u < static_cast<std::size_t>(length); ++u)
     {
-        offset_bytes += serialize(u256(offset));
-        bytes out = serialize(s);
-        offset += out.size();
-        content += out;
-    }
+        std::size_t thisOffset = _offset;
 
-    return offset_bytes + content;
+        if (Dynamic<T>::value)
+        {  // dynamic type
+            // N element offset
+            u256 thisEleOffset;
+            deserialise(thisEleOffset, _offset + u * Offset<T>::value * MAX_BYTE_LENGTH);
+            thisOffset += static_cast<std::size_t>(thisEleOffset);
+        }
+        else
+        {
+            thisOffset = _offset + u * Offset<T>::value * MAX_BYTE_LENGTH;
+        }
+        deserialise(_out[u], thisOffset);
+    }
 }
-*/
 
 }  // namespace abi
 }  // namespace eth

@@ -170,46 +170,104 @@ bool ABIFunc::parser(const std::string& _sig)
 }
 
 // unsigned integer type uint256.
-bytes ABISerialize::serialize(const u256& _u)
+bytes ABISerialize::serialise(const u256& _in)
 {
-    return h256(_u).asBytes();
+    return h256(_in).asBytes();
 }
 
 // two’s complement signed integer type int256.
-bytes ABISerialize::serialize(const s256& _i)
+bytes ABISerialize::serialise(const s256& _in)
 {
-    return h256(_i.convert_to<u256>()).asBytes();
+    return h256(_in.convert_to<u256>()).asBytes();
 }
 
 // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
 // bool is used
-bytes ABISerialize::serialize(const bool& _b)
+bytes ABISerialize::serialise(const bool& _in)
 {
-    return h256(u256(_b ? 1 : 0)).asBytes();
+    return h256(u256(_in ? 1 : 0)).asBytes();
 }
 
 // equivalent to uint160, except for the assumed interpretation and language typing. For
 // computing the function selector, address is used.
 // bool is used.
-bytes ABISerialize::serialize(const Address& _addr)
+bytes ABISerialize::serialise(const Address& _in)
 {
-    return bytes(12, 0) + _addr.asBytes();
+    return bytes(12, 0) + _in.asBytes();
 }
 
 // binary type of 32 bytes
-bytes ABISerialize::serialize(const string32& _s)
+bytes ABISerialize::serialise(const string32& _in)
 {
     bytes ret(32, 0);
-    bytesConstRef((byte const*)_s.data(), 32).populate(bytesRef(&ret));
+    bytesConstRef((byte const*)_in.data(), 32).populate(bytesRef(&ret));
     return ret;
 }
 
 // dynamic sized unicode string assumed to be UTF-8 encoded.
-bytes ABISerialize::serialize(const std::string& _s)
+bytes ABISerialize::serialise(const std::string& _in)
 {
     bytes ret;
-    ret = h256(u256(_s.size())).asBytes();
-    ret.resize(ret.size() + (_s.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
-    bytesConstRef(&_s).populate(bytesRef(&ret).cropped(32));
+    ret = h256(u256(_in.size())).asBytes();
+    ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    bytesConstRef(&_in).populate(bytesRef(&ret).cropped(32));
     return ret;
+}
+
+void ABISerialize::deserialise(s256& out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    u256 u = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    if (u > u256("0x8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+    {
+        auto r =
+            (dev::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") - u) +
+            1;
+        out = s256("-" + r.str());
+    }
+    else
+    {
+        out = u.convert_to<s256>();
+    }
+}
+
+void ABISerialize::deserialise(u256& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+    _out = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+}
+
+void ABISerialize::deserialise(bool& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    u256 ret = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    _out = ret > 0 ? true : false;
+}
+
+void ABISerialize::deserialise(Address& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    data.cropped(_offset + MAX_BYTE_LENGTH - 20, 20).populate(_out.ref());
+}
+
+void ABISerialize::deserialise(string32& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    data.cropped(_offset, MAX_BYTE_LENGTH).populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
+}
+
+void ABISerialize::deserialise(std::string& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    // u256 offset = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    u256 len = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+
+    auto result = data.cropped(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len));
+
+    _out.assign((const char*)result.data(), result.size());
 }
