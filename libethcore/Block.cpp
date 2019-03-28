@@ -182,6 +182,39 @@ void Block::calTransactionRootRC2(bool update) const
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
 void Block::calReceiptRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        calReceiptRoot(update);
+        return;
+    }
+    WriteGuard l(x_txReceiptsCache);
+    if (m_tReceiptsCache == bytes())
+    {
+        RLPStream txReceipts;
+        txReceipts.appendList(m_transactionReceipts.size());
+        BytesMap mapCache;
+        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        {
+            RLPStream s;
+            s << i;
+            bytes tranReceipts_data;
+            m_transactionReceipts[i].encode(tranReceipts_data);
+            txReceipts.appendRaw(tranReceipts_data);
+            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+        }
+        txReceipts.swapOut(m_tReceiptsCache);
+        m_receiptRootCache = hash256(mapCache);
+        LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_KV("hash", toHex(m_receiptRootCache))
+                   << LOG_KV("bytes", toHex(m_tReceiptsCache));
+    }
+    if (update == true)
+    {
+        m_blockHeader.setReceiptsRoot(m_receiptRootCache);
+    }
+}
+
+void Block::calReceiptRootRC2(bool update) const
+{
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes())
     {
@@ -212,6 +245,8 @@ void Block::calReceiptRoot(bool update) const
         // record_time = utcTime();
 
         m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
+        LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_KV("hash", toHex(m_receiptRootCache))
+                   << LOG_KV("bytes", toHex(m_tReceiptsCache));
         // auto hashReceipts_time_cost = utcTime() - record_time;
         /*
         LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_DESC("Calculate receipt root cost")

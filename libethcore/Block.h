@@ -223,6 +223,7 @@ public:
     void calTransactionRoot(bool update = true) const;
     void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
+    void calReceiptRootRC2(bool update = true) const;
 
     /**
      * @brief: set sender for specified transaction, if the sender hasn't been set, then recover

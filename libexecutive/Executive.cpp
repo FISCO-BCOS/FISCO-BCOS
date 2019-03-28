@@ -107,8 +107,14 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     return call(params, _gasPrice, _senderAddress);
 }
 
+
 bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        return callRC2(_p, _gasPrice, _origin);
+    }
+
     // If external transaction.
     if (m_t)
     {
@@ -117,8 +123,53 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         // Increment associated nonce for sender.
         // if (_p.senderAddress != MaxAddress ||
         // m_envInfo.number() < m_sealEngine.chainParams().experimentalForkBlock)  // EIP86
-        // m_s->incNonce(_p.senderAddress);
+        m_s->incNonce(_p.senderAddress);
     }
+
+    m_savepoint = m_s->savepoint();
+    m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
+    if (m_envInfo.precompiledEngine() &&
+        m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
+        bytes output;
+        bool success;
+        tie(success, output) =
+            m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
+        size_t outputSize = output.size();
+        m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+    }
+    else if (m_envInfo.precompiledEngine() &&
+             m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+    {
+        m_gas = _p.gas;
+
+        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+
+        auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
+        size_t outputSize = result.size();
+        m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+    }
+    else
+    {
+        m_gas = _p.gas;
+        if (m_s->addressHasCode(_p.codeAddress))
+        {
+            bytes const& c = m_s->code(_p.codeAddress);
+            h256 codeHash = m_s->codeHash(_p.codeAddress);
+            m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
+                _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        }
+    }
+
+    // Transfer ether.
+    m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+    return !m_ext;
+}
+
+bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
+{
+    // no nonce increase
 
     m_savepoint = m_s->savepoint();
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
@@ -154,8 +205,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         m_excepted = TransactionException::CallAddressError;
     }
 
-    // Transfer ether.
-    // m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+    // no balance transfer
     return !m_ext;
 }
 

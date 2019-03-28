@@ -111,7 +111,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
-    block.setStateRootToAllReceipt(stateRoot);
+    // block.setStateRootToAllReceipt(stateRoot); no need
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
