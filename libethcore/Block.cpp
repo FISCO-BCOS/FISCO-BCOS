@@ -184,7 +184,7 @@ void Block::calReceiptRoot(bool update) const
 {
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        calReceiptRoot(update);
+        calReceiptRootRC2(update);
         return;
     }
     WriteGuard l(x_txReceiptsCache);
