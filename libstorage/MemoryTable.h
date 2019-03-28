@@ -536,6 +536,10 @@ private:
     {
         for (auto& it : *(entry->fields()))
         {
+            if (it.first == "_id_")
+            {
+                continue;
+            }
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {

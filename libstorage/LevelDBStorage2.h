@@ -33,15 +33,15 @@ namespace dev
 {
 namespace storage
 {
-class LevelDBStorage : public Storage
+class LevelDBStorage2 : public Storage
 {
 public:
-    typedef std::shared_ptr<LevelDBStorage> Ptr;
+    typedef std::shared_ptr<LevelDBStorage2> Ptr;
 
-    virtual ~LevelDBStorage(){};
+    virtual ~LevelDBStorage2(){};
 
     virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition = nullptr) override;
+        const std::string& key, Condition::Ptr condition) override;
     virtual size_t commit(
         h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&) override;
     virtual bool onlyDirty() override;
@@ -49,10 +49,10 @@ public:
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
-    size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
-        TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
+
+    const char* COUNTER_KEY = "_sys_counter_";
 };
 
 }  // namespace storage

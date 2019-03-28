@@ -38,6 +38,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     auto groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
     assert(m_p2pService);
     m_ledgerManager = make_shared<LedgerManager>(m_p2pService, m_keyPair);
+    m_ledgerManager->setChannelRPCServer(m_channelRPCServer);
     map<GROUP_ID, h512s> groudID2NodeList;
     bool succ = true;
     try
