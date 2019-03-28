@@ -32,13 +32,7 @@
 using namespace dev;
 using namespace dev::storage;
 
-SQLStorage::SQLStorage()
-{
-    m_fatalHandler = [](std::exception& e) {
-        (void)e;
-        exit(-1);
-    };
-}
+SQLStorage::SQLStorage() {}
 
 Entries::Ptr SQLStorage::select(
     h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition)
@@ -275,7 +269,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             }
             else
             {
-                throw e;
+                BOOST_THROW_EXCEPTION(e);
             }
         }
 
