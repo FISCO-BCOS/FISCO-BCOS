@@ -29,17 +29,20 @@ using namespace dev::initializer;
 
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
-    // TODO: rename keycenter to key-manager, disk encryption to data secure
-    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>("data_secure.enable", false);
-    g_BCOSConfig.diskEncryption.keyCenterIP =
-        _pt.get<std::string>("data_secure.key_manager_ip", "");
-    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>("data_secure.key_manager_port", 0);
-    g_BCOSConfig.diskEncryption.cipherDataKey =
-        _pt.get<std::string>("data_secure.cipher_data_key", "");
-
     /// init version
     std::string version = _pt.get<std::string>("supported_compatibility.version", "");
     g_BCOSConfig.setVersion(version);
+
+    setSectionName();
+
+    // TODO: rename keycenter to key-manager, disk encryption to data secure
+    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>(m_sectionName + ".enable", false);
+    g_BCOSConfig.diskEncryption.keyCenterIP =
+        _pt.get<std::string>(m_sectionName + ".key_manager_ip", "");
+    g_BCOSConfig.diskEncryption.keyCenterPort =
+        _pt.get<int>(m_sectionName + ".key_manager_port", 0);
+    g_BCOSConfig.diskEncryption.cipherDataKey =
+        _pt.get<std::string>(m_sectionName + ".cipher_data_key", "");
 
     /// compress related option, default enable
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
@@ -54,4 +57,16 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
                            << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
                            << LOG_KV("version_str", version)
                            << LOG_KV("version", g_BCOSConfig.version());
+}
+
+void GlobalConfigureInitializer::setSectionName()
+{
+    if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+    {
+        m_sectionName = "storage_security";
+    }
+    else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+    {
+        m_sectionName = "data_secure";
+    }
 }
