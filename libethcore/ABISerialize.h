@@ -311,13 +311,13 @@ private:
     }
 
 public:
-    /*template <class T>
+    template <class T>
     void deserialise(const T& _t, std::size_t _offset)
-    {
+    {  // unsupport type
         (void)_t;
         (void)_offset;
-        static_assert(false, "ABI not support type.");
-    }*/
+        static_assert(Element<T>::value, "ABI not support type.");
+    }
 
     void deserialise(s256& out, std::size_t _offset);
 
@@ -381,13 +381,13 @@ public:
     }
 
 public:
-    /*template <class T>
+    template <class T>
     bytes serialise(const T& _t)
-    {
+    {  // unsupport type
         (void)_t;
-        static_assert(false, "ABI not support type.");
+        static_assert(Element<T>::value, "ABI not support type.");
         return bytes{};
-    }*/
+    }
     // unsigned integer type uint256.
     bytes serialise(const u256& _in);
 
