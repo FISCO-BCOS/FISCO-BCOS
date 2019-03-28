@@ -25,7 +25,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libprecompiled/DagTransferPrecompiled.h>
+#include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>

@@ -79,6 +79,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
                 }
             }
         }
+        entries->setDirty(false);
 
         return entries;
     }
@@ -201,6 +202,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
                 }
             }
         }
+        entries->setDirty(false);
 
         return entries;
     }
