@@ -25,6 +25,7 @@
 
 #pragma once
 #include "P2PInterface.h"
+#include "P2PMessageFactory.h"
 #include "P2PSession.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
@@ -54,7 +55,7 @@ public:
     virtual bool actived() { return m_run; }
     NodeID id() const override { return m_alias.pub(); }
 
-    virtual void onConnect(dev::network::NetworkException e, NodeID nodeID,
+    virtual void onConnect(dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
         std::shared_ptr<dev::network::SessionFace> session);
     virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
@@ -140,6 +141,9 @@ private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
     bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
+
+    bool compressBroadcastMessage(
+        std::shared_ptr<P2PMessage> message, std::shared_ptr<bytes> compressData);
 
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;

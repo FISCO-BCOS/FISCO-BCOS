@@ -44,6 +44,8 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -119,6 +121,8 @@ void Host::startAccept(boost::system::error_code boost_error)
  * @return std::function<bool(bool, boost::asio::ssl::verify_context&)>:
  *  return true: verify success
  *  return false: verify failed
+ * modifications 2019.03.20: append subject name and issuer name after nodeIDOut for demand of
+ * fisco-bcos-browser
  */
 std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCallback(
     std::shared_ptr<std::string> nodeIDOut)
@@ -127,6 +131,11 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
     return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
         try
         {
+            /// return early when the certificate is invalid
+            if (!preverified)
+            {
+                return false;
+            }
             /// get the object points to certificate
             X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
             if (!cert)
@@ -195,7 +204,18 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                                << LOG_KV("nodeID", nodeID.substr(0, 4));
                 return false;
             }
-
+            /// append cert-name and issuer name after node ID
+            /// get subject name
+            const char* certName = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
+            /// get issuer name
+            const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+            /// format: {nodeID}#{issuer-name}#{cert-name}
+            nodeIDOut->append("#");
+            nodeIDOut->append(issuerName);
+            nodeIDOut->append("#");
+            nodeIDOut->append(certName);
+            OPENSSL_free((void*)certName);
+            OPENSSL_free((void*)issuerName);
             return preverified;
         }
         catch (std::exception& e)
@@ -205,6 +225,56 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
         }
     };
 }
+
+/**
+ * @brief: obtain the common name from the subject of certificate
+ *
+ * @param subject : the subject of the certificat
+ *   the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
+ * @return std::string: the common name of the certificate
+ */
+std::string Host::obtainCommonNameFromSubject(std::string const& subject)
+{
+    std::vector<std::string> fields;
+    boost::split(fields, subject, boost::is_any_of("/"), boost::token_compress_on);
+    for (auto field : fields)
+    {
+        std::size_t pos = field.find("CN");
+        if (pos != std::string::npos)
+        {
+            std::vector<std::string> cn_fields;
+            boost::split(cn_fields, field, boost::is_any_of("="), boost::token_compress_on);
+            /// use the whole fields as the common name
+            if (cn_fields.size() < 2)
+            {
+                return field;
+            }
+            /// return real common name
+            return cn_fields[1];
+        }
+    }
+    return subject;
+}
+
+/// obtain nodeInfo from given vector
+void Host::obtainNodeInfo(NodeInfo& info, std::string const& node_info)
+{
+    std::vector<std::string> node_info_vec;
+    boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
+    if (node_info_vec.size() > 0)
+    {
+        info.nodeID = NodeID(node_info_vec[0]);
+    }
+    if (node_info_vec.size() > 1)
+    {
+        info.agencyName = obtainCommonNameFromSubject(node_info_vec[1]);
+    }
+    if (node_info_vec.size() > 2)
+    {
+        info.nodeName = obtainCommonNameFromSubject(node_info_vec[2]);
+    }
+}
+
 
 /**
  * @brief: server calls handshakeServer to after handshake
@@ -235,9 +305,12 @@ void Host::handshakeServer(const boost::system::error_code& error,
     }
     if (m_run)
     {
-        std::string node_id_str(*endpointPublicKey);
-        NodeID nodeID = NodeID(node_id_str);
-        startPeerSession(nodeID, socket, m_connectionHandler);
+        /// node info splitted with #
+        /// format: {nodeId}{#}{agencyName}{#}{nodeName}
+        std::string node_info(*endpointPublicKey);
+        NodeInfo info;
+        obtainNodeInfo(info, node_info);
+        startPeerSession(info, socket, m_connectionHandler);
     }
 }
 
@@ -254,18 +327,18 @@ void Host::handshakeServer(const boost::system::error_code& error,
  * @param _s : connected socket(used to init session object)
  */
 // TODO: asyncConnect pass handle to startPeerSession, make use of it
-void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& socket,
-    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)>)
+void Host::startPeerSession(NodeInfo const& nodeInfo, std::shared_ptr<SocketFace> const& socket,
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
     std::shared_ptr<SessionFace> ps =
         m_sessionFactory->create_session(weakHost, socket, m_messageFactory);
 
     auto connectionHandler = m_connectionHandler;
-    m_threadPool->enqueue([ps, connectionHandler, nodeID]() {
+    m_threadPool->enqueue([ps, connectionHandler, nodeInfo]() {
         if (connectionHandler)
         {
-            connectionHandler(NetworkException(0, ""), nodeID, ps);
+            connectionHandler(NetworkException(0, ""), nodeInfo, ps);
         }
         else
         {
@@ -273,7 +346,7 @@ void Host::startPeerSession(NodeID nodeID, std::shared_ptr<SocketFace> const& so
         }
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remote_endpoint()
-                   << LOG_KV("nodeID", nodeID.abridged());
+                   << LOG_KV("nodeID", nodeInfo.nodeID.abridged());
 }
 
 /**
@@ -319,7 +392,7 @@ void Host::start()
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
 void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-    std::function<void(NetworkException, NodeID nodeID, std::shared_ptr<SessionFace>)> callback)
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)> callback)
 {
     if (!m_run)
     {
@@ -375,7 +448,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                 socket->close();
 
                 m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                    callback(NetworkException(ConnectError, "Connect failed"), NodeID(),
+                    callback(NetworkException(ConnectError, "Connect failed"), NodeInfo(),
                         std::shared_ptr<SessionFace>());
                 });
                 return;
@@ -403,7 +476,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
  */
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string>& endpointPublicKey,
-    std::function<void(NetworkException, NodeID, std::shared_ptr<SessionFace>)> callback,
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
 {
     timerPtr->cancel();
@@ -431,9 +504,10 @@ void Host::handshakeClient(const boost::system::error_code& error,
 
     if (m_run)
     {
-        std::string node_id_str(*endpointPublicKey);
-        NodeID nodeID = NodeID(node_id_str);
-        startPeerSession(nodeID, socket, callback);
+        std::string node_info(*endpointPublicKey);
+        NodeInfo info;
+        obtainNodeInfo(info, node_info);
+        startPeerSession(info, socket, callback);
     }
 }
 

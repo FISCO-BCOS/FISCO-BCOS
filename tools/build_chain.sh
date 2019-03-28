@@ -29,6 +29,8 @@ current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
+timestamp=$(date +%s)
+enable_compress="true"
 
 
 help() {
@@ -42,6 +44,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -C <disable compress>               Default enable. If set -C, disable compress
     -s <State type>                     Default storage. if set -s, use mpt 
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -70,7 +73,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTFd" option;do
+while getopts "f:l:o:p:e:t:icszhgTFdC" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -87,6 +90,7 @@ while getopts "f:l:o:p:e:t:icszhgTFd" option;do
     s) state_type=mpt;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
+    C) enable_compress="false";;
     T) debug_log="true"
     log_level="debug"
     ;;
@@ -400,6 +404,8 @@ generate_config_ini()
         prefix="gm"
     fi
     cat << EOF > ${output}
+[supported_compatibility]
+;version=2.0.0-rc1
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
@@ -414,6 +420,9 @@ generate_config_ini()
     listen_port=$(( offset + port_start[0] ))
     ; nodes to connect
     $ip_list
+    ;enable/disable network compress
+    enable_compress=${enable_compress}
+
 ;certificate rejected list		
 [crl]		
     ; crl.0 should be nodeid, nodeid's length is 128 
@@ -479,6 +488,7 @@ generate_group_genesis()
     gas_limit=300000000
 [group]
     id=${index}
+    timestamp=${timestamp}
 EOF
 }
 

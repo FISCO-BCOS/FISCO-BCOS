@@ -26,6 +26,12 @@
 
 namespace dev
 {
+enum VERSION
+{
+    RC1_VERSION = 1,
+    RC2_VERSION = 2,
+    LATEST_VERSION
+};
 class GlobalConfigure
 {
 public:
@@ -34,6 +40,26 @@ public:
         static GlobalConfigure ins;
         return ins;
     }
+    void setVersion(std::string const& versionStr)
+    {
+        if (dev::stringCmpIgnoreCase(versionStr, "2.0.0-rc1") == 0)
+        {
+            m_version = RC1_VERSION;
+        }
+        else if (dev::stringCmpIgnoreCase(versionStr, "2.0.0-rc2") == 0)
+        {
+            m_version = RC2_VERSION;
+        }
+        else
+        {
+            m_version = LATEST_VERSION;
+        }
+    }
+
+    VERSION const& version() const { return m_version; }
+    void setCompress(bool const& compress) { m_compress = compress; }
+
+    bool compressEnabled() const { return m_compress; }
 
     struct DiskEncryption
     {
@@ -43,13 +69,19 @@ public:
         std::string cipherDataKey;
     } diskEncryption;
 
-
     /// default block time
     const unsigned c_intervalBlockTime = 1000;
     /// omit empty block or not
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
+
+    /// default compress threshold: 1KB
+    const uint64_t c_compressThreshold = 1024;
+
+private:
+    VERSION m_version;
+    bool m_compress;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

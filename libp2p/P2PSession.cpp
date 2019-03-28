@@ -56,7 +56,7 @@ void P2PSession::stop(dev::network::DisconnectReason reason)
 void P2PSession::heartBeat()
 {
     SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
-                       << LOG_KV("m_nodeID", m_nodeID.abridged())
+                       << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
                        << LOG_KV("name", m_session->nodeIPEndpoint().name());
     auto service = m_service.lock();
     if (service && service->actived())
