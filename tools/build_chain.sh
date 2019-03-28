@@ -31,6 +31,7 @@ TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 timestamp=$(date +%s)
 enable_compress="true"
+latest_version=""
 
 
 help() {
@@ -405,7 +406,7 @@ generate_config_ini()
     fi
     cat << EOF > ${output}
 [supported_compatibility]
-;version=2.0.0-rc1
+version=${latest_version}
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
@@ -897,7 +898,7 @@ if [ -z ${docker_mode} ];then
         echo "Binary check passed."
     fi
 fi
-
+latest_version=`${bin_path} --version | grep "FISCO-BCOS Version" | cut -d':' -f2 | sed s/[[:space:]]//g`
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
     # CertConfig="${output_dir}/cert.cnf"
     generate_cert_conf "cert.cnf"

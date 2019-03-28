@@ -50,9 +50,14 @@ public:
         {
             m_version = RC2_VERSION;
         }
-        else
+        else if (dev::stringCmpIgnoreCase(versionStr, "latest") == 0)
         {
             m_version = LATEST_VERSION;
+        }
+        /// default is RC1 version
+        else
+        {
+            m_version = RC1_VERSION;
         }
     }
 
