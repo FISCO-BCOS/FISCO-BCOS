@@ -426,7 +426,7 @@ generate_config_ini()
     enable_compress=${enable_compress}
 
 ;certificate rejected list		
-[crl]		
+[certificate_blacklist]		
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
@@ -437,7 +437,7 @@ generate_config_ini()
     group_config_path=${conf_path}/
 
 ;certificate configuration
-[secure]
+[network_security]
     ; directory the certificates located in
     data_path=${conf_path}/
     ; the node private key file
@@ -446,6 +446,17 @@ generate_config_ini()
     cert=${prefix}node.crt
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
+
+; storage security releated configurations
+[storage_security]
+; enable storage_security or not
+;enable=true
+; the IP of key mananger
+;key_manager_ip=
+; the Port of key manager
+;key_manager_port=
+;cipher_data_key=
+
 [compatibility]
     supported_version=${fisco_version}
 ;log configurations
