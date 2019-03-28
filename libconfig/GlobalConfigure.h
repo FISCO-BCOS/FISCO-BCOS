@@ -40,21 +40,7 @@ public:
         static GlobalConfigure ins;
         return ins;
     }
-    void setVersion(std::string const& versionStr)
-    {
-        if (dev::stringCmpIgnoreCase(versionStr, "2.0.0-rc1") == 0)
-        {
-            m_version = RC1_VERSION;
-        }
-        else if (dev::stringCmpIgnoreCase(versionStr, "2.0.0-rc2") == 0)
-        {
-            m_version = RC2_VERSION;
-        }
-        else
-        {
-            m_version = LATEST_VERSION;
-        }
-    }
+    void setVersion(VERSION _version) { m_version = _version; }
 
     VERSION const& version() const { return m_version; }
     void setCompress(bool const& compress) { m_compress = compress; }

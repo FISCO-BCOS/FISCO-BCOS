@@ -31,6 +31,7 @@ TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 timestamp=$(date +%s)
 enable_compress="true"
+fisco_version=""
 
 
 help() {
@@ -43,6 +44,8 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
+    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
+    -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <disable compress>               Default enable. If set -C, disable compress
     -s <State type>                     Default storage. if set -s, use mpt 
@@ -50,7 +53,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
-    -F <Disable log auto flush>         Default on. If set -d, disable log auto flush
+    -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -73,7 +76,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:icszhgTFdC" option;do
+while getopts "f:l:o:p:e:t:v:icszhgTFdC" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -83,6 +86,7 @@ while getopts "f:l:o:p:e:t:icszhgTFdC" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
+    v) fisco_version="$OPTARG";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
@@ -404,8 +408,6 @@ generate_config_ini()
         prefix="gm"
     fi
     cat << EOF > ${output}
-[supported_compatibility]
-;version=2.0.0-rc1
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
@@ -444,7 +446,8 @@ generate_config_ini()
     cert=${prefix}node.crt
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
-
+[compatibility]
+    supported_version=${fisco_version}
 ;log configurations
 [log]
     ; the directory of the log
@@ -711,7 +714,7 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
-    sleep 1
+    sleep 2
 fi
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
@@ -867,14 +870,18 @@ fi
 dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
+# get fisco_version
+if [ -z "${fisco_version}" ];then
+    fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+fi
+
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
     if [ -z ${bin_path} ];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-        version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
-        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${version}/${package_name}"
+        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${fisco_version}/${package_name}"
         LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
@@ -897,7 +904,6 @@ if [ -z ${docker_mode} ];then
         echo "Binary check passed."
     fi
 fi
-
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
     # CertConfig="${output_dir}/cert.cnf"
     generate_cert_conf "cert.cnf"
