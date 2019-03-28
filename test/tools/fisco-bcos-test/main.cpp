@@ -28,7 +28,6 @@
 INITIALIZE_EASYLOGGINGPP
 int main(int argc, const char* argv[])
 {
-    g_BCOSConfig.setVersion("latest");
     auto fakeInit = [](int, char* []) -> boost::unit_test::test_suite* { return nullptr; };
     int result = boost::unit_test::unit_test_main(fakeInit, argc, const_cast<char**>(argv));
     return result;
