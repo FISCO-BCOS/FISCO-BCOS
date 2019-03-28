@@ -34,7 +34,7 @@ public:
     virtual ~Storage(){};
 
     virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition) = 0;
+        const std::string& key, Condition::Ptr condition = nullptr) = 0;
     virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
         h256 const& blockHash) = 0;
     virtual bool onlyDirty() = 0;

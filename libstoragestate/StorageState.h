@@ -167,7 +167,7 @@ public:
     bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
     void setMemoryTableFactory(
-        std::shared_ptr<dev::storage::MemoryTableFactory> _memoryTableFactory)
+        std::shared_ptr<dev::storage::TableFactory> _memoryTableFactory)
     {
         m_memoryTableFactory = _memoryTableFactory;
     }
@@ -177,7 +177,7 @@ private:
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
     /// check authority by caller
     u256 m_accountStartNonce;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
 };
 }  // namespace storagestate
 }  // namespace dev

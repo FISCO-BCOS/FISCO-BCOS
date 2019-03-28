@@ -24,6 +24,7 @@
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <boost/test/unit_test.hpp>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -45,6 +46,8 @@ struct CRUDPrecompiledFixture
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         crudPrecompiled = std::make_shared<CRUDPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -53,7 +56,7 @@ struct CRUDPrecompiledFixture
     ~CRUDPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     CRUDPrecompiled::Ptr crudPrecompiled;
     BlockInfo blockInfo;
 };

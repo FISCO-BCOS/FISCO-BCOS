@@ -22,7 +22,7 @@
  * @date: 2018-10-24
  */
 #include "DBInitializer.h"
-#include "../libstorage/SQLStorage.h"
+#include <libstorage/SQLStorage.h>
 #include "LedgerParam.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
@@ -30,6 +30,8 @@
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -111,6 +113,11 @@ void DBInitializer::initLevelDBStorage()
             std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
         leveldb_storage->setDB(leveldb_handler);
         m_storage = leveldb_storage;
+
+        auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory>();
+        tableFactoryFactory->setStorage(m_storage);
+
+        m_tableFactoryFactory = tableFactoryFactory;
     }
     catch (std::exception& e)
     {
@@ -136,6 +143,11 @@ void DBInitializer::initSQLStorage()
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
     m_storage = sqlStorage;
+
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+	tableFactoryFactory->setStorage(m_storage);
+
+	m_tableFactoryFactory = tableFactoryFactory;
 }
 
 /// create ExecutiveContextFactory
@@ -148,11 +160,12 @@ void DBInitializer::createExecutiveContext()
         return;
     }
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
-    m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();
+    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
-    m_executiveContextFac->setStateStorage(m_storage);
+    m_executiveContextFactory->setStateStorage(m_storage);
     // mpt or storage
-    m_executiveContextFac->setStateFactory(m_stateFactory);
+    m_executiveContextFactory->setStateFactory(m_stateFactory);
+    m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext SUCC");
 }
 

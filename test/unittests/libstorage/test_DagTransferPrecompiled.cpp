@@ -29,6 +29,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -50,6 +51,8 @@ struct DagTransferPrecompiledFixture
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         dtPrecompiled = std::make_shared<DagTransferPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -58,7 +61,7 @@ struct DagTransferPrecompiledFixture
     ~DagTransferPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     DagTransferPrecompiled::Ptr dtPrecompiled;
     BlockInfo blockInfo;
 

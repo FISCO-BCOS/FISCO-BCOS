@@ -32,6 +32,7 @@
 #include <libdevcore/concurrent_queue.h>
 #include <libsync/SyncStatus.h>
 #include <sstream>
+#include <libstorage/Storage.h>
 
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>

@@ -29,7 +29,6 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -108,11 +107,15 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
     m_stateFactory = _stateFactory;
 }
 
-shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
+shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory()
 {
+#if 0
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
+#endif
+
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), 0);
     return memoryTableFactory;
 }
 
@@ -425,7 +428,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         /// modification 2019.3.20: set timestamp to block header
         block->setEmptyBlock(initParam.timeStamp);
         block->header().appendExtraDataArray(asBytes(initParam.groupMark));
-        shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
+        shared_ptr<TableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);
         if (tb)
         {

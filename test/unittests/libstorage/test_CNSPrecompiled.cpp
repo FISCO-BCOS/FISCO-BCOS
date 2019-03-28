@@ -31,6 +31,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -50,8 +51,10 @@ struct CNSPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -60,7 +63,7 @@ struct CNSPrecompiledFixture
     ~CNSPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     CNSPrecompiled::Ptr cnsPrecompiled;
     BlockInfo blockInfo;
 };

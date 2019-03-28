@@ -36,142 +36,27 @@ public:
 
     virtual ~MemoryStorage(){};
 
-    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
+    virtual Entries::Ptr select(
+        h256, int, const std::string& table, const std::string& key, Condition::Ptr) override
     {
-        std::vector<size_t> indexes;
-        indexes.reserve(entries->size());
-        if (condition->getConditions()->empty())
+        auto search = data.find(table);
+        if (search != data.end())
         {
-            for (size_t i = 0; i < entries->size(); ++i)
-                indexes.emplace_back(i);
-            return indexes;
-        }
-
-        for (size_t i = 0; i < entries->size(); ++i)
+            auto tableData = search->second;
+            auto it = tableData->data.find(key);
+            if (it != tableData->data.end())
         {
-            Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
+                for (size_t i = 0; i < it->second->size(); ++i)
             {
-                indexes.push_back(i);
-            }
-        }
-
-        return indexes;
-    }
-
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
+                    if (it->second->get(i)->getStatus() == Entry::Status::DELETED)
     {
-        try
-        {
-            for (auto& it : *condition->getConditions())
-            {
-                if (entry->getStatus() == Entry::Status::DELETED)
-                {
-                    return false;
+                        it->second->removeEntry(i);
                 }
 
-                std::string lhs = entry->getField(it.first);
-                std::string rhs = it.second.second;
-
-                if (it.second.first == Condition::Op::eq)
-                {
-                    if (lhs != rhs)
-                    {
-                        return false;
                     }
+                return it->second;
                 }
-                else if (it.second.first == Condition::Op::ne)
-                {
-                    if (lhs == rhs)
-                    {
-                        return false;
                     }
-                }
-                else
-                {
-                    if (lhs.empty())
-                    {
-                        lhs = "0";
-                    }
-                    if (rhs.empty())
-                    {
-                        rhs = "0";
-                    }
-
-                    int lhsNum = boost::lexical_cast<int>(lhs);
-                    int rhsNum = boost::lexical_cast<int>(rhs);
-
-                    switch (it.second.first)
-                    {
-                    case Condition::Op::eq:
-                    case Condition::Op::ne:
-                    {
-                        break;
-                    }
-                    case Condition::Op::gt:
-                    {
-                        if (lhsNum <= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::ge:
-                    {
-                        if (lhsNum < rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::lt:
-                    {
-                        if (lhsNum >= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::le:
-                    {
-                        if (lhsNum > rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    }
-                }
-            }
-        }
-        catch (std::exception& e)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition) override
-    {
-        (void)hash;
-        (void)num;
-        auto it = tableData.find(table);
-
-        if (it != tableData.end())
-        {
-            condition->EQ(it->second->info->key, key);
-            auto indices = processEntries(it->second->entries, condition);
-
-            auto entries = std::make_shared<Entries>();
-            for (auto indexIt : indices)
-            {
-                entries->addEntry(it->second->entries->get(indexIt));
-            }
-
-            return entries;
-        }
 
         return std::make_shared<Entries>();
     }
@@ -180,50 +65,14 @@ public:
     {
         for (auto it : datas)
         {
-            auto table = it->info->name;
-            auto tableIt = tableData.find(table);
-            if (tableIt != tableData.end())
-            {
-                size_t count = 0;
-                auto countIt = tableCounter.find(table);
-                if (countIt != tableCounter.end())
-                {
-                    count = countIt->second;
-                }
-
-                for (size_t i = 0; i < it->entries->size(); ++i)
-                {
-                    auto entry = it->entries->get(i);
-                    if (entry->getID() == 0)
-                    {
-                        entry->setID(++count);
-                        tableIt->second->entries->addEntry(entry);
-                    }
-                    else
-                    {
-                        for (size_t j = 0; j < tableIt->second->entries->size(); ++j)
-                        {
-                            if (tableIt->second->entries->get(j)->getID() == entry->getID())
-                            {
-                                for (auto fieldIt : *(entry->fields()))
-                                {
-                                    tableIt->second->entries->get(j)->setField(
-                                        fieldIt.first, fieldIt.second);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            data[it->tableName] = it;
         }
         return datas.size();
     }
     virtual bool onlyDirty() override { return false; }
 
 private:
-    std::map<std::string, TableData::Ptr> tableData;
-    std::map<std::string, size_t> tableCounter;
+    std::map<std::string, TableData::Ptr> data;
 };
 }  // namespace storage
 

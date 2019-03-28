@@ -25,7 +25,7 @@
 #include "StorageState.h"
 #include "libdevcrypto/Hash.h"
 #include "libethcore/Exceptions.h"
-#include "libstorage/MemoryTableFactory.h"
+#include "libstorage/Table.h"
 
 using namespace dev;
 using namespace dev::eth;
@@ -350,7 +350,7 @@ h256 StorageState::rootHash(bool needCalculate) const
 
 void StorageState::commit()
 {
-    m_memoryTableFactory->commit();
+    //m_memoryTableFactory->commit();
 }
 
 void StorageState::dbCommit(h256 const&, int64_t)

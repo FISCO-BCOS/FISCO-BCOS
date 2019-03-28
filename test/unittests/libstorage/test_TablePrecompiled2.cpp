@@ -21,7 +21,7 @@
 #include <libstorage/ConditionPrecompiled.h>
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/EntryPrecompiled.h>
-#include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTable2.h>
 #include <libstorage/Table.h>
 #include <libstorage/TablePrecompiled.h>
 #include <boost/test/unit_test.hpp>
@@ -31,7 +31,7 @@ using namespace std;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 
-namespace test_TablePrecompiled
+namespace test_TablePrecompiled2
 {
 class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 {
@@ -39,20 +39,21 @@ public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable<Serial>
+class MockMemoryDB : public dev::storage::MemoryTable2
 {
 public:
     virtual ~MockMemoryDB() {}
 };
 
-struct TablePrecompiledFixture
+struct TablePrecompiledFixture2
 {
-    TablePrecompiledFixture()
+    TablePrecompiledFixture2()
     {
         context = std::make_shared<MockPrecompiledEngine>();
         tablePrecompiled = std::make_shared<dev::blockverifier::TablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
+        info->fields.emplace_back("_id_");
         info->fields.emplace_back("name");
         info->fields.emplace_back("_status_");
         table->setTableInfo(info);
@@ -61,7 +62,7 @@ struct TablePrecompiledFixture
         tablePrecompiled->setTable(table);
     }
 
-    ~TablePrecompiledFixture() {}
+    ~TablePrecompiledFixture2() {}
 
     dev::blockverifier::TablePrecompiled::Ptr tablePrecompiled;
     ExecutiveContext::Ptr context;
@@ -69,7 +70,7 @@ struct TablePrecompiledFixture
     int addressCount = 0x10000;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TablePrecompiled, TablePrecompiledFixture)
+BOOST_FIXTURE_TEST_SUITE(TablePrecompiled2, TablePrecompiledFixture2)
 
 BOOST_AUTO_TEST_CASE(getDB)
 {

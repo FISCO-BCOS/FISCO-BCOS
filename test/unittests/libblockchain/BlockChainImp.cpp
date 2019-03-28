@@ -28,7 +28,6 @@
 #include <libethcore/Transaction.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -59,7 +58,7 @@ static std::string const c_commonHash =
     "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public dev::storage::MemoryTable
+class MockTable : public dev::storage::MemoryTable<Serial>
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;
@@ -152,16 +151,16 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory() override
+    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory() override
     {
         return m_memoryTableFactory;
     }
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> _m)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> _m)
     {
         m_memoryTableFactory = _m;
     }
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
 };
 
 class MockState : public StorageState

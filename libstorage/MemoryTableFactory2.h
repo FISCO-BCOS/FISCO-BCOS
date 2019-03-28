@@ -39,12 +39,12 @@ class ExecutiveContext;
 }
 namespace storage
 {
-class MemoryTableFactory : public TableFactory
+class MemoryTableFactory2 : public TableFactory
 {
 public:
-    typedef std::shared_ptr<MemoryTableFactory> Ptr;
-    MemoryTableFactory();
-    virtual ~MemoryTableFactory() {}
+    typedef std::shared_ptr<MemoryTableFactory2> Ptr;
+    MemoryTableFactory2();
+    virtual ~MemoryTableFactory2() {}
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = true) override;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
@@ -61,7 +61,6 @@ public:
     virtual size_t savepoint() override;
     virtual void rollback(size_t _savepoint) override;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
-    int getCreateTableCode() { return createTableCode; }
 
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
@@ -75,7 +74,6 @@ private:
     boost::thread_specific_ptr<std::vector<Change>> m_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
-    int createTableCode;
 
     // mutex
     mutable RecursiveMutex x_name2Table;

@@ -19,9 +19,9 @@
  *  @date 20180921
  */
 #include "TableFactoryPrecompiled.h"
-#include "MemoryTable.h"
-#include "MemoryTableFactory.h"
+#include "Table.h"
 #include "TablePrecompiled.h"
+#include "StorageException.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -99,11 +99,16 @@ bytes TableFactoryPrecompiled::call(
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        auto table =
-            m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
-        // set createTableCode
-        int createTableCode = m_memoryTableFactory->getCreateTableCode();
-        out = abi.abiIn("", createTableCode);
+        auto result = 0;
+		try {
+			auto table = m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+			// set createTableCode
+		}
+        catch(dev::storage::StorageException &e) {
+        	STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
+        	result = e.errorCode();
+        }
+        out = abi.abiIn("", result);
     }
     else
     {

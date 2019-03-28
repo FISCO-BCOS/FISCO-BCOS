@@ -15,7 +15,7 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 
-#include "libstorage/LevelDBStorage.h"
+#include "libstorage/LevelDBStorage2.h"
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/FixedHash.h>
@@ -31,7 +31,7 @@ namespace leveldb
 class Value;
 }
 
-namespace test_LevelDBStateStorage
+namespace test_LevelDBStateStorage2
 {
 inline uint32_t DecodeFixed32(const char* ptr, bool LittleEndian = true)
 {
@@ -180,11 +180,11 @@ private:
     std::map<std::string, std::string> db;
 };
 
-struct LevelDBFixture
+struct LevelDBFixture2
 {
-    LevelDBFixture()
+    LevelDBFixture2()
     {
-        levelDB = std::make_shared<dev::storage::LevelDBStorage>();
+        levelDB = std::make_shared<dev::storage::LevelDBStorage2>();
         std::shared_ptr<MockLevelDB> mockLevelDB = std::make_shared<MockLevelDB>();
         levelDB->setDB(mockLevelDB);
     }
@@ -197,10 +197,10 @@ struct LevelDBFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::LevelDBStorage::Ptr levelDB;
+    dev::storage::LevelDBStorage2::Ptr levelDB;
 };
 
-BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture)
+BOOST_FIXTURE_TEST_SUITE(LevelDB2, LevelDBFixture2)
 
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
@@ -214,7 +214,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
     int num = 1;
     std::string table("t_test");
     std::string key("id");
-    Entries::Ptr entries = levelDB->select(h, num, table, key);
+    Entries::Ptr entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -225,18 +225,17 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 blockHash(0x11231);
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
-    tableData->tableName = "t_test";
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->data.insert(std::make_pair(std::string("LiSi"), entries));
-    if (!tableData->data.empty())
-    {
+    tableData->entries = entries;
     datas.push_back(tableData);
-    }
     size_t c = levelDB->commit(h, num, datas, blockHash);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
-    entries = levelDB->select(h, num, table, key);
+    entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -247,15 +246,19 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 blockHash(0x11231);
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
-    tableData->tableName = "e";
+    tableData->info->name = "e";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->data.insert(std::make_pair(std::string("Exception"), entries));
+    entries->get(0)->setField("Name", "Exception");
+    tableData->entries = entries;
     datas.push_back(tableData);
     BOOST_CHECK_THROW(levelDB->commit(h, num, datas, blockHash), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(levelDB->select(h, num, table, key), boost::exception);
+    BOOST_CHECK_THROW(
+        levelDB->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
