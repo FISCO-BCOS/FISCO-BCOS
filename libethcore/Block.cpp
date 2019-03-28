@@ -81,6 +81,35 @@ Block& Block::operator=(Block const& _block)
  */
 void Block::encode(bytes& _out) const
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        encodeRC2(_out);
+        return;
+    }
+
+    m_blockHeader.verify();
+    calTransactionRoot(false);
+    calReceiptRoot(false);
+    bytes headerData;
+    m_blockHeader.encode(headerData);
+    /// get block RLPStream
+    RLPStream block_stream;
+    block_stream.appendList(5);
+    // append block header
+    block_stream.appendRaw(headerData);
+    // append transaction list
+    block_stream.appendRaw(m_txsCache);
+    // append transactionReceipts list
+    block_stream.appendRaw(m_tReceiptsCache);
+    // append block hash
+    block_stream.append(m_blockHeader.hash());
+    // append sig_list
+    block_stream.appendVector(m_sigList);
+    block_stream.swapOut(_out);
+}
+
+void Block::encodeRC2(bytes& _out) const
+{
     m_blockHeader.verify();
     calTransactionRoot(false);
     calReceiptRoot(false);
@@ -106,9 +135,39 @@ void Block::encode(bytes& _out) const
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 void Block::calTransactionRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        calTransactionRootRC2(update);
+        return;
+    }
+
     WriteGuard l(x_txsCache);
     RLPStream txs;
     txs.appendList(m_transactions.size());
+    if (m_txsCache == bytes())
+    {
+        BytesMap txsMapCache;
+        for (size_t i = 0; i < m_transactions.size(); i++)
+        {
+            RLPStream s;
+            s << i;
+            bytes trans_data;
+            m_transactions[i].encode(trans_data);
+            txs.appendRaw(trans_data);
+            txsMapCache.insert(std::make_pair(s.out(), trans_data));
+        }
+        txs.swapOut(m_txsCache);
+        m_transRootCache = hash256(txsMapCache);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setTransactionsRoot(m_transRootCache);
+    }
+}
+
+void Block::calTransactionRootRC2(bool update) const
+{
+    WriteGuard l(x_txsCache);
     if (m_txsCache == bytes())
     {
         m_txsCache = TxsParallelParser::encode(m_transactions);
@@ -172,6 +231,49 @@ void Block::calReceiptRoot(bool update) const
  * @param _block : the specified data of block
  */
 void Block::decode(
+    bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
+{
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        decodeRC2(_block_bytes, _option, _withReceipt, _withTxHash);
+        return;
+    }
+
+    /// no try-catch to throw exceptions directly
+    /// get RLP of block
+    RLP block_rlp = BlockHeader::extractBlock(_block_bytes);
+    /// get block header
+    m_blockHeader.populate(block_rlp[0]);
+    /// get transaction list
+    RLP transactions_rlp = block_rlp[1];
+
+    m_transactions.resize(transactions_rlp.itemCount());
+    for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
+    {
+        m_transactions[i].decode(transactions_rlp[i], _option);
+    }
+
+    /// get txsCache
+    m_txsCache = transactions_rlp.data().toBytes();
+
+    /// get transactionReceipt list
+    RLP transactionReceipts_rlp = block_rlp[2];
+    m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
+    for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
+    {
+        m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
+    }
+    /// get hash
+    h256 hash = block_rlp[3].toHash<h256>();
+    if (hash != m_blockHeader.hash())
+    {
+        BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
+    }
+    /// get sig_list
+    m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
+}
+
+void Block::decodeRC2(
     bytesConstRef _block_bytes, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
     /// no try-catch to throw exceptions directly
