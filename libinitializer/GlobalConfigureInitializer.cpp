@@ -38,8 +38,16 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
         _pt.get<std::string>("data_secure.cipher_data_key", "");
 
     /// init version
-    std::string version = _pt.get<std::string>("supported_compatibility.version", "");
-    g_BCOSConfig.setVersion(version);
+    std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
+    if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
+    {
+        g_BCOSConfig.setVersion(RC2_VERSION);
+    }
+    /// default is RC1
+    else
+    {
+        g_BCOSConfig.setVersion(RC1_VERSION);
+    }
 
     /// compress related option, default enable
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);

@@ -143,23 +143,11 @@ std::string DagTransferPrecompiled::toString()
 Table::Ptr DagTransferPrecompiled::openTable(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-
-    if (!tableFactoryPrecompiled)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
-                               << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
-        return nullptr;
-    }
-
-    auto table =
-        tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER, false, true);
+    auto table = Precompiled::openTable(context, DAG_TRANSFER);
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
-            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, false, origin, true);
+        table = createTable(
+            context, DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");
