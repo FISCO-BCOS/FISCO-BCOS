@@ -29,14 +29,6 @@ using namespace dev::initializer;
 
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
-    // TODO: rename keycenter to key-manager, disk encryption to data secure
-    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>("data_secure.enable", false);
-    g_BCOSConfig.diskEncryption.keyCenterIP =
-        _pt.get<std::string>("data_secure.key_manager_ip", "");
-    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>("data_secure.key_manager_port", 0);
-    g_BCOSConfig.diskEncryption.cipherDataKey =
-        _pt.get<std::string>("data_secure.cipher_data_key", "");
-
     /// init version
     std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
     if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
@@ -48,6 +40,21 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     {
         g_BCOSConfig.setVersion(RC1_VERSION);
     }
+
+
+    std::string sectionName = "data_secure";
+    if (_pt.get_child_optional("storage_security"))
+    {
+        sectionName = "storage_security";
+    }
+
+    // TODO: rename keycenter to key-manager, disk encryption to data secure
+    g_BCOSConfig.diskEncryption.enable = _pt.get<bool>(sectionName + ".enable", false);
+    g_BCOSConfig.diskEncryption.keyCenterIP =
+        _pt.get<std::string>(sectionName + ".key_manager_ip", "");
+    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>(sectionName + ".key_manager_port", 0);
+    g_BCOSConfig.diskEncryption.cipherDataKey =
+        _pt.get<std::string>(sectionName + ".cipher_data_key", "");
 
     /// compress related option, default enable
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
