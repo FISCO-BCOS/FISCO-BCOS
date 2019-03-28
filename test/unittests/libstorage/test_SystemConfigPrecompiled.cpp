@@ -7,6 +7,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -30,6 +31,8 @@ struct SystemConfigPrecompiledFixture
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -38,7 +41,7 @@ struct SystemConfigPrecompiledFixture
     ~SystemConfigPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     SystemConfigPrecompiled::Ptr systemConfigPrecompiled;
     BlockInfo blockInfo;
 };

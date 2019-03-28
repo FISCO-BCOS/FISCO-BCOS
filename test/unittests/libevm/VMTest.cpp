@@ -23,6 +23,7 @@
 #include <libexecutive/StateFace.h>
 #include <libinterpreter/interpreter.h>
 #include <libmptstate/MPTState.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

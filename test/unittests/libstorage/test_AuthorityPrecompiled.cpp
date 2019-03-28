@@ -29,6 +29,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/AuthorityPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -50,8 +51,10 @@ struct AuthorityPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
@@ -60,7 +63,7 @@ struct AuthorityPrecompiledFixture
     ~AuthorityPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr authorityPrecompiled;
     BlockInfo blockInfo;
 };

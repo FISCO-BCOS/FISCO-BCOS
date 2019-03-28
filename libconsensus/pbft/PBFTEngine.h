@@ -30,6 +30,7 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
 #include <sstream>
 
