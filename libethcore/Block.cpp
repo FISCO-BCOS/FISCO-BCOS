@@ -204,8 +204,6 @@ void Block::calReceiptRoot(bool update) const
         }
         txReceipts.swapOut(m_tReceiptsCache);
         m_receiptRootCache = hash256(mapCache);
-        LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_KV("hash", toHex(m_receiptRootCache))
-                   << LOG_KV("bytes", toHex(m_tReceiptsCache));
     }
     if (update == true)
     {
