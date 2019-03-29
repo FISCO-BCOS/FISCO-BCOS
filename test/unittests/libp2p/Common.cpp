@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(testMessage)
     std::string s = "hello world!";
     msg->setBuffer(buf);
     buf->assign(s.begin(), s.end());
-    msg->setLength(p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size());
+    BOOST_CHECK(msg->length() == (p2p::P2PMessage::HEADER_LENGTH + msg->buffer()->size()));
 
     auto buffer = std::make_shared<bytes>();
     msg->encode(*buffer);
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(testMessage)
     BOOST_CHECK(message->protocolID() == 2);
     BOOST_CHECK(message->packetType() == 2);
     BOOST_CHECK(message->seq() == 1);
-    BOOST_CHECK(message->getResponceProtocolID() == -2);
+    /// BOOST_CHECK(message->getResponceProtocolID() == -2);
 
     /*msg->encodeAMOPBuffer("topic");
     std::string t;
