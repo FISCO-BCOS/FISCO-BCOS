@@ -188,6 +188,12 @@ struct StaticArray : std::false_type
 {
 };
 
+// stringN type => bytesN
+template <std::size_t N>
+struct StaticArray<std::array<char, N>> : std::false_type
+{
+};
+
 // a fixed-length array of N elements of type T.
 template <class T, std::size_t N>
 struct StaticArray<std::array<T, N>> : std::true_type
@@ -239,15 +245,6 @@ struct Length
     enum
     {
         value = 1
-    };
-};
-
-template <>
-struct Length<string64>
-{
-    enum
-    {
-        value = 2
     };
 };
 
@@ -345,8 +342,6 @@ public:
 
     void deserialise(string32& _out, std::size_t _offset);
 
-    void deserialise(string64& _out, std::size_t _offset);
-
     void deserialise(std::string& _out, std::size_t _offset);
 
     // static array
@@ -397,7 +392,7 @@ public:
     bool abiOutHex(const std::string& _data, T&... _t)
     {
         auto data = fromHex(_data);
-        abiOut(bytesConstRef(&data), _t...);
+        return abiOut(bytesConstRef(&data), _t...);
     }
 
     bool abiOut(bytesConstRef _data, const std::vector<std::string>& _allTypes,
@@ -431,9 +426,6 @@ public:
 
     // binary type of 32 bytes
     bytes serialise(const string32& _in);
-
-    // binary type of 64 bytes
-    bytes serialise(const string64& _in);
 
     // dynamic sized unicode string assumed to be UTF-8 encoded.
     bytes serialise(const std::string& _in);
