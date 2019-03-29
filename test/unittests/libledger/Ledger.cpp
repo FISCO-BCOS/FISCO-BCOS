@@ -28,7 +28,6 @@
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;

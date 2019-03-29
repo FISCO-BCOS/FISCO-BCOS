@@ -47,28 +47,40 @@ public:
     virtual uint32_t length() override { return m_length; }
     virtual void setLength(uint32_t _length)
     {
-        m_length = _length;
-        setDirty(m_length, _length);
+        if (m_length != _length)
+        {
+            m_length = _length;
+            setDirty(true);
+        }
     }
 
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
     virtual void setProtocolID(PROTOCOL_ID _protocolID)
     {
-        m_protocolID = _protocolID;
-        setDirty(m_protocolID, _protocolID);
+        if (m_protocolID != _protocolID)
+        {
+            m_protocolID = _protocolID;
+            setDirty(true);
+        }
     }
     virtual PACKET_TYPE packetType() { return m_packetType; }
     virtual void setPacketType(PACKET_TYPE _packetType)
     {
-        m_packetType = _packetType;
-        setDirty(m_packetType, _packetType);
+        if (m_packetType != _packetType)
+        {
+            m_packetType = _packetType;
+            setDirty(true);
+        }
     }
 
     virtual uint32_t seq() override { return m_seq; }
     virtual void setSeq(uint32_t _seq)
     {
-        m_seq = _seq;
-        setDirty(m_seq, _seq);
+        if (m_seq != _seq)
+        {
+            m_seq = _seq;
+            setDirty(true);
+        }
     }
 
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
@@ -95,11 +107,7 @@ public:
     virtual ssize_t decode(const byte* buffer, size_t size) override;
 
     /// update m_dirty according to updatedData
-    template <class T>
-    void setDirty(T const& originValue, T const& updatedValue)
-    {
-        m_dirty = (originValue == updatedValue ? false : true);
-    }
+    void setDirty(bool _dirty) { m_dirty = _dirty; }
 
     bool dirty() const { return m_dirty; }
 

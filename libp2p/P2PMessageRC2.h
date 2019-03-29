@@ -47,10 +47,13 @@ public:
     /// returned.
     ssize_t decode(const byte* buffer, size_t size) override;
 
-    virtual void setVersion(VERSION_TYPE const& version)
+    virtual void setVersion(VERSION_TYPE const& _version)
     {
-        m_version = version;
-        setDirty(m_version, version);
+        if (m_version != _version)
+        {
+            m_version = _version;
+            setDirty(true);
+        }
     }
     virtual VERSION_TYPE version() const { return m_version; }
 
