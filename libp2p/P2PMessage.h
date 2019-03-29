@@ -47,12 +47,12 @@ public:
     virtual uint32_t length() override { return m_length; }
 
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
-    virtual void setProtocolID(PROTOCOL_ID _protocolID) { setData(m_protocolID, _protocolID); }
+    virtual void setProtocolID(PROTOCOL_ID _protocolID) { setField(m_protocolID, _protocolID); }
     virtual PACKET_TYPE packetType() { return m_packetType; }
-    virtual void setPacketType(PACKET_TYPE _packetType) { setData(m_packetType, _packetType); }
+    virtual void setPacketType(PACKET_TYPE _packetType) { setField(m_packetType, _packetType); }
 
     virtual uint32_t seq() override { return m_seq; }
-    virtual void setSeq(uint32_t _seq) { setData(m_seq, _seq); }
+    virtual void setSeq(uint32_t _seq) { setField(m_seq, _seq); }
 
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
     virtual void setBuffer(std::shared_ptr<bytes> _buffer)
@@ -81,7 +81,7 @@ public:
 
     /// update m_dirty according to updatedData
     template <class T>
-    void setData(T& originValue, T const& updatedValue)
+    void setField(T& originValue, T const& updatedValue)
     {
         if (originValue == updatedValue)
         {

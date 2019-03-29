@@ -51,7 +51,7 @@ public:
     virtual void setVersion(VERSION_TYPE const& version)
     {
         m_version = version;
-        setData(m_version, version);
+        setField(m_version, version);
     }
     virtual VERSION_TYPE version() const { return m_version; }
 
