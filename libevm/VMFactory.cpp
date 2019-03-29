@@ -24,6 +24,7 @@
 #include "VMFactory.h"
 #include "EVMC.h"
 
+#include <libevmforce/force.h>
 #include <libinterpreter/interpreter.h>
 
 #include <evmc/loader.h>
@@ -44,7 +45,7 @@ namespace eth
 {
 namespace
 {
-auto g_kind = VMKind::Interpreter;
+auto g_kind = VMKind::Force;
 
 /// The pointer to EVMC create function in DLL EVMC VM.
 ///
@@ -73,7 +74,8 @@ VMKindTableEntry vmKindsTable[] = {
 #ifdef ETH_HERA
     {VMKind::Hera, "hera"},
 #endif
-    {VMKind::Interpreter, "interpreter"}};
+    {VMKind::Interpreter, "interpreter"}, {VMKind::Force, "force"}};
+
 
 void setVMKind(const std::string& _name)
 {
@@ -194,7 +196,10 @@ std::unique_ptr<VMFace> VMFactory::create(VMKind _kind)
 #endif
     case VMKind::DLL:
         return std::unique_ptr<VMFace>(new EVMC{g_evmcCreateFn()});
+    case VMKind::Force:
+        return std::unique_ptr<VMFace>(new EVMC(evmc_create_force()));
     case VMKind::Interpreter:
+
     default:
         return std::unique_ptr<VMFace>(new EVMC{evmc_create_interpreter()});
     }
