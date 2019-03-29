@@ -49,6 +49,29 @@ public:
 
     virtual ~MemoryTable(){};
 
+    inline typename Entries::Ptr updateCacheFromRemoteDB(const std::string& key)
+    {
+        dev::WriteGuard l(x_cache);
+        Entries::Ptr entries = std::make_shared<Entries>();
+        auto it = m_cache.find(key);
+        if (it == m_cache.end())
+        {
+            entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+            m_cache[key] = entries;
+        }
+        else
+        {
+            entries = it->second;
+        }
+
+        if (entries == nullptr)
+        {
+            entries = std::make_shared<Entries>();
+        }
+
+        return entries;
+    }
+
     virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
         try
@@ -64,8 +87,7 @@ public:
             {
                 if (m_remoteDB)
                 {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache[key] = entries;
+                    entries = updateCacheFromRemoteDB(key);
                 }
             }
             else
@@ -115,8 +137,7 @@ public:
             {
                 if (m_remoteDB)
                 {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache[key] = entries;
+                    entries = updateCacheFromRemoteDB(key);
                 }
             }
             else
@@ -182,14 +203,9 @@ public:
             // key-value is invalid
             if (it == m_cache.end() || it->second == nullptr)
             {
-                if (m_remoteDB)
+                if (m_remoteDB && needSelect)
                 {
-                    if (needSelect)
-                    {
-                        entries =
-                            m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                        m_cache[key] = entries;
-                    }
+                    entries = updateCacheFromRemoteDB(key);
                 }
             }
             else
@@ -244,8 +260,7 @@ public:
         {
             if (m_remoteDB)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache[key] = entries;
+                entries = updateCacheFromRemoteDB(key);
             }
         }
         else
@@ -279,7 +294,7 @@ public:
         bytes data;
         for (auto& it : tmpOrderedCache)
         {
-            if (it.second->dirty())
+            if (it.second != nullptr && it.second->dirty())
             {
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
@@ -348,6 +363,11 @@ public:
         bool dirtyTable = false;
         for (auto it : m_cache)
         {
+            if (it.second == nullptr)
+            {
+                continue;
+            }
+
             _data->data.insert(make_pair(it.first, it.second));
 
             if (it.second->dirty())
@@ -555,6 +575,7 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
+    dev::SharedMutex x_cache;
 };
 }  // namespace storage
 }  // namespace dev
