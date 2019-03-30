@@ -211,7 +211,7 @@ void CRUDPrecompiled::parseCondition(
                 {
                     condition->LT(*iter, OPJson[*it].asString());
                 }
-                else if (*it == "lit")
+                else if (*it == "limit")
                 {
                     std::string offsetCount = OPJson[*it].asString();
                     std::vector<std::string> offsetCountList;

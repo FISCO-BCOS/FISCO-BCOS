@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // select
     std::string selectFunc = "select(string,string,string,string)";
-    std::string conditonStr = "{\"item_id\":{\"eq\":\"1\"},\"lit\":{\"lit\":\"0,1\"}}";
+    std::string conditonStr = "{\"item_id\":{\"eq\":\"1\"},\"limit\":{\"limit\":\"0,1\"}}";
     param.clear();
     out.clear();
     param = abi.abiIn(selectFunc, tableName, key, conditonStr, "");
