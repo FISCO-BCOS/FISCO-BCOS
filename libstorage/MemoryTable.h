@@ -132,6 +132,11 @@ public:
 
             typename Entries::Ptr entries = selectCache(key);
 
+            if (!entries || entries->size() == 0)
+            {
+                return 0;
+            }
+
             checkField(entry);
             auto indexes = processEntries(entries, condition);
             std::vector<Change::Record> records;
@@ -217,6 +222,11 @@ public:
         }
 
         typename Entries::Ptr entries = selectCache(key);
+
+        if (!entries && entries->size() != 0)
+        {
+            return 0;
+        }
 
         auto indexes = processEntries(entries, condition);
 
