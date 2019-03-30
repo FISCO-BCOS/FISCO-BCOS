@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getField("value") == initBalance);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
+            // std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
 
             auto savepoint1 = memoryDBFactory->savepoint();
             BOOST_TEST(savepoint1 == 1);

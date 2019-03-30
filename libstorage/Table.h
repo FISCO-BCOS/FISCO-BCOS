@@ -253,10 +253,10 @@ public:
     virtual ~TableFactory() {}
 
     virtual Table::Ptr openTable(
-        const std::string& table, bool authorityFlag = true, bool isPara = false) = 0;
+        const std::string& table, bool authorityFlag = true, bool isPara = true) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
-        bool isPara = false) = 0;
+        bool isPara = true) = 0;
 
     virtual h256 hash() = 0;
     virtual size_t savepoint() = 0;

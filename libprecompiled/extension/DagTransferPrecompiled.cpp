@@ -151,6 +151,14 @@ Table::Ptr DagTransferPrecompiled::openTable(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");
+        table->setRecorder([](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
+                               std::vector<Change::Record>& _records) {
+            // This precompile is no need to rollback;
+            (void)_table;
+            (void)_kind;
+            (void)_key;
+            (void)_records;
+        });
     }
 
     return table;
@@ -643,7 +651,7 @@ void DagTransferPrecompiled::userTransferCall(
                                << LOG_KV("toUserBalance", toUserBalance)
                                << LOG_KV("newFromUserBalance", newFromUserBalance)
                                << LOG_KV("newToUserBalance", newToUserBalance);
-                               */
+                               //*/
     }
     else
     {
