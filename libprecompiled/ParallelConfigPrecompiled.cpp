@@ -60,7 +60,7 @@ ParallelConfigPrecompiled::ParallelConfigPrecompiled()
         getFuncSelector(PARA_CONFIG_UNREGISTER_METHOD_ADDR_STR);
 }
 
-std::string ParallelConfigPrecompiled::toString()
+string ParallelConfigPrecompiled::toString()
 {
     return "ParallelConfig";
 }
@@ -92,12 +92,11 @@ bytes ParallelConfigPrecompiled::call(
 }
 
 Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,
-    Address const& contractAddress, Address const& origin)
+    Address const& contractAddress, Address const& origin, bool needCreate)
 {
     string tableName = "_contract_parallel_func_" + contractAddress.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
+        dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
     if (!tableFactoryPrecompiled)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ParallelConfigPrecompiled")
@@ -107,7 +106,8 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
 
     auto table =
         tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName, false, false);
-    if (!table)
+
+    if (!table && needCreate)
     {  //__dat_transfer__ is not exist, then create it first.
         table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
             tableName, PARA_KEY_NAME, PARA_VALUE_NAMES, false, origin, false);
@@ -149,11 +149,11 @@ void ParallelConfigPrecompiled::registerParallelFunction(
         auto entries = table->select(PARA_KEY, cond);
         if (entries->size() == 0)
         {
-            table->insert(PARA_KEY, entry, getOptions(origin), false);
+            table->insert(PARA_KEY, entry, make_shared<AccessOptions>(origin), false);
         }
         else
         {
-            table->update(PARA_KEY, entry, cond, getOptions(origin));
+            table->update(PARA_KEY, entry, cond, make_shared<AccessOptions>(origin));
         }
 
         out = abi.abiIn("", CODE_SUCCESS);
@@ -182,7 +182,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     {
         Condition::Ptr cond = table->newCondition();
         cond->EQ(PARA_SELECTOR, to_string(selector));
-        table->remove(PARA_KEY, cond, getOptions(origin));
+        table->remove(PARA_KEY, cond, make_shared<AccessOptions>(origin));
     }
     out = abi.abiIn("", CODE_SUCCESS);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("unregisterParallelFunction success")
@@ -195,7 +195,7 @@ ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& contractAddress,
     uint32_t selector, Address const& origin)
 {
-    Table::Ptr table = openTable(context, contractAddress, origin);
+    Table::Ptr table = openTable(context, contractAddress, origin, false);
     if (!table || !table.get())
     {
         return nullptr;

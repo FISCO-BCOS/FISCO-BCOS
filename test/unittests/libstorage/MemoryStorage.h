@@ -37,7 +37,7 @@ public:
     virtual ~MemoryStorage(){};
 
     virtual Entries::Ptr select(
-        h256, int, const std::string& table, const std::string& key) override
+        h256, int, const std::string& table, const std::string& key, Condition::Ptr) override
     {
         auto search = data.find(table);
         if (search != data.end())
@@ -56,6 +56,7 @@ public:
                 return it->second;
             }
         }
+
         return std::make_shared<Entries>();
     }
     virtual size_t commit(

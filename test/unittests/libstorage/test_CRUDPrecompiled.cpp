@@ -23,6 +23,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
@@ -51,8 +52,10 @@ struct CRUDPrecompiledFixture
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         ExecutiveContextFactory factory;
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
 
@@ -64,7 +67,7 @@ struct CRUDPrecompiledFixture
     ~CRUDPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr crudPrecompiled;
     dev::blockverifier::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
@@ -81,7 +84,7 @@ BOOST_AUTO_TEST_CASE(CRUD)
     bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     u256 createResult = 0;
     abi.abiOut(&out, createResult);
-    BOOST_TEST(createResult == 1u);
+    BOOST_TEST(createResult == 0u);
 
     // insert
     std::string insertFunc = "insert(string,string,string,string)";

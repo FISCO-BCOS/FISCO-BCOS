@@ -54,19 +54,6 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
-    struct MyHashCompare
-    {
-        static size_t hash(const std::string& x)
-        {
-            size_t h = 0;
-            for (const char* s = x.c_str(); *s; ++s)
-                h = (h * 17) ^ *s;
-            return h;
-        }
-        //! True if strings are equal
-        static bool equal(const std::string& x, const std::string& y) { return x == y; }
-    };
-
     typedef std::shared_ptr<Entry> Ptr;
 
     enum Status
@@ -78,8 +65,15 @@ public:
     Entry();
     virtual ~Entry() {}
 
+    virtual uint32_t getID() const;
+    virtual void setID(uint32_t id);
+
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
+
+    virtual size_t getTempIndex() const;
+    virtual void setTempIndex(size_t index);
+
     virtual std::map<std::string, std::string>* fields();
 
     virtual uint32_t getStatus();
@@ -89,6 +83,7 @@ public:
     void setDirty(bool dirty);
 
 private:
+    size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
 };
@@ -97,7 +92,6 @@ class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
-    typedef std::vector<Entry::Ptr> EntriesContainerType;
 
     Entry::Ptr get(size_t i);
     size_t size() const;
@@ -107,7 +101,7 @@ public:
     void removeEntry(size_t index);
 
 private:
-    EntriesContainerType m_entries;
+    std::vector<Entry::Ptr> m_entries;
     bool m_dirty = false;
 };
 
@@ -178,9 +172,10 @@ struct Change
         size_t index;
         std::string key;
         std::string oldValue;
-        Record(
-            size_t _index, std::string _key = std::string(), std::string _oldValue = std::string())
-          : index(_index), key(_key), oldValue(_oldValue)
+        size_t id;
+        Record(size_t _index, std::string _key = std::string(),
+            std::string _oldValue = std::string(), size_t _id = 0)
+          : index(_index), key(_key), oldValue(_oldValue), id(_id)
         {}
     };
     std::vector<Record> value;
@@ -195,6 +190,17 @@ class TableData
 public:
     typedef std::shared_ptr<TableData> Ptr;
 
+    TableData()
+    {
+        info = std::make_shared<TableInfo>();
+        entries = std::make_shared<Entries>();
+    }
+
+    // for memorytable2
+    TableInfo::Ptr info;
+    Entries::Ptr entries;
+
+    // for memorytable
     std::string tableName;
     std::map<std::string, Entries::Ptr> data;
 };
@@ -237,24 +243,43 @@ public:
     virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
     virtual size_t cacheSize() { return 0; }
 
+    static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
+
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
 };
 
-// Block execution time construction
-class StateDBFactory : public std::enable_shared_from_this<StateDBFactory>
+// Block execution time construction by TableFactoryFactory
+class TableFactory : public std::enable_shared_from_this<TableFactory>
 {
 public:
-    typedef std::shared_ptr<StateDBFactory> Ptr;
+    typedef std::shared_ptr<TableFactory> Ptr;
 
-    virtual ~StateDBFactory() {}
+    virtual ~TableFactory() {}
 
     virtual Table::Ptr openTable(
         const std::string& table, bool authorityFlag = true, bool isPara = false) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
         bool isPara = false) = 0;
-};  // namespace storage
+
+    virtual h256 hash() = 0;
+    virtual size_t savepoint() = 0;
+    virtual void rollback(size_t _savepoint) = 0;
+    virtual void commit() = 0;
+    virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) = 0;
+};
+
+class TableFactoryFactory : public std::enable_shared_from_this<TableFactoryFactory>
+{
+public:
+    typedef std::shared_ptr<TableFactoryFactory> Ptr;
+
+    virtual ~TableFactoryFactory(){};
+
+    virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) = 0;
+};
+
 }  // namespace storage
 }  // namespace dev

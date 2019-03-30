@@ -142,7 +142,10 @@ public:
                     updateEntry->setField(it.first, it.second);
                 }
             }
-            this->m_recorder(this->shared_from_this(), Change::Update, key, records);
+            if (m_recorder)
+            {
+                this->m_recorder(this->shared_from_this(), Change::Update, key, records);
+            }
 
             entries->setDirty(true);
 
@@ -196,7 +199,10 @@ public:
             checkField(entry);
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
-            this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
+            if (m_recorder)
+            {
+                this->m_recorder(this->shared_from_this(), Change::Insert, key, value);
+            }
             if (entries->size() == 0)
             {
                 entries->addEntry(entry);
@@ -257,7 +263,10 @@ public:
             removeEntry->setStatus(1);
             records.emplace_back(i);
         }
-        this->m_recorder(this->shared_from_this(), Change::Remove, key, records);
+        if (m_recorder)
+        {
+            this->m_recorder(this->shared_from_this(), Change::Remove, key, records);
+        }
 
         entries->setDirty(true);
 
@@ -549,6 +558,10 @@ private:
     {
         for (auto& it : *(entry->fields()))
         {
+            if (it.first == "_id_")
+            {
+                continue;
+            }
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {

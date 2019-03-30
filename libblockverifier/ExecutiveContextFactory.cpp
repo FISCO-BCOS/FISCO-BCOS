@@ -19,15 +19,15 @@
  *  @date 20180921
  */
 #include "ExecutiveContextFactory.h"
+#include "include/UserPrecompiled.h"
 #include <libdevcore/Common.h>
 #include <libprecompiled/AuthorityPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libprecompiled/DagTransferPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
-#include <libprecompiled/extension/HelloWorldPrecompiled.h>
+#include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
@@ -39,12 +39,16 @@ using namespace dev::precompiled;
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
 {
+#if 0
     // DBFactoryPrecompiled
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
     memoryTableFactory->setBlockHash(blockInfo.hash);
     memoryTableFactory->setBlockNum(blockInfo.number);
+#endif
+    auto memoryTableFactory =
+        m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
     auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
@@ -61,13 +65,10 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1006), std::make_shared<dev::precompiled::DagTransferPrecompiled>(context));
-    context->setAddress2Precompiled(
-        Address(0x1007), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
+        Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+    // register User developed Precompiled contract
+    registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
-
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));

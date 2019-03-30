@@ -30,10 +30,11 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
 #include <sstream>
 
-#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -293,7 +294,8 @@ protected:
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
         PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
-        dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
+        dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+            m_service->p2pMessageFactory()->buildMessage());
         // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         bytes ret_data;
         PBFTMsgPacket packet;
@@ -508,10 +510,9 @@ protected:
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-    void changeViewForEmptyBlock()
+    void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
-        m_timeManager.m_changeCycle = 0;
         m_fastViewChange = true;
         m_signalled.notify_all();
     }

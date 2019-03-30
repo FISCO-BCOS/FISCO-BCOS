@@ -28,7 +28,6 @@
 #include <libethcore/Transaction.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -152,16 +151,16 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory() override
+    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory() override
     {
         return m_memoryTableFactory;
     }
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> _m)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> _m)
     {
         m_memoryTableFactory = _m;
     }
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
 };
 
 class MockState : public StorageState
@@ -186,7 +185,7 @@ struct EmptyFixture
         m_blockChainImp->setStateFactory(m_storageStateFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
-        GenesisBlockParam initParam;
+        GenesisBlockParam initParam{"", dev::h512s(), dev::h512s(), "", "", "", 0, 0, 0};
         m_blockChainImp->checkAndBuildGenesisBlock(initParam);
     }
 
@@ -221,10 +220,11 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
 #ifdef FISCO_GM
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("cec7b81608663f41fd87cc1159528409665e7ca843f644a72d67fb7d1a655e49"));
+        h256("39b4e98c07189c1a1cc53d8159b294c6b58753e660aa52d3a25c5241cc6225f9"));
 #else
+    /// modify the hash of the empty block since "timestamp" has been added into groupMark
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("0x88f55f09b1b525abbd579649b7b20e0769162a3603160ba396c6bab6d4d65cc8"));
+        h256("0x2d1c730a81f92c9888f508a9c1a4cdeed7063b831f1a21d61a4d6d97584fc260"));
 #endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());

@@ -29,7 +29,6 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -108,11 +107,15 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
     m_stateFactory = _stateFactory;
 }
 
-shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
+shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory()
 {
+#if 0
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
+#endif
+
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), 0);
     return memoryTableFactory;
 }
 
@@ -422,13 +425,15 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
     if (block == nullptr)
     {
         block = std::make_shared<Block>();
-        block->setEmptyBlock();
+        /// modification 2019.3.20: set timestamp to block header
+        block->setEmptyBlock(initParam.timeStamp);
         block->header().appendExtraDataArray(asBytes(initParam.groupMark));
-        shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
+        shared_ptr<TableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);
         if (tb)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setField("number", lexical_cast<std::string>(block->blockHeader().number()));
             entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
         }
@@ -517,7 +522,6 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
-                assert(s.size() == 7);
                 initParam.consensusType = s[2];
                 initParam.storageType = s[3];
                 initParam.stateType = s[4];

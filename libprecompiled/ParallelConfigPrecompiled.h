@@ -55,7 +55,7 @@ public:
         Address const& origin = Address()) override;
 
     dev::storage::Table::Ptr openTable(dev::blockverifier::ExecutiveContext::Ptr context,
-        Address const& contractAddress, Address const& origin);
+        Address const& contractAddress, Address const& origin, bool needCreate = true);
 
 private:
     void registerParallelFunction(dev::blockverifier::ExecutiveContext::Ptr context,

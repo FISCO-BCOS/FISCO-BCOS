@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     Address addressOut;
     abi.abiOut(&out, addressOut);
-    BOOST_TEST(addressOut == Address(0x1));
+    BOOST_TEST(addressOut == Address(0x0));
 
     // createTable exist
     param = abi.abiIn("createTable(string,string,string)", "t_test", "id", "item_name,item_id");

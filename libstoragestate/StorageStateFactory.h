@@ -36,7 +36,7 @@ public:
     StorageStateFactory(u256 const& _accountStartNonce) : m_accountStartNonce(_accountStartNonce) {}
     virtual ~StorageStateFactory() {}
     std::shared_ptr<dev::executive::StateFace> getState(
-        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) override;
+        h256 const& _root, std::shared_ptr<dev::storage::TableFactory> _factory) override;
 
 private:
     u256 m_accountStartNonce;

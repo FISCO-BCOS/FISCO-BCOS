@@ -50,8 +50,7 @@ const char* const DAG_TRANSFER_METHOD_BAL_STR = "userBalance(string)";
 const std::string DAG_TRANSFER_FIELD_NAME = "user_name";
 const std::string DAG_TRANSFER_FIELD_BALANCE = "user_balance";
 
-DagTransferPrecompiled::DagTransferPrecompiled(
-    dev::blockverifier::ExecutiveContext::Ptr context, bool needOpenTable)
+DagTransferPrecompiled::DagTransferPrecompiled()
 {
     name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_ADD_STR_UINT);
@@ -62,12 +61,6 @@ DagTransferPrecompiled::DagTransferPrecompiled(
     name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT] =
         getFuncSelector(DAG_TRANSFER_METHOD_TRS_STR2_UINT);
     name2Selector[DAG_TRANSFER_METHOD_BAL_STR] = getFuncSelector(DAG_TRANSFER_METHOD_BAL_STR);
-
-    // Create table before parallel execution
-    if (needOpenTable)
-    {
-        openTable(context, Address());
-    }
 }
 
 bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
@@ -150,23 +143,11 @@ std::string DagTransferPrecompiled::toString()
 Table::Ptr DagTransferPrecompiled::openTable(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-
-    if (!tableFactoryPrecompiled)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
-                               << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
-        return nullptr;
-    }
-
-    auto table =
-        tableFactoryPrecompiled->getMemoryTableFactory()->openTable(DAG_TRANSFER, false, true);
+    auto table = Precompiled::openTable(context, DAG_TRANSFER);
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
-            DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, false, origin, true);
+        table = createTable(
+            context, DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");
@@ -222,7 +203,6 @@ bytes DagTransferPrecompiled::call(
 void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {  // userAdd(string,uint256)
-
     std::string user;
     dev::u256 amount;
     dev::eth::ContractABI abi;
@@ -260,7 +240,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
 
-        auto count = table->insert(user, entry, getOptions(origin));
+        auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -270,7 +250,6 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
 
         // end success
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -336,7 +315,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
 
-            auto count = table->insert(user, entry, getOptions(origin));
+            auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -362,7 +341,8 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-            auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
+            auto count = table->update(
+                user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -372,7 +352,6 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         }
 
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -449,7 +428,8 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
-        auto count = table->update(user, entry, table->newCondition(), getOptions(origin));
+        auto count = table->update(
+            user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -458,7 +438,6 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         }
 
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -516,7 +495,6 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         // only one record for every user
         balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         ret = 0;
-
     } while (0);
 
     if (0 == ret)
@@ -536,8 +514,8 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
     out = abi.abiIn("", ret, balance);
 }
 
-void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context,
-    bytesConstRef data, Address const& origin, bytes& out)
+void DagTransferPrecompiled::userTransferCall(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string fromUser, toUser;
     dev::u256 amount;
@@ -606,7 +584,7 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
             entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
             entry->setField(DAG_TRANSFER_FIELD_BALANCE, dev::u256(0).str());
 
-            auto count = table->insert(toUser, entry, getOptions(origin));
+            auto count = table->insert(toUser, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "non-authorized";
@@ -635,7 +613,8 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         auto entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, fromUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
-        auto count = table->update(fromUser, entry, table->newCondition(), getOptions(origin));
+        auto count = table->update(
+            fromUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
             strErrorMsg = "non-authorized";
@@ -647,11 +626,11 @@ void DagTransferPrecompiled::userTransferCall(dev::blockverifier::ExecutiveConte
         entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
-        count = table->update(toUser, entry, table->newCondition(), getOptions(origin));
+        count = table->update(
+            toUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
 
         // end with success
         ret = 0;
-
     } while (0);
 
     if (0 == ret)

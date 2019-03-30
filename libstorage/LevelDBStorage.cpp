@@ -24,6 +24,7 @@
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/Guards.h>
+#include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 #include <memory>
@@ -32,6 +33,131 @@
 using namespace dev;
 using namespace dev::storage;
 
+Entries::Ptr LevelDBStorage::select(
+    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
+{
+    (void)condition;
+    try
+    {
+        std::string entryKey = table;
+        entryKey.append("_").append(key);
+
+        std::string value;
+        // ReadGuard l(m_remoteDBMutex);
+        auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+        // l.unlock();
+        if (!s.ok() && !s.IsNotFound())
+        {
+            STORAGE_LEVELDB_LOG(ERROR)
+                << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+
+            BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
+        }
+
+        Entries::Ptr entries = std::make_shared<Entries>();
+        if (!s.IsNotFound())
+        {
+            bytesConstRef frame = bytesConstRef(value);
+            RLP entriesRlps = RLP(frame);
+
+            for (size_t i = 0; i < entriesRlps.itemCount(); i++)
+            {
+                RLP entryRlp = entriesRlps[i];
+                Entry::Ptr entry = std::make_shared<Entry>();
+                entry->setField("_hash_", entryRlp[0].toHash<h256>().hex());
+                entry->setField("_num_", std::to_string(entryRlp[1].toPositiveInt64()));
+
+                RLP fieldsRlp = entryRlp[2];  // fields
+                for (size_t j = 0; j < fieldsRlp.itemCount(); j++)
+                {
+                    RLP fieldRlp = fieldsRlp[j];
+                    entry->setField(fieldRlp[0].toString(), fieldRlp[1].toString());
+                }
+
+                if (entry->getStatus() == Entry::Status::NORMAL)
+                {
+                    entry->setDirty(false);
+                    entries->addEntry(entry);
+                }
+            }
+        }
+        entries->setDirty(false);
+
+        return entries;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query leveldb exception")
+                                   << LOG_KV("msg", boost::diagnostic_information(e));
+
+        BOOST_THROW_EXCEPTION(e);
+    }
+
+    return Entries::Ptr();
+}
+
+size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
+    TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to)
+{
+    // commit table data of given range, thread safe
+    // range to commit: [from, to)
+    if (from >= to)
+        return 0;
+    size_t total = 0;
+    auto dataIt = tableData->data.begin();
+    std::advance(dataIt, from);
+
+    while (from < to && dataIt != tableData->data.end())
+    {
+        if (dataIt->second->size() == 0u)
+        {
+            dataIt++;
+            from++;
+            continue;
+        }
+        std::string entryKey = tableData->tableName + "_" + dataIt->first;
+        Json::Value entry;
+
+        size_t entriesSize = dataIt->second->size();
+        RLPStream rlps;
+        rlps.appendList(entriesSize);
+        for (size_t i = 0; i < entriesSize; ++i)
+        {
+            rlps.appendList(3);
+            rlps.append(hash);
+            rlps.append(bigint(num));
+
+            size_t fiedsSize = dataIt->second->get(i)->fields()->size();
+            rlps.appendList(fiedsSize);
+            for (auto& fieldIt : *(dataIt->second->get(i)->fields()))
+            {
+                rlps.appendList(2);
+                rlps.append(fieldIt.first);
+                rlps.append(fieldIt.second);
+            }
+        }
+
+        bytes rlpBytes;
+        rlps.swapOut(rlpBytes);
+
+        vector_ref<const char> refBytes =
+            vector_ref<const char>((const char*)rlpBytes.data(), rlpBytes.size());
+
+        batch->insertSlice(
+            leveldb::Slice(entryKey), leveldb::Slice(refBytes.data(), refBytes.size()));
+        ++total;
+        // ssOut.seekg(0, std::ios::end);
+        STORAGE_LEVELDB_LOG(TRACE)
+            << LOG_KV("commit key", entryKey) << LOG_KV("entries", entriesSize);
+        //<< LOG_KV("len", ssOut.tellg());
+        dataIt++;
+        from++;
+    }
+
+    return total;
+}
+
+/*
 Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
 {
     try
@@ -78,6 +204,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
                 }
             }
         }
+        entries->setDirty(false);
 
         return entries;
     }
@@ -141,6 +268,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 
     return total;
 }
+*/
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
 size_t LevelDBStorage::commit(

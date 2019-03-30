@@ -95,6 +95,7 @@ DEV_SIMPLE_EXCEPTION(ExternalFunctionFailure);
 DEV_SIMPLE_EXCEPTION(ConnectionToSelfException);
 DEV_SIMPLE_EXCEPTION(InitLedgerConfigFailed);
 DEV_SIMPLE_EXCEPTION(InvalidConsensusType);
+DEV_SIMPLE_EXCEPTION(StorageError);
 DEV_SIMPLE_EXCEPTION(OpenLevelDBFailed);
 DEV_SIMPLE_EXCEPTION(LevelDBNotOpened);
 DEV_SIMPLE_EXCEPTION(UnsupportedInParallelMode);

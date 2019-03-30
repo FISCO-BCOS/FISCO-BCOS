@@ -23,7 +23,7 @@
  */
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
-#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -43,7 +43,10 @@ namespace test
 class FakeService : public dev::p2p::Service
 {
 public:
-    FakeService() : Service() {}
+    FakeService() : Service()
+    {
+        m_messageFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+    }
     void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
@@ -75,11 +78,16 @@ public:
 
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
+    std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override
+    {
+        return m_messageFactory;
+    }
 
 private:
     P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
     std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
+    std::shared_ptr<dev::p2p::P2PMessageFactory> m_messageFactory;
     bool m_connected = false;
 };
 class FakeTxPool : public TxPool

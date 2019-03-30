@@ -112,6 +112,14 @@ struct Options
     uint32_t timeout = 0;     ///< The timeout value of async function, in milliseconds.
 };
 
+/// node info obtained from the certificate
+struct NodeInfo
+{
+    NodeID nodeID;
+    std::string agencyName;
+    std::string nodeName;
+};
+
 class Message : public std::enable_shared_from_this<Message>
 {
 public:

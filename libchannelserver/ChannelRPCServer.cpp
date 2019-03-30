@@ -822,10 +822,15 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
 std::string ChannelRPCServer::newSeq()
 {
+#if 0
     static boost::uuids::random_generator uuidGenerator;
     std::string s = to_string(uuidGenerator());
     s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
-    return s;
+#endif
+    auto seq = m_seq.fetch_add(1) + 1;
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(32) << seq;
+    return ss.str();
 }
 
 void ChannelRPCServer::updateHostTopics()

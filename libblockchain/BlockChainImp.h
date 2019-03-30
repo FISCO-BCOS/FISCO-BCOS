@@ -34,6 +34,7 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
+#include <libstorage/Table.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/thread/shared_mutex.hpp>
 #include <deque>
@@ -93,7 +94,7 @@ public:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
-    virtual std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory();
+    virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory();
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
@@ -103,6 +104,11 @@ public:
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
     void getNonces(
         std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override;
+
+    void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
+    {
+        m_tableFactoryFactory = tableFactoryFactory;
+    }
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
@@ -152,6 +158,8 @@ private:
     /// cache the block number
     mutable SharedMutex m_blockNumberMutex;
     int64_t m_blockNumber = -1;
+
+    dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 };
 }  // namespace blockchain
 }  // namespace dev

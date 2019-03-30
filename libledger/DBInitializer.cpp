@@ -28,6 +28,9 @@
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/LevelDBStorage.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/SQLStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -46,13 +49,21 @@ namespace ledger
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
-    /// TODO: implement AMOP storage
-    if (dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB") != 0)
+
+    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
+    {
+        initSQLStorage();
+    }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
+    {
+        initLevelDBStorage();
+    }
+    else
     {
         DBInitializer_LOG(ERROR) << LOG_DESC(
             "Unsupported dbType, current version only supports levelDB");
+        BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
     }
-    initLevelDBStorage();
 }
 
 /// init the storage with leveldb
@@ -89,7 +100,6 @@ void DBInitializer::initLevelDBStorage()
                 BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         }
 
-
         if (!status.ok())
         {
             DBInitializer_LOG(ERROR)
@@ -103,6 +113,11 @@ void DBInitializer::initLevelDBStorage()
             std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
         leveldb_storage->setDB(leveldb_handler);
         m_storage = leveldb_storage;
+
+        auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory>();
+        tableFactoryFactory->setStorage(m_storage);
+
+        m_tableFactoryFactory = tableFactoryFactory;
     }
     catch (std::exception& e)
     {
@@ -113,10 +128,26 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-/// TODO: init AMOP Storage
-void DBInitializer::initAMOPStorage()
+void DBInitializer::initSQLStorage()
 {
-    DBInitializer_LOG(INFO) << LOG_DESC("[#initAMOPStorage/Unimplemented] ...");
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
+
+    auto sqlStorage = std::make_shared<SQLStorage>();
+    sqlStorage->setChannelRPCServer(m_channelRPCServer);
+    sqlStorage->setTopic(m_param->mutableStorageParam().topic);
+    sqlStorage->setFatalHandler([](std::exception& e) {
+        (void)e;
+        LOG(FATAL) << "Access amdb failed, exit";
+        exit(1);
+    });
+    sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
+
+    m_storage = sqlStorage;
+
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    tableFactoryFactory->setStorage(m_storage);
+
+    m_tableFactoryFactory = tableFactoryFactory;
 }
 
 /// create ExecutiveContextFactory
@@ -129,11 +160,12 @@ void DBInitializer::createExecutiveContext()
         return;
     }
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
-    m_executiveContextFac = std::make_shared<ExecutiveContextFactory>();
+    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
-    m_executiveContextFac->setStateStorage(m_storage);
+    m_executiveContextFactory->setStateStorage(m_storage);
     // mpt or storage
-    m_executiveContextFac->setStateFactory(m_stateFactory);
+    m_executiveContextFactory->setStateFactory(m_stateFactory);
+    m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext SUCC");
 }
 

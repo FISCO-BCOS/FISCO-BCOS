@@ -27,6 +27,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -70,10 +71,12 @@ public:
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
         parallelConfigPrecompiled = std::dynamic_pointer_cast<ParallelConfigPrecompiled>(
-            context->getPrecompiled(Address(0x1007)));
+            context->getPrecompiled(Address(0x1006)));
     };
 
     virtual ~ParallelConfigPrecompiledFixture(){};
@@ -111,7 +114,7 @@ public:
 
 public:
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     BlockInfo blockInfo;
     ParallelConfigPrecompiled::Ptr parallelConfigPrecompiled;
 };
