@@ -62,7 +62,7 @@ public:
             if (m_remoteDB && needSelect)
             {
                 entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                // Multiple insert is ok in concurrent_unordered_map, the second insert will be
+                // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
                 // dropped.
                 m_cache.insert(std::make_pair(key, entries));
             }
