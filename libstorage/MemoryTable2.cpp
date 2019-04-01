@@ -74,7 +74,8 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 else
                 {
                     entries->addEntry(dbEntries->get(i));
-                    //m_cache.insert(std::make_pair(dbEntries->get(i)->getID(), dbEntries->get(i)));
+                    // m_cache.insert(std::make_pair(dbEntries->get(i)->getID(),
+                    // dbEntries->get(i)));
                 }
             }
         }
@@ -129,11 +130,12 @@ int MemoryTable2::update(
 
             for (auto& it : *(entry->fields()))
             {
-            	if(it.first != "_id_") {
-					records.emplace_back(updateEntry->getTempIndex(), it.first,
-						updateEntry->getField(it.first), updateEntry->getID());
-					updateEntry->setField(it.first, it.second);
-            	}
+                if (it.first != "_id_")
+                {
+                    records.emplace_back(updateEntry->getTempIndex(), it.first,
+                        updateEntry->getField(it.first), updateEntry->getID());
+                    updateEntry->setField(it.first, it.second);
+                }
             }
         }
 
