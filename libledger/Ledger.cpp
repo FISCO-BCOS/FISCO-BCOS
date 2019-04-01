@@ -176,9 +176,17 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
-    /// the minimu block generation time(ms)
-    m_param->mutableConsensusParam().minBlockGenTime =
-        pt.get<unsigned>("consensus.min_block_generation_time", 500);
+    /// only RC2 can set the minimum block generation time(ms)
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        /// the minimum block generation time(ms)
+        m_param->mutableConsensusParam().minBlockGenTime =
+            pt.get<unsigned>("consensus.min_block_generation_time", 500);
+    }
+    else if (g_BCOSConfig.version() <= RC1_VERSION)
+    {
+        m_param->mutableConsensusParam().minBlockGenTime = 0;
+    }
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
                       << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
                       << LOG_KV("minBlockGenerationTime",

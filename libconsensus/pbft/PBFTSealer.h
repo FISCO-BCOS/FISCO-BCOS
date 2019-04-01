@@ -80,7 +80,8 @@ protected:
 
     bool reachBlockIntervalTime() override
     {
-        return m_pbftEngine->reachBlockIntervalTime() || m_sealing.block.getTransactionSize() > 0;
+        return m_pbftEngine->reachBlockIntervalTime() ||
+               (m_sealing.block.getTransactionSize() > 0 && m_pbftEngine->reachMinBlockGenTime());
     }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused

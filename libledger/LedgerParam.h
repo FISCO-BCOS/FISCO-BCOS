@@ -45,7 +45,7 @@ struct ConsensusParam
     uint64_t maxTransactions;
     uint8_t maxTTL;
     /// the minimum block time
-    unsigned minBlockGenTime;
+    unsigned minBlockGenTime = 0;
     /// unsigned intervalBlockTime;
     uint64_t minElectTime;
     uint64_t maxElectTime;

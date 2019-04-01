@@ -1425,14 +1425,24 @@ void PBFTEngine::workLoop()
                     << LOG_KV("myNode", m_keyPair.pub().abridged());
                 handleMsg(ret.second);
             }
+            /// to avoid of cpu problem
             else if (m_reqCache->futurePrepareCacheSize() == 0)
             {
                 std::unique_lock<std::mutex> l(x_signalled);
                 m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
-            checkTimeout();
-            handleFutureBlock();
-            collectGarbage();
+
+            if (nodeIdx() == MAXIDX)
+            {
+                PBFTENGINE_LOG(TRACE) << LOG_DESC(
+                    "workLoop: I'm an observer, drop the PBFT message packets directly");
+            }
+            else
+            {
+                checkTimeout();
+                handleFutureBlock();
+                collectGarbage();
+            }
         }
         catch (std::exception& _e)
         {
