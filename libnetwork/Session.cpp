@@ -104,7 +104,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
                        << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
-    message.reset();
     send(p_buffer);
 }
 

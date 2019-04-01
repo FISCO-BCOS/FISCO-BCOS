@@ -26,10 +26,11 @@ fi
 LOG_INFO "==============send a transaction is ok"
 
 LOG_INFO "==============check report block"
-sleep 1
+sleep 2
 num=$(cat node*/log/* | grep Report | wc -l)
 if [ ${num} -ne 8 ];then
     LOG_ERROR "check report block failed! ${num} != 8"
+    cat node*/log/* 
     exit 1
 fi
 LOG_INFO "==============check report block is ok"
@@ -42,6 +43,7 @@ sleep 5
 num=$(cat node*/log/* | grep Report | wc -l)
 if [ ${num} -ne 11 ];then
     LOG_ERROR "sync block failed! ${num} != 11"
+    cat node*/log/* 
     exit 1
 fi
 LOG_INFO "==============check sync block is ok"
