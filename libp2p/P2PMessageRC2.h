@@ -48,14 +48,7 @@ public:
     /// returned.
     ssize_t decode(const byte* buffer, size_t size) override;
 
-    virtual void setVersion(VERSION_TYPE const& _version)
-    {
-        if (m_version != _version)
-        {
-            m_version = _version;
-            setDirty(true);
-        }
-    }
+    virtual void setVersion(VERSION_TYPE const& _version) { setField(m_version, _version); }
     virtual VERSION_TYPE version() const { return m_version; }
 
 protected:

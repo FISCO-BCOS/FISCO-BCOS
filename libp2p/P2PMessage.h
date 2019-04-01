@@ -47,33 +47,12 @@ public:
     virtual uint32_t length() override { return m_length; }
 
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
-    virtual void setProtocolID(PROTOCOL_ID _protocolID)
-    {
-        if (m_protocolID != _protocolID)
-        {
-            m_protocolID = _protocolID;
-            setDirty(true);
-        }
-    }
+    virtual void setProtocolID(PROTOCOL_ID _protocolID) { setField(m_protocolID, _protocolID); }
     virtual PACKET_TYPE packetType() { return m_packetType; }
-    virtual void setPacketType(PACKET_TYPE _packetType)
-    {
-        if (m_packetType != _packetType)
-        {
-            m_packetType = _packetType;
-            setDirty(true);
-        }
-    }
+    virtual void setPacketType(PACKET_TYPE _packetType) { setField(m_packetType, _packetType); }
 
     virtual uint32_t seq() override { return m_seq; }
-    virtual void setSeq(uint32_t _seq)
-    {
-        if (m_seq != _seq)
-        {
-            m_seq = _seq;
-            setDirty(true);
-        }
-    }
+    virtual void setSeq(uint32_t _seq) { setField(m_seq, _seq); }
 
     virtual std::shared_ptr<bytes> buffer() { return m_buffer; }
     virtual void setBuffer(std::shared_ptr<bytes> _buffer)
@@ -101,8 +80,15 @@ public:
     virtual ssize_t decode(const byte* buffer, size_t size) override;
 
     /// update m_dirty according to updatedData
-    void setDirty(bool _dirty) { m_dirty = _dirty; }
-
+    template <class T>
+    void setField(T& _originValue, T const& _newValue)
+    {
+        if (_originValue != _newValue)
+        {
+            _originValue = _newValue;
+            m_dirty = true;
+        }
+    }
     bool dirty() const { return m_dirty; }
 
 protected:
