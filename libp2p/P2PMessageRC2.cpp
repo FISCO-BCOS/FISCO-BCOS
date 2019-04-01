@@ -31,7 +31,7 @@ using namespace dev::compress;
 void P2PMessageRC2::encode(bytes& buffer)
 {
     /// re-encode when m_cache is dirty
-    if (dirty() || m_cache->size() == 0)
+    if (dirty())
     {
         std::shared_ptr<bytes> compressData = std::make_shared<bytes>();
         /// compress success

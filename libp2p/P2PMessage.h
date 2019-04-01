@@ -81,16 +81,14 @@ public:
 
     /// update m_dirty according to updatedData
     template <class T>
-    void setField(T& originValue, T const& updatedValue)
+    void setField(T& _originValue, T const& _newValue)
     {
-        if (originValue == updatedValue)
+        if (_originValue != _newValue)
         {
-            return;
+            _originValue = _newValue;
+            m_dirty = true;
         }
-        originValue = updatedValue;
-        m_dirty = true;
     }
-
     bool dirty() const { return m_dirty; }
 
 protected:
