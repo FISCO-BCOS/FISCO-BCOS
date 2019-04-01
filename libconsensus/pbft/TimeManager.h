@@ -37,7 +37,7 @@ struct TimeManager
     uint64_t m_lastConsensusTime;
     /// the max block generation time
     unsigned m_intervalBlockTime = 1000;
-    /// the minimum block generation time
+    /// the minimum block generation time(default is 500ms)
     unsigned m_minBlockGenTime = 500;
 
     /// time point of last signature collection

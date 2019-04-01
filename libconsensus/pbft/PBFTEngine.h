@@ -99,6 +99,7 @@ public:
         {
             m_timeManager.m_minBlockGenTime = time;
         }
+        PBFTENGINE_LOG(INFO) << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime);
     }
 
     void start() override;
