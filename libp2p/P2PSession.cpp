@@ -72,9 +72,7 @@ void P2PSession::heartBeat()
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
             buffer->assign(s.begin(), s.end());
             message->setBuffer(buffer);
-            message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
             std::shared_ptr<bytes> msgBuf = std::make_shared<bytes>();
-
             m_session->asyncSendMessage(message);
         }
 
@@ -123,8 +121,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     requestTopics->setPacketType(AMOPPacketType::RequestTopics);
                     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
                     requestTopics->setBuffer(buffer);
-                    requestTopics->setLength(
-                        P2PMessage::HEADER_LENGTH + requestTopics->buffer()->size());
                     requestTopics->setSeq(service->p2pMessageFactory()->newSeq());
 
                     auto self = std::weak_ptr<P2PSession>(shared_from_this());
@@ -205,8 +201,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     buffer->assign(s.begin(), s.end());
 
                     responseTopics->setBuffer(buffer);
-                    responseTopics->setLength(
-                        P2PMessage::HEADER_LENGTH + responseTopics->buffer()->size());
                     responseTopics->setSeq(message->seq());
 
                     m_session->asyncSendMessage(
