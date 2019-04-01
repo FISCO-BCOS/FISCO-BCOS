@@ -53,5 +53,5 @@ storage::Table::Ptr Precompiled::createTable(
         std::dynamic_pointer_cast<TableFactoryPrecompiled>(
             context->getPrecompiled(Address(0x1001)));
     return tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
-        tableName, keyField, valueField, true, origin);
+        tableName, keyField, valueField, true, origin, true);
 }

@@ -210,7 +210,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
             {
                 txDag->executeUnit();
-                memoryTableFactory->commit();
             }
         }));
     }
