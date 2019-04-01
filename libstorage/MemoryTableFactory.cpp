@@ -43,7 +43,7 @@ const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{
 
 // according to
 // https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
-const std::vector<string> MemoryTableFactory::c_sysAccessTables =
+const std::vector<string> MemoryTableFactory::c_sysAccessControlFreeTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
@@ -123,8 +123,8 @@ Table::Ptr MemoryTableFactory::openTable(
 
     memoryTable->setTableInfo(tableInfo);
 
-    if (std::find(c_sysAccessTables.begin(), c_sysAccessTables.end(), tableName) ==
-        c_sysAccessTables.end())
+    if (std::find(c_sysAccessControlFreeTables.begin(), c_sysAccessControlFreeTables.end(),
+            tableName) == c_sysAccessControlFreeTables.end())
     {
         memoryTable->setRecorder(
             [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
