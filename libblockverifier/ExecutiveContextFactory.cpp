@@ -21,7 +21,7 @@
 #include "ExecutiveContextFactory.h"
 #include "include/UserPrecompiled.h"
 #include <libdevcore/Common.h>
-#include <libprecompiled/AuthorityPrecompiled.h>
+#include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
@@ -63,7 +63,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
+        Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
     // register User developed Precompiled contract
