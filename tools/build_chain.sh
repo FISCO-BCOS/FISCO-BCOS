@@ -76,7 +76,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdC" option;do
+while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -92,6 +92,7 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdC" option;do
     ;;
     e) bin_path=$OPTARG;;
     s) state_type=mpt;;
+    S) storage_type="external";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) enable_compress="false";;
@@ -491,7 +492,7 @@ generate_group_genesis()
     ${node_list}
 
 [storage]
-    ;storage db type, now support leveldb 
+    ;storage db type, leveldb or external
     type=${storage_type}
 [state]
     ;support mpt/storage
@@ -659,14 +660,11 @@ commonName_default =  fisco
 commonName_max = 64
 
 [ usr_cert ]
-
 basicConstraints=CA:FALSE
-
 nsComment			= "OpenSSL Generated Certificate"
 
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
-
 
 [ v3_req ]
 
@@ -675,11 +673,9 @@ authorityKeyIdentifier=keyid,issuer
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature
 
-
 [ v3enc_req ]
 
 # Extensions to add to a certificate request
-
 basicConstraints = CA:FALSE
 keyUsage = keyAgreement, keyEncipherment, dataEncipherment
 

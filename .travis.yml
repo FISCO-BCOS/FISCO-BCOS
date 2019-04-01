@@ -27,6 +27,7 @@ env:
     global:
       - TRAVIS_BUILD_TYPE=RelWithDebInfo
       - TRAVIS_TESTS=ON
+      - CCACHE_DIR=$TRAVIS_BUILD_DIR/ccache
 matrix:
     fast_finish: true
     include:
@@ -36,12 +37,10 @@ matrix:
           env: 
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
-            - CCACHE_DIR=$TRAVIS_BUILD_DIR/ccache
         - os: osx
-          osx_image: xcode9.4
+          osx_image: xcode10.1
           env: 
             - CACHE_NAME=osx
-            - CCACHE_DIR=$TRAVIS_BUILD_DIR/ccache
 git:
     depth: 1
 compiler: clang

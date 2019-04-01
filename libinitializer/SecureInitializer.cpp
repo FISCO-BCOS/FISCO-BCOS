@@ -37,12 +37,16 @@ using namespace dev::initializer;
 
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
-    setSectionName(pt);
-    std::string dataPath = pt.get<std::string>(m_sectionName + ".data_path", "./conf/");
-    std::string key = dataPath + "/" + pt.get<std::string>(m_sectionName + ".key", "node.key");
-    std::string cert = dataPath + "/" + pt.get<std::string>(m_sectionName + ".cert", "node.crt");
-    std::string caCert = dataPath + "/" + pt.get<std::string>(m_sectionName + ".ca_cert", "ca.crt");
-    std::string caPath = dataPath + "/" + pt.get<std::string>(m_sectionName + ".ca_path", "");
+    std::string sectionName = "secure";
+    if (pt.get_child_optional("network_security"))
+    {
+        sectionName = "network_security";
+    }
+    std::string dataPath = pt.get<std::string>(sectionName + ".data_path", "./conf/");
+    std::string key = dataPath + "/" + pt.get<std::string>(sectionName + ".key", "node.key");
+    std::string cert = dataPath + "/" + pt.get<std::string>(sectionName + ".cert", "node.crt");
+    std::string caCert = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_cert", "ca.crt");
+    std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     bytes keyContent;
     if (!key.empty())
     {
@@ -185,15 +189,6 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("load verify file failed")
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
-    }
-}
-
-/// setSectionName for version control
-void SecureInitializer::setSectionName(const boost::property_tree::ptree& _pt)
-{
-    if (_pt.get_child_optional("network_security"))
-    {
-        m_sectionName = "network_security";
     }
 }
 
