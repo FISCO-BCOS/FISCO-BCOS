@@ -130,6 +130,8 @@ int MemoryTable2::update(
 
             for (auto& it : *(entry->fields()))
             {
+                //_id_ always got initialized value 0 from Entry::Entry()
+                // no need to update _id_ while updating entry
                 if (it.first != "_id_")
                 {
                     records.emplace_back(updateEntry->getTempIndex(), it.first,
