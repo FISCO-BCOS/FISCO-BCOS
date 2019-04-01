@@ -94,7 +94,7 @@ public:
                 }
             }
 
-            responseJson["result"]["count"] = count;
+            responseJson["result"]["count"] = (Json::UInt64)count;
             responseJson["code"] = 0;
         }
 
