@@ -45,14 +45,6 @@ public:
     virtual ~P2PMessage() {}
 
     virtual uint32_t length() override { return m_length; }
-    virtual void setLength(uint32_t _length)
-    {
-        if (m_length != _length)
-        {
-            m_length = _length;
-            setDirty(true);
-        }
-    }
 
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
     virtual void setProtocolID(PROTOCOL_ID _protocolID)
@@ -88,17 +80,19 @@ public:
     {
         m_buffer.reset();
         m_buffer = _buffer;
+        /// update the length
+        m_length = HEADER_LENGTH + m_buffer->size();
         m_dirty = true;
     }
 
-    virtual bool isRequestPacket() override { return (m_protocolID > 0); }
-    virtual PROTOCOL_ID getResponceProtocolID()
-    {
-        if (isRequestPacket())
-            return -m_protocolID;
-        else
-            return 0;
-    }
+    /// to compatible with RC1 even if m_protocolID is extended to int32_t
+    /// attention:
+    /// this logic is only used in AMOP
+    /// the response packet in RC1 is -m_protocolID, but RC2 modifies m_protocolID to int32_t
+    /// to make all the RC1 response packet is positive
+    /// so we need to determine the packet is the response packet or not according to 16th
+    /// binary number of the packet is 1 or 0
+    virtual bool isRequestPacket() override { return !((m_protocolID & 0x8000) == 0x8000); }
 
     virtual void encode(bytes& buffer) override;
 

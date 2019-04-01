@@ -40,6 +40,7 @@ public:
         m_buffer = std::make_shared<bytes>();
         m_cache = std::make_shared<bytes>();
     }
+    bool isRequestPacket() override { return (m_protocolID > 0); }
 
     virtual ~P2PMessageRC2() {}
     void encode(bytes& buffer) override;
