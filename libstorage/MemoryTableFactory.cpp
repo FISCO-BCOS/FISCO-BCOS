@@ -21,6 +21,7 @@
 #include "MemoryTableFactory.h"
 #include "Common.h"
 #include "MemoryTable.h"
+#include "StorageException.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -34,20 +35,20 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0)
-{
-    m_sysTables.push_back(SYS_CONSENSUS);
-    m_sysTables.push_back(SYS_TABLES);
-    m_sysTables.push_back(SYS_ACCESS_TABLE);
-    m_sysTables.push_back(SYS_CURRENT_STATE);
-    m_sysTables.push_back(SYS_NUMBER_2_HASH);
-    m_sysTables.push_back(SYS_TX_HASH_2_BLOCK);
-    m_sysTables.push_back(SYS_HASH_2_BLOCK);
-    m_sysTables.push_back(SYS_CNS);
-    m_sysTables.push_back(SYS_CONFIG);
-    m_sysTables.push_back(SYS_BLOCK_2_NONCES);
-}
+thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
 
+const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
+    SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
+    SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES};
+
+// according to
+// https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
+const std::vector<string> MemoryTableFactory::c_sysAccessTables =
+    std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
+        SYS_BLOCK_2_NONCES};
+
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0), m_createTableCode(0)
+{}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -60,7 +61,7 @@ Table::Ptr MemoryTableFactory::openTable(
     }
     auto tableInfo = std::make_shared<storage::TableInfo>();
 
-    if (m_sysTables.end() != find(m_sysTables.begin(), m_sysTables.end(), tableName))
+    if (c_sysTables.end() != find(c_sysTables.begin(), c_sysTables.end(), tableName))
     {
         tableInfo = getSysTableInfo(tableName);
     }
@@ -121,11 +122,17 @@ Table::Ptr MemoryTableFactory::openTable(
     }
 
     memoryTable->setTableInfo(tableInfo);
-    memoryTable->setRecorder([&](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
-                                 std::vector<Change::Record>& _records) {
-        auto& changeLog = getChangeLog();
-        changeLog.emplace_back(_table, _kind, _key, _records);
-    });
+
+    if (std::find(c_sysAccessTables.begin(), c_sysAccessTables.end(), tableName) ==
+        c_sysAccessTables.end())
+    {
+        memoryTable->setRecorder(
+            [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
+                std::vector<Change::Record>& _records) {
+                auto& changeLog = getChangeLog();
+                changeLog.emplace_back(_table, _kind, _key, _records);
+            });
+    }
 
     m_name2Table.insert({tableName, memoryTable});
     return memoryTable;
@@ -150,7 +157,7 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-        createTableCode = 0;
+
         return nullptr;
     }
     // Write table entry
@@ -158,13 +165,15 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     tableEntry->setField("table_name", tableName);
     tableEntry->setField("key_field", keyField);
     tableEntry->setField("value_field", valueField);
-    createTableCode = sysTable->insert(
+    auto result = sysTable->insert(
         tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
-    if (createTableCode == storage::CODE_NO_AUTHORIZED)
+    if (result == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
                              << LOG_DESC("create table non-authorized")
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
+
+        BOOST_THROW_EXCEPTION(StorageException(result, "create table non-authorized"));
         return nullptr;
     }
     return openTable(tableName, authorityFlag, isPara);
@@ -214,17 +223,7 @@ h256 MemoryTableFactory::hash()
 
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
-    auto changeLog = m_changeLog.get();
-    if (m_changeLog.get() != nullptr)
-    {
-        return *changeLog;
-    }
-    else
-    {
-        changeLog = new std::vector<Change>();
-        m_changeLog.reset(changeLog);
-        return *changeLog;
-    }
+    return s_changeLog;
 }
 
 void MemoryTableFactory::rollback(size_t _savepoint)
@@ -242,7 +241,10 @@ void MemoryTableFactory::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory::commit() {}
+void MemoryTableFactory::commit()
+{
+    getChangeLog().clear();
+}
 
 void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 {

@@ -18,6 +18,7 @@
 #include "libstorage/LevelDBStorage.h"
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/LevelDB.h>
 #include <boost/test/unit_test.hpp>
 

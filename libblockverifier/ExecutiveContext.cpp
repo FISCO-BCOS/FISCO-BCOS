@@ -25,7 +25,7 @@
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/Table.h>
 
 using namespace dev::executive;
 using namespace dev::eth;

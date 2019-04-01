@@ -41,7 +41,7 @@ public:
     StateFactoryInterface() = default;
     virtual ~StateFactoryInterface(){};
     virtual std::shared_ptr<StateFace> getState(
-        h256 const& _root, std::shared_ptr<dev::storage::MemoryTableFactory> _factory) = 0;
+        h256 const& _root, std::shared_ptr<dev::storage::TableFactory> _factory) = 0;
 };
 
 }  // namespace executive

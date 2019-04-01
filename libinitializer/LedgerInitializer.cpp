@@ -38,6 +38,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     auto groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
     assert(m_p2pService);
     m_ledgerManager = make_shared<LedgerManager>(m_p2pService, m_keyPair);
+    m_ledgerManager->setChannelRPCServer(m_channelRPCServer);
     map<GROUP_ID, h512s> groudID2NodeList;
     bool succ = true;
     try
@@ -95,7 +96,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
                                << LOG_DESC("Should init at least one group");
         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
-                              << errinfo_comment("[#LedgerInitializer]: Should init at least on "
+                              << errinfo_comment("[#LedgerInitializer]: Should init at least one "
                                                  "group! Please check configuration!"));
     }
 }
