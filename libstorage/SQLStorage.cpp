@@ -49,13 +49,16 @@ Entries::Ptr SQLStorage::select(
         requestJson["params"]["table"] = table;
         requestJson["params"]["key"] = key;
 
-        for (auto it : *(condition->getConditions()))
+        if (condition)
         {
-            Json::Value cond;
-            cond.append(it.first);
-            cond.append(it.second.first);
-            cond.append(it.second.second);
-            requestJson["params"]["condition"].append(cond);
+            for (auto it : *(condition->getConditions()))
+            {
+                Json::Value cond;
+                cond.append(it.first);
+                cond.append(it.second.first);
+                cond.append(it.second.second);
+                requestJson["params"]["condition"].append(cond);
+            }
         }
 
         Json::Value responseJson = requestDB(requestJson);
