@@ -176,8 +176,13 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+    /// the minimu block generation time(ms)
+    m_param->mutableConsensusParam().minBlockGenTime =
+        pt.get<unsigned>("consensus.min_block_generation_time", 500);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
-                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
+                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
+                      << LOG_KV("minBlockGenerationTime",
+                             m_param->mutableConsensusParam().minBlockGenTime);
 }
 
 
@@ -415,7 +420,10 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
+    /// set the range of block generation time
     pbftEngine->setIntervalBlockTime(g_BCOSConfig.c_intervalBlockTime);
+    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
+
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
