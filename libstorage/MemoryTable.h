@@ -328,15 +328,9 @@ public:
     size_t cacheSize() override { return m_cache.size(); }
 
 private:
-    void eraseKey(ConcurrentMap& _map, KeyType const& _key)
-    {
-        _map.unsafe_erase(_key);
-    }
+    void eraseKey(ConcurrentMap& _map, KeyType const& _key) { _map.unsafe_erase(_key); }
 
-    void eraseKey(SerialMap& _map, KeyType const& _key)
-    {
-        _map.erase(_key);
-    }
+    void eraseKey(SerialMap& _map, KeyType const& _key) { _map.erase(_key); }
 
     typename Entries::Ptr selectFromCache(const std::string& key, bool needSelect = true)
     {
