@@ -41,68 +41,22 @@ template <typename Mode = Serial>
 class MemoryTable : public Table
 {
 public:
-    using CacheType = typename std::conditional<Mode::value,
-        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
-        std::map<std::string, Entries::Ptr>>::type;
+    using ConcurrentMap = tbb::concurrent_unordered_map<std::string, Entries::Ptr>;
+    using SerialMap = std::map<std::string, Entries::Ptr>;
+
+    using CacheType = typename std::conditional<Mode::value, ConcurrentMap, SerialMap>::type;
     using CacheItr = typename CacheType::iterator;
+    using KeyType = typename CacheType::key_type;
+
     using Ptr = std::shared_ptr<MemoryTable<Mode>>;
 
     virtual ~MemoryTable(){};
-
-    inline typename Entries::Ptr selectCache(const std::string& key, bool needSelect = true)
-    {
-        typename Entries::Ptr entries = nullptr;
-        CacheItr it = m_cache.find(key);
-        // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
-        // so we set a value to nullptr as a flag to tell table to update it later when a
-        // key-value is invalid
-        if (it == m_cache.end())
-        {
-            // These code is fast with no rollback
-            if (m_remoteDB && needSelect)
-            {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
-                // dropped.
-                m_cache.insert(std::make_pair(key, entries));
-            }
-        }
-        else if (it->second == nullptr)
-        {
-            // These code is too slow but only happen in rollback
-            if (m_remoteDB && needSelect)
-            {
-                dev::WriteGuard l(x_cache);
-                CacheItr tmpIt = m_cache.find(key);
-                if (tmpIt->second == nullptr)
-                {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache[key] = entries;
-                }
-                else
-                {
-                    entries = tmpIt->second;
-                }
-            }
-        }
-        else
-        {
-            entries = it->second;
-        }
-
-        if (entries == nullptr)
-        {
-            entries = std::make_shared<Entries>();
-        }
-        return entries;
-    }
 
     virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
     {
         try
         {
-            typename Entries::Ptr entries = selectCache(key);
-
+            auto entries = selectFromCache(key);
             auto indexes = processEntries(entries, condition);
             typename Entries::Ptr resultEntries = std::make_shared<Entries>();
             for (auto& i : indexes)
@@ -130,7 +84,7 @@ public:
                 return storage::CODE_NO_AUTHORIZED;
             }
 
-            typename Entries::Ptr entries = selectCache(key);
+            auto entries = selectFromCache(key);
 
             if (!entries || entries->size() == 0)
             {
@@ -182,7 +136,7 @@ public:
 
             Condition::Ptr condition = std::make_shared<Condition>();
 
-            typename Entries::Ptr entries = selectCache(key, needSelect);
+            auto entries = selectFromCache(key, needSelect);
 
             checkField(entry);
             Change::Record record(entries->size());
@@ -221,7 +175,7 @@ public:
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        typename Entries::Ptr entries = selectCache(key);
+        auto entries = selectFromCache(key);
 
         auto indexes = processEntries(entries, condition);
 
@@ -318,11 +272,6 @@ public:
         bool dirtyTable = false;
         for (auto it : m_cache)
         {
-            if (it.second == nullptr)
-            {
-                continue;
-            }
-
             _data->data.insert(make_pair(it.first, it.second));
 
             if (it.second->dirty())
@@ -344,7 +293,7 @@ public:
                 entries->removeEntry(_change.value[0].index);
                 if (entries->size() == 0u)
                 {
-                    m_cache[_change.key] = nullptr;
+                    eraseKey(m_cache, _change.key);
                 }
                 break;
             }
@@ -379,6 +328,34 @@ public:
     size_t cacheSize() override { return m_cache.size(); }
 
 private:
+    void eraseKey(ConcurrentMap& _map, KeyType const& _key) { _map.unsafe_erase(_key); }
+
+    void eraseKey(SerialMap& _map, KeyType const& _key) { _map.erase(_key); }
+
+    typename Entries::Ptr selectFromCache(const std::string& key, bool needSelect = true)
+    {
+        auto entries = std::make_shared<Entries>();
+
+        CacheItr it = m_cache.find(key);
+        if (it == m_cache.end())
+        {
+            // These code is fast with no rollback
+            if (m_remoteDB && needSelect)
+            {
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
+                // dropped.
+                m_cache.insert(std::make_pair(key, entries));
+            }
+        }
+        else
+        {
+            entries = it->second;
+        }
+
+        return entries;
+    }
+
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
@@ -530,7 +507,6 @@ private:
     int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
-    dev::SharedMutex x_cache;
 };
 }  // namespace storage
 }  // namespace dev
