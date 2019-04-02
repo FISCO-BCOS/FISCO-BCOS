@@ -204,8 +204,8 @@ public:
     dev::bytes getCode(dev::Address) override { return bytes(); }
     bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
-    dev::h512s sealerList() { return m_sealerList; }
-    dev::h512s observerList() { return m_observerList; }
+    dev::h512s sealerList() override { return m_sealerList; }
+    dev::h512s observerList() override { return m_observerList; }
     void setSealerList(dev::h512s const& sealers) { m_sealerList = sealers; }
     void setObserverList(dev::h512s const& observers) { m_observerList = observers; }
 
