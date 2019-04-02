@@ -108,8 +108,11 @@ public:
     {
         m_messageFactory = _messageFactory;
     }
-    virtual void setCRL(std::vector<std::string> const& crl) { m_crl = crl; }
-    virtual const std::vector<std::string>& crl() const { return m_crl; }
+    virtual void setCRL(std::vector<std::string> const& _certBlacklist)
+    {
+        m_certBlacklist = _certBlacklist;
+    }
+    virtual const std::vector<std::string>& certBlacklist() const { return m_certBlacklist; }
 
 private:
     /// called by 'startedWorking' to accept connections
@@ -179,7 +182,7 @@ private:
     std::shared_ptr<std::thread> m_hostThread;
 
     // certificate rejected list of nodeID
-    std::vector<std::string> m_crl;
+    std::vector<std::string> m_certBlacklist;
 };
 }  // namespace network
 

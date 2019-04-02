@@ -105,7 +105,8 @@ int MemoryTable2::update(
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("update non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("update permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
 
             return storage::CODE_NO_AUTHORIZED;
@@ -164,7 +165,8 @@ int MemoryTable2::insert(
 
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("insert non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("insert permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
@@ -198,7 +200,8 @@ int MemoryTable2::remove(
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("remove non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("remove permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
