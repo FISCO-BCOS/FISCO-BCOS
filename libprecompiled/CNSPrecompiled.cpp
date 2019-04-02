@@ -105,7 +105,8 @@ bytes CNSPrecompiled::call(
             int count = table->insert(contractName, entry, std::make_shared<AccessOptions>(origin));
             if (count == storage::CODE_NO_AUTHORIZED)
             {
-                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
 
                 out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
                 BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());

@@ -21,11 +21,11 @@
 #include "ExecutiveContextFactory.h"
 #include "include/UserPrecompiled.h"
 #include <libdevcore/Common.h>
-#include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>

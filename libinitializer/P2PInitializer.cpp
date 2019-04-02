@@ -95,7 +95,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         {
             for (auto it : _pt.get_child(certBlacklistSection))
             {
-                if (it.first.find(certBlacklistSection + ".") == 0)
+                if (it.first.find("crl.") == 0)
                 {
                     try
                     {
