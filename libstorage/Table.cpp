@@ -192,6 +192,41 @@ void Entries::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
+size_t ConcurrentEntries::size() const
+{
+    return m_entries.size();
+}
+
+Entry::Ptr ConcurrentEntries::get(size_t i)
+{
+    if (m_entries.size() <= i)
+    {
+        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+
+        return Entry::Ptr();
+    }
+
+    // at() is more safe than operator[](), at() will check whether there is a memory overread
+    return m_entries.at(i);
+}
+
+typename ConcurrentEntries::EntriesIter ConcurrentEntries::addEntry(Entry::Ptr entry)
+{
+    auto iter = m_entries.push_back(entry);
+    m_dirty = true;
+    return iter;
+}
+
+bool ConcurrentEntries::dirty() const
+{
+    return m_dirty;
+}
+
+void ConcurrentEntries::setDirty(bool dirty)
+{
+    m_dirty = dirty;
+}
+
 void Condition::EQ(const std::string& key, const std::string& value)
 {
     m_conditions.insert(std::make_pair(key, std::make_pair(Op::eq, value)));
