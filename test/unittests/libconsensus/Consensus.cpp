@@ -253,6 +253,35 @@ BOOST_AUTO_TEST_CASE(testDoWork)
     BOOST_CHECK(fake_pbft->sealing().block.blockHeader().parentHash() ==
                 (sealerFixture.m_txpoolCreator->m_blockChain->numberHash(blockNumber)));
 }
+
+/// test updateConsensusNodeList
+BOOST_AUTO_TEST_CASE(testUpdateConsensusNodeList)
+{
+    SealerFixture sealerFixture;
+    std::shared_ptr<FakePBFTSealer> fake_pbft = sealerFixture.fakePBFT();
+    /// set SealerList
+    /// fake sealer list
+    dev::h512s sealerList;
+    size_t sealerSize = 5;
+    for (size_t i = 0; i < sealerSize; i++)
+    {
+        sealerList.push_back(KeyPair::create().pub());
+    }
+    /// fake observer list
+    dev::h512s observerList;
+    size_t observerSize = 2;
+    for (size_t i = 0; i < observerSize; i++)
+    {
+        observerList.push_back(KeyPair::create().pub());
+    }
+    sealerFixture.m_txpoolCreator->m_blockChain->setSealerList(sealerList);
+    sealerFixture.m_txpoolCreator->m_blockChain->setObserverList(observerList);
+    fake_pbft->engine()->fakeUpdateConsensusNodeList();
+    /// check sealerList
+    std::sort(sealerList.begin(), sealerList.end());
+    BOOST_CHECK(fake_pbft->engine()->sealerList() == sealerList);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

@@ -52,7 +52,7 @@ void checkSignAndCommitReq()
 
 BOOST_FIXTURE_TEST_SUITE(consensusCommonTest, TestOutputHelperFixture)
 /// testExceptions
-BOOST_AUTO_TEST_CAST(testExceptions)
+BOOST_AUTO_TEST_CASE(testExceptions)
 {
     BOOST_CHECK_THROW(
         assertThrow(false, DisabledFutureTime, "DisabledFutureTime"), DisabledFutureTime);

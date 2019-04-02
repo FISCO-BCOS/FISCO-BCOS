@@ -63,6 +63,7 @@ public:
         setNodeNum(3);
     }
     void updateConsensusNodeList() override {}
+    void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList();}
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
