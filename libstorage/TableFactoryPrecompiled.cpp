@@ -99,7 +99,7 @@ bytes TableFactoryPrecompiled::call(
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        auto result = 0;
+        int result = 0;
         try
         {
             auto table =
@@ -110,9 +110,8 @@ bytes TableFactoryPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
         }
-        out = abi.abiIn("", result);
+        out = abi.abiIn("", u256(result));
     }
     else
     {

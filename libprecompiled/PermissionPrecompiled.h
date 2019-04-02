@@ -27,8 +27,8 @@ namespace precompiled
 {
 #if 0
 contract AuthorityTable {
-    function insert(string table_name, string addr) public returns(int);
-    function remove(string table_name, string addr) public returns(int);
+    function insert(string table_name, string addr) public returns(int256);
+    function remove(string table_name, string addr) public returns(int256);
     function queryByName(string table_name) public constant returns(string);
 }
 #endif

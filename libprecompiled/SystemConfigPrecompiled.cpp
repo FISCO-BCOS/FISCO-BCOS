@@ -70,7 +70,7 @@ bytes SystemConfigPrecompiled::call(
                 << LOG_BADGE("SystemConfigPrecompiled")
                 << LOG_DESC("SystemConfigPrecompiled set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-            out = abi.abiIn("", CODE_INVALID_CONFIGURATION_VALUES);
+            out = abi.abiIn("", u256(CODE_INVALID_CONFIGURATION_VALUES));
             return out;
         }
 
@@ -91,15 +91,14 @@ bytes SystemConfigPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                        << LOG_DESC("setValueByKey successfully");
 
-                out = abi.abiIn("", count);
+                out = abi.abiIn("", u256(count));
             }
         }
         else
@@ -110,15 +109,14 @@ bytes SystemConfigPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                        << LOG_DESC("update value by key successfully");
 
-                out = abi.abiIn("", count);
+                out = abi.abiIn("", u256(count));
             }
         }
     }

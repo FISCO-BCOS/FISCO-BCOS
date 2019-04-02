@@ -85,7 +85,7 @@ bytes ConsensusPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", CODE_INVALID_NODEID);
+            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
         }
         else
         {
@@ -111,15 +111,14 @@ bytes ConsensusPrecompiled::call(
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                        out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                        BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                        out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                     }
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                                << LOG_DESC("addSealer successfully");
 
-                        out = abi.abiIn("", count);
+                        out = abi.abiIn("", u256(count));
                     }
                 }
                 else
@@ -131,15 +130,14 @@ bytes ConsensusPrecompiled::call(
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                        out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                        BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                        out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                     }
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                                << LOG_DESC("addSealer successfully");
 
-                        out = abi.abiIn("", count);
+                        out = abi.abiIn("", u256(count));
                     }
                 }
             }
@@ -158,7 +156,7 @@ bytes ConsensusPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", CODE_INVALID_NODEID);
+            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
         }
         else
         {
@@ -182,15 +180,14 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                    BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addObserver successfully");
 
-                    out = abi.abiIn("", count);
+                    out = abi.abiIn("", u256(count));
                 }
             }
             else if (!checkIsLastSealer(table, nodeID))
@@ -202,20 +199,19 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                    BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addObserver successfully");
 
-                    out = abi.abiIn("", count);
+                    out = abi.abiIn("", u256(count));
                 }
             }
             else
             {
-                out = abi.abiIn("", CODE_LAST_SEALER);
+                out = abi.abiIn("", u256(CODE_LAST_SEALER));
             }
         }
     }
@@ -232,7 +228,7 @@ bytes ConsensusPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", CODE_INVALID_NODEID);
+            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
         }
         else
         {
@@ -248,20 +244,19 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                    BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
 
-                    out = abi.abiIn("", count);
+                    out = abi.abiIn("", u256(count));
                 }
             }
             else
             {
-                out = abi.abiIn("", CODE_LAST_SEALER);
+                out = abi.abiIn("", u256(CODE_LAST_SEALER));
             }
         }
     }
