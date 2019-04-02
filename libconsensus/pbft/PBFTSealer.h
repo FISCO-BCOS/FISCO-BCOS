@@ -80,7 +80,8 @@ protected:
 
     bool reachBlockIntervalTime() override
     {
-        return m_pbftEngine->reachBlockIntervalTime() || m_sealing.block.getTransactionSize() > 0;
+        return m_pbftEngine->reachBlockIntervalTime() ||
+               (m_sealing.block.getTransactionSize() > 0 && m_pbftEngine->reachMinBlockGenTime());
     }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
@@ -88,6 +89,7 @@ protected:
     {
         return m_pbftEngine->canHandleBlockForNextLeader();
     }
+    void setBlock();
 
 private:
     /// reset block when view changes
@@ -123,8 +125,6 @@ private:
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
-
-    void setBlock();
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
