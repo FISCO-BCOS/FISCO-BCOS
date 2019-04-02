@@ -110,12 +110,12 @@ BOOST_AUTO_TEST_CASE(testGetBytes64_0)
     string32 ret0;
     string32 ret1;
 
-    abi.abiOut(bytesConstRef(&out), ret0, ret1);
-
-    std::string s = "1000";
-
     string32 retOut0;
     string32 retOut1;
+
+    auto ok = abi.abiOut(bytesConstRef(&out), retOut0, retOut1);
+
+    std::string s = "1000";
 
     for (unsigned i = 0; i < 32; ++i)
         ret0[i] = (i < s.size() ? s[i] : 0);
@@ -123,6 +123,7 @@ BOOST_AUTO_TEST_CASE(testGetBytes64_0)
     for (unsigned i = 32; i < 64; ++i)
         ret1[i - 32] = (i < s.size() ? s[i] : 0);
 
+    BOOST_TEST_TRUE(ok);
     BOOST_TEST_TRUE(ret0 == retOut0);
     BOOST_TEST_TRUE(ret1 == retOut1);
 }
@@ -139,10 +140,10 @@ BOOST_AUTO_TEST_CASE(testGetBytes64_1)
     string32 ret0;
     string32 ret1;
 
-    abi.abiOut(bytesConstRef(&out), ret0, ret1);
-
     string32 retOut0;
     string32 retOut1;
+
+    auto ok = abi.abiOut(bytesConstRef(&out), retOut0, retOut1);
 
     for (unsigned i = 0; i < 32; ++i)
         ret0[i] = (i < value.size() ? value[i] : 0);
@@ -150,6 +151,7 @@ BOOST_AUTO_TEST_CASE(testGetBytes64_1)
     for (unsigned i = 32; i < 64; ++i)
         ret1[i - 32] = (i < value.size() ? value[i] : 0);
 
+    BOOST_TEST_TRUE(ok);
     BOOST_TEST_TRUE(ret0 == retOut0);
     BOOST_TEST_TRUE(ret1 == retOut1);
 }
