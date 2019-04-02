@@ -152,6 +152,7 @@ BOOST_AUTO_TEST_CASE(testGetBytes64_1)
         ret1[i - 32] = (i < value.size() ? value[i] : 0);
 
     BOOST_CHECK(ok == true);
+
     BOOST_CHECK(ret0 == retOut0);
     BOOST_CHECK(ret1 == retOut1);
 }
