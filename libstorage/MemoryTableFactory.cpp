@@ -170,10 +170,10 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     if (result == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
-                             << LOG_DESC("create table non-authorized")
+                             << LOG_DESC("create table permission denied")
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
 
-        BOOST_THROW_EXCEPTION(StorageException(result, "create table non-authorized"));
+        BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
         return nullptr;
     }
     return openTable(tableName, authorityFlag, isPara);

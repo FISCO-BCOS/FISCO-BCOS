@@ -243,7 +243,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }
@@ -305,7 +305,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -332,7 +332,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
                 user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -406,7 +406,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
             user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }
@@ -534,7 +534,7 @@ void DagTransferPrecompiled::userTransferCall(
             auto count = table->insert(toUser, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -564,7 +564,7 @@ void DagTransferPrecompiled::userTransferCall(
             fromUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }

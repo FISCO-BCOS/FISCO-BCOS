@@ -80,7 +80,6 @@ public:
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
     void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
-    void setTableInfo(TableInfo::Ptr tableInfo) override { m_tableInfo = tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override
     {
@@ -257,7 +256,6 @@ private:
 
     dev::SharedMutex m_mutex;
     Storage::Ptr m_remoteDB;
-    TableInfo::Ptr m_tableInfo;
     std::map<uint32_t, Entry::Ptr> m_cache;
     Entries::Ptr m_newEntries;
     h256 m_blockHash;

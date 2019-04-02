@@ -494,6 +494,7 @@ generate_group_genesis()
 [storage]
     ;storage db type, leveldb or external
     type=${storage_type}
+    topic=DB
 [state]
     ;support mpt/storage
     type=${state_type}
