@@ -110,6 +110,7 @@ bytes TableFactoryPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
+            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
         }
         out = abi.abiIn("", result);
     }

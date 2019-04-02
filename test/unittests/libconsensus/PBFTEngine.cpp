@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->reqCache());
     /// init pbft env
     fake_pbft.consensus()->initPBFTEnv(
-        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+        fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
     /// check level db has already been openend
     BOOST_CHECK(fake_pbft.consensus()->backupDB());
     BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() == 0);
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check m_timeManager
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_viewTimeout ==
-                fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+                fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_changeCycle == 0);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastGarbageCollection <=
                 std::chrono::system_clock::now());
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(testTimeout)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
 
     VIEWTYPE oriToView = fake_pbft.consensus()->toView();
     TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
     // 7 nodes
     FakeConsensus<FakePBFTEngine> fake_pbft(7, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     fake_pbft.consensus()->resetConfig();
 
     ///< timeout situation
@@ -315,7 +315,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     size_t valid = 4;
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     PrepareReq prepare_req;
     FakeValidNodeNum(fake_pbft, valid);
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     size_t valid = 4;
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     int64_t block_number = obtainBlockNumber(fake_pbft);
     PrepareReq prepare_req;
 
@@ -410,7 +410,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * (fake_pbft.consensus()->timeManager().m_intervalBlockTime));
+        3 * (fake_pbft.consensus()->timeManager().m_emptyBlockGenTime));
     PrepareReq req;
     TestIsValidPrepare(fake_pbft, req, true);
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
@@ -465,7 +465,7 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
 
     fake_pbft.consensus()->initPBFTEnv(
-        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+        fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
 
     PBFTMsgPacket pbftMsg;
     SignReq signReq;

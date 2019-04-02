@@ -487,13 +487,14 @@ generate_group_genesis()
     ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
     ;the max number of transactions of a block
-    max_trans_num=10000
+    max_trans_num=1000
     ;the node id of leaders
     ${node_list}
 
 [storage]
     ;storage db type, leveldb or external
     type=${storage_type}
+    topic=DB
 [state]
     ;support mpt/storage
     type=${state_type}
@@ -514,6 +515,8 @@ function generate_group_ini()
 ; the ttl for broadcasting pbft message
 [consensus]
     ;ttl=2
+    ;min block generation time(ms), the max block generation time is 1000 ms
+    ;min_block_generation_time=500
 ;txpool limit
 [tx_pool]
     limit=150000

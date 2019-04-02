@@ -90,9 +90,9 @@ bytes SystemConfigPrecompiled::call(
             if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
-
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
                 out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
             }
             else
             {
@@ -109,9 +109,9 @@ bytes SystemConfigPrecompiled::call(
             if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
-
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
                 out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
             }
             else
             {

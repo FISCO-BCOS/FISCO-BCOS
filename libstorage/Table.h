@@ -275,7 +275,7 @@ public:
     virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
-    virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
     virtual size_t cacheSize() { return 0; }
 
     static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
@@ -283,6 +283,7 @@ public:
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
+    TableInfo::Ptr m_tableInfo;
 };
 
 // Block execution time construction by TableFactoryFactory

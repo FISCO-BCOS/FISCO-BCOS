@@ -195,10 +195,10 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 }
             }
 
-            /// check nodeID in crl, only filter by nodeID.
-            const std::vector<std::string>& crl = host->crl();
+            /// check nodeID in certBlacklist, only filter by nodeID.
+            const std::vector<std::string>& certBlacklist = host->certBlacklist();
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
-            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
+            if (find(certBlacklist.begin(), certBlacklist.end(), nodeID) != certBlacklist.end())
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list")
                                << LOG_KV("nodeID", nodeID.substr(0, 4));

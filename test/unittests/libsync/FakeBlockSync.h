@@ -42,6 +42,18 @@ public:
     SyncStatus status() const override { return m_syncStatus; }
     std::string const syncInfo() const override { return m_syncInfo; }
     bool isSyncing() const override { return m_isSyncing; }
+    void setSyncing(bool syncing)
+    {
+        m_isSyncing = syncing;
+        if (m_isSyncing)
+        {
+            m_syncStatus.state = SyncState::Downloading;
+        }
+        else
+        {
+            m_syncStatus.state = SyncState::Idle;
+        }
+    }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
