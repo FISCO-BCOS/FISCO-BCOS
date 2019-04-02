@@ -89,6 +89,7 @@ protected:
     {
         return m_pbftEngine->canHandleBlockForNextLeader();
     }
+    void setBlock();
 
 private:
     /// reset block when view changes
@@ -124,8 +125,6 @@ private:
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
-
-    void setBlock();
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;

@@ -186,6 +186,8 @@ public:
     void setNodeIdx(IDXTYPE const& _idx) { m_idx = _idx; }
     void collectGarbage() { return PBFTEngine::collectGarbage(); }
     void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
+    /// NodeAccountType accountType() override { return m_accountType; }
+    void setAccountType(NodeAccountType const& accountType) { m_accountType = accountType; }
 };
 
 template <typename T>
@@ -255,8 +257,9 @@ public:
       : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _sealerList)
     {
-        m_pbftEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
+        m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
+            _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
+        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
     }
 
     void loadTransactions(uint64_t const& transToFetch)
@@ -275,6 +278,28 @@ public:
         assert(fake_pbft);
         return fake_pbft;
     }
+
+    void setStartConsensus(bool startConsensus) { m_startConsensus = startConsensus; }
+
+    bool syncBlock() { return m_syncBlock; }
+    uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
+    Sealing const& sealing() const { return m_sealing; }
+    void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
+    bool shouldSeal() { return Sealer::shouldSeal(); }
+    bool canHandleBlockForNextLeader() { return PBFTSealer::canHandleBlockForNextLeader(); }
+    bool reachBlockIntervalTime() { return PBFTSealer::reachBlockIntervalTime(); }
+    void doWork(bool wait) { return PBFTSealer::doWork(wait); }
+    bool shouldHandleBlock() { return PBFTSealer::shouldHandleBlock(); }
+    void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
+    {
+        return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
+    }
+    void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
+    {
+        return PBFTSealer::resetBlock(block, resetNextLeader);
+    }
+    void setBlock() { return PBFTSealer::setBlock(); }
+    virtual bool shouldResetSealing() { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
 }  // namespace dev
