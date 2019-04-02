@@ -81,21 +81,21 @@ public:
     std::string const& getBaseDir() { return m_baseDir; }
 
     /// set max block generation time
-    inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
+    inline void setEmptyBlockGenTime(unsigned const& _intervalBlockTime)
     {
-        m_timeManager.m_intervalBlockTime = _intervalBlockTime;
+        m_timeManager.m_emptyBlockGenTime = _intervalBlockTime;
     }
 
     /// get max block generation time
-    inline unsigned const& getIntervalBlockTime() const
+    inline unsigned const& getEmptyBlockGenTime() const
     {
-        return m_timeManager.m_intervalBlockTime;
+        return m_timeManager.m_emptyBlockGenTime;
     }
 
     /// set mininum block generation time
     void setMinBlockGenerationTime(unsigned const& time)
     {
-        if (time < m_timeManager.m_intervalBlockTime)
+        if (time < m_timeManager.m_emptyBlockGenTime)
         {
             m_timeManager.m_minBlockGenTime = time;
         }
@@ -118,7 +118,7 @@ public:
         /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
         /// handled before the current leader generate a new block, the conditions before can be
         /// deleted
-        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last

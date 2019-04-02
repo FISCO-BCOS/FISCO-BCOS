@@ -418,7 +418,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
     /// set the range of block generation time
-    pbftEngine->setIntervalBlockTime(g_BCOSConfig.c_intervalBlockTime);
+    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
     pbftEngine->setStorage(m_dbInitializer->storage());

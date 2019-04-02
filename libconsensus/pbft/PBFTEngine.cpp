@@ -46,7 +46,7 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 
 void PBFTEngine::start()
 {
-    initPBFTEnv(3 * getIntervalBlockTime());
+    initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
     PBFTENGINE_LOG(INFO) << "[#Start PBFTEngine...]";
 }
@@ -1435,7 +1435,7 @@ void PBFTEngine::workLoop()
             if (nodeIdx() == MAXIDX)
             {
                 PBFTENGINE_LOG(TRACE) << LOG_DESC(
-                    "workLoop: I'm an observer, drop the PBFT message packets directly");
+                    "workLoop: I'm an observer, stop checking timeout and handling future block");
             }
             else
             {

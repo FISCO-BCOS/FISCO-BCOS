@@ -36,7 +36,7 @@ struct TimeManager
     uint64_t m_lastSignTime = 0;
     uint64_t m_lastConsensusTime;
     /// the max block generation time
-    unsigned m_intervalBlockTime = 1000;
+    unsigned m_emptyBlockGenTime = 1000;
     /// the minimum block generation time(default is 500ms)
     unsigned m_minBlockGenTime = 500;
 
