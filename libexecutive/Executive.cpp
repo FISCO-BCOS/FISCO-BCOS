@@ -188,10 +188,9 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
     {
         // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
-        bytes result;
         try
         {
-            result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
+            auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
             size_t outputSize = result.size();
             m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         }
