@@ -23,7 +23,6 @@
 
 #include "ABI.h"
 #include <libdevcore/FixedHash.h>
-#include <boost/regex.hpp>
 
 using namespace std;
 using namespace dev;
