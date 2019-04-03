@@ -34,10 +34,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-MemoryTable2::MemoryTable2()
-{
-    m_newEntries = std::make_shared<EntriesType>();
-}
+MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<EntriesType>()) {}
 
 Entries::Ptr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
