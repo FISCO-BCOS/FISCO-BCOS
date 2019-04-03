@@ -23,7 +23,6 @@
 
 #include "ABIParser.h"
 #include <libdevcore/FixedHash.h>
-#include <boost/regex.hpp>
 
 using namespace std;
 using namespace dev;
@@ -120,8 +119,10 @@ bool ABIInType::reset(const std::string& _s)
     // eg: int[1][2][][3]
     // trim blank character
     trim(strType);
+    auto firstLeftBracket = strType.find('[');
     // int
-    std::string strEleType = strType.substr(0, strType.find('['));
+    std::string strEleType = strType.substr(0, firstLeftBracket);
+    trim(strEleType);
     auto t = getEnumType(strEleType);
     // invalid solidity abi string
     if (t == ABI_ELEMENTARY_TYPE::INVALID)
@@ -129,17 +130,46 @@ bool ABIInType::reset(const std::string& _s)
         return false;
     }
 
+    //  eg : [10][2][3][]
     std::vector<std::size_t> r;
+    std::string::size_type leftBracket = firstLeftBracket;
+    std::string::size_type rigthBracket = 0;
+    std::string::size_type length = strType.size();
 
-    boost::regex regex("\\[[0-9]*\\]");
-    boost::sregex_token_iterator iter(strType.begin(), strType.end(), regex, 0);
-    boost::sregex_token_iterator end;
-
-    for (; iter != end; ++iter)
+    while (leftBracket < length)
     {
-        std::string temp = *iter;
-        std::size_t size = strtoul(temp.c_str() + 1, NULL, 10);
-        r.push_back(size);
+        auto leftBracketBak = leftBracket;
+        leftBracket = strType.find('[', leftBracketBak);
+        rigthBracket = strType.find(']', leftBracketBak);
+
+        if (leftBracket == std::string::npos || rigthBracket == std::string::npos ||
+            leftBracket >= rigthBracket)
+        {
+            // invalid format
+            return false;
+        }
+
+        std::string digit = strType.substr(leftBracket + 1, rigthBracket - leftBracket - 1);
+        trim(digit);
+        bool ok =
+            std::all_of(digit.begin(), digit.end(), [](char c) { return c >= '0' && c <= '9'; });
+        if (!ok)
+        {
+            // invalid format
+            return false;
+        }
+
+        if (digit.empty())
+        {
+            r.push_back(0);
+        }
+        else
+        {
+            std::size_t size = strtoul(digit.c_str(), NULL, 10);
+            r.push_back(size);
+        }
+
+        leftBracket = rigthBracket + 1;
     }
 
     this->aet = t;
