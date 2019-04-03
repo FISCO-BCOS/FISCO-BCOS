@@ -84,6 +84,9 @@ public:
     {
         m_dbInitializer = _dbInitializer;
     }
+    bool initRealBlockChain() { return Ledger::initBlockChain(); }
+
+    bool initRealBlockVerifier() { return Ledger::initBlockVerifier(); }
     std::string const& configFileName() { return m_configFileName; }
 };
 
@@ -177,8 +180,13 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// test initBlockChain
     BOOST_CHECK(fakeLedger.blockChain() == nullptr);
-    BOOST_CHECK(fakeLedger.initBlockChain() == true);
+    BOOST_CHECK(fakeLedger.initRealBlockChain() == true);
     BOOST_CHECK(fakeLedger.blockChain() != nullptr);
+
+    /// test initBlockVerifier
+    BOOST_CHECK(fakeLedger.blockVerifier() == nullptr);
+    BOOST_CHECK(fakeLedger.initRealBlockVerifier() == true);
+    BOOST_CHECK(fakeLedger.blockVerifier() != nullptr);
 }
 
 /// test initLedgers of LedgerManager

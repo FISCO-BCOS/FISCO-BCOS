@@ -125,6 +125,11 @@ public:
     {
         return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }
+    void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
+
+    void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
+
+    bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }

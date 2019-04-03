@@ -709,6 +709,34 @@ BOOST_AUTO_TEST_CASE(testFastViewChange)
     fake_pbft.consensus()->checkTimeout();
     BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req.view);
 }
+
+/// test checkBlock
+BOOST_AUTO_TEST_CASE(testCheckBlock)
+{
+    FakeConsensus<FakePBFTEngine> fake_pbft(13, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    /// ignore the genesis block
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(
+                    *fake_pbft.consensus()->blockChain()->getBlockByNumber(0)) == true);
+
+    ///  check sealerList
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(
+                    *fake_pbft.consensus()->blockChain()->getBlockByNumber(1)) == false);
+
+    /// fake sealerList: check sealerList && sealer passed && sign
+    FakeBlock block(12, KeyPair::create().secret(), 1);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
+    fake_pbft.consensus()->setSealerList(block.m_block.blockHeader().sealerList());
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == true);
+
+    /// block with too-many transactions
+    fake_pbft.consensus()->setMaxBlockTransactions(11);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
+
+    /// block with not-enough sealer
+    FakeBlock invalid_block(7, KeyPair::create().secret(), 1);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(invalid_block.m_block) == false);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
