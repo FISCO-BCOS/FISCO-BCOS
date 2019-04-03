@@ -282,7 +282,6 @@ private:
     }
 
     Storage::Ptr m_remoteDB;
-    TableInfo::Ptr m_tableInfo;
     h256 m_blockHash;
     int m_blockNum = 0;
 };
