@@ -63,7 +63,6 @@ public:
     virtual void rollback(size_t _savepoint) override;
     virtual void commit() override;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
-    int getCreateTableCode() { return m_createTableCode; }
     std::vector<Change>& getChangeLog();
 
 private:
@@ -80,7 +79,6 @@ private:
     const static std::vector<std::string> c_sysTables;
     // sys tables without access control, which means they don't need any rollback records
     const static std::vector<std::string> c_sysNonChangeLogTables;
-    int m_createTableCode;
 
     // mutex
     mutable RecursiveMutex x_name2Table;

@@ -59,7 +59,7 @@ void Executive::initialize(Transaction const& _transaction)
     catch (Exception const& ex)
     {
         m_excepted = toTransactionException(ex);
-        throw;
+        throw ex;
     }
 
     if (!m_t.hasZeroSignature())
@@ -367,13 +367,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                          << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                          << diagnostic_information(_e);
             revert();
-            throw;
+            throw _e;
         }
         catch (PermissionDenied const& _e)
         {
             revert();
             m_excepted = TransactionException::PermissionDenied;
-            throw;
         }
         catch (Exception const& _e)
         {
