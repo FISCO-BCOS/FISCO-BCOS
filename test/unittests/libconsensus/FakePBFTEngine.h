@@ -73,6 +73,7 @@ public:
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
     VIEWTYPE const& toView() const { return m_toView; }
+    void setToView(VIEWTYPE const& view) { m_toView = view; }
     VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
@@ -154,6 +155,13 @@ public:
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
     }
+
+    bool isValidViewChangeReq(ViewChangeReq const& req, IDXTYPE const& source)
+    {
+        std::ostringstream oss;
+        return PBFTEngine::isValidViewChangeReq(req, source, oss);
+    }
+
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
@@ -162,10 +170,19 @@ public:
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
+
+    /// handle sign
     bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
+
+    /// handle viewchange
+    bool handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTEngine::handleViewChangeMsg(viewChange_req, pbftMsg);
+    }
+
     CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
