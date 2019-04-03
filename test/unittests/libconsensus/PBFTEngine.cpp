@@ -593,6 +593,21 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
     testReHandleCommitPrepareCache(fake_pbft, prepareReq);
 
+    ///====== test notifySealing ======
+    FakeBlock block(12, KeyPair::create().secret(), fake_pbft.consensus()->consensusBlockNumber());
+    fake_pbft.consensus()->onNotifyNextLeaderReset();
+    /// the leader calls notifySealing
+    fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
+    fake_pbft.consensus()->notifySealing(block.m_block);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
+
+    /// the nextLeader calls notifySealing
+    fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getNextLeader());
+    fake_pbft.consensus()->notifySealing(block.m_block);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == true);
+    ///====== test notifySealing end ======
+
     /// case 4: the node is not the leader
     fake_pbft.consensus()->setNodeIdx(
         (fake_pbft.consensus()->getLeader().second + 1) % fake_pbft.consensus()->nodeNum());
@@ -736,6 +751,60 @@ BOOST_AUTO_TEST_CASE(testCheckBlock)
     /// block with not-enough sealer
     FakeBlock invalid_block(7, KeyPair::create().secret(), 1);
     BOOST_CHECK(fake_pbft.consensus()->checkBlock(invalid_block.m_block) == false);
+}
+
+/// test handleMsg
+BOOST_AUTO_TEST_CASE(testHandleMsg)
+{
+    /// test fast view change
+    FakeConsensus<FakePBFTEngine> fake_pbft(4, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
+    }
+    /// handleViewChangeMsg
+    ViewChangeReq viewchange_req;
+    PBFTMsgPacket viewchange_packet;
+    IDXTYPE nodeIdxSource = 1;
+    /// handle the viewchange request received from 2nd sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+
+    viewchange_packet.ttl = 1;
+    /// no broadcast for ttl
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+    }
+
+    viewchange_packet.ttl = 2;
+    /// no broadcast for invalid viewchange request
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+    }
+
+    /// broadcast
+    fakeValidViewchange(fake_pbft, viewchange_req, 2, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        if (fake_pbft.m_sealerList[i] != viewchange_packet.node_id && i != viewchange_req.idx)
+        {
+            compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 1);
+        }
+        /// don't broadcast to the source node
+        else
+        {
+            compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+        }
+    }
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

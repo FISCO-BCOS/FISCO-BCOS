@@ -149,6 +149,14 @@ public:
     bool const& cfgErr() { return m_cfgErr; }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
+
+    void onNotifyNextLeaderReset()
+    {
+        PBFTEngine::onNotifyNextLeaderReset(
+            boost::bind(&FakePBFTEngine::resetBlockForNextLeaderTest, this, _1));
+    }
+    void resetBlockForNextLeaderTest(dev::h256Hash const&) {}
+
     void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
     static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
     bool broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
@@ -170,6 +178,9 @@ public:
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
+
+    void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
+    void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
@@ -211,6 +222,9 @@ public:
     void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
     /// NodeAccountType accountType() override { return m_accountType; }
     void setAccountType(NodeAccountType const& accountType) { m_accountType = accountType; }
+
+    bool notifyNextLeaderSeal() { return m_notifyNextLeaderSeal; }
+    IDXTYPE getNextLeader() const { return PBFTEngine::getNextLeader(); }
 };
 
 template <typename T>
@@ -303,6 +317,7 @@ public:
     }
 
     void setStartConsensus(bool startConsensus) { m_startConsensus = startConsensus; }
+    bool getStartConsensus() { return m_startConsensus; }
 
     bool syncBlock() { return m_syncBlock; }
     uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
@@ -322,6 +337,7 @@ public:
         return PBFTSealer::resetBlock(block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }
+    void start() override { return Sealer::start(); }
     virtual bool shouldResetSealing() { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
