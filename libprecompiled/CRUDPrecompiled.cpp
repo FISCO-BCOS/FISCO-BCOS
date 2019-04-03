@@ -72,8 +72,8 @@ bytes CRUDPrecompiled::call(
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
-            Entry::Ptr entry;
-            parseEntry(entryStr, table, entry);
+            Entry::Ptr entry = table->newEntry();
+            parseEntry(entryStr, entry);
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", result);
         }
@@ -91,10 +91,10 @@ bytes CRUDPrecompiled::call(
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
-            Entry::Ptr entry;
-            parseEntry(entryStr, table, entry);
-            Condition::Ptr condition;
-            parseCondition(conditionStr, table, condition);
+            Entry::Ptr entry = table->newEntry();
+            parseEntry(entryStr, entry);
+            Condition::Ptr condition = table->newCondition();
+            parseCondition(conditionStr, condition);
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", result);
@@ -113,8 +113,8 @@ bytes CRUDPrecompiled::call(
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
-            Condition::Ptr condition;
-            parseCondition(conditionStr, table, condition);
+            Condition::Ptr condition = table->newCondition();
+            parseCondition(conditionStr, condition);
             int result = table->remove(key, condition, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", result);
         }
@@ -128,13 +128,15 @@ bytes CRUDPrecompiled::call(
     {  // select(string tableName, string key, string condition, string optional)
         std::string tableName, key, conditionStr, optional;
         abi.abiOut(data, tableName, key, conditionStr, optional);
-        tableName = storage::USER_TABLE_PREFIX + tableName;
-
+        if (tableName != storage::SYS_TABLES)
+        {
+            tableName = storage::USER_TABLE_PREFIX + tableName;
+        }
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
-            Condition::Ptr condition;
-            parseCondition(conditionStr, table, condition);
+            Condition::Ptr condition = table->newCondition();
+            parseCondition(conditionStr, condition);
             auto entries = table->select(key, condition);
             json_spirit::Array records;
             if (entries)
@@ -169,8 +171,7 @@ bytes CRUDPrecompiled::call(
     return out;
 }
 
-void CRUDPrecompiled::parseCondition(
-    const std::string& conditionStr, const Table::Ptr& table, Condition::Ptr& condition)
+void CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition)
 {
     Json::Reader reader;
     Json::Value conditionJson;
@@ -182,7 +183,6 @@ void CRUDPrecompiled::parseCondition(
     }
     else
     {
-        condition = table->newCondition();
         auto members = conditionJson.getMemberNames();
         Json::Value OPJson;
         for (auto iter = members.begin(); iter != members.end(); iter++)
@@ -211,6 +211,10 @@ void CRUDPrecompiled::parseCondition(
                 {
                     condition->LT(*iter, OPJson[*it].asString());
                 }
+                else if (*it == "le")
+                {
+                    condition->LE(*iter, OPJson[*it].asString());
+                }
                 else if (*it == "limit")
                 {
                     std::string offsetCount = OPJson[*it].asString();
@@ -222,15 +226,16 @@ void CRUDPrecompiled::parseCondition(
                 }
                 else
                 {
-                    condition->LE(*iter, OPJson[*it].asString());
+                    PRECOMPILED_LOG(ERROR)
+                        << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("condition operation undefined")
+                        << LOG_KV("operation", *it);
                 }
             }
         }
     }
 }
 
-void CRUDPrecompiled::parseEntry(
-    const std::string& entryStr, const Table::Ptr& table, Entry::Ptr& entry)
+void CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
 {
     Json::Value entryJson;
     Json::Reader reader;
@@ -241,7 +246,6 @@ void CRUDPrecompiled::parseEntry(
     }
     else
     {
-        entry = table->newEntry();
         auto memebers = entryJson.getMemberNames();
         for (auto iter = memebers.begin(); iter != memebers.end(); iter++)
         {
