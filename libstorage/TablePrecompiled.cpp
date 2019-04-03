@@ -96,10 +96,6 @@ bytes TablePrecompiled::call(
         auto entry = entryPrecompiled->getEntry();
 
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
-        if (count == storage::CODE_NO_AUTHORIZED)
-        {
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
-        }
         out = abi.abiIn("", u256(count));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWCOND])
@@ -132,10 +128,6 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
-        if (count == storage::CODE_NO_AUTHORIZED)
-        {
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
-        }
         out = abi.abiIn("", u256(count));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
@@ -154,10 +146,6 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
-        if (count == storage::CODE_NO_AUTHORIZED)
-        {
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
-        }
         out = abi.abiIn("", u256(count));
     }
     else

@@ -80,7 +80,7 @@ bytes PermissionPrecompiled::call(
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
 
-            out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_EXIST);
+            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_EXIST));
         }
         else
         {
@@ -95,15 +95,14 @@ bytes PermissionPrecompiled::call(
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
 
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert successfully");
 
-                out = abi.abiIn("", count);
+                out = abi.abiIn("", u256(count));
             }
         }
     }
@@ -127,7 +126,7 @@ bytes PermissionPrecompiled::call(
             PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                      << LOG_DESC("tableName and address does not exist");
 
-            out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_NOT_EXIST);
+            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_NOT_EXIST));
         }
         else
         {
@@ -138,15 +137,14 @@ bytes PermissionPrecompiled::call(
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
 
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove successfully");
 
-                out = abi.abiIn("", count);
+                out = abi.abiIn("", u256(count));
             }
         }
     }
