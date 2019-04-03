@@ -92,7 +92,7 @@ bytes CNSPrecompiled::call(
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
 
-            out = abi.abiIn("", CODE_ADDRESS_AND_VERSION_EXIST);
+            out = abi.abiIn("", u256(CODE_ADDRESS_AND_VERSION_EXIST));
         }
         else
         {
@@ -108,15 +108,14 @@ bytes CNSPrecompiled::call(
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
 
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-                BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+                out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
 
-                out = abi.abiIn("", count);
+                out = abi.abiIn("", u256(count));
             }
         }
     }

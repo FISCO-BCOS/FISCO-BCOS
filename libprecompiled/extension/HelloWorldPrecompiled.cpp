@@ -85,8 +85,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
+            out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             return out;
         }
     }
@@ -131,9 +130,8 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {  //  permission denied
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("permission denied");
-            BOOST_THROW_EXCEPTION(dev::eth::PermissionDenied());
         }
-        out = abi.abiIn("", count);
+        out = abi.abiIn("", u256(count));
     }
     else
     {  // unkown function call
