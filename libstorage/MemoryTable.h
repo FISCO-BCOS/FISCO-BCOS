@@ -31,6 +31,8 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <mutex>
+#include <thread>
 #include <type_traits>
 
 namespace dev
@@ -45,7 +47,7 @@ public:
     using SerialMap = std::map<std::string, Entries::Ptr>;
 
     using CacheType = typename std::conditional<Mode::value, ConcurrentMap, SerialMap>::type;
-    using CacheItr = typename CacheType::iterator;
+    using CacheIter = typename CacheType::iterator;
     using KeyType = typename CacheType::key_type;
 
     using Ptr = std::shared_ptr<MemoryTable<Mode>>;
@@ -327,7 +329,26 @@ public:
     size_t cacheSize() override { return m_cache.size(); }
 
 private:
-    void eraseKey(ConcurrentMap& _map, KeyType const& _key) { _map.unsafe_erase(_key); }
+    /*
+    NOTICE:
+    m_eraseMutex is used for eraseKey() method with tbb::concurrent_unordered_map
+    instance only. Because in that eraseKey() method, we use unsafe_erase() method to delete element
+    in tbb::concurrent_unordered_map instance. As "unsafe_" prefix says, the unsafe_erase() method
+    can NOT ensure concurrenty safety between different calls to this method, that's why we used a
+    mutex to ensure there is only one thread can erase element each time.
+
+    Additionally, by now no evidence shows that unsafe_erase() method would conflict with insert()
+    or find() method. To get furthur details about the data structure used in
+    tbb::concurrent_unordered_map, maybe you could read:
+    http://www.cs.ucf.edu/~dcm/Teaching/COT4810-Spring2011/Literature/SplitOrderedLists.pdf
+    */
+    std::mutex m_eraseMutex;
+
+    void eraseKey(ConcurrentMap& _map, KeyType const& _key)
+    {
+        std::lock_guard<std::mutex> lock(m_eraseMutex);
+        _map.unsafe_erase(_key);
+    }
 
     void eraseKey(SerialMap& _map, KeyType const& _key) { _map.erase(_key); }
 
@@ -335,7 +356,7 @@ private:
     {
         auto entries = std::make_shared<Entries>();
 
-        CacheItr it = m_cache.find(key);
+        CacheIter it = m_cache.find(key);
         if (it == m_cache.end())
         {
             // These code is fast with no rollback
