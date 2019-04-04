@@ -32,9 +32,9 @@
 
 using namespace dev;
 using namespace dev::storage;
-
-Entries::Ptr LevelDBStorage::select(
-    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
+/*
+Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key,
+Condition::Ptr condition)
 {
     (void)condition;
     try
@@ -116,7 +116,6 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
             continue;
         }
         std::string entryKey = tableData->tableName + "_" + dataIt->first;
-        Json::Value entry;
 
         size_t entriesSize = dataIt->second->size();
         RLPStream rlps;
@@ -156,10 +155,12 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 
     return total;
 }
-
-/*
-Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const std::string& key)
+*/
+//*
+Entries::Ptr LevelDBStorage::select(
+    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
 {
+    (void)condition;
     try
     {
         std::string entryKey = table;
@@ -204,7 +205,7 @@ Entries::Ptr LevelDBStorage::select(h256, int, const std::string& table, const s
                 }
             }
         }
-        entries->setDirty(false);
+        // entries->setDirty(false);
 
         return entries;
     }
@@ -268,7 +269,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 
     return total;
 }
-*/
+//*/
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
 size_t LevelDBStorage::commit(

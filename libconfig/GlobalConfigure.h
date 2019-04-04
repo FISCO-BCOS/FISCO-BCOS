@@ -66,7 +66,7 @@ public:
     const uint64_t c_compressThreshold = 1024;
 
 private:
-    VERSION m_version;
+    VERSION m_version = RC2_VERSION;
     bool m_compress;
 };
 

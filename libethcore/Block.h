@@ -25,9 +25,11 @@
 #include "BlockHeader.h"
 #include "Transaction.h"
 #include "TransactionReceipt.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/TrieHash.h>
+
 namespace dev
 {
 namespace eth
@@ -67,10 +69,14 @@ public:
 
     ///-----encode functions
     void encode(bytes& _out) const;
+    void encodeRC2(bytes& _out) const;
 
     ///-----decode functions
     void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
         bool _withReceipt = true, bool _withTxHash = false);
+    void decodeRC2(bytesConstRef _block,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
@@ -216,7 +222,9 @@ public:
 
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
+    void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
+    void calReceiptRootRC2(bool update = true) const;
 
     /**
      * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
