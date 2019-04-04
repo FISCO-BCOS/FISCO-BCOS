@@ -241,24 +241,6 @@ static inline void checkDelCommitCache(
     BOOST_CHECK(p_commit == fake_pbft.consensus()->reqCache()->mutableCommitCache().end());
 }
 
-/*
-static void checkReportBlock(
-    FakeConsensus<FakePBFTEngine>& fake_pbft, BlockHeader const& highest, bool isSealer = false)
-{
-    BOOST_CHECK(fake_pbft.consensus()->mutableConsensusNumber() ==
-                fake_pbft.consensus()->mutableHighest().number() + 1);
-    BOOST_CHECK(fake_pbft.consensus()->leaderFailed() == false);
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime > utcTime() - 100000);
-    BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastConsensusTime <= utcTime());
-    /// check resetConfig
-    checkResetConfig(fake_pbft, isSealer);
-    /// check clearAllExceptCommitCache
-    checkClearAllExceptCommitCache(fake_pbft);
-    /// check delCommitCache
-    checkDelCommitCache(fake_pbft, highest);
-}
-*/
-
 static void checkBackupMsg(FakeConsensus<FakePBFTEngine>& fake_pbft, std::string const& key,
     bytes const& msgData, bool shouldClean = true)
 {
@@ -575,5 +557,86 @@ static void testReHandleCommitPrepareCache(
     }
 }
 
+/// fake a valid viewchange
+static void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq& req,
+    IDXTYPE const& idx = 0, bool forFastViewChange = false, bool setToView = true)
+{
+    FakeBlockChain* p_blockChain =
+        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
+    BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    /// fake_pbft.consensus()->resetConfig();
+    fake_pbft.consensus()->setHighest(highest);
+    fake_pbft.consensus()->setView(2);
+    req.idx = idx;
+    fake_pbft.consensus()->setNodeIdx((req.idx + 1) % fake_pbft.m_sealerList.size());
+    req.view = 3;
+    if (setToView)
+    {
+        if (!forFastViewChange)
+        {
+            fake_pbft.consensus()->setToView(req.view);
+        }
+        else
+        {
+            fake_pbft.consensus()->setToView(req.view - 2);
+        }
+    }
+
+    req.block_hash = highest.hash();
+    req.height = highest.number();
+    fake_pbft.consensus()->mutableConsensusNumber() = req.height + 1;
+    Secret sec = fake_pbft.m_secrets[req.idx];
+    req.sig = dev::sign(sec, req.block_hash);
+    req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
+}
+
+
+/// test isValidViewChangeReq
+static void TestIsValidViewChange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq& req)
+{
+    IDXTYPE nodeIdx = 0;
+    IDXTYPE nodeIdxSource = 2;
+    fakeValidViewchange(fake_pbft, req);
+
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == true);
+
+    /// case 1: own viewchange request
+    IDXTYPE orgIdx = fake_pbft.consensus()->nodeIdx();
+    fake_pbft.consensus()->setNodeIdx(nodeIdx);
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdx) == false);
+    fake_pbft.consensus()->setNodeIdx(orgIdx);
+
+    /// case 2: existed viewchange
+    fake_pbft.consensus()->reqCache()->addViewChangeReq(req);
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == false);
+    fake_pbft.consensus()->reqCache()->clearAll();
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == true);
+
+    /// case 6: catchupView(send viewchange message to the source)
+    fake_pbft.consensus()->setToView(req.view + 2);
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, req.idx) == true);
+    compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[req.idx], 1);
+    fake_pbft.consensus()->setToView(req.view);
+
+    /// case 3: check height and view
+    uint64_t orgHeight = req.height;
+    req.height = req.height - 1;
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == false);
+    req.height = orgHeight;
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == true);
+
+    /// case 4: check block hash
+    dev::h256 orgHash = req.block_hash;
+    req.block_hash = dev::sha3("fake");
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == false);
+    req.block_hash = orgHash;
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == true);
+
+    /// case 5: check sign
+    req.view += 1;
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == false);
+    req.view -= 1;
+    BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(req, nodeIdxSource) == true);
+}
 }  // namespace test
 }  // namespace dev

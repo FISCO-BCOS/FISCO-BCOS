@@ -62,15 +62,8 @@ void PBFTSealer::handleBlock()
                          << LOG_KV("tx", m_sealing.block.getTransactionSize())
                          << LOG_KV("nodeIdx", m_pbftEngine->nodeIdx())
                          << LOG_KV("hash", m_sealing.block.header().hash().abridged());
-    bool succ = m_pbftEngine->generatePrepare(m_sealing.block);
-    if (!succ)
-    {
-        resetSealingBlock();
-        /// notify to re-generate the block
-        m_signalled.notify_all();
-        m_blockSignalled.notify_all();
-    }
-    else if (m_pbftEngine->shouldReset(m_sealing.block))
+    m_pbftEngine->generatePrepare(m_sealing.block);
+    if (m_pbftEngine->shouldReset(m_sealing.block))
     {
         resetSealingBlock();
         m_signalled.notify_all();

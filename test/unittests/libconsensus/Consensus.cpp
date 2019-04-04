@@ -282,6 +282,24 @@ BOOST_AUTO_TEST_CASE(testUpdateConsensusNodeList)
     BOOST_CHECK(fake_pbft->engine()->sealerList() == sealerList);
 }
 
+/// test start
+BOOST_AUTO_TEST_CASE(testStart)
+{
+    SealerFixture sealerFixture;
+    std::shared_ptr<FakePBFTSealer> fake_pbft = sealerFixture.fakePBFT();
+    uint64_t blockNumber = sealerFixture.m_txpoolCreator->m_blockChain->number();
+    fake_pbft->engine()->setHighest(
+        sealerFixture.m_txpoolCreator->m_blockChain->getBlockByNumber(blockNumber - 1)
+            ->blockHeader());
+
+    fake_pbft->setStartConsensus(false);
+    BOOST_CHECK(fake_pbft->getStartConsensus() == false);
+
+    fake_pbft->start();
+    BOOST_CHECK(fake_pbft->getStartConsensus() == true);
+    BOOST_CHECK(fake_pbft->engine()->consensusBlockNumber() ==
+                (sealerFixture.m_txpoolCreator->m_blockChain->number() + 1));
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
