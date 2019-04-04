@@ -40,10 +40,10 @@ class FakeBlock
 {
 public:
     /// for normal case test
-    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret())
+    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0)
     {
         m_sec = sec;
-        FakeBlockHeader();
+        FakeBlockHeader(blockNumber);
         FakeSigList(size);
         FakeTransaction(size);
         FakeTransactionReceipt(size);
@@ -70,7 +70,7 @@ public:
         bytes result;
         RLPStream s;
         s.appendList(4);
-        FakeBlockHeader();
+        FakeBlockHeader(0);
         FakeSigList(size);
         FakeTransaction(size);
         unsigned fake_value = 10;
@@ -92,7 +92,7 @@ public:
     /// check exception conditions related about decode and encode
     void CheckInvalidBlockData(size_t size)
     {
-        FakeBlockHeader();
+        FakeBlockHeader(0);
         m_block.setBlockHeader(m_blockHeader);
         BOOST_CHECK_THROW(m_block.decode(ref(m_blockHeaderData)), InvalidBlockFormat);
         BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData));
@@ -108,12 +108,12 @@ public:
     }
 
     /// fake block header
-    void FakeBlockHeader()
+    void FakeBlockHeader(uint64_t blockNumber)
     {
         m_blockHeader.setParentHash(sha3("parent"));
         m_blockHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
         m_blockHeader.setLogBloom(LogBloom(0));
-        m_blockHeader.setNumber(int64_t(0));
+        m_blockHeader.setNumber(blockNumber);
         m_blockHeader.setGasLimit(u256(3000000));
         m_blockHeader.setGasUsed(u256(100000));
         uint64_t current_time = 100000;  // utcTime();
@@ -121,9 +121,10 @@ public:
         m_blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
         m_blockHeader.setSealer(u256(12));
         std::vector<h512> sealer_list;
-        for (unsigned int i = 0; i < 10; i++)
+        for (unsigned int i = 0; i < 13; i++)
         {
-            sealer_list.push_back(toPublic(Secret(h256(i))));
+            /// sealer_list.push_back(toPublic(Secret(h256(i))));
+            sealer_list.push_back(toPublic(m_sec));
         }
         m_blockHeader.setSealerList(sealer_list);
     }
@@ -137,9 +138,9 @@ public:
         m_sigList.clear();
         for (size_t i = 0; i < size; i++)
         {
-            block_hash = sha3("block " + std::to_string(i));
+            block_hash = m_blockHeader.hash();
             sig = sign(m_sec, block_hash);
-            m_sigList.push_back(std::make_pair(u256(block_hash), sig));
+            m_sigList.push_back(std::make_pair(u256(i), sig));
         }
     }
 

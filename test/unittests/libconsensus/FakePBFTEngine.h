@@ -73,6 +73,7 @@ public:
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
     VIEWTYPE const& toView() const { return m_toView; }
+    void setToView(VIEWTYPE const& view) { m_toView = view; }
     VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
@@ -124,6 +125,11 @@ public:
     {
         return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }
+    void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
+
+    void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
+
+    bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
@@ -143,6 +149,14 @@ public:
     bool const& cfgErr() { return m_cfgErr; }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
+
+    void onNotifyNextLeaderReset()
+    {
+        PBFTEngine::onNotifyNextLeaderReset(
+            boost::bind(&FakePBFTEngine::resetBlockForNextLeaderTest, this, _1));
+    }
+    void resetBlockForNextLeaderTest(dev::h256Hash const&) {}
+
     void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
     static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
     bool broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
@@ -154,18 +168,37 @@ public:
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
     }
+
+    bool isValidViewChangeReq(ViewChangeReq const& req, IDXTYPE const& source)
+    {
+        std::ostringstream oss;
+        return PBFTEngine::isValidViewChangeReq(req, source, oss);
+    }
+
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
+
+    void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
+    void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
+
+    /// handle sign
     bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
+
+    /// handle viewchange
+    bool handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTEngine::handleViewChangeMsg(viewChange_req, pbftMsg);
+    }
+
     CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
@@ -189,6 +222,9 @@ public:
     void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
     /// NodeAccountType accountType() override { return m_accountType; }
     void setAccountType(NodeAccountType const& accountType) { m_accountType = accountType; }
+
+    bool notifyNextLeaderSeal() { return m_notifyNextLeaderSeal; }
+    IDXTYPE getNextLeader() const { return PBFTEngine::getNextLeader(); }
 };
 
 template <typename T>
@@ -281,6 +317,7 @@ public:
     }
 
     void setStartConsensus(bool startConsensus) { m_startConsensus = startConsensus; }
+    bool getStartConsensus() { return m_startConsensus; }
 
     bool syncBlock() { return m_syncBlock; }
     uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
@@ -300,6 +337,7 @@ public:
         return PBFTSealer::resetBlock(block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }
+    void start() override { return Sealer::start(); }
     virtual bool shouldResetSealing() { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
