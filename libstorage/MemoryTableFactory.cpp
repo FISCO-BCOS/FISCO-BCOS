@@ -142,11 +142,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     Address const& _origin, bool isPara)
 {
     RecursiveGuard l(x_name2Table);
-    auto table = openTable(tableName, authorityFlag, isPara);
-    if (table)
-    {
-        return table;
-    }
 
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
@@ -173,7 +168,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
 
         BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
-        return nullptr;
     }
     return openTable(tableName, authorityFlag, isPara);
 }
