@@ -104,7 +104,10 @@ bytes TableFactoryPrecompiled::call(
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
-            // set createTableCode
+            if (!table)
+            {
+                result = CODE_TABLE_NAME_ALREADY_EXIST;
+            }
         }
         catch (dev::storage::StorageException& e)
         {

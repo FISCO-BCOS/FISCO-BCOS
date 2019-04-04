@@ -758,6 +758,7 @@ do
     ((i=i+1))
 done
 echo " stop \${node} failed, exceed maximum number of retries."
+exit 1
 EOF
 }
 

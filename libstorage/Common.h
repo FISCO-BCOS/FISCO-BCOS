@@ -50,6 +50,7 @@ const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 const std::string DAG_TRANSFER = "_dag_transfer_";
 
 const int CODE_NO_AUTHORIZED = 50000;
+const int CODE_TABLE_NAME_ALREADY_EXIST = 50001;
 
 }  // namespace storage
 }  // namespace dev
