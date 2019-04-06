@@ -27,6 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
+#include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -227,7 +228,8 @@ dev::h256 MemoryTable2::hash()
 {
     bytes data;
 
-    for (auto it : m_dirty)
+    auto tempDirty = std::map<uint32_t, Entry::Ptr>(m_dirty.begin(), m_dirty.end());
+    for (auto it : tempDirty)
     {
         auto id = htonl(it.first);
         data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
@@ -241,6 +243,8 @@ dev::h256 MemoryTable2::hash()
         }
     }
 
+    tbb::parallel_sort(m_newEntries->begin(), m_newEntries->end(),
+        [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) { return lhs->getID() < rhs->getID(); });
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
         auto entry = m_newEntries->get(i);
