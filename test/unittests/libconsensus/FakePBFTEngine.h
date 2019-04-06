@@ -303,7 +303,8 @@ public:
     {
         return PBFTSealer::loadTransactions(transToFetch);
     }
-    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+
+    bool checkTxsEnough(uint64_t maxTxsCanSeal) override
     {
         return PBFTSealer::checkTxsEnough(maxTxsCanSeal);
     }
@@ -323,11 +324,14 @@ public:
     uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
     Sealing const& sealing() const { return m_sealing; }
     void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
-    bool shouldSeal() { return Sealer::shouldSeal(); }
-    bool canHandleBlockForNextLeader() { return PBFTSealer::canHandleBlockForNextLeader(); }
-    bool reachBlockIntervalTime() { return PBFTSealer::reachBlockIntervalTime(); }
-    void doWork(bool wait) { return PBFTSealer::doWork(wait); }
-    bool shouldHandleBlock() { return PBFTSealer::shouldHandleBlock(); }
+    bool shouldSeal() override { return Sealer::shouldSeal(); }
+    bool canHandleBlockForNextLeader() override
+    {
+        return PBFTSealer::canHandleBlockForNextLeader();
+    }
+    bool reachBlockIntervalTime() override { return PBFTSealer::reachBlockIntervalTime(); }
+    void doWork(bool wait) override { return PBFTSealer::doWork(wait); }
+    bool shouldHandleBlock() override { return PBFTSealer::shouldHandleBlock(); }
     void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {
         return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
@@ -338,7 +342,7 @@ public:
     }
     void setBlock() { return PBFTSealer::setBlock(); }
     void start() override { return Sealer::start(); }
-    virtual bool shouldResetSealing() { return Sealer::shouldResetSealing(); }
+    bool shouldResetSealing() override { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
 }  // namespace dev
