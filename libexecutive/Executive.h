@@ -141,6 +141,8 @@ public:
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
     bool call(dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+    bool callRC2(
+        dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
     void accrueSubState(dev::eth::SubState& _parentContext);
 
