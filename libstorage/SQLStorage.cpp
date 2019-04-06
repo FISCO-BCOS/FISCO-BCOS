@@ -207,7 +207,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             ssOut << value;
 
             auto str = ssOut.str();
-            LOG(DEBUG) << "Request AMOPDB:" << request->seq() << " " << str;
+            LOG(TRACE) << "Request AMOPDB:" << request->seq() << " " << str;
 
             request->setTopic(m_topic);
 
@@ -225,15 +225,15 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
                             boost::lexical_cast<std::string>(response->result()));
             }
 
-            // 解析topic
+            // resolving topic
             std::string topic = response->topic();
-            LOG(DEBUG) << "Receive topic:" << topic;
+            LOG(TRACE) << "Receive topic:" << topic;
 
             std::stringstream ssIn;
             std::string jsonStr(response->data(), response->data() + response->dataSize());
             ssIn << jsonStr;
 
-            LOG(DEBUG) << "AMOPDB Response:" << ssIn.str();
+            LOG(TRACE) << "AMOPDB Response:" << ssIn.str();
 
             Json::Value responseJson;
             ssIn >> responseJson;
@@ -281,7 +281,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         {
             LOG(ERROR) << "Reach max retry:" << retry;
 
-            //存储无法正常使用，退出程序
+            // The storage doesn't works well, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
 
             m_fatalHandler(e);
