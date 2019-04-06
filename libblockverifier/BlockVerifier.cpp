@@ -39,13 +39,13 @@ using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
-    if (!m_enableParallel)
+    if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
     {
-        return serialExecuteBlock(block, parentBlockInfo);
+        return parallelExecuteBlock(block, parentBlockInfo);
     }
     else
     {
-        return parallelExecuteBlock(block, parentBlockInfo);
+        return serialExecuteBlock(block, parentBlockInfo);
     }
 }
 
@@ -111,7 +111,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
-    block.setStateRootToAllReceipt(stateRoot);
+    // block.setStateRootToAllReceipt(stateRoot); no need
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);

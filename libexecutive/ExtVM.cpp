@@ -256,9 +256,15 @@ void ExtVM::suicide(Address const& _a)
     // witnessing the current consensus
     // 'GeneralStateTests/stSystemOperationsTest/suicideSendEtherPostDeath.json'.
 
-    // No balance here in BCOS. Balance has data racing in parallel suicide.
-    // m_s->addBalance(_a, m_s->balance(myAddress()));
-    // m_s->setBalance(myAddress(), 0);
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        // No balance here in BCOS. Balance has data racing in parallel suicide.
+        ExtVMFace::suicide(_a);
+        return;
+    }
+
+    m_s->addBalance(_a, m_s->balance(myAddress()));
+    m_s->setBalance(myAddress(), 0);
     ExtVMFace::suicide(_a);
 }
 
