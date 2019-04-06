@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <chrono>
 #include <ctime>
+#include <random>
 #include <string>
 #include <thread>
 
@@ -91,6 +92,9 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     Secret sec = KeyPair::create().secret();
     u256 maxBlockLimit = u256(500);
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
+    random_device rd;
+    mt19937 mt(rd());
+    uniform_int_distribution<int> dist(0, userCount);
 
     while (true)
     {
@@ -116,8 +120,8 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                 string userFrom;
                 string userTo;
 
-                userFrom = to_string(rand() % userCount);
-                userTo = to_string(rand() % userCount);
+                userFrom = to_string(dist(mt));
+                userTo = to_string(dist(mt));
 
                 u256 money = 1;
                 dev::eth::ContractABI abi;

@@ -303,7 +303,8 @@ public:
     {
         return PBFTSealer::loadTransactions(transToFetch);
     }
-    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal) override
+
+    bool checkTxsEnough(uint64_t maxTxsCanSeal) override
     {
         return PBFTSealer::checkTxsEnough(maxTxsCanSeal);
     }
@@ -341,7 +342,7 @@ public:
     }
     void setBlock() { return PBFTSealer::setBlock(); }
     void start() override { return Sealer::start(); }
-    virtual bool shouldResetSealing() override { return Sealer::shouldResetSealing(); }
+    bool shouldResetSealing() override { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
 }  // namespace dev
