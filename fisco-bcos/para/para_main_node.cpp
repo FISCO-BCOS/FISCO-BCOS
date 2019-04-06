@@ -37,6 +37,7 @@
 #include <chrono>
 #include <ctime>
 #include <string>
+#include <thread>
 
 using namespace std;
 using namespace dev;
@@ -47,9 +48,6 @@ using namespace dev::txpool;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
 
-#define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[#CONSENSUS_MAIN] "
-
-static const size_t USER_NUM = 1000;
 void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _userNum)
 {
     Secret sec = KeyPair::create().secret();
@@ -69,7 +67,6 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
                 abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
             u256 nonce = u256(utcTime());
             Transaction tx(value, gasPrice, gas, dest, data, nonce);
-            // sec = KeyPair::create().secret();
             Signature sig = sign(sec, tx.sha3(WithoutSignature));
 
             for (auto group : ledgerManager->getGrouplList())
@@ -87,31 +84,28 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
-/*
-static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
+
+static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed,
+    unsigned int userCount, KeyPair const&)
 {
-    CONSENSUS_MAIN_LOG(TRACE) << "[#rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
-                              << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
-                              << receiptPtr->blockHash();
-}
-*/
-static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const&)
-{
-    /// Transaction tx(value, gasPrice, gas, dst, data);
     Secret sec = KeyPair::create().secret();
     u256 maxBlockLimit = u256(500);
-    /// get the consensus status
-    /// m_txSpeed default is 10
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
-    // u256 count = u256(0);
 
     while (true)
     {
         for (auto group : ledgerManager->getGrouplList())
         {
-            if (ledgerManager->blockChain(group)->number() <= 0)
-                generateUserAddTx(ledgerManager, USER_NUM);
-
+            auto hasGenerated = false;
+            while (ledgerManager->blockChain(group)->number() <= 0)
+            {
+                if (!hasGenerated)
+                {
+                    generateUserAddTx(ledgerManager, userCount);
+                    hasGenerated = true;
+                }
+                std::this_thread::yield();
+            }
 
             try
             {
@@ -122,8 +116,8 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                 string userFrom;
                 string userTo;
 
-                userFrom = to_string(rand() % USER_NUM);
-                userTo = to_string(rand() % USER_NUM);
+                userFrom = to_string(rand() % userCount);
+                userTo = to_string(rand() % userCount);
 
                 u256 money = 1;
                 dev::eth::ContractABI abi;
@@ -142,7 +136,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
             catch (std::exception& e)
             {
-                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[#PARA_MAIN_NODE]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }
@@ -161,9 +155,8 @@ static void startConsensus(Params& params)
     KeyPair key_pair = secureInitializer->keyPair();
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
 
-
     /// create transaction
-    createTx(ledgerManager, params.txSpeed(), key_pair);
+    createTx(ledgerManager, params.txSpeed(), params.userCount(), key_pair);
 }
 
 int main(int argc, const char* argv[])
