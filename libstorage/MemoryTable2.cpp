@@ -30,6 +30,8 @@
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <thread>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
@@ -227,27 +229,46 @@ int MemoryTable2::remove(
 dev::h256 MemoryTable2::hash()
 {
     bytes data;
+    auto tempEntries = std::vector<Entry::Ptr>();
+    auto size = (m_dirty.size() + m_newEntries->size());
+    tempEntries.reserve(size);
 
-    auto tempDirty = std::map<uint32_t, Entry::Ptr>(m_dirty.begin(), m_dirty.end());
-    for (auto it : tempDirty)
-    {
-        auto id = htonl(it.first);
-        data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
-        for (auto fieldIt : *(it.second->fields()))
+    auto comparator = [this](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
+        auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
+        if (ret > 0)
         {
-            if (isHashField(fieldIt.first))
-            {
-                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-            }
+            return true;
         }
+        else
+        {
+            return false;
+        }
+    };
+
+    for (auto it : m_dirty)
+    {
+        auto entry = it.second;
+        tempEntries.push_back(entry);
     }
 
-    tbb::parallel_sort(m_newEntries->begin(), m_newEntries->end(),
-        [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) { return lhs->getID() < rhs->getID(); });
+    tbb::parallel_sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(), comparator);
+
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
         auto entry = m_newEntries->get(i);
+        while (entry.get() == nullptr)
+        {
+            std::this_thread::yield();
+        }
+        tempEntries.push_back(entry);
+    }
+
+    tbb::parallel_sort(
+        tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size, comparator);
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto entry = tempEntries[i];
         for (auto fieldIt : *(entry->fields()))
         {
             if (isHashField(fieldIt.first))
