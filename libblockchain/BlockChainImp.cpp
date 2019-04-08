@@ -29,6 +29,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -1137,6 +1138,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     {
         BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
             "[#commitBlock]System meets error when try to write block to storage");
+        throw;
+    }
+    /// leveldb caused exception: database corruption or the disk has no space left
+    catch (StorageException& e)
+    {
+        if (e.errorCode() == -1)
+        {
+            BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
+            exit(-1);
+        }
         throw;
     }
 }
