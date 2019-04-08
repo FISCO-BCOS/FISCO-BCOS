@@ -27,9 +27,9 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
-#include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
 #include <thread>
 #include <vector>
 
@@ -241,7 +241,43 @@ dev::h256 MemoryTable2::hash()
         }
         else
         {
-            return false;
+            if (ret == 0)
+            {
+                auto& lFields = *lhs->fields();
+                auto& rFields = *rhs->fields();
+                if (lFields.size() > rFields.size())
+                {
+                    return true;
+                }
+                else
+                {
+                    if (lFields.size() == rFields.size())
+                    {
+                        for (auto lIter = lFields.begin(), rIter = rFields.begin();
+                             lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
+                        {
+                            if (lIter->first != rIter->first)
+                            {
+                                return static_cast<bool>(lIter->first.compare(rIter->first));
+                            }
+
+                            if (lIter->second != rIter->second)
+                            {
+                                return static_cast<bool>(lIter->second.compare(rIter->second));
+                            }
+                        }
+                        return false;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                return false;
+            }
         }
     };
 
@@ -251,7 +287,7 @@ dev::h256 MemoryTable2::hash()
         tempEntries.push_back(entry);
     }
 
-    tbb::parallel_sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(), comparator);
+    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(), comparator);
 
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
@@ -263,8 +299,7 @@ dev::h256 MemoryTable2::hash()
         tempEntries.push_back(entry);
     }
 
-    tbb::parallel_sort(
-        tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size, comparator);
+    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size, comparator);
 
     for (size_t i = 0; i < size; ++i)
     {
