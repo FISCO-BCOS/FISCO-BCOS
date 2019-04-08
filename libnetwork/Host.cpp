@@ -84,7 +84,7 @@ void Host::startAccept(boost::system::error_code boost_error)
         m_asioInterface->asyncAccept(socket,
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
-                auto endpoint = socket->remote_endpoint();
+                auto endpoint = socket->remoteEndpoint();
                 HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// network acception failed
                 if (ec || !m_run)
@@ -345,7 +345,7 @@ void Host::startPeerSession(NodeInfo const& nodeInfo, std::shared_ptr<SocketFace
             HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
-    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remote_endpoint()
+    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remoteEndpoint()
                    << LOG_KV("nodeID", nodeInfo.nodeID.abridged());
 }
 
