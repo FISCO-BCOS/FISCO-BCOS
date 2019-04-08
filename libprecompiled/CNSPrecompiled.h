@@ -21,6 +21,15 @@
 #pragma once
 #include "Common.h"
 
+#if 0
+contract CNS
+{
+    function insert(string name, string version, string addr, string abi) public returns(uint256);
+    function selectByName(string name) public constant returns(string);
+    function selectByNameAndVersion(string name, string version) public constant returns(string);
+}
+#endif
+
 namespace dev
 {
 const std::string SYS_CNS_FIELD_NAME = "name";

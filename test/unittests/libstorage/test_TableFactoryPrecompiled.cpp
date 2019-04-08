@@ -79,21 +79,22 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     bytes param =
         abi.abiIn("createTable(string,string,string)", "t_test", "id", "item_name,item_id");
     bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
-    Address addressOut;
-    abi.abiOut(&out, addressOut);
-    BOOST_TEST(addressOut == Address(0x0));
+    u256 errCode;
+    abi.abiOut(&out, errCode);
+    BOOST_TEST(errCode == 0);
 
     // createTable exist
     param = abi.abiIn("createTable(string,string,string)", "t_test", "id", "item_name,item_id");
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
-    abi.abiOut(&out, addressOut);
-    BOOST_TEST(addressOut <= Address(0x2));
+    abi.abiOut(&out, errCode);
+    BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
 
     // openTable not exist
     param.clear();
     out.clear();
     param = abi.abiIn("openTable(string)", "t_poor");
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    Address addressOut;
     addressOut.clear();
     abi.abiOut(&out, addressOut);
     BOOST_TEST(addressOut == Address(0x0));

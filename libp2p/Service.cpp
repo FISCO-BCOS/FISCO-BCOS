@@ -387,7 +387,6 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 
         if (it != m_sessions.end() && it->second->actived())
         {
-            message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
             if (message->seq() == 0)
             {
                 message->setSeq(m_p2pMessageFactory->newSeq());

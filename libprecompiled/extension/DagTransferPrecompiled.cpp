@@ -151,14 +151,6 @@ Table::Ptr DagTransferPrecompiled::openTable(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");
-        table->setRecorder([](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
-                               std::vector<Change::Record>& _records) {
-            // This precompile is no need to rollback;
-            (void)_table;
-            (void)_kind;
-            (void)_key;
-            (void)_records;
-        });
     }
 
     return table;
@@ -251,7 +243,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }
@@ -259,19 +251,6 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         // end success
         ret = 0;
     } while (0);
-
-    if (0 == ret)
-    {
-        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount);
-    }
-    else
-    {
-        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userAddCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
-        //                       << LOG_DESC(strErrorMsg);
-    }
-
 
     out = abi.abiIn("", ret);
 }
@@ -326,7 +305,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
             auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -353,7 +332,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
                 user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -361,19 +340,6 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
 
         ret = 0;
     } while (0);
-
-    if (0 == ret)
-    {
-        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
-        //                       << LOG_KV("balance", balance);
-    }
-    else
-    {
-        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userSaveCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
-        //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
-    }
 
     out = abi.abiIn("", ret);
 }
@@ -440,26 +406,13 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
             user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }
 
         ret = 0;
     } while (0);
-
-    if (0 == ret)
-    {
-        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
-        //                       << LOG_KV("balance", balance);
-    }
-    else
-    {
-        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("userDrawCall")
-        //                       << LOG_KV("user", user) << LOG_KV("amount", amount)
-        //                       << LOG_KV("balance", balance) << LOG_DESC(strErrorMsg);
-    }
 
     out = abi.abiIn("", ret);
 }
@@ -504,20 +457,6 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         ret = 0;
     } while (0);
-
-    if (0 == ret)
-    {
-        // PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") <<
-        // LOG_DESC("userBalanceCall")
-        //                       << LOG_KV("user", user) << LOG_KV("balance", balance);
-    }
-    else
-    {
-        // PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled") <<
-        // LOG_DESC("userBalanceCall")
-        //                       << LOG_KV("user", user) << LOG_KV("balance", balance)
-        //                       << LOG_DESC(strErrorMsg);
-    }
 
     out = abi.abiIn("", ret, balance);
 }
@@ -595,7 +534,7 @@ void DagTransferPrecompiled::userTransferCall(
             auto count = table->insert(toUser, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
-                strErrorMsg = "non-authorized";
+                strErrorMsg = "permission denied";
                 ret = CODE_NO_AUTHORIZED;
                 break;
             }
@@ -625,7 +564,7 @@ void DagTransferPrecompiled::userTransferCall(
             fromUser, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
         {  // permission denied
-            strErrorMsg = "non-authorized";
+            strErrorMsg = "permission denied";
             ret = CODE_NO_AUTHORIZED;
             break;
         }
@@ -640,32 +579,6 @@ void DagTransferPrecompiled::userTransferCall(
         // end with success
         ret = 0;
     } while (0);
-
-    if (0 == ret)
-    {
-        /*
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled")
-                               << LOG_DESC("userTransferCall") << LOG_KV("fromUser", fromUser)
-                               << LOG_KV("toUser", toUser) << LOG_KV("amount", amount)
-                               << LOG_KV("fromUserBalance", fromUserBalance)
-                               << LOG_KV("toUserBalance", toUserBalance)
-                               << LOG_KV("newFromUserBalance", newFromUserBalance)
-                               << LOG_KV("newToUserBalance", newToUserBalance);
-                               //*/
-    }
-    else
-    {
-        /*
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("DagTransferPrecompiled")
-                               << LOG_DESC("userTransferCall") << LOG_KV("fromUser", fromUser)
-                               << LOG_KV("toUser", toUser) << LOG_KV("amount", amount)
-                               << LOG_KV("fromUserBalance", fromUserBalance)
-                               << LOG_KV("toUserBalance", toUserBalance)
-                               << LOG_KV("newFromUserBalance", newFromUserBalance)
-                               << LOG_KV("newToUserBalance", newToUserBalance)
-                               << LOG_DESC(strErrorMsg);
-                               */
-    }
 
     out = abi.abiIn("", ret);
 }

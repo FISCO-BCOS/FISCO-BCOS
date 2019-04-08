@@ -76,7 +76,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdC" option;do
+while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -92,6 +92,7 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdC" option;do
     ;;
     e) bin_path=$OPTARG;;
     s) state_type=mpt;;
+    S) storage_type="external";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) enable_compress="false";;
@@ -486,13 +487,14 @@ generate_group_genesis()
     ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
     ;the max number of transactions of a block
-    max_trans_num=10000
+    max_trans_num=1000
     ;the node id of leaders
     ${node_list}
 
 [storage]
-    ;storage db type, now support leveldb 
+    ;storage db type, leveldb or external
     type=${storage_type}
+    topic=DB
 [state]
     ;support mpt/storage
     type=${state_type}
@@ -513,6 +515,8 @@ function generate_group_ini()
 ; the ttl for broadcasting pbft message
 [consensus]
     ;ttl=2
+    ;min block generation time(ms), the max block generation time is 1000 ms
+    ;min_block_generation_time=500
 ;txpool limit
 [tx_pool]
     limit=150000
@@ -659,14 +663,11 @@ commonName_default =  fisco
 commonName_max = 64
 
 [ usr_cert ]
-
 basicConstraints=CA:FALSE
-
 nsComment			= "OpenSSL Generated Certificate"
 
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
-
 
 [ v3_req ]
 
@@ -675,11 +676,9 @@ authorityKeyIdentifier=keyid,issuer
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature
 
-
 [ v3enc_req ]
 
 # Extensions to add to a certificate request
-
 basicConstraints = CA:FALSE
 keyUsage = keyAgreement, keyEncipherment, dataEncipherment
 
@@ -759,6 +758,7 @@ do
     ((i=i+1))
 done
 echo " stop \${node} failed, exceed maximum number of retries."
+exit 1
 EOF
 }
 

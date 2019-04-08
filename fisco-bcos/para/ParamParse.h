@@ -40,7 +40,7 @@ namespace js = json_spirit;
 class Params
 {
 public:
-    Params() : m_txSpeed(10) {}
+    Params() = delete;
 
     Params(boost::program_options::variables_map const& vm,
         boost::program_options::options_description const& option)
@@ -53,20 +53,31 @@ public:
         boost::program_options::options_description const&)
     {
         if (vm.count("txSpeed") || vm.count("t"))
+        {
             m_txSpeed = vm["txSpeed"].as<float>();
+        }
+
+        if (vm.count("userCount") || vm.count("u"))
+        {
+            m_userCount = vm["userCount"].as<unsigned int>();
+        }
     }
 
     float txSpeed() { return m_txSpeed; }
+    float userCount() { return m_userCount; }
 
 private:
-    float m_txSpeed;
+    float m_txSpeed = 0;
+    unsigned int m_userCount = 0;
 };
 
 static Params initCommandLine(int argc, const char* argv[])
 {
     boost::program_options::options_description server_options("p2p module of FISCO-BCOS");
-    server_options.add_options()("txSpeed,t", boost::program_options::value<float>(),
-        "transaction generate speed")("help,h", "help of p2p module of FISCO-BCOS");
+    server_options.add_options()("txSpeed,t",
+        boost::program_options::value<float>()->default_value(10), "transaction generate speed")(
+        "userCount,u", boost::program_options::value<unsigned int>()->default_value(1000),
+        "the count of users")("help,h", "help of p2p module of FISCO-BCOS");
 
     boost::program_options::variables_map vm;
     try

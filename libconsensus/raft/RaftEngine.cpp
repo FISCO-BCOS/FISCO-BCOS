@@ -100,7 +100,7 @@ void RaftEngine::resetConfig()
         auto iter = std::find(m_sealerList.begin(), m_sealerList.end(), m_keyPair.pub());
         if (iter == m_sealerList.end())
         {
-            RAFTENGINE_LOG(WARNING) << LOG_DESC(
+            RAFTENGINE_LOG(TRACE) << LOG_DESC(
                 "[#resetConfig]Reset config error: can't find myself in "
                 "sealer list, stop sealing");
             m_cfgErr = true;

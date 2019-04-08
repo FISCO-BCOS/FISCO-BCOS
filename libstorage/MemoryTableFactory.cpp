@@ -43,12 +43,11 @@ const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{
 
 // according to
 // https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/docs/design/security_control/permission_control.html
-const std::vector<string> MemoryTableFactory::c_sysAccessTables =
+const std::vector<string> MemoryTableFactory::c_sysNonChangeLogTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0), m_createTableCode(0)
-{}
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -123,8 +122,8 @@ Table::Ptr MemoryTableFactory::openTable(
 
     memoryTable->setTableInfo(tableInfo);
 
-    if (std::find(c_sysAccessTables.begin(), c_sysAccessTables.end(), tableName) ==
-        c_sysAccessTables.end())
+    if (std::find(c_sysNonChangeLogTables.begin(), c_sysNonChangeLogTables.end(), tableName) ==
+        c_sysNonChangeLogTables.end())
     {
         memoryTable->setRecorder(
             [&, this](Table::Ptr _table, Change::Kind _kind, std::string const& _key,
@@ -143,11 +142,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     Address const& _origin, bool isPara)
 {
     RecursiveGuard l(x_name2Table);
-    auto table = openTable(tableName, authorityFlag, isPara);
-    if (table)
-    {
-        return table;
-    }
 
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
@@ -170,11 +164,10 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     if (result == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
-                             << LOG_DESC("create table non-authorized")
+                             << LOG_DESC("create table permission denied")
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
 
-        BOOST_THROW_EXCEPTION(StorageException(result, "create table non-authorized"));
-        return nullptr;
+        BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
     }
     return openTable(tableName, authorityFlag, isPara);
 }
