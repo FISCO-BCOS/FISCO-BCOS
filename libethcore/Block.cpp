@@ -243,8 +243,6 @@ void Block::calReceiptRootRC2(bool update) const
         // record_time = utcTime();
 
         m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
-        LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_KV("hash", toHex(m_receiptRootCache))
-                   << LOG_KV("bytes", toHex(m_tReceiptsCache));
         // auto hashReceipts_time_cost = utcTime() - record_time;
         /*
         LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_DESC("Calculate receipt root cost")
