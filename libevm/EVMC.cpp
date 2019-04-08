@@ -30,7 +30,8 @@ namespace dev
 namespace eth
 {
 /// Error info for EVMC status code.
-using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
+using errinfo_evmcStatusCode =
+    boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
 
 EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
 {
@@ -40,10 +41,12 @@ EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
     // Set the options.
     if (m_instance->set_option)
         for (auto& pair : evmcOptions())
-            m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
+            m_instance->set_option(
+                m_instance, pair.first.c_str(), pair.second.c_str());
 }
 
-owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp)
+owning_bytes_ref EVMC::exec(
+    u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp)
 {
     assert(_ext.envInfo().number() >= 0);
 
@@ -54,7 +57,8 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
     (void)int64max;
     assert(io_gas <= int64max);
     assert(_ext.envInfo().gasLimit() <= int64max);
-    assert(_ext.depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+    assert(_ext.depth() <=
+           static_cast<size_t>(std::numeric_limits<int32_t>::max()));
 
     auto gas = static_cast<int64_t>(io_gas);
     EVM::Result r = execute(_ext, gas);
@@ -95,13 +99,16 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
         BOOST_THROW_EXCEPTION(DisallowedStateChange());
 
     case EVMC_REJECTED:
-        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM implementation";
-        return VMFactory::create(VMKind::Interpreter)->exec(io_gas, _ext, _onOp);
+        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM "
+                        "implementation";
+        return VMFactory::create(VMKind::Interpreter)
+            ->exec(io_gas, _ext, _onOp);
 
     case EVMC_INTERNAL_ERROR:
     default:
         if (r.status() <= EVMC_INTERNAL_ERROR)
-            BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(r.status()));
+            BOOST_THROW_EXCEPTION(
+                InternalVMError{} << errinfo_evmcStatusCode(r.status()));
         else
             // These cases aren't really internal errors, just more specific
             // error codes returned by the VM. Map all of them to OOG.

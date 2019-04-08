@@ -40,8 +40,9 @@ void delete_output(const evmc_result* result)
     delete[] result->output_data;
 }
 
-evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revision _rev,
-    const evmc_message* _msg, uint8_t const* _code, size_t _codeSize) noexcept
+evmc_result execute(evmc_instance* _instance, evmc_context* _context,
+    evmc_revision _rev, const evmc_message* _msg, uint8_t const* _code,
+    size_t _codeSize) noexcept
 {
     (void)_instance;
     std::unique_ptr<dev::eth::MyVM> vm{new dev::eth::MyVM};
@@ -116,7 +117,8 @@ extern "C" evmc_instance* evmc_create_force() noexcept
 {
     // TODO: Allow creating multiple instances with different configurations.
     static evmc_instance s_instance{
-        EVMC_ABI_VERSION, "force", FISCO_BCOS_PROJECT_VERSION, ::destroy, ::execute,
+        EVMC_ABI_VERSION, "force", FISCO_BCOS_PROJECT_VERSION, ::destroy,
+        ::execute,
         nullptr,  // set_tracer
         nullptr,  // set_option
     };
@@ -156,7 +158,8 @@ uint64_t MyVM::decodeJumpDest(const byte* const _code, uint64_t& _pc)
     return dest;
 }
 
-uint64_t MyVM::decodeJumpvDest(const byte* const _code, uint64_t& _pc, byte _voff)
+uint64_t MyVM::decodeJumpvDest(
+    const byte* const _code, uint64_t& _pc, byte _voff)
 {
     // Layout of jump table in bytecode...
     //     byte opcode
@@ -227,8 +230,8 @@ void MyVM::logGasMem()
 {
     unsigned n = (unsigned)m_OP - (unsigned)Instruction::LOG0;
     constexpr int64_t logDataGas = VMSchedule::logDataGas;
-    m_runGas =
-        toInt63(VMSchedule::logGas + VMSchedule::logTopicGas * n + logDataGas * u512(m_SP[1]));
+    m_runGas = toInt63(VMSchedule::logGas + VMSchedule::logTopicGas * n +
+                       logDataGas * u512(m_SP[1]));
     updateMem(memNeed(m_SP[0], m_SP[1]));
 }
 
@@ -247,7 +250,8 @@ void MyVM::fetchInstruction()
 void MyVM::PrintCrash(std::string s)
 {
     std::string content =
-        "********************************************************\nSOL_ASAN: " + s + "\n";
+        "********************************************************\nSOL_ASAN: " +
+        s + "\n";
     EVM_LOG(WARNING) << LOG_DESC(content);
 }
 
@@ -265,8 +269,8 @@ evmc_tx_context const& MyVM::getTxContext()
 //
 // interpreter entry point
 
-owning_bytes_ref MyVM::exec(evmc_context* _context, evmc_revision _rev, const evmc_message* _msg,
-    uint8_t const* _code, size_t _codeSize)
+owning_bytes_ref MyVM::exec(evmc_context* _context, evmc_revision _rev,
+    const evmc_message* _msg, uint8_t const* _code, size_t _codeSize)
 {
     m_context = _context;
     m_rev = _rev;
@@ -329,7 +333,8 @@ void MyVM::interpretCases()
                 throwBadInstruction();
             if (m_OP == Instruction::STATICCALL && m_rev < EVMC_BYZANTIUM)
                 throwBadInstruction();
-            if (m_OP == Instruction::CALL && m_message->flags & EVMC_STATIC && m_SP[2] != 0)
+            if (m_OP == Instruction::CALL && m_message->flags & EVMC_STATIC &&
+                m_SP[2] != 0)
                 throwDisallowedStateChange();
             m_bounce = &MyVM::caseCall;
         }
@@ -376,23 +381,26 @@ void MyVM::interpretCases()
             m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? 5000 : 0;
             evmc_address destination = toEvmC(asAddress(m_SP[0]));
 
-            // After EIP158 zero-value suicides do not have to pay account creation
+            // After EIP158 zero-value suicides do not have to pay account
+            // creation
             // gas.
             evmc_uint256be rawBalance;
-            m_context->fn_table->get_balance(&rawBalance, m_context, &m_message->destination);
+            m_context->fn_table->get_balance(
+                &rawBalance, m_context, &m_message->destination);
             u256 balance = fromEvmC(rawBalance);
             if (balance > 0 || m_rev < EVMC_SPURIOUS_DRAGON)
             {
                 // After EIP150 hard fork charge additional cost of sending
                 // ethers to non-existing account.
-                int destinationExists =
-                    m_context->fn_table->account_exists(m_context, &destination);
+                int destinationExists = m_context->fn_table->account_exists(
+                    m_context, &destination);
                 if (m_rev >= EVMC_TANGERINE_WHISTLE && !destinationExists)
                     m_runGas += VMSchedule::callNewAccount;
             }
 
             updateIOGas();
-            m_context->fn_table->selfdestruct(m_context, &m_message->destination, &destination);
+            m_context->fn_table->selfdestruct(
+                m_context, &m_message->destination, &destination);
             m_bounce = nullptr;
         }
         BREAK
@@ -444,7 +452,8 @@ void MyVM::interpretCases()
             ON_OP();
             constexpr int64_t sha3Gas = VMSchedule::sha3Gas;
             constexpr int64_t sha3WordGas = VMSchedule::sha3WordGas;
-            m_runGas = toInt63(sha3Gas + (u512(m_SP[1]) + 31) / 32 * sha3WordGas);
+            m_runGas =
+                toInt63(sha3Gas + (u512(m_SP[1]) + 31) / 32 * sha3WordGas);
             updateMem(memNeed(m_SP[0], m_SP[1]));
             updateIOGas();
 
@@ -486,8 +495,8 @@ void MyVM::interpretCases()
             evmc_uint256be topics[] = {toEvmC(m_SP[2])};
             size_t numTopics = sizeof(topics) / sizeof(topics[0]);
 
-            m_context->fn_table->emit_log(
-                m_context, &m_message->destination, data, dataSize, topics, numTopics);
+            m_context->fn_table->emit_log(m_context, &m_message->destination,
+                data, dataSize, topics, numTopics);
         }
         NEXT
 
@@ -506,8 +515,8 @@ void MyVM::interpretCases()
             evmc_uint256be topics[] = {toEvmC(m_SP[2]), toEvmC(m_SP[3])};
             size_t numTopics = sizeof(topics) / sizeof(topics[0]);
 
-            m_context->fn_table->emit_log(
-                m_context, &m_message->destination, data, dataSize, topics, numTopics);
+            m_context->fn_table->emit_log(m_context, &m_message->destination,
+                data, dataSize, topics, numTopics);
         }
         NEXT
 
@@ -523,11 +532,12 @@ void MyVM::interpretCases()
             uint8_t const* data = m_mem.data() + size_t(m_SP[0]);
             size_t dataSize = size_t(m_SP[1]);
 
-            evmc_uint256be topics[] = {toEvmC(m_SP[2]), toEvmC(m_SP[3]), toEvmC(m_SP[4])};
+            evmc_uint256be topics[] = {
+                toEvmC(m_SP[2]), toEvmC(m_SP[3]), toEvmC(m_SP[4])};
             size_t numTopics = sizeof(topics) / sizeof(topics[0]);
 
-            m_context->fn_table->emit_log(
-                m_context, &m_message->destination, data, dataSize, topics, numTopics);
+            m_context->fn_table->emit_log(m_context, &m_message->destination,
+                data, dataSize, topics, numTopics);
         }
         NEXT
 
@@ -543,12 +553,12 @@ void MyVM::interpretCases()
             uint8_t const* data = m_mem.data() + size_t(m_SP[0]);
             size_t dataSize = size_t(m_SP[1]);
 
-            evmc_uint256be topics[] = {
-                toEvmC(m_SP[2]), toEvmC(m_SP[3]), toEvmC(m_SP[4]), toEvmC(m_SP[5])};
+            evmc_uint256be topics[] = {toEvmC(m_SP[2]), toEvmC(m_SP[3]),
+                toEvmC(m_SP[4]), toEvmC(m_SP[5])};
             size_t numTopics = sizeof(topics) / sizeof(topics[0]);
 
-            m_context->fn_table->emit_log(
-                m_context, &m_message->destination, data, dataSize, topics, numTopics);
+            m_context->fn_table->emit_log(m_context, &m_message->destination,
+                data, dataSize, topics, numTopics);
         }
         NEXT
 
@@ -557,7 +567,8 @@ void MyVM::interpretCases()
             u256 expon = m_SP[1];
             const int64_t byteCost = m_rev >= EVMC_SPURIOUS_DRAGON ? 50 : 10;
             m_runGas =
-                toInt63(VMSchedule::stepGas5 + byteCost * (32 - (h256(expon).firstBitSet() / 8)));
+                toInt63(VMSchedule::stepGas5 +
+                        byteCost * (32 - (h256(expon).firstBitSet() / 8)));
             ON_OP();
             updateIOGas();
 
@@ -611,8 +622,8 @@ void MyVM::interpretCases()
                         throw "SOL_ASAN Crash";
                     }
                 }
-                }
-        
+            }
+
             // // pops two items and pushes their product mod 2^256.
             m_SPP[0] = m_SP[0] * m_SP[1];
         }
@@ -640,9 +651,10 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-            
 
-            m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]),u2s(m_SP[1]))) :0;
+
+            m_SPP[0] =
+                m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
             --m_SP;
         }
         NEXT
@@ -661,8 +673,8 @@ void MyVM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] = m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
-
+            m_SPP[0] =
+                m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
         }
         NEXT
 
@@ -761,7 +773,9 @@ void MyVM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] = m_SP[0] < 32 ? (m_SP[1] >> (unsigned)(8 * (31 - m_SP[0]))) & 0xff : 0;
+            m_SPP[0] = m_SP[0] < 32 ?
+                           (m_SP[1] >> (unsigned)(8 * (31 - m_SP[0]))) & 0xff :
+                           0;
         }
         NEXT
 
@@ -807,8 +821,9 @@ void MyVM::interpretCases()
             updateIOGas();
 
             static u256 const hibit = u256(1) << 255;
-            static u256 const allbits =
-                u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            static u256 const allbits = u256(
+                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                "ffff");
 
             u256 shiftee = m_SP[1];
             if (m_SP[0] >= 256)
@@ -880,8 +895,9 @@ void MyVM::interpretCases()
         }
         NEXT
 
-            CASE(JUMPTO) CASE(JUMPIF) CASE(JUMPV) CASE(JUMPSUB) CASE(JUMPSUBV) CASE(RETURNSUB)
-                CASE(BEGINSUB) CASE(BEGINDATA) CASE(GETLOCAL) CASE(PUTLOCAL)
+            CASE(JUMPTO) CASE(JUMPIF) CASE(JUMPV) CASE(JUMPSUB) CASE(JUMPSUBV)
+                CASE(RETURNSUB) CASE(BEGINSUB) CASE(BEGINDATA) CASE(GETLOCAL)
+                    CASE(PUTLOCAL)
         {
             throwBadInstruction();
         }
@@ -986,7 +1002,8 @@ void MyVM::interpretCases()
             else
             {
                 h256 r;
-                for (uint64_t i = (uint64_t)m_SP[0], e = (uint64_t)m_SP[0] + (uint64_t)32, j = 0;
+                for (uint64_t i = (uint64_t)m_SP[0],
+                              e = (uint64_t)m_SP[0] + (uint64_t)32, j = 0;
                      i < e; ++i, ++j)
                     r[j] = i < dataSize ? data[i] : 0;
                 m_SP[0] = (u256)r;
@@ -1105,8 +1122,9 @@ void MyVM::interpretCases()
 
             size_t memoryOffset = static_cast<size_t>(m_SP[1]);
             constexpr size_t codeOffsetMax = std::numeric_limits<size_t>::max();
-            size_t codeOffset =
-                m_SP[2] > codeOffsetMax ? codeOffsetMax : static_cast<size_t>(m_SP[2]);
+            size_t codeOffset = m_SP[2] > codeOffsetMax ?
+                                    codeOffsetMax :
+                                    static_cast<size_t>(m_SP[2]);
             size_t size = static_cast<size_t>(copyMemSize);
 
             size_t numCopied = m_context->fn_table->copy_code(
@@ -1134,10 +1152,12 @@ void MyVM::interpretCases()
             const int64_t blockNumber = getTxContext().block_number;
             u256 number = m_SP[0];
 
-            if (number < blockNumber && number >= std::max(int64_t(256), blockNumber) - 256)
+            if (number < blockNumber &&
+                number >= std::max(int64_t(256), blockNumber) - 256)
             {
                 evmc_uint256be hash;
-                m_context->fn_table->get_block_hash(&hash, m_context, int64_t(number));
+                m_context->fn_table->get_block_hash(
+                    &hash, m_context, int64_t(number));
                 m_SPP[0] = fromEvmC(hash);
             }
             else
@@ -1205,7 +1225,8 @@ void MyVM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            // get val at two-byte offset into const pool and advance pc by one-byte
+            // get val at two-byte offset into const pool and advance pc by
+            // one-byte
             // remainder
             TRACE_OP(2, m_PC, m_OP);
             unsigned off;
@@ -1353,9 +1374,10 @@ void MyVM::interpretCases()
         }
         NEXT
 
-            CASE(SWAP1) CASE(SWAP2) CASE(SWAP3) CASE(SWAP4) CASE(SWAP5) CASE(SWAP6) CASE(SWAP7)
-                CASE(SWAP8) CASE(SWAP9) CASE(SWAP10) CASE(SWAP11) CASE(SWAP12) CASE(SWAP13)
-                    CASE(SWAP14) CASE(SWAP15) CASE(SWAP16)
+            CASE(SWAP1) CASE(SWAP2) CASE(SWAP3) CASE(SWAP4) CASE(SWAP5)
+                CASE(SWAP6) CASE(SWAP7) CASE(SWAP8) CASE(SWAP9) CASE(SWAP10)
+                    CASE(SWAP11) CASE(SWAP12) CASE(SWAP13) CASE(SWAP14)
+                        CASE(SWAP15) CASE(SWAP16)
         {
             ON_OP();
             updateIOGas();
@@ -1373,7 +1395,8 @@ void MyVM::interpretCases()
 
             evmc_uint256be key = toEvmC(m_SP[0]);
             evmc_uint256be value;
-            m_context->fn_table->get_storage(&value, m_context, &m_message->destination, &key);
+            m_context->fn_table->get_storage(
+                &value, m_context, &m_message->destination, &key);
             m_SPP[0] = fromEvmC(value);
         }
         NEXT
@@ -1385,19 +1408,22 @@ void MyVM::interpretCases()
                 throwDisallowedStateChange();
 
             static_assert(
-                VMSchedule::sstoreResetGas <= VMSchedule::sstoreSetGas, "Wrong SSTORE gas costs");
-            m_runGas = VMSchedule::sstoreResetGas;  // Charge the modification cost up front.
+                VMSchedule::sstoreResetGas <= VMSchedule::sstoreSetGas,
+                "Wrong SSTORE gas costs");
+            m_runGas = VMSchedule::sstoreResetGas;  // Charge the modification
+                                                    // cost up front.
             updateIOGas();
 
             evmc_uint256be key = toEvmC(m_SP[0]);
             evmc_uint256be value = toEvmC(m_SP[1]);
-            auto status =
-                m_context->fn_table->set_storage(m_context, &m_message->destination, &key, &value);
+            auto status = m_context->fn_table->set_storage(
+                m_context, &m_message->destination, &key, &value);
 
             if (status == EVMC_STORAGE_ADDED)
             {
                 // Charge additional amount for added storage item.
-                m_runGas = VMSchedule::sstoreSetGas - VMSchedule::sstoreResetGas;
+                m_runGas =
+                    VMSchedule::sstoreSetGas - VMSchedule::sstoreResetGas;
                 updateIOGas();
             }
         }

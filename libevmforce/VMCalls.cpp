@@ -34,16 +34,21 @@ void MyVM::copyDataToMemory(bytesConstRef _data, u256* _sp)
     auto size = static_cast<size_t>(_sp[2]);
 
     size_t sizeToBeCopied =
-        bigIndex + size > _data.size() ? _data.size() < bigIndex ? 0 : _data.size() - index : size;
+        bigIndex + size > _data.size() ?
+            _data.size() < bigIndex ? 0 : _data.size() - index :
+            size;
 
     if (sizeToBeCopied > 0)
-        std::memcpy(m_mem.data() + offset, _data.data() + index, sizeToBeCopied);
+        std::memcpy(
+            m_mem.data() + offset, _data.data() + index, sizeToBeCopied);
     if (size > sizeToBeCopied)
-        std::memset(m_mem.data() + offset + sizeToBeCopied, 0, size - sizeToBeCopied);
+        std::memset(
+            m_mem.data() + offset + sizeToBeCopied, 0, size - sizeToBeCopied);
 }
 
 
-// consolidate exception throws to avoid spraying boost code all over interpreter
+// consolidate exception throws to avoid spraying boost code all over
+// interpreter
 
 void MyVM::throwOutOfGas()
 {
@@ -66,28 +71,32 @@ void MyVM::throwDisallowedStateChange()
 }
 
 // throwBadStack is called from fetchInstruction() -> adjustStack()
-// its the only exception that can happen before ON_OP() log is done for an opcode case in MyVM.cpp
+// its the only exception that can happen before ON_OP() log is done for an
+// opcode case in MyVM.cpp
 // so the call to m_onFail is needed here
 void MyVM::throwBadStack(int _removed, int _added)
 {
     bigint size = m_stackEnd - m_SPP;
     if (size < _removed)
-        BOOST_THROW_EXCEPTION(StackUnderflow() << RequirementError((bigint)_removed, size));
+        BOOST_THROW_EXCEPTION(
+            StackUnderflow() << RequirementError((bigint)_removed, size));
     else
-        BOOST_THROW_EXCEPTION(OutOfStack() << RequirementError((bigint)(_added - _removed), size));
+        BOOST_THROW_EXCEPTION(OutOfStack() << RequirementError(
+                                  (bigint)(_added - _removed), size));
 }
 
 void MyVM::throwRevertInstruction(owning_bytes_ref&& _output)
 {
-    // We can't use BOOST_THROW_EXCEPTION here because it makes a copy of exception inside and
+    // We can't use BOOST_THROW_EXCEPTION here because it makes a copy of
+    // exception inside and
     // RevertInstruction has no copy constructor
     throw RevertInstruction(std::move(_output));
 }
 
 void MyVM::throwBufferOverrun(bigint const& _endOfAccess)
 {
-    BOOST_THROW_EXCEPTION(
-        BufferOverrun() << RequirementError(_endOfAccess, bigint(m_returnData.size())));
+    BOOST_THROW_EXCEPTION(BufferOverrun() << RequirementError(
+                              _endOfAccess, bigint(m_returnData.size())));
 }
 
 int64_t MyVM::verifyJumpDest(u256 const& _dest, bool _throw)
@@ -96,7 +105,8 @@ int64_t MyVM::verifyJumpDest(u256 const& _dest, bool _throw)
     if (_dest <= 0x7FFFFFFFFFFFFFFF)
     {
         // check for within bounds and to a jump destination
-        // use binary search of array because hashtable collisions are exploitable
+        // use binary search of array because hashtable collisions are
+        // exploitable
         uint64_t pc = uint64_t(_dest);
         if (std::binary_search(m_jumpDests.begin(), m_jumpDests.end(), pc))
             return pc;
@@ -132,7 +142,8 @@ void MyVM::caseCreate()
     m_returnData.clear();
 
     evmc_uint256be rawBalance;
-    m_context->fn_table->get_balance(&rawBalance, m_context, &m_message->destination);
+    m_context->fn_table->get_balance(
+        &rawBalance, m_context, &m_message->destination);
     u256 balance = fromEvmC(rawBalance);
     if (balance >= endowment && m_message->depth < 1024)
     {
@@ -150,9 +161,10 @@ void MyVM::caseCreate()
         msg.create2_salt = toEvmC(salt);
         msg.sender = m_message->destination;
         msg.depth = m_message->depth + 1;
-        msg.kind = m_OP == Instruction::CREATE ?
-                       EVMC_CREATE :
-                       EVMC_CREATE2;  // FIXME: In EVMC move the kind to the top.
+        msg.kind =
+            m_OP == Instruction::CREATE ?
+                EVMC_CREATE :
+                EVMC_CREATE2;  // FIXME: In EVMC move the kind to the top.
         msg.value = toEvmC(endowment);
 
         evmc_result result;
@@ -162,7 +174,8 @@ void MyVM::caseCreate()
             m_SPP[0] = fromAddress(fromEvmC(result.create_address));
         else
             m_SPP[0] = 0;
-        m_returnData.assign(result.output_data, result.output_data + result.output_size);
+        m_returnData.assign(
+            result.output_data, result.output_data + result.output_size);
 
         m_io_gas -= (msg.gas - result.gas_left);
 
@@ -189,7 +202,8 @@ void MyVM::caseCall()
         evmc_result result;
         m_context->fn_table->call(&result, m_context, &msg);
 
-        m_returnData.assign(result.output_data, result.output_data + result.output_size);
+        m_returnData.assign(
+            result.output_data, result.output_data + result.output_size);
         bytesConstRef{&m_returnData}.copyTo(output);
 
         m_SPP[0] = result.status_code == EVMC_SUCCESS ? 1 : 0;
@@ -228,10 +242,12 @@ bool MyVM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     if (m_OP == Instruction::STATICCALL || m_message->flags & EVMC_STATIC)
         o_msg.flags = EVMC_STATIC;
 
-    bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE;
+    bool const haveValueArg =
+        m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE;
 
     evmc_address destination = toEvmC(asAddress(m_SP[1]));
-    int destinationExists = m_context->fn_table->account_exists(m_context, &destination);
+    int destinationExists =
+        m_context->fn_table->account_exists(m_context, &destination);
 
     if (m_OP == Instruction::CALL && !destinationExists)
     {
@@ -282,7 +298,8 @@ bool MyVM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
             o_msg.gas += VMSchedule::callStipend;
             {
                 evmc_uint256be rawBalance;
-                m_context->fn_table->get_balance(&rawBalance, m_context, &m_message->destination);
+                m_context->fn_table->get_balance(
+                    &rawBalance, m_context, &m_message->destination);
                 u256 balance = fromEvmC(rawBalance);
                 balanceOk = balance >= value;
             }
