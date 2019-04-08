@@ -89,24 +89,25 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("insert(string)", "test");
+    bytes in = abi.abiIn("insert(string)", std::string("test"));
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
 }
 
 BOOST_AUTO_TEST_CASE(InvalidValue)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("setValueByKey(string,string)", "tx_count_limit", "0");
+    bytes in =
+        abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 100u);
+    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
 
-    in = abi.abiIn("setValueByKey(string,string)", "tx_count_limit", "0");
+    in = abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 100u);
+    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
