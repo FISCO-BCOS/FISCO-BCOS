@@ -1139,4 +1139,11 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             "[#commitBlock]System meets error when try to write block to storage");
         throw;
     }
+    /// leveldb caused exception: database corruption or the disk has no space left
+    catch (StorageException& e)
+    {
+        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
+        exit(-1);
+    }
 }
