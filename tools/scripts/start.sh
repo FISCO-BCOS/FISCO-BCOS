@@ -7,11 +7,13 @@ ulimit -c unlimited 2>/dev/null
 pid=`ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}'`
 [ ! -z $pid ] &&  {
     echo " ${node} is running, pid is $pid."
-    exit(0)
+    exit 0
 }
     
 echo " start ${node} ..."
 setsid fisco-bcos  --genesis ${dirpath}/genesis.json  --config ${dirpath}/config.json  >> fisco-bcos.log 2>&1 &
+
+sleep 1
 
 # check if start node successfully
 try_times=3
