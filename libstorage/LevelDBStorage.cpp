@@ -196,7 +196,7 @@ size_t LevelDBStorage::commit(
                 STORAGE_LEVELDB_LOG(FATAL) << LOG_DESC(
                                                   "Commit leveldb exception! Please remove all the "
                                                   "data and sync data from other nodes!")
-                                           << LOG_KV("errorInfo", s.toString());
+                                           << LOG_KV("errorInfo", s.ToString());
                 exit(-1);
             }
 
