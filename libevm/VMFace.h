@@ -26,21 +26,19 @@
 #include <libethcore/Exceptions.h>
 #include <memory>
 
-namespace dev
-{
-namespace eth
-{
+namespace dev {
+namespace eth {
 /// EVM Virtual Machine interface
-class VMFace
-{
+class VMFace {
 public:
-    VMFace() = default;
-    virtual ~VMFace() = default;
-    VMFace(VMFace const&) = delete;
-    VMFace& operator=(VMFace const&) = delete;
+  VMFace() = default;
+  virtual ~VMFace() = default;
+  VMFace(VMFace const &) = delete;
+  VMFace &operator=(VMFace const &) = delete;
 
-    /// VM implementation
-    virtual owning_bytes_ref exec(u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) = 0;
+  /// VM implementation
+  virtual owning_bytes_ref exec(u256 &io_gas, ExtVMFace &_ext,
+                                OnOpFunc const &_onOp) = 0;
 };
-}  // namespace eth
-}  // namespace dev
+} // namespace eth
+} // namespace dev
