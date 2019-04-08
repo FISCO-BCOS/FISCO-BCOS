@@ -230,7 +230,7 @@ dev::h256 MemoryTable2::hash()
 {
     bytes data;
     auto tempEntries = std::vector<Entry::Ptr>();
-    auto size = (m_dirty.size() + m_newEntries->size());
+    auto size = m_dirty.size() + m_newEntries->size();
     tempEntries.reserve(size);
 
     auto comparator = [this](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
@@ -239,46 +239,40 @@ dev::h256 MemoryTable2::hash()
         {
             return true;
         }
-        else
-        {
-            if (ret == 0)
-            {
-                auto& lFields = *lhs->fields();
-                auto& rFields = *rhs->fields();
-                if (lFields.size() > rFields.size())
-                {
-                    return true;
-                }
-                else
-                {
-                    if (lFields.size() == rFields.size())
-                    {
-                        for (auto lIter = lFields.begin(), rIter = rFields.begin();
-                             lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
-                        {
-                            if (lIter->first != rIter->first)
-                            {
-                                return static_cast<bool>(lIter->first.compare(rIter->first));
-                            }
 
-                            if (lIter->second != rIter->second)
-                            {
-                                return static_cast<bool>(lIter->second.compare(rIter->second));
-                            }
-                        }
-                        return false;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-            }
-            else
+        if (ret < 0)
+        {
+            return false;
+        }
+
+        auto& lFields = *lhs->fields();
+        auto& rFields = *rhs->fields();
+
+        if (lFields.size() > rFields.size())
+        {
+            return true;
+        }
+
+        if (lFields.size() < rFields.size())
+        {
+            return false;
+        }
+
+        for (auto lIter = lFields.begin(), rIter = rFields.begin();
+             lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
+        {
+            if (lIter->first != rIter->first)
             {
-                return false;
+                return static_cast<bool>(lIter->first.compare(rIter->first));
+            }
+
+            if (lIter->second != rIter->second)
+            {
+                return static_cast<bool>(lIter->second.compare(rIter->second));
             }
         }
+
+        return false;
     };
 
     for (auto it : m_dirty)
