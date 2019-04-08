@@ -213,6 +213,7 @@ size_t LevelDBStorage::commit(
     }
     catch (std::exception& e)
     {
+        // This should never happen, if happened exit.
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);

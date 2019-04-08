@@ -51,9 +51,9 @@ public:
     }
     ~FakeSocket() { close(); }
 
-    virtual bool isConnected() const override { return m_wsSocket->lowest_layer().is_open(); }
+    bool isConnected() const override { return m_wsSocket->lowest_layer().is_open(); }
 
-    virtual void close() override
+    void close() override
     {
         try
         {
@@ -67,20 +67,20 @@ public:
         }
     }
 
-    virtual bi::tcp::endpoint remoteEndpoint() override
+    bi::tcp::endpoint remoteEndpoint() override
     {
         return m_wsSocket->lowest_layer().remote_endpoint();
     }
 
-    virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
-    virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
-    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override
+    bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
+    boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override
     {
         return *m_wsSocket;
     }
 
-    virtual const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
+    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
     {
         m_nodeIPEndpoint = _nodeIPEndpoint;
     }
