@@ -1149,5 +1149,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                                   << LOG_KV("EINFO", boost::diagnostic_information(e));
             exit(-1);
         }
+        throw;
     }
 }
