@@ -64,6 +64,33 @@ public:
         return true;
     }
 
+    bool initRealLedger()
+    {
+        bool ret = false;
+        ret = Ledger::initBlockChain();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initBlockVerifier();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initTxPool();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initSync();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::consensusInitFactory();
+        return ret;
+    }
+
     void initGenesisConfig(boost::property_tree::ptree const& pt)
     {
         FakeLedger::initGenesisConfig(pt);
@@ -84,9 +111,6 @@ public:
     {
         m_dbInitializer = _dbInitializer;
     }
-    bool initRealBlockChain() { return Ledger::initBlockChain(); }
-
-    bool initRealBlockVerifier() { return Ledger::initBlockVerifier(); }
     std::string const& configFileName() { return m_configFileName; }
 };
 
@@ -180,13 +204,17 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// test initBlockChain
     BOOST_CHECK(fakeLedger.blockChain() == nullptr);
-    BOOST_CHECK(fakeLedger.initRealBlockChain() == true);
-    BOOST_CHECK(fakeLedger.blockChain() != nullptr);
-
     /// test initBlockVerifier
     BOOST_CHECK(fakeLedger.blockVerifier() == nullptr);
-    BOOST_CHECK(fakeLedger.initRealBlockVerifier() == true);
+    BOOST_CHECK(fakeLedger.consensus() == nullptr);
+    BOOST_CHECK(fakeLedger.txPool() == nullptr);
+    BOOST_CHECK(fakeLedger.sync() == nullptr);
+    fakeLedger.initRealLedger();
     BOOST_CHECK(fakeLedger.blockVerifier() != nullptr);
+    BOOST_CHECK(fakeLedger.blockChain() != nullptr);
+    BOOST_CHECK(fakeLedger.consensus() != nullptr);
+    BOOST_CHECK(fakeLedger.txPool() != nullptr);
+    BOOST_CHECK(fakeLedger.sync() != nullptr);
 }
 
 /// test initLedgers of LedgerManager
