@@ -226,6 +226,49 @@ int MemoryTable2::remove(
     return 0;
 }
 
+bool MemoryTable2::Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs)
+{
+    auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
+    if (ret > 0)
+    {
+        return true;
+    }
+
+    if (ret < 0)
+    {
+        return false;
+    }
+
+    auto& lFields = *lhs->fields();
+    auto& rFields = *rhs->fields();
+
+    if (lFields.size() > rFields.size())
+    {
+        return true;
+    }
+
+    if (lFields.size() < rFields.size())
+    {
+        return false;
+    }
+
+    for (auto lIter = lFields.begin(), rIter = rFields.begin();
+         lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
+    {
+        if (lIter->first != rIter->first)
+        {
+            return static_cast<bool>(lIter->first.compare(rIter->first));
+        }
+
+        if (lIter->second != rIter->second)
+        {
+            return static_cast<bool>(lIter->second.compare(rIter->second));
+        }
+    }
+
+    return false;
+}
+
 dev::h256 MemoryTable2::hash()
 {
     bytes data;
@@ -233,55 +276,14 @@ dev::h256 MemoryTable2::hash()
     auto size = m_dirty.size() + m_newEntries->size();
     tempEntries.reserve(size);
 
-    auto comparator = [this](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
-        auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
-        if (ret > 0)
-        {
-            return true;
-        }
-
-        if (ret < 0)
-        {
-            return false;
-        }
-
-        auto& lFields = *lhs->fields();
-        auto& rFields = *rhs->fields();
-
-        if (lFields.size() > rFields.size())
-        {
-            return true;
-        }
-
-        if (lFields.size() < rFields.size())
-        {
-            return false;
-        }
-
-        for (auto lIter = lFields.begin(), rIter = rFields.begin();
-             lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
-        {
-            if (lIter->first != rIter->first)
-            {
-                return static_cast<bool>(lIter->first.compare(rIter->first));
-            }
-
-            if (lIter->second != rIter->second)
-            {
-                return static_cast<bool>(lIter->second.compare(rIter->second));
-            }
-        }
-
-        return false;
-    };
-
     for (auto it : m_dirty)
     {
         auto entry = it.second;
         tempEntries.push_back(entry);
     }
 
-    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(), comparator);
+    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(),
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
 
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
@@ -293,7 +295,8 @@ dev::h256 MemoryTable2::hash()
         tempEntries.push_back(entry);
     }
 
-    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size, comparator);
+    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size,
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
 
     for (size_t i = 0; i < size; ++i)
     {
