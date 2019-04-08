@@ -199,7 +199,6 @@ size_t LevelDBStorage::commit(
                                            << LOG_KV("errorInfo", s.ToString());
                 BOOST_THROW_EXCEPTION(
                     StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-                throw;
             }
 
             writeDB_time_cost += utcTime() - record_time;

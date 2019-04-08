@@ -85,7 +85,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+            out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
             return out;
         }
     }
