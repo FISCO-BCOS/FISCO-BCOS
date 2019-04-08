@@ -125,7 +125,11 @@ public:
     }
     virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
-        return m_sealer->consensusEngine();
+        if (m_sealer)
+        {
+            return m_sealer->consensusEngine();
+        }
+        return nullptr;
     }
     std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
     virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
