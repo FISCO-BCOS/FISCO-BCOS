@@ -19,9 +19,9 @@
  *  @date 20180921
  */
 
-
 #include "ExecutiveContext.h"
 #include <libdevcore/easylog.h>
+#include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
@@ -29,6 +29,7 @@
 
 using namespace dev::executive;
 using namespace dev::eth;
+using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
@@ -172,12 +173,11 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         else
         {
             {  // Testing code
-               // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                auto res = make_shared<vector<string>>();
 
-                AbiFunction af;
-                af.setSignature(config->functionName);
-                //
-                bool isOk = af.doParser();
+                ABIFunc af;
+                bool isOk = af.parser(config->functionName);
                 if (!isOk)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG)
@@ -187,10 +187,22 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                     return nullptr;
                 }
 
-                auto res = make_shared<vector<string>>();
+                auto paramTypes = af.getParamsType();
+                if (paramTypes.size() < (size_t)config->criticalSize)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG)
+                        << LOG_DESC("[#getTxCriticals] params type less than  criticalSize")
+                        << LOG_KV("func signature", config->functionName)
+                        << LOG_KV("func criticalSize", config->criticalSize)
+                        << LOG_KV("input data", toHex(_tx.data()));
+
+                    return nullptr;
+                }
+
+                paramTypes.resize((size_t)config->criticalSize);
+
                 ContractABI abi;
-                isOk =
-                    abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), af.getParamsTypes(), *res);
+                isOk = abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), paramTypes, *res);
                 if (!isOk)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
@@ -199,8 +211,6 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
 
                     return nullptr;
                 }
-
-                res->resize((size_t)config->criticalSize);
 
                 return res;
             }
