@@ -1,7 +1,24 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-add_library(force ${SRC_LIST} ${HEADERS})
-set_source_files_properties(${SRC_LIST} PROPERTIES COMPILE_FLAGS -Wno-pedantic)
-target_compile_options(force BEFORE PRIVATE -Wno-missing-field-initializers -Wno-pedantic)
-target_link_libraries(force PRIVATE evmc::evmc evmc::instructions devcore)
+add_library(evm ${SRC_LIST} ${HEADERS})
+
+target_link_libraries(
+    evm
+    PRIVATE interpreter evmc::loader ethcore evmc::evmc Boost::program_options devcore 
+    PRIVATE force evmc::loader ethcore evmc::evmc Boost::program_options devcore
+)
+
+if(EVM_OPTIMIZE)
+    target_compile_definitions(evm PRIVATE EVM_OPTIMIZE)
+endif()
+
+if(EVMJIT)
+    target_link_libraries(evm PRIVATE evmjit)
+    target_compile_definitions(evm PRIVATE ETH_EVMJIT)
+endif()
+
+if(HERA)
+    target_link_libraries(evm PRIVATE hera)
+    target_compile_definitions(evm PRIVATE ETH_HERA)
+endif()
