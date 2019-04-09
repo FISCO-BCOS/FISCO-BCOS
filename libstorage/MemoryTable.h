@@ -404,8 +404,8 @@ private:
         }
         if (condition->getOffset() >= 0 && condition->getCount() >= 0)
         {
-            size_t offset = condition->getOffset();
-            size_t count = condition->getCount();
+            int offset = condition->getOffset();
+            int count = condition->getCount();
             std::vector<size_t> limitedIndex;
             size_t size = indexes.size();
             if (offset >= size)
@@ -416,7 +416,7 @@ private:
             {
                 count = size - offset;
             }
-            for (size_t j = offset; j < offset + count && j < size; j++)
+            for (int j = offset; j < offset + count && j < size; j++)
             {
                 limitedIndex.push_back(indexes[j]);
             }

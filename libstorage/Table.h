@@ -173,8 +173,8 @@ public:
     virtual void LT(const std::string& key, const std::string& value);
     virtual void LE(const std::string& key, const std::string& value);
 
-    virtual void limit(size_t count);
-    virtual void limit(size_t offset, size_t count);
+    virtual void limit(int count);
+    virtual void limit(int offset, int count);
 
     virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
 

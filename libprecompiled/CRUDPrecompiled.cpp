@@ -261,8 +261,8 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
                     std::string offsetCount = OPJson[*it].asString();
                     std::vector<std::string> offsetCountList;
                     boost::split(offsetCountList, offsetCount, boost::is_any_of(","));
-                    size_t offset = boost::lexical_cast<size_t>(offsetCountList[0]);
-                    size_t count = boost::lexical_cast<size_t>(offsetCountList[1]);
+                    int offset = boost::lexical_cast<int>(offsetCountList[0]);
+                    int count = boost::lexical_cast<int>(offsetCountList[1]);
                     condition->limit(offset, count);
                 }
                 else
