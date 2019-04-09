@@ -56,8 +56,7 @@ evmc_create_fn g_evmcCreateFn;
 /// A helper type to build the tabled of VM implementations.
 ///
 /// More readable than std::tuple.
-/// Fields are not initialized to allow usage of construction with initializer
-/// lists {}.
+/// Fields are not initialized to allow usage of construction with initializer lists {}.
 struct VMKindTableEntry
 {
     VMKind kind;
@@ -66,9 +65,8 @@ struct VMKindTableEntry
 
 /// The table of available VM implementations.
 ///
-/// We don't use a map to avoid complex dynamic initialization. This list will
-/// never be long, so linear search only to parse command line arguments is not
-/// a problem.
+/// We don't use a map to avoid complex dynamic initialization. This list will never be long,
+/// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
 #ifdef ETH_EVMJIT
     {VMKind::JIT, "jit"},
@@ -98,16 +96,15 @@ void setVMKind(const std::string& _name)
     case EVMC_LOADER_SUCCESS:
         break;
     case EVMC_LOADER_CANNOT_OPEN:
-        BOOST_THROW_EXCEPTION(po::validation_error(
-            po::validation_error::invalid_option_value, "vm", _name, 1));
+        BOOST_THROW_EXCEPTION(
+            po::validation_error(po::validation_error::invalid_option_value, "vm", _name, 1));
     case EVMC_LOADER_SYMBOL_NOT_FOUND:
-        BOOST_THROW_EXCEPTION(std::system_error(
-            std::make_error_code(std::errc::invalid_seek),
+        BOOST_THROW_EXCEPTION(std::system_error(std::make_error_code(std::errc::invalid_seek),
             "loading " + _name + " failed: EVMC create function not found"));
     default:
-        BOOST_THROW_EXCEPTION(std::system_error(
-            std::error_code(static_cast<int>(ec), std::generic_category()),
-            "loading " + _name + " failed"));
+        BOOST_THROW_EXCEPTION(
+            std::system_error(std::error_code(static_cast<int>(ec), std::generic_category()),
+                "loading " + _name + " failed"));
     }
     g_kind = VMKind::DLL;
 }
@@ -132,8 +129,7 @@ void parseEvmcOptions(const std::vector<std::string>& _opts)
     {
         auto separatorPos = s.find('=');
         if (separatorPos == s.npos)
-            throw po::invalid_syntax{
-                po::invalid_syntax::missing_parameter, c_evmcPrefix + s};
+            throw po::invalid_syntax{po::invalid_syntax::missing_parameter, c_evmcPrefix + s};
         auto name = s.substr(0, separatorPos);
         auto value = s.substr(separatorPos + 1);
         s_evmcOptions.emplace_back(std::move(name), std::move(value));
@@ -158,8 +154,7 @@ po::options_description vmProgramOptions(unsigned _lineLength)
             names += entry.name;
         }
 
-        return "Select VM implementation. Available options are: " + names +
-               ".";
+        return "Select VM implementation. Available options are: " + names + ".";
     }();
 
     po::options_description opts("VM OPTIONS", _lineLength);
