@@ -266,22 +266,16 @@ void Condition::limit(size_t offset, size_t count)
 {
     m_offset = offset;
     m_count = count;
-    m_dirty = true;
 }
 
-size_t Condition::getOffset()
+int Condition::getOffset()
 {
     return m_offset;
 }
 
-size_t Condition::getCount()
+int Condition::getCount()
 {
     return m_count;
-}
-
-bool Condition::isDirty()
-{
-    return m_dirty;
 }
 
 std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()

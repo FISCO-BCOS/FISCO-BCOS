@@ -380,22 +380,29 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
-        if (condition->getConditions()->empty() && !condition->isDirty())
+        if (condition->getConditions()->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
-                indexes.emplace_back(i);
-            return indexes;
-        }
-
-        for (size_t i = 0; i < entries->size(); ++i)
-        {
-            Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
             {
-                indexes.push_back(i);
+                indexes.emplace_back(i);
+            }
+            if (condition->getOffset() < 0 || condition->getCount() < 0)
+            {
+                return indexes;
             }
         }
-        if (condition->isDirty())
+        else
+        {
+            for (size_t i = 0; i < entries->size(); ++i)
+            {
+                Entry::Ptr entry = entries->get(i);
+                if (processCondition(entry, condition))
+                {
+                    indexes.push_back(i);
+                }
+            }
+        }
+        if (condition->getOffset() >= 0 && condition->getCount() >= 0)
         {
             size_t offset = condition->getOffset();
             size_t count = condition->getCount();
