@@ -6,6 +6,7 @@ add_library(evm ${SRC_LIST} ${HEADERS})
 target_link_libraries(
     evm
     PRIVATE interpreter evmc::loader ethcore evmc::evmc Boost::program_options devcore 
+    PRIVATE force evmc::loader ethcore evmc::evmc Boost::program_options devcore
 )
 
 if(EVM_OPTIMIZE)
