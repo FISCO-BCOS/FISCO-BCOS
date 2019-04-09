@@ -82,6 +82,9 @@ DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
 DEV_SIMPLE_EXCEPTION_RLP(ErrorBlockHash);
 
+/// block execution related
+DEV_SIMPLE_EXCEPTION(BlockExecutionFailed);
+
 /// sync related
 DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
 DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
