@@ -215,7 +215,7 @@ main()
         fi
         break;
     done
-    generate_node_scripts "${output_dir}"
+    # generate_node_scripts "${output_dir}"
     cat ${key_path}/agency.crt >> ${output_dir}/${conf_path}/node.crt
     cat ${key_path}/ca.crt >> ${output_dir}/${conf_path}/node.crt
     rm ${logfile}

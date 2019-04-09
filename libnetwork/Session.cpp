@@ -104,7 +104,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
                        << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
-    message.reset();
     send(p_buffer);
 }
 
@@ -303,13 +302,13 @@ void Session::drop(DisconnectReason _reason)
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remote_endpoint()
+                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remoteEndpoint()
                                    << LOG_KV("reason", reasonOf(_reason))
                                    << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remote_endpoint()
+                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remoteEndpoint()
                                      << LOG_KV("reason", reasonOf(_reason))
                                      << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }

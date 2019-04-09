@@ -39,8 +39,8 @@ namespace storage
 class MemoryTable2 : public Table
 {
 public:
-    using CacheType = std::map<std::string, Entries::Ptr>;
-    using CacheItr = typename CacheType::iterator;
+    using CacheType = tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>;
+    using CacheIter = typename CacheType::iterator;
     using Ptr = std::shared_ptr<MemoryTable2>;
 
     MemoryTable2();
@@ -48,8 +48,6 @@ public:
     virtual ~MemoryTable2(){};
 
     virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
-
-    Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
@@ -63,10 +61,10 @@ public:
 
     virtual h256 hash() override;
 
-    virtual void clear() override { m_cache.clear(); }
+    virtual void clear() override { m_dirty.clear(); }
     virtual bool empty() override
     {
-        for (auto iter : m_cache)
+        for (auto iter : m_dirty)
         {
             if (iter.second != nullptr)
             {
@@ -80,7 +78,6 @@ public:
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
     void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
-    void setTableInfo(TableInfo::Ptr tableInfo) override { m_tableInfo = tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override
     {
@@ -95,7 +92,7 @@ public:
     {
         data->info = m_tableInfo;
         data->entries = std::make_shared<Entries>();
-        for (auto it : m_cache)
+        for (auto it : m_dirty)
         {
             data->entries->addEntry(it.second);
         }
@@ -111,23 +108,52 @@ public:
     virtual void rollback(const Change& _change) override;
 
 private:
-    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
+    using EntriesType = ConcurrentEntries;
+    using EntriesPtr = EntriesType::Ptr;
+    EntriesPtr m_newEntries;
+
+    CacheType m_dirty;
+    bool Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs);
+    std::vector<size_t> processEntries(EntriesType::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
         if (condition->getConditions()->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
-                indexes.emplace_back(i);
+            {
+                /*
+                When dereferencing a entry pointer(named as entry_ptr) contained in entries(name as
+                v), we MUST need to check whether entry_ptr.get() equals to nullptr. It is NOT safe
+                to use a subscript to visit elements in a tbb::concurrent_vector even though the
+                subscript < v.size(), due to that the elements in the vector may not be already
+                constructed.
+
+                In the implementation of our ConcurrentEntries, we specify that the
+                concurrent_vector container using tbb::zero_allocator<T, A> as its memory allocator.
+                Zero allocator forwards allocation requests to A and zeros the allocation before
+                returning it, which means the return value of get() method of an uncontructed
+                entry_ptr would keep as 0x0(nullptr), until the entry constructed successfully. If
+                the pointer is null, we just skip this element.
+                */
+                if (entries->get(i).get() != nullptr)
+                {
+                    indexes.emplace_back(i);
+                }
+            }
             return indexes;
         }
 
         for (size_t i = 0; i < entries->size(); ++i)
         {
             Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
+            // same as above
+            if (entry != nullptr)
             {
-                indexes.push_back(i);
+                if (processCondition(entry, condition))
+                {
+                    indexes.push_back(i);
+                }
             }
         }
 
@@ -255,14 +281,9 @@ private:
         }
     }
 
-    dev::SharedMutex m_mutex;
     Storage::Ptr m_remoteDB;
-    TableInfo::Ptr m_tableInfo;
-    std::map<uint32_t, Entry::Ptr> m_cache;
-    Entries::Ptr m_newEntries;
     h256 m_blockHash;
     int m_blockNum = 0;
-};  // namespace storage
-
+};
 }  // namespace storage
 }  // namespace dev

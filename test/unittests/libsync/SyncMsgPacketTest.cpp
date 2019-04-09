@@ -27,7 +27,6 @@
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

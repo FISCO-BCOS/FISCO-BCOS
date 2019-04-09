@@ -38,7 +38,11 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
-    setSectionsName(_pt);
+    std::string certBlacklistSection = "crl";
+    if (_pt.get_child_optional("certificate_blacklist"))
+    {
+        certBlacklistSection = "certificate_blacklist";
+    }
     try
     {
         std::map<NodeIPEndpoint, NodeID> nodes;
@@ -85,13 +89,13 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
         }
 
-        std::vector<std::string> crl;
+        std::vector<std::string> certBlacklist;
         /// CRL means certificate rejected list, CRL optional in config.ini
-        if (_pt.get_child_optional(m_certBlacklistSection))
+        if (_pt.get_child_optional(certBlacklistSection))
         {
-            for (auto it : _pt.get_child(m_certBlacklistSection))
+            for (auto it : _pt.get_child(certBlacklistSection))
             {
-                if (it.first.find(m_certBlacklistSection + ".") == 0)
+                if (it.first.find("crl.") == 0)
                 {
                     try
                     {
@@ -99,7 +103,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         INITIALIZER_LOG(TRACE) << LOG_BADGE("P2PInitializer")
                                                << LOG_DESC("get certificate rejected by nodeID")
                                                << LOG_KV("nodeID", nodeID);
-                        crl.push_back(nodeID);
+                        certBlacklist.push_back(nodeID);
                     }
                     catch (std::exception& e)
                     {
@@ -133,7 +137,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         host->setMessageFactory(messageFactory);
         host->setHostPort(listenIP, listenPort);
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));
-        host->setCRL(crl);
+        host->setCRL(certBlacklist);
 
         m_p2pService = std::make_shared<Service>();
         m_p2pService->setHost(host);
@@ -154,13 +158,5 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                      << LOG_KV("check Port", listenPort)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
-    }
-}
-
-void P2PInitializer::setSectionsName(boost::property_tree::ptree const& _pt)
-{
-    if (_pt.get_child_optional("certificate_blacklist"))
-    {
-        m_certBlacklistSection = "certificate_blacklist";
     }
 }

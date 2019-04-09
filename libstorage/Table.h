@@ -23,6 +23,8 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/tbb_allocator.h>
+#include <atomic>
 #include <map>
 #include <memory>
 #include <type_traits>
@@ -105,6 +107,46 @@ private:
     bool m_dirty = false;
 };
 
+class ConcurrentEntries : public std::enable_shared_from_this<ConcurrentEntries>
+{
+public:
+    using Ptr = std::shared_ptr<ConcurrentEntries>;
+
+    /*
+    tbb::concurrent_vector class DOES NOT support a thread traverse across a tbb::concurrent_vector
+    instance safely in parallel to growth operations of other threads, nether using simple C-style
+    for-loop with "i < v.size()" or "iter != v.end()" nor C++-11-style for-loop "for(auto i: v)",
+    please visit:
+    https://software.intel.com/en-us/blogs/2009/04/09/delusion-of-tbbconcurrent_vectors-size-or-3-ways-to-traverse-in-parallel-correctly
+    to get an insight about this problem and the solution.
+    */
+    using EntriesContainer =
+        tbb::concurrent_vector<typename Entry::Ptr, tbb::zero_allocator<typename Entry::Ptr>>;
+    using EntriesIter = typename EntriesContainer::iterator;
+
+    typename Entry::Ptr get(size_t i);
+    size_t size() const;
+    EntriesIter addEntry(Entry::Ptr entry);
+    bool dirty() const;
+    void setDirty(bool dirty);
+
+    /*
+    To support grow in parallel, tbb::concurrent_vector DOES NOT represent a contiguous array/memory
+    region for storing its elements. In Reference Manual for developers, it says:
+
+    Unlike a std::vector, a concurrent_vector never moves existing elements when it grows.
+    The container allocates a series of contiguous arrays. ...
+
+    So the iterator begin() method returns will never change.
+    */
+    EntriesIter begin() { return m_entries.begin(); }
+    EntriesIter end() { return m_entries.end(); }
+
+private:
+    EntriesContainer m_entries;
+    std::atomic_bool m_dirty;
+};
+
 class Condition : public std::enable_shared_from_this<Condition>
 {
 public:
@@ -134,7 +176,7 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::map<std::string, std::pair<Op, std::string> >* getConditions();
+    virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
 
     virtual size_t getOffset();
     virtual size_t getCount();
@@ -142,7 +184,7 @@ public:
 
 
 private:
-    std::map<std::string, std::pair<Op, std::string> > m_conditions;
+    std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
     bool m_dirty = false;
@@ -240,7 +282,7 @@ public:
     virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
     virtual void setBlockHash(h256 blockHash) = 0;
     virtual void setBlockNum(int blockNum) = 0;
-    virtual void setTableInfo(TableInfo::Ptr tableInfo) = 0;
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
     virtual size_t cacheSize() { return 0; }
 
     static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
@@ -248,6 +290,7 @@ public:
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
+    TableInfo::Ptr m_tableInfo;
 };
 
 // Block execution time construction by TableFactoryFactory
@@ -259,10 +302,10 @@ public:
     virtual ~TableFactory() {}
 
     virtual Table::Ptr openTable(
-        const std::string& table, bool authorityFlag = true, bool isPara = false) = 0;
+        const std::string& table, bool authorityFlag = true, bool isPara = true) = 0;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag, Address const& _origin = Address(),
-        bool isPara = false) = 0;
+        bool isPara = true) = 0;
 
     virtual h256 hash() = 0;
     virtual size_t savepoint() = 0;

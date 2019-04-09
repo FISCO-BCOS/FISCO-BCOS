@@ -84,7 +84,7 @@ void Host::startAccept(boost::system::error_code boost_error)
         m_asioInterface->asyncAccept(socket,
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
-                auto endpoint = socket->remote_endpoint();
+                auto endpoint = socket->remoteEndpoint();
                 HOST_LOG(TRACE) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// network acception failed
                 if (ec || !m_run)
@@ -195,10 +195,10 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                 }
             }
 
-            /// check nodeID in crl, only filter by nodeID.
-            const std::vector<std::string>& crl = host->crl();
+            /// check nodeID in certBlacklist, only filter by nodeID.
+            const std::vector<std::string>& certBlacklist = host->certBlacklist();
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
-            if (find(crl.begin(), crl.end(), nodeID) != crl.end())
+            if (find(certBlacklist.begin(), certBlacklist.end(), nodeID) != certBlacklist.end())
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list")
                                << LOG_KV("nodeID", nodeID.substr(0, 4));
@@ -345,7 +345,7 @@ void Host::startPeerSession(NodeInfo const& nodeInfo, std::shared_ptr<SocketFace
             HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
-    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remote_endpoint()
+    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remoteEndpoint()
                    << LOG_KV("nodeID", nodeInfo.nodeID.abridged());
 }
 

@@ -80,36 +80,45 @@ public:
 
     std::string const& getBaseDir() { return m_baseDir; }
 
-    inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
+    /// set max block generation time
+    inline void setEmptyBlockGenTime(unsigned const& _intervalBlockTime)
     {
-        m_timeManager.m_intervalBlockTime = _intervalBlockTime;
+        m_timeManager.m_emptyBlockGenTime = _intervalBlockTime;
     }
 
-    inline unsigned const& getIntervalBlockTime() const
+    /// get max block generation time
+    inline unsigned const& getEmptyBlockGenTime() const
     {
-        return m_timeManager.m_intervalBlockTime;
+        return m_timeManager.m_emptyBlockGenTime;
     }
+
+    /// set mininum block generation time
+    void setMinBlockGenerationTime(unsigned const& time)
+    {
+        if (time < m_timeManager.m_emptyBlockGenTime)
+        {
+            m_timeManager.m_minBlockGenTime = time;
+        }
+        PBFTENGINE_LOG(INFO) << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime);
+    }
+
     void start() override;
+
+    /// reach the minimum block generation time
+    virtual bool reachMinBlockGenTime()
+    {
+        /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
+        /// handled before the current leader generate a new block, it's no need to add other
+        /// conditions to enforce this striction
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_minBlockGenTime;
+    }
 
     virtual bool reachBlockIntervalTime()
     {
-        if (false == getLeader().first)
-        {
-            return false;
-        }
-        /// the block is sealed by the next leader, and can execute after the last block has been
-        /// consensused
-        if (m_notifyNextLeaderSeal)
-        {
-            /// represent that the latest block has not been consensused
-            if (getNextLeader() == nodeIdx())
-            {
-                return false;
-            }
-            return true;
-        }
-        /// the block is sealed by the current leader
-        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+        /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
+        /// handled before the current leader generate a new block, the conditions before can be
+        /// deleted
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last

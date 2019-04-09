@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getField("value") == initBalance);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
+            // std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
 
             auto savepoint1 = memoryDBFactory->savepoint();
             BOOST_TEST(savepoint1 == 1);
@@ -157,20 +157,22 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
             entry->setField("value", std::to_string((i + 1) * 100));
             table->update(key, entry, table->newCondition());
             entries = table->select(key, table->newCondition());
+
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getField("value") == std::to_string((i + 1) * 100));
 
             memoryDBFactory->rollback(savepoint1);
             entries = table->select(key, table->newCondition());
+
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getField("value") == initBalance);
 
             memoryDBFactory->rollback(savepoint0);
+
             entries = table->select(key, table->newCondition());
             BOOST_TEST(entries->size() == 0);
 
             entry = table->newEntry();
-            // entry->setField("key", "name");
             entry->setField("key", "name");
             entry->setField("value", "Vita");
             table->insert(key, entry);
@@ -184,7 +186,6 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
             entries = table->select(key, table->newCondition());
             BOOST_TEST(entries->size() == 1);
             BOOST_TEST(entries->get(0)->getStatus() == 1);
-
 
             memoryDBFactory->rollback(savepoint2);
             entries = table->select(key, table->newCondition());
@@ -204,7 +205,6 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
     {
         threads.push_back(std::thread([this, i, table]() {
             auto entry = table->newEntry();
-            // entry->setField("key", "balance");
             entry->setField("key", "balance");
             auto initBalance = std::to_string(500 + i);
             entry->setField("value", initBalance);
@@ -228,6 +228,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
     {
         t.join();
     }
+
     memoryDBFactory->commitDB(h256(0), 2);
 }
 

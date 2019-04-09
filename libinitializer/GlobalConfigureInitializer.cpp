@@ -48,7 +48,6 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
         sectionName = "storage_security";
     }
 
-    // TODO: rename keycenter to key-manager, disk encryption to data secure
     g_BCOSConfig.diskEncryption.enable = _pt.get<bool>(sectionName + ".enable", false);
     g_BCOSConfig.diskEncryption.keyCenterIP =
         _pt.get<std::string>(sectionName + ".key_manager_ip", "");

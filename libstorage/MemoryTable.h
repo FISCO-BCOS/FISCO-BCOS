@@ -31,6 +31,8 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <mutex>
+#include <thread>
 #include <type_traits>
 
 namespace dev
@@ -41,10 +43,13 @@ template <typename Mode = Serial>
 class MemoryTable : public Table
 {
 public:
-    using CacheType = typename std::conditional<Mode::value,
-        tbb::concurrent_unordered_map<std::string, Entries::Ptr>,
-        std::map<std::string, Entries::Ptr>>::type;
-    using CacheItr = typename CacheType::iterator;
+    using ConcurrentMap = tbb::concurrent_unordered_map<std::string, Entries::Ptr>;
+    using SerialMap = std::map<std::string, Entries::Ptr>;
+
+    using CacheType = typename std::conditional<Mode::value, ConcurrentMap, SerialMap>::type;
+    using CacheIter = typename CacheType::iterator;
+    using KeyType = typename CacheType::key_type;
+
     using Ptr = std::shared_ptr<MemoryTable<Mode>>;
 
     virtual ~MemoryTable(){};
@@ -53,30 +58,7 @@ public:
     {
         try
         {
-            typename Entries::Ptr entries = std::make_shared<Entries>();
-
-            CacheItr it;
-            it = m_cache.find(key);
-            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
-            // so we set a value to nullptr as a flag to tell table to update it later when a
-            // key-value is invalid
-            if (it == m_cache.end() || it->second == nullptr)
-            {
-                if (m_remoteDB)
-                {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache[key] = entries;
-                }
-            }
-            else
-            {
-                entries = it->second;
-            }
-
-            if (!entries)
-            {
-                return std::make_shared<Entries>();
-            }
+            auto entries = selectFromCache(key);
             auto indexes = processEntries(entries, condition);
             typename Entries::Ptr resultEntries = std::make_shared<Entries>();
             for (auto& i : indexes)
@@ -104,27 +86,9 @@ public:
                 return storage::CODE_NO_AUTHORIZED;
             }
 
-            typename Entries::Ptr entries = std::make_shared<Entries>();
+            auto entries = selectFromCache(key);
 
-            CacheItr it;
-            it = m_cache.find(key);
-            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
-            // so we set a value to nullptr as a flag to tell table to update it later when a
-            // key-value is invalid
-            if (it == m_cache.end() || it->second == nullptr)
-            {
-                if (m_remoteDB)
-                {
-                    entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                    m_cache[key] = entries;
-                }
-            }
-            else
-            {
-                entries = it->second;
-            }
-
-            if (!entries)
+            if (!entries || entries->size() == 0)
             {
                 return 0;
             }
@@ -172,30 +136,10 @@ public:
                 return storage::CODE_NO_AUTHORIZED;
             }
 
-            typename Entries::Ptr entries = std::make_shared<Entries>();
             Condition::Ptr condition = std::make_shared<Condition>();
 
-            CacheItr it;
-            it = m_cache.find(key);
-            // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
-            // so we set a value to nullptr as a flag to tell table to update it later when a
-            // key-value is invalid
-            if (it == m_cache.end() || it->second == nullptr)
-            {
-                if (m_remoteDB)
-                {
-                    if (needSelect)
-                    {
-                        entries =
-                            m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                        m_cache[key] = entries;
-                    }
-                }
-            }
-            else
-            {
-                entries = it->second;
-            }
+            auto entries = selectFromCache(key, needSelect);
+
             checkField(entry);
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
@@ -206,7 +150,7 @@ public:
             if (entries->size() == 0)
             {
                 entries->addEntry(entry);
-                m_cache[key] = entries;
+                m_cache.insert(std::make_pair(key, entries));
                 return 1;
             }
             else
@@ -233,25 +177,7 @@ public:
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        typename Entries::Ptr entries = std::make_shared<Entries>();
-
-        CacheItr it;
-        it = m_cache.find(key);
-        // beacuse there is no interface to erase element in tbb::concurrent_unordered_map,
-        // so we set a value to nullptr as a flag to tell table to update it later when a
-        // key-value is invalid
-        if (it == m_cache.end() || it->second == nullptr)
-        {
-            if (m_remoteDB)
-            {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
-                m_cache[key] = entries;
-            }
-        }
-        else
-        {
-            entries = it->second;
-        }
+        auto entries = selectFromCache(key);
 
         auto indexes = processEntries(entries, condition);
 
@@ -279,7 +205,7 @@ public:
         bytes data;
         for (auto& it : tmpOrderedCache)
         {
-            if (it.second->dirty())
+            if (it.second != nullptr && it.second->dirty())
             {
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
@@ -325,7 +251,6 @@ public:
     void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
     void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
     void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
-    void setTableInfo(TableInfo::Ptr tableInfo) override { m_tableInfo = tableInfo; }
 
     bool checkAuthority(Address const& _origin) const override
     {
@@ -369,7 +294,7 @@ public:
                 entries->removeEntry(_change.value[0].index);
                 if (entries->size() == 0u)
                 {
-                    m_cache[_change.key] = nullptr;
+                    eraseKey(m_cache, _change.key);
                 }
                 break;
             }
@@ -404,6 +329,53 @@ public:
     size_t cacheSize() override { return m_cache.size(); }
 
 private:
+    /*
+    NOTICE:
+    m_eraseMutex is used for eraseKey() method with tbb::concurrent_unordered_map
+    instance only. Because in that eraseKey() method, we use unsafe_erase() method to delete element
+    in tbb::concurrent_unordered_map instance. As "unsafe_" prefix says, the unsafe_erase() method
+    can NOT ensure concurrenty safety between different calls to this method, that's why we used a
+    mutex to ensure there is only one thread can erase element each time.
+
+    Additionally, by now no evidence shows that unsafe_erase() method would conflict with insert()
+    or find() method. To get furthur details about the data structure used in
+    tbb::concurrent_unordered_map, maybe you could read:
+    http://www.cs.ucf.edu/~dcm/Teaching/COT4810-Spring2011/Literature/SplitOrderedLists.pdf
+    */
+    std::mutex m_eraseMutex;
+
+    void eraseKey(ConcurrentMap& _map, KeyType const& _key)
+    {
+        std::lock_guard<std::mutex> lock(m_eraseMutex);
+        _map.unsafe_erase(_key);
+    }
+
+    void eraseKey(SerialMap& _map, KeyType const& _key) { _map.erase(_key); }
+
+    typename Entries::Ptr selectFromCache(const std::string& key, bool needSelect = true)
+    {
+        auto entries = std::make_shared<Entries>();
+
+        CacheIter it = m_cache.find(key);
+        if (it == m_cache.end())
+        {
+            // These code is fast with no rollback
+            if (m_remoteDB && needSelect)
+            {
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
+                // dropped.
+                m_cache.insert(std::make_pair(key, entries));
+            }
+        }
+        else
+        {
+            entries = it->second;
+        }
+
+        return entries;
+    }
+
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
@@ -571,7 +543,6 @@ private:
     }
 
     Storage::Ptr m_remoteDB;
-    TableInfo::Ptr m_tableInfo;
     CacheType m_cache;
     h256 m_blockHash;
     int m_blockNum = 0;

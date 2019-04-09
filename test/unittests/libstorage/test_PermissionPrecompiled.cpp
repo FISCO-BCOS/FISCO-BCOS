@@ -27,7 +27,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libprecompiled/AuthorityPrecompiled.h>
+#include <libprecompiled/PermissionPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
