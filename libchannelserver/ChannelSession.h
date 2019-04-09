@@ -104,9 +104,10 @@ public:
         m_topics = topics;
     };
 
-    void setThreadPool(ThreadPool::Ptr requestThreadPool, ThreadPool::Ptr responsethreadPool) {
-    	m_requestThreadPool = requestThreadPool;
-    	m_responseThreadPool = responsethreadPool;
+    void setThreadPool(ThreadPool::Ptr requestThreadPool, ThreadPool::Ptr responsethreadPool)
+    {
+        m_requestThreadPool = requestThreadPool;
+        m_responseThreadPool = responsethreadPool;
     }
 
     MessageFactory::Ptr messageFactory() { return _messageFactory; }

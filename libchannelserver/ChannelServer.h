@@ -78,7 +78,10 @@ public:
     };
 
     MessageFactory::Ptr messageFactory() { return m_messageFactory; }
-    void setMessageFactory(MessageFactory::Ptr messageFactory) { m_messageFactory = messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr messageFactory)
+    {
+        m_messageFactory = messageFactory;
+    }
 
     virtual void stop();
 
