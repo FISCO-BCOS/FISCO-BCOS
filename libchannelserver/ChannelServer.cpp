@@ -34,8 +34,8 @@ using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
 {
-    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReqWorker", 8);
-    m_responseThreadPool = std::make_shared<ThreadPool>("ChannelRespWorker", 8);
+    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 8);
+    m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
     if (!m_listenHost.empty() && m_listenPort > 0)
     {
         m_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
