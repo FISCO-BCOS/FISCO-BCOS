@@ -42,6 +42,7 @@ public:
     explicit EVM(evmc_instance* _instance) noexcept;
 
     ~EVM() { m_instance->destroy(m_instance); }
+
     EVM(EVM const&) = delete;
     EVM& operator=(EVM) = delete;
 
@@ -49,6 +50,7 @@ public:
     {
     public:
         explicit Result(evmc_result const& _result) : m_result(_result) {}
+
         ~Result()
         {
             if (m_result.release)
@@ -65,11 +67,10 @@ public:
         Result& operator=(Result const&) = delete;
 
         evmc_status_code status() const { return m_result.status_code; }
+
         int64_t gasLeft() const { return m_result.gas_left; }
-        bytesConstRef output() const
-        {
-            return {m_result.output_data, m_result.output_size};
-        }
+
+        bytesConstRef output() const { return {m_result.output_data, m_result.output_size}; }
 
     private:
         evmc_result m_result;
@@ -81,14 +82,12 @@ public:
         auto mode = toRevision(_ext.evmSchedule());
         evmc_call_kind kind = _ext.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = _ext.staticCall() ? EVMC_STATIC : 0;
-        assert(flags != EVMC_STATIC ||
-               kind == EVMC_CALL);  // STATIC implies a CALL.
-        evmc_message msg = {toEvmC(_ext.myAddress()), toEvmC(_ext.caller()),
-            toEvmC(_ext.value()), _ext.data().data(), _ext.data().size(),
-            toEvmC(_ext.codeHash()), toEvmC(0x0_cppui256), gas,
-            static_cast<int32_t>(_ext.depth()), kind, flags};
-        return Result{m_instance->execute(m_instance, &_ext, mode, &msg,
-            _ext.code().data(), _ext.code().size())};
+        assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
+        evmc_message msg = {toEvmC(_ext.myAddress()), toEvmC(_ext.caller()), toEvmC(_ext.value()),
+            _ext.data().data(), _ext.data().size(), toEvmC(_ext.codeHash()), toEvmC(0x0_cppui256),
+            gas, static_cast<int32_t>(_ext.depth()), kind, flags};
+        return Result{m_instance->execute(
+            m_instance, &_ext, mode, &msg, _ext.code().data(), _ext.code().size())};
     }
 
 private:
@@ -102,8 +101,8 @@ class EVMC : public EVM, public VMFace
 {
 public:
     explicit EVMC(evmc_instance* _instance) : EVM(_instance) {}
-    owning_bytes_ref exec(
-        u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) final;
+
+    owning_bytes_ref exec(u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) final;
 };
 }  // namespace eth
 }  // namespace dev
