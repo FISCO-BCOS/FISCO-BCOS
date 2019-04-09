@@ -54,8 +54,8 @@ public:
         bytesConstRef param, Address const& origin = Address());
 
 private:
-    void parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
-    void parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition);
+    int parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
+    int parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition);
 };
 
 }  // namespace precompiled

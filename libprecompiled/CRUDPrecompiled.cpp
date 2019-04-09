@@ -73,15 +73,23 @@ bytes CRUDPrecompiled::call(
         if (table)
         {
             Entry::Ptr entry = table->newEntry();
-            parseEntry(entryStr, entry);
+            int parseEntryResult = parseEntry(entryStr, entry);
+            if(parseEntryResult != CODE_SUCCESS)
+            {
+            	out = abi.abiIn("", u256(parseEntryResult));
+            	return out;
+            }
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", result);
+            out = abi.abiIn("", u256(result));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
+			out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
         }
+
+        return out;
     }
     if (func == name2Selector[CRUD_METHOD_UPDATE_STR])
     {  // update(string tableName, string key, string entry, string condition, string optional)
@@ -92,18 +100,31 @@ bytes CRUDPrecompiled::call(
         if (table)
         {
             Entry::Ptr entry = table->newEntry();
-            parseEntry(entryStr, entry);
+            int parseEntryResult = parseEntry(entryStr, entry);
+            if(parseEntryResult != CODE_SUCCESS)
+            {
+            	out = abi.abiIn("", u256(parseEntryResult));
+            	return out;
+            }
             Condition::Ptr condition = table->newCondition();
-            parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition);
+            if(parseConditionResult != CODE_SUCCESS)
+            {
+				out = abi.abiIn("", u256(parseConditionResult));
+				return out;
+            }
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", result);
+            out = abi.abiIn("", u256(result));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
+            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
         }
+
+        return out;
     }
     if (func == name2Selector[CRUD_METHOD_REMOVE_STR])
     {  // remove(string tableName, string key, string condition, string optional)
@@ -114,15 +135,23 @@ bytes CRUDPrecompiled::call(
         if (table)
         {
             Condition::Ptr condition = table->newCondition();
-            parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition);
+            if(parseConditionResult != CODE_SUCCESS)
+            {
+				out = abi.abiIn("", u256(parseConditionResult));
+				return out;
+            }
             int result = table->remove(key, condition, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", result);
+            out = abi.abiIn("", u256(result));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
+            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
         }
+
+        return out;
     }
     if (func == name2Selector[CRUD_METHOD_SELECT_STR])
     {  // select(string tableName, string key, string condition, string optional)
@@ -136,7 +165,12 @@ bytes CRUDPrecompiled::call(
         if (table)
         {
             Condition::Ptr condition = table->newCondition();
-            parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition);
+            if(parseConditionResult != CODE_SUCCESS)
+            {
+				out = abi.abiIn("", u256(parseConditionResult));
+				return out;
+            }
             auto entries = table->select(key, condition);
             json_spirit::Array records;
             if (entries)
@@ -161,17 +195,23 @@ bytes CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
+            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
         }
+
+        return out;
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        out = abi.abiIn("", u256(CODE_FUNCTION_NOT_EXIST));
+
+        return out;
     }
-    return out;
+
 }
 
-void CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition)
+int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition)
 {
     Json::Reader reader;
     Json::Value conditionJson;
@@ -180,6 +220,8 @@ void CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition:
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
                                << LOG_DESC("condition json parse error")
                                << LOG_KV("condition", conditionStr);
+
+        return CODE_PARSE_CONDITION_ERROR;
     }
     else
     {
@@ -229,13 +271,17 @@ void CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition:
                     PRECOMPILED_LOG(ERROR)
                         << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("condition operation undefined")
                         << LOG_KV("operation", *it);
+
+                    return CODE_CONDITION_OPERATION_UNDEFINED;
                 }
             }
         }
     }
+
+    return CODE_SUCCESS;
 }
 
-void CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
+int CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
 {
     Json::Value entryJson;
     Json::Reader reader;
@@ -243,6 +289,8 @@ void CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("entry json parse error")
                                << LOG_KV("entry", entryStr);
+
+        return CODE_PARSE_ENTRY_ERROR;
     }
     else
     {
@@ -251,5 +299,7 @@ void CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
         {
             entry->setField(*iter, entryJson[*iter].asString());
         }
+
+        return CODE_SUCCESS;
     }
 }
