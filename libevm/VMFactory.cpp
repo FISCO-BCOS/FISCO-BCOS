@@ -66,8 +66,8 @@ struct VMKindTableEntry
 
 /// The table of available VM implementations.
 ///
-/// We don't use a map to avoid complex dynamic initialization. This list will never be long,
-/// so linear search only to parse command line arguments is not
+/// We don't use a map to avoid complex dynamic initialization. This list will
+/// never be long, so linear search only to parse command line arguments is not
 /// a problem.
 VMKindTableEntry vmKindsTable[] = {
 #ifdef ETH_EVMJIT
