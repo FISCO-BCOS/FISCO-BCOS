@@ -724,7 +724,7 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
-    sleep 2
+    sleep 2.5
 fi
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then

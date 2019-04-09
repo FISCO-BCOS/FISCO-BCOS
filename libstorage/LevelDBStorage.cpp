@@ -194,13 +194,11 @@ size_t LevelDBStorage::commit(
             if (!s.ok())
             {
                 STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC(
-                                                  "Commit leveldb crashed! Please remove all "
-                                                  "data and sync data from other nodes")
-                                           << LOG_KV("status", s.ToString());
-
+                                                  "Commit leveldb exception! Please remove all the "
+                                                  "data and sync data from other nodes!")
+                                           << LOG_KV("errorInfo", s.ToString());
                 BOOST_THROW_EXCEPTION(
                     StorageException(-1, "Commit leveldb exception:" + s.ToString()));
-                return 0;
             }
 
             writeDB_time_cost += utcTime() - record_time;
@@ -215,6 +213,7 @@ size_t LevelDBStorage::commit(
     }
     catch (std::exception& e)
     {
+        // This should never happen, if happened exit.
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);

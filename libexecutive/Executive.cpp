@@ -359,6 +359,11 @@ bool Executive::go(OnOpFunc const& _onOp)
             m_excepted = toTransactionException(_e);
             revert();
         }
+        catch (PermissionDenied const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::PermissionDenied;
+        }
         catch (InternalVMError const& _e)
         {
             using errinfo_evmcStatusCode =
@@ -367,12 +372,7 @@ bool Executive::go(OnOpFunc const& _onOp)
                          << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                          << diagnostic_information(_e);
             revert();
-            throw _e;
-        }
-        catch (PermissionDenied const& _e)
-        {
-            revert();
-            m_excepted = TransactionException::PermissionDenied;
+            exit(1);
         }
         catch (Exception const& _e)
         {
