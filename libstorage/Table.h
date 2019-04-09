@@ -186,7 +186,6 @@ private:
     std::map<std::string, std::pair<Op, std::string>> m_conditions;
     int m_offset = -1;
     int m_count = -1;
-    bool m_dirty = false;
 };
 
 using Parallel = std::true_type;
