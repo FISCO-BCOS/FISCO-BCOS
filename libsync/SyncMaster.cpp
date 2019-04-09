@@ -623,8 +623,11 @@ void SyncMaster::maintainPeersConnection()
         return true;
     });
 
-    // If myself is not in group, ignore receive packet checking from all peers
-    m_msgEngine->needCheckPacketInGroup = hasMyself;
+    if (!isSyncing())
+    {
+        // Set flag to check packet from group peers
+        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
+    }
 
     // If myself is not in group, no need to maintain transactions(send transactions to peers)
     m_needMaintainTransactions = hasMyself;
