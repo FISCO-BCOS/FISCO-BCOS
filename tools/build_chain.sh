@@ -32,7 +32,7 @@ auto_flush="true"
 timestamp=$(date +%s)
 enable_compress="true"
 fisco_version=""
-
+OS=
 
 help() {
     echo $1
@@ -136,7 +136,7 @@ EXIT_CODE=-1
 
 check_env() {
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
-        echo "please install openssl 1.0.2k-fips!"
+        echo "please install openssl!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit $EXIT_CODE
@@ -144,6 +144,12 @@ check_env() {
     if [ ! -z "$(openssl version | grep reSSL)" ];then
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
+    if [ "$(uname)" == "Darwin" ];then
+        OS="macOS"
+    elif [ "$(uname -s)" == " Linux " ];then
+        OS="Linux"
+    fi
+
 }
 
 # TASSL env
@@ -724,16 +730,23 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
-    sleep 2.5
+    sleep 1
 fi
-node_pid=${ps_cmd}
-if [ ! -z \${node_pid} ];then
-    echo -e "\033[32m \${node} start successfully\033[0m"
-else
-    echo -e "\033[31m \${node} start failed\033[0m"
-    ${log_cmd}
-    exit 1
-fi
+try_times=5
+i=0
+while [ \$i -lt \${try_times} ]
+do
+    node_pid=${ps_cmd}
+    if [ ! -z \${node_pid} ];then
+        echo -e "\033[32m \${node} start successfully\033[0m"
+        exit 0
+    fi
+    sleep 0.5
+    ((i=i+1))
+done
+echo -e "\033[31m \${node} starting excess waiting time \033[0m"
+${log_cmd}
+exit 1
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
@@ -831,7 +844,7 @@ do
         bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
 done  
-sleep 3
+sleep 3.5
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
@@ -888,7 +901,7 @@ fi
 
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
-    if [ -z ${bin_path} ];then
+    if [[ -z ${bin_path} && -z ${OS} ]];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
@@ -897,6 +910,9 @@ if [ -z ${docker_mode} ];then
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
         chmod a+x ${bin_path}
+    elif [[ -z ${bin_path} && ! -z ${OS} ]];then
+        echo "Please use docker mode to run fisco-bcos on macOS Or compile source code and use -e option to specific fisco-bcos binary path"
+        exit 1
     else
         echo "Checking fisco-bcos binary..."
         bin_version=$(${bin_path} -v)
