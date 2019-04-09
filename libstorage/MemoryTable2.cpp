@@ -29,24 +29,17 @@
 #include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
+#include <thread>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-MemoryTable2::MemoryTable2()
-{
-    m_newEntries = std::make_shared<Entries>();
-}
+MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<EntriesType>()) {}
 
 Entries::Ptr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
-{
-    dev::ReadGuard lock(m_mutex);
-
-    return selectNoLock(key, condition);
-}
-
-Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -60,14 +53,13 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
 
             if (!dbEntries)
             {
-                return std::make_shared<Entries>();
+                return entries;
             }
-
 
             for (size_t i = 0; i < dbEntries->size(); ++i)
             {
-                auto entryIt = m_cache.find(dbEntries->get(i)->getID());
-                if (entryIt != m_cache.end())
+                auto entryIt = m_dirty.find(dbEntries->get(i)->getID());
+                if (entryIt != m_dirty.end())
                 {
                     entries->addEntry(entryIt->second);
                 }
@@ -103,34 +95,38 @@ int MemoryTable2::update(
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("update non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("update permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
 
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        dev::WriteGuard lock(m_mutex);
         checkField(entry);
 
-        auto entries = selectNoLock(key, condition);
-
+        auto entries = select(key, condition);
         std::vector<Change::Record> records;
 
         for (size_t i = 0; i < entries->size(); ++i)
         {
             auto updateEntry = entries->get(i);
 
-            // if id equals to zero and not in the m_cache, must be new dirty entry
-            if (updateEntry->getID() != 0 && m_cache.find(updateEntry->getID()) == m_cache.end())
+            // if id not equals to zero and not in the m_dirty, must be new dirty entry
+            if (updateEntry->getID() != 0 && m_dirty.find(updateEntry->getID()) == m_dirty.end())
             {
-                m_cache.insert(std::make_pair(updateEntry->getID(), updateEntry));
+                m_dirty.insert(std::make_pair(updateEntry->getID(), updateEntry));
             }
 
             for (auto& it : *(entry->fields()))
             {
-                records.emplace_back(updateEntry->getTempIndex(), it.first,
-                    updateEntry->getField(it.first), updateEntry->getID());
-                updateEntry->setField(it.first, it.second);
+                //_id_ always got initialized value 0 from Entry::Entry()
+                // no need to update _id_ while updating entry
+                if (it.first != "_id_")
+                {
+                    records.emplace_back(updateEntry->getTempIndex(), it.first,
+                        updateEntry->getField(it.first), updateEntry->getID());
+                    updateEntry->setField(it.first, it.second);
+                }
             }
         }
 
@@ -157,17 +153,18 @@ int MemoryTable2::insert(
 
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("insert non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("insert permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        dev::WriteGuard lock(m_mutex);
         checkField(entry);
 
         entry->setField(m_tableInfo->key, key);
-        Change::Record record(m_newEntries->size());
-        m_newEntries->addEntry(entry);
+        // Change::Record record(m_newEntries->size());
+        auto iter = m_newEntries->addEntry(entry);
+        Change::Record record(iter - m_newEntries->begin());
 
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
@@ -191,13 +188,13 @@ int MemoryTable2::remove(
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2") << LOG_DESC("remove non-authorized")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
+                                 << LOG_DESC("remove permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        dev::WriteGuard lock(m_mutex);
-        auto entries = selectNoLock(key, condition);
+        auto entries = select(key, condition);
 
         std::vector<Change::Record> records;
         for (size_t i = 0; i < entries->size(); ++i)
@@ -206,10 +203,10 @@ int MemoryTable2::remove(
 
             removeEntry->setStatus(1);
 
-            // if id equals to zero and not in the m_cache, must be new dirty entry
-            if (removeEntry->getID() != 0 && m_cache.find(removeEntry->getID()) == m_cache.end())
+            // if id not equals to zero and not in the m_dirty, must be new dirty entry
+            if (removeEntry->getID() != 0 && m_dirty.find(removeEntry->getID()) == m_dirty.end())
             {
-                m_cache.insert(std::make_pair(removeEntry->getID(), removeEntry));
+                m_dirty.insert(std::make_pair(removeEntry->getID(), removeEntry));
             }
 
             records.emplace_back(removeEntry->getTempIndex(), "", "", removeEntry->getID());
@@ -229,28 +226,81 @@ int MemoryTable2::remove(
     return 0;
 }
 
-dev::h256 MemoryTable2::hash()
+bool MemoryTable2::Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs)
 {
-    dev::ReadGuard lock(m_mutex);
-    bytes data;
-
-    for (auto it : m_cache)
+    auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
+    if (ret > 0)
     {
-        auto id = htonl(it.first);
-        data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
-        for (auto fieldIt : *(it.second->fields()))
+        return true;
+    }
+
+    if (ret < 0)
+    {
+        return false;
+    }
+
+    auto& lFields = *lhs->fields();
+    auto& rFields = *rhs->fields();
+
+    if (lFields.size() > rFields.size())
+    {
+        return true;
+    }
+
+    if (lFields.size() < rFields.size())
+    {
+        return false;
+    }
+
+    for (auto lIter = lFields.begin(), rIter = rFields.begin();
+         lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
+    {
+        if (lIter->first != rIter->first)
         {
-            if (isHashField(fieldIt.first))
-            {
-                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-            }
+            return static_cast<bool>(lIter->first.compare(rIter->first));
+        }
+
+        if (lIter->second != rIter->second)
+        {
+            return static_cast<bool>(lIter->second.compare(rIter->second));
         }
     }
+
+    return false;
+}
+
+dev::h256 MemoryTable2::hash()
+{
+    bytes data;
+    auto tempEntries = std::vector<Entry::Ptr>();
+    auto size = m_dirty.size() + m_newEntries->size();
+    tempEntries.reserve(size);
+
+    for (auto it : m_dirty)
+    {
+        auto entry = it.second;
+        tempEntries.push_back(entry);
+    }
+
+    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(),
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
 
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
         auto entry = m_newEntries->get(i);
+        while (entry.get() == nullptr)
+        {
+            std::this_thread::yield();
+        }
+        tempEntries.push_back(entry);
+    }
+
+    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size,
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto entry = tempEntries[i];
         for (auto fieldIt : *(entry->fields()))
         {
             if (isHashField(fieldIt.first))
@@ -274,7 +324,6 @@ dev::h256 MemoryTable2::hash()
 
 void MemoryTable2::rollback(const Change& _change)
 {
-    dev::WriteGuard lock(m_mutex);
     LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries->size();
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
@@ -310,8 +359,8 @@ void MemoryTable2::rollback(const Change& _change)
                        << " newIndex: " << record.index;
             if (record.id)
             {
-                auto it = m_cache.find(record.id);
-                if (it != m_cache.end())
+                auto it = m_dirty.find(record.id);
+                if (it != m_dirty.end())
                 {
                     it->second->setField(record.key, record.oldValue);
                 }
@@ -332,8 +381,8 @@ void MemoryTable2::rollback(const Change& _change)
                        << " newIndex: " << record.index;
             if (record.id)
             {
-                auto it = m_cache.find(record.id);
-                if (it != m_cache.end())
+                auto it = m_dirty.find(record.id);
+                if (it != m_dirty.end())
                 {
                     it->second->setStatus(0);
                 }

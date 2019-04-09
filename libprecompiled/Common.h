@@ -45,7 +45,7 @@ const int CODE_SUCCESS = 0;
 /// note: abi.abiOut will return a positive number related to the negative number.
 /// It maybe coincide with the positive number that should have been returned.
 
-/// AuthorityPrecompiled 51000 ~ 51099
+/// PermissionPrecompiled 51000 ~ 51099
 const int CODE_TABLE_AND_ADDRESS_EXIST = 51000;
 const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = 51001;
 

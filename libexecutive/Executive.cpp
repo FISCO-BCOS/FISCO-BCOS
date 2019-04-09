@@ -51,16 +51,8 @@ void Executive::initialize(Transaction const& _transaction)
 {
     m_t = _transaction;
     m_baseGasRequired = m_t.baseGasRequired(DefaultSchedule);
-    try
-    {
-        verifyTransaction(
-            ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
-    }
-    catch (Exception const& ex)
-    {
-        m_excepted = toTransactionException(ex);
-        throw;
-    }
+
+    verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
     if (!m_t.hasZeroSignature())
     {
@@ -188,10 +180,22 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
     {
         // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
-
-        auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
-        size_t outputSize = result.size();
-        m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        try
+        {
+            auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
+            size_t outputSize = result.size();
+            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        }
+        catch (dev::Exception& e)
+        {
+            revert();
+            m_excepted = toTransactionException(e);
+        }
+        catch (std::exception& e)
+        {
+            revert();
+            m_excepted = TransactionException::Unknown;
+        }
     }
     else if (m_s->addressHasCode(_p.codeAddress))
     {
@@ -347,6 +351,11 @@ bool Executive::go(OnOpFunc const& _onOp)
             m_excepted = toTransactionException(_e);
             revert();
         }
+        catch (PermissionDenied const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::PermissionDenied;
+        }
         catch (InternalVMError const& _e)
         {
             using errinfo_evmcStatusCode =
@@ -355,13 +364,7 @@ bool Executive::go(OnOpFunc const& _onOp)
                          << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                          << diagnostic_information(_e);
             revert();
-            throw;
-        }
-        catch (PermissionDenied const& _e)
-        {
-            revert();
-            m_excepted = TransactionException::PermissionDenied;
-            throw;
+            exit(1);
         }
         catch (Exception const& _e)
         {

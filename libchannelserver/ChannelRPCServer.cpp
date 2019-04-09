@@ -408,8 +408,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                             p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
                             p2pResponse->setPacketType(0u);
                             p2pResponse->setSeq(p2pMessage->seq());
-                            p2pResponse->setLength(
-                                p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                             service->asyncSendMessageByNodeID(nodeID, p2pResponse,
                                 CallbackFuncWithSession(), dev::network::Options());
 
@@ -426,8 +424,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                         p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
                         p2pResponse->setPacketType(0u);
                         p2pResponse->setSeq(p2pMessage->seq());
-                        p2pResponse->setLength(
-                            p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                         service->asyncSendMessageByNodeID(nodeID, p2pResponse,
                             CallbackFuncWithSession(), dev::network::Options());
                     });
@@ -448,8 +444,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 p2pResponse->setProtocolID(dev::eth::ProtocolID::AMOP);
                 p2pResponse->setPacketType(0u);
                 p2pResponse->setSeq(msg->seq());
-                p2pResponse->setLength(
-                    p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                 m_service->asyncSendMessageByNodeID(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
@@ -536,7 +530,6 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setBuffer(buffer);
             p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
             p2pMessage->setPacketType(0u);
-            p2pMessage->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pMessage->buffer()->size());
 
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
@@ -684,7 +677,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", _topic);
+                    CHANNEL_LOG(ERROR)
+                        << "sendMessage failed: no session use topic" << LOG_KV("topic", _topic);
                     throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                 }
 
