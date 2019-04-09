@@ -22,6 +22,7 @@
  * @date: 2018-10-09
  */
 #include "Common.h"
+#include <libdevcore/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 using namespace dev::consensus;
@@ -50,6 +51,21 @@ void checkSignAndCommitReq()
 }
 
 BOOST_FIXTURE_TEST_SUITE(consensusCommonTest, TestOutputHelperFixture)
+/// testExceptions
+BOOST_AUTO_TEST_CASE(testExceptions)
+{
+    BOOST_CHECK_THROW(
+        assertThrow(false, DisabledFutureTime, "DisabledFutureTime"), DisabledFutureTime);
+    BOOST_CHECK_THROW(
+        assertThrow(false, OverThresTransNum, "OverThresTransNum"), OverThresTransNum);
+    BOOST_CHECK_THROW(
+        assertThrow(false, InvalidBlockHeight, "InvalidBlockHeight"), InvalidBlockHeight);
+    BOOST_CHECK_THROW(assertThrow(false, ExistedBlock, "ExistedBlock"), ExistedBlock);
+    BOOST_CHECK_THROW(assertThrow(false, ParentNoneExist, "ParentNoneExist"), ParentNoneExist);
+    BOOST_CHECK_THROW(assertThrow(false, WrongParentHash, "WrongParentHash"), WrongParentHash);
+    BOOST_CHECK_THROW(
+        assertThrow(false, BlockSealerListWrong, "BlockSealerListWrong"), BlockSealerListWrong);
+}
 /// test PBFTMsg
 BOOST_AUTO_TEST_CASE(testPBFTMsg)
 {

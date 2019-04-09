@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file AuthorityPrecompiled.h
+/** @file PermissionPrecompiled.h
  *  @author caryliao
  *  @date 20181204
  */
@@ -27,8 +27,8 @@ namespace precompiled
 {
 #if 0
 contract AuthorityTable {
-    function insert(string table_name, string addr) public returns(int);
-    function remove(string table_name, string addr) public returns(int);
+    function insert(string table_name, string addr) public returns(int256);
+    function remove(string table_name, string addr) public returns(int256);
     function queryByName(string table_name) public constant returns(string);
 }
 #endif
@@ -38,12 +38,12 @@ const std::string SYS_AC_TABLE_NAME = "table_name";
 const std::string SYS_AC_ADDRESS = "address";
 const std::string SYS_AC_ENABLENUM = "enable_num";
 
-class AuthorityPrecompiled : public dev::blockverifier::Precompiled
+class PermissionPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
-    typedef std::shared_ptr<AuthorityPrecompiled> Ptr;
-    AuthorityPrecompiled();
-    virtual ~AuthorityPrecompiled(){};
+    typedef std::shared_ptr<PermissionPrecompiled> Ptr;
+    PermissionPrecompiled();
+    virtual ~PermissionPrecompiled(){};
 
     virtual std::string toString();
 

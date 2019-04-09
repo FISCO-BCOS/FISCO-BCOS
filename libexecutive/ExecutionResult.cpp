@@ -41,6 +41,8 @@ TransactionException dev::executive::toTransactionException(Exception const& _e)
         return TransactionException::OutOfGasIntrinsic;
     if (!!dynamic_cast<InvalidSignature const*>(&_e))
         return TransactionException::InvalidSignature;
+    if (!!dynamic_cast<PermissionDenied const*>(&_e))
+        return TransactionException::PermissionDenied;
     // Executive exceptions
     if (!!dynamic_cast<OutOfGasBase const*>(&_e))
         return TransactionException::OutOfGasBase;

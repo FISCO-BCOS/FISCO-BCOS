@@ -30,12 +30,15 @@
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
+#include <thread>
 #include <utility>
 #include <vector>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace std;
+
+thread_local std::vector<Change> MemoryTableFactory2::s_changeLog = std::vector<Change>();
 
 MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 {
@@ -159,10 +162,9 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
     if (result == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory2")
-                             << LOG_DESC("create table non-authorized")
+                             << LOG_DESC("create table permission denied")
                              << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
-        BOOST_THROW_EXCEPTION(StorageException(result, "create table non-authorized"));
-        return nullptr;
+        BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
     }
     return openTable(tableName, authorityFlag, isPara);
 }
@@ -216,17 +218,7 @@ h256 MemoryTableFactory2::hash()
 
 std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-    auto changeLog = m_changeLog.get();
-    if (m_changeLog.get() != nullptr)
-    {
-        return *changeLog;
-    }
-    else
-    {
-        changeLog = new std::vector<Change>();
-        m_changeLog.reset(changeLog);
-        return *changeLog;
-    }
+    return s_changeLog;
 }
 
 void MemoryTableFactory2::rollback(size_t _savepoint)

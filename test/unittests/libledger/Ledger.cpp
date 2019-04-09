@@ -28,7 +28,6 @@
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev;
@@ -63,6 +62,33 @@ public:
         /// init sync
         FakeLedger::initSync();
         return true;
+    }
+
+    bool initRealLedger()
+    {
+        bool ret = false;
+        ret = Ledger::initBlockChain();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initBlockVerifier();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initTxPool();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initSync();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::consensusInitFactory();
+        return ret;
     }
 
     void initGenesisConfig(boost::property_tree::ptree const& pt)
@@ -108,7 +134,6 @@ void checkGenesisParam(std::shared_ptr<LedgerParam> param)
 /// test init ini config and genesis config
 BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     dev::GROUP_ID group_id = 10;
@@ -124,10 +149,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// init genesis configuration
     boost::property_tree::ptree pt;
     fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
     /// check with invalid timestamp
     fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 0);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
     /// check with valid timestamp
     pt.put("group.timestamp", 1553520855);
     fakeLedger.initGenesisConfig(pt);
@@ -141,7 +166,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
         "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
         "f4746846c0db2604adebf9c70c7f418d4d5a61,"
         "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
-        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-sql-mpt-2000-300000000-1553520855";
+        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-sql-mpt-2000-300000000";
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().genesisMark == mark);
 
     /// init ini config
@@ -179,15 +204,22 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// test initBlockChain
     BOOST_CHECK(fakeLedger.blockChain() == nullptr);
-    BOOST_CHECK(fakeLedger.initBlockChain() == true);
+    /// test initBlockVerifier
+    BOOST_CHECK(fakeLedger.blockVerifier() == nullptr);
+    BOOST_CHECK(fakeLedger.consensus() == nullptr);
+    BOOST_CHECK(fakeLedger.txPool() == nullptr);
+    BOOST_CHECK(fakeLedger.sync() == nullptr);
+    fakeLedger.initRealLedger();
+    BOOST_CHECK(fakeLedger.blockVerifier() != nullptr);
     BOOST_CHECK(fakeLedger.blockChain() != nullptr);
-#endif
+    BOOST_CHECK(fakeLedger.consensus() != nullptr);
+    BOOST_CHECK(fakeLedger.txPool() != nullptr);
+    BOOST_CHECK(fakeLedger.sync() != nullptr);
 }
 
 /// test initLedgers of LedgerManager
 BOOST_AUTO_TEST_CASE(testInitLedger)
 {
-#if 0
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager =
@@ -204,7 +236,6 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     populateBlock.resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(group_id)->number() == 1);
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

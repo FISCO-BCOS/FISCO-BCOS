@@ -210,7 +210,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
             while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
             {
                 txDag->executeUnit();
-                memoryTableFactory->commit();
             }
         }));
     }
@@ -313,13 +312,24 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     Executive e(executiveContext->getState(), _envInfo);
     ExecutionResult res;
     e.setResultRecipient(res);
-    e.initialize(_t);
 
     // OK - transaction looks valid - execute.
-    if (!e.execute())
-        e.go(onOp);
-    e.finalize();
-
+    try
+    {
+        e.initialize(_t);
+        if (!e.execute())
+            e.go(onOp);
+        e.finalize();
+    }
+    catch (Exception const& _e)
+    {
+        // should not throw exceptions to here, but catch it in case
+        BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
+    }
+    catch (std::exception const& _e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << _e.what();
+    }
     /// mptstate calculates every transactions
     /// storagestate ignore hash calculation
     return make_pair(

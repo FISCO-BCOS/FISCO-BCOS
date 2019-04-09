@@ -77,8 +77,7 @@ public:
 
     virtual bi::tcp::endpoint remoteEndpoint() override
     {
-        boost::system::error_code ec;
-        return m_wsSocket->lowest_layer().remote_endpoint(ec);
+        return m_wsSocket->lowest_layer().remote_endpoint();
     }
 
     virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
@@ -92,10 +91,6 @@ public:
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
     {
         m_nodeIPEndpoint = _nodeIPEndpoint;
-    }
-    virtual boost::asio::ip::tcp::endpoint remote_endpoint() override
-    {
-        return ref().remote_endpoint();
     }
 
 protected:
