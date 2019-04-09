@@ -32,17 +32,13 @@ void MyVM::initMetrics()
     static bool done = []() noexcept
     {
         // Copy the metrics of the top EVM revision.
-        std::memcpy(&c_metrics[0],
-            evmc_get_instruction_metrics_table(EVMC_LATEST_REVISION),
+        std::memcpy(&c_metrics[0], evmc_get_instruction_metrics_table(EVMC_LATEST_REVISION),
             c_metrics.size() * sizeof(c_metrics[0]));
 
         // Inject interpreter optimization opcodes.
-        c_metrics[uint8_t(Instruction::PUSHC)] =
-            c_metrics[uint8_t(Instruction::PUSH1)];
-        c_metrics[uint8_t(Instruction::JUMPC)] =
-            c_metrics[uint8_t(Instruction::JUMP)];
-        c_metrics[uint8_t(Instruction::JUMPCI)] =
-            c_metrics[uint8_t(Instruction::JUMPI)];
+        c_metrics[uint8_t(Instruction::PUSHC)] = c_metrics[uint8_t(Instruction::PUSH1)];
+        c_metrics[uint8_t(Instruction::JUMPC)] = c_metrics[uint8_t(Instruction::JUMP)];
+        c_metrics[uint8_t(Instruction::JUMPCI)] = c_metrics[uint8_t(Instruction::JUMPI)];
         return true;
     }
     ();
@@ -75,8 +71,7 @@ void MyVM::optimize()
         TRACE_OP(2, pc, op);
 
         // make synthetic ops in user code trigger invalid instruction if run
-        if (op == Instruction::PUSHC || op == Instruction::JUMPC ||
-            op == Instruction::JUMPCI)
+        if (op == Instruction::PUSHC || op == Instruction::JUMPC || op == Instruction::JUMPCI)
         {
             TRACE_OP(1, pc, op);
             m_code[pc] = (byte)Instruction::INVALID;
@@ -86,8 +81,7 @@ void MyVM::optimize()
         {
             m_jumpDests.push_back(pc);
         }
-        else if ((byte)Instruction::PUSH1 <= (byte)op &&
-                 (byte)op <= (byte)Instruction::PUSH32)
+        else if ((byte)Instruction::PUSH1 <= (byte)op && (byte)op <= (byte)Instruction::PUSH32)
         {
             pc += (byte)op - (byte)Instruction::PUSH1 + 1;
         }
@@ -101,8 +95,7 @@ void MyVM::optimize()
         u256 val = 0;
         Instruction op = Instruction(m_code[pc]);
 
-        if ((byte)Instruction::PUSH1 <= (byte)op &&
-            (byte)op <= (byte)Instruction::PUSH32)
+        if ((byte)Instruction::PUSH1 <= (byte)op && (byte)op <= (byte)Instruction::PUSH32)
         {
             byte nPush = (byte)op - (byte)Instruction::PUSH1 + 1;
 
