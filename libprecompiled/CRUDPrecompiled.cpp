@@ -74,10 +74,10 @@ bytes CRUDPrecompiled::call(
         {
             Entry::Ptr entry = table->newEntry();
             int parseEntryResult = parseEntry(entryStr, entry);
-            if(parseEntryResult != CODE_SUCCESS)
+            if (parseEntryResult != CODE_SUCCESS)
             {
-            	out = abi.abiIn("", u256(parseEntryResult));
-            	return out;
+                out = abi.abiIn("", u256(parseEntryResult));
+                return out;
             }
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", u256(result));
@@ -86,7 +86,7 @@ bytes CRUDPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-			out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
+            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
         }
 
         return out;
@@ -101,17 +101,17 @@ bytes CRUDPrecompiled::call(
         {
             Entry::Ptr entry = table->newEntry();
             int parseEntryResult = parseEntry(entryStr, entry);
-            if(parseEntryResult != CODE_SUCCESS)
+            if (parseEntryResult != CODE_SUCCESS)
             {
-            	out = abi.abiIn("", u256(parseEntryResult));
-            	return out;
+                out = abi.abiIn("", u256(parseEntryResult));
+                return out;
             }
             Condition::Ptr condition = table->newCondition();
             int parseConditionResult = parseCondition(conditionStr, condition);
-            if(parseConditionResult != CODE_SUCCESS)
+            if (parseConditionResult != CODE_SUCCESS)
             {
-				out = abi.abiIn("", u256(parseConditionResult));
-				return out;
+                out = abi.abiIn("", u256(parseConditionResult));
+                return out;
             }
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
@@ -136,10 +136,10 @@ bytes CRUDPrecompiled::call(
         {
             Condition::Ptr condition = table->newCondition();
             int parseConditionResult = parseCondition(conditionStr, condition);
-            if(parseConditionResult != CODE_SUCCESS)
+            if (parseConditionResult != CODE_SUCCESS)
             {
-				out = abi.abiIn("", u256(parseConditionResult));
-				return out;
+                out = abi.abiIn("", u256(parseConditionResult));
+                return out;
             }
             int result = table->remove(key, condition, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", u256(result));
@@ -166,10 +166,10 @@ bytes CRUDPrecompiled::call(
         {
             Condition::Ptr condition = table->newCondition();
             int parseConditionResult = parseCondition(conditionStr, condition);
-            if(parseConditionResult != CODE_SUCCESS)
+            if (parseConditionResult != CODE_SUCCESS)
             {
-				out = abi.abiIn("", u256(parseConditionResult));
-				return out;
+                out = abi.abiIn("", u256(parseConditionResult));
+                return out;
             }
             auto entries = table->select(key, condition);
             json_spirit::Array records;
@@ -208,7 +208,6 @@ bytes CRUDPrecompiled::call(
 
         return out;
     }
-
 }
 
 int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition)

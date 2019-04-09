@@ -79,7 +79,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
 {
     // createTable
     dev::eth::ContractABI abi;
-    std::string tableName = "t_test", tableName2 = "t_demo", key = "name", valueField = "item_id,item_name";
+    std::string tableName = "t_test", tableName2 = "t_demo", key = "name",
+                valueField = "item_id,item_name";
     bytes param = abi.abiIn("createTable(string,string,string)", tableName, key, valueField);
     bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     u256 createResult = 0;
