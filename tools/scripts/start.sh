@@ -4,7 +4,7 @@ dirpath="$(cd "$(dirname "$0")" && pwd)"
 cd $dirpath
 node=$(basename ${dirpath})
 ulimit -c unlimited 2>/dev/null
-pid=`ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}'`
+pid=$(ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}')
 [ ! -z $pid ] &&  {
     echo " ${node} is running, pid is $pid."
     exit 0
@@ -20,7 +20,7 @@ try_times=3
 i=0
 while [ $i -lt ${try_times} ]
 do
-    pid=`ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}'`
+    pid=$(ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}')
     if [ ! -z $pid ];then
         echo " start ${node} successfully. "
         exit 0

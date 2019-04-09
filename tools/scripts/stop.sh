@@ -13,7 +13,7 @@ fi
 
 # stop node
 node=$(basename ${dirpath})
-pid=`ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}'`
+pid=$(ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}')
 
 if [ -z "$pid" ];then
     echo " ${node} is not running."
@@ -27,7 +27,7 @@ while [ $i -lt ${try_times} ]
 do
     eval ${kill_cmd}
     sleep 1
-    pid=`ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}'`
+    pid=$(ps aux|grep "${dirpath}/config.json"|grep "fisco-bcos"|grep -v grep|awk '{print $2}')
     if [ -z $pid ];then
         echo " stop ${node} successfully. "
         exit 0
