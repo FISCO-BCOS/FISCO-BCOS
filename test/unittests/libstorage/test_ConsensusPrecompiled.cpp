@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("add(string)", "test");
+    bytes in = abi.abiIn("add(string)", std::string("test"));
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
 }
 
