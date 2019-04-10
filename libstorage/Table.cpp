@@ -273,11 +273,11 @@ std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getCon
     return &m_conditions;
 }
 
-bool Table::processCondition(Entry::Ptr entry, Condition::Ptr condition)
+bool Condition::process(Entry::Ptr entry)
 {
     try
     {
-        for (auto& it : *condition->getConditions())
+        for (auto it : m_conditions)
         {
             if (entry->getStatus() == Entry::Status::DELETED)
             {
@@ -366,4 +366,26 @@ bool Table::processCondition(Entry::Ptr entry, Condition::Ptr condition)
     }
 
     return true;
+}
+
+virtual bool Condition::graterThan(Condition::Ptr rhs) {
+#if 0
+	if(rhs->getConditions()->size() < m_conditions.size()) {
+		return false;
+	}
+
+	if(m_conditions.empty()) {
+		return true;
+	}
+
+	//first find same condition
+	for(auto rhsIt: *rhs->getConditions()) {
+		auto lhsIt = m_conditions.find(rhsIt.first);
+		if(lhsIt == m_conditions.end()) {
+			return false;
+		}
+
+		//if(conditionIt->)
+	}
+#endif
 }

@@ -26,5 +26,9 @@ using namespace dev::storage;
 
 Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition = nullptr) {
-
+	auto it = m_caches.find(table);
+	if(it != m_caches.end()) {
+		for(auto cacheIt: it->second->cachePages) {
+		}
+	}
 }

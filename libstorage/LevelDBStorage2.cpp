@@ -77,7 +77,7 @@ Entries::Ptr LevelDBStorage2::select(
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL &&
-                    Table::processCondition(entry, condition))
+                    condition->process(entry))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);

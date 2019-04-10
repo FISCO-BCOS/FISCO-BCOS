@@ -30,17 +30,20 @@ namespace storage
 {
 
 class CachePage: std::enable_shared_from_this<CachePage> {
+public:
 	typedef std::shared_ptr<CachePage> Ptr;
 
-	Entries::Ptr m_entries;
-	Condition::Ptr m_condition;
-	int64_t m_flushNum;
+	Entries::Ptr entries;
+	Condition::Ptr condition;
+	int64_t flushNum;
 };
 
 class TableCache {
+public:
 	typedef std::shared_ptr<TableCache> Ptr;
 
-	std::vector<CachePage::Ptr> m_cachePages;
+	TableInfo::Ptr tableInfo;
+	std::vector<CachePage::Ptr> cachePages;
 };
 
 class RangeCachedStorage : public std::enable_shared_from_this<RangeCachedStorage>

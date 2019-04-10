@@ -180,6 +180,9 @@ public:
 
     virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
 
+    virtual bool process(Entry::Ptr entry);
+    virtual bool graterThan(Condition::Ptr condition);
+
 private:
     std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
@@ -280,8 +283,6 @@ public:
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
     virtual size_t cacheSize() { return 0; }
-
-    static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
