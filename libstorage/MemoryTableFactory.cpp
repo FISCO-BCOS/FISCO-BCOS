@@ -152,7 +152,10 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-
+        if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            m_createTableCode = 0;
+        }
         return nullptr;
     }
     // Write table entry

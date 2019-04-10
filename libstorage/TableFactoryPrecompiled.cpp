@@ -101,11 +101,6 @@ bytes TableFactoryPrecompiled::call(
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
         int result = 0;
-
-        if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            result = m_memoryTableFactory->getCreateTableCode();
-        }
         try
         {
             auto table =
@@ -119,6 +114,10 @@ bytes TableFactoryPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
+        }
+        if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            result = m_memoryTableFactory->getCreateTableCode();
         }
         out = abi.abiIn("", u256(result));
     }
