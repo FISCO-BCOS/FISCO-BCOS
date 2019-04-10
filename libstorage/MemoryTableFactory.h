@@ -65,7 +65,7 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
     std::vector<Change>& getChangeLog();
 
-    int getCreateTableCode() { return m_createTableCode; }
+    int getCreateTableCode() override { return m_createTableCode; }
 
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
