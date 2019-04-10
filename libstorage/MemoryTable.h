@@ -383,20 +383,49 @@ private:
         if (condition->getConditions()->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
-                indexes.emplace_back(i);
-            return indexes;
-        }
-
-        for (size_t i = 0; i < entries->size(); ++i)
-        {
-            Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
             {
-                indexes.push_back(i);
+                indexes.emplace_back(i);
+            }
+            if (condition->getOffset() < 0 || condition->getCount() < 0)
+            {
+                return indexes;
             }
         }
-
-        return indexes;
+        else
+        {
+            for (size_t i = 0; i < entries->size(); ++i)
+            {
+                Entry::Ptr entry = entries->get(i);
+                if (processCondition(entry, condition))
+                {
+                    indexes.push_back(i);
+                }
+            }
+        }
+        if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+        {
+            int offset = condition->getOffset();
+            int count = condition->getCount();
+            std::vector<size_t> limitedIndex;
+            int size = indexes.size();
+            if (offset >= size)
+            {
+                return limitedIndex;
+            }
+            if (offset + count > size)
+            {
+                count = size - offset;
+            }
+            for (int j = offset; j < offset + count && j < size; j++)
+            {
+                limitedIndex.push_back(indexes[j]);
+            }
+            return limitedIndex;
+        }
+        else
+        {
+            return indexes;
+        }
     }
 
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition)

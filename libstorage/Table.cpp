@@ -257,15 +257,25 @@ void Condition::LE(const std::string& key, const std::string& value)
     m_conditions.insert(std::make_pair(key, std::make_pair(Op::le, value)));
 }
 
-void Condition::limit(size_t count)
+void Condition::limit(int count)
 {
     limit(0, count);
 }
 
-void Condition::limit(size_t offset, size_t count)
+void Condition::limit(int offset, int count)
 {
     m_offset = offset;
     m_count = count;
+}
+
+int Condition::getOffset()
+{
+    return m_offset;
+}
+
+int Condition::getCount()
+{
+    return m_count;
 }
 
 std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()

@@ -173,15 +173,19 @@ public:
     virtual void LT(const std::string& key, const std::string& value);
     virtual void LE(const std::string& key, const std::string& value);
 
-    virtual void limit(size_t count);
-    virtual void limit(size_t offset, size_t count);
+    virtual void limit(int count);
+    virtual void limit(int offset, int count);
 
     virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
 
+    virtual int getOffset();
+    virtual int getCount();
+
+
 private:
     std::map<std::string, std::pair<Op, std::string>> m_conditions;
-    size_t m_offset = 0;
-    size_t m_count = 0;
+    int m_offset = -1;
+    int m_count = -1;
 };
 
 using Parallel = std::true_type;
