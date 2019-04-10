@@ -104,7 +104,11 @@ public:
         m_topics = topics;
     };
 
-    void setThreadPool(ThreadPool::Ptr threadPool) { m_threadPool = threadPool; }
+    void setThreadPool(ThreadPool::Ptr requestThreadPool, ThreadPool::Ptr responsethreadPool)
+    {
+        m_requestThreadPool = requestThreadPool;
+        m_responseThreadPool = responsethreadPool;
+    }
 
     MessageFactory::Ptr messageFactory() { return _messageFactory; }
     void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
@@ -197,7 +201,8 @@ private:
 
     mutable SharedMutex x_topics;
     std::shared_ptr<std::set<std::string> > m_topics;
-    ThreadPool::Ptr m_threadPool;
+    ThreadPool::Ptr m_requestThreadPool;
+    ThreadPool::Ptr m_responseThreadPool;
 
     size_t _idleTime = 30000;
 };

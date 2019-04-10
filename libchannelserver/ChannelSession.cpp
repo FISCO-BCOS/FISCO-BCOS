@@ -407,7 +407,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
 
             if (response_callback->callback)
             {
-                m_threadPool->enqueue([=]() {
+                m_responseThreadPool->enqueue([=]() {
                     response_callback->callback(e, message);
                     eraseResponseCallbackBySeq(message->seq());
                 });
@@ -423,7 +423,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             if (_messageHandler)
             {
                 auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
-                m_threadPool->enqueue([session, message]() {
+                m_requestThreadPool->enqueue([session, message]() {
                     auto s = session.lock();
                     if (s && s->_messageHandler)
                     {
@@ -541,7 +541,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
 
                         if (it.second->callback)
                         {
-                            m_threadPool->enqueue(
+                            m_responseThreadPool->enqueue(
                                 [=]() { it.second->callback(e, Message::Ptr()); });
                         }
                         else
