@@ -238,37 +238,31 @@ EOF
 	FORMAT                  =   "%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%file:%line|%msg"
 	FILENAME                =   "log/log_%datetime{%Y%M%d%H}.log"
 	MILLISECONDS_WIDTH      =   3
-	PERFORMANCE_TRACKING    =   true
+	PERFORMANCE_TRACKING    =   false
 	MAX_LOG_FILE_SIZE       =   209715200 ## 200MB - Comment starts with two hashes (##)
 	LOG_FLUSH_THRESHOLD     =   100  ## Flush after every 100 logs
 
-* TRACE:
-	ENABLED                 =   true
-	FILENAME                =   "log/trace_log_%datetime{%Y%M%d%H}.log"
-
-* DEBUG:
-	ENABLED                 =   true
-	FILENAME                =   "log/debug_log_%datetime{%Y%M%d%H}.log"
-
-* FATAL:
-	ENABLED                 =   true
-	FILENAME                =   "log/fatal_log_%datetime{%Y%M%d%H}.log"
-
-* ERROR:
-	ENABLED                 =   true
-	FILENAME                =   "log/error_log_%datetime{%Y%M%d%H}.log"
-
-* WARNING:
-		ENABLED                 =   true
-		FILENAME                =   "log/warn_log_%datetime{%Y%M%d%H}.log"
-
-* INFO:
-	ENABLED                 =   true
-	FILENAME                =   "log/info_log_%datetime{%Y%M%d%H}.log"
-
-* VERBOSE:
-	ENABLED                 =   true
-	FILENAME                =   "log/verbose_log_%datetime{%Y%M%d%H}.log"
+* FATAL:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
+* ERROR:  
+    ENABLED                 =   true
+    TO_FILE                 =   false
+* WARNING: 
+     ENABLED                =   true
+     TO_FILE                =   false
+* INFO: 
+    ENABLED                 =   true
+    TO_FILE                 =   false 
+* DEBUG:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
+* TRACE:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
+* VERBOSE:  
+    ENABLED                 =   false
+    TO_FILE                 =   false
 EOF
 
 	cat << EOF > "$node_dir/genesis.json"

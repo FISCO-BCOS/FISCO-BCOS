@@ -105,11 +105,6 @@ struct ChainOperationParams
 	std::string dataDir;
 	std::string logFileConf;
 	
-	//dfs related parameters
-	std::string nodeId;
-	std::string groupId;
-	std::string storagePath;
-	
 	std::string rateLimitConfig;
 	int statsInterval;
 	int channelPort = 0;

@@ -109,6 +109,8 @@ void ChannelSession::asyncSendMessage(Message::Ptr request, std::function<void(d
 
 				responseCallback->timeoutHandler = timeoutHandler;
 			}
+
+			std::lock_guard<std::recursive_mutex> lock(_mutex);
 			_responseCallbacks.insert(std::make_pair(request->seq(), responseCallback));
 		}
 
@@ -336,22 +338,40 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message) {
 			return;
 		}
 
-		auto it = _responseCallbacks.find(message->seq());
-		if (it != _responseCallbacks.end()) {
-			if(it->second->timeoutHandler.get() != NULL) {
-			it->second->timeoutHandler->cancel();
+		ResponseCallback::Ptr callback;
+
+		{
+			std::lock_guard<std::recursive_mutex> lock(_mutex);
+			auto it = _responseCallbacks.find(message->seq());
+			if (it != _responseCallbacks.end()) {
+				callback = it->second;
+			}
+		}
+
+		if (callback) {
+			if(callback->timeoutHandler.get() != NULL) {
+				callback->timeoutHandler->cancel();
 			}
 
-			if (it->second->callback) {
+			if (callback->callback) {
 				_threadPool->enqueue([=]() {
-					it->second->callback(e, message);
-					_responseCallbacks.erase(it);
+					callback->callback(e, message);
+
+					std::lock_guard<std::recursive_mutex> lock(_mutex);
+					auto ite =  _responseCallbacks.find(message->seq());
+					if(ite != _responseCallbacks.end()) {
+						_responseCallbacks.erase(ite);
+					}
 				});
 			}
 			else {
 				LOG(ERROR) << "Callback empty";
 
-				_responseCallbacks.erase(it);
+				std::lock_guard<std::recursive_mutex> lock(_mutex);
+				auto ite =  _responseCallbacks.find(message->seq());
+				if(ite != _responseCallbacks.end()) {
+					_responseCallbacks.erase(ite);
+				}
 			}
 		}
 		else {
@@ -391,6 +411,7 @@ void ChannelSession::onTimeout(const boost::system::error_code& error, std::stri
 				LOG(ERROR) << "Callback empty";
 			}
 
+			std::lock_guard<std::recursive_mutex> lock(_mutex);
 			_responseCallbacks.erase(it);
 		} else {
 			LOG(WARNING) << "Seq timeout: " << seq;
