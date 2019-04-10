@@ -111,7 +111,7 @@ bytes ConsensusPrecompiled::call(
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                        out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                        out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                     }
                     else
                     {
@@ -130,7 +130,7 @@ bytes ConsensusPrecompiled::call(
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                        out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                        out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                     }
                     else
                     {
@@ -180,7 +180,7 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {
@@ -199,7 +199,7 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {
@@ -244,7 +244,7 @@ bytes ConsensusPrecompiled::call(
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
 
-                    out = out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
                 }
                 else
                 {

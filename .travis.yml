@@ -69,8 +69,8 @@ addons:
 install: |
     bash tools/ci/check-commit.sh;
 script: |
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && make -j2 && \
-    cd ../tools && bash ci/ci_check.sh
+    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
+    make -j2 && cd ../tools && bash ci/ci_check.sh
 after_success:
     # if [ $TRAVIS_OS_NAME == linux ]; then
     #   cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)

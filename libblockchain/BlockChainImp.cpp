@@ -1143,12 +1143,8 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
     /// leveldb caused exception: database corruption or the disk has no space left
     catch (StorageException& e)
     {
-        if (e.errorCode() == -1)
-        {
-            BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
-                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
-            exit(-1);
-        }
-        throw;
+        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
+        exit(1);
     }
 }

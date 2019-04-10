@@ -140,6 +140,7 @@ public:
     So the iterator begin() method returns will never change.
     */
     EntriesIter begin() { return m_entries.begin(); }
+    EntriesIter end() { return m_entries.end(); }
 
 private:
     EntriesContainer m_entries;

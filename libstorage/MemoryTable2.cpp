@@ -29,6 +29,9 @@
 #include <libprecompiled/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
+#include <thread>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
@@ -223,27 +226,81 @@ int MemoryTable2::remove(
     return 0;
 }
 
+bool MemoryTable2::Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs)
+{
+    auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
+    if (ret > 0)
+    {
+        return true;
+    }
+
+    if (ret < 0)
+    {
+        return false;
+    }
+
+    auto& lFields = *lhs->fields();
+    auto& rFields = *rhs->fields();
+
+    if (lFields.size() > rFields.size())
+    {
+        return true;
+    }
+
+    if (lFields.size() < rFields.size())
+    {
+        return false;
+    }
+
+    for (auto lIter = lFields.begin(), rIter = rFields.begin();
+         lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
+    {
+        if (lIter->first != rIter->first)
+        {
+            return static_cast<bool>(lIter->first.compare(rIter->first));
+        }
+
+        if (lIter->second != rIter->second)
+        {
+            return static_cast<bool>(lIter->second.compare(rIter->second));
+        }
+    }
+
+    return false;
+}
+
 dev::h256 MemoryTable2::hash()
 {
     bytes data;
+    auto tempEntries = std::vector<Entry::Ptr>();
+    auto size = m_dirty.size() + m_newEntries->size();
+    tempEntries.reserve(size);
 
     for (auto it : m_dirty)
     {
-        auto id = htonl(it.first);
-        data.insert(data.end(), (char*)&id, (char*)&id + sizeof(id));
-        for (auto fieldIt : *(it.second->fields()))
-        {
-            if (isHashField(fieldIt.first))
-            {
-                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
-            }
-        }
+        auto entry = it.second;
+        tempEntries.push_back(entry);
     }
+
+    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(),
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
 
     for (size_t i = 0; i < m_newEntries->size(); ++i)
     {
         auto entry = m_newEntries->get(i);
+        while (entry.get() == nullptr)
+        {
+            std::this_thread::yield();
+        }
+        tempEntries.push_back(entry);
+    }
+
+    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size,
+        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        auto entry = tempEntries[i];
         for (auto fieldIt : *(entry->fields()))
         {
             if (isHashField(fieldIt.first))

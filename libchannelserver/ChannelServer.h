@@ -56,49 +56,53 @@ public:
 
     void setBind(const std::string& host, int port)
     {
-        _listenHost = host;
-        _listenPort = port;
+        m_listenHost = host;
+        m_listenPort = port;
     };
 
-    void setEnableSSL(bool enableSSL) { _enableSSL = enableSSL; };
+    void setEnableSSL(bool enableSSL) { m_enableSSL = enableSSL; };
 
     void setConnectionHandler(
         std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> handler)
     {
-        _connectionHandler = handler;
+        m_connectionHandler = handler;
     };
 
     void setIOService(std::shared_ptr<boost::asio::io_service> ioService)
     {
-        _ioService = ioService;
+        m_ioService = ioService;
     };
     void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext)
     {
-        _sslContext = sslContext;
+        m_sslContext = sslContext;
     };
 
-    MessageFactory::Ptr messageFactory() { return _messageFactory; }
-    void setMessageFactory(MessageFactory::Ptr messageFactory) { _messageFactory = messageFactory; }
+    MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+    void setMessageFactory(MessageFactory::Ptr messageFactory)
+    {
+        m_messageFactory = messageFactory;
+    }
 
     virtual void stop();
 
 private:
     void onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session);
 
-    std::shared_ptr<boost::asio::io_service> _ioService;
-    std::shared_ptr<boost::asio::ssl::context> _sslContext;
+    std::shared_ptr<boost::asio::io_service> m_ioService;
+    std::shared_ptr<boost::asio::ssl::context> m_sslContext;
 
-    std::shared_ptr<std::thread> _serverThread;
+    std::shared_ptr<std::thread> m_serverThread;
 
-    std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor;
-    ThreadPool::Ptr _threadPool;
+    std::shared_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
+    ThreadPool::Ptr m_requestThreadPool;
+    ThreadPool::Ptr m_responseThreadPool;
 
-    std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> _connectionHandler;
-    MessageFactory::Ptr _messageFactory;
+    std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> m_connectionHandler;
+    MessageFactory::Ptr m_messageFactory;
 
-    std::string _listenHost = "";
-    int _listenPort = 0;
-    bool _enableSSL = false;
+    std::string m_listenHost = "";
+    int m_listenPort = 0;
+    bool m_enableSSL = false;
 };
 
 }  // namespace channel

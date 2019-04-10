@@ -113,7 +113,7 @@ private:
     EntriesPtr m_newEntries;
 
     CacheType m_dirty;
-
+    bool Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs);
     std::vector<size_t> processEntries(EntriesType::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;

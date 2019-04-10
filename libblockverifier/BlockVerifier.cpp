@@ -27,6 +27,7 @@
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
 #include <libstorage/Table.h>
+#include <tbb/parallel_for.h>
 #include <exception>
 #include <thread>
 
@@ -92,17 +93,29 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
-
-    for (size_t i = 0; i < block.transactions().size(); i++)
+    try
     {
-        auto& tx = block.transactions()[i];
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-            execute(envInfo, tx, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(i, resultReceipt.second);
-        executiveContext->getState()->commit();
+        for (size_t i = 0; i < block.transactions().size(); i++)
+        {
+            auto& tx = block.transactions()[i];
+            EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+            envInfo.setPrecompiledEngine(executiveContext);
+            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+                execute(envInfo, tx, OnOpFunc(), executiveContext);
+            block.setTransactionReceipt(i, resultReceipt.second);
+            executiveContext->getState()->commit();
+        }
     }
+    catch (exception& e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
+                                 << LOG_DESC("Error during serial block execution")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
+
+        BOOST_THROW_EXCEPTION(
+            BlockExecutionFailed() << errinfo_comment("Error during serial block execution"));
+    }
+
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run serial tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
@@ -203,28 +216,37 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
-    vector<thread> threads;
-    for (unsigned int i = 0; i < m_threadNum; ++i)
-    {
-        threads.push_back(std::thread([txDag, parallelTimeOut, memoryTableFactory]() {
-            while (!txDag->hasFinished() && utcTime() < parallelTimeOut)
-            {
-                txDag->executeUnit();
-            }
-        }));
-    }
 
-    for (auto& t : threads)
+    try
     {
-        t.join();
-    }
+        tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
+            [&](const tbb::blocked_range<unsigned int>& _r) {
+                (void)_r;
+                while (!txDag->hasFinished())
+                {
+                    if (utcTime() >= parallelTimeOut)
+                    {
+                        BLOCKVERIFIER_LOG(ERROR)
+                            << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
+                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("blockNumber", block.blockHeader().number());
 
-    if (utcTime() >= parallelTimeOut)
+                        BOOST_THROW_EXCEPTION(BlockExecutionFailed()
+                                              << errinfo_comment("Para execute block timeout"));
+                    }
+
+                    txDag->executeUnit();
+                }
+            });
+    }
+    catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
-                                 << LOG_DESC("Para execute block timeout")
-                                 << LOG_KV("txNum", block.transactions().size())
-                                 << LOG_KV("blockNumber", block.blockHeader().number());
+                                 << LOG_DESC("Error during parallel block execution")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
+
+        BOOST_THROW_EXCEPTION(
+            BlockExecutionFailed() << errinfo_comment("Error during parallel block execution"));
     }
 
     auto exe_time_cost = utcTime() - record_time;
@@ -253,6 +275,16 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     {
         if (tmpHeader != block.blockHeader())
         {
+            BLOCKVERIFIER_LOG(ERROR)
+                << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
+                << LOG_KV("originHash", tmpHeader.hash().abridged())
+                << LOG_KV("curHash", block.header().hash().abridged())
+                << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
+                << LOG_KV("curRecepit", block.header().receiptsRoot().abridged())
+                << LOG_KV("orgState", tmpHeader.stateRoot().abridged())
+                << LOG_KV("curState", block.header().stateRoot().abridged())
+                << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
+                << LOG_KV("curDBHash", block.header().dbHash().abridged());
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }
