@@ -42,6 +42,7 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::string key;
     std::vector<std::string> fields;
     std::vector<Address> authorizedAddress;
+    std::vector<std::string> indices;
 };
 
 struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
@@ -94,13 +95,14 @@ class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
+    virtual ~Entries() {};
 
-    Entry::Ptr get(size_t i);
-    size_t size() const;
-    void addEntry(Entry::Ptr entry);
-    bool dirty() const;
-    void setDirty(bool dirty);
-    void removeEntry(size_t index);
+    virtual Entry::Ptr get(size_t i);
+    virtual size_t size() const;
+    virtual void addEntry(Entry::Ptr entry);
+    virtual bool dirty() const;
+    virtual void setDirty(bool dirty);
+    virtual void removeEntry(size_t index);
 
 private:
     std::vector<Entry::Ptr> m_entries;

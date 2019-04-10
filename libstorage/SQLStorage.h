@@ -23,6 +23,7 @@
 
 #include "Storage.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelRPCServer.h>
 
 namespace dev
@@ -44,8 +45,6 @@ public:
     virtual bool onlyDirty() override;
 
     virtual void setTopic(const std::string& topic);
-    // virtual void setBlockHash(h256 blockHash);
-    // virtual void setNum(int num);
     virtual void setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer);
     virtual void setMaxRetry(int maxRetry);
 
@@ -60,8 +59,6 @@ private:
     std::function<void(std::exception&)> m_fatalHandler;
 
     std::string m_topic;
-    // h256 _blockHash;
-    // int _num = 0;
     dev::ChannelRPCServer::Ptr m_channelRPCServer;
     int m_maxRetry = 0;
 };

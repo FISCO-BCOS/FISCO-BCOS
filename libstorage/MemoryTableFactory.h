@@ -73,7 +73,7 @@ private:
     int m_blockNum;
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
-    thread_local static std::vector<Change> s_changeLog;
+    boost::thread_specific_ptr<std::vector<Change> > s_changeLog;
     h256 m_hash;
     // sys tables
     const static std::vector<std::string> c_sysTables;

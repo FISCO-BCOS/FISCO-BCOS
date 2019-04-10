@@ -38,9 +38,9 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-thread_local std::vector<Change> MemoryTableFactory2::s_changeLog = std::vector<Change>();
-
-MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
+MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0), s_changeLog([](std::vector<Change> *p) {
+	delete p;
+})
 {
     m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
@@ -218,7 +218,11 @@ h256 MemoryTableFactory2::hash()
 
 std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-    return s_changeLog;
+	if(!s_changeLog.get()) {
+		s_changeLog.reset(new std::vector<Change>());
+	}
+
+	return *s_changeLog;
 }
 
 void MemoryTableFactory2::rollback(size_t _savepoint)

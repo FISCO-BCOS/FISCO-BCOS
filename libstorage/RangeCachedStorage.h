@@ -16,30 +16,50 @@
  */
 /** @file storage.h
  *  @author monan
- *  @date 20180921
+ *  @date 20190409
  */
+
 #pragma once
 
 #include "Table.h"
+#include <libdevcore/FixedHash.h>
 
 namespace dev
 {
 namespace storage
 {
-class Storage : public std::enable_shared_from_this<Storage>
-{
-public:
-    typedef std::shared_ptr<Storage> Ptr;
 
-    virtual ~Storage(){};
+class CachePage: std::enable_shared_from_this<CachePage> {
+	typedef std::shared_ptr<CachePage> Ptr;
 
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition = nullptr) = 0;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
-        h256 const& blockHash) = 0;
-    virtual bool onlyDirty() = 0;
+	Entries::Ptr m_entries;
+	Condition::Ptr m_condition;
+	int64_t m_flushNum;
 };
 
-}  // namespace storage
+class TableCache {
+	typedef std::shared_ptr<TableCache> Ptr;
 
-}  // namespace dev
+	std::vector<CachePage::Ptr> m_cachePages;
+};
+
+class RangeCachedStorage : public std::enable_shared_from_this<RangeCachedStorage>
+{
+public:
+    typedef std::shared_ptr<RangeCachedStorage> Ptr;
+
+    virtual ~RangeCachedStorage(){};
+
+    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
+        const std::string& key, Condition::Ptr condition = nullptr) override;
+    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
+        h256 const& blockHash) override;
+    virtual bool onlyDirty() override;
+
+private:
+    std::map<std::string, TableCache::Ptr> m_caches;
+};
+
+}
+
+}

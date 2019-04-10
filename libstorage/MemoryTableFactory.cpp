@@ -27,6 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
+#include <libdevcore/FixedHash.h>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -34,8 +35,6 @@
 using namespace dev;
 using namespace dev::storage;
 using namespace std;
-
-thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
 
 const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
     SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
@@ -47,7 +46,9 @@ const std::vector<string> MemoryTableFactory::c_sysNonChangeLogTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
+MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0), s_changeLog([](std::vector<Change> *p) {
+	delete p;
+}) {}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -216,7 +217,11 @@ h256 MemoryTableFactory::hash()
 
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
-    return s_changeLog;
+	if(!s_changeLog.get()) {
+		s_changeLog.reset(new std::vector<Change>());
+	}
+
+	return *s_changeLog;
 }
 
 void MemoryTableFactory::rollback(size_t _savepoint)
