@@ -23,6 +23,7 @@
 #include "Table.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -100,6 +101,11 @@ bytes TableFactoryPrecompiled::call(
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
         int result = 0;
+
+        if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            result = m_memoryTableFactory->getCreateTableCode();
+        }
         try
         {
             auto table =
