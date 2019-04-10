@@ -407,7 +407,7 @@ private:
             int offset = condition->getOffset();
             int count = condition->getCount();
             std::vector<size_t> limitedIndex;
-            size_t size = indexes.size();
+            int size = indexes.size();
             if (offset >= size)
             {
                 return limitedIndex;
