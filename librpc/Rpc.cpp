@@ -542,6 +542,8 @@ Json::Value Rpc::getBlockByNumber(
         response["parentHash"] = toJS(block->header().parentHash());
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
+        response["dbHash"] = toJS(block->header().dbHash());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);

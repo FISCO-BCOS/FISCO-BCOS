@@ -188,13 +188,13 @@ public:
     void resizeTransactionReceipt(size_t _totalReceipt)
     {
         m_transactionReceipts.resize(_totalReceipt);
-        noteChange();
+        noteReceiptChange();
     }
 
     void setTransactionReceipt(size_t _receiptId, TransactionReceipt const& _tran)
     {
         m_transactionReceipts[_receiptId] = _tran;
-        noteChange();
+        noteReceiptChange();
     }
 
     void updateSequenceReceiptGas()
@@ -211,7 +211,7 @@ public:
     {
         for (auto& receipt : m_transactionReceipts)
             receipt.setStateRoot(_stateRoot);
-        noteChange();
+        noteReceiptChange();
     }
 
     void clearAllReceipts()
