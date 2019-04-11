@@ -87,12 +87,12 @@ bytes CNSPrecompiled::call(
                 }
             }
         }
+        int result = 0;
         if (exist)
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
-
-            out = abi.abiIn("", u256(CODE_ADDRESS_AND_VERSION_EXIST));
+            result = CODE_ADDRESS_AND_VERSION_EXIST;
         }
         else
         {
@@ -107,17 +107,16 @@ bytes CNSPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                result = storage::CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", u256(count));
+                result = count;
             }
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {
