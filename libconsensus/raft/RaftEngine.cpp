@@ -267,7 +267,7 @@ void RaftEngine::workLoop()
         if (isSyncing)
         {
             RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
-            std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             continue;
         }
 
@@ -279,8 +279,7 @@ void RaftEngine::workLoop()
                                          "[#workLoop]work loop suspend due to disturbing config")
                                   << LOG_KV("cfgError", m_cfgErr)
                                   << LOG_KV("accountType", m_accountType);
-            std::this_thread::yield();
-            resetConfig();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             continue;
         }
 
@@ -564,7 +563,7 @@ void RaftEngine::runAsLeader()
             break;
         }
 
-        // std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -709,7 +708,7 @@ void RaftEngine::runAsCandidate()
             break;
         }
 
-        // std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -796,7 +795,7 @@ void RaftEngine::runAsFollower()
             break;
         }
 
-        // std::this_thread::yield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
