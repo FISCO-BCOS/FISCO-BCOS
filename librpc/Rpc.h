@@ -51,7 +51,7 @@ public:
     }
 
     // system config part
-    std::string getSystemConfigByKey(int _groupID, std::string const& key) override;
+    std::string getSystemConfigByKey(int _groupID, const std::string& param2) override;
 
     // consensus part
     std::string getBlockNumber(int _groupID) override;

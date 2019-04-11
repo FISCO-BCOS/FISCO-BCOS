@@ -84,12 +84,12 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
-std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
+std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
+                      << LOG_KV("groupID", _groupID) << LOG_KV("key", key);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);

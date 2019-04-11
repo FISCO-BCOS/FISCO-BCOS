@@ -194,9 +194,16 @@ public:
             {
                 BOOST_THROW_EXCEPTION(jsonrpc::JsonRpcException(e.GetCode(), e.GetMessage()));
             }
+            catch (std::exception& e)
+            {
+                BOOST_THROW_EXCEPTION(
+                    jsonrpc::JsonRpcException(jsonrpc::Errors::ERROR_RPC_INVALID_PARAMS));
+            }
         }
         else
+        {
             ModularServer<Is...>::HandleMethodCall(_proc, _input, _output);
+        }
     }
 
     virtual void HandleNotificationCall(
