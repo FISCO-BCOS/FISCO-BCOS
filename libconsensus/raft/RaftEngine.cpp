@@ -263,10 +263,23 @@ void RaftEngine::workLoop()
 {
     while (isWorking())
     {
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
+            std::this_thread::yield();
+            continue;
+        }
+
+        resetConfig();
+
         if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a sealer");
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                                         "[#workLoop]work loop suspend due to disturbing config")
+                                  << LOG_KV("cfgError", m_cfgErr)
+                                  << LOG_KV("accountType", m_accountType);
+            std::this_thread::yield();
             resetConfig();
             continue;
         }
@@ -538,9 +551,20 @@ void RaftEngine::runAsLeader()
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
-    while (isWorking() && runAsLeaderImp(memberHeartbeatLog))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsLeaderImp(memberHeartbeatLog))
+        {
+            break;
+        }
+
+        // std::this_thread::yield();
     }
 }
 
@@ -672,9 +696,20 @@ void RaftEngine::runAsCandidate()
         return;
     }
 
-    while (isWorking() && runAsCandidateImp(voteState))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsCandidateImp(voteState))
+        {
+            break;
+        }
+
+        // std::this_thread::yield();
     }
 }
 
@@ -748,9 +783,20 @@ bool RaftEngine::runAsFollowerImp()
 
 void RaftEngine::runAsFollower()
 {
-    while (isWorking() && runAsFollowerImp())
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsFollowerImp())
+        {
+            break;
+        }
+
+        // std::this_thread::yield();
     }
 }
 
