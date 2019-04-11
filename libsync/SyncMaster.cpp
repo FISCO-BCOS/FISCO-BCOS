@@ -80,9 +80,8 @@ string const SyncMaster::syncInfo() const
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
         json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
-    // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
-    // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
-    // toHex(m_syncStatus->knownLatestHash)));
+    syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
+    syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
     syncInfo.push_back(json_spirit::Pair("txPoolSize", std::to_string(m_txPool->pendingSize())));
 
     json_spirit::Array peersInfo;
@@ -341,6 +340,14 @@ void SyncMaster::maintainPeersStatus()
         m_syncStatus->knownHighestNumber = maxPeerNumber;
         m_syncStatus->knownLatestHash = latestHash;
     }
+    else
+    {
+        // No need to send sync request
+        WriteGuard l(m_syncStatus->x_known);
+        m_syncStatus->knownHighestNumber = currentNumber;
+        m_syncStatus->knownLatestHash = m_blockChain->numberHash(currentNumber);
+        return;
+    }
 
     // Not to start download when mining or no need
     {
@@ -443,10 +450,12 @@ void SyncMaster::maintainPeersStatus()
 bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
-    if (currentNumber >= m_syncStatus->knownHighestNumber)
-        return true;
-
     DownloadingBlockQueue& bq = m_syncStatus->bq();
+    if (currentNumber >= m_syncStatus->knownHighestNumber)
+    {
+        bq.clear();
+        return true;
+    }
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
