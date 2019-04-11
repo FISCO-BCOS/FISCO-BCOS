@@ -178,15 +178,18 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
+    virtual std::map<std::string, std::pair<std::pair<bool, std::string>, std::pair<bool, std::string> > >* getConditions();
 
     virtual bool process(Entry::Ptr entry);
     virtual bool graterThan(Condition::Ptr condition);
 
 private:
-    std::map<std::string, std::pair<Op, std::string>> m_conditions;
+    //false is close range '<', true is open range '<='
+    std::map<std::string, std::pair<std::pair<bool, std::string>, std::pair<bool, std::string> > > m_conditions;
+    //std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
+    const std::string UNLIMITED = "_VALUE_UNLIMITED_";
 };
 
 using Parallel = std::true_type;

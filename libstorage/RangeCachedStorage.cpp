@@ -29,6 +29,9 @@ Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& t
 	auto it = m_caches.find(table);
 	if(it != m_caches.end()) {
 		for(auto cacheIt: it->second->cachePages) {
+			if(cacheIt->condition->graterThan(condition)) {
+
+			}
 		}
 	}
 }

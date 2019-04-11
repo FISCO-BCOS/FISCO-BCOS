@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Table.h"
+#include "Storage.h"
 #include <libdevcore/FixedHash.h>
 
 namespace dev
@@ -46,7 +47,7 @@ public:
 	std::vector<CachePage::Ptr> cachePages;
 };
 
-class RangeCachedStorage : public std::enable_shared_from_this<RangeCachedStorage>
+class RangeCachedStorage : public Storage
 {
 public:
     typedef std::shared_ptr<RangeCachedStorage> Ptr;
@@ -61,6 +62,7 @@ public:
 
 private:
     std::map<std::string, TableCache::Ptr> m_caches;
+    Storage::Ptr m_backend;
 };
 
 }

@@ -150,7 +150,7 @@ private:
             // same as above
             if (entry != nullptr)
             {
-                if (processCondition(entry, condition))
+                if (condition->process(entry))
                 {
                     indexes.push_back(i);
                 }
@@ -158,101 +158,6 @@ private:
         }
 
         return indexes;
-    }
-
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
-    {
-        try
-        {
-            for (auto& it : *condition->getConditions())
-            {
-                if (entry->getStatus() == Entry::Status::DELETED)
-                {
-                    return false;
-                }
-
-                std::string lhs = entry->getField(it.first);
-                std::string rhs = it.second.second;
-
-                if (it.second.first == Condition::Op::eq)
-                {
-                    if (lhs != rhs)
-                    {
-                        return false;
-                    }
-                }
-                else if (it.second.first == Condition::Op::ne)
-                {
-                    if (lhs == rhs)
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    if (lhs.empty())
-                    {
-                        lhs = "0";
-                    }
-                    if (rhs.empty())
-                    {
-                        rhs = "0";
-                    }
-
-                    int lhsNum = boost::lexical_cast<int>(lhs);
-                    int rhsNum = boost::lexical_cast<int>(rhs);
-
-                    switch (it.second.first)
-                    {
-                    case Condition::Op::eq:
-                    case Condition::Op::ne:
-                    {
-                        break;
-                    }
-                    case Condition::Op::gt:
-                    {
-                        if (lhsNum <= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::ge:
-                    {
-                        if (lhsNum < rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::lt:
-                    {
-                        if (lhsNum >= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::le:
-                    {
-                        if (lhsNum > rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    }
-                }
-            }
-        }
-        catch (std::exception& e)
-        {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
-                               << LOG_KV("msg", boost::diagnostic_information(e));
-            return false;
-        }
-
-        return true;
     }
 
     bool isHashField(const std::string& _key)

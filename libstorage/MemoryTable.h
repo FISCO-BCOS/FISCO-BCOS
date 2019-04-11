@@ -390,7 +390,8 @@ private:
         for (size_t i = 0; i < entries->size(); ++i)
         {
             Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
+            if(condition->process(entry))
+            //if (processCondition(entry, condition))
             {
                 indexes.push_back(i);
             }
@@ -399,6 +400,7 @@ private:
         return indexes;
     }
 
+#if 0
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
     {
         try
@@ -493,6 +495,7 @@ private:
 
         return true;
     }
+#endif
 
     bool isHashField(const std::string& _key)
     {

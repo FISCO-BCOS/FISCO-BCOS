@@ -229,32 +229,84 @@ void ConcurrentEntries::setDirty(bool dirty)
 
 void Condition::EQ(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::eq, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::eq, value)));
+    auto it = m_conditions.find(key);
+    if(it != m_conditions.end()) {
+    	it->second.first.first = true;
+    	it->second.first.second = value;
+    	it->second.second.first = true;
+    	it->second.second.second = value;
+    }
+    else {
+    	m_conditions.insert(std::make_pair(std::make_pair(true, value), std::make_pair(true, value)));
+    }
 }
 
 void Condition::NE(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::ne, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::ne, value)));
+	auto it = m_conditions.find(key);
+	if(it != m_conditions.end()) {
+		it->second.second.first = false;
+		it->second.second.second = value;
+		it->second.first.first = false;
+		it->second.first.second = value;
+	}
+	else {
+		m_conditions.insert(std::make_pair(std::make_pair(false, value), std::make_pair(false, value)));
+	}
 }
 
 void Condition::GT(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::gt, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::gt, value)));
+	auto it = m_conditions.find(key);
+	if(it != m_conditions.end()) {
+		it->second.first.first = false;
+		it->second.first.second = value;
+	}
+	else {
+		m_conditions.insert(std::make_pair(std::make_pair(false, value), std::make_pair(false, UNLIMITED)));
+	}
 }
 
 void Condition::GE(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::ge, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::ge, value)));
+	auto it = m_conditions.find(key);
+	if(it != m_conditions.end()) {
+		it->second.first.first = true;
+		it->second.first.second = value;
+	}
+	else {
+		m_conditions.insert(std::make_pair(std::make_pair(true, value), std::make_pair(false, UNLIMITED)));
+	}
 }
 
 void Condition::LT(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::lt, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::lt, value)));
+	auto it = m_conditions.find(key);
+	if(it != m_conditions.end()) {
+		it->second.second.first = false;
+		it->second.second.second = value;
+	}
+	else {
+		m_conditions.insert(std::make_pair(std::make_pair(false, UNLIMITED), std::make_pair(false, value)));
+	}
 }
 
 void Condition::LE(const std::string& key, const std::string& value)
 {
-    m_conditions.insert(std::make_pair(key, std::make_pair(Op::le, value)));
+    //m_conditions.insert(std::make_pair(key, std::make_pair(Op::le, value)));
+	auto it = m_conditions.find(key);
+	if(it != m_conditions.end()) {
+		it->second.second.first = true;
+		it->second.second.second = value;
+	}
+	else {
+		m_conditions.insert(std::make_pair(std::make_pair(false, UNLIMITED), std::make_pair(true, value)));
+	}
 }
 
 void Condition::limit(size_t count)
@@ -268,7 +320,7 @@ void Condition::limit(size_t offset, size_t count)
     m_count = count;
 }
 
-std::map<std::string, std::pair<Condition::Op, std::string> >* Condition::getConditions()
+std::map<std::string, std::pair<std::pair<bool, std::string>, std::pair<bool, std::string> > >* Condition::getConditions()
 {
     return &m_conditions;
 }
@@ -277,86 +329,69 @@ bool Condition::process(Entry::Ptr entry)
 {
     try
     {
-        for (auto it : m_conditions)
-        {
-            if (entry->getStatus() == Entry::Status::DELETED)
-            {
-                return false;
-            }
+    	if(entry->getStatus() == Entry::Status::DELETED) {
+    		return false;
+    	}
 
-            std::string lhs = entry->getField(it.first);
-            std::string rhs = it.second.second;
+    	auto fields = entry->fields();
+    	for(auto it : m_conditions) {
+    		auto fieldIt = fields->find(it.first);
 
-            if (it.second.first == Condition::Op::eq)
-            {
-                if (lhs != rhs)
-                {
-                    return false;
-                }
-            }
-            else if (it.second.first == Condition::Op::ne)
-            {
-                if (lhs == rhs)
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                if (lhs.empty())
-                {
-                    lhs = "0";
-                }
-                if (rhs.empty())
-                {
-                    rhs = "0";
-                }
+    		if(fieldIt != fields->end()) {
+    			auto value = fieldIt->second;
 
-                int lhsNum = boost::lexical_cast<int>(lhs);
-                int rhsNum = boost::lexical_cast<int>(rhs);
+    			if(it.second.first.second == it.second.second.second) {
+    				if(it.second.first.first && it.second.second.first) {
+    					if(!(it.second.first.second == value)) {
+    						return false;
+    					}
+    					else {
+    						if(!(it.second.first.second != value)) {
+    							return false;
+    						}
+    					}
+    				}
+    			}
 
-                switch (it.second.first)
-                {
-                case Condition::Op::eq:
-                case Condition::Op::ne:
-                {
-                    break;
-                }
-                case Condition::Op::gt:
-                {
-                    if (lhsNum <= rhsNum)
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                case Condition::Op::ge:
-                {
-                    if (lhsNum < rhsNum)
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                case Condition::Op::lt:
-                {
-                    if (lhsNum >= rhsNum)
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                case Condition::Op::le:
-                {
-                    if (lhsNum > rhsNum)
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                }
-            }
-        }
+    			if(it.second.first.second != UNLIMITED) {
+    				auto lhs = boost::lexical_cast<int64_t>(it.second.first.second);
+    				auto rhs = (int64_t)0;
+    				if(!value.empty()) {
+    					auto rhs = boost::lexical_cast<int64_t>(value);
+    				}
+
+    				if(it.second.first.first) {
+    					if(!(lhs <= rhs)) {
+    						return false;
+    					}
+    				}
+    				else {
+    					if(!(lhs < rhs)) {
+							return false;
+						}
+    				}
+    			}
+
+    			if(it.second.second.second != UNLIMITED) {
+    				auto lhs = boost::lexical_cast<int64_t>(it.second.first.second);
+					auto rhs = (int64_t)0;
+					if(!value.empty()) {
+						auto rhs = boost::lexical_cast<int64_t>(value);
+					}
+
+    				if(it.second.second.first) {
+    					if(!(lhs >= rhs)) {
+							return false;
+						}
+    				}
+    				else {
+    					if(!(lhs > rhs)) {
+							return false;
+						}
+    				}
+    			}
+    		}
+    	}
     }
     catch (std::exception& e)
     {
@@ -388,4 +423,10 @@ virtual bool Condition::graterThan(Condition::Ptr rhs) {
 		//if(conditionIt->)
 	}
 #endif
+	for(auto it: *(rhs->getConditions())) {
+		auto condIt = m_conditions.find(it.first);
+		if(condIt != m_conditions.end()) {
+			if()
+		}
+	}
 }
