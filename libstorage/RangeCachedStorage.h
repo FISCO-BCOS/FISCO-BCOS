@@ -33,10 +33,24 @@ namespace storage
 class CachePage: std::enable_shared_from_this<CachePage> {
 public:
 	typedef std::shared_ptr<CachePage> Ptr;
+	virtual ~CachePage() {};
 
-	Entries::Ptr entries;
-	Condition::Ptr condition;
-	int64_t flushNum;
+	virtual void import(Entries::Ptr entries);
+	virtual void addEntry(Entry::Ptr entry);
+	virtual Entry::Ptr getByID(int64_t id);
+	virtual void removeByID(int64_t id);
+	virtual void setCondition(Condition::Ptr condition);
+	virtual Condition::Ptr condition();
+	virtual void setNum(int64_t num);
+	virtual int64_t num();
+	virtual Entries::Ptr process(Condition::Ptr condition);
+
+private:
+	std::list<Entry::Ptr> m_entries;
+	std::map<int64_t, std::list<Entry::Ptr>::iterator > m_ID2Entry;
+
+	Condition::Ptr m_condition;
+	int64_t m_num = 0;
 };
 
 class TableCache {
@@ -45,6 +59,7 @@ public:
 
 	TableInfo::Ptr tableInfo;
 	std::vector<CachePage::Ptr> cachePages;
+	CachePage::Ptr m_unindexPage;
 };
 
 class RangeCachedStorage : public Storage

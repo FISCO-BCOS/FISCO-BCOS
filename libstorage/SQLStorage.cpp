@@ -55,8 +55,8 @@ Entries::Ptr SQLStorage::select(
             {
                 Json::Value cond;
                 cond.append(it.first);
-                cond.append(it.second.first);
-                cond.append(it.second.second);
+                //cond.append(it.second.left);
+                //cond.append(it.second.second);
                 requestJson["params"]["condition"].append(cond);
             }
         }

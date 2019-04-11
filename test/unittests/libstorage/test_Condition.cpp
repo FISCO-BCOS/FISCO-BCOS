@@ -47,7 +47,7 @@ struct ConditionFixture
 
 BOOST_FIXTURE_TEST_SUITE(ConditionTest, ConditionFixture)
 
-BOOST_AUTO_TEST_CASE(call)
+BOOST_AUTO_TEST_CASE(process)
 {
 	auto condition = std::make_shared<Condition>();
 
@@ -116,6 +116,45 @@ BOOST_AUTO_TEST_CASE(call)
 	BOOST_TEST(condition->process(entry) == true);
 
 	//condition->GE("price", )
+}
+
+BOOST_AUTO_TEST_CASE(greaterThan) {
+	auto condition1 = std::make_shared<Condition>();
+	auto condition2 = std::make_shared<Condition>();
+
+	condition1->EQ("t", "100");
+	condition2->EQ("t", "100");
+
+	BOOST_TEST(condition1->graterThan(condition2) == true);
+
+	condition2->EQ("t", "101");
+
+	BOOST_TEST(condition1->graterThan(condition2) == false);
+
+	condition1 = std::make_shared<Condition>();
+	condition2 = std::make_shared<Condition>();
+
+	condition1->GT("t", "100");
+	condition2->GT("t", "101");
+
+	BOOST_TEST(condition1->graterThan(condition2) == true);
+	BOOST_TEST(condition2->graterThan(condition1) == false);
+
+	condition1->GE("t", "101");
+
+	BOOST_TEST(condition1->graterThan(condition2) == true);
+	BOOST_TEST(condition2->graterThan(condition1) == false);
+
+	condition1->LT("t", "101");
+	condition2->LT("t", "100");
+
+	BOOST_TEST(condition1->graterThan(condition2) == true);
+	BOOST_TEST(condition2->graterThan(condition1) == false);
+
+	condition1->LE("t", "101");
+
+	BOOST_TEST(condition1->graterThan(condition2) == true);
+	BOOST_TEST(condition2->graterThan(condition1) == false);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

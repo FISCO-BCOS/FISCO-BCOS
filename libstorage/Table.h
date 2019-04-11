@@ -164,6 +164,15 @@ public:
         le
     };
 
+    class Range {
+    public:
+		Range(std::pair<bool, std::string> _left, std::pair<bool, std::string> _right): left(_left), right(_right) {};
+
+		//false is close range '<', true is open range '<='
+		std::pair<bool, std::string> left;
+		std::pair<bool, std::string> right;
+	};
+
     virtual ~Condition() {}
 
     virtual void EQ(const std::string& key, const std::string& value);
@@ -178,14 +187,13 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::map<std::string, std::pair<std::pair<bool, std::string>, std::pair<bool, std::string> > >* getConditions();
+    virtual std::map<std::string, Range>* getConditions();
 
     virtual bool process(Entry::Ptr entry);
     virtual bool graterThan(Condition::Ptr condition);
 
 private:
-    //false is close range '<', true is open range '<='
-    std::map<std::string, std::pair<std::pair<bool, std::string>, std::pair<bool, std::string> > > m_conditions;
+    std::map<std::string, Range> m_conditions;
     //std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
