@@ -101,14 +101,10 @@ bytes TableFactoryPrecompiled::call(
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
 
-        int result;
-        /// RC2 success result is 0
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            result = 0;
-        }
+        int result = 0;
+
         /// RC1 success result is 1
-        else if (g_BCOSConfig.version() <= RC1_VERSION)
+        if (g_BCOSConfig.version() < RC2_VERSION)
         {
             result = 1;
         }
@@ -119,14 +115,9 @@ bytes TableFactoryPrecompiled::call(
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
             if (!table)
             {
-                /// RC2 table already exist: CODE_TABLE_NAME_ALREADY_EXIST
-                if (g_BCOSConfig.version() >= RC2_VERSION)
-                {
-                    result = CODE_TABLE_NAME_ALREADY_EXIST;
-                }
-
+                result = CODE_TABLE_NAME_ALREADY_EXIST;
                 /// RC1 table already exist: 0
-                else if (g_BCOSConfig.version() <= RC1_VERSION)
+                if (g_BCOSConfig.version() < RC2_VERSION)
                 {
                     result = 0;
                 }
