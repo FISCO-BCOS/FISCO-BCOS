@@ -22,7 +22,6 @@
 #include "ConsensusPrecompiled.h"
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
@@ -254,16 +253,7 @@ bytes ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    /// RC2 bug fix trans result to u256
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        out = abi.abiIn("", u256(result));
-    }
-    /// RC1
-    else if (g_BCOSConfig.version() <= RC1_VERSION)
-    {
-        out = abi.abiIn("", result);
-    }
+    getOut(out, result);
     return out;
 }
 

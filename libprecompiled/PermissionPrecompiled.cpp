@@ -22,7 +22,6 @@
 #include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -95,6 +94,7 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
     {
@@ -126,6 +126,7 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
     {
@@ -165,19 +166,6 @@ bytes PermissionPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-    }
-    if ((func == name2Selector[AUP_METHOD_INS]) || (func == name2Selector[AUP_METHOD_REM]))
-    {
-        /// RC2 bug fix trans result to u256
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            out = abi.abiIn("", u256(result));
-        }
-        /// RC1
-        else if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            out = abi.abiIn("", result);
-        }
     }
     return out;
 }

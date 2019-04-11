@@ -22,6 +22,7 @@
 #include "Precompiled.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Hash.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -54,4 +55,19 @@ storage::Table::Ptr Precompiled::createTable(
             context->getPrecompiled(Address(0x1001)));
     return tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
         tableName, keyField, valueField, true, origin, true);
+}
+
+/// get out according to version
+void Precompiled::getOut(bytes& out, int const& result)
+{
+    /// RC2 bug fix trans result to u256
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        out = abi.abiIn("", u256(result));
+    }
+    /// RC1
+    else if (g_BCOSConfig.version() <= RC1_VERSION)
+    {
+        out = abi.abiIn("", result);
+    }
 }

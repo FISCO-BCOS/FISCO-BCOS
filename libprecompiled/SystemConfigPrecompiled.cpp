@@ -22,7 +22,6 @@
 
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
@@ -71,17 +70,7 @@ bytes SystemConfigPrecompiled::call(
                 << LOG_BADGE("SystemConfigPrecompiled")
                 << LOG_DESC("SystemConfigPrecompiled set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-
-            /// RC2 bug fix trans result to u256
-            if (g_BCOSConfig.version() >= RC2_VERSION)
-            {
-                out = abi.abiIn("", u256(CODE_INVALID_CONFIGURATION_VALUES));
-            }
-            /// RC1
-            else if (g_BCOSConfig.version() <= RC1_VERSION)
-            {
-                out = abi.abiIn("", CODE_INVALID_CONFIGURATION_VALUES);
-            }
+            getOut(out, CODE_INVALID_CONFIGURATION_VALUES);
             return out;
         }
 
@@ -134,17 +123,7 @@ bytes SystemConfigPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-
-    /// RC2 bug fix trans result to u256
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        out = abi.abiIn("", u256(result));
-    }
-    /// RC1
-    else if (g_BCOSConfig.version() <= RC1_VERSION)
-    {
-        out = abi.abiIn("", result);
-    }
+    getOut(out, result);
     return out;
 }
 

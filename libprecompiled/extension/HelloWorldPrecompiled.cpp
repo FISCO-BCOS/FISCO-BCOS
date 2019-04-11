@@ -21,7 +21,6 @@
 #include "HelloWorldPrecompiled.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -86,17 +85,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-
-            /// RC2 bug fix trans result to u256
-            if (g_BCOSConfig.version() >= RC2_VERSION)
-            {
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
-            }
-            /// RC1
-            else if (g_BCOSConfig.version() <= RC1_VERSION)
-            {
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-            }
+            getOut(out, storage::CODE_NO_AUTHORIZED);
             return out;
         }
     }
@@ -142,17 +131,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("permission denied");
         }
-
-        /// RC2 bug fix trans result to u256
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            out = abi.abiIn("", u256(count));
-        }
-        /// RC1
-        else if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            out = abi.abiIn("", count);
-        }
+        getOut(out, count);
     }
     else
     {  // unkown function call

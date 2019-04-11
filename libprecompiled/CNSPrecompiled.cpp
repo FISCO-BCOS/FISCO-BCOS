@@ -22,7 +22,6 @@
 
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -117,17 +116,7 @@ bytes CNSPrecompiled::call(
                 result = count;
             }
         }
-
-        /// RC2 bug fix trans result to u256
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            out = abi.abiIn("", u256(result));
-        }
-        /// RC1
-        else if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            out = abi.abiIn("", result);
-        }
+        getOut(out, result);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {
