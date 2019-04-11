@@ -263,11 +263,23 @@ void RaftEngine::workLoop()
 {
     while (isWorking())
     {
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            continue;
+        }
+
+        resetConfig();
+
         if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a sealer");
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                                         "[#workLoop]work loop suspend due to disturbing config")
+                                  << LOG_KV("cfgError", m_cfgErr)
+                                  << LOG_KV("accountType", m_accountType);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            resetConfig();
             continue;
         }
 
@@ -538,9 +550,20 @@ void RaftEngine::runAsLeader()
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
-    while (isWorking() && runAsLeaderImp(memberHeartbeatLog))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsLeaderImp(memberHeartbeatLog))
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -672,9 +695,20 @@ void RaftEngine::runAsCandidate()
         return;
     }
 
-    while (isWorking() && runAsCandidateImp(voteState))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsCandidateImp(voteState))
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -748,9 +782,20 @@ bool RaftEngine::runAsFollowerImp()
 
 void RaftEngine::runAsFollower()
 {
-    while (isWorking() && runAsFollowerImp())
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsFollowerImp())
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -1206,7 +1251,7 @@ void RaftEngine::switchToCandidate()
 bool RaftEngine::sendResponse(
     u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _msg)
 {
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send sesponse") << LOG_KV("to", _to)
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send response") << LOG_KV("to", _to)
                           << LOG_KV("term", _msg.term) << LOG_KV("packetType", _packetType);
 
     RLPStream ts;
