@@ -137,7 +137,12 @@ bytes TableFactoryPrecompiled::call(
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
         }
-        getOut(out, result);
+
+        out = abi.abiIn("", u256(result));
+        if (g_BCOSConfig.version() < RC2_VERSION)
+        {
+            out = abi.abiIn("", result);
+        }
     }
     else
     {
