@@ -102,15 +102,7 @@ public:
 
     /// operator override: (), ==, !=
     explicit operator bool() const { return m_timestamp != UINT64_MAX; }
-    bool operator==(BlockHeader const& _cmp) const
-    {
-        return m_parentHash == _cmp.parentHash() && m_logBloom == _cmp.logBloom() &&
-               m_number == _cmp.number() && m_gasLimit == _cmp.gasLimit() &&
-               m_gasUsed == _cmp.gasUsed() && m_timestamp == _cmp.timestamp() &&
-               m_extraData == _cmp.extraData() && m_sealer == _cmp.sealer() &&
-               m_stateRoot == _cmp.stateRoot() && m_dbHash == _cmp.dbHash() &&
-               m_sealerList == _cmp.sealerList();
-    }
+    bool operator==(BlockHeader const& _cmp) const { return hash() == _cmp.hash(); }
     bool operator!=(BlockHeader const& _cmp) const { return !operator==(_cmp); }
 
     /// populate block header from parent
