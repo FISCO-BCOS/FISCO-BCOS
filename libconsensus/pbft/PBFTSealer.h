@@ -103,12 +103,19 @@ private:
         /// blockNumber(m_sealing) = n + 1 the result is: generate two block with the same block in
         /// a period solution: if there has been  a higher sealed block, return directly without
         /// reset
-        if (m_sealing.block.isSealed() && shouldHandleBlock())
-        {
-            return;
-        }
         {
             DEV_WRITE_GUARDED(x_sealing)
+            if (m_sealing.block.isSealed() && shouldHandleBlock())
+            {
+                PBFTSEALER_LOG(DEBUG)
+                    << LOG_DESC("sealing block have already been sealed and should be handled")
+                    << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                    << LOG_KV("curNum", m_blockChain->number());
+                return;
+            }
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for viewchange")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
         }
         m_signalled.notify_all();
@@ -120,6 +127,9 @@ private:
     {
         {
             DEV_WRITE_GUARDED(x_sealing)
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock(filter, true);
         }
         m_signalled.notify_all();

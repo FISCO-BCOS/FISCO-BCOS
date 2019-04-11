@@ -505,7 +505,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 }
                 else
                 {
-                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                     << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
@@ -545,7 +545,7 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
-        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                         << LOG_DESC("Download finish")
                         << LOG_KV("latestHash", latestHash.abridged())
                         << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
@@ -686,7 +686,7 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
                 if (!blockRLP)
                 {
-                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                     << LOG_DESC("Get block for node failed")
                                     << LOG_KV("reason", "block is null") << LOG_KV("number", number)
                                     << LOG_KV("nodeId", _p->nodeId.abridged());
