@@ -24,6 +24,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Hash.h>
+#include <libethcore/ABI.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
@@ -60,6 +61,7 @@ storage::Table::Ptr Precompiled::createTable(
 /// get out according to version
 void Precompiled::getOut(bytes& out, int const& result)
 {
+    dev::eth::ContractABI abi;
     /// RC2 bug fix trans result to u256
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
