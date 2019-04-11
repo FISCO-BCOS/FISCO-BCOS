@@ -22,6 +22,7 @@
 #include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/TableFactoryPrecompiled.h>
@@ -61,7 +62,7 @@ bytes PermissionPrecompiled::call(
 
     dev::eth::ContractABI abi;
     bytes out;
-
+    int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
     {
         // insert(string tableName,string addr)
@@ -79,8 +80,7 @@ bytes PermissionPrecompiled::call(
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
-
-            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_EXIST));
+            result = CODE_TABLE_AND_ADDRESS_EXIST;
         }
         else
         {
@@ -94,15 +94,13 @@ bytes PermissionPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                result = CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", u256(count));
+                result = count;
             }
         }
     }
@@ -125,8 +123,7 @@ bytes PermissionPrecompiled::call(
         {
             PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                      << LOG_DESC("tableName and address does not exist");
-
-            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_NOT_EXIST));
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
         else
         {
@@ -136,19 +133,30 @@ bytes PermissionPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                result = CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove successfully");
-
-                out = abi.abiIn("", u256(count));
+                result = count;
             }
         }
     }
-    else if (func == name2Selector[AUP_METHOD_QUE])
+    if ((func == name2Selector[AUP_METHOD_INS]) || (func == name2Selector[AUP_METHOD_REM]))
+    {
+        /// RC2 bug fix trans result to u256
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            out = abi.abiIn("", u256(result));
+        }
+        /// RC1
+        else if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            out = abi.abiIn("", result);
+        }
+    }
+    if (func == name2Selector[AUP_METHOD_QUE])
     {
         // queryByName(string table_name)
         std::string tableName;

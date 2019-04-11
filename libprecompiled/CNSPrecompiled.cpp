@@ -22,6 +22,7 @@
 
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -87,12 +88,12 @@ bytes CNSPrecompiled::call(
                 }
             }
         }
+        int result = 0;
         if (exist)
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
-
-            out = abi.abiIn("", u256(CODE_ADDRESS_AND_VERSION_EXIST));
+            result = CODE_ADDRESS_AND_VERSION_EXIST;
         }
         else
         {
@@ -107,16 +108,25 @@ bytes CNSPrecompiled::call(
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                result = storage::CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", u256(count));
+                result = count;
             }
+        }
+
+        /// RC2 bug fix trans result to u256
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            out = abi.abiIn("", u256(result));
+        }
+        /// RC1
+        else if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            out = abi.abiIn("", result);
         }
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])

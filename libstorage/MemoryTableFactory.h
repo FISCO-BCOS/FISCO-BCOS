@@ -65,8 +65,6 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
     std::vector<Change>& getChangeLog();
 
-    int getCreateTableCode() override { return m_createTableCode; }
-
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
@@ -84,8 +82,6 @@ private:
 
     // mutex
     mutable RecursiveMutex x_name2Table;
-
-    int m_createTableCode = 1;
 };
 
 }  // namespace storage

@@ -24,7 +24,6 @@
 #include "StorageException.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
@@ -152,10 +151,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-        if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            m_createTableCode = 0;
-        }
         return nullptr;
     }
     // Write table entry
@@ -165,12 +160,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     tableEntry->setField("value_field", valueField);
     auto result = sysTable->insert(
         tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
-    /// return code for RC1
-    /// RC1 has no para feature, it's no need to use lock here
-    if (g_BCOSConfig.version() <= RC1_VERSION)
-    {
-        m_createTableCode = result;
-    }
     if (result == storage::CODE_NO_AUTHORIZED)
     {
         STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
