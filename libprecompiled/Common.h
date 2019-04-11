@@ -75,5 +75,8 @@ const int CODE_PARSE_ENTRY_ERROR = 51502;
 const int CODE_PARSE_CONDITION_ERROR = 51503;
 const int CODE_CONDITION_OPERATION_UNDEFINED = 51504;
 
+void getOut(bytes& out, int const& result);
+
+
 }  // namespace precompiled
 }  // namespace dev

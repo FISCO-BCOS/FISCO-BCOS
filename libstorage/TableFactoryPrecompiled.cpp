@@ -23,6 +23,7 @@
 #include "Table.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -99,14 +100,36 @@ bytes TableFactoryPrecompiled::call(
             boost::trim(str);
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        int result = 0;
+
+        int result;
+        /// RC2 success result is 0
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            result = 0;
+        }
+        /// RC1 success result is 1
+        else if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            result = 1;
+        }
         try
         {
+            /// table already exist
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
             if (!table)
             {
-                result = CODE_TABLE_NAME_ALREADY_EXIST;
+                /// RC2 table already exist: CODE_TABLE_NAME_ALREADY_EXIST
+                if (g_BCOSConfig.version() >= RC2_VERSION)
+                {
+                    result = CODE_TABLE_NAME_ALREADY_EXIST;
+                }
+
+                /// RC1 table already exist: 0
+                else if (g_BCOSConfig.version() <= RC1_VERSION)
+                {
+                    result = 0;
+                }
             }
         }
         catch (dev::storage::StorageException& e)
@@ -114,7 +137,12 @@ bytes TableFactoryPrecompiled::call(
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
         }
+
         out = abi.abiIn("", u256(result));
+        if (g_BCOSConfig.version() < RC2_VERSION)
+        {
+            out = abi.abiIn("", result);
+        }
     }
     else
     {

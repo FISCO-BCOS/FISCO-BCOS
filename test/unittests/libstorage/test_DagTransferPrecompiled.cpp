@@ -194,7 +194,6 @@ BOOST_AUTO_TEST_CASE(userAdd)
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-
     BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // normal input, first add this user
@@ -212,6 +211,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(CODE_INVALID_USER_ALREADY_EXIST == result);
+
 }
 
 BOOST_AUTO_TEST_CASE(userSave)
@@ -231,6 +231,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(CODE_INVALID_USER_NAME == result);
+
 
     // invalid input, amount zero
     user = "user";
@@ -271,6 +272,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(CODE_INVALID_BALANCE_OVERFLOW == result);
+
 }
 
 BOOST_AUTO_TEST_CASE(userDraw)
@@ -290,6 +292,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(CODE_INVALID_USER_NAME == result);
+
 
     // invalid input, amount zero
     user = "user";
