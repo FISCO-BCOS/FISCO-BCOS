@@ -90,18 +90,10 @@ bytes PermissionPrecompiled::call(
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-                result = CODE_NO_AUTHORIZED;
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert successfully");
-                result = count;
-            }
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
+            result = count;
         }
     }
     else if (func == name2Selector[AUP_METHOD_REM])
