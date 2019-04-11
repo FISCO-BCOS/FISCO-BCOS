@@ -90,10 +90,10 @@ bytes PermissionPrecompiled::call(
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
+            result = count;
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
-            result = count;
         }
     }
     else if (func == name2Selector[AUP_METHOD_REM])
@@ -121,34 +121,13 @@ bytes PermissionPrecompiled::call(
         {
             int count =
                 table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-                result = CODE_NO_AUTHORIZED;
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove successfully");
-                result = count;
-            }
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
     }
-    if ((func == name2Selector[AUP_METHOD_INS]) || (func == name2Selector[AUP_METHOD_REM]))
-    {
-        /// RC2 bug fix trans result to u256
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            out = abi.abiIn("", u256(result));
-        }
-        /// RC1
-        else if (g_BCOSConfig.version() <= RC1_VERSION)
-        {
-            out = abi.abiIn("", result);
-        }
-    }
-    if (func == name2Selector[AUP_METHOD_QUE])
+    else if (func == name2Selector[AUP_METHOD_QUE])
     {
         // queryByName(string table_name)
         std::string tableName;
@@ -186,6 +165,19 @@ bytes PermissionPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+    }
+    if ((func == name2Selector[AUP_METHOD_INS]) || (func == name2Selector[AUP_METHOD_REM]))
+    {
+        /// RC2 bug fix trans result to u256
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            out = abi.abiIn("", u256(result));
+        }
+        /// RC1
+        else if (g_BCOSConfig.version() <= RC1_VERSION)
+        {
+            out = abi.abiIn("", result);
+        }
     }
     return out;
 }
