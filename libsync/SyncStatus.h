@@ -54,19 +54,21 @@ class SyncPeerStatus
 {
 public:
     SyncPeerStatus(PROTOCOL_ID, NodeID const& _nodeId, int64_t _number, h256 const& _genesisHash,
-        h256 const& _latestHash)
+        h256 const& _latestHash, bool _isSyncing = false)
       : nodeId(_nodeId),
         number(_number),
         genesisHash(_genesisHash),
         latestHash(_latestHash),
-        reqQueue(_nodeId)
+        reqQueue(_nodeId),
+        isSyncing(_isSyncing)
     {}
     SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID)
       : nodeId(_info.nodeId),
         number(_info.number),
         genesisHash(_info.genesisHash),
         latestHash(_info.latestHash),
-        reqQueue(_info.nodeId)
+        reqQueue(_info.nodeId),
+        isSyncing(_info.isSyncing)
     {}
 
     void update(const SyncPeerInfo& _info)
@@ -75,6 +77,7 @@ public:
         number = _info.number;
         genesisHash = _info.genesisHash;
         latestHash = _info.latestHash;
+        isSyncing = _info.isSyncing;
     }
 
 public:
@@ -84,6 +87,7 @@ public:
     h256 latestHash;
     DownloadRequestQueue reqQueue;
     bool isSealer = false;
+    bool isSyncing = true;
 };
 
 class SyncMasterStatus

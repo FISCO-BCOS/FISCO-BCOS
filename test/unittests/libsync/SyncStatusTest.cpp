@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(PeerNewHasDeleteTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
         BOOST_CHECK(!status.hasPeer(node.nodeId));
         BOOST_CHECK(status.newSyncPeerStatus(node));
         BOOST_CHECK(!status.newSyncPeerStatus(node));
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(PeerNewHasDeleteTest)
 BOOST_AUTO_TEST_CASE(PeerStatusTest)
 {
     unsigned id = 999;
-    SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+    SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
     status.newSyncPeerStatus(node);
     shared_ptr<SyncPeerStatus> peerStatus = status.peerStatus(node.nodeId);
 
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(ForeachPeerTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
         status.newSyncPeerStatus(node);
     }
 
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(ForeachPeerRandomTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
         status.newSyncPeerStatus(node);
     }
 
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(RandomSelectionTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
         status.newSyncPeerStatus(node);
     }
 
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(RandomSelectionSizeTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id), false};
         status.newSyncPeerStatus(node);
     }
 

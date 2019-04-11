@@ -91,6 +91,7 @@ string const SyncMaster::syncInfo() const
         info.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(_p->genesisHash)));
         info.push_back(json_spirit::Pair("blockNumber", _p->number));
         info.push_back(json_spirit::Pair("latestHash", toHexPrefixed(_p->latestHash)));
+        info.push_back(json_spirit::Pair("isSyncing", _p->isSyncing));
         peersInfo.push_back(info);
         return true;
     });
@@ -302,7 +303,7 @@ void SyncMaster::maintainBlocks()
     // Just broadcast status
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         SyncStatusPacket packet;
-        packet.encode(number, m_genesisHash, currentHash);
+        packet.encode(number, m_genesisHash, currentHash, isSyncing());
 
         m_service->asyncSendMessageByNodeID(
             _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
@@ -312,6 +313,7 @@ void SyncMaster::maintainBlocks()
                         << LOG_KV("number", int(number))
                         << LOG_KV("genesisHash", m_genesisHash.abridged())
                         << LOG_KV("currentHash", currentHash.abridged())
+                        << LOG_KV("isSyncing", isSyncing())
                         << LOG_KV("peer", _p->nodeId.abridged());
 
         return true;
@@ -408,6 +410,11 @@ void SyncMaster::maintainPeersStatus()
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            if (_p->isSyncing)
+            {
+                return true;  // Not to request to a syncing node
+            }
+
             // shard: [from, to]
             int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
@@ -604,13 +611,13 @@ void SyncMaster::maintainPeersConnection()
     {
         if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
-            // create a peer
-            SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
+            // create a peer, default isSyncing true, waiting peer to set to false
+            SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash, true};
             m_syncStatus->newSyncPeerStatus(newPeer);
 
             // send my status to her
             SyncStatusPacket packet;
-            packet.encode(currentNumber, m_genesisHash, currentHash);
+            packet.encode(currentNumber, m_genesisHash, currentHash, isSyncing());
 
             m_service->asyncSendMessageByNodeID(
                 member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
@@ -618,6 +625,7 @@ void SyncMaster::maintainPeersConnection()
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash.abridged())
                             << LOG_KV("currentHash", currentHash.abridged())
+                            << LOG_KV("isSyncing", isSyncing())
                             << LOG_KV("peer", member.abridged());
         }
     }

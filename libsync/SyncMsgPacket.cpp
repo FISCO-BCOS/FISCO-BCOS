@@ -73,10 +73,25 @@ RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
     return _s.appendRaw(bytes(1, _id + c_syncPacketIDBase)).appendList(_args);
 }
 
-void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
+void SyncStatusPacket::encode(
+    int64_t _number, h256 const& _genesisHash, h256 const& _latestHash, bool _isSyncing)
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        encodeRC2(_number, _genesisHash, _latestHash, _isSyncing);
+        return;
+    }
+
     m_rlpStream.clear();
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
+}
+
+void SyncStatusPacket::encodeRC2(
+    int64_t _number, h256 const& _genesisHash, h256 const& _latestHash, bool _isSyncing)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, StatusPacket, 4)
+        << _number << _genesisHash << _latestHash << int64_t(_isSyncing);
 }
 
 void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)

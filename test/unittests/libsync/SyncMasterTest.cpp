@@ -135,9 +135,9 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     std::shared_ptr<TxPoolInterface> txPool = syncTools.txPool;
 
     sync->syncStatus()->newSyncPeerStatus(
-        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash});
+        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash, false});
     sync->syncStatus()->newSyncPeerStatus(
-        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
+        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash, false});
 
     shared_ptr<Transactions> txs = fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
@@ -212,9 +212,9 @@ BOOST_AUTO_TEST_CASE(MaintainBlocksTest)
     std::shared_ptr<FakeService> service = syncTools.service;
 
     sync->syncStatus()->newSyncPeerStatus(
-        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash});
+        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash, false});
     sync->syncStatus()->newSyncPeerStatus(
-        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
+        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash, false});
 
     sync->maintainBlocks();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
@@ -230,14 +230,14 @@ BOOST_AUTO_TEST_CASE(MaintainPeersStatusTest)
     std::shared_ptr<FakeService> service = syncTools.service;
 
     // Can recieve 5 req
-    sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{
-        NodeID(101), c_maxRequestBlocks * 5 + currentBlockNumber, m_genesisHash, m_genesisHash});
+    sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{NodeID(101),
+        c_maxRequestBlocks * 5 + currentBlockNumber, m_genesisHash, m_genesisHash, false});
     // Can recieve 1 req
     sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{
-        NodeID(102), c_maxRequestBlocks + currentBlockNumber, m_genesisHash, m_genesisHash});
+        NodeID(102), c_maxRequestBlocks + currentBlockNumber, m_genesisHash, m_genesisHash, false});
     // Can recieve 10(at least 5)req
-    sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{
-        NodeID(103), c_maxRequestBlocks * 10 + currentBlockNumber, m_genesisHash, m_genesisHash});
+    sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{NodeID(103),
+        c_maxRequestBlocks * 10 + currentBlockNumber, m_genesisHash, m_genesisHash, false});
 
     sync->maintainPeersStatus();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(103)) << endl;

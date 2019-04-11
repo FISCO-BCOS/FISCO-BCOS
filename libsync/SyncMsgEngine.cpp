@@ -118,6 +118,12 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        onPeerStatusRC2(_packet);
+        return;
+    }
+
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
 
     RLP const& rlps = _packet.rlp();
@@ -129,8 +135,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
-    SyncPeerInfo info{
-        _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
+    SyncPeerInfo info{_packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(),
+        rlps[2].toHash<h256>(), false};
 
     if (info.genesisHash != m_genesisHash)
     {
@@ -141,21 +147,14 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
-    struct SyncPeerInfo
-    {
-        NodeID nodeId;
-        int64_t number;
-        h256 genesisHash;
-        h256 latestHash;
-    };
-
     if (status == nullptr)
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
                         << LOG_KV("peer", info.nodeId.abridged())
                         << LOG_KV("peerBlockNumber", info.number)
                         << LOG_KV("genesisHash", info.genesisHash.abridged())
-                        << LOG_KV("latestHash", info.latestHash.abridged());
+                        << LOG_KV("latestHash", info.latestHash.abridged())
+                        << LOG_KV("isSyncing", info.isSyncing);
         m_syncStatus->newSyncPeerStatus(info);
     }
     else
@@ -164,7 +163,55 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
                         << LOG_KV("peerNodeId", info.nodeId.abridged())
                         << LOG_KV("peerBlockNumber", info.number)
                         << LOG_KV("genesisHash", info.genesisHash.abridged())
-                        << LOG_KV("latestHash", info.latestHash.abridged());
+                        << LOG_KV("latestHash", info.latestHash.abridged())
+                        << LOG_KV("isSyncing", info.isSyncing);
+        status->update(info);
+    }
+}
+
+void SyncMsgEngine::onPeerStatusRC2(SyncMsgPacket const& _packet)
+{
+    shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
+
+    RLP const& rlps = _packet.rlp();
+
+    if (rlps.itemCount() != 4)
+    {
+        SYNC_LOG(WARNING) << LOG_BADGE("Status") << LOG_DESC("Receive invalid status packet format")
+                          << LOG_KV("peer", _packet.nodeId.abridged());
+        return;
+    }
+
+    SyncPeerInfo info{_packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(),
+        rlps[2].toHash<h256>(), bool(rlps[3].toInt<int64_t>() > 0)};
+
+    if (info.genesisHash != m_genesisHash)
+    {
+        SYNC_LOG(WARNING) << LOG_BADGE("Status")
+                          << LOG_DESC("Receive invalid status packet with different genesis hash")
+                          << LOG_KV("peer", _packet.nodeId.abridged())
+                          << LOG_KV("genesisHash", info.genesisHash);
+        return;
+    }
+
+    if (status == nullptr)
+    {
+        SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
+                        << LOG_KV("peer", info.nodeId.abridged())
+                        << LOG_KV("peerBlockNumber", info.number)
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
+                        << LOG_KV("latestHash", info.latestHash.abridged())
+                        << LOG_KV("isSyncing", info.isSyncing);
+        m_syncStatus->newSyncPeerStatus(info);
+    }
+    else
+    {
+        SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from peer")
+                        << LOG_KV("peerNodeId", info.nodeId.abridged())
+                        << LOG_KV("peerBlockNumber", info.number)
+                        << LOG_KV("genesisHash", info.genesisHash.abridged())
+                        << LOG_KV("latestHash", info.latestHash.abridged())
+                        << LOG_KV("isSyncing", info.isSyncing);
         status->update(info);
     }
 }
@@ -202,9 +249,17 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 
     if (rlp.itemCount() != 2)
     {
+        SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                          << LOG_DESC("Receive invalid request blocks packet format")
+                          << LOG_KV("peer", _packet.nodeId.abridged());
+        return;
+    }
+
+    if (m_syncStatus->state == SyncState::Downloading)
+    {
         SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Receive invalid request blocks packet format")
-                        << LOG_KV("peer", _packet.nodeId.abridged());
+                        << LOG_DESC("Drop peer request when dowloading blocks")
+                        << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
 
@@ -212,7 +267,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     int64_t from = rlp[0].toInt<int64_t>();
     unsigned size = rlp[1].toInt<unsigned>();
 
-    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                     << LOG_DESC("Receive block request")
                     << LOG_KV("peer", _packet.nodeId.abridged()) << LOG_KV("from", from)
                     << LOG_KV("to", from + size - 1);
@@ -220,6 +275,17 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
     if (peerStatus != nullptr && peerStatus)
         peerStatus->reqQueue.push(from, (int64_t)size);
+}
+
+bool SyncMsgEngine::decodePeerSyncStatus(RLP const& _rlp)
+{
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        return (_rlp.toInt<int64_t>() > 0);
+    }
+
+    // RC1 is not support this flag
+    return false;
 }
 
 void DownloadBlocksContainer::batchAndSend(BlockPtr _block)

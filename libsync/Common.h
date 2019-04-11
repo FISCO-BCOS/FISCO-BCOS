@@ -92,6 +92,7 @@ struct SyncPeerInfo
     int64_t number;
     h256 genesisHash;
     h256 latestHash;
+    bool isSyncing;
 };
 
 }  // namespace sync

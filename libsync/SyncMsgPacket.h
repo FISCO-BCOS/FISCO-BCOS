@@ -82,7 +82,10 @@ class SyncStatusPacket : public SyncMsgPacket
 {
 public:
     SyncStatusPacket() { packetType = StatusPacket; }
-    void encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash);
+    void encode(
+        int64_t _number, h256 const& _genesisHash, h256 const& _latestHash, bool _isSyncing);
+    void encodeRC2(
+        int64_t _number, h256 const& _genesisHash, h256 const& _latestHash, bool _isSyncing);
 };
 
 class SyncTransactionsPacket : public SyncMsgPacket

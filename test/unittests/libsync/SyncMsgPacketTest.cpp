@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(PacketDecodeTest)
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
     SyncStatusPacket statusPacket;
-    statusPacket.encode(0x00, h256(0xab), h256(0xcd));
+    statusPacket.encode(0x00, h256(0xab), h256(0xcd), false);
     auto msgPtr = statusPacket.toMessage(0x01);
     statusPacket.decode(fakeSessionPtr, msgPtr);
     auto rlpStatus = statusPacket.rlp();
