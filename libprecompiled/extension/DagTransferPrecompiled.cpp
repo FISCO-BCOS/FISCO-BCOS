@@ -253,7 +253,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -342,7 +342,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -415,7 +415,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -459,7 +459,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret, balance);
+    out = abi.abiIn("", u256(ret), balance);
 }
 
 void DagTransferPrecompiled::userTransferCall(
@@ -581,5 +581,5 @@ void DagTransferPrecompiled::userTransferCall(
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
