@@ -1251,7 +1251,7 @@ void RaftEngine::switchToCandidate()
 bool RaftEngine::sendResponse(
     u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _msg)
 {
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send sesponse") << LOG_KV("to", _to)
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send response") << LOG_KV("to", _to)
                           << LOG_KV("term", _msg.term) << LOG_KV("packetType", _packetType);
 
     RLPStream ts;
