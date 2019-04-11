@@ -41,8 +41,7 @@ void MyVM::copyDataToMemory(bytesConstRef _data, u256* _sp)
     if (size > sizeToBeCopied)
         std::memset(m_mem.data() + offset + sizeToBeCopied, 0, size - sizeToBeCopied);
 }
-
-
+  
 // consolidate exception throws to avoid spraying boost code all over interpreter
 
 void MyVM::throwOutOfGas()
@@ -66,6 +65,7 @@ void MyVM::throwDisallowedStateChange()
 }
 
 // throwBadStack is called from fetchInstruction() -> adjustStack()
+  
 // its the only exception that can happen before ON_OP() log is done for an opcode case in MyVM.cpp
 // so the call to m_onFail is needed here
 void MyVM::throwBadStack(int _removed, int _added)
@@ -80,7 +80,6 @@ void MyVM::throwBadStack(int _removed, int _added)
 void MyVM::throwRevertInstruction(owning_bytes_ref&& _output)
 {
     // We can't use BOOST_THROW_EXCEPTION here because it makes a copy of exception inside and
-    // RevertInstruction has no copy constructor
     throw RevertInstruction(std::move(_output));
 }
 
@@ -106,10 +105,6 @@ int64_t MyVM::verifyJumpDest(u256 const& _dest, bool _throw)
     return -1;
 }
 
-
-//
-// interpreter cases that call out
-//
 
 void MyVM::caseCreate()
 {

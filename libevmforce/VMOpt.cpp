@@ -163,8 +163,7 @@ void MyVM::optimize()
     TRACE_STR(1, "Finished optimizations")
 #endif
 }
-
-
+  
 //
 // Init interpreter on entry.
 //
@@ -174,7 +173,6 @@ void MyVM::initEntry()
     initMetrics();
     optimize();
 }
-
 
 // Implementation of EXP.
 //

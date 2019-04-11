@@ -95,7 +95,6 @@ private:
     evmc_instance* m_instance = nullptr;
 };
 
-
 /// The wrapper implementing the VMFace interface with a EVM-C VM as a backend.
 class EVMC : public EVM, public VMFace
 {

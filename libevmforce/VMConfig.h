@@ -31,6 +31,9 @@ namespace eth
 // interpreter configuration macros for development, optimizations and tracing
 //
 // EVM_OPTIMIZE           - all optimizations off when false (TO DO - MAKE DYNAMIC)
+=======
+// EVM_OPTIMIZE           - all optimizations off when false (TO DO - MAKE
+// DYNAMIC)
 //
 // EVM_SWITCH_DISPATCH    - dispatch via loop and switch
 // EVM_JUMP_DISPATCH      - dispatch via a jump table - available only on GCC
@@ -65,7 +68,7 @@ namespace eth
 #define EVM_DO_FIRST_PASS_OPTIMIZATION (EVM_REPLACE_CONST_JUMP || EVM_USE_CONSTANT_POOL)
 #endif
 
-
+=======
 ///////////////////////////////////////////////////////////////////////////////
 //
 // set EVM_TRACE to 3, 2, 1, or 0 for lots to no tracing to cerr
@@ -122,7 +125,7 @@ namespace eth
 #endif
 #endif
 
-
+=======
 ///////////////////////////////////////////////////////////////////////////////
 //
 // build a simple loop-and-switch interpreter
@@ -146,8 +149,6 @@ namespace eth
 #define WHILE_CASES \
     }               \
     }
-
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 // build an indirect-threaded interpreter using a jump table of

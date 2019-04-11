@@ -594,8 +594,45 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[0] - m_SP[1];
+            u256 a = m_SP[0];
+            u256 b = s2u(0 - u2s(m_SP[1]));
+            if (((u2s(a) >= 0) && (u2s(b) <= 0)) || ((u2s(a) <= 0) && (u2s(b) >= 0)))
+            {
+                m_SPP[0] = m_SP[0] - m_SP[1];
+            }
+            else
+            {
+                if (u2s(a) >= 0 && u2s(b) >= 0)
+                {
+                    u256 temp = a + b;
+                    u512 temp_ = u512(a) + u512(b);
+                    if (temp != temp_)
+                    {
+                        PrintCrash("integer overflow when doing sub operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                    else
+                    {
+                        m_SPP[0] = m_SP[0] - m_SP[1];
+                    }
+                }
+                else
+                {
+                    a = s2u(0 - u2s(a));
+                    b = s2u(0 - u2s(b));
+                    u256 temp = a + b;
+                    u512 temp_ = u512(a) + u512(b);
+                    if (temp != temp_)
+                    {
+                        PrintCrash("integer overflow when doing sub operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                    else
+                    {
+                        m_SPP[0] = m_SP[0] - m_SP[1];
+                    }
+                }
+            }
         }
         NEXT
 
@@ -612,7 +649,8 @@ void MyVM::interpretCases()
             {
                 m_SPP[0] = divWorkaround(m_SP[0], m_SP[1]);
             }
-            // m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
+
+            m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -630,9 +668,7 @@ void MyVM::interpretCases()
                 m_SPP[0] = s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
             }
 
-            // m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]),
-            // u2s(m_SP[1]))) :
-            // 0;
+            m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
             --m_SP;
         }
         NEXT
@@ -650,8 +686,7 @@ void MyVM::interpretCases()
             {
                 m_SPP[0] = modWorkaround(m_SP[0], m_SP[1]);
             }
-
-            //     m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
+            m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -669,9 +704,7 @@ void MyVM::interpretCases()
                 m_SPP[0] = s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
             }
 
-            //     m_SPP[0] = m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]),
-            //     u2s(m_SP[1])))
-            //     : 0;
+            m_SPP[0] = m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
         }
         NEXT
 

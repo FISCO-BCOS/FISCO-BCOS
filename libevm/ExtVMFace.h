@@ -112,7 +112,8 @@ class EnvInfo
 public:
     typedef boost::function<dev::h256(int64_t x)> CallBackFunction;
 
-    // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
+    // Constructor with custom gasLimit - used in some synthetic scenarios like
+    // eth_estimateGas RPC
     // method
     EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
         u256 const& _gasLimit)
@@ -138,7 +139,6 @@ public:
     /// @return gasLimit of the block header
     u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
 
-
     /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
 
@@ -148,7 +148,6 @@ public:
 
     void setPrecompiledEngine(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine);
-
 
 private:
     BlockHeader m_headerInfo;
@@ -181,13 +180,15 @@ struct CreateResult
     owning_bytes_ref output;
     h160 address;
 
-    CreateResult(evmc_status_code status, owning_bytes_ref&& output, h160 const& address)
+    CreateResult(evmc_status_code status, owning_bytes_ref&& output, h160 const&
+address)
       : status{status}, output{std::move(output)}, address{address}
     {}
 };*/
 
 /**
- * @brief Interface and null implementation of the class for specifying VM externalities.
+ * @brief Interface and null implementation of the class for specifying VM
+ * externalities.
  */
 class ExtVMFace : public evmc_context
 {
@@ -283,12 +284,13 @@ protected:
     EnvInfo const& m_envInfo;
 
 private:
-    Address m_myAddress;  ///< Address associated with executing code (a contract, or
-                          ///< contract-to-be).
-    Address m_caller;  ///< Address which sent the message (either equal to origin or a contract).
-    Address m_origin;  ///< Original transactor.
-    u256 m_value;      ///< Value (in Wei) that was passed to this address.
-    u256 m_gasPrice;   ///< Price of gas (that we already paid).
+    Address m_myAddress;        ///< Address associated with executing code (a contract, or
+                                ///< contract-to-be).
+    Address m_caller;           ///< Address which sent the message (either equal to origin
+                                /// or a contract).
+    Address m_origin;           ///< Original transactor.
+    u256 m_value;               ///< Value (in Wei) that was passed to this address.
+    u256 m_gasPrice;            ///< Price of gas (that we already paid).
     bytesConstRef m_data;       ///< Current input data.
     bytes m_code;               ///< Current code that is executing.
     h256 m_codeHash;            ///< SHA3 hash of the executing code

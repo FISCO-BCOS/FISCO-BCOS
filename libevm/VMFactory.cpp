@@ -56,7 +56,8 @@ evmc_create_fn g_evmcCreateFn;
 /// A helper type to build the tabled of VM implementations.
 ///
 /// More readable than std::tuple.
-/// Fields are not initialized to allow usage of construction with initializer lists {}.
+/// Fields are not initialized to allow usage of construction with initializer
+/// lists {}.
 struct VMKindTableEntry
 {
     VMKind kind;
@@ -65,7 +66,8 @@ struct VMKindTableEntry
 
 /// The table of available VM implementations.
 ///
-/// We don't use a map to avoid complex dynamic initialization. This list will never be long,
+/// We don't use a map to avoid complex dynamic initialization. This list will
+/// never be long,
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
 #ifdef ETH_EVMJIT
@@ -75,7 +77,6 @@ VMKindTableEntry vmKindsTable[] = {
     {VMKind::Hera, "hera"},
 #endif
     {VMKind::Interpreter, "interpreter"}, {VMKind::Force, "force"}};
-
 
 void setVMKind(const std::string& _name)
 {
@@ -175,7 +176,6 @@ po::options_description vmProgramOptions(unsigned _lineLength)
 
     return opts;
 }
-
 
 std::unique_ptr<VMFace> VMFactory::create()
 {
