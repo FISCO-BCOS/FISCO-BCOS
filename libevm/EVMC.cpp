@@ -95,7 +95,8 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
         BOOST_THROW_EXCEPTION(DisallowedStateChange());
 
     case EVMC_REJECTED:
-        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM implementation";
+        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM "
+                        "implementation";
         return VMFactory::create(VMKind::Interpreter)->exec(io_gas, _ext, _onOp);
 
     case EVMC_INTERNAL_ERROR:

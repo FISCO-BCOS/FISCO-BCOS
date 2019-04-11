@@ -96,11 +96,14 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
 }
 
 /**
- * @brief : copy code between [_codeOffset, _codeOffset + _bufferSize] to bufferData
+ * @brief : copy code between [_codeOffset, _codeOffset + _bufferSize] to
+ * bufferData
  *          if _codeOffset is larger than code length, then return 0;
- *          if _codeOffset + _bufferSize is larger than the end of the code, than only copy
+ *          if _codeOffset + _bufferSize is larger than the end of the code,
+ * than only copy
  * [_codeOffset, _codeEnd]
- * @param _context : evm context, including to myAddress, caller, gas, origin, value, etc.
+ * @param _context : evm context, including to myAddress, caller, gas, origin,
+ * value, etc.
  * @param _addr: the evmc-address of the code
  * @param _codeOffset: the offset begin to copy code
  * @param _bufferData : buffer store the copied code
@@ -132,7 +135,6 @@ void selfdestruct(
     assert(fromEvmC(*_addr) == env.myAddress());
     env.suicide(fromEvmC(*_beneficiary));
 }
-
 
 void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data, size_t _dataSize,
     evmc_uint256be const _topics[], size_t _numTopics) noexcept
