@@ -65,6 +65,7 @@ public:
 
     virtual uint32_t getFuncSelector(std::string const& _functionName);
     virtual bytesConstRef getParamData(bytesConstRef _param) { return _param.cropped(4); }
+    virtual void getOut(bytes& out, int const& result);
 
 protected:
     std::map<std::string, uint32_t> name2Selector;
