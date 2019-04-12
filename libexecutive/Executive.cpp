@@ -52,23 +52,7 @@ void Executive::initialize(Transaction const& _transaction)
     m_t = _transaction;
     m_baseGasRequired = m_t.baseGasRequired(DefaultSchedule);
 
-    try
-    {
-        verifyTransaction(
-            ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
-    }
-    catch (dev::Exception& e)
-    {
-        // Not need to revert, evm is not running
-        m_excepted = toTransactionException(e);
-        throw;
-    }
-    catch (std::exception& e)
-    {
-        // Not need to revert, evm is not running
-        m_excepted = TransactionException::Unknown;
-        throw;
-    }
+    verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
     if (!m_t.hasZeroSignature())
     {
@@ -91,8 +75,11 @@ void Executive::verifyTransaction(
     // Pre calculate the gas needed for execution
     if ((_ir & ImportRequirements::TransactionBasic) &&
         _t.baseGasRequired(schedule) > (bigint)txGasLimit)
+    {
+        m_excepted = TransactionException::OutOfGasIntrinsic;
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
+    }
 }
 
 bool Executive::execute()
