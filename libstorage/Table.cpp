@@ -368,6 +368,62 @@ bool Condition::process(Entry::Ptr entry)
     	}
 
     	auto fields = entry->fields();
+
+    	for(auto it: *fields) {
+    		auto condIt = m_conditions.find(it.first);
+    		if(condIt != m_conditions.end()) {
+    			if(condIt->second.left.second == condIt->second.right.second && condIt->second.left.first && condIt->second.right.first) {
+    				if(condIt->second.left.second == it.second) {
+    					// point hited
+    					continue;
+    				}
+    				else {
+    					// point missed
+    					return false;
+    				}
+    			}
+
+    			if(condIt->second.left.second != UNLIMITED) {
+					auto lhs = boost::lexical_cast<int64_t>(condIt->second.left.second);
+					auto rhs = (int64_t)0;
+					if(!it.second.empty()) {
+						rhs = boost::lexical_cast<int64_t>(it.second);
+					}
+
+					if(condIt->second.left.first) {
+						if(!(lhs <= rhs)) {
+							return false;
+						}
+					}
+					else {
+						if(!(lhs < rhs)) {
+							return false;
+						}
+					}
+				}
+
+				if(condIt->second.right.second != UNLIMITED) {
+					auto lhs = boost::lexical_cast<int64_t>(condIt->second.right.second);
+					auto rhs = (int64_t)0;
+					if(!it.second.empty()) {
+						rhs = boost::lexical_cast<int64_t>(it.second);
+					}
+
+					if(condIt->second.right.first) {
+						if(!(lhs >= rhs)) {
+							return false;
+						}
+					}
+					else {
+						if(!(lhs > rhs)) {
+							return false;
+						}
+					}
+				}
+    		}
+    	}
+
+#if 0
     	for(auto it : m_conditions) {
     		auto fieldIt = fields->find(it.first);
 
@@ -376,13 +432,11 @@ bool Condition::process(Entry::Ptr entry)
 
     			if(it.second.left.second == it.second.right.second) {
     				if(it.second.left.first && it.second.right.first) {
-    					if(!(it.second.left.second == value)) {
-    						return false;
+    					if(it.second.left.second == value) {
+    						continue;
     					}
     					else {
-    						if(!(it.second.left.second != value)) {
-    							return false;
-    						}
+    						return false;
     					}
     				}
     			}
@@ -426,6 +480,7 @@ bool Condition::process(Entry::Ptr entry)
     			}
     		}
     	}
+#endif
     }
     catch (std::exception& e)
     {

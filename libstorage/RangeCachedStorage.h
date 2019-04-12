@@ -66,6 +66,7 @@ public:
 	virtual std::vector<CachePage::Ptr>* cachePages();
 	virtual CachePage::Ptr tempPage();
 
+private:
 	TableInfo::Ptr m_tableInfo;
 	std::vector<CachePage::Ptr> m_cachePages;
 	CachePage::Ptr m_tempPage;
