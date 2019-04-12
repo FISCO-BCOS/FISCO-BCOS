@@ -744,7 +744,7 @@ do
     sleep 0.5
     ((i=i+1))
 done
-echo -e "\033[31m \${node} starting excess waiting time \033[0m"
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
 ${log_cmd}
 exit 1
 EOF
@@ -770,7 +770,7 @@ do
     fi
     ((i=i+1))
 done
-echo " stop \${node} failed, exceed maximum number of retries."
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
 }
