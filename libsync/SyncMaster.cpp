@@ -408,6 +408,13 @@ void SyncMaster::maintainPeersStatus()
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            if (m_syncStatus->knownHighestNumber <= 0 ||
+                _p->number != m_syncStatus->knownHighestNumber)
+            {
+                // Only send request to nodes which are not syncing(has max number)
+                return true;
+            }
+
             // shard: [from, to]
             int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
