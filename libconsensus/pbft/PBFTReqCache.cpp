@@ -190,6 +190,17 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
     }
 }
 
+void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader)
+{
+    for (auto it : m_futurePrepareCache)
+    {
+        if (it.first <= highestBlockHeader.number())
+        {
+            m_futurePrepareCache.erase(it);
+        }
+    }
+}
+
 /// get the consensus status
 void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) const
 {

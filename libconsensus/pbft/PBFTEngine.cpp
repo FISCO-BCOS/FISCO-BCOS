@@ -946,6 +946,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                     << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
+                m_reqCache->removeInvalidFutureCache(m_highestBlock);
             }
             else
             {

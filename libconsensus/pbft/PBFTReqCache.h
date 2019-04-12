@@ -211,6 +211,7 @@ public:
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+        removeInvalidFutureCache(highestBlockHeader);
     }
     /// remove invalid view-change requests according to view and the current block header
     void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
@@ -224,6 +225,8 @@ public:
         m_signCache.clear();
         m_recvViewChangeReq.clear();
     }
+
+    void removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader);
 
     inline void clearAll()
     {
