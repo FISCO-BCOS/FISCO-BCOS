@@ -82,14 +82,47 @@ Entries::Ptr CachePage::process(Condition::Ptr condition) {
 	return out;
 }
 
+std::list<Entry::Ptr>* CachePage::entries() {
+	return &m_entries;
+}
+
+void CachePage::mergeFrom(CachePage::Ptr cachePage, bool move) {
+	for(auto entryIt = m_entries.begin(); entryIt != m_entries.end(); ++entryIt) {
+		auto entry = cachePage->getByID((*entryIt)->getID());
+		if(entry && entry->num() > (*entryIt)->num()) {
+			*entryIt = entry;
+
+			if(move) {
+				cachePage->removeByID(entry->getID());
+			}
+		}
+	}
+}
+
+TableInfo::Ptr TableCache::tableInfo() {
+	return m_tableInfo;
+}
+
+std::vector<CachePage::Ptr>* TableCache::cachePages() {
+	return &m_cachePages;
+}
+
+CachePage::Ptr TableCache::tempPage() {
+	return m_tempPage;
+}
+
 Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition) {
 	auto it = m_caches.find(table);
 	if(it != m_caches.end()) {
-		for(auto cacheIt: it->second->cachePages) {
+		for(auto cacheIt: *(it->second->cachePages())) {
 			if(cacheIt->condition()->graterThan(condition)) {
 				return cacheIt->process(condition);
 			}
+		}
+
+		if(it->second->tempPage()->condition()->graterThan(condition)) {
+			return it->second->tempPage()->process(condition);
 		}
 	}
 
@@ -105,12 +138,23 @@ Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& t
 		cachePage->setCondition(condition);
 		cachePage->import(out);
 
-		for(auto pageIt = tableIt->second->cachePages.begin(); pageIt != tableIt->second->cachePages.end(); ++pageIt) {
+		for(auto pageIt = tableIt->second->cachePages()->begin(); pageIt != tableIt->second->cachePages()->end(); ++pageIt) {
 			if(condition->graterThan((*pageIt)->condition())) {
-				pageIt = tableIt->second->cachePages.erase(pageIt);
+				pageIt = tableIt->second->cachePages()->erase(pageIt);
+				continue;
+			}
+
+			if(condition->related((*pageIt)->condition())) {
+				//related to page, merge related entry
+				cachePage->mergeFrom(*pageIt);
 			}
 		}
-		tableIt->second->cachePages.push_back(cachePage);
+
+		if(condition->related(tableIt->second->tempPage()->condition())) {
+			cachePage->mergeFrom(tableIt->second->tempPage(), true);
+		}
+
+		tableIt->second->cachePages()->push_back(cachePage);
 		return out;
 	}
 
@@ -119,6 +163,10 @@ Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& t
 
 size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
         h256 const& blockHash) {
+	(void)hash;
+	(void)num;
+	(void)blockHash;
+
 	for(auto it: datas) {
 		auto tableIt = m_caches.find(it->tableName);
 		if(tableIt == m_caches.end()) {
@@ -127,9 +175,10 @@ size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<Tabl
 
 		for(size_t i=0;i<it->entries->size();++i) {
 			auto entry = it->entries->get(i);
-			for(auto pageIt: tableIt->second->cachePages) {
+			for(auto pageIt: *(tableIt->second->cachePages())) {
 				if(pageIt->condition()->process(entry)) {
-					pageIt->entries->addEntry(entry);
+					pageIt->addEntry(entry);
+					break;
 				}
 			}
 		}

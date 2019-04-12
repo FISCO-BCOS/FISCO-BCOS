@@ -30,6 +30,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <libdevcore/FixedHash.h>
 #include <type_traits>
 
 namespace dev
@@ -47,7 +48,7 @@ public:
 
     virtual ~MemoryTable2(){};
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
+    virtual Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
 
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
@@ -108,6 +109,8 @@ public:
     virtual void rollback(const Change& _change) override;
 
 private:
+    Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
+
     using EntriesType = ConcurrentEntries;
     using EntriesPtr = EntriesType::Ptr;
     EntriesPtr m_newEntries;

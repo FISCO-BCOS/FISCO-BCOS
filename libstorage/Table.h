@@ -58,6 +58,7 @@ class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
     typedef std::shared_ptr<Entry> Ptr;
+    typedef std::shared_ptr<const Entry> ConstPtr;
 
     enum Status
     {
@@ -77,13 +78,16 @@ public:
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
 
-    virtual std::map<std::string, std::string>* fields();
+    virtual const std::map<std::string, std::string>* fields() const;
 
-    virtual uint32_t getStatus();
+    virtual uint32_t getStatus() const;
     virtual void setStatus(int status);
 
-    bool dirty() const;
-    void setDirty(bool dirty);
+    virtual uint32_t num() const;
+    virtual void setNum(uint32_t num);
+
+    virtual bool dirty() const;
+    virtual void setDirty(bool dirty);
 
 private:
     size_t m_tempIndex = 0;
@@ -95,8 +99,10 @@ class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
+    typedef std::shared_ptr<const Entries> ConstPtr;
     virtual ~Entries() {};
 
+    virtual Entry::ConstPtr get(size_t i) const;
     virtual Entry::Ptr get(size_t i);
     virtual size_t size() const;
     virtual void addEntry(Entry::Ptr entry);
@@ -191,6 +197,7 @@ public:
 
     virtual bool process(Entry::Ptr entry);
     virtual bool graterThan(Condition::Ptr condition);
+    virtual bool related(Condition::Ptr condition);
 
 private:
     std::map<std::string, Range> m_conditions;
@@ -268,7 +275,7 @@ public:
 
     virtual Entry::Ptr newEntry() { return std::make_shared<Entry>(); }
     virtual Condition::Ptr newCondition() { return std::make_shared<Condition>(); }
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
+    virtual Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) = 0;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int insert(const std::string& key, Entry::Ptr entry,

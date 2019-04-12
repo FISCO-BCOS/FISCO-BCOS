@@ -39,7 +39,11 @@ using namespace dev::precompiled;
 
 MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<EntriesType>()) {}
 
-Entries::Ptr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
+Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition) {
+	return selectNoLock(key, condition);
+}
+
+Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -104,12 +108,12 @@ int MemoryTable2::update(
 
         checkField(entry);
 
-        auto entries = select(key, condition);
+        auto entries = selectNoLock(key, condition);
         std::vector<Change::Record> records;
 
         for (size_t i = 0; i < entries->size(); ++i)
         {
-            auto updateEntry = entries->get(i);
+            Entry::Ptr updateEntry = entries->get(i);
 
             // if id not equals to zero and not in the m_dirty, must be new dirty entry
             if (updateEntry->getID() != 0 && m_dirty.find(updateEntry->getID()) == m_dirty.end())
@@ -194,12 +198,12 @@ int MemoryTable2::remove(
             return storage::CODE_NO_AUTHORIZED;
         }
 
-        auto entries = select(key, condition);
+        auto entries = selectNoLock(key, condition);
 
         std::vector<Change::Record> records;
         for (size_t i = 0; i < entries->size(); ++i)
         {
-            auto removeEntry = entries->get(i);
+            Entry::Ptr removeEntry = entries->get(i);
 
             removeEntry->setStatus(1);
 

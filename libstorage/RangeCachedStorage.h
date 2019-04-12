@@ -45,9 +45,13 @@ public:
 	virtual int64_t num();
 	virtual Entries::Ptr process(Condition::Ptr condition);
 
+	virtual std::list<Entry::Ptr>* entries();
+	virtual void mergeFrom(CachePage::Ptr cachePage, bool move = false);
+
 private:
 	std::list<Entry::Ptr> m_entries;
 	std::map<int64_t, std::list<Entry::Ptr>::iterator > m_ID2Entry;
+	//std::map<std::string, std::list<Entry::Ptr>::iterator >
 
 	Condition::Ptr m_condition;
 	int64_t m_num = 0;
@@ -56,10 +60,15 @@ private:
 class TableCache {
 public:
 	typedef std::shared_ptr<TableCache> Ptr;
+	virtual ~TableCache() {};
 
-	TableInfo::Ptr tableInfo;
-	std::vector<CachePage::Ptr> cachePages;
-	CachePage::Ptr m_unindexPage;
+	virtual TableInfo::Ptr tableInfo();
+	virtual std::vector<CachePage::Ptr>* cachePages();
+	virtual CachePage::Ptr tempPage();
+
+	TableInfo::Ptr m_tableInfo;
+	std::vector<CachePage::Ptr> m_cachePages;
+	CachePage::Ptr m_tempPage;
 };
 
 class RangeCachedStorage : public Storage

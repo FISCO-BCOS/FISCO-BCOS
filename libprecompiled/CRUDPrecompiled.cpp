@@ -65,7 +65,7 @@ bytes CRUDPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param, 
         {
             auto entries = table->select(key, table->newCondition());
             auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
-            entriesPrecompiled->setEntries(entries);
+            //entriesPrecompiled->setEntries(entries);
             auto newAddress = context->registerPrecompiled(entriesPrecompiled);
             out = abi.abiIn("", newAddress);
         }

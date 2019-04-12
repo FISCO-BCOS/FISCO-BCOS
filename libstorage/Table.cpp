@@ -109,12 +109,12 @@ void Entry::setTempIndex(size_t index)
     m_tempIndex = index;
 }
 
-std::map<std::string, std::string>* Entry::fields()
+const std::map<std::string, std::string>* Entry::fields() const
 {
     return &m_fields;
 }
 
-uint32_t Entry::getStatus()
+uint32_t Entry::getStatus() const
 {
     // dev::ReadGuard l(x_fields);
     auto it = m_fields.find(STATUS);
@@ -144,6 +144,28 @@ void Entry::setStatus(int status)
     m_dirty = true;
 }
 
+uint32_t Entry::num() const {
+	auto it = m_fields.find(NUM_FIELD);
+	if(it == m_fields.end()) {
+		return 0;
+	}
+	else {
+		return boost::lexical_cast<uint32_t>(it->second);
+	}
+}
+
+void Entry::setNum(uint32_t num) {
+	auto it = m_fields.find(NUM_FIELD);
+	if(it == m_fields.end()) {
+		m_fields.insert(std::make_pair(NUM_FIELD, boost::lexical_cast<std::string>(num)));
+	}
+	else {
+		it->second = boost::lexical_cast<std::string>(num);
+	}
+
+	m_dirty = true;
+}
+
 bool Entry::dirty() const
 {
     return m_dirty;
@@ -157,6 +179,17 @@ void Entry::setDirty(bool dirty)
 size_t Entries::size() const
 {
     return m_entries.size();
+}
+
+Entry::ConstPtr Entries::get(size_t i) const {
+	if (m_entries.size() <= i)
+	{
+		throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+
+		return Entry::Ptr();
+	}
+
+	return m_entries[i];
 }
 
 Entry::Ptr Entries::get(size_t i)
@@ -396,7 +429,7 @@ bool Condition::process(Entry::Ptr entry)
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
+        STORAGE_LOG(ERROR) << LOG_BADGE("Condition") << LOG_DESC("process error")
                            << LOG_KV("msg", boost::diagnostic_information(e));
         return false;
     }
@@ -484,9 +517,58 @@ bool Condition::graterThan(Condition::Ptr condition) {
 		}
 	}
 	catch(std::exception &e) {
-		STORAGE_LOG(WARNING) << "Error while compare condition: " << boost::diagnostic_information(e);
+		STORAGE_LOG(WARNING) << "Error while graterThan condition: " << boost::diagnostic_information(e);
 		return false;
 	}
 
 	return true;
+}
+
+bool Condition::related(Condition::Ptr condition) {
+	try {
+		for(auto condIt: m_conditions) {
+			auto it = condition->getConditions()->find(condIt.first);
+			if(it == condition->getConditions()->end()) {
+				return true;
+			}
+			else {
+				if(it->second.left.first && condIt.second.left.first && it->second.left.second == condIt.second.left.second) {
+					return true;
+				}
+
+				if(it->second.right.first && condIt.second.right.first && it->second.right.second == condIt.second.right.second) {
+					return true;
+				}
+
+				if(condIt.second.left.second == UNLIMITED || it->second.left.second == UNLIMITED) {
+					return true;
+				}
+
+				if(condIt.second.right.second == UNLIMITED || it->second.right.second == UNLIMITED) {
+					return true;
+				}
+
+				auto leftLHS = boost::lexical_cast<int64_t>(condIt.second.left.second);
+				auto leftRHS = boost::lexical_cast<int64_t>(it->second.left.second);
+				auto rightLHS = boost::lexical_cast<int64_t>(condIt.second.right.second);
+				auto rightRHS = boost::lexical_cast<int64_t>(it->second.right.second);
+
+				if(leftLHS < rightLHS && leftRHS < rightLHS) {
+					return false;
+				}
+
+				if(leftLHS > rightRHS && leftRHS > rightRHS) {
+					return false;
+				}
+
+				return true;
+			}
+		}
+	}
+	catch(std::exception &e) {
+		STORAGE_LOG(WARNING) << "Error while related condition: " << boost::diagnostic_information(e);
+		return false;
+	}
+
+	return false;
 }

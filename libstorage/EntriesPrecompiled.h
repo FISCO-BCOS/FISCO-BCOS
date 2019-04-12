@@ -51,10 +51,20 @@ public:
         ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
     void setEntries(dev::storage::Entries::Ptr entries) { m_entries = entries; }
+    void setEntries(dev::storage::Entries::ConstPtr entries) { m_entriesConst = entries; }
     dev::storage::Entries::Ptr getEntries() { return m_entries; }
+    dev::storage::Entries::ConstPtr getEntries() const {
+    	if(m_entriesConst) {
+    		return m_entries;
+    	}
+    	else {
+    		return m_entries;
+    	}
+    }
 
 private:
     dev::storage::Entries::Ptr m_entries;
+    dev::storage::Entries::ConstPtr m_entriesConst;
 };
 
 }  // namespace blockverifier

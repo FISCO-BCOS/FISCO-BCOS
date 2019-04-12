@@ -102,7 +102,7 @@ public:
         m_fakeStorage[SYS_TX_HASH_2_BLOCK][c_commonHash] = entry;
     }
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr) override
+    virtual Entries::ConstPtr select(const std::string& key, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
 

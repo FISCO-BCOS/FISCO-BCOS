@@ -893,8 +893,9 @@ void BlockChainImp::writeTotalTransactionCount(
             auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
             currentCount += block.transactions().size();
 
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
-            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, tb->newCondition());
+            auto updateEntry = tb->newEntry();
+            updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, updateEntry, tb->newCondition());
         }
         else
         {

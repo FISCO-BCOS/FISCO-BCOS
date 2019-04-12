@@ -54,7 +54,7 @@ public:
 
     virtual ~MemoryTable(){};
 
-    virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
+    virtual typename Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override
     {
         try
         {
