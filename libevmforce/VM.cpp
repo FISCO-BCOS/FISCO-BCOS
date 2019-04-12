@@ -584,8 +584,35 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            u256 a = m_SP[0];
+            u256 b = m_SP[1];
+            u256 temp_ = a * b;
+            if (a != 0)
+            {
+                if (u2s(a) < 0 || u2s(b) < 0)
+                {
+                    if (s2u(divWorkaround(u2s(temp_), u2s(a))) != b)
+                    {
+                        PrintCrash("integer overflow when doing mul operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                }
+                else
+                {
+                    if (divWorkaround(temp_, a) != b)
+                    {
+                        std::cout << a << std::endl;
+                        std::cout << b << std::endl;
+                        std::cout << temp_ << std::endl;
+                        std::cout << divWorkaround(temp_, a) << std::endl;
+                        std::cout << s2u(divWorkaround(u2s(temp_), u2s(a))) << std::endl;
+                        PrintCrash("integer overflow when doing mul operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                }
+            }
 
-            // pops two items and pushes their product mod 2^256.
+            // // pops two items and pushes their product mod 2^256.
             m_SPP[0] = m_SP[0] * m_SP[1];
         }
         NEXT
@@ -840,7 +867,15 @@ void MyVM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] = m_SP[2] ? u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing addmod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = u256((u512(m_SP[0]) + u512(m_SP[1])) % m_SP[2]);
+            }
         }
         NEXT
 
@@ -849,7 +884,15 @@ void MyVM::interpretCases()
             ON_OP();
             updateIOGas();
 
-            m_SPP[0] = m_SP[2] ? u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing mulmod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = u256((u512(m_SP[0]) * u512(m_SP[1])) % m_SP[2]);
+            }
         }
         NEXT
 
