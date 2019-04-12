@@ -231,6 +231,7 @@ public:
     inline void clearAll()
     {
         m_rawPrepareCache.clear();
+        m_futurePrepareCache.clear();
         clearAllExceptCommitCache();
         m_commitCache.clear();
     }

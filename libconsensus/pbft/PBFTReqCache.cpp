@@ -193,11 +193,15 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 /// clear the cache of future block to solve the memory leak problems
 void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader)
 {
-    for (auto it : m_futurePrepareCache)
+    for (auto pcache = m_futurePrepareCache.begin(); pcache != it.end();)
     {
-        if (it.first <= (uint64_t)(highestBlockHeader.number()))
+        if (pcache->first <= (uint64_t)(highestBlockHeader.number()))
         {
-            m_futurePrepareCache.erase(it.first);
+            pcache = m_futurePrepareCache.erase(pcache);
+        }
+        else
+        {
+            pcache++;
         }
     }
 }
