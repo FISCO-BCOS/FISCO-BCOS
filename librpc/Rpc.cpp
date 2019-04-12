@@ -84,12 +84,12 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
-std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
+std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
+                      << LOG_KV("groupID", _groupID) << LOG_KV("key", key);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -542,6 +542,8 @@ Json::Value Rpc::getBlockByNumber(
         response["parentHash"] = toJS(block->header().parentHash());
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
+        response["dbHash"] = toJS(block->header().dbHash());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);

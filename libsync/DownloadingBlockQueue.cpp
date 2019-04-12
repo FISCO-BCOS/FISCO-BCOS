@@ -106,8 +106,10 @@ BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
 
 void DownloadingBlockQueue::clear()
 {
-    WriteGuard l(x_buffer);
-    m_buffer->clear();
+    {
+        WriteGuard l(x_buffer);
+        m_buffer->clear();
+    }
 
     clearQueue();
 }

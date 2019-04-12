@@ -21,6 +21,9 @@
 #pragma once
 
 #include "ModularServer.h"
+#include <boost/lexical_cast.hpp>
+
+using namespace jsonrpc;
 
 namespace dev
 {
@@ -131,32 +134,33 @@ public:
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getSystemConfigByKey(request[0u].asInt(), request[1u].asString());
+        response = this->getSystemConfigByKey(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
     inline virtual void getBlockNumberI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getBlockNumber(request[0u].asInt());
+        response = this->getBlockNumber(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getPbftViewI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPbftView(request[0u].asInt());
+        response = this->getPbftView(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getSealerListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getSealerList(request[0u].asInt());
+        response = this->getSealerList(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getObserverListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getObserverList(request[0u].asInt());
+        response = this->getObserverList(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getConsensusStatusI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getConsensusStatus(request[0u].asInt());
+        response = this->getConsensusStatus(boost::lexical_cast<int>(request[0u].asString()));
     }
 
     inline virtual void getSyncStatusI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getSyncStatus(request[0u].asInt());
+        response = this->getSyncStatus(boost::lexical_cast<int>(request[0u].asString()));
     }
 
     inline virtual void getClientVersionI(const Json::Value&, Json::Value& response)
@@ -165,11 +169,11 @@ public:
     }
     inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPeers(request[0u].asInt());
+        response = this->getPeers(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getGroupPeersI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getGroupPeers(request[0u].asInt());
+        response = this->getGroupPeers(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getGroupListI(const Json::Value&, Json::Value& response)
     {
@@ -177,67 +181,74 @@ public:
     }
     inline virtual void getNodeIDListI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getNodeIDList(request[0u].asInt());
+        response = this->getNodeIDList(boost::lexical_cast<int>(request[0u].asString()));
     }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
     {
-        response =
-            this->getBlockByHash(request[0u].asInt(), request[1u].asString(), request[2u].asBool());
+        response = this->getBlockByHash(boost::lexical_cast<int>(request[0u].asString()),
+            request[1u].asString(), request[2u].asBool());
     }
     inline virtual void getBlockByNumberI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getBlockByNumber(
-            request[0u].asInt(), request[1u].asString(), request[2u].asBool());
+        response = this->getBlockByNumber(boost::lexical_cast<int>(request[0u].asString()),
+            request[1u].asString(), request[2u].asBool());
     }
     inline virtual void getBlockHashByNumberI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getBlockHashByNumber(request[0u].asInt(), request[1u].asString());
+        response = this->getBlockHashByNumber(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
     inline virtual void getTransactionByHashI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getTransactionByHash(request[0u].asInt(), request[1u].asString());
+        response = this->getTransactionByHash(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
     inline virtual void getTransactionByBlockHashAndIndexI(
         const Json::Value& request, Json::Value& response)
     {
         response = this->getTransactionByBlockHashAndIndex(
-            request[0u].asInt(), request[1u].asString(), request[2u].asString());
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString(),
+            request[2u].asString());
     }
     inline virtual void getTransactionByBlockNumberAndIndexI(
         const Json::Value& request, Json::Value& response)
     {
         response = this->getTransactionByBlockNumberAndIndex(
-            request[0u].asInt(), request[1u].asString(), request[2u].asString());
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString(),
+            request[2u].asString());
     }
     inline virtual void getTransactionReceiptI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getTransactionReceipt(request[0u].asInt(), request[1u].asString());
+        response = this->getTransactionReceipt(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
     inline virtual void getPendingTransactionsI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPendingTransactions(request[0u].asInt());
+        response = this->getPendingTransactions(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getPendingTxSizeI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getPendingTxSize(request[0u].asInt());
+        response = this->getPendingTxSize(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getCodeI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getCode(request[0u].asInt(), request[1u].asString());
+        response =
+            this->getCode(boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
     inline virtual void getTotalTransactionCountI(const Json::Value& request, Json::Value& response)
     {
-        response = this->getTotalTransactionCount(request[0u].asInt());
+        response = this->getTotalTransactionCount(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void callI(const Json::Value& request, Json::Value& response)
     {
-        response = this->call(request[0u].asInt(), request[1u]);
+        response = this->call(boost::lexical_cast<int>(request[0u].asString()), request[1u]);
     }
     inline virtual void sendRawTransactionI(const Json::Value& request, Json::Value& response)
     {
-        response = this->sendRawTransaction(request[0u].asInt(), request[1u].asString());
+        response = this->sendRawTransaction(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
     // system config part

@@ -110,8 +110,12 @@ done
 
 print_result()
 {
-echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path   : $bin_path"
+echo "================================================================"
+LOG_INFO "Execute the following command to get the FISCO-BCOS console"
+echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
+echo "================================================================"
+[ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
+[ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : ${port_start[*]}"
@@ -122,7 +126,7 @@ LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
-echo "=============================================================="
+echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
 
@@ -744,7 +748,7 @@ do
     sleep 0.5
     ((i=i+1))
 done
-echo -e "\033[31m \${node} starting excess waiting time \033[0m"
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
 ${log_cmd}
 exit 1
 EOF
@@ -770,7 +774,7 @@ do
     fi
     ((i=i+1))
 done
-echo " stop \${node} failed, exceed maximum number of retries."
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
 }
