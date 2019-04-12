@@ -574,9 +574,46 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
             // pops two items and pushes their sum mod 2^256.
-            m_SPP[0] = m_SP[0] + m_SP[1];
+            u256 a = m_SP[0];
+            u256 b = m_SP[1];
+            if (((u2s(a) >= 0) && (u2s(b) <= 0)) || ((u2s(a) <= 0) && (u2s(b) >= 0)))
+            {
+                m_SPP[0] = m_SP[0] + m_SP[1];
+            }
+            else
+            {
+                if (u2s(a) >= 0 && u2s(b) >= 0)
+                {
+                    u256 temp = a + b;
+                    u512 temp_ = u512(a) + u512(b);
+                    if (temp != temp_)
+                    {
+                        PrintCrash("integer overflow when doing add operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                    else
+                    {
+                        m_SPP[0] = m_SP[0] + m_SP[1];
+                    }
+                }
+                else
+                {
+                    a = s2u(0 - u2s(a));
+                    b = s2u(0 - u2s(b));
+                    u256 temp = a + b;
+                    u512 temp_ = u512(a) + u512(b);
+                    if (temp != temp_)
+                    {
+                        PrintCrash("integer overflow when doing add operation");
+                        throw "SOL_ASAN Crash";
+                    }
+                    else
+                    {
+                        m_SPP[0] = m_SP[0] + m_SP[1];
+                    }
+                }
+            }
         }
         NEXT
 
