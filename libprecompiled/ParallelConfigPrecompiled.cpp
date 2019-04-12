@@ -187,7 +187,6 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     out = abi.abiIn("", u256(CODE_SUCCESS));
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("unregisterParallelFunction success")
                            << LOG_KV(PARA_SELECTOR, to_string(selector));
-    ;
 }
 
 
