@@ -732,7 +732,6 @@ void MyVM::interpretCases()
             {
                 m_SPP[0] = s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
             }
-
         }
         NEXT
 
