@@ -110,7 +110,7 @@ done
 
 print_result()
 {
-    echo "================================================================"
+echo "================================================================"
 LOG_INFO "Execute the following command to get the FISCO-BCOS console"
 echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
 echo "================================================================"
@@ -748,7 +748,7 @@ do
     sleep 0.5
     ((i=i+1))
 done
-echo -e "\033[31m \${node} starting excess waiting time \033[0m"
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
 ${log_cmd}
 exit 1
 EOF
@@ -774,7 +774,7 @@ do
     fi
     ((i=i+1))
 done
-echo " stop \${node} failed, exceed maximum number of retries."
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
 }

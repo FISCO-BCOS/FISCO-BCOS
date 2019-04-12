@@ -21,6 +21,8 @@
 #pragma once
 
 #include "ModularServer.h"
+#include <boost/lexical_cast.hpp>
+
 using namespace jsonrpc;
 
 namespace dev
