@@ -134,9 +134,10 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         getOut(out, count);
     }
     else
-    {  // unkown function call
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unkown func ")
+    {  // unknown function call
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unknown func ")
                                << LOG_KV("func", func);
+        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
     }
 
     return out;
