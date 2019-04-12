@@ -667,8 +667,16 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing div operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = divWorkaround(m_SP[0], m_SP[1]);
+            }
+            // m_SPP[0] = m_SP[1] ? divWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -676,8 +684,19 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing sdiv operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
+            }
 
-            m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
+            // m_SPP[0] = m_SP[1] ? s2u(divWorkaround(u2s(m_SP[0]),
+            // u2s(m_SP[1]))) :
+            // 0;
             --m_SP;
         }
         NEXT
@@ -686,8 +705,17 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing mod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = modWorkaround(m_SP[0], m_SP[1]);
+            }
 
-            m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
+            //     m_SPP[0] = m_SP[1] ? modWorkaround(m_SP[0], m_SP[1]) : 0;
         }
         NEXT
 
@@ -695,8 +723,15 @@ void MyVM::interpretCases()
         {
             ON_OP();
             updateIOGas();
-
-            m_SPP[0] = m_SP[1] ? s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1]))) : 0;
+            if (m_SP[2] == 0)
+            {
+                PrintCrash("integer overflow when doing smod operation");
+                throw "SOL_ASAN Crash";
+            }
+            else
+            {
+                m_SPP[0] = s2u(modWorkaround(u2s(m_SP[0]), u2s(m_SP[1])));
+            }
         }
         NEXT
 
