@@ -89,6 +89,8 @@ public:
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
 
+    virtual void copyFrom(Entry::Ptr entry);
+
 private:
     size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
@@ -109,6 +111,8 @@ public:
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
+
+    virtual std::vector<Entry::Ptr>* entries();
 
 private:
     std::vector<Entry::Ptr> m_entries;
@@ -170,6 +174,8 @@ public:
         le
     };
 
+
+
     class Range {
     public:
 		Range(std::pair<bool, std::string> _left, std::pair<bool, std::string> _right): left(_left), right(_right) {};
@@ -198,6 +204,8 @@ public:
     virtual bool process(Entry::Ptr entry);
     virtual bool graterThan(Condition::Ptr condition);
     virtual bool related(Condition::Ptr condition);
+
+    virtual std::string unlimitedField() { return UNLIMITED; }
 
 private:
     std::map<std::string, Range> m_conditions;

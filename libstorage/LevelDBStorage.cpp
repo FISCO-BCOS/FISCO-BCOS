@@ -148,7 +148,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
 size_t LevelDBStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {

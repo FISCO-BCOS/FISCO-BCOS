@@ -55,6 +55,31 @@ Entries::Ptr SQLStorage::select(
             {
                 Json::Value cond;
                 cond.append(it.first);
+                if(it.second.left.second == it.second.right.second && it.second.left.first && it.second.right.first) {
+                	cond.append(Condition::eq);
+                	cond.append(it.second.left.second);
+                }
+                else {
+					if(it.second.left.second != condition->unlimitedField()) {
+						if(it.second.left.first) {
+							cond.append(Condition::ge);
+						}
+						else {
+							cond.append(Condition::gt);
+						}
+						cond.append(it.second.left.second);
+					}
+
+					if(it.second.right.second != condition->unlimitedField()) {
+						if(it.second.right.first) {
+							cond.append(Condition::le);
+						}
+						else {
+							cond.append(Condition::lt);
+						}
+						cond.append(it.second.right.second);
+					}
+                }
                 //cond.append(it.second.left);
                 //cond.append(it.second.second);
                 requestJson["params"]["condition"].append(cond);
@@ -113,11 +138,10 @@ Entries::Ptr SQLStorage::select(
 }
 
 size_t SQLStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const& blockHash)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
-        (void)blockHash;
         LOG(DEBUG) << "Commit data to database:" << datas.size();
 
         if (datas.size() == 0)

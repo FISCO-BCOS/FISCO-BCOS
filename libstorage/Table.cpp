@@ -21,7 +21,7 @@
 /*
  * Table.cpp
  *
- *  Created on: 2018年4月27日
+ *  Created on: 2018.4.27
  *      Author: mo nan
  */
 
@@ -56,7 +56,7 @@ uint32_t Entry::getID() const
 
 void Entry::setID(uint32_t id)
 {
-    auto it = m_fields.find(STATUS);
+    auto it = m_fields.find(ID_FIELD);
     if (it == m_fields.end())
     {
         m_fields.insert(std::make_pair(ID_FIELD, boost::lexical_cast<std::string>(id)));
@@ -176,6 +176,12 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
+void Entry::copyFrom(Entry::Ptr entry) {
+	m_dirty = entry->m_dirty;
+	m_fields = entry->m_fields;
+	m_tempIndex = entry->m_tempIndex;
+}
+
 size_t Entries::size() const
 {
     return m_entries.size();
@@ -223,6 +229,10 @@ bool Entries::dirty() const
 void Entries::setDirty(bool dirty)
 {
     m_dirty = dirty;
+}
+
+std::vector<Entry::Ptr>* Entries::entries() {
+	return &m_entries;
 }
 
 size_t ConcurrentEntries::size() const
@@ -493,6 +503,8 @@ bool Condition::process(Entry::Ptr entry)
 }
 
 bool Condition::graterThan(Condition::Ptr condition) {
+	(void)condition;
+#if 0
 	try {
 		for(auto it: *(condition->getConditions())) {
 			auto condIt = m_conditions.find(it.first);
@@ -575,11 +587,14 @@ bool Condition::graterThan(Condition::Ptr condition) {
 		STORAGE_LOG(WARNING) << "Error while graterThan condition: " << boost::diagnostic_information(e);
 		return false;
 	}
+#endif
 
 	return true;
 }
 
 bool Condition::related(Condition::Ptr condition) {
+	(void)condition;
+#if 0
 	try {
 		for(auto condIt: m_conditions) {
 			auto it = condition->getConditions()->find(condIt.first);
@@ -624,6 +639,7 @@ bool Condition::related(Condition::Ptr condition) {
 		STORAGE_LOG(WARNING) << "Error while related condition: " << boost::diagnostic_information(e);
 		return false;
 	}
+#endif
 
 	return false;
 }

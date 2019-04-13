@@ -263,7 +263,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
+        stateStorage()->commit(_blockHash, _blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();

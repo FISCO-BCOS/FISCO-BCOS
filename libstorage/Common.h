@@ -37,6 +37,7 @@ const char* const SYS_TABLES = "_sys_tables_";
 const char* const SYS_CONSENSUS = "_sys_consensus_";
 const char* const SYS_CURRENT_STATE = "_sys_current_state_";
 const char* const SYS_KEY_CURRENT_NUMBER = "current_number";
+const char* const SYS_KEY_CURRENT_ID = "current_id";
 const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 const char* const SYS_VALUE = "value";
 const char* const SYS_KEY = "key";

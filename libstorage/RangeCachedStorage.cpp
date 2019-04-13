@@ -161,11 +161,9 @@ Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& t
 	return Entries::Ptr();
 }
 
-size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
-        h256 const& blockHash) {
+size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
 	(void)hash;
 	(void)num;
-	(void)blockHash;
 
 	for(auto it: datas) {
 		auto tableIt = m_caches.find(it->tableName);
