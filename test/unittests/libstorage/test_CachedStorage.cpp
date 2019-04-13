@@ -123,7 +123,7 @@ struct CachedStorageFixture
         Entries::Ptr entries = std::make_shared<Entries>();
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("Name", "LiSi");
-        entry->setField("id", "1");
+        entry->setField("id", "2");
         entries->addEntry(entry);
         return entries;
     }
@@ -203,10 +203,20 @@ BOOST_AUTO_TEST_CASE(commit)
     std::string table("t_test");
     std::string key("LiSi");
     entries = cachedStorage->select(h, num, table, key, std::make_shared<Condition>());
-    BOOST_CHECK_EQUAL(entries->size(), 1u);
+    BOOST_CHECK_EQUAL(entries->size(), 2u);
 
-    auto entry = entries->get(0);
-    BOOST_TEST(entry->getID() == 2);
+    for(size_t i=0; i<entries->size(); ++i) {
+    	auto entry = entries->get(i);
+    	if(entry->getField("id") == "1") {
+    		BOOST_TEST(entry->getID() == 1);
+    	}
+    	else if(entry->getField("id") == "2") {
+    		BOOST_TEST(entry->getID() == 2);
+    	}
+    	else {
+    		BOOST_TEST(false);
+    	}
+    }
 }
 
 BOOST_AUTO_TEST_CASE(exception)

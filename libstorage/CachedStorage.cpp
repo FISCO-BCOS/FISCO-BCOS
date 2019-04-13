@@ -82,6 +82,27 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition) {
 	auto out = std::make_shared<Entries>();
 
+	auto entries = selectNoCondition(hash, num, table, key, condition);
+
+	for(size_t i=0; i<entries->size(); ++i) {
+		auto entry = entries->get(i);
+		if(condition) {
+			if(condition->process(entry)) {
+				out->addEntry(entry);
+			}
+		}
+		else {
+			out->addEntry(entry);
+		}
+	}
+
+	return out;
+}
+
+Entries::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::string& table,
+        const std::string& key, Condition::Ptr condition) {
+	(void)condition;
+
 	auto tableIt = m_caches.find(table);
 	if(tableIt != m_caches.end()) {
 		auto tableCaches = tableIt->second;
@@ -92,19 +113,7 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
 				m_mru.relocate(m_mru.end(), r.first);
 			}
 
-			for(size_t i=0; i<caches->entries()->size(); ++i) {
-				auto entry = caches->entries()->get(i);
-				if(condition) {
-					if(condition->process(entry)) {
-						out->addEntry(entry);
-					}
-				}
-				else {
-					out->addEntry(entry);
-				}
-			}
-
-			return out;
+			return caches->entries();
 		}
 	}
 
@@ -121,21 +130,10 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
 
 		tableIt->second->addCache(key, cache);
 
-		for(size_t i=0; i<backendData->size(); ++i) {
-			auto entry = backendData->get(i);
-			if(condition) {
-				if(condition->process(entry)) {
-					out->addEntry(entry);
-				}
-			}
-			else {
-				out->addEntry(entry);
-			}
-		}
-		return out;
+		return cache->entries();
 	}
 
-	return out;
+	return std::make_shared<Entries>();
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
@@ -147,7 +145,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 			auto entry = it->entries->get(i);
 			auto key = entry->getField(it->info->key);
 
-			auto entries = select(h256(), 0, it->info->name, key, nullptr);
+			auto entries = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
 
 			for(size_t i=0;i<it->entries->size();++i) {
 				++total;
