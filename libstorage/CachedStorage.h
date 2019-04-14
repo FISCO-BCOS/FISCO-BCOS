@@ -60,6 +60,8 @@ public:
 	virtual void addCache(const std::string &key, Caches::Ptr cache);
 	virtual void removeCache(const std::string &key);
 
+	virtual std::map<std::string, Caches::Ptr>* caches();
+
 private:
 	TableInfo::Ptr m_tableInfo;
 	std::map<std::string, Caches::Ptr> m_caches;
@@ -102,8 +104,6 @@ public:
     void clearCache();
 
 private:
-
-
     std::map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<
 		std::pair<std::string, std::string>,

@@ -147,8 +147,9 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::stri
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
 	STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
+	STORAGE_LOG(TRACE) << "Commit data";
 	for(auto it: datas) {
-		STORAGE_LOG(TRACE) << "Commit data table: " << it->info->name;
+		STORAGE_LOG(TRACE) << "table: " << it->info->name;
 		for(size_t i=0;i<it->entries->size();++i) {
 			auto entry = it->entries->get(i);
 
@@ -210,7 +211,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 					caches->entries()->addEntry(cacheEntry);
 
 					auto commitEntry = std::make_shared<Entry>();
-					commitEntry->copyFrom(entry);
+					commitEntry->copyFrom(cacheEntry);
 					tableData->entries->addEntry(commitEntry);
 				}
 			}
@@ -221,8 +222,27 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 		commitDatas.push_back(tableData);
 	}
 
+	STORAGE_LOG(TRACE) << "Current cache --";
+	for(auto it: m_caches) {
+		STORAGE_LOG(TRACE) << "table: " << it.second->tableInfo()->name;
+		for(auto cacheIt: *(it.second->caches())) {
+			STORAGE_LOG(TRACE) << "key: " << cacheIt.first;
+			for(size_t i=0;i<cacheIt.second->entries();++i) {
+				auto entry = cacheIt.second->entries()->get(i);
+
+				std::stringstream ss;
+				for(auto fieldIt: *(entry->fields())) {
+					ss << " " << fieldIt.first << ":" << fieldIt.second;
+				}
+
+				STORAGE_LOG(TRACE) << "Entry: " << ss.str();
+			}
+		}
+	}
+
+	STORAGE_LOG(TRACE) << "Commit commitDatas ---";
 	for(auto it: commitDatas) {
-		STORAGE_LOG(TRACE) << "Commit commitDatas table: " << it->info->name;
+		STORAGE_LOG(TRACE) << "table: " << it->info->name;
 		for(size_t i=0;i<it->entries->size();++i) {
 			auto entry = it->entries->get(i);
 
