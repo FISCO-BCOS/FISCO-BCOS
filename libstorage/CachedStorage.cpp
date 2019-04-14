@@ -89,11 +89,17 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
 		auto entry = entries->get(i);
 		if(condition) {
 			if(condition->process(entry)) {
-				out->addEntry(entry);
+				auto outEntry = std::make_shared<Entry>();
+				outEntry->copyFrom(entry);
+
+				out->addEntry(outEntry);
 			}
 		}
 		else {
-			out->addEntry(entry);
+			auto outEntry = std::make_shared<Entry>();
+			outEntry->copyFrom(entry);
+
+			out->addEntry(outEntry);
 		}
 	}
 
@@ -171,9 +177,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 							}
 						}
 
-						auto cacheEntry = std::make_shared<Entry>();
-						cacheEntry->copyFrom(*entryIt);
-						tableData->entries->addEntry(cacheEntry);
+						auto commitEntry = std::make_shared<Entry>();
+						commitEntry->copyFrom(*entryIt);
+						tableData->entries->addEntry(commitEntry);
 					}
 					else {
 						STORAGE_LOG(ERROR) << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
@@ -188,7 +194,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 					cacheEntry->setID(++m_ID);
 					caches->entries()->addEntry(cacheEntry);
 
-					tableData->entries->addEntry(cacheEntry);
+					auto commitEntry = std::make_shared<Entry>();
+					commitEntry->copyFrom(entry);
+					tableData->entries->addEntry(commitEntry);
 				}
 			}
 

@@ -52,7 +52,8 @@ public:
 			Entry::Ptr entry = std::make_shared<Entry>();
 			entry->setID(1);
 			entry->setNum(100);
-			entry->setField(SYS_KEY, "100");
+			entry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+			entry->setField(SYS_VALUE, "100");
 			entry->setStatus(0);
 
 			entries->addEntry(entry);
