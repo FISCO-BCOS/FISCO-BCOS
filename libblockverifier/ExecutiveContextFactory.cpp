@@ -95,6 +95,8 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         BlockInfo blockInfo = context->blockInfo();
         std::string ret;
 
+        auto condition = std::make_shared<dev::storage::Condition>();
+        condition->EQ("key", key);
         auto values =
             m_stateStorage->select(blockInfo.hash, blockInfo.number, storage::SYS_CONFIG, key);
         if (!values || values->size() != 1)

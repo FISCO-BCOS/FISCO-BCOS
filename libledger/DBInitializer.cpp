@@ -143,8 +143,6 @@ void DBInitializer::initSQLStorage()
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
-    m_storage = sqlStorage;
-
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(sqlStorage);
     cachedStorage->setMaxStoreKey(1000);
@@ -155,6 +153,7 @@ void DBInitializer::initSQLStorage()
     //tableFactoryFactory->setStorage(m_storage);
     tableFactoryFactory->setStorage(cachedStorage);
 
+    m_storage = cachedStorage;
     m_tableFactoryFactory = tableFactoryFactory;
 }
 
