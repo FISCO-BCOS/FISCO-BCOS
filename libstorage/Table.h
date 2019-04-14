@@ -89,12 +89,17 @@ public:
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
 
+    // set the force flag will force insert the entry without query
+    virtual bool force() const;
+    virtual void setForce(bool force);
+
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
     size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
+    bool m_force = false;
 };
 
 class Entries : public std::enable_shared_from_this<Entries>

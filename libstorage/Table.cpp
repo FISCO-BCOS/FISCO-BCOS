@@ -176,6 +176,14 @@ void Entry::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
+bool Entry::force() const {
+	return m_force;
+}
+
+void Entry::setForce(bool force) {
+	m_force = force;
+}
+
 void Entry::copyFrom(Entry::Ptr entry) {
 	m_dirty = entry->m_dirty;
 	m_fields = entry->m_fields;

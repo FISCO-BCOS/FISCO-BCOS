@@ -937,6 +937,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                     entry->setField(
                         SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
                     entry->setField("index", lexical_cast<std::string>(i));
+                    entry->setForce(true);
                     // constructEntry_time_cost += utcTime() - record_time;
                     // record_time = utcTime();
 
