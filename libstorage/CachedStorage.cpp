@@ -22,6 +22,7 @@
 #include "CachedStorage.h"
 #include "StorageException.h"
 #include <libdevcore/easylog.h>
+#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -82,7 +83,7 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition) {
 	auto out = std::make_shared<Entries>();
 
-	auto entries = selectNoCondition(hash, num, table, key, condition);
+	auto entries = selectNoCondition(hash, num, table, key, condition)->entries();
 
 	for(size_t i=0; i<entries->size(); ++i) {
 		auto entry = entries->get(i);
@@ -99,7 +100,7 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
 	return out;
 }
 
-Entries::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::string& table,
+Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition) {
 	(void)condition;
 
@@ -113,7 +114,7 @@ Entries::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::str
 				m_mru.relocate(m_mru.end(), r.first);
 			}
 
-			return caches->entries();
+			return caches;
 		}
 	}
 
@@ -125,34 +126,38 @@ Entries::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::str
 			tableIt = m_caches.insert(std::make_pair(table, std::make_shared<TableCaches>())).first;
 		}
 
-		auto cache = std::make_shared<Caches>();
-		cache->setEntries(backendData);
+		auto caches = std::make_shared<Caches>();
+		caches->setEntries(backendData);
 
-		tableIt->second->addCache(key, cache);
+		tableIt->second->addCache(key, caches);
 
-		return cache->entries();
+		return caches;
 	}
 
-	return std::make_shared<Entries>();
+	return std::make_shared<Caches>();
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
 	size_t total = 0;
 
-	//update cache
+	std::vector<TableData::Ptr> commitDatas;
+	//update cache & copy datas
 	for(auto it: datas) {
+		auto tableData = std::make_shared<TableData>();
+		tableData->info = it->info;
+
 		for(size_t i=0; i<it->entries->size(); ++i) {
 			auto entry = it->entries->get(i);
 			auto key = entry->getField(it->info->key);
 
-			auto entries = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
+			auto caches = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
 
 			for(size_t i=0;i<it->entries->size();++i) {
 				++total;
 				auto entry = it->entries->get(i);
 				auto id = entry->getID();
 				if(id != 0) {
-					auto data = entries->entries();
+					auto data = caches->entries()->entries();
 					auto entryIt = std::lower_bound(data->begin(), data->end(), entry, [](const Entry::Ptr &lhs, const Entry::Ptr &rhs) {
 						return lhs->getID() < rhs->getID();
 					});
@@ -163,6 +168,10 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 								(*entryIt)->setField(fieldIt.first, fieldIt.second);
 							}
 						}
+
+						auto cacheEntry = std::make_shared<Entry>();
+						cacheEntry->copyFrom(*entryIt);
+						tableData->entries->addEntry(cacheEntry);
 					}
 					else {
 						STORAGE_LOG(ERROR) << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
@@ -175,17 +184,23 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 					auto cacheEntry = std::make_shared<Entry>();
 					cacheEntry->copyFrom(entry);
 					cacheEntry->setID(++m_ID);
-					entries->addEntry(cacheEntry);
+					caches->entries()->addEntry(cacheEntry);
+
+					tableData->entries->addEntry(cacheEntry);
 				}
 			}
+
+			caches->setNum(num);
 		}
+
+		commitDatas.push_back(tableData);
 	}
 
 	//new task write to backend
 	Task::Ptr task = std::make_shared<Task>();
 	task->hash = hash;
 	task->num = num;
-	task->datas = datas;
+	task->datas = commitDatas;
 
 	TableData::Ptr data = std::make_shared<TableData>();
 	data->info->name = SYS_CURRENT_STATE;
