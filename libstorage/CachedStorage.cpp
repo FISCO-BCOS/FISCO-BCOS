@@ -87,6 +87,8 @@ tbb::concurrent_unordered_map<std::string, Caches::Ptr>* TableCaches::caches() {
 
 CachedStorage::CachedStorage() {
 	m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
+	m_syncNum.store(0);
+	m_commitNum.store(0);
 }
 
 Entries::Ptr CachedStorage::select(h256 hash, int num, TableInfo::Ptr tableInfo,
@@ -318,7 +320,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 	auto backend = m_backend;
 	auto self = std::weak_ptr<CachedStorage>(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
 
-	m_commitNum = num;
+	m_commitNum.store(num);
 	m_taskThreadPool->enqueue([backend, task, self]() {
 		STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to persist storage";
 		backend->commit(task->hash, task->num, task->datas);
@@ -365,7 +367,7 @@ int64_t CachedStorage::syncNum() {
 }
 
 void CachedStorage::setSyncNum(int64_t syncNum) {
-	m_syncNum = syncNum;
+	m_syncNum.store(syncNum);
 }
 
 void CachedStorage::setMaxStoreKey(size_t maxStoreKey) {
