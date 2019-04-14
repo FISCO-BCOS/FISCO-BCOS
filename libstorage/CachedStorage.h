@@ -120,8 +120,8 @@ private:
     Storage::Ptr m_backend;
     size_t m_ID = 1;
 
-    std::atomic_int64_t m_syncNum;
-    std::atomic_int64_t m_commitNum;
+	boost::atomic_int64_t m_syncNum;
+    boost::atomic_int64_t m_commitNum;
 
     size_t m_maxStoreKey = 1000;
     size_t m_maxForwardBlock = 100;
