@@ -81,6 +81,7 @@ CachedStorage::CachedStorage() {
 
 Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
         const std::string& key, Condition::Ptr condition) {
+	STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << table << " key: " << key;
 	auto out = std::make_shared<Entries>();
 
 	auto entries = selectNoCondition(hash, num, table, key, condition)->entries();
@@ -146,6 +147,20 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::stri
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
 	STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
+	for(auto it: datas) {
+		STORAGE_LOG(TRACE) << "Commit data table: " << it->info->name;
+		for(size_t i=0;i<it->entries->size();++i) {
+			auto entry = it->entries->get(i);
+
+			std::stringstream ss;
+			for(auto fieldIt: *(entry->fields())) {
+				ss << " " << fieldIt.first << ":" << fieldIt.second;
+			}
+
+			STORAGE_LOG(TRACE) << "Entry: " << ss.str();
+		}
+	}
+
 	size_t total = 0;
 
 	std::vector<TableData::Ptr> commitDatas;
@@ -204,6 +219,20 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 		}
 
 		commitDatas.push_back(tableData);
+	}
+
+	for(auto it: commitDatas) {
+		STORAGE_LOG(TRACE) << "Commit commitDatas table: " << it->info->name;
+		for(size_t i=0;i<it->entries->size();++i) {
+			auto entry = it->entries->get(i);
+
+			std::stringstream ss;
+			for(auto fieldIt: *(entry->fields())) {
+				ss << " " << fieldIt.first << ":" << fieldIt.second;
+			}
+
+			STORAGE_LOG(TRACE) << "Entry: " << ss.str();
+		}
 	}
 
 	//new task write to backend
