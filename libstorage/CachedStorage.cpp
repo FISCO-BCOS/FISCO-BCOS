@@ -176,51 +176,48 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 		tableData->info = it->info;
 
 		for(size_t i=0; i<it->entries->size(); ++i) {
+			++total;
+
 			auto entry = it->entries->get(i);
 			auto key = entry->getField(it->info->key);
+			auto id = entry->getID();
 
 			auto caches = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
+			if(id != 0) {
+				auto data = caches->entries()->entries();
+				auto entryIt = std::lower_bound(data->begin(), data->end(), entry, [](const Entry::Ptr &lhs, const Entry::Ptr &rhs) {
+					return lhs->getID() < rhs->getID();
+				});
 
-			for(size_t i=0;i<it->entries->size();++i) {
-				++total;
-				auto entry = it->entries->get(i);
-				auto id = entry->getID();
-				if(id != 0) {
-					auto data = caches->entries()->entries();
-					auto entryIt = std::lower_bound(data->begin(), data->end(), entry, [](const Entry::Ptr &lhs, const Entry::Ptr &rhs) {
-						return lhs->getID() < rhs->getID();
-					});
-
-					if(entryIt != data->end() && (*entryIt)->getID() == id) {
-						for(auto fieldIt: *entry->fields()) {
-							if (fieldIt.first != "_id_") {
-								(*entryIt)->setField(fieldIt.first, fieldIt.second);
-							}
+				if(entryIt != data->end() && (*entryIt)->getID() == id) {
+					for(auto fieldIt: *entry->fields()) {
+						if (fieldIt.first != "_id_") {
+							(*entryIt)->setField(fieldIt.first, fieldIt.second);
 						}
-
-						auto commitEntry = std::make_shared<Entry>();
-						commitEntry->copyFrom(*entryIt);
-						tableData->entries->addEntry(commitEntry);
 					}
-					else {
-						STORAGE_LOG(ERROR) << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
-
-						//impossible
-						BOOST_THROW_EXCEPTION(StorageException(-1, "Can not find entry in cache, id: " + boost::lexical_cast<std::string>(entry->getID())));
-					}
-				}
-				else {
-					auto cacheEntry = std::make_shared<Entry>();
-					cacheEntry->copyFrom(entry);
-					cacheEntry->setID(++m_ID);
-					caches->entries()->addEntry(cacheEntry);
-
-					LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
 
 					auto commitEntry = std::make_shared<Entry>();
-					commitEntry->copyFrom(cacheEntry);
+					commitEntry->copyFrom(*entryIt);
 					tableData->entries->addEntry(commitEntry);
 				}
+				else {
+					STORAGE_LOG(ERROR) << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
+
+					//impossible
+					BOOST_THROW_EXCEPTION(StorageException(-1, "Can not find entry in cache, id: " + boost::lexical_cast<std::string>(entry->getID())));
+				}
+			}
+			else {
+				auto cacheEntry = std::make_shared<Entry>();
+				cacheEntry->copyFrom(entry);
+				cacheEntry->setID(++m_ID);
+				caches->entries()->addEntry(cacheEntry);
+
+				LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
+
+				auto commitEntry = std::make_shared<Entry>();
+				commitEntry->copyFrom(cacheEntry);
+				tableData->entries->addEntry(commitEntry);
 			}
 
 			caches->setNum(num);
