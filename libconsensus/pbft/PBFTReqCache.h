@@ -170,6 +170,11 @@ public:
     /// add future-prepare cache
     inline void addFuturePrepareCache(PrepareReq const& req)
     {
+        /// at most 20 future prepare cache
+        if (m_futurePrepareCache.size() >= 20)
+        {
+            return;
+        }
         auto it = m_futurePrepareCache.find(req.height);
         if (it == m_futurePrepareCache.end())
         {
@@ -211,7 +216,10 @@ public:
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+        /// remove invalid future block cache from cache
         removeInvalidFutureCache(highestBlockHeader);
+        /// delete invalid viewchange from cache
+        delInvalidViewChange(highestBlockHeader);
     }
     /// remove invalid view-change requests according to view and the current block header
     void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
