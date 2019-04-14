@@ -251,7 +251,7 @@ void CachedStorage::init() {
 	auto out = m_backend->select(h256(), 0, SYS_CURRENT_STATE, SYS_KEY_CURRENT_ID, nullptr);
 	if(out->size() > 0) {
 		auto entry = out->get(0);
-		auto numStr = entry->getField(SYS_KEY_CURRENT_ID);
+		auto numStr = entry->getField(SYS_VALUE);
 		m_ID = boost::lexical_cast<size_t>(numStr);
 	}
 }
