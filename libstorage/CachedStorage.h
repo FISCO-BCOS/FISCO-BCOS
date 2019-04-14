@@ -95,7 +95,7 @@ public:
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
 
-    void setMaxCacheKey(size_t m_maxStoreKey);
+    void setMaxStoreKey(size_t maxStoreKey);
 
     size_t ID();
 

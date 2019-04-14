@@ -154,7 +154,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 				if(id != 0) {
 					auto data = entries->entries();
 					auto entryIt = std::lower_bound(data->begin(), data->end(), entry, [](const Entry::Ptr &lhs, const Entry::Ptr &rhs) {
-						return lhs->getID() > rhs->getID();
+						return lhs->getID() < rhs->getID();
 					});
 
 					if(entryIt != data->end() && (*entryIt)->getID() == id) {
@@ -165,14 +165,16 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 						}
 					}
 					else {
+						STORAGE_LOG(ERROR) << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
+
 						//impossible
-						BOOST_THROW_EXCEPTION(StorageException(-1, "Can not find entry in cache!"));
+						BOOST_THROW_EXCEPTION(StorageException(-1, "Can not find entry in cache, id: " + boost::lexical_cast<std::string>(entry->getID())));
 					}
 				}
 				else {
-					entry->setID(++m_ID);
 					auto cacheEntry = std::make_shared<Entry>();
 					cacheEntry->copyFrom(entry);
+					cacheEntry->setID(++m_ID);
 					entries->addEntry(cacheEntry);
 				}
 			}
@@ -216,7 +218,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
 	STORAGE_LOG(INFO) << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
 
-	return 0;
+	return total;
 }
 
 bool CachedStorage::onlyDirty() {
@@ -244,6 +246,10 @@ int64_t CachedStorage::syncNum() {
 
 void CachedStorage::setSyncNum(int64_t syncNum) {
 	m_syncNum = syncNum;
+}
+
+void CachedStorage::setMaxStoreKey(size_t maxStoreKey) {
+	m_maxStoreKey = maxStoreKey;
 }
 
 size_t CachedStorage::ID() {

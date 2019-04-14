@@ -31,6 +31,7 @@
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/SQLStorage.h>
+#include <libstorage/CachedStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -130,7 +131,7 @@ void DBInitializer::initLevelDBStorage()
 
 void DBInitializer::initSQLStorage()
 {
-    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initSQLStorage");
 
     auto sqlStorage = std::make_shared<SQLStorage>();
     sqlStorage->setChannelRPCServer(m_channelRPCServer);
@@ -144,8 +145,15 @@ void DBInitializer::initSQLStorage()
 
     m_storage = sqlStorage;
 
+    auto cachedStorage = std::make_shared<CachedStorage>();
+    cachedStorage->setBackend(sqlStorage);
+    cachedStorage->setMaxStoreKey(1000);
+
+    cachedStorage->init();
+
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(m_storage);
+    //tableFactoryFactory->setStorage(m_storage);
+    tableFactoryFactory->setStorage(cachedStorage);
 
     m_tableFactoryFactory = tableFactoryFactory;
 }

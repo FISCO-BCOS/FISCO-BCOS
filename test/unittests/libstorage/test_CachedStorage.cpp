@@ -147,6 +147,7 @@ BOOST_AUTO_TEST_CASE(setBackend) {
 
 BOOST_AUTO_TEST_CASE(init) {
 	cachedStorage->init();
+	BOOST_TEST(cachedStorage->ID() == 100);
 }
 
 BOOST_AUTO_TEST_CASE(empty_select)
