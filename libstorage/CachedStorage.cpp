@@ -138,6 +138,8 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::stri
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
+	STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
+
 	size_t total = 0;
 
 	std::vector<TableData::Ptr> commitDatas;

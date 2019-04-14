@@ -30,7 +30,7 @@ namespace dev
 namespace storage
 {
 
-class CachePage: std::enable_shared_from_this<CachePage> {
+class CachePage: public std::enable_shared_from_this<CachePage> {
 public:
 	typedef std::shared_ptr<CachePage> Ptr;
 	virtual ~CachePage() {};
@@ -57,7 +57,7 @@ private:
 	int64_t m_num = 0;
 };
 
-class TableCache {
+class TableCache: public std::enable_shared_from_this<TableCache> {
 public:
 	typedef std::shared_ptr<TableCache> Ptr;
 	virtual ~TableCache() {};

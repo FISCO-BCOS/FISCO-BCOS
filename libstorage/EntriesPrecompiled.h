@@ -55,7 +55,7 @@ public:
     dev::storage::Entries::Ptr getEntries() { return m_entries; }
     dev::storage::Entries::ConstPtr getEntries() const {
     	if(m_entriesConst) {
-    		return m_entries;
+    		return m_entriesConst;
     	}
     	else {
     		return m_entries;
