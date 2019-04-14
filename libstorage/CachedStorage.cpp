@@ -137,7 +137,7 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, TableInfo::Ptr 
 	if(m_backend) {
 		auto conditionKey = std::make_shared<Condition>();
 		conditionKey->EQ(tableInfo->key, key);
-		auto backendData = m_backend->select(hash, num, tableInfo, key, nullptr);
+		auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
 
 		auto tableIt = m_caches.find(tableInfo->name);
 		if(tableIt == m_caches.end()) {
