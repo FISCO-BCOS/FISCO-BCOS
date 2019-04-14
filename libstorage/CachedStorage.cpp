@@ -75,17 +75,18 @@ void TableCaches::addCache(const std::string &key, Caches::Ptr cache) {
 void TableCaches::removeCache(const std::string &key) {
 	auto it = m_caches.find(key);
 	if(it != m_caches.end()) {
-		m_caches.erase(it);
+		//m_caches.erase(it);
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_caches.unsafe_erase(it);
 	}
 }
 
-std::map<std::string, Caches::Ptr>* TableCaches::caches() {
+tbb::concurrent_unordered_map<std::string, Caches::Ptr>* TableCaches::caches() {
 	return &m_caches;
 }
 
 CachedStorage::CachedStorage() {
 	m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
-	m_writeLock = std::make_shared<boost::shared_mutex>();
 }
 
 Entries::Ptr CachedStorage::select(h256 hash, int num, TableInfo::Ptr tableInfo,
@@ -120,17 +121,20 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, TableInfo::Ptr 
         const std::string& key, Condition::Ptr condition) {
 	(void)condition;
 
-	auto tableIt = m_caches.find(tableInfo->name);
-	if(tableIt != m_caches.end()) {
-		auto tableCaches = tableIt->second;
-		auto caches = tableCaches->findCache(key);
-		if(caches) {
-			auto r = m_mru.push_front(std::make_pair(tableInfo->name, key));
-			if(!r.second) {
-				m_mru.relocate(m_mru.end(), r.first);
-			}
+	{
+		auto tableIt = m_caches.find(tableInfo->name);
+		if(tableIt != m_caches.end()) {
+			auto tableCaches = tableIt->second;
+			auto caches = tableCaches->findCache(key);
+			if(caches) {
+				std::lock_guard<std::mutex> lock(m_mutex);
+				auto r = m_mru.push_front(std::make_pair(tableInfo->name, key));
+				if(!r.second) {
+					m_mru.relocate(m_mru.end(), r.first);
+				}
 
-			return caches;
+				return caches;
+			}
 		}
 	}
 

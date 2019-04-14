@@ -117,11 +117,12 @@ public:
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
 
-    virtual std::vector<Entry::Ptr>* entries();
+    virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* entries();
 
 private:
-    std::vector<Entry::Ptr> m_entries;
+    tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> > m_entries;
     bool m_dirty = false;
+    std::mutex m_mutex;
 };
 
 class ConcurrentEntries : public std::enable_shared_from_this<ConcurrentEntries>

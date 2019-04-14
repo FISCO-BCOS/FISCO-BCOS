@@ -226,7 +226,8 @@ void Entries::addEntry(Entry::Ptr entry)
 
 void Entries::removeEntry(size_t index)
 {
-    m_entries.erase(m_entries.begin() + index);
+	(void)index;
+    //m_entries.unsafe_erase(m_entries.begin() + index);
 }
 
 bool Entries::dirty() const
@@ -239,7 +240,7 @@ void Entries::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
-std::vector<Entry::Ptr>* Entries::entries() {
+tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* Entries::entries() {
 	return &m_entries;
 }
 

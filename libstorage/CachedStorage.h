@@ -64,11 +64,12 @@ public:
 	virtual void addCache(const std::string &key, Caches::Ptr cache);
 	virtual void removeCache(const std::string &key);
 
-	virtual std::map<std::string, Caches::Ptr>* caches();
+	virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
 
 private:
 	TableInfo::Ptr m_tableInfo;
-	std::map<std::string, Caches::Ptr> m_caches;
+	tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
+	std::mutex m_mutex;
 };
 
 class Task {
@@ -108,7 +109,7 @@ public:
 private:
     void checkAndClear();
 
-    std::map<std::string, TableCaches::Ptr> m_caches;
+    tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<
 		std::pair<std::string, std::string>,
 		boost::multi_index::indexed_by<
@@ -118,13 +119,14 @@ private:
     //boost::multi_index
     Storage::Ptr m_backend;
     size_t m_ID = 1;
-    int64_t m_syncNum = 0;
-    int64_t m_commitNum = 0;
+
+    std::atomic_int64_t m_syncNum;
+    std::atomic_int64_t m_commitNum;
 
     size_t m_maxStoreKey = 1000;
     size_t m_maxForwardBlock = 100;
 
-    std::shared_ptr<boost::shared_mutex> m_writeLock;
+    std::mutex m_mutex;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
 };

@@ -240,6 +240,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         auto entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
+        entry->setForce(true);
 
         auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
