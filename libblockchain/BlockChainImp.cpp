@@ -976,6 +976,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
         entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
@@ -1000,6 +1001,7 @@ void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<Executi
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
+        entry->setForce(true);
         tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
     }
     else
@@ -1017,6 +1019,7 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         bytes out;
         block.encode(out);
         entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
     else
