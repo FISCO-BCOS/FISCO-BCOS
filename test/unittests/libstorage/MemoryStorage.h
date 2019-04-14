@@ -46,14 +46,18 @@ public:
             auto it = tableData->data.find(key);
             if (it != tableData->data.end())
             {
+            	auto entries = std::make_shared<Entries>();
+
                 for (size_t i = 0; i < it->second->size(); ++i)
                 {
-                    if (it->second->get(i)->getStatus() == Entry::Status::DELETED)
+                    if (it->second->get(i)->getStatus() != Entry::Status::DELETED)
                     {
-                        it->second->removeEntry(i);
+                        //it->second->removeEntry(i);
+                    	entries->addEntry(it->second->get(i));
                     }
                 }
-                return it->second;
+                //return it->second;
+                return entries;
             }
         }
 
