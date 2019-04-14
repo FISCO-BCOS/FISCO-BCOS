@@ -82,7 +82,7 @@ public:
 		BOOST_CHECK(hash == h256());
 		BOOST_CHECK(num == 101);
 
-		BOOST_CHECK(datas.size() == 2);
+		BOOST_CHECK(datas.size() == 1);
 		for(auto it: datas) {
 			if(it->info->name == "t_test") {
 				BOOST_CHECK(it->entries->size() == 1);

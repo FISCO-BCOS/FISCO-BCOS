@@ -53,6 +53,9 @@ private:
 class TableCaches {
 public:
 	typedef std::shared_ptr<TableCaches> Ptr;
+	TableCaches() {
+		m_tableInfo = std::make_shared<TableInfo>();
+	}
 	virtual ~TableCaches() {};
 
 	virtual TableInfo::Ptr tableInfo();

@@ -135,6 +135,7 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::stri
 		auto tableIt = m_caches.find(table);
 		if(tableIt == m_caches.end()) {
 			tableIt = m_caches.insert(std::make_pair(table, std::make_shared<TableCaches>())).first;
+			tableIt->second->tableInfo()->name = table;
 		}
 
 		auto caches = std::make_shared<Caches>();
@@ -213,6 +214,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 					cacheEntry->copyFrom(entry);
 					cacheEntry->setID(++m_ID);
 					caches->entries()->addEntry(cacheEntry);
+
+					LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
 
 					auto commitEntry = std::make_shared<Entry>();
 					commitEntry->copyFrom(cacheEntry);
