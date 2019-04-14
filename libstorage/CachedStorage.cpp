@@ -23,6 +23,7 @@
 #include "StorageException.h"
 #include <libdevcore/easylog.h>
 #include <libdevcore/FixedHash.h>
+#include <thread>
 
 using namespace dev;
 using namespace dev::storage;
@@ -45,6 +46,10 @@ void Caches::setNum(int64_t num) {
 
 TableInfo::Ptr TableCaches::tableInfo() {
 	return m_tableInfo;
+}
+
+void TableCaches::setTableInfo(TableInfo::Ptr tableInfo) {
+	m_tableInfo = tableInfo;
 }
 
 Caches::Ptr TableCaches::findCache(const std::string &key) {
@@ -309,6 +314,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 	auto backend = m_backend;
 	auto self = std::weak_ptr<CachedStorage>(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
 
+	m_commitNum = num;
 	m_taskThreadPool->enqueue([backend, task, self]() {
 		STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to persist storage";
 		backend->commit(task->hash, task->num, task->datas);
@@ -321,6 +327,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 	});
 
 	STORAGE_LOG(INFO) << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
+	checkAndClear();
 
 	return total;
 }
@@ -365,29 +372,51 @@ size_t CachedStorage::ID() {
 	return m_ID;
 }
 
-void CachedStorage::clearCache() {
-	if(m_mru.size() > m_maxStoreKey) {
-		for(auto it = m_mru.begin(); it != m_mru.end(); ++it) {
-			auto tableIt = m_caches.find(it->first);
-			if(tableIt != m_caches.end()) {
-				auto cache = tableIt->second->findCache(it->second);
-				if(cache) {
-					if(cache->num() <= m_syncNum) {
-						tableIt->second->removeCache(it->second);
+void CachedStorage::checkAndClear() {
+	bool needClear = false;
+	size_t clearTimes = 0;
+
+	do {
+		needClear = false;
+
+		if(clearTimes > 1) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+		if(m_mru.size() > m_maxStoreKey) {
+			STORAGE_LOG(INFO) << "Total keys: " << m_mru.size() << " greater than maxStoreKey: " << m_maxStoreKey << ", waiting...";
+			needClear = true;
+		}
+		else if((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock) {
+			STORAGE_LOG(INFO) << "Current block number: " << m_commitNum << " greater than syncd block number: " << m_syncNum << ", waiting...";
+			needClear = true;
+		}
+
+		if(needClear) {
+			for(auto it = m_mru.begin(); it != m_mru.end(); ++it) {
+				auto tableIt = m_caches.find(it->first);
+				if(tableIt != m_caches.end()) {
+					auto cache = tableIt->second->findCache(it->second);
+					if(cache) {
+						if(cache->num() <= m_syncNum) {
+							tableIt->second->removeCache(it->second);
+							it = m_mru.erase(it);
+						}
+					}
+					else {
 						it = m_mru.erase(it);
 					}
 				}
 				else {
 					it = m_mru.erase(it);
 				}
-			}
-			else {
-				it = m_mru.erase(it);
-			}
 
-			if(m_mru.size() <= m_maxStoreKey) {
-				break;
+				if(m_mru.size() <= m_maxStoreKey) {
+					break;
+				}
 			}
 		}
-	}
+
+		++clearTimes;
+	} while(needClear);
 }

@@ -111,9 +111,9 @@ CachePage::Ptr TableCache::tempPage() {
 	return m_tempPage;
 }
 
-Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& table,
+Entries::Ptr RangeCachedStorage::select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition) {
-	auto it = m_caches.find(table);
+	auto it = m_caches.find(tableInfo->name);
 	if(it != m_caches.end()) {
 		for(auto cacheIt: *(it->second->cachePages())) {
 			if(cacheIt->condition()->graterThan(condition)) {
@@ -127,11 +127,11 @@ Entries::Ptr RangeCachedStorage::select(h256 hash, int num, const std::string& t
 	}
 
 	if(m_backend) {
-		auto out = m_backend->select(hash, num, table, key, condition);
+		auto out = m_backend->select(hash, num, tableInfo, key, condition);
 
-		auto tableIt = m_caches.find(table);
+		auto tableIt = m_caches.find(tableInfo->name);
 		if(tableIt == m_caches.end()) {
-			tableIt = m_caches.insert(std::make_pair(table, std::make_shared<TableCache>())).first;
+			tableIt = m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCache>())).first;
 		}
 
 		auto cachePage = std::make_shared<CachePage>();

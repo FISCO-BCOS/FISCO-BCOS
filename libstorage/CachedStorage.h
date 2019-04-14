@@ -105,9 +105,9 @@ public:
 
     size_t ID();
 
-    void clearCache();
-
 private:
+    void checkAndClear();
+
     std::map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<
 		std::pair<std::string, std::string>,
@@ -119,7 +119,10 @@ private:
     Storage::Ptr m_backend;
     size_t m_ID = 1;
     int64_t m_syncNum = 0;
+    int64_t m_commitNum = 0;
+
     size_t m_maxStoreKey = 1000;
+    size_t m_maxForwardBlock = 100;
 
     std::shared_ptr<boost::shared_mutex> m_writeLock;
 

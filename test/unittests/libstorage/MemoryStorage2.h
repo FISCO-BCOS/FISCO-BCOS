@@ -152,12 +152,12 @@ public:
         return true;
     }
 
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
+    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition) override
     {
         (void)hash;
         (void)num;
-        auto it = tableData.find(table);
+        auto it = tableData.find(tableInfo->name);
 
         if (it != tableData.end())
         {
