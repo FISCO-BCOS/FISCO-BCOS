@@ -214,7 +214,10 @@ BOOST_AUTO_TEST_CASE(empty_select)
     int num = 1;
     std::string table("t_test");
     std::string key("id");
-    Entries::Ptr entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    Entries::Ptr entries = levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -235,7 +238,10 @@ BOOST_AUTO_TEST_CASE(commit)
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
-    entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    entries = levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -257,8 +263,10 @@ BOOST_AUTO_TEST_CASE(exception)
     std::string table("e");
     std::string key("Exception");
 
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
     BOOST_CHECK_THROW(
-        levelDB->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+        levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>()), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
