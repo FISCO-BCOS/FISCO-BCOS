@@ -74,6 +74,10 @@ void TableCaches::removeCache(const std::string &key) {
 	}
 }
 
+std::map<std::string, Caches::Ptr>* TableCaches::caches() {
+	return &m_caches;
+}
+
 CachedStorage::CachedStorage() {
 	m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
 	m_writeLock = std::make_shared<boost::shared_mutex>();
