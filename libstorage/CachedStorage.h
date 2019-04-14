@@ -59,6 +59,7 @@ public:
 	virtual ~TableCaches() {};
 
 	virtual TableInfo::Ptr tableInfo();
+	virtual void setTableInfo(TableInfo::Ptr tableInfo);
 	virtual Caches::Ptr findCache(const std::string &key);
 	virtual void addCache(const std::string &key, Caches::Ptr cache);
 	virtual void removeCache(const std::string &key);
@@ -87,9 +88,9 @@ public:
 
     virtual ~CachedStorage(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
+    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr) override;
-    virtual Caches::Ptr selectNoCondition(h256 hash, int num, const std::string& table,
+    virtual Caches::Ptr selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
             const std::string& key, Condition::Ptr condition = nullptr);
     virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     virtual bool onlyDirty() override;

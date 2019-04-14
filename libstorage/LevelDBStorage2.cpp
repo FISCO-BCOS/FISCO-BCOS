@@ -37,11 +37,11 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage2::select(
-    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        std::string entryKey = table;
+        std::string entryKey = tableInfo->name;
         entryKey.append("_").append(key);
 
         std::string value;

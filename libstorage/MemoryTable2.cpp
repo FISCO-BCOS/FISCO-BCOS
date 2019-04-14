@@ -53,7 +53,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
         {
             // query remoteDB anyway
             Entries::Ptr dbEntries =
-                m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key, condition);
+                m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key, condition);
 
             if (!dbEntries)
             {

@@ -83,12 +83,12 @@ CachedStorage::CachedStorage() {
 	m_writeLock = std::make_shared<boost::shared_mutex>();
 }
 
-Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
+Entries::Ptr CachedStorage::select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition) {
-	STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << table << " key: " << key;
+	STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name << " key: " << key;
 	auto out = std::make_shared<Entries>();
 
-	auto entries = selectNoCondition(hash, num, table, key, condition)->entries();
+	auto entries = selectNoCondition(hash, num, tableInfo, key, condition)->entries();
 
 	for(size_t i=0; i<entries->size(); ++i) {
 		auto entry = entries->get(i);
@@ -111,16 +111,16 @@ Entries::Ptr CachedStorage::select(h256 hash, int num, const std::string& table,
 	return out;
 }
 
-Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::string& table,
+Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition) {
 	(void)condition;
 
-	auto tableIt = m_caches.find(table);
+	auto tableIt = m_caches.find(tableInfo->name);
 	if(tableIt != m_caches.end()) {
 		auto tableCaches = tableIt->second;
 		auto caches = tableCaches->findCache(key);
 		if(caches) {
-			auto r = m_mru.push_front(std::make_pair(table, key));
+			auto r = m_mru.push_front(std::make_pair(tableInfo->name, key));
 			if(!r.second) {
 				m_mru.relocate(m_mru.end(), r.first);
 			}
@@ -130,12 +130,14 @@ Caches::Ptr CachedStorage::selectNoCondition(h256 hash, int num, const std::stri
 	}
 
 	if(m_backend) {
-		auto backendData = m_backend->select(hash, num, table, key, nullptr);
+		auto conditionKey = std::make_shared<Condition>();
+		conditionKey->EQ(tableInfo->key, key);
+		auto backendData = m_backend->select(hash, num, tableInfo, key, nullptr);
 
-		auto tableIt = m_caches.find(table);
+		auto tableIt = m_caches.find(tableInfo->name);
 		if(tableIt == m_caches.end()) {
-			tableIt = m_caches.insert(std::make_pair(table, std::make_shared<TableCaches>())).first;
-			tableIt->second->tableInfo()->name = table;
+			tableIt = m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>())).first;
+			tableIt->second->setTableInfo(tableInfo);
 		}
 
 		auto caches = std::make_shared<Caches>();
@@ -186,7 +188,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
 
 			if(id != 0) {
-				auto caches = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
+				auto caches = selectNoCondition(h256(), 0, it->info, key, nullptr);
 				auto data = caches->entries()->entries();
 				auto entryIt = std::lower_bound(data->begin(), data->end(), entry, [](const Entry::Ptr &lhs, const Entry::Ptr &rhs) {
 					return lhs->getID() < rhs->getID();
@@ -232,7 +234,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
 				}
 				else {
-					auto caches = selectNoCondition(h256(), 0, it->info->name, key, nullptr);
+					auto caches = selectNoCondition(h256(), 0, it->info, key, nullptr);
 					caches->entries()->addEntry(cacheEntry);
 					caches->setNum(num);
 				}
@@ -332,8 +334,13 @@ void CachedStorage::setBackend(Storage::Ptr backend) {
 }
 
 void CachedStorage::init() {
+	auto tableInfo = std::make_shared<storage::TableInfo>();
+	tableInfo->name = SYS_CURRENT_STATE;
+	tableInfo->key = SYS_KEY;
+	tableInfo->fields = std::vector<std::string>{"value"};
+
 	//get id from backend
-	auto out = m_backend->select(h256(), 0, SYS_CURRENT_STATE, SYS_KEY_CURRENT_ID, nullptr);
+	auto out = m_backend->select(h256(), 0, tableInfo, SYS_KEY_CURRENT_ID, nullptr);
 	if(out->size() > 0) {
 		auto entry = out->get(0);
 		auto numStr = entry->getField(SYS_VALUE);

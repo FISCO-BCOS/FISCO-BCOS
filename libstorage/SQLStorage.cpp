@@ -28,6 +28,7 @@
 #include "SQLStorage.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
+#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -35,7 +36,7 @@ using namespace dev::storage;
 SQLStorage::SQLStorage() {}
 
 Entries::Ptr SQLStorage::select(
-    h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition)
+    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -46,7 +47,7 @@ Entries::Ptr SQLStorage::select(
         requestJson["op"] = "select";
         requestJson["params"]["blockHash"] = hash.hex();
         requestJson["params"]["num"] = num;
-        requestJson["params"]["table"] = table;
+        requestJson["params"]["table"] = tableInfo->name;
         requestJson["params"]["key"] = key;
 
         if (condition)

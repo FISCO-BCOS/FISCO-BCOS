@@ -34,6 +34,7 @@
 #include <mutex>
 #include <thread>
 #include <type_traits>
+#include <libdevcore/FixedHash.h>
 
 namespace dev
 {
@@ -362,7 +363,7 @@ private:
             // These code is fast with no rollback
             if (m_remoteDB && needSelect)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key);
                 // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
                 // dropped.
                 m_cache.insert(std::make_pair(key, entries));
