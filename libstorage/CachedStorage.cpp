@@ -227,7 +227,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 		STORAGE_LOG(TRACE) << "table: " << it.second->tableInfo()->name;
 		for(auto cacheIt: *(it.second->caches())) {
 			STORAGE_LOG(TRACE) << "key: " << cacheIt.first;
-			for(size_t i=0;i<cacheIt.second->entries();++i) {
+			for(size_t i=0;i<cacheIt.second->entries()->size();++i) {
 				auto entry = cacheIt.second->entries()->get(i);
 
 				std::stringstream ss;
