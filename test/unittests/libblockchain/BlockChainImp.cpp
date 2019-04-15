@@ -102,7 +102,7 @@ public:
         m_fakeStorage[SYS_TX_HASH_2_BLOCK][c_commonHash] = entry;
     }
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr) override
+    Entries::ConstPtr select(const std::string& key, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
 
@@ -115,7 +115,7 @@ public:
         return entries;
     }
 
-    virtual int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr, bool) override
+    int insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr, bool) override
     {
         m_fakeStorage[m_table].insert(std::make_pair(key, entry));
         return 0;
@@ -139,7 +139,7 @@ class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 public:
     MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
 
-    virtual Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
+    Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
     {
         m_mockTable->m_table = _table;
         return m_mockTable;
