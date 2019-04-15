@@ -66,10 +66,25 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 
     /// test addFuturePrepareCache
     req_cache.addFuturePrepareCache(prepare_req);
+    BOOST_CHECK(req_cache.futurePrepareCacheSize() == 1);
     auto p_future = req_cache.futurePrepareCache(prepare_req.height);
     checkPBFTMsg(*(p_future), key_pair, prepare_req.height, prepare_req.view, prepare_req.idx,
         p_future->timestamp, prepare_req.block_hash);
     req_cache.eraseHandledFutureReq(prepare_req.height);
+    BOOST_CHECK(req_cache.futurePrepareCacheSize() == 0);
+
+    /// test removeInvalidFutureCache
+    for (int i = 0; i < 12; i++)
+    {
+        PrepareReq req = prepare_req;
+        req.height = i;
+        req_cache.addFuturePrepareCache(req);
+    }
+    BOOST_CHECK(req_cache.futurePrepareCacheSize() == 12);
+    BlockHeader highest;
+    highest.setNumber(10);
+    req_cache.removeInvalidFutureCache(highest);
+    BOOST_CHECK(req_cache.futurePrepareCacheSize() == 1);
 }
 /// test generateAndSetSigList
 BOOST_AUTO_TEST_CASE(testSigListSetting)

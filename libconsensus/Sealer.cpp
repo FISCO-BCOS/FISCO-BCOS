@@ -56,7 +56,7 @@ bool Sealer::shouldSeal()
 {
     bool sealed = false;
     {
-        DEV_READ_GUARDED(x_sealing)
+        ReadGuard l(x_sealing);
         sealed = m_sealing.block.isSealed();
     }
     return (!sealed && m_startConsensus &&
@@ -77,7 +77,7 @@ void Sealer::reportNewBlock()
             return;
         }
         m_consensusEngine->reportBlock(*p_block);
-        DEV_WRITE_GUARDED(x_sealing)
+        WriteGuard l(x_sealing);
         {
             if (shouldResetSealing())
             {
@@ -100,7 +100,7 @@ void Sealer::doWork(bool wait)
     reportNewBlock();
     if (shouldSeal())
     {
-        DEV_WRITE_GUARDED(x_sealing)
+        WriteGuard l(x_sealing);
         {
             /// get current transaction num
             uint64_t tx_num = m_sealing.block.getTransactionSize();
