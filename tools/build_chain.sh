@@ -30,7 +30,7 @@ consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 timestamp=$(date +%s)
-enable_compress="true"
+chain_id=1
 fisco_version=""
 OS=
 
@@ -95,7 +95,12 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
     S) storage_type="external";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
-    C) enable_compress="false";;
+    C) chain_id=$OPTARG
+      if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
+        LOG_WARN "chan_id is not a number."
+        exit 1;
+      fi
+    ;;
     T) debug_log="true"
     log_level="debug"
     ;;
@@ -468,6 +473,8 @@ generate_config_ini()
 ;key_manager_port=
 ;cipher_data_key=
 
+[chain]
+    id=${chain_id}
 [compatibility]
     supported_version=${fisco_version}
 ;log configurations
