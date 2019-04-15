@@ -40,11 +40,10 @@ public:
 
     virtual ~LevelDBStorage2(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition) override;
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&) override;
-    virtual bool onlyDirty() override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 

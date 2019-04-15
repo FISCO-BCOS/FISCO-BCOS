@@ -945,6 +945,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                     << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
+                m_reqCache->removeInvalidFutureCache(m_highestBlock);
             }
             else
             {
@@ -988,6 +989,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
+        /// remove invalid future block
+        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
         m_highestBlock = block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)
