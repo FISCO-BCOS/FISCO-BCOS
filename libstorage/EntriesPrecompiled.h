@@ -50,20 +50,14 @@ public:
     virtual bytes call(
         ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
 
-    void setEntries(dev::storage::Entries::Ptr entries) { m_entries = entries; }
     void setEntries(dev::storage::Entries::ConstPtr entries) { m_entriesConst = entries; }
-    dev::storage::Entries::Ptr getEntries() { return m_entries; }
-    dev::storage::Entries::ConstPtr getEntries() const {
-    	if(m_entriesConst) {
-    		return m_entriesConst;
-    	}
-    	else {
-    		return m_entries;
-    	}
+    dev::storage::Entries::Ptr getEntries()
+    {
+        return std::const_pointer_cast<dev::storage::Entries>(m_entriesConst);
     }
+    dev::storage::Entries::ConstPtr getEntries() const { return m_entriesConst; }
 
 private:
-    dev::storage::Entries::Ptr m_entries;
     dev::storage::Entries::ConstPtr m_entriesConst;
 };
 

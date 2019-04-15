@@ -93,6 +93,9 @@ public:
     virtual bool force() const;
     virtual void setForce(bool force);
 
+    virtual bool deleted() const;
+    virtual void setDeleted(bool deleted);
+
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
@@ -100,6 +103,7 @@ private:
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
     bool m_force = false;
+    bool m_deleted = false;
 };
 
 class Entries : public std::enable_shared_from_this<Entries>
@@ -107,7 +111,7 @@ class Entries : public std::enable_shared_from_this<Entries>
 public:
     typedef std::shared_ptr<Entries> Ptr;
     typedef std::shared_ptr<const Entries> ConstPtr;
-    virtual ~Entries() {};
+    virtual ~Entries(){};
 
     virtual Entry::ConstPtr get(size_t i) const;
     virtual Entry::Ptr get(size_t i);
@@ -117,10 +121,10 @@ public:
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
 
-    virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* entries();
+    virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>>* entries();
 
 private:
-    tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> > m_entries;
+    tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>> m_entries;
     bool m_dirty = false;
     std::mutex m_mutex;
 };
@@ -181,15 +185,16 @@ public:
     };
 
 
-
-    class Range {
+    class Range
+    {
     public:
-		Range(std::pair<bool, std::string> _left, std::pair<bool, std::string> _right): left(_left), right(_right) {};
+        Range(std::pair<bool, std::string> _left, std::pair<bool, std::string> _right)
+          : left(_left), right(_right){};
 
-		//false is close range '<', true is open range '<='
-		std::pair<bool, std::string> left;
-		std::pair<bool, std::string> right;
-	};
+        // false is close range '<', true is open range '<='
+        std::pair<bool, std::string> left;
+        std::pair<bool, std::string> right;
+    };
 
     virtual ~Condition() {}
 
@@ -215,7 +220,7 @@ public:
 
 private:
     std::map<std::string, Range> m_conditions;
-    //std::map<std::string, std::pair<Op, std::string>> m_conditions;
+    // std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
     const std::string UNLIMITED = "_VALUE_UNLIMITED_";

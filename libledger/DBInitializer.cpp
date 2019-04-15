@@ -27,11 +27,11 @@
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/SQLStorage.h>
-#include <libstorage/CachedStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -145,12 +145,13 @@ void DBInitializer::initSQLStorage()
 
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(sqlStorage);
-    cachedStorage->setMaxStoreKey(1000);
+    cachedStorage->setMaxStoreKey(m_param->mutableStorageParam().maxStoreKey);
+    cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
 
     cachedStorage->init();
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    //tableFactoryFactory->setStorage(m_storage);
+    // tableFactoryFactory->setStorage(m_storage);
     tableFactoryFactory->setStorage(cachedStorage);
 
     m_storage = cachedStorage;

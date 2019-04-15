@@ -32,91 +32,97 @@ using namespace dev::storage;
 
 namespace test_CachedStorage
 {
-
-class MockStorage: public Storage {
+class MockStorage : public Storage
+{
 public:
-	virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition = nullptr) override {
-		(void)hash;
-		(void)num;
+    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
+        const std::string& key, Condition::Ptr condition) override
+    {
+        (void)hash;
+        (void)num;
 
-		if(commited) {
-			BOOST_TEST(false);
-			return nullptr;
-		}
+        if (commited)
+        {
+            BOOST_TEST(false);
+            return nullptr;
+        }
 
-		auto entries = std::make_shared<Entries>();
+        auto entries = std::make_shared<Entries>();
 
-		BOOST_TEST(condition == nullptr);
+        BOOST_TEST(condition != nullptr);
 
-		if(tableInfo->name == SYS_CURRENT_STATE && key == SYS_KEY_CURRENT_ID) {
-			Entry::Ptr entry = std::make_shared<Entry>();
-			entry->setID(1);
-			entry->setNum(100);
-			entry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
-			entry->setField(SYS_VALUE, "100");
-			entry->setStatus(0);
+        if (tableInfo->name == SYS_CURRENT_STATE && key == SYS_KEY_CURRENT_ID)
+        {
+            Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setID(1);
+            entry->setNum(100);
+            entry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+            entry->setField(SYS_VALUE, "100");
+            entry->setStatus(0);
 
-			entries->addEntry(entry);
-			return entries;
-		}
+            entries->addEntry(entry);
+            return entries;
+        }
 
-		if(tableInfo->name == "t_test") {
-			if(key == "LiSi") {
-				Entry::Ptr entry = std::make_shared<Entry>();
-				entry->setID(1);
-				entry->setNum(100);
-				entry->setField("Name", "LiSi");
-				entry->setField("id", "1");
-				entry->setStatus(0);
+        if (tableInfo->name == "t_test")
+        {
+            if (key == "LiSi")
+            {
+                Entry::Ptr entry = std::make_shared<Entry>();
+                entry->setID(1);
+                entry->setNum(100);
+                entry->setField("Name", "LiSi");
+                entry->setField("id", "1");
+                entry->setStatus(0);
 
-				entries->addEntry(entry);
-			}
-		}
+                entries->addEntry(entry);
+            }
+        }
 
-		return entries;
-	}
+        return entries;
+    }
 
-	virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override {
-		(void)datas;
+    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    {
+        (void)datas;
 
-		BOOST_CHECK(hash == h256());
-		BOOST_CHECK(num == 101);
+        BOOST_CHECK(hash == h256());
+        BOOST_CHECK(num == 101);
 
-		BOOST_CHECK(datas.size() == 1);
-		for(auto it: datas) {
-			if(it->info->name == "t_test") {
-				BOOST_CHECK(it->entries->size() == 1);
-			}
-			else if(it->info->name == SYS_CURRENT_STATE) {
-				BOOST_CHECK(it->entries->size() == 1);
-			}
-			else {
-				BOOST_CHECK(false);
-			}
-		}
+        BOOST_CHECK(datas.size() == 2);
+        for (auto it : datas)
+        {
+            if (it->info->name == "t_test")
+            {
+                BOOST_CHECK(it->entries->size() == 1);
+            }
+            else if (it->info->name == SYS_CURRENT_STATE)
+            {
+                BOOST_CHECK(it->entries->size() == 1);
+            }
+            else
+            {
+                BOOST_CHECK(false);
+            }
+        }
 
-		lock.unlock();
+        commited = true;
+        return 0;
+    }
 
-		commited = true;
-		return 0;
-	}
+    virtual bool onlyDirty() override { return true; }
 
-	virtual bool onlyDirty() override {
-		return true;
-	}
-
-	std::mutex lock;
-	bool commited = false;
+    bool commited = false;
 };
 
 struct CachedStorageFixture
 {
-	CachedStorageFixture()
+    CachedStorageFixture()
     {
-		cachedStorage = std::make_shared<CachedStorage>();
-		mockStorage = std::make_shared<MockStorage>();
+        cachedStorage = std::make_shared<CachedStorage>();
+        mockStorage = std::make_shared<MockStorage>();
 
-		cachedStorage->setBackend(mockStorage);
+        cachedStorage->setBackend(mockStorage);
     }
 
     Entries::Ptr getEntries()
@@ -141,33 +147,36 @@ BOOST_AUTO_TEST_CASE(onlyDirty)
     BOOST_CHECK_EQUAL(cachedStorage->onlyDirty(), true);
 }
 
-BOOST_AUTO_TEST_CASE(setBackend) {
-	auto backend = Storage::Ptr();
-	cachedStorage->setBackend(backend);
+BOOST_AUTO_TEST_CASE(setBackend)
+{
+    auto backend = Storage::Ptr();
+    cachedStorage->setBackend(backend);
 }
 
-BOOST_AUTO_TEST_CASE(init) {
-	cachedStorage->init();
-	BOOST_TEST(cachedStorage->ID() == 100);
+BOOST_AUTO_TEST_CASE(init)
+{
+    cachedStorage->init();
+    BOOST_TEST(cachedStorage->ID() == 100);
 }
 
 BOOST_AUTO_TEST_CASE(empty_select)
 {
-	cachedStorage->init();
+    cachedStorage->init();
     h256 h(0x01);
     int num = 1;
     std::string table("t_test");
     std::string key("id");
 
     auto tableInfo = std::make_shared<TableInfo>();
-	tableInfo->name = table;
-    Entries::Ptr entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    tableInfo->name = table;
+    Entries::Ptr entries =
+        cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
 BOOST_AUTO_TEST_CASE(select_condition)
 {
-	//query from backend
+    // query from backend
     h256 h(0x01);
     int num = 1;
     std::string table("t_test");
@@ -175,11 +184,11 @@ BOOST_AUTO_TEST_CASE(select_condition)
     condition->EQ("id", "2");
 
     auto tableInfo = std::make_shared<TableInfo>();
-	tableInfo->name = table;
+    tableInfo->name = table;
     Entries::Ptr entries = cachedStorage->select(h, num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 
-    //query from cache
+    // query from cache
     mockStorage->commited = true;
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1");
@@ -203,11 +212,10 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->entries = entries;
     datas.push_back(tableData);
 
-    mockStorage->lock.lock();
-    size_t c = cachedStorage->commit(h, num, datas);
     BOOST_TEST(cachedStorage->syncNum() == 0);
-    mockStorage->lock.lock();
-    mockStorage->lock.unlock();
+    size_t c = cachedStorage->commit(h, num, datas);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     BOOST_TEST(cachedStorage->syncNum() == 101);
 
     BOOST_CHECK_EQUAL(c, 1u);
@@ -215,21 +223,25 @@ BOOST_AUTO_TEST_CASE(commit)
     std::string key("LiSi");
 
     auto tableInfo = std::make_shared<TableInfo>();
-	tableInfo->name = table;
+    tableInfo->name = table;
     entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 2u);
 
-    for(size_t i=0; i<entries->size(); ++i) {
-    	auto entry = entries->get(i);
-    	if(entry->getField("id") == "1") {
-    		BOOST_TEST(entry->getID() == 1);
-    	}
-    	else if(entry->getField("id") == "2") {
-    		BOOST_TEST(entry->getID() == 2);
-    	}
-    	else {
-    		BOOST_TEST(false);
-    	}
+    for (size_t i = 0; i < entries->size(); ++i)
+    {
+        auto entry = entries->get(i);
+        if (entry->getField("id") == "1")
+        {
+            BOOST_TEST(entry->getID() == 1);
+        }
+        else if (entry->getField("id") == "2")
+        {
+            BOOST_TEST(entry->getID() == 2);
+        }
+        else
+        {
+            BOOST_TEST(false);
+        }
     }
 }
 
@@ -258,4 +270,4 @@ BOOST_AUTO_TEST_CASE(exception)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_AMOPStateStorage
+}  // namespace test_CachedStorage

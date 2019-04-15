@@ -76,8 +76,7 @@ Entries::Ptr LevelDBStorage2::select(
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                if (entry->getStatus() == Entry::Status::NORMAL &&
-                    condition->process(entry))
+                if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -98,8 +97,7 @@ Entries::Ptr LevelDBStorage2::select(
     return Entries::Ptr();
 }
 
-size_t LevelDBStorage2::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {

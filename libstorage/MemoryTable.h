@@ -24,6 +24,7 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -34,7 +35,6 @@
 #include <mutex>
 #include <thread>
 #include <type_traits>
-#include <libdevcore/FixedHash.h>
 
 namespace dev
 {
@@ -55,7 +55,8 @@ public:
 
     virtual ~MemoryTable(){};
 
-    virtual typename Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override
+    virtual typename Entries::ConstPtr select(
+        const std::string& key, Condition::Ptr condition) override
     {
         try
         {
@@ -211,7 +212,7 @@ public:
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
                 {
-                    if (it.second->get(i)->dirty())
+                    if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
                         for (auto& fieldIt : *(it.second->get(i)->fields()))
                         {
@@ -381,18 +382,20 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
+#if 0
         if (condition->getConditions()->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
                 indexes.emplace_back(i);
             return indexes;
         }
+#endif
 
         for (size_t i = 0; i < entries->size(); ++i)
         {
             Entry::Ptr entry = entries->get(i);
-            if(condition->process(entry))
-            //if (processCondition(entry, condition))
+            if (condition->process(entry))
+            // if (processCondition(entry, condition))
             {
                 indexes.push_back(i);
             }

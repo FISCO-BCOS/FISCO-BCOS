@@ -23,6 +23,7 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -30,7 +31,6 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
-#include <libdevcore/FixedHash.h>
 #include <type_traits>
 
 namespace dev
@@ -95,12 +95,18 @@ public:
         data->entries = std::make_shared<Entries>();
         for (auto it : m_dirty)
         {
-            data->entries->addEntry(it.second);
+            if (!it.second->deleted())
+            {
+                data->entries->addEntry(it.second);
+            }
         }
 
         for (size_t i = 0; i < m_newEntries->size(); ++i)
         {
-            data->entries->addEntry(m_newEntries->get(i));
+            if (!m_newEntries->get(i)->deleted())
+            {
+                data->entries->addEntry(m_newEntries->get(i));
+            }
         }
 
         return true;

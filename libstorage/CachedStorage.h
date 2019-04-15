@@ -21,64 +21,64 @@
 
 #pragma once
 
-#include "Table.h"
 #include "Storage.h"
+#include "Table.h"
 #include <libdevcore/FixedHash.h>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index_container.hpp>
+#include <libdevcore/ThreadPool.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
-#include <libdevcore/ThreadPool.h>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 
 namespace dev
 {
 namespace storage
 {
-
-class Caches {
+class Caches
+{
 public:
-	typedef std::shared_ptr<Caches> Ptr;
-	virtual ~Caches() {};
+    typedef std::shared_ptr<Caches> Ptr;
+    virtual ~Caches(){};
 
-	virtual Entries::Ptr entries();
-	virtual void setEntries(Entries::Ptr entries);
-	virtual int64_t num() const;
-	virtual void setNum(int64_t num);
+    virtual Entries::Ptr entries();
+    virtual void setEntries(Entries::Ptr entries);
+    virtual int64_t num() const;
+    virtual void setNum(int64_t num);
 
 private:
-	Entries::Ptr m_entries;
-	int64_t m_num;
+    Entries::Ptr m_entries;
+    int64_t m_num;
 };
 
-class TableCaches {
+class TableCaches
+{
 public:
-	typedef std::shared_ptr<TableCaches> Ptr;
-	TableCaches() {
-		m_tableInfo = std::make_shared<TableInfo>();
-	}
-	virtual ~TableCaches() {};
+    typedef std::shared_ptr<TableCaches> Ptr;
+    TableCaches() { m_tableInfo = std::make_shared<TableInfo>(); }
+    virtual ~TableCaches(){};
 
-	virtual TableInfo::Ptr tableInfo();
-	virtual void setTableInfo(TableInfo::Ptr tableInfo);
-	virtual Caches::Ptr findCache(const std::string &key);
-	virtual void addCache(const std::string &key, Caches::Ptr cache);
-	virtual void removeCache(const std::string &key);
+    virtual TableInfo::Ptr tableInfo();
+    virtual void setTableInfo(TableInfo::Ptr tableInfo);
+    virtual Caches::Ptr findCache(const std::string& key);
+    virtual void addCache(const std::string& key, Caches::Ptr cache);
+    virtual void removeCache(const std::string& key);
 
-	virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
+    virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
 
 private:
-	TableInfo::Ptr m_tableInfo;
-	tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
-	std::mutex m_mutex;
+    TableInfo::Ptr m_tableInfo;
+    tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
+    std::mutex m_mutex;
 };
 
-class Task {
+class Task
+{
 public:
-	typedef std::shared_ptr<Task> Ptr;
+    typedef std::shared_ptr<Task> Ptr;
 
-	h256 hash;
-	int64_t num;
-	std::vector<TableData::Ptr> datas;
+    h256 hash;
+    int64_t num;
+    std::vector<TableData::Ptr> datas;
 };
 
 class CachedStorage : public Storage
@@ -92,8 +92,9 @@ public:
     virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr) override;
     virtual Caches::Ptr selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
-            const std::string& key, Condition::Ptr condition = nullptr);
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+        const std::string& key, Condition::Ptr condition = nullptr);
+    virtual size_t commit(
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     virtual bool onlyDirty() override;
 
     void setBackend(Storage::Ptr backend);
@@ -103,6 +104,7 @@ public:
     void setSyncNum(int64_t syncNum);
 
     void setMaxStoreKey(size_t maxStoreKey);
+    void setMaxForwardBlock(size_t maxForwardBlock);
 
     size_t ID();
 
@@ -110,17 +112,16 @@ private:
     void checkAndClear();
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
-    boost::multi_index_container<
-		std::pair<std::string, std::string>,
-		boost::multi_index::indexed_by<
-		boost::multi_index::sequenced<>,
-		boost::multi_index::hashed_unique<boost::multi_index::identity<std::pair<std::string, std::string> > > >
-	> m_mru;
-    //boost::multi_index
+    boost::multi_index_container<std::pair<std::string, std::string>,
+        boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
+            boost::multi_index::hashed_unique<
+                boost::multi_index::identity<std::pair<std::string, std::string> > > > >
+        m_mru;
+    // boost::multi_index
     Storage::Ptr m_backend;
     size_t m_ID = 1;
 
-	boost::atomic_int64_t m_syncNum;
+    boost::atomic_int64_t m_syncNum;
     boost::atomic_int64_t m_commitNum;
 
     size_t m_maxStoreKey = 1000;
@@ -131,6 +132,6 @@ private:
     dev::ThreadPool::Ptr m_taskThreadPool;
 };
 
-}
+}  // namespace storage
 
-}
+}  // namespace dev

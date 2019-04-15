@@ -39,8 +39,9 @@ using namespace dev::precompiled;
 
 MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<EntriesType>()) {}
 
-Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition) {
-	return selectNoLock(key, condition);
+Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
+{
+    return selectNoLock(key, condition);
 }
 
 Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
@@ -305,12 +306,15 @@ dev::h256 MemoryTable2::hash()
     for (size_t i = 0; i < size; ++i)
     {
         auto entry = tempEntries[i];
-        for (auto fieldIt : *(entry->fields()))
+        if (!entry->deleted())
         {
-            if (isHashField(fieldIt.first))
+            for (auto fieldIt : *(entry->fields()))
             {
-                data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-                data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+                if (isHashField(fieldIt.first))
+                {
+                    data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
+                    data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+                }
             }
         }
     }
