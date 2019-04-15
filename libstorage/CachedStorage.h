@@ -89,13 +89,12 @@ public:
 
     virtual ~CachedStorage(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr) override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr) override;
     virtual Caches::Ptr selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr);
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    virtual bool onlyDirty() override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
     void setBackend(Storage::Ptr backend);
     void init();

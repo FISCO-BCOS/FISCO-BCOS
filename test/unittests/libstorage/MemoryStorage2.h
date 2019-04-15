@@ -152,8 +152,8 @@ public:
         return true;
     }
 
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition) override
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override
     {
         (void)hash;
         (void)num;
@@ -175,7 +175,7 @@ public:
 
         return std::make_shared<Entries>();
     }
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
@@ -218,7 +218,7 @@ public:
         }
         return datas.size();
     }
-    virtual bool onlyDirty() override { return false; }
+    bool onlyDirty() override { return false; }
 
 private:
     std::map<std::string, TableData::Ptr> tableData;

@@ -38,11 +38,10 @@ public:
     SQLStorage();
     virtual ~SQLStorage(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition) override;
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    virtual bool onlyDirty() override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
     virtual void setTopic(const std::string& topic);
     virtual void setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer);

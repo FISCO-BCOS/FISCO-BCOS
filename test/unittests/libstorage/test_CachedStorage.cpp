@@ -35,8 +35,8 @@ namespace test_CachedStorage
 class MockStorage : public Storage
 {
 public:
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition) override
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override
     {
         (void)hash;
         (void)num;
@@ -82,7 +82,7 @@ public:
         return entries;
     }
 
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
         (void)datas;
 
@@ -110,7 +110,7 @@ public:
         return 0;
     }
 
-    virtual bool onlyDirty() override { return true; }
+    bool onlyDirty() override { return true; }
 
     bool commited = false;
 };

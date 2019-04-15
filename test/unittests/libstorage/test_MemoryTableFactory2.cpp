@@ -40,16 +40,15 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries::Ptr select(
-        h256, int, TableInfo::Ptr, const std::string&, Condition::Ptr) override
+    Entries::Ptr select(h256, int, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
+    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
 
-    virtual bool onlyDirty() override { return false; }
+    bool onlyDirty() override { return false; }
 };
 
 struct MemoryTableFactoryFixture2

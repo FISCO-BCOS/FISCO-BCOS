@@ -48,22 +48,22 @@ public:
 
     virtual ~MemoryTable2(){};
 
-    virtual Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
+    Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
 
-    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+    int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
-    virtual int insert(const std::string& key, Entry::Ptr entry,
+    int insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
         bool needSelect = true) override;
 
-    virtual int remove(const std::string& key, Condition::Ptr condition,
+    int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
-    virtual h256 hash() override;
+    h256 hash() override;
 
-    virtual void clear() override { m_dirty.clear(); }
-    virtual bool empty() override
+    void clear() override { m_dirty.clear(); }
+    bool empty() override
     {
         for (auto iter : m_dirty)
         {
@@ -89,7 +89,7 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    virtual bool dump(dev::storage::TableData::Ptr data) override
+    bool dump(dev::storage::TableData::Ptr data) override
     {
         data->info = m_tableInfo;
         data->entries = std::make_shared<Entries>();
@@ -112,7 +112,7 @@ public:
         return true;
     }
 
-    virtual void rollback(const Change& _change) override;
+    void rollback(const Change& _change) override;
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);

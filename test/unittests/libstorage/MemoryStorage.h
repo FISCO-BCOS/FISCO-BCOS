@@ -36,7 +36,7 @@ public:
 
     virtual ~MemoryStorage(){};
 
-    virtual Entries::Ptr select(
+    Entries::Ptr select(
         h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr) override
     {
         auto search = data.find(tableInfo->name);
@@ -63,7 +63,7 @@ public:
 
         return std::make_shared<Entries>();
     }
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
@@ -71,7 +71,7 @@ public:
         }
         return datas.size();
     }
-    virtual bool onlyDirty() override { return false; }
+    bool onlyDirty() override { return false; }
 
 private:
     std::map<std::string, TableData::Ptr> data;

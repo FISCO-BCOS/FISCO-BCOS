@@ -36,7 +36,7 @@ namespace test_SQLStorage
 class MockChannelRPCServer : public dev::ChannelRPCServer
 {
 public:
-    virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
+    dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message) override
     {
         std::string jsonStr(message->data(), message->data() + message->dataSize());

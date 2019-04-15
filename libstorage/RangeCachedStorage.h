@@ -80,11 +80,10 @@ public:
 
     virtual ~RangeCachedStorage(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr) override;
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    virtual bool onlyDirty() override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr) override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
 private:
     std::map<std::string, TableCache::Ptr> m_caches;
