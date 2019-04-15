@@ -216,7 +216,7 @@ h256 MemoryTableFactory2::hash()
 
 std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-	return s_changeLog.local();
+    return s_changeLog.local();
 }
 
 void MemoryTableFactory2::rollback(size_t _savepoint)

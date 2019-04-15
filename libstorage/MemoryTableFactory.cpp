@@ -24,10 +24,10 @@
 #include "StorageException.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
-#include <libdevcore/FixedHash.h>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -215,7 +215,7 @@ h256 MemoryTableFactory::hash()
 
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
-	return s_changeLog.local();
+    return s_changeLog.local();
 }
 
 void MemoryTableFactory::rollback(size_t _savepoint)

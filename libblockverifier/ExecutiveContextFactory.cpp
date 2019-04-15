@@ -96,9 +96,9 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         std::string ret;
 
         auto tableInfo = std::make_shared<storage::TableInfo>();
-		tableInfo->name = storage::SYS_CONFIG;
-		tableInfo->key = storage::SYS_KEY;
-		tableInfo->fields = std::vector<std::string>{"value"};
+        tableInfo->name = storage::SYS_CONFIG;
+        tableInfo->key = storage::SYS_KEY;
+        tableInfo->fields = std::vector<std::string>{"value"};
 
         auto condition = std::make_shared<dev::storage::Condition>();
         condition->EQ("key", key);

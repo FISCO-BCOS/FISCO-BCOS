@@ -21,55 +21,56 @@
 
 #pragma once
 
-#include "Table.h"
 #include "Storage.h"
+#include "Table.h"
 #include <libdevcore/FixedHash.h>
 
 namespace dev
 {
 namespace storage
 {
-
-class CachePage: public std::enable_shared_from_this<CachePage> {
+class CachePage : public std::enable_shared_from_this<CachePage>
+{
 public:
-	typedef std::shared_ptr<CachePage> Ptr;
-	virtual ~CachePage() {};
+    typedef std::shared_ptr<CachePage> Ptr;
+    virtual ~CachePage(){};
 
-	virtual void import(Entries::Ptr entries);
-	virtual void addEntry(Entry::Ptr entry);
-	virtual Entry::Ptr getByID(int64_t id);
-	virtual void removeByID(int64_t id);
-	virtual void setCondition(Condition::Ptr condition);
-	virtual Condition::Ptr condition();
-	virtual void setNum(int64_t num);
-	virtual int64_t num();
-	virtual Entries::Ptr process(Condition::Ptr condition);
+    virtual void import(Entries::Ptr entries);
+    virtual void addEntry(Entry::Ptr entry);
+    virtual Entry::Ptr getByID(int64_t id);
+    virtual void removeByID(int64_t id);
+    virtual void setCondition(Condition::Ptr condition);
+    virtual Condition::Ptr condition();
+    virtual void setNum(int64_t num);
+    virtual int64_t num();
+    virtual Entries::Ptr process(Condition::Ptr condition);
 
-	virtual std::list<Entry::Ptr>* entries();
-	virtual void mergeFrom(CachePage::Ptr cachePage, bool move = false);
+    virtual std::list<Entry::Ptr>* entries();
+    virtual void mergeFrom(CachePage::Ptr cachePage, bool move = false);
 
 private:
-	std::list<Entry::Ptr> m_entries;
-	std::map<int64_t, std::list<Entry::Ptr>::iterator > m_ID2Entry;
-	//std::map<std::string, std::list<Entry::Ptr>::iterator >
+    std::list<Entry::Ptr> m_entries;
+    std::map<int64_t, std::list<Entry::Ptr>::iterator> m_ID2Entry;
+    // std::map<std::string, std::list<Entry::Ptr>::iterator >
 
-	Condition::Ptr m_condition;
-	int64_t m_num = 0;
+    Condition::Ptr m_condition;
+    int64_t m_num = 0;
 };
 
-class TableCache: public std::enable_shared_from_this<TableCache> {
+class TableCache : public std::enable_shared_from_this<TableCache>
+{
 public:
-	typedef std::shared_ptr<TableCache> Ptr;
-	virtual ~TableCache() {};
+    typedef std::shared_ptr<TableCache> Ptr;
+    virtual ~TableCache(){};
 
-	virtual TableInfo::Ptr tableInfo();
-	virtual std::vector<CachePage::Ptr>* cachePages();
-	virtual CachePage::Ptr tempPage();
+    virtual TableInfo::Ptr tableInfo();
+    virtual std::vector<CachePage::Ptr>* cachePages();
+    virtual CachePage::Ptr tempPage();
 
 private:
-	TableInfo::Ptr m_tableInfo;
-	std::vector<CachePage::Ptr> m_cachePages;
-	CachePage::Ptr m_tempPage;
+    TableInfo::Ptr m_tableInfo;
+    std::vector<CachePage::Ptr> m_cachePages;
+    CachePage::Ptr m_tempPage;
 };
 
 class RangeCachedStorage : public Storage
@@ -81,7 +82,8 @@ public:
 
     virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr) override;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    virtual size_t commit(
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     virtual bool onlyDirty() override;
 
 private:
@@ -89,6 +91,6 @@ private:
     Storage::Ptr m_backend;
 };
 
-}
+}  // namespace storage
 
-}
+}  // namespace dev

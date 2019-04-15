@@ -26,11 +26,11 @@
 #include "Table.h"
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>
 #include <memory>
 #include <type_traits>
-#include <tbb/enumerable_thread_specific.h>
 
 namespace dev
 {

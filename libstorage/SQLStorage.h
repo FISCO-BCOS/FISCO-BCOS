@@ -23,8 +23,8 @@
 
 #include "Storage.h"
 #include <json/json.h>
-#include <libdevcore/FixedHash.h>
 #include <libchannelserver/ChannelRPCServer.h>
+#include <libdevcore/FixedHash.h>
 
 namespace dev
 {
@@ -40,7 +40,8 @@ public:
 
     virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition) override;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    virtual size_t commit(
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     virtual bool onlyDirty() override;
 
     virtual void setTopic(const std::string& topic);

@@ -29,15 +29,14 @@ using namespace dev::storage;
 
 namespace test_Condition
 {
-
 struct ConditionFixture
 {
     ConditionFixture()
     {
-    	entry = std::make_shared<Entry>();
-    	entry->setField("name", "myname");
-    	entry->setField("item_id", "100");
-    	entry->setField("price", boost::lexical_cast<std::string>(100 * 10000));
+        entry = std::make_shared<Entry>();
+        entry->setField("name", "myname");
+        entry->setField("item_id", "100");
+        entry->setField("price", boost::lexical_cast<std::string>(100 * 10000));
     }
 
     Entry::Ptr entry;
@@ -49,14 +48,14 @@ BOOST_FIXTURE_TEST_SUITE(ConditionTest, ConditionFixture)
 
 BOOST_AUTO_TEST_CASE(process)
 {
-	auto condition = std::make_shared<Condition>();
+    auto condition = std::make_shared<Condition>();
 
-	condition->EQ("name", "myname");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->EQ("name", "myname");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition = std::make_shared<Condition>();
-	condition->EQ("name", "myname2");
-	BOOST_TEST(condition->process(entry) == false);
+    condition = std::make_shared<Condition>();
+    condition->EQ("name", "myname2");
+    BOOST_TEST(condition->process(entry) == false);
 
 #if 0
 	condition = std::make_shared<Condition>();
@@ -68,59 +67,60 @@ BOOST_AUTO_TEST_CASE(process)
 	BOOST_TEST(condition->process(entry) == true);
 #endif
 
-	condition = std::make_shared<Condition>();
-	condition->GT("item_id", "50");
-	BOOST_TEST(condition->process(entry) == true);
+    condition = std::make_shared<Condition>();
+    condition->GT("item_id", "50");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition->GT("item_id", "100");
-	BOOST_TEST(condition->process(entry) == false);
+    condition->GT("item_id", "100");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition->GT("item_id", "150");
-	BOOST_TEST(condition->process(entry) == false);
+    condition->GT("item_id", "150");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition = std::make_shared<Condition>();
-	condition->GE("item_id", "50");
-	BOOST_TEST(condition->process(entry) == true);
+    condition = std::make_shared<Condition>();
+    condition->GE("item_id", "50");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition->GE("item_id", "100");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->GE("item_id", "100");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition->GE("item_id", "150");
-	BOOST_TEST(condition->process(entry) == false);
+    condition->GE("item_id", "150");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition = std::make_shared<Condition>();
-	condition->LT("item_id", "50");
-	BOOST_TEST(condition->process(entry) == false);
+    condition = std::make_shared<Condition>();
+    condition->LT("item_id", "50");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition->LT("item_id", "100");
-	BOOST_TEST(condition->process(entry) == false);
+    condition->LT("item_id", "100");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition->LT("item_id", "150");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->LT("item_id", "150");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition = std::make_shared<Condition>();
-	condition->LE("item_id", "50");
-	BOOST_TEST(condition->process(entry) == false);
+    condition = std::make_shared<Condition>();
+    condition->LE("item_id", "50");
+    BOOST_TEST(condition->process(entry) == false);
 
-	condition->LE("item_id", "100");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->LE("item_id", "100");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition->LE("item_id", "150");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->LE("item_id", "150");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition = std::make_shared<Condition>();
-	condition->GT("item_id", "99");
-	condition->LT("item_id", "101");
-	BOOST_TEST(condition->process(entry) == true);
+    condition = std::make_shared<Condition>();
+    condition->GT("item_id", "99");
+    condition->LT("item_id", "101");
+    BOOST_TEST(condition->process(entry) == true);
 
-	condition->GE("item_id", "100");
-	condition->LT("item_id", "101");
-	BOOST_TEST(condition->process(entry) == true);
+    condition->GE("item_id", "100");
+    condition->LT("item_id", "101");
+    BOOST_TEST(condition->process(entry) == true);
 
-	//condition->GE("price", )
+    // condition->GE("price", )
 }
 
-BOOST_AUTO_TEST_CASE(greaterThan) {
+BOOST_AUTO_TEST_CASE(greaterThan)
+{
 #if 0
 	auto condition1 = std::make_shared<Condition>();
 	auto condition2 = std::make_shared<Condition>();
@@ -161,7 +161,8 @@ BOOST_AUTO_TEST_CASE(greaterThan) {
 #endif
 }
 
-BOOST_AUTO_TEST_CASE(related) {
+BOOST_AUTO_TEST_CASE(related)
+{
 #if 0
 	auto condition1 = std::make_shared<Condition>();
 	auto condition2 = std::make_shared<Condition>();
@@ -203,4 +204,4 @@ BOOST_AUTO_TEST_CASE(related) {
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}
+}  // namespace test_Condition

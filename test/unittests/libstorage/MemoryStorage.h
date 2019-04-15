@@ -46,25 +46,24 @@ public:
             auto it = tableData->data.find(key);
             if (it != tableData->data.end())
             {
-            	auto entries = std::make_shared<Entries>();
+                auto entries = std::make_shared<Entries>();
 
                 for (size_t i = 0; i < it->second->size(); ++i)
                 {
                     if (it->second->get(i)->getStatus() != Entry::Status::DELETED)
                     {
-                        //it->second->removeEntry(i);
-                    	entries->addEntry(it->second->get(i));
+                        // it->second->removeEntry(i);
+                        entries->addEntry(it->second->get(i));
                     }
                 }
-                //return it->second;
+                // return it->second;
                 return entries;
             }
         }
 
         return std::make_shared<Entries>();
     }
-    virtual size_t commit(
-        h256, int64_t, const std::vector<TableData::Ptr>& datas) override
+    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
