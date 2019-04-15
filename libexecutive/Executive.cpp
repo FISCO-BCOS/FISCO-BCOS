@@ -66,7 +66,7 @@ void Executive::initialize(Transaction const& _transaction)
 }
 
 void Executive::verifyTransaction(
-    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&)
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
@@ -75,8 +75,11 @@ void Executive::verifyTransaction(
     // Pre calculate the gas needed for execution
     if ((_ir & ImportRequirements::TransactionBasic) &&
         _t.baseGasRequired(schedule) > (bigint)txGasLimit)
+    {
+        m_excepted = TransactionException::OutOfGasIntrinsic;
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
+    }
 }
 
 bool Executive::execute()
@@ -136,7 +139,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     {
         m_gas = _p.gas;
 
-        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
+        LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
 
         auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
         size_t outputSize = result.size();
@@ -343,6 +346,11 @@ bool Executive::go(OnOpFunc const& _onOp)
             revert();
             m_output = _e.output();
             m_excepted = TransactionException::RevertInstruction;
+        }
+        catch (OutOfGas& _e)
+        {
+            revert();
+            m_excepted = TransactionException::OutOfGas;
         }
         catch (VMException const& _e)
         {

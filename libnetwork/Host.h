@@ -66,7 +66,6 @@ public:
     virtual bool haveNetwork() const { return m_run; }
 
     virtual std::string listenHost() { return m_listenHost; }
-    virtual uint16_t listenPort() { return m_listenPort; }
     virtual void setHostPort(std::string host, uint16_t port)
     {
         m_listenHost = host;

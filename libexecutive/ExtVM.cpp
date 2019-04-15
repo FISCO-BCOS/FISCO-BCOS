@@ -203,7 +203,7 @@ size_t ExtVM::codeSizeAt(dev::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
-        LOG(TRACE) << _a << "Precompiled codeSizeAt return 1";
+        LOG(TRACE) << _a << " precompiled codeSizeAt return 1";
         return 1;
     }
     return m_s->codeSize(_a);

@@ -227,12 +227,12 @@ workflows:
     jobs:
       - build_static:
           filters:
-            tags:
-              ignore: /.*/
+            branches:
+              ignore: /^pull.*/
       - build_guomi:
           filters:
-            tags:
-              ignore: /.*/
+            branches:
+              ignore: /^pull.*/
       - deploy_static:
           requires:
             - build_static

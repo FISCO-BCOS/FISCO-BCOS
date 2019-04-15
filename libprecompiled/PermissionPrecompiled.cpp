@@ -61,7 +61,7 @@ bytes PermissionPrecompiled::call(
 
     dev::eth::ContractABI abi;
     bytes out;
-
+    int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
     {
         // insert(string tableName,string addr)
@@ -79,8 +79,7 @@ bytes PermissionPrecompiled::call(
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
-
-            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_EXIST));
+            result = CODE_TABLE_AND_ADDRESS_EXIST;
         }
         else
         {
@@ -90,21 +89,12 @@ bytes PermissionPrecompiled::call(
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", u256(count));
-            }
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
     {
@@ -125,28 +115,18 @@ bytes PermissionPrecompiled::call(
         {
             PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                      << LOG_DESC("tableName and address does not exist");
-
-            out = abi.abiIn("", u256(CODE_TABLE_AND_ADDRESS_NOT_EXIST));
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
         else
         {
             int count =
                 table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("permission denied");
-
-                out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove successfully");
-
-                out = abi.abiIn("", u256(count));
-            }
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
     {

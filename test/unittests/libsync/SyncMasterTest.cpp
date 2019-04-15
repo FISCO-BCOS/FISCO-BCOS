@@ -246,6 +246,17 @@ BOOST_AUTO_TEST_CASE(MaintainPeersStatusTest)
                           service->getAsyncSendSizeByNodeID(NodeID(102)) +
                           service->getAsyncSendSizeByNodeID(NodeID(103));
     BOOST_CHECK_EQUAL(reqPacketSum, c_maxRequestShards);
+
+    // Reset peers test
+    sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        _p->number = currentBlockNumber - 1;  // set peers number smaller than myself
+        return true;
+    });
+    sync->maintainPeersStatus();
+    reqPacketSum = service->getAsyncSendSizeByNodeID(NodeID(101)) +
+                   service->getAsyncSendSizeByNodeID(NodeID(102)) +
+                   service->getAsyncSendSizeByNodeID(NodeID(103));
+    BOOST_CHECK_EQUAL(reqPacketSum, c_maxRequestShards);  //
 }
 
 BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)

@@ -19,7 +19,6 @@
  *  @date 20180921
  */
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <string>
 
 namespace dev
