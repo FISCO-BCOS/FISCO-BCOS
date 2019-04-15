@@ -47,12 +47,16 @@ public:
     virtual bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
+    
+    Entries::Ptr selectWithoutCache(
+        const std::string& table, const std::string& key, Condition::Ptr condition);
 
 private:
     size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
         TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
+    void decode(Entries::Ptr entries, std::string const& value);
 };
 
 }  // namespace storage

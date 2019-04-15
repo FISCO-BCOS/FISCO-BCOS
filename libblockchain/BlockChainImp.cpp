@@ -166,7 +166,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
         record_time = utcTime();
         if (tb)
         {
-            auto entries = tb->select(_blockHash.hex(), tb->newCondition());
+            auto entries = m_stateStorage->selectWithoutCache(
+                SYS_HASH_2_BLOCK, _blockHash.hex(), tb->newCondition());
             auto select_time_cost = utcTime() - record_time;
             record_time = utcTime();
             if (entries->size() > 0)
@@ -251,7 +252,8 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
         record_time = utcTime();
         if (tb)
         {
-            auto entries = tb->select(_blockHash.hex(), tb->newCondition());
+            auto entries = m_stateStorage->selectWithoutCache(
+                SYS_HASH_2_BLOCK, _blockHash.hex(), tb->newCondition());
             auto select_time_cost = utcTime() - record_time;
             record_time = utcTime();
             if (entries->size() > 0)
@@ -323,7 +325,8 @@ void BlockChainImp::getNonces(
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
-        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
+        auto entries = m_stateStorage->selectWithoutCache(
+            SYS_BLOCK_2_NONCES, lexical_cast<std::string>(_blockNumber), tb->newCondition());
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);

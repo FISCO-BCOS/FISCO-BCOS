@@ -34,6 +34,48 @@
 using namespace dev;
 using namespace dev::storage;
 
+Entries::Ptr LevelDBStorage::selectWithoutCache(
+    const std::string& table, const std::string& key, Condition::Ptr condition)
+{
+    (void)condition;
+    try
+    {
+        /// obtain the name of the table
+        std::string entryKey = table;
+        entryKey.append("_").append(key);
+
+        std::string value;
+        /// read without cache
+        leveldb::ReadOptions readOption;
+        readOption.fill_cache = false;
+        std::string value;
+        auto s = m_db->Get(readOption, leveldb::Slice(entryKey), &value);
+
+        if (!status.ok() && !status.IsNotFound())
+        {
+            STORAGE_LEVELDB_LOG(ERROR)
+                << LOG_BADGE("selectWithoutCache") << LOG_DESC("Query leveldb failed")
+                << LOG_KV("status", status.ToString());
+            BOOST_THROW_EXCEPTION(StorageException(
+                -1, "selectWithoutCache: Query leveldb exception:" + status.ToString()));
+        }
+        Entries::Ptr entries = std::make_shared<Entries>();
+        if (!status.IsNotFound())
+        {
+            decode(entries, value);
+        }
+        return entries;
+    }
+    catch (const std::exception& e)
+    {
+        STORAGE_LEVELDB_LOG(ERROR)
+            << LOG_BADGE("selectWithoutCache") << LOG_DESC("Query leveldb exception")
+            << LOG_KV("msg", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(e);
+    }
+    return Entries::Ptr();
+}
+
 Entries::Ptr LevelDBStorage::select(
     h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
@@ -58,32 +100,9 @@ Entries::Ptr LevelDBStorage::select(
         Entries::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
-            // parse json
-            std::stringstream ssIn;
-            ssIn << value;
-
-            Json::Value valueJson;
-            ssIn >> valueJson;
-
-            Json::Value values = valueJson["values"];
-            for (auto it = values.begin(); it != values.end(); ++it)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-
-                for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
-                {
-                    entry->setField(valueIt.key().asString(), valueIt->asString());
-                }
-
-                if (entry->getStatus() == Entry::Status::NORMAL)
-                {
-                    entry->setDirty(false);
-                    entries->addEntry(entry);
-                }
-            }
+            decode(entries, value);
         }
         // entries->setDirty(false);
-
         return entries;
     }
     catch (std::exception& e)
@@ -95,6 +114,34 @@ Entries::Ptr LevelDBStorage::select(
     }
 
     return Entries::Ptr();
+}
+
+/// decode the leveldb-obtained value into Entries
+void LevelDBStorage::decode(Entries::Ptr entries, std::string const& value)
+{
+    // parse json
+    std::stringstream ssIn;
+    ssIn << value;
+
+    Json::Value valueJson;
+    ssIn >> valueJson;
+
+    Json::Value values = valueJson["values"];
+    for (auto it = values.begin(); it != values.end(); ++it)
+    {
+        Entry::Ptr entry = std::make_shared<Entry>();
+
+        for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
+        {
+            entry->setField(valueIt.key().asString(), valueIt->asString());
+        }
+
+        if (entry->getStatus() == Entry::Status::NORMAL)
+        {
+            entry->setDirty(false);
+            entries->addEntry(entry);
+        }
+    }
 }
 
 size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
