@@ -42,6 +42,7 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::string key;
     std::vector<std::string> fields;
     std::vector<Address> authorizedAddress;
+    std::vector<std::string> indices;
 };
 
 struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
@@ -57,6 +58,7 @@ class Entry : public std::enable_shared_from_this<Entry>
 {
 public:
     typedef std::shared_ptr<Entry> Ptr;
+    typedef std::shared_ptr<const Entry> ConstPtr;
 
     enum Status
     {
@@ -76,35 +78,55 @@ public:
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
 
-    virtual std::map<std::string, std::string>* fields();
+    virtual const std::map<std::string, std::string>* fields() const;
 
-    virtual uint32_t getStatus();
+    virtual uint32_t getStatus() const;
     virtual void setStatus(int status);
 
-    bool dirty() const;
-    void setDirty(bool dirty);
+    virtual uint32_t num() const;
+    virtual void setNum(uint32_t num);
+
+    virtual bool dirty() const;
+    virtual void setDirty(bool dirty);
+
+    // set the force flag will force insert the entry without query
+    virtual bool force() const;
+    virtual void setForce(bool force);
+
+    virtual bool deleted() const;
+    virtual void setDeleted(bool deleted);
+
+    virtual void copyFrom(Entry::Ptr entry);
 
 private:
     size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
+    bool m_force = false;
+    bool m_deleted = false;
 };
 
 class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
     typedef std::shared_ptr<Entries> Ptr;
+    typedef std::shared_ptr<const Entries> ConstPtr;
+    virtual ~Entries(){};
 
-    Entry::Ptr get(size_t i);
-    size_t size() const;
-    void addEntry(Entry::Ptr entry);
-    bool dirty() const;
-    void setDirty(bool dirty);
-    void removeEntry(size_t index);
+    virtual Entry::ConstPtr get(size_t i) const;
+    virtual Entry::Ptr get(size_t i);
+    virtual size_t size() const;
+    virtual void addEntry(Entry::Ptr entry);
+    virtual bool dirty() const;
+    virtual void setDirty(bool dirty);
+    virtual void removeEntry(size_t index);
+
+    virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>>* entries();
 
 private:
-    std::vector<Entry::Ptr> m_entries;
+    tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>> m_entries;
     bool m_dirty = false;
+    std::mutex m_mutex;
 };
 
 class ConcurrentEntries : public std::enable_shared_from_this<ConcurrentEntries>
@@ -162,6 +184,18 @@ public:
         le
     };
 
+
+    class Range
+    {
+    public:
+        Range(std::pair<bool, std::string> _left, std::pair<bool, std::string> _right)
+          : left(_left), right(_right){};
+
+        // false is close range '<', true is open range '<='
+        std::pair<bool, std::string> left;
+        std::pair<bool, std::string> right;
+    };
+
     virtual ~Condition() {}
 
     virtual void EQ(const std::string& key, const std::string& value);
@@ -176,12 +210,20 @@ public:
     virtual void limit(size_t count);
     virtual void limit(size_t offset, size_t count);
 
-    virtual std::map<std::string, std::pair<Op, std::string>>* getConditions();
+    virtual std::map<std::string, Range>* getConditions();
+
+    virtual bool process(Entry::Ptr entry);
+    virtual bool graterThan(Condition::Ptr condition);
+    virtual bool related(Condition::Ptr condition);
+
+    virtual std::string unlimitedField() { return UNLIMITED; }
 
 private:
-    std::map<std::string, std::pair<Op, std::string>> m_conditions;
+    std::map<std::string, Range> m_conditions;
+    // std::map<std::string, std::pair<Op, std::string>> m_conditions;
     size_t m_offset = 0;
     size_t m_count = 0;
+    const std::string UNLIMITED = "_VALUE_UNLIMITED_";
 };
 
 using Parallel = std::true_type;
@@ -252,7 +294,7 @@ public:
 
     virtual Entry::Ptr newEntry() { return std::make_shared<Entry>(); }
     virtual Condition::Ptr newCondition() { return std::make_shared<Condition>(); }
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) = 0;
+    virtual Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) = 0;
     virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) = 0;
     virtual int insert(const std::string& key, Entry::Ptr entry,
@@ -278,8 +320,6 @@ public:
     virtual void setBlockNum(int blockNum) = 0;
     virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
     virtual size_t cacheSize() { return 0; }
-
-    static bool processCondition(Entry::Ptr entry, Condition::Ptr condition);
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
