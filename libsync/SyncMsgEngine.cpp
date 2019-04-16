@@ -260,7 +260,7 @@ void DownloadBlocksContainer::clearBatchAndSend()
     retPacket.encode(m_blockRLPsBatch);
 
     auto msg = retPacket.toMessage(m_protocolId);
-    m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg, nullptr);
     SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request") << LOG_BADGE("BlockSync")
                     << LOG_DESC("Send block packet") << LOG_KV("peer", m_nodeId.abridged())
                     << LOG_KV("blocks", m_blockRLPsBatch.size())
@@ -276,7 +276,7 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
     retPacket.singleEncode(_blockRLP);
 
     auto msg = retPacket.toMessage(m_protocolId);
-    m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
+    m_service->asyncSendMessageByNodeID(m_nodeId, msg, nullptr);
     SYNC_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("Send") << LOG_BADGE("Download")
                     << LOG_DESC("Block back") << LOG_KV("peer", m_nodeId.abridged())
                     << LOG_KV("blocks", 1) << LOG_KV("bytes(B)", msg->buffer()->size());

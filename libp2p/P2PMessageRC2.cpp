@@ -55,7 +55,7 @@ void P2PMessageRC2::encode(bytes& buffer)
  */
 void P2PMessageRC2::encode(std::shared_ptr<bytes> encodeBuffer)
 {
-    m_cache->clear();  ///< It is not allowed to be assembled outside.
+    bytes().swap(*m_cache);
     m_length = HEADER_LENGTH + encodeBuffer->size();
 
     uint32_t length = htonl(m_length);

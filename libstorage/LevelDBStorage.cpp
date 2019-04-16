@@ -46,21 +46,30 @@ Entries::Ptr LevelDBStorage::selectWithoutCache(
         /// read without cache
         leveldb::ReadOptions readOption;
         readOption.fill_cache = false;
-        std::string value;
-        auto status = m_db->Get(readOption, leveldb::Slice(entryKey), &value);
-
-        if (!status.ok() && !status.IsNotFound())
+        leveldb::Iterator* it = m_db->NewIterator(readOption);
+        it->Seek(leveldb::Slice(entryKey));
+        Entries::Ptr entries = std::make_shared<Entries>();
+        if (it->Valid() && !it->status().IsNotFound() && it->key().ToString() == entryKey)
+        {
+            std::string value = it->value().ToString();
+            decode(entries, value);
+            STORAGE_LEVELDB_LOG(TRACE) << LOG_BADGE("selectWithoutCache") << LOG_KV("key", entryKey)
+                                       << LOG_KV("valueSize", value.size());
+        }
+        else if (!it->Valid())
         {
             STORAGE_LEVELDB_LOG(ERROR)
                 << LOG_BADGE("selectWithoutCache") << LOG_DESC("Query leveldb failed")
-                << LOG_KV("status", status.ToString());
+                << LOG_KV("status", it->status().ToString());
             BOOST_THROW_EXCEPTION(StorageException(
-                -1, "selectWithoutCache: Query leveldb exception:" + status.ToString()));
+                -1, "selectWithoutCache: Query leveldb exception:" + it->status().ToString()));
         }
-        Entries::Ptr entries = std::make_shared<Entries>();
-        if (!status.IsNotFound())
+        STORAGE_LEVELDB_LOG(TRACE)
+            << LOG_BADGE("selectWithoutCache") << LOG_DESC("not found") << LOG_KV("key", entryKey);
+
+        if (it)
         {
-            decode(entries, value);
+            delete it;
         }
         return entries;
     }

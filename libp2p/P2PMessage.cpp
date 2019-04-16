@@ -28,7 +28,7 @@ using namespace dev::p2p;
 
 void P2PMessage::encode(bytes& buffer)
 {
-    buffer.clear();  ///< It is not allowed to be assembled outside.
+    bytes().swap(buffer);
     m_length = HEADER_LENGTH + m_buffer->size();
 
     uint32_t length = htonl(m_length);

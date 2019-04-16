@@ -160,11 +160,11 @@ public:
         }
         /// sealer must be reseted since it's used to decide a block is valid or not
         m_blockHeader.setSealer(Invalid256);
-        m_transactions.clear();
-        m_transactionReceipts.clear();
-        m_sigList.clear();
-        m_txsCache.clear();
-        m_tReceiptsCache.clear();
+        Transactions().swap(m_transactions);
+        TransactionReceipts().swap(m_transactionReceipts);
+        std::vector<std::pair<u256, Signature>>().swap(m_sigList);
+        bytes().swap(m_txsCache);
+        bytes().swap(m_tReceiptsCache);
         noteChange();
         noteReceiptChange();
     }

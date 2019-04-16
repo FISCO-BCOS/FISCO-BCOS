@@ -118,9 +118,9 @@ void BlockHeader::clear()
     m_gasLimit = 0;
     m_gasUsed = 0;
     m_timestamp = UINT64_MAX;
-    m_extraData.clear();
+    std::vector<bytes>().swap(m_extraData);
     m_sealer = Invalid256;
-    m_sealerList.clear();
+    h512s().swap(m_sealerList);
     noteDirty();
 }
 

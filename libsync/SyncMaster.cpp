@@ -272,7 +272,7 @@ void SyncMaster::maintainTransactions()
         packet.encode(txRLPs);
 
         auto msg = packet.toMessage(m_protocolId);
-        m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
+        m_service->asyncSendMessageByNodeID(_p->nodeId, msg, nullptr);
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
@@ -304,8 +304,7 @@ void SyncMaster::maintainBlocks()
         SyncStatusPacket packet;
         packet.encode(number, m_genesisHash, currentHash);
 
-        m_service->asyncSendMessageByNodeID(
-            _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+        m_service->asyncSendMessageByNodeID(_p->nodeId, packet.toMessage(m_protocolId), nullptr);
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Status")
                         << LOG_DESC("Send current status when maintainBlocks")
@@ -427,7 +426,7 @@ void SyncMaster::maintainPeersStatus()
             unsigned size = to - from + 1;
             packet.encode(from, size);
             m_service->asyncSendMessageByNodeID(
-                _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+                _p->nodeId, packet.toMessage(m_protocolId), nullptr);
 
             // update max request number
             m_maxRequestNumber = max(m_maxRequestNumber, to);
@@ -619,8 +618,7 @@ void SyncMaster::maintainPeersConnection()
             SyncStatusPacket packet;
             packet.encode(currentNumber, m_genesisHash, currentHash);
 
-            m_service->asyncSendMessageByNodeID(
-                member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+            m_service->asyncSendMessageByNodeID(member, packet.toMessage(m_protocolId), nullptr);
             SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
                             << LOG_KV("number", int(currentNumber))
                             << LOG_KV("genesisHash", m_genesisHash.abridged())

@@ -104,7 +104,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
                        << LOG_KV("seq2Callback.size", m_seq2Callback->size());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
-    send(p_buffer);
+    send(std::move(p_buffer));
 }
 
 bool Session::actived() const
@@ -135,7 +135,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
     write();
 }
 
-void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes>)
+void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr<bytes> buffer)
 {
     if (!actived())
     {
@@ -157,6 +157,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
             if (m_writing)
             {
                 m_writing = false;
+                buffer.reset();
             }
         }
 

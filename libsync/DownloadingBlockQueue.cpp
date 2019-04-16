@@ -108,7 +108,8 @@ void DownloadingBlockQueue::clear()
 {
     {
         WriteGuard l(x_buffer);
-        m_buffer->clear();
+        ShardPtrVec empty;
+        empty.swap(*m_buffer);
     }
 
     clearQueue();
