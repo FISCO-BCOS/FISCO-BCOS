@@ -37,13 +37,13 @@ struct HostFixture
     {
         std::shared_ptr<boost::asio::ssl::context> sslContext =
             std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
-        auto asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
-        asioInterface->setIOService(std::make_shared<ba::io_service>());
-        asioInterface->setSSLContext(sslContext);
-        asioInterface->setType(dev::network::ASIOInterface::SSL);
+        m_asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
+        m_asioInterface->setIOService(std::make_shared<ba::io_service>());
+        m_asioInterface->setSSLContext(sslContext);
+        m_asioInterface->setType(dev::network::ASIOInterface::SSL);
 
         m_host = std::make_shared<dev::network::Host>();
-        m_host->setASIOInterface(asioInterface);
+        m_host->setASIOInterface(m_asioInterface);
         m_sessionFactory = std::make_shared<dev::network::SessionFactory>();
         m_host->setSessionFactory(m_sessionFactory);
         m_messageFactory = std::make_shared<P2PMessageFactory>();
@@ -96,7 +96,16 @@ BOOST_AUTO_TEST_CASE(functions)
     BOOST_CHECK(m_messageFactory == m_host->messageFactory());
     BOOST_CHECK(m_threadPool == m_host->threadPool());
 
-    // m_host->start();
+    m_host->start();
+    BOOST_CHECK(true == m_host->haveNetwork());
+    auto fakeAsioInterface = dynamic_pointer_cast<FakeASIOInterface>(m_asioInterface);
+    // auto socket = fakeAsioInterface->m_acceptorInfo.first;
+    auto socket = fakeAsioInterface->m_socket;
+    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
+    socket->setNodeIPEndpoint(nodeIP);
+    auto handler = fakeAsioInterface->m_acceptorInfo.second;
+    boost::system::error_code ec;
+    handler(ec);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
