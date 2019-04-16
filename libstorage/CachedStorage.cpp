@@ -218,10 +218,11 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     tbb::atomic<size_t> total = 0;
 
     std::vector<TableData::Ptr> commitDatas;
-    commitDatas.reserve(datas.size());
+    commitDatas.resize(datas.size());
     // update cache & copy datas
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
-    	for(size_t idx = range.begin(); idx < range.end(); ++idx) {
+    //tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
+    	//for(size_t idx = range.begin(); idx < range.end(); ++idx) {
+    	for(size_t idx = 0; idx < datas.size(); ++idx) {
     		auto requestData = datas[idx];
 			auto commitData = std::make_shared<TableData>();
 			commitData->info = requestData->info;
@@ -312,7 +313,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 			//commitDatas.push_back(tableData);
 			commitDatas[idx] = commitData;
     	}
-    });
+    //});
 
     /*
         STORAGE_LOG(TRACE) << "Current cache --";

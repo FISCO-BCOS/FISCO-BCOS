@@ -193,17 +193,22 @@ void MemoryTableFactory2::setBlockNum(int64_t blockNum)
 
 h256 MemoryTableFactory2::hash()
 {
-	std::vector<Table::Ptr> tables;
+	std::vector<std::pair<std::string, Table::Ptr> > tables;
 	for(auto it: m_name2Table) {
-		tables.push_back(it.second);
+		tables.push_back(std::make_pair(it.first, it.second));
 	}
 
-    tbb::concurrent_vector<h256> hashs;
+	tbb::parallel_sort(tables.begin(), tables.end(), [](const std::pair<std::string, Table::Ptr> &lhs, const std::pair<std::string, Table::Ptr> &rhs) {
+		return lhs.first < rhs.first;
+	});
+
+    bytes data;
+    data.resize(tables.size() * 32);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
 		for (auto it = range.begin(); it != range.end(); ++it)
 		{
 			auto table = tables[it];
-			h256 hash = table->hash();
+			h256 hash = table.second->hash();
 			if (hash == h256())
 			{
 				continue;
@@ -211,16 +216,9 @@ h256 MemoryTableFactory2::hash()
 
 			bytes tableHash = hash.asBytes();
 
-			//data.insert(data.end(), tableHash.begin(), tableHash.end());
-			hashs.push_back(hash);
+			memcpy(&data[it * 32], &tableHash[0], tableHash.size());
 		}
     });
-    tbb::parallel_sort(hashs.begin(), hashs.end());
-
-    bytes data;
-    for(auto it : hashs) {
-    	data.insert(data.end(), it.begin(), it.end());
-    }
 
     if (data.empty())
     {
