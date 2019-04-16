@@ -14,7 +14,10 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-
+/** @file Host.h
+ * @author 122025861@qq.com
+ * @date 2018
+ */
 
 #include "libnetwork/Host.h"
 #include "FakeASIOInterface.h"
@@ -41,25 +44,59 @@ struct HostFixture
 
         m_host = std::make_shared<dev::network::Host>();
         m_host->setASIOInterface(asioInterface);
-        m_host->setSessionFactory(std::make_shared<dev::network::SessionFactory>());
-        auto messageFactory = std::make_shared<P2PMessageFactory>();
-        m_host->setMessageFactory(messageFactory);
-        m_host->setHostPort("127.0.0.1", 8545);
-        m_host->setThreadPool(std::make_shared<ThreadPool>("P2PTest", 2));
-        std::vector<std::string> certBlacklist;
-        m_host->setCRL(certBlacklist);
+        m_sessionFactory = std::make_shared<dev::network::SessionFactory>();
+        m_host->setSessionFactory(m_sessionFactory);
+        m_messageFactory = std::make_shared<P2PMessageFactory>();
+        m_host->setMessageFactory(m_messageFactory);
+
+        m_host->setHostPort(m_hostIP, m_port);
+        m_threadPool = std::make_shared<ThreadPool>("P2PTest", 2);
+        m_host->setThreadPool(m_threadPool);
+        m_host->setCRL(m_certBlacklist);
+        m_host->setConnectionHandler(
+            [](dev::network::NetworkException e, dev::network::NodeInfo const&,
+                std::shared_ptr<dev::network::SessionFace>) {
+                if (e.errorCode())
+                {
+                    LOG(ERROR) << e.what();
+                }
+            });
+        m_connectionHandler = m_host->connectionHandler();
     }
 
     ~HostFixture() {}
+    string m_hostIP = "127.0.0.1";
+    uint16_t m_port = 8545;
     std::shared_ptr<dev::network::Host> m_host;
+    MessageFactory::Ptr m_messageFactory;
+    std::shared_ptr<SessionFactory> m_sessionFactory;
+    std::shared_ptr<dev::ThreadPool> m_threadPool;
+    std::vector<std::string> m_certBlacklist;
     std::shared_ptr<ASIOInterface> m_asioInterface;
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
+        m_connectionHandler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Host, HostFixture)
 
-BOOST_AUTO_TEST_CASE(start)
+BOOST_AUTO_TEST_CASE(functions)
 {
-    m_host->start();
+    BOOST_CHECK(m_port == m_host->listenPort());
+    BOOST_CHECK(m_hostIP == m_host->listenHost());
+    string hostIP = "0.0.0.0";
+    uint16_t port = 8546;
+    m_host->setHostPort(hostIP, port);
+    BOOST_CHECK(port == m_host->listenPort());
+    BOOST_CHECK(hostIP == m_host->listenHost());
+    BOOST_CHECK(false == m_host->haveNetwork());
+    BOOST_CHECK(m_certBlacklist == m_host->certBlacklist());
+    m_host->setASIOInterface(m_asioInterface);
+    BOOST_CHECK(m_asioInterface == m_host->asioInterface());
+    BOOST_CHECK(m_sessionFactory == m_host->sessionFactory());
+    BOOST_CHECK(m_messageFactory == m_host->messageFactory());
+    BOOST_CHECK(m_threadPool == m_host->threadPool());
+
+    // m_host->start();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

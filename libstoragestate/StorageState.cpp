@@ -100,9 +100,9 @@ void StorageState::addBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance += _amount;
-            entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+            Entry::Ptr updateEntry = table->newEntry();
+            updateEntry->setField(STORAGE_VALUE, balance.str());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
         }
     }
     else
@@ -124,9 +124,9 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
             if (balance < _amount)
                 BOOST_THROW_EXCEPTION(NotEnoughCash());
             balance -= _amount;
-            entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+            Entry::Ptr updateEntry = table->newEntry();
+            updateEntry->setField(STORAGE_VALUE, balance.str());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
         }
     }
     else
@@ -146,9 +146,9 @@ void StorageState::setBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance = _amount;
-            entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+            Entry::Ptr updateEntry = table->newEntry();
+            updateEntry->setField(STORAGE_VALUE, balance.str());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
         }
     }
     else
@@ -301,9 +301,9 @@ void StorageState::incNonce(Address const& _address)
             auto entry = entries->get(0);
             auto nonce = u256(entry->getField(STORAGE_VALUE));
             ++nonce;
-            entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, nonce.str());
-            table->update(ACCOUNT_NONCE, entry, table->newCondition());
+            Entry::Ptr updateEntry = table->newEntry();
+            updateEntry->setField(STORAGE_VALUE, nonce.str());
+            table->update(ACCOUNT_NONCE, updateEntry, table->newCondition());
         }
     }
     else

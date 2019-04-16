@@ -94,53 +94,58 @@ public:
         }
     }
 
-    inline bool exists(Mutex& lock, QueueSet<std::string>& queue, std::string const& key)
+    inline bool exists(SharedMutex& lock, QueueSet<std::string>& queue, std::string const& key)
     {
         /// lock succ
-        DEV_GUARDED(lock)
-        return queue.exist(key);
-        /// lock failed
-        return false;
+        ReadGuard l(lock);
+        bool exist = queue.exist(key);
+        return exist;
     }
 
-    inline void insertMessage(Mutex& lock, QueueSet<std::string>& queue, size_t const& maxCacheSize,
-        std::string const& key)
+    inline void insertMessage(SharedMutex& lock, QueueSet<std::string>& queue,
+        size_t const& maxCacheSize, std::string const& key)
     {
-        DEV_GUARDED(lock)
-        {
-            if (queue.size() > maxCacheSize)
-                queue.pop();
-            queue.push(key);
-        }
+        WriteGuard l(lock);
+        if (queue.size() > maxCacheSize)
+            queue.pop();
+        queue.push(key);
     }
     /// clear all the cache
     inline void clearAll()
     {
-        DEV_GUARDED(x_knownPrepare)
-        m_knownPrepare.clear();
-        DEV_GUARDED(x_knownSign)
-        m_knownSign.clear();
-        DEV_GUARDED(x_knownCommit)
-        m_knownCommit.clear();
-        DEV_GUARDED(x_knownViewChange)
-        m_knownViewChange.clear();
+        {
+            WriteGuard l(x_knownPrepare);
+            m_knownPrepare.clear();
+        }
+        {
+            WriteGuard l(x_knownSign);
+            m_knownSign.clear();
+        }
+        {
+            WriteGuard l(x_knownCommit);
+            m_knownCommit.clear();
+        }
+        {
+            WriteGuard l(x_knownViewChange);
+            m_knownViewChange.clear();
+        }
     }
 
 private:
     /// mutex for m_knownPrepare
-    Mutex x_knownPrepare;
+    mutable SharedMutex x_knownPrepare;
     /// cache for the prepare packet
     QueueSet<std::string> m_knownPrepare;
     /// mutex for m_knownSign
-    Mutex x_knownSign;
+    mutable SharedMutex x_knownSign;
     /// cache for the sign packet
     QueueSet<std::string> m_knownSign;
     /// mutex for m_knownCommit
-    Mutex x_knownCommit;
+    mutable SharedMutex x_knownCommit;
     /// cache for the commit packet
     QueueSet<std::string> m_knownCommit;
     /// mutex for m_knownViewChange
-    Mutex x_knownViewChange;
+    mutable SharedMutex x_knownViewChange;
     /// cache for the viewchange packet
     QueueSet<std::string> m_knownViewChange;
 

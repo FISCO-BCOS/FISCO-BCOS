@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "Table.h"
 #include "libblockverifier/Precompiled.h"
 
 namespace dev
@@ -62,11 +63,11 @@ public:
     virtual bytes call(
         std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const& origin = Address());
 
-    void setEntry(std::shared_ptr<dev::storage::Entry> entry) { m_entry = entry; }
-    std::shared_ptr<dev::storage::Entry> getEntry() { return m_entry; }
+    void setEntry(dev::storage::Entry::Ptr entry) { m_entry = entry; }
+    dev::storage::Entry::Ptr getEntry() const { return m_entry; };
 
 private:
-    std::shared_ptr<dev::storage::Entry> m_entry;
+    dev::storage::Entry::Ptr m_entry;
 };
 
 }  // namespace blockverifier
