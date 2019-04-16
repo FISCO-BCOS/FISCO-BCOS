@@ -64,11 +64,7 @@ public:
 
     std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint()) override
     {
-        auto socket = std::make_shared<FakeSocket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
-        auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
-        socket->setNodeIPEndpoint(nodeIP);
-        m_socket = socket;
-        return socket;
+        return std::make_shared<FakeSocket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
     }
 
     std::shared_ptr<bi::tcp::acceptor> acceptor() override { return m_acceptor; }
@@ -76,16 +72,12 @@ public:
     void init(std::string listenHost, uint16_t listenPort) override
     {
         m_strand = std::make_shared<boost::asio::io_service::strand>(*m_ioService);
-        m_acceptor = std::make_shared<bi::tcp::acceptor>(
-            *m_ioService, boost::asio::ip::tcp::endpoint(
-                              boost::asio::ip::address::from_string(listenHost), listenPort));
-        boost::asio::socket_base::reuse_address optionReuseAddress(true);
-        m_acceptor->set_option(optionReuseAddress);
-        (void)listenHost;
-        (void)listenPort;
+        m_acceptor = std::make_shared<bi::tcp::acceptor>(*m_ioService);
+        m_listenHost = listenHost;
+        m_listenPort = listenPort;
     }
 
-    void run() override { std::this_thread::sleep_for(std::chrono::seconds(10)); }
+    void run() override { std::this_thread::sleep_for(std::chrono::seconds(5)); }
 
     void stop() override {}
 
@@ -95,17 +87,17 @@ public:
         boost::system::error_code = boost::system::error_code()) override
     {
         // m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
-        m_socket = socket;
         m_acceptorInfo = std::make_pair(socket, handler);
     }
 
     void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint peer_endpoint,
         Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
     {
-        (void)socket;
-        (void)peer_endpoint;
-        (void)handler;
-        // socket->ref().async_connect(peer_endpoint, handler);
+        auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
+        fakeSocket->open();
+        fakeSocket->setRemoteEndpoint(peer_endpoint);
+        boost::system::error_code ec;
+        handler(ec);
     }
 
     void asyncWrite(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
@@ -140,8 +132,8 @@ public:
     {
         (void)socket;
         (void)type;
-        (void)handler;
-        // socket->sslref().async_handshake(type, handler);
+        boost::system::error_code ec;
+        handler(ec);
     }
 
     void asyncWait(boost::asio::deadline_timer* m_timer, boost::asio::io_service::strand& m_strand,
@@ -155,14 +147,21 @@ public:
         std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true) override
     {
         (void)socket;
-        (void)callback;
-        // socket->sslref().set_verify_callback(callback);
+        // auto s = m_sslContext->m_sslContext();
+        // auto x509 = SSL_CTX_get0_certificate(s);
+        // auto store = SSL_CTX_get_cert_store(s);
+        auto x509_store_ctx = X509_STORE_CTX_new();
+        // auto chain = SSL_get_peer_cert_chain();
+        // X509_STORE_CTX_init(x509_store_ctx,store,x509,chain);
+        boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
+        callback(true, verifyContext);
     }
 
     void strandPost(Base_Handler handler) override { m_strand->post(handler); }
-
+    // std::shared_ptr<SocketFace> m_socket;
     std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
-    std::shared_ptr<SocketFace> m_socket;
+    std::string m_listenHost;
+    uint16_t m_listenPort;
 
 private:
     std::shared_ptr<ba::io_service> m_ioService;

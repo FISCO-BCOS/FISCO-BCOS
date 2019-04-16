@@ -96,6 +96,10 @@ public:
         return copydSize;
     }
     bi::tcp::endpoint remoteEndpoint() override { return m_nodeIPEndpoint; }
+    void setRemoteEndpoint(const bi::tcp::endpoint& end)
+    {
+        m_nodeIPEndpoint = NodeIPEndpoint(end.address(), 0, end.port());
+    }
 
     bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
