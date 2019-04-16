@@ -49,6 +49,7 @@ Usage:
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <disable compress>               Default enable. If set -C, disable compress
     -s <State type>                     Default storage. if set -s, use mpt 
+    -S <Storage type>                   Default leveldb. if set -S, use external
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -507,7 +508,6 @@ generate_group_genesis()
     max_trans_num=1000
     ;the node id of leaders
     ${node_list}
-
 [storage]
     ;storage db type, leveldb or external
     type=${storage_type}
