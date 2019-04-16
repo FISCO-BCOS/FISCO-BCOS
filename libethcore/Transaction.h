@@ -46,11 +46,14 @@ enum class CheckTransaction
     Cheap,
     Everything
 };
+
+const int c_fieldCountRC1WithOutSig = 7;
+const int c_fieldCountRC2WithOutSig = 10;
+const int c_sigCount = 3;
+
 /// function called after the transaction has been submitted
 using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
-/// Remove m_chainId ,EIP155 value for calculating transaction hash
-/// https://github.com/ethereum/EIPs/issues/155
 class Transaction
 {
 public:
@@ -131,8 +134,12 @@ public:
     /// was not initialized void streamRLP(RLPStream& _s, IncludeSignature _sig =
     /// WithSignature) const;
     void encode(bytes& _trans, IncludeSignature _sig = WithSignature) const;
+    void encodeRC1(bytes& _trans, IncludeSignature _sig = WithSignature) const;
+    void encodeRC2(bytes& _trans, IncludeSignature _sig = WithSignature) const;
     void decode(bytesConstRef tx_bytes, CheckTransaction _checkSig = CheckTransaction::Everything);
     void decode(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
+    void decodeRC1(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
+    void decodeRC2(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
     /// @returns the RLP serialisation of this transaction.
     bytes rlp(IncludeSignature _sig = WithSignature) const
     {
@@ -235,6 +242,8 @@ public:
 
     void updateTransactionHashWithSig(dev::h256 const& txHash);
 
+    bool checkChainIdAndGroupId(u256 _chainId, u256 _groupId);
+
 protected:
     /// Type of transaction.
     enum Type
@@ -281,6 +290,10 @@ protected:
 
     bytes m_rlpBuffer;  /// < The buffer to cache origin RLP sequence. It will be reused when the tx
                         /// < needs to be encocoded again;
+
+    u256 m_chainId = u256(1);  /// < The scenario to which the transaction belongs.
+    u256 m_groupId = u256(1);  /// < The group to which the transaction belongs.
+    bytes m_extraData;         /// < Reserved fields, distinguished by "##".
 };
 
 /// Nice name for vector of Transaction.

@@ -73,6 +73,12 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
             TransactionRefused() << errinfo_comment(
                 "ImportResult::TransactionAlreadyInChain, txHash: " + toHex(_tx.sha3())));
     }
+    else if (ImportResult::InvalidChainIdOrGroupId == ret)
+    {
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "ImportResult::InvalidChainIdOrGroupId, txHash: " + toHex(_tx.sha3())));
+    }
     else
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
@@ -181,6 +187,7 @@ bool TxPool::txExists(dev::h256 const& txHash)
  *  1. whether the transaction is known (refuse repeated transaction)
  *  2. check nonce
  *  3. check block limit
+ *  4. check chainId and groupId
  *  TODO: check transaction filter
  *
  * @param trans : the transaction to be verified
@@ -221,6 +228,11 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     /// valid transaction into the txpool nonce cache
     if (false == txPoolNonceCheck(trans))
         return ImportResult::TxPoolNonceCheckFail;
+    /// check chainId and groupId
+    if (false == trans.checkChainIdAndGroupId(u256(g_BCOSConfig.chainId()), u256(m_groupId)))
+    {
+        return ImportResult::InvalidChainIdOrGroupId;
+    }
     /// TODO: filter check
     return ImportResult::Success;
 }
