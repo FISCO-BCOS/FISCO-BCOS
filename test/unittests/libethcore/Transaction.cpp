@@ -72,7 +72,6 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     /// test decode
     Transaction decodeTxRC1;
     decodeTxRC1.decode(ref(encodeBytesRC1));
-    BOOST_CHECK(decodeTxRC1.sender() == tx.safeSender());
     BOOST_CHECK_NO_THROW(decodeTxRC1.signature());
     BOOST_CHECK_NO_THROW(decodeTxRC1.checkLowS());
     g_BCOSConfig.setVersion(RC2_VERSION);
