@@ -47,9 +47,9 @@ public:
     virtual bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
-    
+
     Entries::Ptr selectWithoutCache(
-        const std::string& table, const std::string& key, Condition::Ptr condition);
+        const std::string& table, const std::string& key, Condition::Ptr condition) override;
 
 private:
     size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
