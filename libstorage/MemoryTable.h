@@ -142,6 +142,7 @@ public:
             auto entries = selectFromCache(key, needSelect);
 
             checkField(entry);
+            entry->setField(m_tableInfo->key, key);
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             if (m_recorder)
