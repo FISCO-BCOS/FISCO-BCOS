@@ -31,6 +31,7 @@
 #include "Table.h"
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
+#include <tbb/pipeline.h>
 
 using namespace dev::storage;
 
@@ -714,4 +715,7 @@ bool Condition::related(Condition::Ptr condition)
     */
 
     return false;
+}
+
+Entries::Ptr Condition::processEntries(Entries::Ptr entries) {
 }

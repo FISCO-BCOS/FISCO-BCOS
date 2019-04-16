@@ -216,6 +216,8 @@ public:
     virtual bool graterThan(Condition::Ptr condition);
     virtual bool related(Condition::Ptr condition);
 
+    virtual Entries::Ptr processEntries(Entries::Ptr entries);
+
     virtual std::string unlimitedField() { return UNLIMITED; }
 
 private:
