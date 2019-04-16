@@ -21,6 +21,7 @@
  */
 #include <iostream>
 
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
@@ -62,6 +63,19 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     BOOST_CHECK_NO_THROW(decodeTx.checkLowS());
     /*bytes s;
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
+
+    // RC1_VERSION encode and decode
+    g_BCOSConfig.setVersion(RC1_VERSION);
+    /// test encode
+    bytes encodeBytesRC1;
+    tx.encode(encodeBytesRC1, eth::IncludeSignature::WithSignature);
+    /// test decode
+    Transaction decodeTxRC1;
+    decodeTxRC1.decode(ref(encodeBytesRC1));
+    BOOST_CHECK(decodeTxRC1.sender() == tx.safeSender());
+    BOOST_CHECK_NO_THROW(decodeTxRC1.signature());
+    BOOST_CHECK_NO_THROW(decodeTxRC1.checkLowS());
+    g_BCOSConfig.setVersion(RC2_VERSION);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
