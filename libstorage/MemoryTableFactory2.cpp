@@ -29,6 +29,9 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
+#include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -190,22 +193,35 @@ void MemoryTableFactory2::setBlockNum(int64_t blockNum)
 
 h256 MemoryTableFactory2::hash()
 {
+	std::vector<Table::Ptr> tables;
+	for(auto it: m_name2Table) {
+		tables.push_back(it.second);
+	}
+
+    tbb::concurrent_vector<h256> hashs;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
+		for (auto it = range.begin(); it != range.end(); ++it)
+		{
+			auto table = tables[it];
+			h256 hash = table->hash();
+			if (hash == h256())
+			{
+				continue;
+			}
+
+			bytes tableHash = hash.asBytes();
+
+			//data.insert(data.end(), tableHash.begin(), tableHash.end());
+			hashs.push_back(hash);
+		}
+    });
+    tbb::parallel_sort(hashs.begin(), hashs.end());
+
     bytes data;
-    for (auto& it : m_name2Table)
-    {
-        auto table = it.second;
-        h256 hash = table->hash();
-        if (hash == h256())
-        {
-            continue;
-        }
-
-        bytes tableHash = hash.asBytes();
-        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
-        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
-
-        data.insert(data.end(), tableHash.begin(), tableHash.end());
+    for(auto it : hashs) {
+    	data.insert(data.end(), it.begin(), it.end());
     }
+
     if (data.empty())
     {
         return h256();

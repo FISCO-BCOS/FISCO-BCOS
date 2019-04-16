@@ -24,6 +24,8 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <thread>
+#include <tbb/parallel_for.h>
+#include <tbb/concurrent_vector.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -213,101 +215,104 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         }
     */
 
-    size_t total = 0;
+    tbb::atomic<size_t> total = 0;
 
     std::vector<TableData::Ptr> commitDatas;
+    commitDatas.reserve(datas.size());
     // update cache & copy datas
-    for (auto it : datas)
-    {
-        auto tableData = std::make_shared<TableData>();
-        tableData->info = it->info;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
+    	for(size_t idx = range.begin(); idx < range.end(); ++idx) {
+    		auto requestData = datas[idx];
+			auto commitData = std::make_shared<TableData>();
+			commitData->info = requestData->info;
 
-        for (size_t i = 0; i < it->entries->size(); ++i)
-        {
-            ++total;
+			for (size_t i = 0; i < requestData->entries->size(); ++i)
+			{
+				++total;
 
-            auto entry = it->entries->get(i);
-            auto key = entry->getField(it->info->key);
-            auto id = entry->getID();
+				auto entry = requestData->entries->get(i);
+				auto key = entry->getField(requestData->info->key);
+				auto id = entry->getID();
 
+				if (id != 0)
+				{
+					auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+					auto data = caches->entries()->entries();
+					auto entryIt = std::lower_bound(data->begin(), data->end(), entry,
+						[](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
+							return lhs->getID() < rhs->getID();
+						});
 
-            if (id != 0)
-            {
-                auto caches = selectNoCondition(h256(), 0, it->info, key, nullptr);
-                auto data = caches->entries()->entries();
-                auto entryIt = std::lower_bound(data->begin(), data->end(), entry,
-                    [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
-                        return lhs->getID() < rhs->getID();
-                    });
+					if (entryIt != data->end() && (*entryIt)->getID() == id)
+					{
+						for (auto fieldIt : *entry->fields())
+						{
+							if (fieldIt.first != "_id_")
+							{
+								(*entryIt)->setField(fieldIt.first, fieldIt.second);
+							}
+						}
 
-                if (entryIt != data->end() && (*entryIt)->getID() == id)
-                {
-                    for (auto fieldIt : *entry->fields())
-                    {
-                        if (fieldIt.first != "_id_")
-                        {
-                            (*entryIt)->setField(fieldIt.first, fieldIt.second);
-                        }
-                    }
+						auto commitEntry = std::make_shared<Entry>();
+						commitEntry->copyFrom(*entryIt);
+						commitData->entries->addEntry(commitEntry);
+					}
+					else
+					{
+						STORAGE_LOG(ERROR)
+							<< "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
 
-                    auto commitEntry = std::make_shared<Entry>();
-                    commitEntry->copyFrom(*entryIt);
-                    tableData->entries->addEntry(commitEntry);
-                }
-                else
-                {
-                    STORAGE_LOG(ERROR)
-                        << "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
+						// impossible
+						BOOST_THROW_EXCEPTION(
+							StorageException(-1, "Can not find entry in cache, id: " +
+													 boost::lexical_cast<std::string>(entry->getID())));
+					}
+				}
+				else
+				{
+					auto cacheEntry = std::make_shared<Entry>();
+					cacheEntry->copyFrom(entry);
+					cacheEntry->setID(++m_ID);
 
-                    // impossible
-                    BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Can not find entry in cache, id: " +
-                                                 boost::lexical_cast<std::string>(entry->getID())));
-                }
-            }
-            else
-            {
-                auto cacheEntry = std::make_shared<Entry>();
-                cacheEntry->copyFrom(entry);
-                cacheEntry->setID(++m_ID);
+					if (entry->force())
+					{
+						auto tableIt = m_caches.find(requestData->info->name);
+						if (tableIt == m_caches.end())
+						{
+							tableIt = m_caches
+										  .insert(std::make_pair(
+												  requestData->info->name, std::make_shared<TableCaches>()))
+										  .first;
+							tableIt->second->tableInfo()->name = requestData->info->name;
+						}
 
-                if (entry->force())
-                {
-                    auto tableIt = m_caches.find(it->info->name);
-                    if (tableIt == m_caches.end())
-                    {
-                        tableIt = m_caches
-                                      .insert(std::make_pair(
-                                          it->info->name, std::make_shared<TableCaches>()))
-                                      .first;
-                        tableIt->second->tableInfo()->name = it->info->name;
-                    }
+						auto caches = std::make_shared<Caches>();
+						auto newEntries = std::make_shared<Entries>();
+						newEntries->addEntry(cacheEntry);
+						caches->setEntries(newEntries);
+						caches->setNum(num);
 
-                    auto caches = std::make_shared<Caches>();
-                    auto newEntries = std::make_shared<Entries>();
-                    newEntries->addEntry(cacheEntry);
-                    caches->setEntries(newEntries);
-                    caches->setNum(num);
+						tableIt->second->addCache(key, caches);
+					}
+					else
+					{
+						auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+						caches->entries()->addEntry(cacheEntry);
+						caches->setNum(num);
+					}
 
-                    tableIt->second->addCache(key, caches);
-                }
-                else
-                {
-                    auto caches = selectNoCondition(h256(), 0, it->info, key, nullptr);
-                    caches->entries()->addEntry(cacheEntry);
-                    caches->setNum(num);
-                }
+					LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
 
-                LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
+					auto commitEntry = std::make_shared<Entry>();
+					commitEntry->copyFrom(cacheEntry);
+					commitData->entries->addEntry(commitEntry);
+				}
+			}
 
-                auto commitEntry = std::make_shared<Entry>();
-                commitEntry->copyFrom(cacheEntry);
-                tableData->entries->addEntry(commitEntry);
-            }
-        }
-
-        commitDatas.push_back(tableData);
-    }
+			//commitDatas.push_back(tableData);
+			commitDatas[idx] = commitData;
+    	}
+    });
 
     /*
         STORAGE_LOG(TRACE) << "Current cache --";
