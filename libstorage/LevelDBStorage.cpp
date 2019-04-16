@@ -43,13 +43,11 @@ Entries::Ptr LevelDBStorage::selectWithoutCache(
         /// obtain the name of the table
         std::string entryKey = table;
         entryKey.append("_").append(key);
-
-        std::string value;
         /// read without cache
         leveldb::ReadOptions readOption;
         readOption.fill_cache = false;
         std::string value;
-        auto s = m_db->Get(readOption, leveldb::Slice(entryKey), &value);
+        auto status = m_db->Get(readOption, leveldb::Slice(entryKey), &value);
 
         if (!status.ok() && !status.IsNotFound())
         {
