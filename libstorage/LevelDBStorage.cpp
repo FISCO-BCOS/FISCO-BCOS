@@ -23,6 +23,7 @@
 #include "Table.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
@@ -34,12 +35,12 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage::select(
-    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
     try
     {
-        std::string entryKey = table;
+        std::string entryKey = tableInfo->name;
         entryKey.append("_").append(key);
 
         std::string value;
@@ -147,8 +148,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 }
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
-size_t LevelDBStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
+size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {

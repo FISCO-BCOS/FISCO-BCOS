@@ -104,7 +104,7 @@ private:
         /// a period solution: if there has been  a higher sealed block, return directly without
         /// reset
         {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
             if (m_sealing.block.isSealed() && shouldHandleBlock())
             {
                 PBFTSEALER_LOG(DEBUG)
@@ -126,7 +126,7 @@ private:
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
         {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
                                   << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());

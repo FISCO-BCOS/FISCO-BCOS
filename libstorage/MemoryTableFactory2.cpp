@@ -38,8 +38,6 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-thread_local std::vector<Change> MemoryTableFactory2::s_changeLog = std::vector<Change>();
-
 MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 {
     m_sysTables.push_back(SYS_CONSENSUS);
@@ -218,7 +216,7 @@ h256 MemoryTableFactory2::hash()
 
 std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-    return s_changeLog;
+    return s_changeLog.local();
 }
 
 void MemoryTableFactory2::rollback(size_t _savepoint)
@@ -259,7 +257,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
+        stateStorage()->commit(_blockHash, _blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();

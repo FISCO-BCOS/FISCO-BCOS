@@ -86,7 +86,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
 
 void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _transcation)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    WriteGuard l(m_lock);
     {
         auto key = this->generateKey(_transcation);
         m_cache.insert(key);

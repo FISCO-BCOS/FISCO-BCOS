@@ -24,6 +24,7 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -54,7 +55,7 @@ public:
 
     virtual ~MemoryTable(){};
 
-    virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
+    typename Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override
     {
         try
         {
@@ -141,6 +142,7 @@ public:
             auto entries = selectFromCache(key, needSelect);
 
             checkField(entry);
+            entry->setField(m_tableInfo->key, key);
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             if (m_recorder)
@@ -210,7 +212,7 @@ public:
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
                 {
-                    if (it.second->get(i)->dirty())
+                    if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
                         for (auto& fieldIt : *(it.second->get(i)->fields()))
                         {
@@ -362,7 +364,7 @@ private:
             // These code is fast with no rollback
             if (m_remoteDB && needSelect)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key);
                 // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
                 // dropped.
                 m_cache.insert(std::make_pair(key, entries));
@@ -380,17 +382,20 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
+#if 0
         if (condition->getConditions()->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
                 indexes.emplace_back(i);
             return indexes;
         }
+#endif
 
         for (size_t i = 0; i < entries->size(); ++i)
         {
             Entry::Ptr entry = entries->get(i);
-            if (processCondition(entry, condition))
+            if (condition->process(entry))
+            // if (processCondition(entry, condition))
             {
                 indexes.push_back(i);
             }
@@ -399,6 +404,7 @@ private:
         return indexes;
     }
 
+#if 0
     bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
     {
         try
@@ -493,6 +499,7 @@ private:
 
         return true;
     }
+#endif
 
     bool isHashField(const std::string& _key)
     {

@@ -1572,18 +1572,18 @@ const std::string RaftEngine::consensusStatus()
     json_spirit::Array status;
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
-    // get current leader idx
-    statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     // get current leader ID
     h512 leaderId;
     auto isSucc = getNodeIdByIndex(leaderId, m_leader);
     if (isSucc)
     {
         statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     }
     else
     {
         statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", "NULL"));
     }
     status.push_back(statusObj);
     json_spirit::Value value(status);
