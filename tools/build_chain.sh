@@ -30,7 +30,7 @@ consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
-timestamp=$((`date '+%s'`*1000+`date '+%N'`/1000000))
+timestamp=$(($(date '+%s')*1000+$(date '+%N')/1000000))
 chain_id=1
 fisco_version=""
 OS=
