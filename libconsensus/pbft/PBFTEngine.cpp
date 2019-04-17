@@ -533,18 +533,17 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
+    auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
     {
         return true;
     }
     {
-        /// check sealer list(node list)
-        ReadGuard l(m_sealerListMutex);
-        if (m_sealerList != block.blockHeader().sealerList())
+        if (sealers != block.blockHeader().sealerList())
         {
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: wrong sealers")
-                                  << LOG_KV("Nsealer", m_sealerList.size())
+                                  << LOG_KV("Nsealer", sealers.size())
                                   << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
                                   << LOG_KV("hash", block.blockHeader().hash().abridged())
                                   << LOG_KV("nodeIdx", nodeIdx())
@@ -572,20 +571,20 @@ bool PBFTEngine::checkBlock(Block const& block)
     /// check sign
     for (auto sign : sig_list)
     {
-        if (sign.first >= m_sealerList.size())
+        if (sign.first >= sealers.size())
         {
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: overflowed signer")
                                   << LOG_KV("signer", sign.first)
-                                  << LOG_KV("Nsealer", m_sealerList.size());
+                                  << LOG_KV("Nsealer", sealers.size());
             return false;
         }
-        if (!dev::verify(m_sealerList[sign.first.convert_to<size_t>()], sign.second,
-                block.blockHeader().hash()))
+        if (!dev::verify(
+                sealers[sign.first.convert_to<size_t>()], sign.second, block.blockHeader().hash()))
         {
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: invalid sign")
                                   << LOG_KV("signer", sign.first)
-                                  << LOG_KV("pub",
-                                         m_sealerList[sign.first.convert_to<size_t>()].abridged())
+                                  << LOG_KV(
+                                         "pub", sealers[sign.first.convert_to<size_t>()].abridged())
                                   << LOG_KV("hash", block.blockHeader().hash().abridged());
             return false;
         }
@@ -946,6 +945,7 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                     << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
+                m_reqCache->removeInvalidFutureCache(m_highestBlock);
             }
             else
             {
@@ -989,6 +989,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
+        /// remove invalid future block
+        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
         m_highestBlock = block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)

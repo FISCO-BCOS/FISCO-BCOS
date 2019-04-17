@@ -58,7 +58,7 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
         u256 num;
         abi.abiOut(data, num);
 
-        auto entry = m_entries->get(num.convert_to<size_t>());
+        Entry::Ptr entry = getEntries()->get(num.convert_to<size_t>());
         EntryPrecompiled::Ptr entryPrecompiled = std::make_shared<EntryPrecompiled>();
         entryPrecompiled->setEntry(entry);
         Address address = context->registerPrecompiled(entryPrecompiled);
@@ -67,7 +67,7 @@ bytes dev::blockverifier::EntriesPrecompiled::call(
     }
     else if (func == name2Selector[ENTRYIES_METHOD_SIZE])
     {  // size()
-        u256 c = m_entries->size();
+        u256 c = getEntries()->size();
 
         out = abi.abiIn("", c);
     }

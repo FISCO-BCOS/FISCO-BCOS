@@ -773,7 +773,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
     {
         std::string topic = message->topic();
 
-        CHANNEL_LOG(DEBUG) << "Push to SDK" << LOG_KV("topic", topic)
+        CHANNEL_LOG(TRACE) << "Push to SDK" << LOG_KV("topic", topic)
                            << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
         std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
 
