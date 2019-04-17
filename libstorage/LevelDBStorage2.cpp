@@ -37,11 +37,11 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage2::select(
-    h256, int, const std::string& table, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
-        std::string entryKey = table;
+        std::string entryKey = tableInfo->name;
         entryKey.append("_").append(key);
 
         std::string value;
@@ -76,8 +76,7 @@ Entries::Ptr LevelDBStorage2::select(
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
 
-                if (entry->getStatus() == Entry::Status::NORMAL &&
-                    Table::processCondition(entry, condition))
+                if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -98,8 +97,7 @@ Entries::Ptr LevelDBStorage2::select(
     return Entries::Ptr();
 }
 
-size_t LevelDBStorage2::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&)
+size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {

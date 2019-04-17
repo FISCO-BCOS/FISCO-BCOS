@@ -27,6 +27,7 @@
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
@@ -130,7 +131,7 @@ void DBInitializer::initLevelDBStorage()
 
 void DBInitializer::initSQLStorage()
 {
-    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initAMOPDBStorage");
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initSQLStorage");
 
     auto sqlStorage = std::make_shared<SQLStorage>();
     sqlStorage->setChannelRPCServer(m_channelRPCServer);
@@ -142,11 +143,18 @@ void DBInitializer::initSQLStorage()
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
 
-    m_storage = sqlStorage;
+    auto cachedStorage = std::make_shared<CachedStorage>();
+    cachedStorage->setBackend(sqlStorage);
+    cachedStorage->setMaxStoreKey(m_param->mutableStorageParam().maxStoreKey);
+    cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+
+    cachedStorage->init();
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(m_storage);
+    // tableFactoryFactory->setStorage(m_storage);
+    tableFactoryFactory->setStorage(cachedStorage);
 
+    m_storage = cachedStorage;
     m_tableFactoryFactory = tableFactoryFactory;
 }
 

@@ -60,7 +60,7 @@ bool TransactionNonceCheck::ok(Transaction const& _transaction, bool _needinsert
 
 void TransactionNonceCheck::updateCache(bool _rebuild)
 {
-    DEV_WRITE_GUARDED(m_lock)
+    WriteGuard l(m_lock);
     {
         try
         {
