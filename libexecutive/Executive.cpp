@@ -408,6 +408,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 
 bool Executive::goRC2(OnOpFunc const& _onOp)
 {
+    // The try catch version of go()
     if (m_ext)
     {
 #if ETH_TIMED_EXECUTIONS
