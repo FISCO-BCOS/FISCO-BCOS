@@ -42,10 +42,14 @@ struct HostFixture
     {
         boost::property_tree::ptree pt;
         pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
+#ifdef FISCO_GM
+        m_sslContext =
+            std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+#else
         auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
         secureInitializer->initConfig(pt);
         m_sslContext = secureInitializer->SSLContext();
-
+#endif
         m_asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
         m_asioInterface->setIOService(std::make_shared<ba::io_service>());
         m_asioInterface->setSSLContext(m_sslContext);
@@ -75,7 +79,7 @@ struct HostFixture
 
     ~HostFixture() {}
     string m_hostIP = "127.0.0.1";
-    uint16_t m_port = 8545;
+    uint16_t m_port = 8845;
     std::shared_ptr<dev::network::Host> m_host;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
     MessageFactory::Ptr m_messageFactory;
@@ -101,7 +105,6 @@ BOOST_AUTO_TEST_CASE(functions)
     BOOST_CHECK(false == m_host->haveNetwork());
     BOOST_CHECK(m_certBlacklist == m_host->certBlacklist());
     m_host->connectionHandler();
-    m_host->setASIOInterface(m_asioInterface);
     BOOST_CHECK(m_asioInterface == m_host->asioInterface());
     BOOST_CHECK(m_sessionFactory == m_host->sessionFactory());
     BOOST_CHECK(m_messageFactory == m_host->messageFactory());
