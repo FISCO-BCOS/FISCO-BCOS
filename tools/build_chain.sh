@@ -29,7 +29,8 @@ current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
-timestamp=$(date +%s)
+# trans timestamp from seconds to milliseconds
+timestamp=$(($(date '+%s')*1000+$(date '+%N')/1000000))
 chain_id=1
 fisco_version=""
 OS=
