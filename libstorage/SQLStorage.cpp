@@ -28,7 +28,6 @@
 #include "SQLStorage.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
-#include <libdevcore/FixedHash.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -36,7 +35,7 @@ using namespace dev::storage;
 SQLStorage::SQLStorage() {}
 
 Entries::Ptr SQLStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -47,7 +46,7 @@ Entries::Ptr SQLStorage::select(
         requestJson["op"] = "select";
         requestJson["params"]["blockHash"] = hash.hex();
         requestJson["params"]["num"] = num;
-        requestJson["params"]["table"] = tableInfo->name;
+        requestJson["params"]["table"] = table;
         requestJson["params"]["key"] = key;
 
         if (condition)
@@ -56,42 +55,8 @@ Entries::Ptr SQLStorage::select(
             {
                 Json::Value cond;
                 cond.append(it.first);
-                if (it.second.left.second == it.second.right.second && it.second.left.first &&
-                    it.second.right.first)
-                {
-                    cond.append(Condition::eq);
-                    cond.append(it.second.left.second);
-                }
-                else
-                {
-                    if (it.second.left.second != condition->unlimitedField())
-                    {
-                        if (it.second.left.first)
-                        {
-                            cond.append(Condition::ge);
-                        }
-                        else
-                        {
-                            cond.append(Condition::gt);
-                        }
-                        cond.append(it.second.left.second);
-                    }
-
-                    if (it.second.right.second != condition->unlimitedField())
-                    {
-                        if (it.second.right.first)
-                        {
-                            cond.append(Condition::le);
-                        }
-                        else
-                        {
-                            cond.append(Condition::lt);
-                        }
-                        cond.append(it.second.right.second);
-                    }
-                }
-                // cond.append(it.second.left);
-                // cond.append(it.second.second);
+				cond.append(it.second.first);
+				cond.append(it.second.second);
                 requestJson["params"]["condition"].append(cond);
             }
         }
@@ -147,10 +112,12 @@ Entries::Ptr SQLStorage::select(
     return Entries::Ptr();
 }
 
-size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t SQLStorage::commit(
+	    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const& blockHash)
 {
     try
     {
+		(void)blockHash;
         LOG(DEBUG) << "Commit data to database:" << datas.size();
 
         if (datas.size() == 0)
