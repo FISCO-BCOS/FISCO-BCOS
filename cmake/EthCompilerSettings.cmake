@@ -61,6 +61,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
     
+    if(PROF)
+    add_compile_options(-pg)
+    endif ()
+    
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
     set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
