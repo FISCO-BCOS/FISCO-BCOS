@@ -333,40 +333,6 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
 std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        return executeRC2(_envInfo, _t, _onOp, executiveContext);
-    }
-
-    auto onOp = _onOp;
-#if ETH_VMTRACE
-    if (isChannelVisible<VMTraceChannel>())
-        onOp = Executive::simpleTrace();  // override tracer
-#endif
-
-    // Create and initialize the executive. This will throw fairly cheaply and quickly if the
-    // transaction is bad in any way.
-    Executive e(executiveContext->getState(), _envInfo);
-    ExecutionResult res;
-    e.setResultRecipient(res);
-    e.initialize(_t);
-
-    // OK - transaction looks valid - execute.
-    u256 startGasUsed = _envInfo.gasUsed();
-    if (!e.execute())
-        e.go(onOp);
-    e.finalize();
-
-    /// mptstate calculates every transactions
-    /// storagestate ignore hash calculation
-    return make_pair(res, TransactionReceipt(executiveContext->getState()->rootHash(false),
-                              startGasUsed + e.gasUsed(), e.logs(), e.status(),
-                              e.takeOutput().takeBytes(), e.newAddress()));
-}
-
-std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeRC2(EnvInfo const& _envInfo,
-    Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
-{
     auto onOp = _onOp;
 #if ETH_VMTRACE
     if (isChannelVisible<VMTraceChannel>())
