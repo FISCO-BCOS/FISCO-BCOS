@@ -1439,18 +1439,13 @@ bool RaftEngine::shouldSeal()
 
 bool RaftEngine::commit(Block const& _block)
 {
-    {
-        Guard guard(m_commitMutex);
-        m_uncommittedBlock = _block;
-        m_uncommittedBlockNumber = m_consensusBlockNumber;
-        RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Prepare to commit block")
-                              << LOG_KV("nextHeight", m_uncommittedBlockNumber);
-    }
-
     std::unique_lock<std::mutex> ul(m_commitMutex);
+    m_uncommittedBlock = _block;
+    m_uncommittedBlockNumber = m_consensusBlockNumber;
     m_waitingForCommitting = true;
     m_commitReady = false;
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Wait to commit block");
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Wait to commit block")
+                          << LOG_KV("nextHeight", m_uncommittedBlockNumber);
     m_commitCV.wait(ul, [this]() { return m_commitReady; });
 
     m_commitReady = false;
@@ -1572,18 +1567,18 @@ const std::string RaftEngine::consensusStatus()
     json_spirit::Array status;
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
-    // get current leader idx
-    statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     // get current leader ID
     h512 leaderId;
     auto isSucc = getNodeIdByIndex(leaderId, m_leader);
     if (isSucc)
     {
         statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     }
     else
     {
         statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", "NULL"));
     }
     status.push_back(statusObj);
     json_spirit::Value value(status);
