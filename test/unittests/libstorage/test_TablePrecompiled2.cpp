@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(call_select)
     abi.abiOut(bytesConstRef(&out), entriesAddress);
     auto entriesPrecompiled =
         std::dynamic_pointer_cast<EntriesPrecompiled>(context->getPrecompiled(entriesAddress));
-    auto entries = entriesPrecompiled->getEntries();
+    Entries::ConstPtr entries = entriesPrecompiled->getEntries();
     BOOST_TEST(entries->size() == 0u);
 }
 

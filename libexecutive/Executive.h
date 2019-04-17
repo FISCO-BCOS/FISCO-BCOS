@@ -111,7 +111,7 @@ public:
     /// @returns true if the transaction is done, false if go() must be called.
 
     void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction const& _t,
-        dev::eth::BlockHeader const& _header, u256 const& _gasUsed) const;
+        dev::eth::BlockHeader const& _header, u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().

@@ -36,31 +36,34 @@ public:
 
     virtual ~MemoryStorage(){};
 
-    virtual Entries::Ptr select(
-        h256, int, const std::string& table, const std::string& key, Condition::Ptr) override
+    Entries::Ptr select(
+        h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr) override
     {
-        auto search = data.find(table);
+        auto search = data.find(tableInfo->name);
         if (search != data.end())
         {
             auto tableData = search->second;
             auto it = tableData->data.find(key);
             if (it != tableData->data.end())
             {
+                auto entries = std::make_shared<Entries>();
+
                 for (size_t i = 0; i < it->second->size(); ++i)
                 {
-                    if (it->second->get(i)->getStatus() == Entry::Status::DELETED)
+                    if (it->second->get(i)->getStatus() != Entry::Status::DELETED)
                     {
-                        it->second->removeEntry(i);
+                        // it->second->removeEntry(i);
+                        entries->addEntry(it->second->get(i));
                     }
                 }
-                return it->second;
+                // return it->second;
+                return entries;
             }
         }
 
         return std::make_shared<Entries>();
     }
-    virtual size_t commit(
-        h256, int64_t, const std::vector<TableData::Ptr>& datas, h256 const&) override
+    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
@@ -68,7 +71,7 @@ public:
         }
         return datas.size();
     }
-    virtual bool onlyDirty() override { return false; }
+    bool onlyDirty() override { return false; }
 
 private:
     std::map<std::string, TableData::Ptr> data;

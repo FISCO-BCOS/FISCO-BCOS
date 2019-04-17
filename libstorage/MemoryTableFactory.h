@@ -26,6 +26,7 @@
 #include "Table.h"
 #include "TablePrecompiled.h"
 #include <libdevcore/easylog.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>
 #include <memory>
@@ -73,7 +74,8 @@ private:
     int m_blockNum;
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
-    thread_local static std::vector<Change> s_changeLog;
+    // boost::thread_specific_ptr<std::vector<Change> > s_changeLog;
+    tbb::enumerable_thread_specific<std::vector<Change> > s_changeLog;
     h256 m_hash;
     // sys tables
     const static std::vector<std::string> c_sysTables;
