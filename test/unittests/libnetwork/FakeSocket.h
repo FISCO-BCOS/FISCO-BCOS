@@ -84,10 +84,10 @@ public:
         b->commit(copydSize);
         m_queue.push(b);
     }
-    size_t read(boost::asio::mutable_buffers_1 buffers)
+    size_t read(boost::asio::mutable_buffers_1 buffers, size_t size)
     {
         auto p = m_queue.front();
-        auto copydSize = boost::asio::buffer_copy(buffers, p->data(), buffers.size());
+        auto copydSize = boost::asio::buffer_copy(buffers, p->data(), size);
         p->consume(copydSize);
         if (p->size() == 0)
         {

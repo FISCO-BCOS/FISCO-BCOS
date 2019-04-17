@@ -42,32 +42,11 @@ public:
     typedef boost::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
 
     ~FakeASIOInterface() = default;
-    void setType(int type) override { m_type = type; }
-
-    std::shared_ptr<ba::io_service> ioService() override { return m_ioService; }
-    void setIOService(std::shared_ptr<ba::io_service> ioService) override
-    {
-        m_ioService = ioService;
-    }
-
-    std::shared_ptr<ba::ssl::context> sslContext() override { return m_sslContext; }
-    void setSSLContext(std::shared_ptr<ba::ssl::context> sslContext) override
-    {
-        m_sslContext = sslContext;
-    }
-
-    std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout) override
-    {
-        return std::make_shared<boost::asio::deadline_timer>(
-            *m_ioService, boost::posix_time::milliseconds(timeout));
-    }
 
     std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint()) override
     {
         return std::make_shared<FakeSocket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
     }
-
-    std::shared_ptr<bi::tcp::acceptor> acceptor() override { return m_acceptor; }
 
     void init(std::string listenHost, uint16_t listenPort) override
     {
@@ -122,7 +101,7 @@ public:
         ReadWriteHandler handler) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
-        auto size = fakeSocket->read(buffers);
+        auto size = fakeSocket->read(buffers, buffers.size());
         boost::system::error_code ec;
         handler(ec, size);
     }
@@ -134,13 +113,6 @@ public:
         (void)type;
         boost::system::error_code ec;
         handler(ec);
-    }
-
-    void asyncWait(boost::asio::deadline_timer* m_timer, boost::asio::io_service::strand& m_strand,
-        Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
-    {
-        if (m_timer)
-            m_timer->async_wait(m_strand.wrap(handler));
     }
 
     void setVerifyCallback(
@@ -157,18 +129,10 @@ public:
         callback(true, verifyContext);
     }
 
-    void strandPost(Base_Handler handler) override { m_strand->post(handler); }
     // std::shared_ptr<SocketFace> m_socket;
     std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
     std::string m_listenHost;
     uint16_t m_listenPort;
-
-private:
-    std::shared_ptr<ba::io_service> m_ioService;
-    std::shared_ptr<ba::io_service::strand> m_strand;
-    std::shared_ptr<bi::tcp::acceptor> m_acceptor = nullptr;
-    std::shared_ptr<ba::ssl::context> m_sslContext;
-    int m_type = 0;
 };
 }  // namespace network
 }  // namespace dev
