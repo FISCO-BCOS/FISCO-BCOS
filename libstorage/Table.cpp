@@ -718,4 +718,5 @@ bool Condition::related(Condition::Ptr condition)
 }
 
 Entries::Ptr Condition::processEntries(Entries::Ptr entries) {
+	return entries;
 }

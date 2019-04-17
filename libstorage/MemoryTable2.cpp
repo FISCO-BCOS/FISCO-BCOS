@@ -355,7 +355,8 @@ void MemoryTable2::rollback(const Change& _change)
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
 
         auto entry = m_newEntries->get(_change.value[0].index);
-        entry->setStatus(1);
+        //entry->setStatus(1);
+        entry->setDeleted(true);
         // m_newEntries->removeEntry(_change.value[0].newIndex);
         break;
     }

@@ -198,23 +198,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 {
     STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
-    /*
-        STORAGE_LOG(TRACE) << "Commit data";
-        for(auto it: datas) {
-            STORAGE_LOG(TRACE) << "table: " << it->info->name;
-            for(size_t i=0;i<it->entries->size();++i) {
-                auto entry = it->entries->get(i);
-
-                std::stringstream ss;
-                for(auto fieldIt: *(entry->fields())) {
-                    ss << " " << fieldIt.first << ":" << fieldIt.second;
-                }
-
-                STORAGE_LOG(TRACE) << "Entry: " << ss.str();
-            }
-        }
-    */
-
     tbb::atomic<size_t> total = 0;
 
     std::vector<TableData::Ptr> commitDatas;
@@ -314,41 +297,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 			commitDatas[idx] = commitData;
     	}
     //});
-
-    /*
-        STORAGE_LOG(TRACE) << "Current cache --";
-        for(auto it: m_caches) {
-            STORAGE_LOG(TRACE) << "table: " << it.second->tableInfo()->name;
-            for(auto cacheIt: *(it.second->caches())) {
-                STORAGE_LOG(TRACE) << "key: " << cacheIt.first;
-                for(size_t i=0;i<cacheIt.second->entries()->size();++i) {
-                    auto entry = cacheIt.second->entries()->get(i);
-
-                    std::stringstream ss;
-                    for(auto fieldIt: *(entry->fields())) {
-                        ss << " " << fieldIt.first << ":" << fieldIt.second;
-                    }
-
-                    STORAGE_LOG(TRACE) << "Entry: " << ss.str();
-                }
-            }
-        }
-
-        STORAGE_LOG(TRACE) << "Commit commitDatas ---";
-        for(auto it: commitDatas) {
-            STORAGE_LOG(TRACE) << "table: " << it->info->name;
-            for(size_t i=0;i<it->entries->size();++i) {
-                auto entry = it->entries->get(i);
-
-                std::stringstream ss;
-                for(auto fieldIt: *(entry->fields())) {
-                    ss << " " << fieldIt.first << ":" << fieldIt.second;
-                }
-
-                STORAGE_LOG(TRACE) << "Entry: " << ss.str();
-            }
-        }
-    */
 
     // new task write to backend
     Task::Ptr task = std::make_shared<Task>();
