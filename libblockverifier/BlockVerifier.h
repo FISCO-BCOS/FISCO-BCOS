@@ -84,6 +84,11 @@ public:
         dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);
 
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeRC2(
+        dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
+        dev::eth::OnOpFunc const& _onOp,
+        dev::blockverifier::ExecutiveContext::Ptr executiveContext);
+
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
         m_executiveContextFactory = executiveContextFactory;

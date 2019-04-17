@@ -149,6 +149,7 @@ public:
     /// Executes (or continues execution of) the VM.
     /// @returns false iff go() must be called again to finish the transaction.
     bool go(dev::eth::OnOpFunc const& _onOp = dev::eth::OnOpFunc());
+    bool goRC2(dev::eth::OnOpFunc const& _onOp = dev::eth::OnOpFunc());
 
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
