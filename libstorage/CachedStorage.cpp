@@ -164,7 +164,6 @@ Caches::Ptr CachedStorage::selectNoCondition(
             auto caches = tableCaches->findCache(key);
             if (caches)
             {
-                std::lock_guard<std::mutex> lock(m_mutex);
                 touchMRU(tableInfo->name, key);
 
                 return caches;
@@ -181,7 +180,6 @@ Caches::Ptr CachedStorage::selectNoCondition(
         auto tableIt = m_caches.find(tableInfo->name);
         if (tableIt == m_caches.end())
         {
-        	std::lock_guard<std::mutex> lock(m_mutex);
             tableIt =
                 m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
                     .first;
@@ -194,6 +192,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         caches->setEntries(backendData);
 
         tableIt->second->addCache(key, caches);
+
         touchMRU(tableInfo->name, key);
 
         return caches;
@@ -303,7 +302,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 				touchMRU(requestData->info->name, key);
 			}
 
-			std::lock_guard<std::mutex> lock(m_mutex);
 			commitDatas[idx] = commitData;
     	}
     //});
@@ -412,6 +410,8 @@ size_t CachedStorage::ID()
 }
 
 void CachedStorage::touchMRU(std::string table, std::string key) {
+	std::lock_guard<std::mutex> lock(m_mutex);
+
 	auto r = m_mru.push_back(std::make_pair(table, key));
 	if (!r.second)
 	{
