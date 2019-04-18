@@ -141,14 +141,6 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
-    struct SyncPeerInfo
-    {
-        NodeID nodeId;
-        int64_t number;
-        h256 genesisHash;
-        h256 latestHash;
-    };
-
     if (status == nullptr)
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
