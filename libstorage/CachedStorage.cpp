@@ -30,6 +30,14 @@
 using namespace dev;
 using namespace dev::storage;
 
+std::string Caches::key() {
+	return m_key;
+}
+
+void Caches::setKey(const std::string &key) {
+	m_key = key;
+}
+
 Entries::Ptr Caches::entries()
 {
     return m_entries;
@@ -157,11 +165,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
             if (caches)
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                auto r = m_mru.push_front(std::make_pair(tableInfo->name, key));
-                if (!r.second)
-                {
-                    m_mru.relocate(m_mru.end(), r.first);
-                }
+                touchMRU(tableInfo->name, key);
 
                 return caches;
             }
@@ -177,16 +181,20 @@ Caches::Ptr CachedStorage::selectNoCondition(
         auto tableIt = m_caches.find(tableInfo->name);
         if (tableIt == m_caches.end())
         {
+        	std::lock_guard<std::mutex> lock(m_mutex);
             tableIt =
                 m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
                     .first;
+
             tableIt->second->setTableInfo(tableInfo);
         }
 
         auto caches = std::make_shared<Caches>();
+        caches->setKey(key);
         caches->setEntries(backendData);
 
         tableIt->second->addCache(key, caches);
+        touchMRU(tableInfo->name, key);
 
         return caches;
     }
@@ -291,9 +299,11 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 					commitEntry->copyFrom(cacheEntry);
 					commitData->entries->addEntry(commitEntry);
 				}
+
+				touchMRU(requestData->info->name, key);
 			}
 
-			//commitDatas.push_back(tableData);
+			std::lock_guard<std::mutex> lock(m_mutex);
 			commitDatas[idx] = commitData;
     	}
     //});
@@ -400,6 +410,14 @@ size_t CachedStorage::ID()
     return m_ID;
 }
 
+void CachedStorage::touchMRU(std::string table, std::string key) {
+	auto r = m_mru.push_back(std::make_pair(table, key));
+	if (!r.second)
+	{
+		m_mru.relocate(m_mru.end(), r.first);
+	}
+}
+
 void CachedStorage::checkAndClear()
 {
     bool needClear = false;
@@ -411,7 +429,7 @@ void CachedStorage::checkAndClear()
 
         if (clearTimes > 1)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::yield();
         }
 
         if (m_mru.size() > m_maxStoreKey)
@@ -440,6 +458,7 @@ void CachedStorage::checkAndClear()
                     {
                         if (cache->num() <= m_syncNum)
                         {
+                        	STORAGE_LOG(TRACE) << "Clear last recent record: " << tableIt->second->tableInfo()->name << "-" << it->second;
                             tableIt->second->removeCache(it->second);
                             it = m_mru.erase(it);
                         }

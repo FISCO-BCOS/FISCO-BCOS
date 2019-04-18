@@ -87,7 +87,7 @@ public:
         (void)datas;
 
         BOOST_CHECK(hash == h256());
-        BOOST_CHECK(num == 101);
+        BOOST_CHECK(num == commitNum);
 
         BOOST_CHECK(datas.size() == 2);
         for (auto it : datas)
@@ -113,6 +113,7 @@ public:
     bool onlyDirty() override { return true; }
 
     bool commited = false;
+    int64_t commitNum = 50;
 };
 
 struct CachedStorageFixture
@@ -202,7 +203,7 @@ BOOST_AUTO_TEST_CASE(select_condition)
 BOOST_AUTO_TEST_CASE(commit)
 {
     h256 h;
-    int64_t num = 101;
+    int64_t num = 50;
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "t_test";
@@ -213,10 +214,11 @@ BOOST_AUTO_TEST_CASE(commit)
     datas.push_back(tableData);
 
     BOOST_TEST(cachedStorage->syncNum() == 0);
+    mockStorage->commitNum = 50;
     size_t c = cachedStorage->commit(h, num, datas);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    BOOST_TEST(cachedStorage->syncNum() == 101);
+    BOOST_TEST(cachedStorage->syncNum() == 50);
 
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");

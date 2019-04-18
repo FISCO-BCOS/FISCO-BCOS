@@ -40,12 +40,15 @@ public:
     typedef std::shared_ptr<Caches> Ptr;
     virtual ~Caches(){};
 
+    virtual std::string key();
+    virtual void setKey(const std::string &key);
     virtual Entries::Ptr entries();
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
 private:
+    std::string m_key;
     Entries::Ptr m_entries;
     int64_t m_num;
 };
@@ -108,6 +111,7 @@ public:
     size_t ID();
 
 private:
+    void touchMRU(std::string table, std::string key);
     void checkAndClear();
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
