@@ -22,7 +22,6 @@
  */
 
 #include "SyncMsgPacket.h"
-#include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -51,7 +50,7 @@ bool SyncMsgPacket::decode(
 
 P2PMessage::Ptr SyncMsgPacket::toMessage(PROTOCOL_ID _protocolId)
 {
-    P2PMessage::Ptr msg = std::make_shared<P2PMessage>();
+    P2PMessage::Ptr msg = std::dynamic_pointer_cast<P2PMessage>(m_p2pFactory->buildMessage());
 
     std::shared_ptr<bytes> b = std::make_shared<bytes>();
     m_rlpStream.swapOut(*b);
@@ -80,10 +79,29 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
-void SyncTransactionsPacket::encode(unsigned _txsSize, bytes const& _txRLPs)
+void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
+{
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        encodeRC2(_txRLPs);
+        return;
+    }
+
+    m_rlpStream.clear();
+    bytes txRLPS;
+    unsigned txsSize = unsigned(_txRLPs.size());
+    for (size_t i = 0; i < _txRLPs.size(); i++)
+    {
+        txRLPS += _txRLPs[i];
+    }
+    prep(m_rlpStream, TransactionsPacket, txsSize).appendRaw(txRLPS, txsSize);
+}
+
+void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, TransactionsPacket, _txsSize).appendRaw(_txRLPs, _txsSize);
+    bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
+    prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
 }
 
 void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)

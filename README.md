@@ -12,7 +12,7 @@ English / [中文](docs/README_CN.md)
 
 ## Documentation
 
-- [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
+- [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)
 
 ## Compatibility
 

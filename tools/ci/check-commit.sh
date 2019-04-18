@@ -1,6 +1,6 @@
 # "Copyright [2018] <fisco-bcos>"
 # @ function: check code format of {.h, .hpp and .cpp} files
-# @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready 
+# @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready
 # @ author  : wheatli
 # @ file    : check-commit.sh
 # @ date    : 2018
@@ -46,14 +46,14 @@ function check()
     # Redirect output to stderr.
     exec 1>&2
     sum=0
-    git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'        
+    git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'
     # for check-script
     for file in $(git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
-        LOG_INFO "=== file: ${file}" 
+        LOG_INFO "=== file: ${file}"
         sum=$(expr ${sum} + $?)
     done
-        
+
     if [ ${sum} -eq 0 ]; then
         exit 0
     else

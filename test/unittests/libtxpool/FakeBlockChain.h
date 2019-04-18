@@ -23,12 +23,11 @@
  */
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
-#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -43,7 +42,10 @@ namespace test
 class FakeService : public dev::p2p::Service
 {
 public:
-    FakeService() : Service() {}
+    FakeService() : Service()
+    {
+        m_messageFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+    }
     void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
@@ -75,11 +77,16 @@ public:
 
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
+    std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override
+    {
+        return m_messageFactory;
+    }
 
 private:
     P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
     std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
+    std::shared_ptr<dev::p2p::P2PMessageFactory> m_messageFactory;
     bool m_connected = false;
 };
 class FakeTxPool : public TxPool
@@ -155,6 +162,16 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
+    {
+        return getBlockByHash(_blockHash)->rlpP();
+    }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    {
+        return getBlockRLPByHash(numberHash(_i));
+    }
+
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
     dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
@@ -186,14 +203,19 @@ public:
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
     bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
-    dev::h512s sealerList() override { return dev::h512s(); };
-    dev::h512s observerList() override { return dev::h512s(); };
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
+    dev::h512s sealerList() override { return m_sealerList; }
+    dev::h512s observerList() override { return m_observerList; }
+    void setSealerList(dev::h512s const& sealers) { m_sealerList = sealers; }
+    void setObserverList(dev::h512s const& observers) { m_observerList = observers; }
+
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block> > m_blockChain;
     int64_t m_blockNumber;
     int64_t m_totalTransactionCount;
     Secret m_sec;
+    dev::h512s m_sealerList = dev::h512s();
+    dev::h512s m_observerList = dev::h512s();
 };
 class TxPoolFixture
 {

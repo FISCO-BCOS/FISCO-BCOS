@@ -43,7 +43,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        int16_t const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
         h512s const& _sealerList = h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
@@ -80,7 +80,8 @@ protected:
 
     bool reachBlockIntervalTime() override
     {
-        return m_pbftEngine->reachBlockIntervalTime() || m_sealing.block.getTransactionSize() > 0;
+        return m_pbftEngine->reachBlockIntervalTime() ||
+               (m_sealing.block.getTransactionSize() > 0 && m_pbftEngine->reachMinBlockGenTime());
     }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
@@ -88,13 +89,33 @@ protected:
     {
         return m_pbftEngine->canHandleBlockForNextLeader();
     }
+    void setBlock();
 
 private:
     /// reset block when view changes
     void resetBlockForViewChange()
     {
+        /// in case of that:
+        /// time1: checkTimeout, blockNumber = n - 1
+        /// time2: Report block, blockNumber = n
+        /// time2: handleBlock, seal a new block, blockNumber(m_sealing) = n + 1, and broadcast the
+        /// prepare request time3: callback onViewChange, reset the sealed block time4: seal again,
+        /// blockNumber(m_sealing) = n + 1 the result is: generate two block with the same block in
+        /// a period solution: if there has been  a higher sealed block, return directly without
+        /// reset
         {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
+            if (m_sealing.block.isSealed() && shouldHandleBlock())
+            {
+                PBFTSEALER_LOG(DEBUG)
+                    << LOG_DESC("sealing block have already been sealed and should be handled")
+                    << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                    << LOG_KV("curNum", m_blockChain->number());
+                return;
+            }
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for viewchange")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
         }
         m_signalled.notify_all();
@@ -105,14 +126,15 @@ private:
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
         {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock(filter, true);
         }
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
-
-    void setBlock();
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;

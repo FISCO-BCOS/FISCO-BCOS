@@ -23,9 +23,11 @@
 
 #pragma once
 #include "Common.h"
+#include "DownloadingTxsQueue.h"
 #include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 
 namespace dev
@@ -35,7 +37,20 @@ namespace sync
 class SyncMsgPacket
 {
 public:
-    SyncMsgPacket() {}
+    SyncMsgPacket()
+    {
+        /// TODO:
+        /// 1. implement these packet with SyncMsgPacketFactory
+        /// 2. modify sync and PBFT related packet from reference to pointer
+        if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+        {
+            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactoryRC2>();
+        }
+        else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        {
+            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+        }
+    }
     /// Extract data by decoding the message
     bool decode(
         std::shared_ptr<dev::p2p::P2PSession> _session, std::shared_ptr<dev::p2p::P2PMessage> _msg);
@@ -56,6 +71,7 @@ public:
 protected:
     RLP m_rlp;              /// The result of decode
     RLPStream m_rlpStream;  // The result of encode
+    std::shared_ptr<dev::p2p::P2PMessageFactory> m_p2pFactory;
 
 private:
     bool checkPacket(bytesConstRef _msg);
@@ -73,7 +89,8 @@ class SyncTransactionsPacket : public SyncMsgPacket
 {
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
-    void encode(unsigned _txsSize, bytes const& txRLPs);
+    void encode(std::vector<bytes> const& _txRLPs);
+    void encodeRC2(std::vector<bytes> const& _txRLPs);
 };
 
 class SyncBlocksPacket : public SyncMsgPacket

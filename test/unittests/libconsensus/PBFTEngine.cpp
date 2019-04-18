@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->reqCache());
     /// init pbft env
     fake_pbft.consensus()->initPBFTEnv(
-        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+        fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
     /// check level db has already been openend
     BOOST_CHECK(fake_pbft.consensus()->backupDB());
     BOOST_CHECK(fake_pbft.consensus()->consensusBlockNumber() == 0);
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check m_timeManager
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_viewTimeout ==
-                fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+                fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_changeCycle == 0);
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastGarbageCollection <=
                 std::chrono::system_clock::now());
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(testTimeout)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
 
     VIEWTYPE oriToView = fake_pbft.consensus()->toView();
     TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
     // 7 nodes
     FakeConsensus<FakePBFTEngine> fake_pbft(7, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     fake_pbft.consensus()->resetConfig();
 
     ///< timeout situation
@@ -315,7 +315,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     size_t valid = 4;
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     PrepareReq prepare_req;
     FakeValidNodeNum(fake_pbft, valid);
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     size_t valid = 4;
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * fake_pbft.consensus()->timeManager().m_intervalBlockTime);
+        3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     int64_t block_number = obtainBlockNumber(fake_pbft);
     PrepareReq prepare_req;
 
@@ -410,7 +410,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
-        3 * (fake_pbft.consensus()->timeManager().m_intervalBlockTime));
+        3 * (fake_pbft.consensus()->timeManager().m_emptyBlockGenTime));
     PrepareReq req;
     TestIsValidPrepare(fake_pbft, req, true);
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
@@ -465,7 +465,7 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
 
     fake_pbft.consensus()->initPBFTEnv(
-        fake_pbft.consensus()->timeManager().m_intervalBlockTime * 3);
+        fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
 
     PBFTMsgPacket pbftMsg;
     SignReq signReq;
@@ -593,6 +593,21 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
     testReHandleCommitPrepareCache(fake_pbft, prepareReq);
 
+    ///====== test notifySealing ======
+    FakeBlock block(12, KeyPair::create().secret(), fake_pbft.consensus()->consensusBlockNumber());
+    fake_pbft.consensus()->onNotifyNextLeaderReset();
+    /// the leader calls notifySealing
+    fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
+    fake_pbft.consensus()->notifySealing(block.m_block);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
+
+    /// the nextLeader calls notifySealing
+    fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getNextLeader());
+    fake_pbft.consensus()->notifySealing(block.m_block);
+    BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == true);
+    ///====== test notifySealing end ======
+
     /// case 4: the node is not the leader
     fake_pbft.consensus()->setNodeIdx(
         (fake_pbft.consensus()->getLeader().second + 1) % fake_pbft.consensus()->nodeNum());
@@ -644,6 +659,153 @@ BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
         fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height) == nullptr);
 }
 
+/// test handleViewChangeMsg
+BOOST_AUTO_TEST_CASE(testHandleViewchangeMsg)
+{
+    FakeConsensus<FakePBFTEngine> fake_pbft(4, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
+    }
+    ViewChangeReq viewchange_req;
+    PBFTMsgPacket viewchange_packet;
+    /// construct viewchange triggered by the 0th sealer
+    TestIsValidViewChange(fake_pbft, viewchange_req);
+    IDXTYPE nodeIdxSource = 2;
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+
+    /// test handleViewChangeReq
+    ViewChangeReq viewchange_req_decoded;
+    fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
+    BOOST_CHECK(viewchange_req_decoded == viewchange_req);
+    /// viewchange no consensused
+    BOOST_CHECK(fake_pbft.consensus()->view() != viewchange_req_decoded.view);
+
+    /// fake viewchange req generated by the 1st sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 1);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+    fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
+    BOOST_CHECK(viewchange_req_decoded == viewchange_req);
+    /// viewchange no consensused
+    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req_decoded.view);
+}
+
+BOOST_AUTO_TEST_CASE(testFastViewChange)
+{
+    /// test fast view change
+    FakeConsensus<FakePBFTEngine> fake_pbft(4, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
+    }
+    ViewChangeReq viewchange_req;
+    PBFTMsgPacket viewchange_packet;
+    IDXTYPE nodeIdxSource = 1;
+    /// handle the viewchange request received from 2nd sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+    fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
+    BOOST_CHECK(fake_pbft.consensus()->toView() != viewchange_req.view - 1);
+
+    nodeIdxSource = 2;
+    /// handle the viewchange request received from 1st sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 1, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+    fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == viewchange_req.view - 1);
+
+    /// the node trigger fast viewchange, broadcast ViewChangeReq and changeView
+    fake_pbft.consensus()->checkTimeout();
+    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req.view);
+}
+
+/// test checkBlock
+BOOST_AUTO_TEST_CASE(testCheckBlock)
+{
+    FakeConsensus<FakePBFTEngine> fake_pbft(13, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    /// ignore the genesis block
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(
+                    *fake_pbft.consensus()->blockChain()->getBlockByNumber(0)) == true);
+
+    ///  check sealerList
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(
+                    *fake_pbft.consensus()->blockChain()->getBlockByNumber(1)) == false);
+
+    /// fake sealerList: check sealerList && sealer passed && sign
+    FakeBlock block(12, KeyPair::create().secret(), 1);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
+    fake_pbft.consensus()->setSealerList(block.m_block.blockHeader().sealerList());
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == true);
+
+    /// block with too-many transactions
+    fake_pbft.consensus()->setMaxBlockTransactions(11);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
+
+    /// block with not-enough sealer
+    FakeBlock invalid_block(7, KeyPair::create().secret(), 1);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(invalid_block.m_block) == false);
+}
+
+/// test handleMsg
+BOOST_AUTO_TEST_CASE(testHandleMsg)
+{
+    /// test fast view change
+    FakeConsensus<FakePBFTEngine> fake_pbft(4, ProtocolID::PBFT);
+    fake_pbft.consensus()->resetConfig();
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
+    }
+    /// handleViewChangeMsg
+    ViewChangeReq viewchange_req;
+    PBFTMsgPacket viewchange_packet;
+    IDXTYPE nodeIdxSource = 1;
+    /// handle the viewchange request received from 2nd sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+
+    viewchange_packet.ttl = 1;
+    /// no broadcast for ttl
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+    }
+
+    viewchange_packet.ttl = 2;
+    /// no broadcast for invalid viewchange request
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+    }
+
+    /// broadcast
+    fakeValidViewchange(fake_pbft, viewchange_req, 2, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+    fake_pbft.consensus()->handleMsg(viewchange_packet);
+    for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
+    {
+        if (fake_pbft.m_sealerList[i] != viewchange_packet.node_id && i != viewchange_req.idx)
+        {
+            compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 1);
+        }
+        /// don't broadcast to the source node
+        else
+        {
+            compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 0);
+        }
+    }
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

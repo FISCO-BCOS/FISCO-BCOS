@@ -91,6 +91,7 @@ using bytesSec = secure_vector<byte>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
+
 // unsigned int64
 using u64 = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<64, 64,
     boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
@@ -132,6 +133,7 @@ using u256HashMap = std::unordered_map<u256, u256>;
 
 // String types.
 using strings = std::vector<std::string>;
+
 using string64 = std::array<char, 64>;
 // Fixed-length string types.
 using string32 = std::array<char, 32>;
@@ -304,6 +306,9 @@ enum class WithExisting : int
 
 /// Get the current time in seconds since the epoch in UTC(ms)
 uint64_t utcTime();
+
+/// Get the current time in seconds since the epoch in UTC(us)
+uint64_t utcTimeUs();
 
 /// Reference to a slice of buffer that also owns the buffer.
 ///

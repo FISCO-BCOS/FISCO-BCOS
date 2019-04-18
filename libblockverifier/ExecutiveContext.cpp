@@ -19,26 +19,31 @@
  *  @date 20180921
  */
 
-
 #include "ExecutiveContext.h"
 #include <libdevcore/easylog.h>
+#include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libstorage/MemoryTableFactory.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libstorage/Table.h>
 
 using namespace dev::executive;
 using namespace dev::eth;
+using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
+using namespace std;
 
 bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
 {
     try
     {
+        /*
         EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
                                     << LOG_KV("blockHash", m_blockInfo.hash.abridged())
                                     << LOG_KV("number", m_blockInfo.number)
                                     << LOG_KV("address", address) << LOG_KV("param", toHex(param));
+                                    */
 
         auto p = getPrecompiled(address);
 
@@ -77,12 +82,6 @@ Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
     auto p = getPrecompiled(address);
-
-    if (p)
-    {
-        LOG(DEBUG) << LOG_DESC("[#isPrecompiled]Internal contract") << LOG_KV("address", address);
-    }
-
     return p.get() != NULL;
 }
 
@@ -94,8 +93,6 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     {
         return itPrecompiled->second;
     }
-    /// since non-precompile contracts will print this log, modify the log level to DEBUG
-    LOG(TRACE) << LOG_DESC("[getPrecompiled] can't find precompiled") << LOG_KV("address", address);
     return Precompiled::Ptr();
 }
 
@@ -129,4 +126,94 @@ void ExecutiveContext::dbCommit(Block& block)
 {
     m_stateFace->dbCommit(block.header().hash(), block.header().number());
     m_memoryTableFactory->commitDB(block.header().hash(), block.header().number());
+}
+
+std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const Transaction& _tx)
+{
+    if (_tx.isCreation())
+    {
+        // Not to parallel contract creation transaction
+        return nullptr;
+    }
+
+    auto p = getPrecompiled(_tx.receiveAddress());
+    if (p)
+    {
+        // Precompile transaction
+        if (p->isParallelPrecompiled())
+        {
+            auto ret = make_shared<vector<string>>(p->getParallelTag(ref(_tx.data())));
+            for (string& critical : *ret)
+            {
+                critical += _tx.receiveAddress().hex();
+            }
+            return ret;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        // Normal transaction
+        auto parallelConfigPrecompiled =
+            std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
+                getPrecompiled(Address(0x1006)));
+
+        uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+
+        auto config = parallelConfigPrecompiled->getParallelConfig(
+            shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
+
+        if (config == nullptr)
+        {
+            return nullptr;
+        }
+        else
+        {
+            {  // Testing code
+                // bytesConstRef data = parallelConfigPrecompiled->getParamData(ref(_tx.data()));
+                auto res = make_shared<vector<string>>();
+
+                ABIFunc af;
+                bool isOk = af.parser(config->functionName);
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG)
+                        << LOG_DESC("[#getTxCriticals] parser function signature failed, ")
+                        << LOG_KV("func signature", config->functionName);
+
+                    return nullptr;
+                }
+
+                auto paramTypes = af.getParamsType();
+                if (paramTypes.size() < (size_t)config->criticalSize)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG)
+                        << LOG_DESC("[#getTxCriticals] params type less than  criticalSize")
+                        << LOG_KV("func signature", config->functionName)
+                        << LOG_KV("func criticalSize", config->criticalSize)
+                        << LOG_KV("input data", toHex(_tx.data()));
+
+                    return nullptr;
+                }
+
+                paramTypes.resize((size_t)config->criticalSize);
+
+                ContractABI abi;
+                isOk = abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), paramTypes, *res);
+                if (!isOk)
+                {
+                    EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
+                                                << LOG_KV("func signature", config->functionName)
+                                                << LOG_KV("input data", toHex(_tx.data()));
+
+                    return nullptr;
+                }
+
+                return res;
+            }
+        }
+    }
 }

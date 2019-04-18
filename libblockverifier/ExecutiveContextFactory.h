@@ -24,6 +24,8 @@
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
+#include <libstorage/Table.h>
+
 namespace dev
 {
 namespace blockverifier
@@ -57,12 +59,19 @@ public:
     virtual void setStateFactory(
         std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface);
 
+    virtual void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
+    {
+        m_tableFactoryFactory = tableFactoryFactory;
+    }
+
 private:
+    dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
+    void registerUserPrecompiled(ExecutiveContext::Ptr context);
 };
 
 }  // namespace blockverifier

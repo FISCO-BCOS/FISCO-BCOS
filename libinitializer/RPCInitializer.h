@@ -55,6 +55,8 @@ public:
         }
     }
 
+    void initChannelRPCServer(boost::property_tree::ptree const& _pt);
+
     void initConfig(boost::property_tree::ptree const& _pt);
     void setP2PService(std::shared_ptr<p2p::P2PInterface> _p2pService)
     {
@@ -68,6 +70,8 @@ public:
     {
         m_ledgerManager = _ledgerManager;
     }
+
+    ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
 
 private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;

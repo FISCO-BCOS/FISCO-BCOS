@@ -40,11 +40,15 @@ namespace precompiled
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
 
 /// correct return: code great or equal 0
+const int CODE_SUCCESS = 0;
 
 /// note: abi.abiOut will return a positive number related to the negative number.
 /// It maybe coincide with the positive number that should have been returned.
 
-/// AuthorityPrecompiled 51000 ~ 51099
+/// Common error code among all precompiled contracts
+const int CODE_UNKNOW_FUNCTION_CALL = 50100;
+
+/// PermissionPrecompiled 51000 ~ 51099
 const int CODE_TABLE_AND_ADDRESS_EXIST = 51000;
 const int CODE_TABLE_AND_ADDRESS_NOT_EXIST = 51001;
 
@@ -57,6 +61,25 @@ const int CODE_ADDRESS_AND_VERSION_EXIST = 51200;
 
 /// SystemConfigPrecompiled
 const int CODE_INVALID_CONFIGURATION_VALUES = 51300;
+
+/// DagTransferPrecompiled 51400 ~ 51499
+const int CODE_INVALID_USER_NAME = 51400;
+const int CODE_INVALID_AMOUNT = 51401;
+const int CODE_INVALID_USER_NOT_EXIST = 51402;
+const int CODE_INVALID_USER_ALREADY_EXIST = 51403;
+const int CODE_INVALID_INSUFFICIENT_BALANCE = 51404;
+const int CODE_INVALID_BALANCE_OVERFLOW = 51405;
+const int CODE_INVALID_OPENTALBLE_FAILED = 51406;
+
+/// CRUDPrecompiled 51500 ~ 51599
+const int CODE_TABLE_NOT_EXIST = 51500;
+const int CODE_FUNCTION_NOT_EXIST = 51501;
+const int CODE_PARSE_ENTRY_ERROR = 51502;
+const int CODE_PARSE_CONDITION_ERROR = 51503;
+const int CODE_CONDITION_OPERATION_UNDEFINED = 51504;
+
+void getOut(bytes& out, int const& result);
+
 
 }  // namespace precompiled
 }  // namespace dev

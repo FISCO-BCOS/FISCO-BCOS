@@ -27,7 +27,6 @@
 #include <libsync/SyncMsgPacket.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
-#include <test/unittests/libp2p/FakeHost.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -145,15 +144,17 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 {
     SyncTransactionsPacket txPacket;
-    bytes txRLPs = fakeTransaction.rlp();
+    vector<bytes> txRLPs;
+    txRLPs.emplace_back(fakeTransaction.rlp());
 
-    txPacket.encode(0x01, txRLPs);
+    txPacket.encode(txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
     txPacket.decode(fakeSessionPtr, msgPtr);
+
     auto rlpTx = txPacket.rlp()[0];
-    Transaction tx;
-    tx.decode(rlpTx);
-    BOOST_CHECK(tx == fakeTransaction);
+    Transactions txs;
+    dev::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
+    BOOST_CHECK(txs[0] == fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

@@ -8,7 +8,7 @@ add_library(devcore ${SRC_LIST} ${HEADERS})
 target_include_directories(devcore SYSTEM BEFORE PUBLIC ${BOOST_INCLUDE_DIR})
 # set_source_files_properties(${SRC_LIST} ${HEADERS} PROPERTIES COMPILE_FLAGS -Wno-unused-function)
 target_compile_options(devcore BEFORE PRIVATE -Wno-error -Wno-unused-variable -Wno-unused-function -Wno-uninitialized)
-target_link_libraries(devcore PUBLIC LevelDB Boost::Log Boost::Filesystem Boost::Thread)
+target_link_libraries(devcore PUBLIC LevelDB Boost::Log Boost::Filesystem Boost::Thread Snappy)
 add_dependencies(devcore BuildInfo.h LevelDB)
 
 # get_property(dirs TARGET devcore PROPERTY INCLUDE_DIRECTORIES)

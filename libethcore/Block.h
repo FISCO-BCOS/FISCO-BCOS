@@ -25,9 +25,11 @@
 #include "BlockHeader.h"
 #include "Transaction.h"
 #include "TransactionReceipt.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/TrieHash.h>
+
 namespace dev
 {
 namespace eth
@@ -37,10 +39,12 @@ class Block
 public:
     ///-----constructors of Block
     Block() = default;
-    explicit Block(
-        bytesConstRef _data, CheckTransaction const option = CheckTransaction::Everything);
-    explicit Block(
-        bytes const& _data, CheckTransaction const option = CheckTransaction::Everything);
+    explicit Block(bytesConstRef _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
+    explicit Block(bytes const& _data,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
     /// copy constructor
     Block(Block const& _block);
     /// assignment operator
@@ -65,15 +69,27 @@ public:
 
     ///-----encode functions
     void encode(bytes& _out) const;
+    void encodeRC2(bytes& _out) const;
 
     ///-----decode functions
-    void decode(bytesConstRef _block, CheckTransaction const option = CheckTransaction::Everything);
+    void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
+        bool _withReceipt = true, bool _withTxHash = false);
+    void decodeRC2(bytesConstRef _block,
+        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
+        bool _withTxHash = false);
 
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
     {
         bytes out;
         encode(out);
+        return out;
+    }
+
+    std::shared_ptr<bytes> rlpP() const
+    {
+        std::shared_ptr<bytes> out = std::make_shared<bytes>();
+        encode(*out);
         return out;
     }
 
@@ -153,11 +169,12 @@ public:
         noteReceiptChange();
     }
 
-    void setEmptyBlock()
+    void setEmptyBlock(uint64_t timeStamp)
     {
         m_blockHeader.setNumber(0);
         m_blockHeader.setGasUsed(u256(0));
         m_blockHeader.setSealer(u256(0));
+        m_blockHeader.setTimestamp(timeStamp);
         noteChange();
         noteReceiptChange();
     }
@@ -165,6 +182,35 @@ public:
     void appendTransactionReceipt(TransactionReceipt const& _tran)
     {
         m_transactionReceipts.push_back(_tran);
+        noteReceiptChange();
+    }
+
+    void resizeTransactionReceipt(size_t _totalReceipt)
+    {
+        m_transactionReceipts.resize(_totalReceipt);
+        noteReceiptChange();
+    }
+
+    void setTransactionReceipt(size_t _receiptId, TransactionReceipt const& _tran)
+    {
+        m_transactionReceipts[_receiptId] = _tran;
+        noteReceiptChange();
+    }
+
+    void updateSequenceReceiptGas()
+    {
+        u256 totalGas = 0;
+        for (auto& receipt : m_transactionReceipts)
+        {
+            totalGas += receipt.gasUsed();
+            receipt.setGasUsed(totalGas);
+        }
+    }
+
+    void setStateRootToAllReceipt(h256 const& _stateRoot)
+    {
+        for (auto& receipt : m_transactionReceipts)
+            receipt.setStateRoot(_stateRoot);
         noteReceiptChange();
     }
 
@@ -176,7 +222,9 @@ public:
 
     const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
+    void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
+    void calReceiptRootRC2(bool update = true) const;
 
     /**
      * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
@@ -217,7 +265,7 @@ private:
     /// block header of the block (field 0)
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
-    Transactions m_transactions;
+    mutable Transactions m_transactions;
     TransactionReceipts m_transactionReceipts;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;

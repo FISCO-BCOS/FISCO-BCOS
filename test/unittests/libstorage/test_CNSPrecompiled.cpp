@@ -29,6 +29,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -50,8 +51,10 @@ struct CNSPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -60,7 +63,7 @@ struct CNSPrecompiledFixture
     ~CNSPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     CNSPrecompiled::Ptr cnsPrecompiled;
     BlockInfo blockInfo;
 };
@@ -139,7 +142,7 @@ BOOST_AUTO_TEST_CASE(select)
     BOOST_TEST(retJson.get_array().size() == 2);
 
     // select no existing keys
-    in = abi.abiIn("selectByName(string)", "Ok2");
+    in = abi.abiIn("selectByName(string)", std::string("Ok2"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
@@ -155,13 +158,13 @@ BOOST_AUTO_TEST_CASE(select)
     BOOST_TEST(retJson.get_array().size() == 1);
 
     // select no existing keys and version
-    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, "3.0");
+    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, std::string("3.0"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
     BOOST_TEST(retJson.get_array().size() == 0);
-    in = abi.abiIn("selectByNameAndVersion(string,string)", "Ok2", contractVersion);
+    in = abi.abiIn("selectByNameAndVersion(string,string)", std::string("Ok2"), contractVersion);
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
@@ -177,7 +180,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("insert(string)", "test");
+    bytes in = abi.abiIn("insert(string)", std::string("test"));
     bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
 }
 

@@ -88,13 +88,14 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             {
                 tx.setNonce(tx.nonce() + u256(utcTime()));
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                sec = KeyPair::create().secret();
                 dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
                 tx.updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }
             catch (std::exception& e)
             {
-                LOG(ERROR) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }

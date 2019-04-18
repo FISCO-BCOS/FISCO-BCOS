@@ -44,7 +44,6 @@ public:
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
-    virtual boost::asio::ip::tcp::endpoint remote_endpoint() = 0;
 };
 }  // namespace network
 }  // namespace dev

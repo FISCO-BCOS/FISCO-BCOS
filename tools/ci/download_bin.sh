@@ -37,10 +37,13 @@ download_artifact()
 {
     [ -f ${output_dir}/fisco-bcos ] && rm -rf ${output_dir}/fisco-bcos
     mkdir -p ${output_dir}
-    local build_num=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/tree/${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | head -2 | tail -1 |sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g")
+    build_nums=($(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/tree/${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g"))
+    local build_num=0
+    for i in ${build_nums[@]};do
+        if [[ ${i} > ${build_num} ]];then build_num=${i};fi
+    done
     # echo "build num : ${build_num}"
     local response="$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${build_num}/artifacts?circle-token= 2>/dev/null)"
-
     link=$(echo ${response}| grep -o 'https://[^"]*')
 
     is_gm="$(echo "${response}"| grep -o 'gm')"

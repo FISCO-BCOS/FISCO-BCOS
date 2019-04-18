@@ -105,11 +105,17 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
         abi.abiOut(data, str);
 
         std::string value = m_entry->getField(str);
-        string64 ret;
-        for (unsigned i = 0; i < 64; ++i)
-            ret[i] = i < value.size() ? value[i] : 0;
 
-        out = abi.abiIn("", ret);
+        string32 ret0;
+        string32 ret1;
+
+        for (unsigned i = 0; i < 32; ++i)
+            ret0[i] = (i < value.size() ? value[i] : 0);
+
+        for (unsigned i = 32; i < 64; ++i)
+            ret1[i - 32] = (i < value.size() ? value[i] : 0);
+
+        out = abi.abiIn("", ret0, ret1);
     }
     else if (func == name2Selector[ENTRYIY_METHOD_GETB_STR32])
     {  //"getBytes32(string)"

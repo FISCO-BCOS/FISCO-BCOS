@@ -146,7 +146,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (it != _seq2session.end())
     {
-        CHANNEL_LOG(DEBUG) << "send ethereum resp seq"
+        CHANNEL_LOG(TRACE) << "send ethereum resp seq"
                            << LOG_KV("seq", it->first.substr(0, c_seqAbridgedLen))
                            << LOG_KV("response", _response);
 
@@ -249,9 +249,9 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 {
     if (e.errorCode() == 0)
     {
-        CHANNEL_LOG(INFO) << "receive sdk message" << LOG_KV("length", message->length())
-                          << LOG_KV("type", message->type())
-                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
+        CHANNEL_LOG(TRACE) << "receive sdk message" << LOG_KV("length", message->length())
+                           << LOG_KV("type", message->type())
+                           << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
 
         switch (message->type())
         {
@@ -298,7 +298,7 @@ void dev::ChannelRPCServer::onClientEthereumRequest(
 
     std::string body(message->data(), message->data() + message->dataSize());
 
-    CHANNEL_LOG(DEBUG) << "client ethereum request"
+    CHANNEL_LOG(TRACE) << "client ethereum request"
                        << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                        << LOG_KV("ethereum request",
                               std::string((char*)message->data(), message->dataSize()));
@@ -408,8 +408,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                             p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
                             p2pResponse->setPacketType(0u);
                             p2pResponse->setSeq(p2pMessage->seq());
-                            p2pResponse->setLength(
-                                p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                             service->asyncSendMessageByNodeID(nodeID, p2pResponse,
                                 CallbackFuncWithSession(), dev::network::Options());
 
@@ -426,8 +424,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                         p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
                         p2pResponse->setPacketType(0u);
                         p2pResponse->setSeq(p2pMessage->seq());
-                        p2pResponse->setLength(
-                            p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                         service->asyncSendMessageByNodeID(nodeID, p2pResponse,
                             CallbackFuncWithSession(), dev::network::Options());
                     });
@@ -448,8 +444,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 p2pResponse->setProtocolID(dev::eth::ProtocolID::AMOP);
                 p2pResponse->setPacketType(0u);
                 p2pResponse->setSeq(msg->seq());
-                p2pResponse->setLength(
-                    p2p::P2PMessage::HEADER_LENGTH + p2pResponse->buffer()->size());
                 m_service->asyncSendMessageByNodeID(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
@@ -536,7 +530,6 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setBuffer(buffer);
             p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
             p2pMessage->setPacketType(0u);
-            p2pMessage->setLength(p2p::P2PMessage::HEADER_LENGTH + p2pMessage->buffer()->size());
 
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
@@ -684,7 +677,8 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", _topic);
+                    CHANNEL_LOG(ERROR)
+                        << "sendMessage failed: no session use topic" << LOG_KV("topic", _topic);
                     throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                 }
 
@@ -779,7 +773,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
     {
         std::string topic = message->topic();
 
-        CHANNEL_LOG(DEBUG) << "Push to SDK" << LOG_KV("topic", topic)
+        CHANNEL_LOG(TRACE) << "Push to SDK" << LOG_KV("topic", topic)
                            << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
         std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
 
@@ -822,10 +816,15 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
 std::string ChannelRPCServer::newSeq()
 {
+#if 0
     static boost::uuids::random_generator uuidGenerator;
     std::string s = to_string(uuidGenerator());
     s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
-    return s;
+#endif
+    auto seq = m_seq.fetch_add(1) + 1;
+    std::stringstream ss;
+    ss << std::setfill('0') << std::setw(32) << seq;
+    return ss.str();
 }
 
 void ChannelRPCServer::updateHostTopics()

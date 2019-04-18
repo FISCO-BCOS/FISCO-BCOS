@@ -44,6 +44,8 @@ enum class CommitResult
 };
 // Configuration item written to the table of genesis block,
 // groupMark/consensusType/storageType/stateType excluded.
+// modification 2019.3.20: add timestamp filed into the GenesisBlockParam for setting the timestamp
+// for the zero block
 struct GenesisBlockParam
 {
     std::string groupMark;      // Data written to extra data of genesis block.
@@ -54,6 +56,7 @@ struct GenesisBlockParam
     std::string stateType;      // the type of state, now mpt/storage
     uint64_t txCountLimit;      // the maximum number of transactions recorded in a block
     uint64_t txGasLimit;        // the maximum gas required to execute a transaction
+    uint64_t timeStamp;         /// the timestamp of genesis block
 };
 class BlockChainInterface
 {
@@ -69,6 +72,8 @@ public:
         dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
+    virtual std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) = 0;
+    virtual std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) = 0;
     virtual CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;

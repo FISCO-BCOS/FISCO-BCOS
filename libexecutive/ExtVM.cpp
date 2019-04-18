@@ -203,7 +203,7 @@ size_t ExtVM::codeSizeAt(dev::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
-        LOG(TRACE) << _a << "Precompiled codeSizeAt return 1";
+        LOG(TRACE) << _a << " precompiled codeSizeAt return 1";
         return 1;
     }
     return m_s->codeSize(_a);
@@ -255,6 +255,14 @@ void ExtVM::suicide(Address const& _a)
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
     // witnessing the current consensus
     // 'GeneralStateTests/stSystemOperationsTest/suicideSendEtherPostDeath.json'.
+
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        // No balance here in BCOS. Balance has data racing in parallel suicide.
+        ExtVMFace::suicide(_a);
+        return;
+    }
+
     m_s->addBalance(_a, m_s->balance(myAddress()));
     m_s->setBalance(myAddress(), 0);
     ExtVMFace::suicide(_a);

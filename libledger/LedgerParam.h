@@ -44,6 +44,8 @@ struct ConsensusParam
     dev::h512s observerList = dev::h512s();
     uint64_t maxTransactions;
     uint8_t maxTTL;
+    /// the minimum block time
+    unsigned minBlockGenTime = 0;
     /// unsigned intervalBlockTime;
     uint64_t minElectTime;
     uint64_t maxElectTime;
@@ -63,15 +65,24 @@ struct SyncParam
     unsigned idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
 };
 
+/// modification 2019.03.20: add timeStamp field to GenesisParam
 struct GenesisParam
 {
     std::string genesisMark;
     std::string nodeListMark;
+    uint64_t timeStamp;
 };
 struct StorageParam
 {
     std::string type;
     std::string path;
+
+    // for amop storage
+    std::string topic;
+    size_t timeout;
+    size_t maxRetry;
+    size_t maxStoreKey;
+    size_t maxForwardBlock;
 };
 struct StateParam
 {
@@ -80,6 +91,7 @@ struct StateParam
 struct TxParam
 {
     uint64_t txGasLimit;
+    bool enableParallel;
 };
 class LedgerParam : public LedgerParamInterface
 {

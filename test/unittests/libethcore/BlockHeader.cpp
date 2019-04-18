@@ -192,15 +192,6 @@ BOOST_AUTO_TEST_CASE(testExtraHeaderException)
     invalid_rlp << 10;
     BOOST_CHECK_THROW(
         block_header_genesis.extractHeader(ref(invalid_rlp.out())), InvalidBlockFormat);
-    // invalid block format because transaction invalid
-    RLPStream invalid_txlist;
-    invalid_txlist.appendList(2);
-    bytes header_bytes;
-    block_header_genesis.encode(header_bytes);
-    invalid_txlist.appendRaw(header_bytes);
-    invalid_txlist.appendRaw(invalid_rlp.out());
-    BOOST_CHECK_THROW(
-        block_header_genesis.extractHeader(ref(invalid_txlist.out())), InvalidBlockFormat);
 }
 
 BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)

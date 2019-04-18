@@ -38,6 +38,7 @@ Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 
 void Transaction::decode(bytesConstRef tx_bytes, CheckTransaction _checkSig)
 {
+    m_rlpBuffer.assign(tx_bytes.data(), tx_bytes.data() + tx_bytes.size());
     RLP const rlp(tx_bytes);
     decode(rlp, _checkSig);
 }
@@ -68,8 +69,12 @@ void Transaction::decode(RLP const& rlp, CheckTransaction _checkSig)
         // r -> rlp[8].toInt<u256>();             // 8
         // s -> rlp[9].toInt<u256>();             // 9
 
-        m_vrs = SignatureStruct(
-            rlp[8].toInt<u256>(), rlp[9].toInt<u256>(), rlp[7].toInt<NumberVType>() - VBase);
+        // decode v r s by increasing rlp index order for faster decoding
+        NumberVType v = rlp[7].toInt<NumberVType>() - VBase;
+        u256 r = rlp[8].toInt<u256>();
+        u256 s = rlp[9].toInt<u256>();
+
+        m_vrs = SignatureStruct(r, s, v);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -182,7 +187,12 @@ h256 Transaction::sha3(IncludeSignature _sig) const
     return ret;
 }
 
-void Transaction::tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
+{
+    m_hashWith = txHash;
+}
+
+void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
 {
     try
     {

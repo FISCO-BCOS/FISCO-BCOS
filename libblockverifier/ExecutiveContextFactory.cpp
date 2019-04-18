@@ -19,13 +19,15 @@
  *  @date 20180921
  */
 #include "ExecutiveContextFactory.h"
+#include "include/UserPrecompiled.h"
 #include <libdevcore/Common.h>
-#include <libprecompiled/AuthorityPrecompiled.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
-#include <libprecompiled/extension/HelloWorldPrecompiled.h>
+#include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/TableFactoryPrecompiled.h>
 
@@ -37,12 +39,16 @@ using namespace dev::precompiled;
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
 {
+#if 0
     // DBFactoryPrecompiled
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
     memoryTableFactory->setBlockHash(blockInfo.hash);
     memoryTableFactory->setBlockNum(blockInfo.number);
+#endif
+    auto memoryTableFactory =
+        m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
     auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
@@ -57,11 +63,12 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1005), std::make_shared<dev::precompiled::AuthorityPrecompiled>());
+        Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
+        Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+    // register User developed Precompiled contract
+    registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
-
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
@@ -88,8 +95,15 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         BlockInfo blockInfo = context->blockInfo();
         std::string ret;
 
+        auto tableInfo = std::make_shared<storage::TableInfo>();
+        tableInfo->name = storage::SYS_CONFIG;
+        tableInfo->key = storage::SYS_KEY;
+        tableInfo->fields = std::vector<std::string>{"value"};
+
+        auto condition = std::make_shared<dev::storage::Condition>();
+        condition->EQ("key", key);
         auto values =
-            m_stateStorage->select(blockInfo.hash, blockInfo.number, storage::SYS_CONFIG, key);
+            m_stateStorage->select(blockInfo.hash, blockInfo.number, tableInfo, key, condition);
         if (!values || values->size() != 1)
         {
             EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#setTxGasLimitToContext]Select error");

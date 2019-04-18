@@ -27,8 +27,9 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libprecompiled/AuthorityPrecompiled.h>
+#include <libprecompiled/PermissionPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -50,8 +51,10 @@ struct AuthorityPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
@@ -60,7 +63,7 @@ struct AuthorityPrecompiledFixture
     ~AuthorityPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr authorityPrecompiled;
     BlockInfo blockInfo;
 };
@@ -146,8 +149,9 @@ BOOST_AUTO_TEST_CASE(queryByName)
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
     BOOST_TEST(retJson.get_array().size() == 1);
 
+    std::string keyName = "test";
     // queryByName by a no existing key
-    in = abi.abiIn("queryByName(string)", "test");
+    in = abi.abiIn("queryByName(string)", keyName);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);

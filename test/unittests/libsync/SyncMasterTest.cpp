@@ -66,6 +66,7 @@ public:
         std::shared_ptr<TxPoolInterface> txPool;
         std::shared_ptr<BlockChainInterface> blockChain;
         std::shared_ptr<BlockVerifierInterface> verifier;
+        std::shared_ptr<DownloadingTxsQueue> txQueue;
     };
 
     FakeSyncToolsSet fakeSyncToolsSet(uint64_t _blockNum, size_t const& _transSize,
@@ -79,8 +80,10 @@ public:
         std::shared_ptr<SyncMaster> fakeSyncMaster =
             std::make_shared<SyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
                 txpool_creator.m_blockChain, blockVerifier, c_protocolId, _nodeId, m_genesisHash);
+        std::shared_ptr<DownloadingTxsQueue> txQueue =
+            std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId);
         return FakeSyncToolsSet{fakeSyncMaster, txpool_creator.m_topicService,
-            txpool_creator.m_txPool, txpool_creator.m_blockChain, blockVerifier};
+            txpool_creator.m_txPool, txpool_creator.m_blockChain, blockVerifier, txQueue};
     }
 
     shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)
@@ -243,6 +246,17 @@ BOOST_AUTO_TEST_CASE(MaintainPeersStatusTest)
                           service->getAsyncSendSizeByNodeID(NodeID(102)) +
                           service->getAsyncSendSizeByNodeID(NodeID(103));
     BOOST_CHECK_EQUAL(reqPacketSum, c_maxRequestShards);
+
+    // Reset peers test
+    sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        _p->number = currentBlockNumber - 1;  // set peers number smaller than myself
+        return true;
+    });
+    sync->maintainPeersStatus();
+    reqPacketSum = service->getAsyncSendSizeByNodeID(NodeID(101)) +
+                   service->getAsyncSendSizeByNodeID(NodeID(102)) +
+                   service->getAsyncSendSizeByNodeID(NodeID(103));
+    BOOST_CHECK_EQUAL(reqPacketSum, c_maxRequestShards);  //
 }
 
 BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)

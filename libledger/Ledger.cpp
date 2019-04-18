@@ -35,9 +35,11 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <tbb/tbb.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
@@ -55,6 +57,8 @@ bool Ledger::initLedger()
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+    m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
+    // m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
@@ -97,6 +101,8 @@ void Ledger::initConfig(std::string const& configPath)
         initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
+        /// init params related to genesis: timestamp
+        initGenesisConfig(pt);
     }
     catch (std::exception& e)
     {
@@ -114,7 +120,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     try
     {
         Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
-                         << LOG_DESC("initTxPoolConfig/initSyncConfig")
+                         << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                          << LOG_KV("configFile", iniConfigFileName);
         ptree pt;
         /// read the configuration file for a specified group
@@ -123,6 +129,7 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         initTxPoolConfig(pt);
         /// init params related to sync
         initSyncConfig(pt);
+        initTxExecuteConfig(pt);
 
         /// init params releated to consensus(ttl)
         initConsensusIniConfig(pt);
@@ -132,6 +139,21 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
         Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
+}
+
+void Ledger::initTxExecuteConfig(ptree const& pt)
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") != 0)
+    {
+        m_param->mutableTxParam().enableParallel = false;
+    }
+    else
+    {
+        bool enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+        m_param->mutableTxParam().enableParallel = enableParallel;
+    }
+    Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
+                      << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
 }
 
 void Ledger::initTxPoolConfig(ptree const& pt)
@@ -154,8 +176,13 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+    /// the minimum block generation time(ms)
+    m_param->mutableConsensusParam().minBlockGenTime =
+        pt.get<unsigned>("consensus.min_block_generation_time", 500);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
-                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL));
+                      << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
+                      << LOG_KV("minBlockGenerationTime",
+                             m_param->mutableConsensusParam().minBlockGenTime);
 }
 
 
@@ -236,6 +263,14 @@ void Ledger::initDBConfig(ptree const& pt)
     /// set storage db related param
     m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
+    m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+    m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+    m_param->mutableStorageParam().maxStoreKey = pt.get<int>("storage.max_store_key", 10000);
+    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 100);
+    if (m_param->mutableStorageParam().maxRetry <= 0)
+    {
+        m_param->mutableStorageParam().maxRetry = 100;
+    }
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
@@ -251,6 +286,15 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
     m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gas_limit", 300000000);
     Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
+}
+
+/// init genesis configuration
+void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
+{
+    /// use UTCTime directly as timeStamp in case of the clock differences between machines
+    m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+                      << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
 }
 
 /// init mark of this group
@@ -296,7 +340,16 @@ bool Ledger::initBlockVerifier()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
         return false;
     }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>();
+
+    bool enableParallel = false;
+    if (m_param->mutableTxParam().enableParallel)
+    {
+        enableParallel = true;
+    }
+
+    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
+
+    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
@@ -318,6 +371,7 @@ bool Ledger::initBlockChain()
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
+    blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
     m_blockChain = blockChain;
     std::string consensusType = m_param->mutableConsensusParam().consensusType;
     std::string storageType = m_param->mutableStorageParam().type;
@@ -325,7 +379,7 @@ bool Ledger::initBlockChain()
     GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
         m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
         consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit};
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
     bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
     if (!ret)
     {
@@ -365,7 +419,10 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =
         std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
-    pbftEngine->setIntervalBlockTime(g_BCOSConfig.c_intervalBlockTime);
+    /// set the range of block generation time
+    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
+    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
+
     pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);

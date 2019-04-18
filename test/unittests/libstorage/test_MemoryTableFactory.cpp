@@ -23,7 +23,11 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
+#include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
+#include <string>
+#include <thread>
+#include <vector>
 
 using namespace dev;
 using namespace dev::storage;
@@ -36,18 +40,16 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    virtual Entries::Ptr select(h256, int, const std::string&, const std::string&) override
+    virtual Entries::Ptr select(
+        h256, int, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    virtual size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&, h256 const&) override
-    {
-        return 0;
-    }
+    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
 
-    virtual bool onlyDirty() override { return false; }
+    bool onlyDirty() override { return false; }
 };
 
 struct MemoryTableFactoryFixture
@@ -73,9 +75,8 @@ BOOST_AUTO_TEST_CASE(open_Table)
     std::string tableName("t_test");
     std::string keyField("key");
     std::string valueField("value");
-    memoryDBFactory->createTable(tableName, keyField, valueField, true);
-    MemoryTable::Ptr table =
-        std::dynamic_pointer_cast<MemoryTable>(memoryDBFactory->openTable("t_test"));
+    memoryDBFactory->createTable(tableName, keyField, valueField, true, Address(), false);
+    Table::Ptr table = memoryDBFactory->openTable("t_test", true, false);
     table->remove("name", table->newCondition());
     auto entry = table->newEntry();
     entry->setField("key", "name");
@@ -92,7 +93,7 @@ BOOST_AUTO_TEST_CASE(open_Table)
     auto savePoint = memoryDBFactory->savepoint();
     auto condition = table->newCondition();
     condition->EQ("key", "name");
-    condition->NE("value", "name");
+    // condition->NE("value", "name");
     table->remove("name", condition);
     memoryDBFactory->rollback(savePoint);
     condition = table->newCondition();
@@ -111,6 +112,118 @@ BOOST_AUTO_TEST_CASE(open_Table)
     condition->EQ("key", "balance");
     condition->LE("value", "504");
     table->select("balance", condition);
+    memoryDBFactory->commitDB(h256(0), 2);
+}
+
+BOOST_AUTO_TEST_CASE(parallel_openTable)
+{
+    h256 blockHash(0x0101);
+    std::string tableName("t_test");
+    std::string keyField("key");
+    std::string valueField("value");
+    MemoryTable<Parallel>::Ptr table = std::dynamic_pointer_cast<MemoryTable<Parallel>>(
+        memoryDBFactory->createTable(tableName, keyField, valueField, false, Address(), true));
+
+    auto threadID = tbb::this_tbb_thread::get_id();
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, 50), [&](const tbb::blocked_range<size_t>& _r) {
+        if (tbb::this_tbb_thread::get_id() == threadID)
+        {
+            return;
+        }
+
+        auto i = _r.begin();
+
+        auto entry = table->newEntry();
+        // entry->setField("key", "balance");
+        entry->setField("key", "balance");
+        auto initBalance = std::to_string(500 + i);
+        entry->setField("value", initBalance);
+        auto key = std::to_string(i);
+
+        auto savepoint0 = memoryDBFactory->savepoint();
+        BOOST_TEST(savepoint0 == 0);
+        table->insert(key, entry);
+
+        auto entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+        // std::this_thread::sleep_for(std::chrono::milliseconds((i + 1) * 100));
+        tbb::this_tbb_thread::sleep(tbb::tick_count::interval_t((double)i / 100));
+
+        auto savepoint1 = memoryDBFactory->savepoint();
+        BOOST_TEST(savepoint1 == 1);
+
+        entry = table->newEntry();
+        // entry->setField("key", "balance");
+        entry->setField("key", "balance");
+        entry->setField("value", std::to_string((i + 1) * 100));
+        table->update(key, entry, table->newCondition());
+        entries = table->select(key, table->newCondition());
+
+        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->get(0)->getField("value") == std::to_string((i + 1) * 100));
+
+        memoryDBFactory->rollback(savepoint1);
+        entries = table->select(key, table->newCondition());
+
+        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+        memoryDBFactory->rollback(savepoint0);
+
+        entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 0);
+
+        entry = table->newEntry();
+        entry->setField("key", "name");
+        entry->setField("value", "Vita");
+        table->insert(key, entry);
+
+        entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 1);
+
+        auto savepoint2 = memoryDBFactory->savepoint();
+
+        table->remove(key, table->newCondition());
+        entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 0);
+        // BOOST_TEST(entries->get(0)->getStatus() == 1);
+
+        memoryDBFactory->rollback(savepoint2);
+        entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->get(0)->getStatus() == 0);
+    });
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, 50), [&](const tbb::blocked_range<size_t>& _r) {
+        if (tbb::this_tbb_thread::get_id() == threadID)
+        {
+            return;
+        }
+
+        auto i = _r.begin();
+
+        auto entry = table->newEntry();
+        entry->setField("key", "balance");
+        auto initBalance = std::to_string(500 + i);
+        entry->setField("value", initBalance);
+        auto key = std::to_string(i + 10);
+
+        auto savepoint0 = memoryDBFactory->savepoint();
+        BOOST_TEST(savepoint0 == 0);
+        table->insert(key, entry);
+
+        auto entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->get(0)->getField("value") == initBalance);
+
+        memoryDBFactory->rollback(savepoint0);
+        entries = table->select(key, table->newCondition());
+        BOOST_TEST(entries->size() == 0);
+    });
+
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
