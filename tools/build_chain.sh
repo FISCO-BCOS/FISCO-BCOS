@@ -47,10 +47,10 @@ Usage:
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
-    -C <disable compress>               Default enable. If set -C, disable compress
     -s <State type>                     Default storage. if set -s, use mpt 
     -S <Storage type>                   Default leveldb. if set -S, use external
+    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -78,7 +78,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
+while getopts "f:l:o:p:e:t:v:icszhgTFdC:S" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -99,7 +99,7 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
       if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
-        LOG_WARN "chan_id is not a number."
+        LOG_WARN "${chain_id} is not a positive integer."
         exit 1;
       fi
     ;;
