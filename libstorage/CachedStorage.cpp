@@ -450,6 +450,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+        	std::lock_guard<std::mutex> lock(m_mutex);
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
                 auto tableIt = m_caches.find(it->first);
