@@ -144,9 +144,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
     auto handler = fakeAsioInterface->m_acceptorInfo.second;
     boost::system::error_code ec;
     handler(ec);
-    auto fp = [](NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>) {
-
-    };
+    auto fp = [](NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>) {};
     nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8889);
     m_host->asyncConnect(nodeIP, fp);
     if (!m_sessions.empty())
