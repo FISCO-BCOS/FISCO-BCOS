@@ -341,11 +341,11 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         auto storage = self.lock();
         if (storage)
         {
+        	storage->setSyncNum(task->num);
             STORAGE_LOG(INFO) << "Commit block: " << task->num
                               << " to persist storage finished, current syncd block: "
                               << storage->syncNum();
             STORAGE_LOG(INFO) << "m_caches: " << storage->m_caches.size() << "m_mru: " << storage->m_mru.size();
-            storage->setSyncNum(task->num);
         }
     });
 
@@ -428,9 +428,10 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
+        size_t sleepTimes = clearTimes < 20? clearTimes * 100 : 20 * 100;
         if (clearTimes > 1)
         {
-            std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
         }
 
         if (m_mru.size() > m_maxStoreKey)
