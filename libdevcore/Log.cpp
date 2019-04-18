@@ -21,6 +21,8 @@
  * @date 2018-12-04
  */
 #include "Log.h"
+#include <boost/log/core.hpp>
+
 namespace dev
 {
 std::string const FileLogger = "FileLogger";
