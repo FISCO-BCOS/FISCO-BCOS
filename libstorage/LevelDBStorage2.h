@@ -50,8 +50,6 @@ public:
 private:
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
-
-    const char* COUNTER_KEY = "_sys_counter_";
 };
 
 }  // namespace storage

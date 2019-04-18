@@ -62,7 +62,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     endif ()
     
     if(PROF)
-    add_compile_options(-pg)
+    	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
+		SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
     endif ()
     
     # Configuration-specific compiler settings.

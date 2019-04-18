@@ -32,6 +32,7 @@
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/SQLStorage.h>
+#include <libstorage/LevelDBStorage2.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -58,6 +59,9 @@ void DBInitializer::initStorageDB()
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
         initLevelDBStorage();
+    }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2")) {
+    	initLevelDBStorage2();
     }
     else
     {
@@ -151,11 +155,63 @@ void DBInitializer::initSQLStorage()
     cachedStorage->init();
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    // tableFactoryFactory->setStorage(m_storage);
     tableFactoryFactory->setStorage(cachedStorage);
 
     m_storage = cachedStorage;
     m_tableFactoryFactory = tableFactoryFactory;
+}
+
+void DBInitializer::initLevelDBStorage2() {
+	DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage");
+	/// open and init the levelDB
+	leveldb::Options ldb_option;
+	dev::db::BasicLevelDB* pleveldb = nullptr;
+	try
+	{
+		boost::filesystem::create_directories(m_param->mutableStorageParam().path);
+		ldb_option.create_if_missing = true;
+		ldb_option.max_open_files = 1000;
+		ldb_option.compression = leveldb::kSnappyCompression;
+		leveldb::Status status;
+
+		// Not to use disk encryption
+		DBInitializer_LOG(DEBUG)
+			<< LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
+			<< LOG_DESC("open leveldb handler");
+		status =
+			BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
+
+		if (!status.ok())
+		{
+			DBInitializer_LOG(ERROR)
+				<< LOG_BADGE("initStorageDB") << LOG_DESC("openLevelDBStorage failed");
+			throw std::runtime_error("open LevelDB failed");
+		}
+		DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB") << LOG_BADGE("initLevelDBStorage")
+								 << LOG_KV("status", status.ok());
+		std::shared_ptr<LevelDBStorage2> leveldb_storage = std::make_shared<LevelDBStorage2>();
+		std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
+			std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
+		leveldb_storage->setDB(leveldb_handler);
+
+		auto cachedStorage = std::make_shared<CachedStorage>();
+		cachedStorage->setBackend(leveldb_storage);
+		cachedStorage->setMaxStoreKey(m_param->mutableStorageParam().maxStoreKey);
+		cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+		m_storage = cachedStorage;
+
+		 auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+		tableFactoryFactory->setStorage(cachedStorage);
+
+		m_tableFactoryFactory = tableFactoryFactory;
+	}
+	catch (std::exception& e)
+	{
+		DBInitializer_LOG(ERROR) << LOG_BADGE("initLevelDBStorage")
+								 << LOG_DESC("initLevelDBStorage failed")
+								 << LOG_KV("EINFO", boost::diagnostic_information(e));
+		BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
+	}
 }
 
 /// create ExecutiveContextFactory

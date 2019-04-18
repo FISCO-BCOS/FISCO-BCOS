@@ -101,14 +101,6 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
 {
     try
     {
-        size_t counter = 0;
-        std::string counterValue;
-        auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(COUNTER_KEY), &counterValue);
-        if (s.ok() && !s.IsNotFound())
-        {
-            counter = boost::lexical_cast<size_t>(counterValue);
-        }
-
         auto hex = hash.hex();
 
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
@@ -184,7 +176,6 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
                 }
                 else
                 {
-                    value["_id_"] = (Json::UInt64)++counter;
                     it->second["values"].append(value);
                 }
             }
@@ -198,9 +189,6 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
                 batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
             }
         }
-
-        counterValue = boost::lexical_cast<std::string>(counterValue);
-        batch->insertSlice(leveldb::Slice(COUNTER_KEY), leveldb::Slice(counterValue));
 
         m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
         return datas.size();
