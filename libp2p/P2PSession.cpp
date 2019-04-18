@@ -61,7 +61,7 @@ void P2PSession::heartBeat()
     auto service = m_service.lock();
     if (service && service->actived())
     {
-        if (m_session->isConnected())
+        if (m_session->actived())
         {
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());

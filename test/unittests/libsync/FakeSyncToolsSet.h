@@ -43,8 +43,6 @@ public:
     virtual void start() override {}
     virtual void disconnect(dev::network::DisconnectReason) override {}
 
-    virtual bool isConnected() const override { return true; }
-
     virtual void asyncSendMessage(dev::network::Message::Ptr, dev::network::Options = Options(),
         CallbackFunc = CallbackFunc()) override
     {}

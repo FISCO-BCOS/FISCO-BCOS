@@ -68,6 +68,12 @@ NodeIPEndpoint Session::nodeIPEndpoint() const
     return m_socket->nodeIPEndpoint();
 }
 
+bool Session::actived() const
+{
+    auto server = m_server.lock();
+    return m_actived && server && server->haveNetwork() && m_socket && m_socket->isConnected();
+}
+
 void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
 {
     auto server = m_server.lock();
@@ -105,14 +111,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     send(p_buffer);
-}
-
-bool Session::actived() const
-{
-    auto server = m_server.lock();
-    if (m_actived && server && server->haveNetwork())
-        return true;
-    return false;
 }
 
 void Session::send(std::shared_ptr<bytes> _msg)
@@ -169,16 +167,6 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
         drop(TCPError);
         return;
     }
-}
-
-bool Session::isConnected() const
-{
-    auto server = m_server.lock();
-    if (!m_actived || !server || !server->haveNetwork() || !m_socket)
-    {
-        return false;
-    }
-    return m_socket->isConnected();
 }
 
 void Session::write()

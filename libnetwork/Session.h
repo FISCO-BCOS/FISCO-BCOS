@@ -55,11 +55,8 @@ public:
     virtual void start() override;
     virtual void disconnect(DisconnectReason _reason) override;
 
-    virtual bool isConnected() const override;
-
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override;
-    // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override;
 
