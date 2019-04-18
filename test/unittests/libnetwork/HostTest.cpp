@@ -21,6 +21,7 @@
 
 #include "libnetwork/Host.h"
 #include "FakeASIOInterface.h"
+#include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
 #include "test/tools/libutils/Common.h"
 #include <libinitializer/SecureInitializer.h>
@@ -67,12 +68,15 @@ struct HostFixture
         m_host->setThreadPool(m_threadPool);
         m_host->setCRL(m_certBlacklist);
         m_host->setConnectionHandler(
-            [](dev::network::NetworkException e, dev::network::NodeInfo const&,
-                std::shared_ptr<dev::network::SessionFace>) {
+            [&](dev::network::NetworkException e, dev::network::NodeInfo const&,
+                std::shared_ptr<dev::network::SessionFace> p) {
                 if (e.errorCode())
                 {
                     LOG(ERROR) << e.what();
+                    return;
                 }
+                m_sessions.push_back(p);
+                p->start();
             });
         m_connectionHandler = m_host->connectionHandler();
     }
@@ -87,13 +91,25 @@ struct HostFixture
     std::shared_ptr<dev::ThreadPool> m_threadPool;
     std::vector<std::string> m_certBlacklist;
     std::shared_ptr<ASIOInterface> m_asioInterface;
+    std::vector<std::shared_ptr<dev::network::SessionFace>> m_sessions;
     std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Host, HostFixture)
 
-BOOST_AUTO_TEST_CASE(functions)
+BOOST_AUTO_TEST_CASE(ASIOInterface)
+{
+    m_asioInterface->ioService();
+    m_asioInterface->sslContext();
+    m_asioInterface->sslContext();
+    m_asioInterface->newTimer(0);
+    m_asioInterface->reset();
+    m_asioInterface->stop();
+    m_asioInterface->ASIOInterface::newSocket();
+}
+
+BOOST_AUTO_TEST_CASE(Hostfunctions)
 {
     BOOST_CHECK(m_port == m_host->listenPort());
     BOOST_CHECK(m_hostIP == m_host->listenHost());
@@ -111,7 +127,7 @@ BOOST_AUTO_TEST_CASE(functions)
     BOOST_CHECK(m_threadPool == m_host->threadPool());
 }
 
-BOOST_AUTO_TEST_CASE(run)
+BOOST_AUTO_TEST_CASE(Host_run)
 {
     m_host->start();
     // start() will create a new thread and call host->startAccept, so wait
@@ -128,6 +144,18 @@ BOOST_AUTO_TEST_CASE(run)
     auto handler = fakeAsioInterface->m_acceptorInfo.second;
     boost::system::error_code ec;
     handler(ec);
+    auto fp = [](NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>) {};
+    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8889);
+    m_host->asyncConnect(nodeIP, fp);
+    if (!m_sessions.empty())
+    {
+        auto s = std::dynamic_pointer_cast<Session>(m_sessions[0]);
+
+        // BOOST_CHECK(true == s->actived());
+        // BOOST_CHECK(true == s->isConnected());
+        // BOOST_CHECK(m_host == s->host());
+        // BOOST_CHECK(m_messageFactory == s->messageFactory());
+    }
     m_host->stop();
     handler = fakeAsioInterface->m_acceptorInfo.second;
     handler(ec);
