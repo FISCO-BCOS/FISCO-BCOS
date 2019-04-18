@@ -72,10 +72,12 @@ public:
 
         _length = ntohl(*((uint32_t*)&buffer[0]));
 
+#if 0
         if (_length > MAX_LENGTH)
         {
             return -1;
         }
+#endif
 
         if (size < _length)
         {
