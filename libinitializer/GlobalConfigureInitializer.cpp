@@ -34,11 +34,13 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
     {
         g_BCOSConfig.setVersion(RC2_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc2");
     }
     /// default is RC1
     else
     {
         g_BCOSConfig.setVersion(RC1_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc1");
     }
 
 
