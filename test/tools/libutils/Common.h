@@ -37,7 +37,7 @@ namespace constVar
 const static std::string TEST_PATH = "FISCO_BCOS_TEST_PATH";
 }  // namespace constVar
 
-static inline boost::filesystem::path getTestPath()
+inline boost::filesystem::path getTestPath()
 {
     if (dev::test::Options::get().testpath != "")
     {
@@ -60,7 +60,7 @@ static inline boost::filesystem::path getTestPath()
     return boost::filesystem::path(testPath);
 }
 
-static inline std::vector<boost::filesystem::path> getFiles(
+inline std::vector<boost::filesystem::path> getFiles(
     boost::filesystem::path const& dirPath, std::set<std::string> const& extensionLists)
 {
     std::vector<boost::filesystem::path> files;

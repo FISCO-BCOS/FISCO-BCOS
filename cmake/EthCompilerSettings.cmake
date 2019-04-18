@@ -134,7 +134,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
                 COMMAND ${LCOV_TOOL} -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '${CMAKE_SOURCE_DIR}/deps**' '${CMAKE_SOURCE_DIR}/evmc*' ‘${CMAKE_SOURCE_DIR}/utils*’  -o ${CMAKE_BINARY_DIR}/coverage.info
                 COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
         else ()
-            message(FATAL_ERROR "Can't find lcov tool. Please install lcov and genhtml")
+            message(FATAL_ERROR "Can't find lcov tool. Please install lcov")
         endif()
     endif ()
 else ()
