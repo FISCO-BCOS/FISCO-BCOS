@@ -77,6 +77,7 @@ public:
         fakeSocket->setRemoteEndpoint(peer_endpoint);
         boost::system::error_code ec;
         handler(ec);
+        handler(boost::asio::error::operation_aborted);
     }
 
     void asyncWrite(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
@@ -101,7 +102,7 @@ public:
         ReadWriteHandler handler) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
-        auto size = fakeSocket->read(buffers, buffers.size());
+        auto size = fakeSocket->doRead(buffers);
         boost::system::error_code ec;
         handler(ec, size);
     }
@@ -119,12 +120,18 @@ public:
         std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true) override
     {
         (void)socket;
-        // auto s = m_sslContext->m_sslContext();
-        // auto x509 = SSL_CTX_get0_certificate(s);
-        // auto store = SSL_CTX_get_cert_store(s);
+        auto s = m_sslContext->native_handle();
+        auto store = SSL_CTX_get_cert_store(s);
+        // auto ssl = SSL_new(s);
+        // auto x509 = SSL_get_peer_certificate(ssl);
+        // auto chain = SSL_get_peer_cert_chain(ssl);
+        auto x509 = SSL_CTX_get0_certificate(s);
         auto x509_store_ctx = X509_STORE_CTX_new();
-        // auto chain = SSL_get_peer_cert_chain();
-        // X509_STORE_CTX_init(x509_store_ctx,store,x509,chain);
+        X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
+        X509_STORE_CTX_set_cert(x509_store_ctx, x509);
+        // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+        x509_store_ctx->current_cert = x509;
+        // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
         boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
         callback(true, verifyContext);
     }
