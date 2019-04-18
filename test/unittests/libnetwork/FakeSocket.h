@@ -84,6 +84,7 @@ public:
         b->commit(copydSize);
         m_queue.push(b);
     }
+
     size_t doRead(boost::asio::mutable_buffers_1 buffers)
     {
         auto p = m_queue.front();
