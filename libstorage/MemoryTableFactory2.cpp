@@ -261,7 +261,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         auto tableData = std::make_shared<TableData>();
         table->dump(tableData);
 
-        if (tableData->entries->size() > 0)
+        if (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0)
         {
             datas.push_back(tableData);
         }

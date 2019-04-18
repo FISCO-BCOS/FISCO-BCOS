@@ -99,12 +99,25 @@ public:
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
+    uint32_t m_ID = 0;
     size_t m_tempIndex = 0;
     std::map<std::string, std::string> m_fields;
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
 };
+
+class EntryLess {
+public:
+	EntryLess(TableInfo::Ptr tableInfo): m_tableInfo(tableInfo) {};
+	virtual ~EntryLess() {};
+
+	virtual bool operator()(const Entry::Ptr &lhs, const Entry::Ptr &rhs) const;
+
+private:
+	TableInfo::Ptr m_tableInfo;
+};
+
 
 class Entries : public std::enable_shared_from_this<Entries>
 {
@@ -116,17 +129,18 @@ public:
     virtual Entry::ConstPtr get(size_t i) const;
     virtual Entry::Ptr get(size_t i);
     virtual size_t size() const;
-    virtual void addEntry(Entry::Ptr entry);
+    virtual size_t addEntry(Entry::Ptr entry);
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
+
+    virtual void copyFrom(Entries::Ptr entries);
 
     virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>>* entries();
 
 private:
     tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>> m_entries;
     bool m_dirty = false;
-    std::mutex m_mutex;
 };
 
 class ConcurrentEntries : public std::enable_shared_from_this<ConcurrentEntries>
@@ -273,12 +287,14 @@ public:
     TableData()
     {
         info = std::make_shared<TableInfo>();
-        entries = std::make_shared<Entries>();
+        dirtyEntries = std::make_shared<Entries>();
+        newEntries = std::make_shared<Entries>();
     }
 
     // for memorytable2
     TableInfo::Ptr info;
-    Entries::Ptr entries;
+    Entries::Ptr dirtyEntries;
+    Entries::Ptr newEntries;
 
     // for memorytable
     std::string tableName;

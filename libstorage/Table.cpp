@@ -44,6 +44,10 @@ Entry::Entry()
 uint32_t Entry::getID() const
 {
     // dev::ReadGuard l(x_fields);
+	if(m_ID) {
+		return m_ID;
+	}
+
     auto it = m_fields.find(ID_FIELD);
     if (it == m_fields.end())
     {
@@ -51,7 +55,8 @@ uint32_t Entry::getID() const
     }
     else
     {
-        return boost::lexical_cast<uint32_t>(it->second);
+    	const_cast<Entry*>(this)->m_ID = boost::lexical_cast<uint32_t>(it->second);
+        return m_ID;
     }
 }
 
@@ -66,6 +71,8 @@ void Entry::setID(uint32_t id)
     {
         it->second = boost::lexical_cast<std::string>(id);
     }
+
+    m_ID = id;
 
     m_dirty = true;
 }
@@ -208,6 +215,43 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_dirty = entry->m_dirty;
     m_fields = entry->m_fields;
     m_tempIndex = entry->m_tempIndex;
+    m_force = entry->m_force;
+    m_ID = entry->m_ID;
+    m_deleted = entry->m_deleted;
+}
+
+bool EntryLess::operator()(const Entry::Ptr &lhs, const Entry::Ptr &rhs) const {
+	if(lhs->getID() != rhs->getID()) {
+		return lhs->getID() < rhs->getID();
+	}
+
+	auto lhsStr = lhs->getField(m_tableInfo->key);
+	auto rhsStr = rhs->getField(m_tableInfo->key);
+	if(lhsStr != rhsStr) {
+		return lhsStr < rhsStr;
+	}
+
+	auto lFields = lhs->fields();
+	auto rFields = rhs->fields();
+	if(lFields->size() != rFields->size()) {
+		return lFields->size() < rFields->size();
+	}
+
+	for (auto lIter = lFields->begin(), rIter = rFields->begin();
+		 lIter != lFields->end() && rIter != rFields->end(); ++lIter, ++rIter)
+	{
+		if (lIter->first != rIter->first)
+		{
+			return lIter->first < rIter->first;
+		}
+
+		if (lIter->second != rIter->second)
+		{
+			return lIter->second < rIter->second;
+		}
+	}
+
+	return false;
 }
 
 size_t Entries::size() const
@@ -239,10 +283,13 @@ Entry::Ptr Entries::get(size_t i)
     return m_entries[i];
 }
 
-void Entries::addEntry(Entry::Ptr entry)
+size_t Entries::addEntry(Entry::Ptr entry)
 {
+	auto index = m_entries.size();
     m_entries.push_back(entry);
     m_dirty = true;
+
+    return index;
 }
 
 void Entries::removeEntry(size_t index)
@@ -262,6 +309,11 @@ bool Entries::dirty() const
 void Entries::setDirty(bool dirty)
 {
     m_dirty = dirty;
+}
+
+void Entries::copyFrom(Entries::Ptr entries) {
+	m_entries = entries->m_entries;
+	m_dirty = entries->m_dirty;
 }
 
 tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* Entries::entries()

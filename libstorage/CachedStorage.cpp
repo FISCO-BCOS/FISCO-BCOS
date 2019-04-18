@@ -26,6 +26,7 @@
 #include <thread>
 #include <tbb/parallel_for.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/parallel_sort.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -81,26 +82,17 @@ Caches::Ptr TableCaches::findCache(const std::string& key)
     }
 }
 
-void TableCaches::addCache(const std::string& key, Caches::Ptr cache)
+std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool> TableCaches::addCache(const std::string& key, Caches::Ptr cache)
 {
-    auto it = m_caches.find(key);
-    if (it != m_caches.end())
-    {
-        it->second = cache;
-    }
-    else
-    {
-        m_caches.insert(std::make_pair(key, cache));
-    }
+	return m_caches.insert(std::make_pair(key, cache));
 }
 
 void TableCaches::removeCache(const std::string& key)
 {
+	std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_caches.find(key);
     if (it != m_caches.end())
     {
-        // m_caches.erase(it);
-        std::lock_guard<std::mutex> lock(m_mutex);
         m_caches.unsafe_erase(it);
     }
 }
@@ -191,11 +183,11 @@ Caches::Ptr CachedStorage::selectNoCondition(
         caches->setKey(key);
         caches->setEntries(backendData);
 
-        tableIt->second->addCache(key, caches);
+        auto newIt = tableIt->second->addCache(key, caches);
 
         touchMRU(tableInfo->name, key);
 
-        return caches;
+        return newIt.first->second;
     }
 
     return std::make_shared<Caches>();
@@ -209,102 +201,109 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     std::vector<TableData::Ptr> commitDatas;
     commitDatas.resize(datas.size());
-    // update cache & copy datas
-    //tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
-    	//for(size_t idx = range.begin(); idx < range.end(); ++idx) {
-    	for(size_t idx = 0; idx < datas.size(); ++idx) {
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
+    	for(size_t idx = range.begin(); idx < range.end(); ++idx) {
     		auto requestData = datas[idx];
 			auto commitData = std::make_shared<TableData>();
 			commitData->info = requestData->info;
 
-			for (size_t i = 0; i < requestData->entries->size(); ++i)
-			{
-				++total;
+			tbb::parallel_for(tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size(), 1000), [&](const tbb::blocked_range<size_t>& rangeEntries) {
+				for(size_t i=rangeEntries.begin(); i<rangeEntries.end(); ++i) {
+					++total;
 
-				auto entry = requestData->entries->get(i);
-				auto key = entry->getField(requestData->info->key);
-				auto id = entry->getID();
+					auto entry = requestData->dirtyEntries->get(i);
+					auto key = entry->getField(requestData->info->key);
+					auto id = entry->getID();
 
-				if (id != 0)
-				{
-					auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
-					auto data = caches->entries()->entries();
-					auto entryIt = std::lower_bound(data->begin(), data->end(), entry,
-						[](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
-							return lhs->getID() < rhs->getID();
-						});
-
-					if (entryIt != data->end() && (*entryIt)->getID() == id)
+					if (id != 0)
 					{
-						for (auto fieldIt : *entry->fields())
+						auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+						auto data = caches->entries()->entries();
+						auto entryIt = std::lower_bound(data->begin(), data->end(), entry,
+							[](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
+								return lhs->getID() < rhs->getID();
+							});
+
+						if (entryIt != data->end() && (*entryIt)->getID() == id)
 						{
-							if (fieldIt.first != "_id_")
+							for (auto fieldIt : *entry->fields())
 							{
-								(*entryIt)->setField(fieldIt.first, fieldIt.second);
+								if (fieldIt.first != "_id_")
+								{
+									(*entryIt)->setField(fieldIt.first, fieldIt.second);
+								}
 							}
+
+							auto commitEntry = std::make_shared<Entry>();
+							commitEntry->copyFrom(*entryIt);
+							commitData->dirtyEntries->addEntry(commitEntry);
 						}
+						else
+						{
+							STORAGE_LOG(ERROR)
+								<< "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
 
-						auto commitEntry = std::make_shared<Entry>();
-						commitEntry->copyFrom(*entryIt);
-						commitData->entries->addEntry(commitEntry);
+							// impossible
+							BOOST_THROW_EXCEPTION(
+								StorageException(-1, "Can not find entry in cache, id: " +
+														 boost::lexical_cast<std::string>(entry->getID())));
+						}
 					}
-					else
+
+					touchMRU(requestData->info->name, key);
+				}
+			});
+
+			tbb::parallel_sort(commitData->dirtyEntries->entries()->begin(), commitData->newEntries->entries()->end(), EntryLess(requestData->info));
+
+			commitData->newEntries->copyFrom(requestData->newEntries);
+			tbb::parallel_sort(commitData->newEntries->entries()->begin(), commitData->newEntries->entries()->end(), EntryLess(requestData->info));
+
+			for(size_t j=0; j<commitData->newEntries->size(); ++j) {
+				auto commitEntry = commitData->newEntries->get(j);
+				commitEntry->setID(++m_ID);
+
+				auto key = commitEntry->getField(requestData->info->key);
+
+				auto cacheEntry = std::make_shared<Entry>();
+				cacheEntry->copyFrom(commitEntry);
+
+				if (cacheEntry->force())
+				{
+					auto tableIt = m_caches.find(requestData->info->name);
+					if (tableIt == m_caches.end())
 					{
-						STORAGE_LOG(ERROR)
-							<< "Can not find entry in cache, id:" << entry->getID() << " key:" << key;
-
-						// impossible
-						BOOST_THROW_EXCEPTION(
-							StorageException(-1, "Can not find entry in cache, id: " +
-													 boost::lexical_cast<std::string>(entry->getID())));
+						tableIt = m_caches
+									  .insert(std::make_pair(
+											  requestData->info->name, std::make_shared<TableCaches>()))
+									  .first;
+						tableIt->second->tableInfo()->name = requestData->info->name;
 					}
+
+					auto caches = std::make_shared<Caches>();
+					auto newEntries = std::make_shared<Entries>();
+					caches->setEntries(newEntries);
+					caches->setNum(num);
+
+					auto newIt = tableIt->second->addCache(key, caches);
+					newIt.first->second->entries()->addEntry(cacheEntry);
+
+					newEntries->addEntry(cacheEntry);
 				}
 				else
 				{
-					auto cacheEntry = std::make_shared<Entry>();
-					cacheEntry->copyFrom(entry);
-					cacheEntry->setID(++m_ID);
-
-					if (entry->force())
-					{
-						auto tableIt = m_caches.find(requestData->info->name);
-						if (tableIt == m_caches.end())
-						{
-							tableIt = m_caches
-										  .insert(std::make_pair(
-												  requestData->info->name, std::make_shared<TableCaches>()))
-										  .first;
-							tableIt->second->tableInfo()->name = requestData->info->name;
-						}
-
-						auto caches = std::make_shared<Caches>();
-						auto newEntries = std::make_shared<Entries>();
-						newEntries->addEntry(cacheEntry);
-						caches->setEntries(newEntries);
-						caches->setNum(num);
-
-						tableIt->second->addCache(key, caches);
-					}
-					else
-					{
-						auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
-						caches->entries()->addEntry(cacheEntry);
-						caches->setNum(num);
-					}
-
-					LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
-
-					auto commitEntry = std::make_shared<Entry>();
-					commitEntry->copyFrom(cacheEntry);
-					commitData->entries->addEntry(commitEntry);
+					auto caches = selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+					caches->entries()->addEntry(cacheEntry);
+					caches->setNum(num);
 				}
 
-				touchMRU(requestData->info->name, key);
+				LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
 			}
 
 			commitDatas[idx] = commitData;
     	}
-    //});
+    });
 
     // new task write to backend
     Task::Ptr task = std::make_shared<Task>();
@@ -324,7 +323,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
     idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
 
-    data->entries->addEntry(idEntry);
+    data->dirtyEntries->addEntry(idEntry);
 
     task->datas.push_back(data);
     auto backend = m_backend;
@@ -343,7 +342,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             STORAGE_LOG(INFO) << "Commit block: " << task->num
                               << " to persist storage finished, current syncd block: "
                               << storage->syncNum();
-            STORAGE_LOG(INFO) << "m_caches: " << storage->m_caches.size() << "m_mru: " << storage->m_mru.size();
         }
     });
 

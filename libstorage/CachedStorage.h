@@ -50,7 +50,8 @@ public:
 private:
     std::string m_key;
     Entries::Ptr m_entries;
-    int64_t m_num;
+    //int64_t m_num;
+    tbb::atomic<int64_t> m_num;
 };
 
 class TableCaches
@@ -63,7 +64,7 @@ public:
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
     virtual Caches::Ptr findCache(const std::string& key);
-    virtual void addCache(const std::string& key, Caches::Ptr cache);
+    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool> addCache(const std::string& key, Caches::Ptr cache);
     virtual void removeCache(const std::string& key);
 
     virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
