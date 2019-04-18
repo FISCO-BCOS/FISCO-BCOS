@@ -344,6 +344,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             STORAGE_LOG(INFO) << "Commit block: " << task->num
                               << " to persist storage finished, current syncd block: "
                               << storage->syncNum();
+            STORAGE_LOG(INFO) << "m_caches: " << storage->m_caches.size() << "m_mru: " << storage->m_mru.size();
             storage->setSyncNum(task->num);
         }
     });
