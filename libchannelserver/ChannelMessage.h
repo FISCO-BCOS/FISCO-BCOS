@@ -33,6 +33,7 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <climits>
 
 namespace dev
 {
@@ -94,7 +95,7 @@ protected:
     const static size_t MIN_HEADER_LENGTH = 4;
 
     const static size_t HEADER_LENGTH = 4 + 2 + 32 + 4;
-    const static size_t MAX_LENGTH = 4 * 1024 * 1024 * 1024;  // max 4G
+    const static size_t MAX_LENGTH = ULONG_MAX;  // max 4G
 };
 
 class ChannelMessageFactory : public MessageFactory
