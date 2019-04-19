@@ -91,7 +91,7 @@ public:
     typedef std::shared_ptr<CachedStorage> Ptr;
     CachedStorage();
 
-    virtual ~CachedStorage(){};
+    virtual ~CachedStorage();
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;

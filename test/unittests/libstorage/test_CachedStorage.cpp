@@ -94,11 +94,11 @@ public:
         {
             if (it->info->name == "t_test")
             {
-                BOOST_CHECK(it->entries->size() == 1);
+                BOOST_CHECK(it->newEntries->size() == 1);
             }
             else if (it->info->name == SYS_CURRENT_STATE)
             {
-                BOOST_CHECK(it->entries->size() == 1);
+                BOOST_CHECK(it->diryEntries->size() == 1);
             }
             else
             {
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
 
     BOOST_TEST(cachedStorage->syncNum() == 0);

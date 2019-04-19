@@ -104,9 +104,14 @@ tbb::concurrent_unordered_map<std::string, Caches::Ptr>* TableCaches::caches()
 
 CachedStorage::CachedStorage()
 {
+	LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
     m_syncNum.store(0);
     m_commitNum.store(0);
+}
+
+CachedStorage::~CachedStorage() {
+	m_taskThreadPool->stop();
 }
 
 Entries::Ptr CachedStorage::select(
@@ -261,6 +266,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 			tbb::parallel_sort(commitData->newEntries->entries()->begin(), commitData->newEntries->entries()->end(), EntryLess(requestData->info));
 
 			for(size_t j=0; j<commitData->newEntries->size(); ++j) {
+				++total;
+
 				auto commitEntry = commitData->newEntries->get(j);
 				commitEntry->setID(++m_ID);
 
