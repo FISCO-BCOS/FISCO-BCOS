@@ -69,6 +69,8 @@ void Initializer::init(std::string const& _path)
         m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
         m_rpcInitializer->initConfig(pt);
         m_ledgerInitializer->startAll();
+
+        m_tbbInit = std::make_shared<tbb::task_scheduler_init>(tbb::task_scheduler_init::automatic);
     }
     catch (std::exception& e)
     {

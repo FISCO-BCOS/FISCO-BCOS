@@ -35,6 +35,7 @@
 #include "P2PInitializer.h"
 #include "RPCInitializer.h"
 #include "SecureInitializer.h"
+#include <tbb/tbb.h>
 
 namespace dev
 {
@@ -89,6 +90,7 @@ private:
 
     LogInitializer::Ptr m_logInitializer;
     SecureInitializer::Ptr m_secureInitializer;
+    std::shared_ptr<tbb::task_scheduler_init> m_tbbInit;
 };
 
 }  // namespace initializer
