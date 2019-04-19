@@ -366,7 +366,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                               << storage->syncNum();
             STORAGE_LOG(INFO) << "Total query: " << storage->m_queryTimes
                               << " cache hit: " << storage->m_hitTimes
-                              << " hit rate: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+                              << " hit rate: " << std::setiosflags(std::ios::fixed)
+                              << std::setprecision(4)
                               << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%";
         }
     });
