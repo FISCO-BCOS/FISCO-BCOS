@@ -90,7 +90,6 @@ private:
 
     LogInitializer::Ptr m_logInitializer;
     SecureInitializer::Ptr m_secureInitializer;
-    std::shared_ptr<tbb::task_scheduler_init> m_tbbInit;
 };
 
 }  // namespace initializer
