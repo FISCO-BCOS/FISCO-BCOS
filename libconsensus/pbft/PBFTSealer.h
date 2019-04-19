@@ -141,6 +141,8 @@ private:
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
     VIEWTYPE m_lastView = 0;
+    int64_t m_timeoutCount = 0;
+    uint64_t m_lastBlockNumber = 0;
 };
 }  // namespace consensus
 }  // namespace dev

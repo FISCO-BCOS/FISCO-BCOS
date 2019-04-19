@@ -104,27 +104,34 @@ void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
     if (m_pbftEngine->view() > 0 && m_pbftEngine->timeout() &&
         m_lastView != (m_pbftEngine->view()) && maxBlockCanSeal >= 2)
     {
-        PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
-                              << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal)
-                              << LOG_KV("halfed_maxBlockCanSeal", maxBlockCanSeal / 2);
         maxBlockCanSeal /= 2;
         m_lastView = m_pbftEngine->view();
+        m_timeoutCount++;
+        PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
+                              << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal / 2)
+                              << LOG_KV("halfed_maxBlockCanSeal", maxBlockCanSeal)
+                              << LOG_KV("timeoutCount", m_timeoutCount);
     }
-    else if (!m_pbftEngine->timeout() && m_pbftEngine->view() == 0)
+    else if (m_blockChain->number() > m_lastBlockNumber && !m_pbftEngine->timeout() &&
+             m_pbftEngine->view() == 0 &&)
     {
         m_lastView = 0;
-        if (maxBlockCanSeal < m_pbftEngine->maxBlockTransactions())
+        if (m_timeoutCount > 0)
+        {
+            m_timeoutCount--;
+        }
+        if ((m_timeoutCount == 0) && maxBlockCanSeal < m_pbftEngine->maxBlockTransactions())
         {
             maxBlockCanSeal += (0.5 * maxBlockCanSeal);
-            PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxBlockCanSeal")
-                                  << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal)
-                                  << LOG_KV("increased_maxBlockCanSeal", maxBlockCanSeal);
             if (maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
             {
                 maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
             }
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxBlockCanSeal")
+                                  << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal);
         }
     }
+    m_lastBlockNumber = m_blockChain->number();
 }
 
 }  // namespace consensus
