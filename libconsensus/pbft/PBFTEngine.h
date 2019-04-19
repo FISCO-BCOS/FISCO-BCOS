@@ -537,7 +537,7 @@ protected:
         m_viewMap[idx] = view;
     }
 
-    bool isTimeout() { return m_timeManager.isTimeout(); }
+    bool timeout() { return m_timeManager.m_changeCylce > 0; }
 
 protected:
     VIEWTYPE m_view = 0;

@@ -101,13 +101,31 @@ void PBFTSealer::stop()
 /// decrease maxBlockCanSeal to half when timeout
 void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
 {
-    if (m_pbftEngine->isTimeout() && maxBlockCanSeal >= 2)
+    if (m_pbftEngine->view() > 0 && m_pbftEngine->timeout() &&
+        m_lastView != (m_pbftEngine->view()) && maxBlockCanSeal >= 2)
     {
         PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
                               << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal)
                               << LOG_KV("halfed_maxBlockCanSeal", maxBlockCanSeal / 2);
         maxBlockCanSeal /= 2;
+        m_lastView = m_pbftEngine->view();
+    }
+    else if (!m_pbftEngine->timeout() && m_pbftEngine->view() == 0)
+    {
+        m_lastView = 0;
+        if (maxBlockCanSeal < m_pbftEngine->maxBlockTransactions())
+        {
+            maxBlockCanSeal += (0.5 * maxBlockCanSeal);
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxBlockCanSeal")
+                                  << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal)
+                                  << LOG_KV("increased_maxBlockCanSeal", maxBlockCanSeal);
+            if (maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
+            {
+                maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
+            }
+        }
     }
 }
+
 }  // namespace consensus
 }  // namespace dev

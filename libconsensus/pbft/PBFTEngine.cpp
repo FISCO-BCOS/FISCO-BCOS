@@ -1316,11 +1316,11 @@ void PBFTEngine::checkTimeout()
             if (m_timeManager.m_lastConsensusTime != 0)
             {
                 m_fastViewChange = false;
+                m_timeManager.updateChangeCycle();
             }
             Timer t;
             m_toView += 1;
             m_leaderFailed = true;
-            m_timeManager.updateChangeCycle();
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;

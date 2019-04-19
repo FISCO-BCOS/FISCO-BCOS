@@ -140,6 +140,7 @@ private:
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
+    VIEWTYPE m_lastView = 0;
 };
 }  // namespace consensus
 }  // namespace dev
