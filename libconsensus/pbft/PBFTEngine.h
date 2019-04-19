@@ -180,7 +180,7 @@ public:
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
 
-    bool timeout() { return m_timeManager.m_changeCylce > 0; }
+    bool timeout() { return m_timeManager.m_changeCycle > 0; }
     VIEWTYPE const& view() const { return m_view; }
 
 protected:
