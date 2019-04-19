@@ -454,9 +454,9 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
-        size_t sleepTimes = clearTimes < 20 ? clearTimes * 100 : 20 * 100;
         if (clearTimes > 1)
         {
+            size_t sleepTimes = clearTimes < 20 ? clearTimes * 100 : 20 * 100;
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
         }
 
