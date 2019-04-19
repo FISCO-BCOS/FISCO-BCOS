@@ -21,11 +21,10 @@
  * @date 2018-12-04
  */
 #pragma once
-#include <boost/log/core.hpp>
+
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
-#include <boost/log/utility/setup/common_attributes.hpp>
-#include <boost/log/utility/setup/file.hpp>
+
 namespace dev
 {
 extern std::string const FileLogger;

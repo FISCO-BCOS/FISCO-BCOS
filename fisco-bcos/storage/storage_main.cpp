@@ -76,7 +76,7 @@ void help()
     std::cout << main_options << std::endl;
 }
 
-void printEntries(Entries::Ptr entries)
+void printEntries(Entries::ConstPtr entries)
 {
     if (entries->size() == 0)
     {

@@ -98,7 +98,7 @@ public:
             }
             else if (it->info->name == SYS_CURRENT_STATE)
             {
-                BOOST_CHECK(it->diryEntries->size() == 1);
+                BOOST_CHECK(it->dirtyEntries->size() == 1);
             }
             else
             {

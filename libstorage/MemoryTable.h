@@ -142,6 +142,11 @@ public:
             auto entries = selectFromCache(key, needSelect);
 
             checkField(entry);
+
+            // Bug: Not set key, but for compatible with RC1, leave bug here. This MemoryTable will
+            // be instead by MemoryTable2, not to fix any more.
+            // entry->setField(m_tableInfo->key, key); bug fix here
+
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             if (m_recorder)

@@ -40,8 +40,7 @@ Entries::Ptr SQLStorage::select(
 {
     try
     {
-        LOG(DEBUG) << "Query AMOPDB data";
-
+        LOG(TRACE) << "Query AMOPDB data";
         Json::Value requestJson;
 
         requestJson["op"] = "select";
@@ -327,8 +326,11 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         {
             LOG(ERROR) << "Reach max retry:" << retry;
 
-            // The storage doesn't works well, the program will exit with abnormal status
+            // The storage doesn't works well, the program will exit with abnormal
+            // status
             auto e = StorageException(-1, "Reach max retry");
+            std::cout << "because the storage doesn't works well,"
+                      << "the program will exit with abnormal status" << std::endl;
 
             m_fatalHandler(e);
 
