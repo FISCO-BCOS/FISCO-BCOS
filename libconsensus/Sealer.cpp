@@ -77,6 +77,7 @@ void Sealer::reportNewBlock()
             return;
         }
         m_consensusEngine->reportBlock(*p_block);
+        m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
         WriteGuard l(x_sealing);
         {
             if (shouldResetSealing())
@@ -105,7 +106,7 @@ void Sealer::doWork(bool wait)
             /// get current transaction num
             uint64_t tx_num = m_sealing.block.getTransactionSize();
             /// obtain the transaction num should be packed
-            uint64_t max_blockCanSeal = calculateMaxPackTxNum();
+            calculateMaxPackTxNum(m_maxBlockCanSeal);
 
             /// add this to in case of unlimited-loop
             if (m_txPool->status().current == 0)
@@ -117,7 +118,7 @@ void Sealer::doWork(bool wait)
                 m_syncTxPool = true;
             }
             /// load transaction from transaction queue
-            if (m_syncTxPool == true && !reachBlockIntervalTime())
+            if (max_blockCanSeal > tx_num && m_syncTxPool == true && !reachBlockIntervalTime())
                 loadTransactions(max_blockCanSeal - tx_num);
             /// check enough or reach block interval
             if (!checkTxsEnough(max_blockCanSeal))

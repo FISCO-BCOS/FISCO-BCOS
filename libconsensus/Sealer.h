@@ -114,7 +114,11 @@ protected:
     virtual bool shouldWait(bool const& wait) const;
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
-    virtual uint64_t calculateMaxPackTxNum() { return m_consensusEngine->maxBlockTransactions(); }
+    virtual void calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
+    {
+        maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
+    }
+
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
@@ -195,6 +199,8 @@ protected:
     /// handler
     Handler<> m_tqReady;
     Handler<int64_t> m_blockSubmitted;
+
+    uint64_t m_maxBlockCanSeal;
 };
 }  // namespace consensus
 }  // namespace dev

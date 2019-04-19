@@ -97,5 +97,17 @@ void PBFTSealer::stop()
     Sealer::stop();
     m_pbftEngine->stop();
 }
+
+/// decrease maxBlockCanSeal to half when timeout
+void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
+{
+    if (m_pbftEngine->isTimeout() && maxBlockCanSeal >= 2)
+    {
+        PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
+                              << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal)
+                              << LOG_KV("halfed_maxBlockCanSeal", maxBlockCanSeal / 2);
+        maxBlockCanSeal /= 2;
+    }
+}
 }  // namespace consensus
 }  // namespace dev

@@ -67,6 +67,8 @@ public:
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
+    void calculateMaxPackTxNum(uint64_t& maxBlockCanSeal) override;
+
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
