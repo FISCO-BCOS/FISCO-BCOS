@@ -28,10 +28,10 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
-#include <boost/algorithm/string.hpp>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
+#include <boost/algorithm/string.hpp>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -193,32 +193,34 @@ void MemoryTableFactory2::setBlockNum(int64_t blockNum)
 
 h256 MemoryTableFactory2::hash()
 {
-	std::vector<std::pair<std::string, Table::Ptr> > tables;
-	for(auto it: m_name2Table) {
-		tables.push_back(std::make_pair(it.first, it.second));
-	}
+    std::vector<std::pair<std::string, Table::Ptr> > tables;
+    for (auto it : m_name2Table)
+    {
+        tables.push_back(std::make_pair(it.first, it.second));
+    }
 
-	tbb::parallel_sort(tables.begin(), tables.end(), [](const std::pair<std::string, Table::Ptr> &lhs, const std::pair<std::string, Table::Ptr> &rhs) {
-		return lhs.first < rhs.first;
-	});
+    tbb::parallel_sort(tables.begin(), tables.end(),
+        [](const std::pair<std::string, Table::Ptr>& lhs,
+            const std::pair<std::string, Table::Ptr>& rhs) { return lhs.first < rhs.first; });
 
     bytes data;
     data.resize(tables.size() * 32);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
-		for (auto it = range.begin(); it != range.end(); ++it)
-		{
-			auto table = tables[it];
-			h256 hash = table.second->hash();
-			if (hash == h256())
-			{
-				continue;
-			}
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                auto table = tables[it];
+                h256 hash = table.second->hash();
+                if (hash == h256())
+                {
+                    continue;
+                }
 
-			bytes tableHash = hash.asBytes();
+                bytes tableHash = hash.asBytes();
 
-			memcpy(&data[it * 32], &tableHash[0], tableHash.size());
-		}
-    });
+                memcpy(&data[it * 32], &tableHash[0], tableHash.size());
+            }
+        });
 
     if (data.empty())
     {

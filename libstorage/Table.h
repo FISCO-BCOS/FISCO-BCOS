@@ -107,15 +107,16 @@ private:
     bool m_deleted = false;
 };
 
-class EntryLess {
+class EntryLess
+{
 public:
-	EntryLess(TableInfo::Ptr tableInfo): m_tableInfo(tableInfo) {};
-	virtual ~EntryLess() {};
+    EntryLess(TableInfo::Ptr tableInfo) : m_tableInfo(tableInfo){};
+    virtual ~EntryLess(){};
 
-	virtual bool operator()(const Entry::Ptr &lhs, const Entry::Ptr &rhs) const;
+    virtual bool operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const;
 
 private:
-	TableInfo::Ptr m_tableInfo;
+    TableInfo::Ptr m_tableInfo;
 };
 
 

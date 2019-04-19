@@ -41,7 +41,7 @@ public:
     virtual ~Caches(){};
 
     virtual std::string key();
-    virtual void setKey(const std::string &key);
+    virtual void setKey(const std::string& key);
     virtual Entries::Ptr entries();
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
@@ -50,7 +50,7 @@ public:
 private:
     std::string m_key;
     Entries::Ptr m_entries;
-    //int64_t m_num;
+    // int64_t m_num;
     tbb::atomic<int64_t> m_num;
 };
 
@@ -64,7 +64,8 @@ public:
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
     virtual Caches::Ptr findCache(const std::string& key);
-    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool> addCache(const std::string& key, Caches::Ptr cache);
+    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
+    addCache(const std::string& key, Caches::Ptr cache);
     virtual void removeCache(const std::string& key);
 
     virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
@@ -135,7 +136,7 @@ private:
 
     dev::ThreadPool::Ptr m_taskThreadPool;
 
-    //stat
+    // stat
     tbb::atomic<uint64_t> m_hitTimes = 0;
     tbb::atomic<uint64_t> m_queryTimes = 0;
 };

@@ -186,18 +186,18 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
             }
 
             for (size_t i = 0; i < it->newEntries->size(); ++i)
-			{
-				auto entry = it->newEntries->get(i);
+            {
+                auto entry = it->newEntries->get(i);
 
-				Json::Value value;
+                Json::Value value;
 
-				for (auto fieldIt : *entry->fields())
-				{
-					value[fieldIt.first] = fieldIt.second;
-				}
+                for (auto fieldIt : *entry->fields())
+                {
+                    value[fieldIt.first] = fieldIt.second;
+                }
 
-				tableData["entries"].append(value);
-			}
+                tableData["entries"].append(value);
+            }
 
             if (!tableData["entries"].empty())
             {

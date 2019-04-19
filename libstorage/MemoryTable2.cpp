@@ -27,9 +27,9 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
+#include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
-#include <tbb/parallel_sort.h>
 #include <algorithm>
 #include <thread>
 #include <vector>
@@ -239,18 +239,22 @@ dev::h256 MemoryTable2::hash()
     tempEntries.resize(size);
 
     tbb::atomic<size_t> j = 0;
-    tbb::parallel_for(m_dirty.range(), [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type & range) {
-		for(auto it=range.begin(); it != range.end(); ++it) {
-			tempEntries[j.fetch_and_increment()] = (*it).second;
-		}
-	});
+    tbb::parallel_for(m_dirty.range(),
+        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                tempEntries[j.fetch_and_increment()] = (*it).second;
+            }
+        });
 
     // parallel import unless > 10 * 1000 items
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000), [&](const tbb::blocked_range<size_t>& range) {
-    	for(size_t i=range.begin(); i<range.end(); ++i) {
-    		tempEntries[j.fetch_and_increment()] = m_newEntries->get(i);
-    	}
-    });
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                tempEntries[j.fetch_and_increment()] = m_newEntries->get(i);
+            }
+        });
 
     tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
 
@@ -284,28 +288,33 @@ dev::h256 MemoryTable2::hash()
 
 bool MemoryTable2::dump(dev::storage::TableData::Ptr data)
 {
-	data->info = m_tableInfo;
-	data->dirtyEntries = std::make_shared<Entries>();
+    data->info = m_tableInfo;
+    data->dirtyEntries = std::make_shared<Entries>();
 
-	tbb::parallel_for(m_dirty.range(), [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type &range) {
-		for(auto it = range.begin(); it != range.end(); ++it) {
-			if (!it->second->deleted()) {
-				data->dirtyEntries->addEntry(it->second);
-			}
-		}
-	});
+    tbb::parallel_for(m_dirty.range(),
+        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                if (!it->second->deleted())
+                {
+                    data->dirtyEntries->addEntry(it->second);
+                }
+            }
+        });
 
-	data->newEntries = std::make_shared<Entries>();
-	tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000), [&](const tbb::blocked_range<size_t>& range) {
-		for(auto i = range.begin(); i<range.end(); ++i) {
-			if (!m_newEntries->get(i)->deleted())
-			{
-				data->newEntries->addEntry(m_newEntries->get(i));
-			}
-		}
-	});
+    data->newEntries = std::make_shared<Entries>();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                if (!m_newEntries->get(i)->deleted())
+                {
+                    data->newEntries->addEntry(m_newEntries->get(i));
+                }
+            }
+        });
 
-	return true;
+    return true;
 }
 
 void MemoryTable2::rollback(const Change& _change)
@@ -333,7 +342,7 @@ void MemoryTable2::rollback(const Change& _change)
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
 
         auto entry = m_newEntries->get(_change.value[0].index);
-        //entry->setStatus(1);
+        // entry->setStatus(1);
         entry->setDeleted(true);
         // m_newEntries->removeEntry(_change.value[0].newIndex);
         break;
