@@ -109,8 +109,6 @@ BOOST_AUTO_TEST_CASE(heartBeat)
     session->heartBeat();
 }
 
-BOOST_AUTO_TEST_CASE(getter) {}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

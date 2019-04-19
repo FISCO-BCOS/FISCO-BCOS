@@ -26,6 +26,8 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
+#define ERROR_SOCKET_PORT 8889
+
 namespace dev
 {
 namespace network
@@ -56,28 +58,36 @@ public:
         m_listenPort = listenPort;
     }
 
-    void run() override { std::this_thread::sleep_for(std::chrono::seconds(5)); }
-
-    void stop() override {}
-
-    void reset() override {}
-
     void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
         boost::system::error_code = boost::system::error_code()) override
     {
-        // m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
-        m_acceptorInfo = std::make_pair(socket, handler);
+        if (m_allowAccept)
+        {
+            m_acceptorInfo = std::make_pair(socket, handler);
+            m_allowAccept = false;
+        }
+        m_ioService->post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(200)); });
     }
-
-    void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint peer_endpoint,
+    void callAcceptHandler(boost::system::error_code e = boost::system::error_code())
+    {
+        m_allowAccept = true;
+        m_acceptorInfo.second(e);
+    }
+    void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint endpoint,
         Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();
-        fakeSocket->setRemoteEndpoint(peer_endpoint);
-        boost::system::error_code ec;
-        handler(ec);
-        handler(boost::asio::error::operation_aborted);
+        fakeSocket->setRemoteEndpoint(endpoint);
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
     void asyncWrite(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
@@ -110,10 +120,17 @@ public:
     void asyncHandshake(std::shared_ptr<SocketFace> socket,
         ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
-        (void)socket;
         (void)type;
-        boost::system::error_code ec;
-        handler(ec);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
     void setVerifyCallback(
@@ -136,10 +153,13 @@ public:
         callback(true, verifyContext);
     }
 
-    // std::shared_ptr<SocketFace> m_socket;
-    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
     std::string m_listenHost;
     uint16_t m_listenPort;
+
+    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
+
+private:
+    bool m_allowAccept = true;
 };
 }  // namespace network
 }  // namespace dev

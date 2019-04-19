@@ -97,7 +97,7 @@ public:
     virtual void stop()
     {
         // shutdown acceptor
-        if (m_acceptor->is_open())
+        if (m_acceptor && m_acceptor->is_open())
         {
             m_acceptor->cancel();
             m_acceptor->close();

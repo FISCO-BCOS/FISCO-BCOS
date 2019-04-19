@@ -64,7 +64,7 @@ struct HostFixture
         m_host->setMessageFactory(m_messageFactory);
 
         m_host->setHostPort(m_hostIP, m_port);
-        m_threadPool = std::make_shared<ThreadPool>("P2PTest", 2);
+        m_threadPool = std::make_shared<ThreadPool>("P2PTest", 1);
         m_host->setThreadPool(m_threadPool);
         m_host->setCRL(m_certBlacklist);
         m_host->setConnectionHandler(
@@ -75,6 +75,7 @@ struct HostFixture
                     LOG(ERROR) << e.what();
                     return;
                 }
+                LOG(INFO) << "start session " << p->socket()->nodeIPEndpoint().name();
                 m_sessions.push_back(p);
                 p->start();
             });
@@ -133,7 +134,6 @@ BOOST_AUTO_TEST_CASE(Host_run)
     // start() will create a new thread and call host->startAccept, so wait
     this_thread::sleep_for(chrono::milliseconds(200));
     BOOST_CHECK(true == m_host->haveNetwork());
-
     auto fakeAsioInterface = dynamic_pointer_cast<FakeASIOInterface>(m_asioInterface);
     while (!fakeAsioInterface->m_acceptorInfo.first)
     {
@@ -141,24 +141,28 @@ BOOST_AUTO_TEST_CASE(Host_run)
     auto socket = fakeAsioInterface->m_acceptorInfo.first;
     auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
     socket->setNodeIPEndpoint(nodeIP);
-    auto handler = fakeAsioInterface->m_acceptorInfo.second;
+    BOOST_CHECK(true == m_sessions.empty());
     boost::system::error_code ec;
-    handler(ec);
+    // accept successfully
+    fakeAsioInterface->callAcceptHandler(ec);
+    BOOST_CHECK(1u == m_sessions.size());
+    // accept failed
+    fakeAsioInterface->callAcceptHandler(boost::asio::error::operation_aborted);
+    BOOST_CHECK(1u == m_sessions.size());
     auto fp = [](NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>) {};
-    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8889);
+    nodeIP =
+        NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, ERROR_SOCKET_PORT);
     m_host->asyncConnect(nodeIP, fp);
-    if (!m_sessions.empty())
-    {
-        auto s = std::dynamic_pointer_cast<Session>(m_sessions[0]);
-
-        // BOOST_CHECK(true == s->actived());
-        // BOOST_CHECK(true == s->isConnected());
-        // BOOST_CHECK(m_host == s->host());
-        // BOOST_CHECK(m_messageFactory == s->messageFactory());
-    }
+    BOOST_CHECK(1u == m_sessions.size());
+    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
+    m_host->asyncConnect(nodeIP, fp);
+    BOOST_CHECK(2u == m_sessions.size());
+    // Session unit test
+    auto s = std::dynamic_pointer_cast<Session>(m_sessions[0]);
+    BOOST_CHECK(m_host == s->host().lock());
+    BOOST_CHECK(m_messageFactory == s->messageFactory());
+    BOOST_CHECK(true == s->actived());
     m_host->stop();
-    handler = fakeAsioInterface->m_acceptorInfo.second;
-    handler(ec);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
