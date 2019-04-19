@@ -96,7 +96,10 @@ public:
         }
         return copydSize;
     }
-    bi::tcp::endpoint remoteEndpoint() override { return m_nodeIPEndpoint; }
+    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override
+    {
+        return m_nodeIPEndpoint;
+    }
     void setRemoteEndpoint(const bi::tcp::endpoint& end)
     {
         m_nodeIPEndpoint = NodeIPEndpoint(end.address(), 0, end.port());
