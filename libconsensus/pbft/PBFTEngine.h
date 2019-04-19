@@ -234,6 +234,7 @@ protected:
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
     void checkAndChangeView();
+    bool timeout() { return m_timeManager.m_changeCylce > 0; }
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
@@ -537,7 +538,6 @@ protected:
         m_viewMap[idx] = view;
     }
 
-    bool timeout() { return m_timeManager.m_changeCylce > 0; }
 
 protected:
     VIEWTYPE m_view = 0;
