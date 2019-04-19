@@ -180,6 +180,9 @@ public:
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
 
+    bool timeout() { return m_timeManager.m_changeCylce > 0; }
+    VIEWTYPE const& view() const { return m_view; }
+
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
@@ -234,7 +237,6 @@ protected:
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
     void checkAndChangeView();
-    bool timeout() { return m_timeManager.m_changeCylce > 0; }
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
