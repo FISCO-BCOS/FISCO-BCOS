@@ -55,6 +55,7 @@ public:
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+        m_lastBlockNumber = m_blockChain->number();
     }
 
     void start() override;

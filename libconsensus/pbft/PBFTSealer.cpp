@@ -116,10 +116,6 @@ void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
              m_pbftEngine->view() == 0 &&)
     {
         m_lastView = 0;
-        if (m_timeoutCount > 0)
-        {
-            m_timeoutCount--;
-        }
         if ((m_timeoutCount == 0) && maxBlockCanSeal < m_pbftEngine->maxBlockTransactions())
         {
             maxBlockCanSeal += (0.5 * maxBlockCanSeal);
@@ -129,6 +125,10 @@ void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
             }
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxBlockCanSeal")
                                   << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal);
+        }
+        if (m_timeoutCount > 0)
+        {
+            m_timeoutCount--;
         }
     }
     m_lastBlockNumber = m_blockChain->number();
