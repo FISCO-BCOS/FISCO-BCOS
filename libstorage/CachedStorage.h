@@ -134,6 +134,10 @@ private:
     std::mutex m_mutex;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
+
+    //stat
+    tbb::atomic<uint64_t> m_hitTimes = 0;
+    tbb::atomic<uint64_t> m_queryTimes = 0;
 };
 
 }  // namespace storage

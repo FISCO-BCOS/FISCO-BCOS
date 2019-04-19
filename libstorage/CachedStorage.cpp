@@ -153,20 +153,20 @@ Caches::Ptr CachedStorage::selectNoCondition(
 {
     (void)condition;
 
-    {
-        auto tableIt = m_caches.find(tableInfo->name);
-        if (tableIt != m_caches.end())
-        {
-            auto tableCaches = tableIt->second;
-            auto caches = tableCaches->findCache(key);
-            if (caches)
-            {
-                touchMRU(tableInfo->name, key);
+    ++m_queryTimes;
+	auto tableIt = m_caches.find(tableInfo->name);
+	if (tableIt != m_caches.end())
+	{
+		auto tableCaches = tableIt->second;
+		auto caches = tableCaches->findCache(key);
+		if (caches)
+		{
+			++m_hitTimes;
+			touchMRU(tableInfo->name, key);
 
-                return caches;
-            }
-        }
-    }
+			return caches;
+		}
+	}
 
     if (m_backend)
     {
@@ -340,6 +340,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     m_commitNum.store(num);
     m_taskThreadPool->enqueue([backend, task, self]() {
         STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to persist storage";
+
         backend->commit(task->hash, task->num, task->datas);
 
         auto storage = self.lock();
@@ -349,6 +350,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             STORAGE_LOG(INFO) << "Commit block: " << task->num
                               << " to persist storage finished, current syncd block: "
                               << storage->syncNum();
+            STORAGE_LOG(INFO) << "Total query: " << m_queryTimes << " cache hit: " << m_hitTimes << " hit rate: " << std::setprecision(2) << (double)m_hitTimes / m_queryTimes;
         }
     });
 
