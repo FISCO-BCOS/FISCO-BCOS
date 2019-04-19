@@ -35,7 +35,6 @@
 #include "P2PInitializer.h"
 #include "RPCInitializer.h"
 #include "SecureInitializer.h"
-#include <tbb/tbb.h>
 
 namespace dev
 {
