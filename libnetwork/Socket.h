@@ -75,9 +75,10 @@ public:
         }
     }
 
-    virtual bi::tcp::endpoint remoteEndpoint() override
+    virtual bi::tcp::endpoint remoteEndpoint(
+        boost::system::error_code ec = boost::system::error_code()) override
     {
-        return m_wsSocket->lowest_layer().remote_endpoint();
+        return m_wsSocket->lowest_layer().remote_endpoint(ec);
     }
 
     virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
