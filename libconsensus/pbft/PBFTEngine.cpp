@@ -646,6 +646,10 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
+    {
+        WriteGuard l(x_sealingNumber);
+        m_sealingNumber = sealing.block.getTransactionSize();
+    }
 
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)

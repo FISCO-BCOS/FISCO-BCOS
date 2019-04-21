@@ -181,7 +181,13 @@ public:
     }
 
     bool timeout() { return m_timeManager.m_changeCycle > 0; }
+    uint64_t const& changeCycle() const { return m_timeManager.m_changeCycle; }
     VIEWTYPE const& view() const { return m_view; }
+    uint64_t const& sealingTxNumber() const
+    {
+        ReadGuard l(x_sealingNumber);
+        return m_sealingNumber;
+    }
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -579,6 +585,9 @@ protected:
     /// map between nodeIdx to view
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
+
+    uint64_t m_sealingNumber = 0;
+    mutable SharedMutex x_sealingNumber;
 };
 }  // namespace consensus
 }  // namespace dev
