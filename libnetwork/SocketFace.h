@@ -36,7 +36,8 @@ public:
     virtual ~SocketFace(){};
     virtual bool isConnected() const = 0;
     virtual void close() = 0;
-    virtual bi::tcp::endpoint remoteEndpoint() = 0;
+    virtual bi::tcp::endpoint remoteEndpoint(
+        boost::system::error_code ec = boost::system::error_code()) = 0;
 
     virtual bi::tcp::socket& ref() = 0;
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
