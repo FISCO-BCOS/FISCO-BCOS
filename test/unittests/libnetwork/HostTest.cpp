@@ -66,6 +66,7 @@ struct HostFixture
         m_host->setHostPort(m_hostIP, m_port);
         m_threadPool = std::make_shared<ThreadPool>("P2PTest", 1);
         m_host->setThreadPool(m_threadPool);
+
         m_host->setCRL(m_certBlacklist);
         m_host->setConnectionHandler(
             [&](dev::network::NetworkException e, dev::network::NodeInfo const&,
@@ -75,7 +76,8 @@ struct HostFixture
                     LOG(ERROR) << e.what();
                     return;
                 }
-                LOG(INFO) << "start session " << p->socket()->nodeIPEndpoint().name();
+                LOG(INFO) << "start new session " << p->socket()->nodeIPEndpoint().name()
+                          << ",error:" << e.what();
                 m_sessions.push_back(p);
                 p->start();
             });
@@ -132,7 +134,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
 {
     m_host->start();
     // start() will create a new thread and call host->startAccept, so wait
-    this_thread::sleep_for(chrono::milliseconds(200));
+    this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(true == m_host->haveNetwork());
     auto fakeAsioInterface = dynamic_pointer_cast<FakeASIOInterface>(m_asioInterface);
     while (!fakeAsioInterface->m_acceptorInfo.first)
@@ -145,23 +147,64 @@ BOOST_AUTO_TEST_CASE(Host_run)
     boost::system::error_code ec;
     // accept successfully
     fakeAsioInterface->callAcceptHandler(ec);
+    this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(1u == m_sessions.size());
+
     // accept failed
     fakeAsioInterface->callAcceptHandler(boost::asio::error::operation_aborted);
+    // accept failed, cert is empty
+    socket = fakeAsioInterface->m_acceptorInfo.first;
+    nodeIP = NodeIPEndpoint(
+        boost::asio::ip::address::from_string("127.0.0.1"), 0, EMPTY_CERT_SOCKET_PORT);
+    socket->setNodeIPEndpoint(nodeIP);
+    fakeAsioInterface->callAcceptHandler(ec);
     BOOST_CHECK(1u == m_sessions.size());
     auto fp = [](NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>) {};
+    m_certBlacklist.push_back(
+        string("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe6"
+               "37191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
+    m_host->setCRL(m_certBlacklist);
+    // connect failed, nodeID is in blackList
+    m_host->asyncConnect(nodeIP, fp);
+    this_thread::sleep_for(chrono::milliseconds(50));
+    BOOST_CHECK(1u == m_sessions.size());
+    // clear blacklist
+    m_certBlacklist.clear();
+    m_host->setCRL(m_certBlacklist);
+    // connect failed, cert is empty
+    m_host->asyncConnect(nodeIP, fp);
+    this_thread::sleep_for(chrono::milliseconds(50));
+    BOOST_CHECK(1u == m_sessions.size());
+    // connect failed, operation_aborted
     nodeIP =
         NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, ERROR_SOCKET_PORT);
     m_host->asyncConnect(nodeIP, fp);
     BOOST_CHECK(1u == m_sessions.size());
-    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
+    // connect success
+    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8890);
     m_host->asyncConnect(nodeIP, fp);
+    this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(2u == m_sessions.size());
+    // // dup socket
+    // m_host->asyncConnect(nodeIP, fp);
+    // this_thread::sleep_for(chrono::milliseconds(50));
+    // BOOST_CHECK(2u == m_sessions.size());
     // Session unit test
     auto s = std::dynamic_pointer_cast<Session>(m_sessions[0]);
+    s->nodeIPEndpoint();
     BOOST_CHECK(m_host == s->host().lock());
     BOOST_CHECK(m_messageFactory == s->messageFactory());
+    BOOST_CHECK(false == s->actived());
+    auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(s->socket());
+    fakeSocket->open();
     BOOST_CHECK(true == s->actived());
+    BOOST_CHECK(2u == m_sessions.size());
+    auto messageHandler = std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>(
+        [](NetworkException, SessionFace::Ptr, Message::Ptr m) { LOG(INFO) << m->length(); });
+    s->setMessageHandler(messageHandler);
+    // empty callback
+    BOOST_CHECK(nullptr == s->getCallbackBySeq(0u));
+
     m_host->stop();
 }
 

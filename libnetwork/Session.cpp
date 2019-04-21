@@ -37,8 +37,9 @@
 using namespace dev;
 using namespace dev::network;
 
-Session::Session()
+Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
+    m_recvBuffer.resize(bufferSize);
     m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
 }
 
@@ -399,8 +400,8 @@ void Session::doRead()
                     s->drop(TCPError);
                     return;
                 }
-                s->m_data.insert(
-                    s->m_data.end(), s->m_recvBuffer, s->m_recvBuffer + bytesTransferred);
+                s->m_data.insert(s->m_data.end(), s->m_recvBuffer.begin(),
+                    s->m_recvBuffer.begin() + bytesTransferred);
 
                 while (true)
                 {
@@ -434,7 +435,7 @@ void Session::doRead()
         if (m_socket->isConnected())
         {
             server->asioInterface()->asyncReadSome(
-                m_socket, boost::asio::buffer(m_recvBuffer, BUFFER_LENGTH), asyncRead);
+                m_socket, boost::asio::buffer(m_recvBuffer, m_recvBuffer.size()), asyncRead);
         }
         else
         {

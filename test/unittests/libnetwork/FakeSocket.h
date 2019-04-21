@@ -88,6 +88,10 @@ public:
     size_t doRead(boost::asio::mutable_buffers_1 buffers)
     {
         auto p = m_queue.front();
+        if (p->size() == 0)
+        {
+            return 0;
+        }
         auto copydSize = boost::asio::buffer_copy(buffers, p->data(), buffers.size());
         p->consume(copydSize);
         if (p->size() == 0)

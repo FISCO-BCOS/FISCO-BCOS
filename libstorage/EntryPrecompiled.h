@@ -33,7 +33,7 @@ namespace blockverifier
 {
 #if 0
 contract Entry {
-    function getInt(string) public constant returns(int);
+    function getInt(string) public constant returns(int, bool);
     function getBytes32(string) public constant returns(bytes32);
     function getBytes64(string) public constant returns(byte[64]);
     function getAddress(string) public constant returns(address);

@@ -27,6 +27,7 @@
 #include <boost/asio/ssl.hpp>
 
 #define ERROR_SOCKET_PORT 8889
+#define EMPTY_CERT_SOCKET_PORT 8887
 
 namespace dev
 {
@@ -145,11 +146,15 @@ public:
         auto x509 = SSL_CTX_get0_certificate(s);
         auto x509_store_ctx = X509_STORE_CTX_new();
         X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
-        X509_STORE_CTX_set_cert(x509_store_ctx, x509);
+        // X509_STORE_CTX_set_cert(x509_store_ctx, x509);
         // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
-        x509_store_ctx->current_cert = x509;
-        // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
+        {
+            x509_store_ctx->current_cert = x509;
+        }
         boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
+
         callback(true, verifyContext);
     }
 
