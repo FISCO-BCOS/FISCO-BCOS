@@ -42,6 +42,8 @@ struct ParallelConfig
     u256 criticalSize;
 };
 
+const std::string PARA_CONFIG_TABLE_PREFIX = "_contract_parafunc_";
+
 class ParallelConfigPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
