@@ -87,7 +87,15 @@ public:
 
     size_t doRead(boost::asio::mutable_buffers_1 buffers)
     {
+        if (!m_alive || m_queue.size() == 0)
+        {
+            return 0;
+        }
         auto p = m_queue.front();
+        if (p->size() == 0)
+        {
+            return 0;
+        }
         auto copydSize = boost::asio::buffer_copy(buffers, p->data(), buffers.size());
         p->consume(copydSize);
         if (p->size() == 0)
@@ -120,7 +128,7 @@ public:
 
 
 protected:
-    bool m_alive = false;
+    bool m_alive = true;
     NodeIPEndpoint m_nodeIPEndpoint;
     std::queue<std::shared_ptr<boost::asio::streambuf>> m_queue;
     std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>> m_wsSocket;

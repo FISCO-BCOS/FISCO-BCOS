@@ -56,11 +56,8 @@ public:
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
 
-    virtual bool isConnected() const = 0;
-
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) = 0;
-    // virtual Message::Ptr sendMessage(Message::Ptr message, Options options = Options()) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
