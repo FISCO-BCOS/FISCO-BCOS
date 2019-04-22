@@ -116,28 +116,20 @@ void Ledger::initConfig(std::string const& configPath)
 
 void Ledger::initIniConfig(std::string const& iniConfigFileName)
 {
-    try
-    {
-        Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
-                         << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
-                         << LOG_KV("configFile", iniConfigFileName);
-        ptree pt;
-        /// read the configuration file for a specified group
-        read_ini(iniConfigFileName, pt);
-        /// init params related to txpool
-        initTxPoolConfig(pt);
-        /// init params related to sync
-        initSyncConfig(pt);
-        initTxExecuteConfig(pt);
+    Ledger_LOG(INFO) << LOG_BADGE("initIniConfig")
+                     << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
+                     << LOG_KV("configFile", iniConfigFileName);
+    ptree pt;
+    /// read the configuration file for a specified group
+    read_ini(iniConfigFileName, pt);
+    /// init params related to txpool
+    initTxPoolConfig(pt);
+    /// init params related to sync
+    initSyncConfig(pt);
+    initTxExecuteConfig(pt);
 
-        /// init params releated to consensus(ttl)
-        initConsensusIniConfig(pt);
-    }
-    catch (std::exception& e)
-    {
-        Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
-                          << LOG_KV("EINFO", boost::diagnostic_information(e));
-    }
+    /// init params releated to consensus(ttl)
+    initConsensusIniConfig(pt);
 }
 
 void Ledger::initTxExecuteConfig(ptree const& pt)

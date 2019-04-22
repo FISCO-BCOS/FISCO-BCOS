@@ -62,7 +62,10 @@ public:
     {
         assert(m_txPool && m_blockSync && m_blockChain);
         if (m_txPool->status().current > 0)
+        {
             m_syncTxPool = true;
+        }
+
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
         m_blockSubmitted = m_blockChain->onReady([=](int64_t) { this->onBlockChanged(); });
@@ -114,11 +117,6 @@ protected:
     virtual bool shouldWait(bool const& wait) const;
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
-    virtual void calculateMaxPackTxNum(uint64_t& maxBlockCanSeal)
-    {
-        maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
-    }
-
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
@@ -205,7 +203,8 @@ protected:
     Handler<> m_tqReady;
     Handler<int64_t> m_blockSubmitted;
 
-    uint64_t m_maxBlockCanSeal;
+    /// the maximum transaction number that can be sealed in a block
+    uint64_t m_maxBlockCanSeal = 1000;
     mutable SharedMutex x_maxBlockCanSeal;
 };
 }  // namespace consensus

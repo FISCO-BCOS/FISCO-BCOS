@@ -58,7 +58,8 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     g_BCOSConfig.diskEncryption.enable = _pt.get<bool>(sectionName + ".enable", false);
     g_BCOSConfig.diskEncryption.keyCenterIP =
         _pt.get<std::string>(sectionName + ".key_manager_ip", "");
-    g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>(sectionName + ".key_manager_port", 0);
+    g_BCOSConfig.diskEncryption.keyCenterPort =
+        _pt.get<int>(sectionName + ".key_manager_port", 20000);
     if (!isValidPort(g_BCOSConfig.diskEncryption.keyCenterPort))
     {
         BOOST_THROW_EXCEPTION(

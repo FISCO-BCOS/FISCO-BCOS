@@ -45,8 +45,8 @@ void Sealer::start()
     }
     SEAL_LOG(INFO) << "[#Start sealer module]";
     resetSealingBlock();
-    m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+    m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
     m_syncBlock = false;
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();

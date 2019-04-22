@@ -103,6 +103,7 @@ protected:
 
 private:
     void onTimeout(uint64_t const& sealingTxNumber);
+    void increaseMaxTxsCanSeal();
     void onCommitBlock(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
     /// reset block when view changes

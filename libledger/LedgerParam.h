@@ -84,9 +84,9 @@ struct StorageParam
     // for amop storage
     std::string topic;
     size_t timeout;
-    size_t maxRetry;
-    size_t maxStoreKey;
-    size_t maxForwardBlock;
+    int maxRetry;
+    int maxStoreKey;
+    int maxForwardBlock;
 };
 struct StateParam
 {
