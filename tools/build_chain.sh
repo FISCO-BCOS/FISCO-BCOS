@@ -535,6 +535,8 @@ function generate_group_ini()
     ;ttl=2
     ;min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
+    ;enable_dynamic_block_size=true
+
 ;txpool limit
 [tx_pool]
     limit=150000

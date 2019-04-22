@@ -55,9 +55,6 @@ public:
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
-        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1));
-        m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this, _1, _2, _3));
-        m_lastBlockNumber = m_blockChain->number();
     }
 
     void start() override;
@@ -68,6 +65,16 @@ public:
         /// only the leader need reset sealing in PBFT
         return Sealer::shouldResetSealing() &&
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
+    }
+
+    void setEnableDynamicBlockSize(bool enableDynamicBlockSize)
+    {
+        m_enableDynamicBlockSize = enableDynamicBlockSize;
+    }
+
+    void setBlockSizeIncreaseRatio(bool blockSizeIncreaseRatio)
+    {
+        m_blockSizeIncreaseRatio = blockSizeIncreaseRatio;
     }
 
 protected:
@@ -151,6 +158,8 @@ protected:
     /// timeout counter
     int64_t m_timeoutCount = 0;
     uint64_t m_lastBlockNumber = 0;
+    bool m_enableDynamicBlockSize = true;
+    float m_blockSizeIncreaseRatio = 0.5;
 };
 }  // namespace consensus
 }  // namespace dev

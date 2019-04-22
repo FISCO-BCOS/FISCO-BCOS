@@ -49,6 +49,10 @@ struct ConsensusParam
     /// unsigned intervalBlockTime;
     uint64_t minElectTime;
     uint64_t maxElectTime;
+    /// enable dynamic block size or not
+    bool enableDynamicBlockSize = true;
+    /// block size increase ratio
+    float blockSizeIncreaseRatio = 0.5;
 };
 
 struct AMDBParam

@@ -178,10 +178,20 @@ void Ledger::initConsensusIniConfig(ptree const& pt)
     /// the minimum block generation time(ms)
     m_param->mutableConsensusParam().minBlockGenTime =
         pt.get<unsigned>("consensus.min_block_generation_time", 500);
+    /// enable dynamic block size
+    m_param->mutableConsensusParam().enableDynamicBlockSize =
+        pt.get<bool>("consensus.enable_dynamic_block_size", true);
+    /// obtain block size increase ratio
+    m_param->mutableConsensusParam().blockSizeIncreaseRatio =
+        pt.get<float>("consensus.block_size_increase_ratio", 0.5);
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
                       << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
                       << LOG_KV("minBlockGenerationTime",
-                             m_param->mutableConsensusParam().minBlockGenTime);
+                             m_param->mutableConsensusParam().minBlockGenTime)
+                      << LOG_KV("enablDynamicBlockSize",
+                             m_param->mutableConsensusParam().enableDynamicBlockSize)
+                      << LOG_KV("blockSizeIncreaseRatio",
+                             m_param->mutableConsensusParam().blockSizeIncreaseRatio);
 }
 
 
@@ -411,6 +421,9 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<Sealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
         m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
         m_param->mutableConsensusParam().sealerList);
+
+    pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
+    pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
 
     /// set params for PBFTEngine
     std::shared_ptr<PBFTEngine> pbftEngine =

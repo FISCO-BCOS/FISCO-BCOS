@@ -582,12 +582,12 @@ protected:
     Mutex x_signalled;
 
 
-    std::function<void()> m_onViewChange;
-    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
-    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout;
+    std::function<void()> m_onViewChange = nullptr;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
+    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout = nullptr;
     std::function<void(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
-        m_onCommitBlock;
+        m_onCommitBlock = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

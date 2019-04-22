@@ -89,6 +89,12 @@ bool PBFTSealer::shouldSeal()
 }
 void PBFTSealer::start()
 {
+    if (m_enableDynamicBlockSize)
+    {
+        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1));
+        m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this, _1, _2, _3));
+        m_lastBlockNumber = m_blockChain->number();
+    }
     m_pbftEngine->start();
     Sealer::start();
 }
@@ -177,7 +183,15 @@ void PBFTSealer::onCommitBlock(
     /// last-timeout-tx-number
     {
         WriteGuard l(x_maxBlockCanSeal);
-        m_maxBlockCanSeal += (0.5 * m_maxBlockCanSeal);
+        /// in case of no increase when m_maxBlockCanSeal is smaller than 2
+        if (m_blockSizeIncreaseRatio * m_maxBlockCanSeal > 1)
+        {
+            m_maxBlockCanSeal += (m_blockSizeIncreaseRatio * m_maxBlockCanSeal);
+        }
+        else
+        {
+            m_maxBlockCanSeal += 1;
+        }
         if (m_lastTimeoutTx > 0 && m_maxBlockCanSeal > m_lastTimeoutTx)
         {
             m_maxBlockCanSeal = m_lastTimeoutTx;
