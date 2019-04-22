@@ -206,7 +206,7 @@ protected:
     Handler<int64_t> m_blockSubmitted;
 
     uint64_t m_maxBlockCanSeal;
-    Mutex x_maxBlockCanSeal;
+    mutable SharedMutex x_maxBlockCanSeal;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -45,7 +45,7 @@ void Sealer::start()
     }
     SEAL_LOG(INFO) << "[#Start sealer module]";
     resetSealingBlock();
-    maxBlockCanSeal() = m_consensusEngine->maxBlockTransactions();
+    m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_syncBlock = false;
     /// start  a thread to execute doWork()&&workLoop()
@@ -115,11 +115,12 @@ void Sealer::doWork(bool wait)
             {
                 m_syncTxPool = true;
             }
+            auto maxTxsPerBlock = maxBlockCanSeal();
             /// load transaction from transaction queue
-            if (maxBlockCanSeal() > tx_num && m_syncTxPool == true && !reachBlockIntervalTime())
-                loadTransactions(maxBlockCanSeal() - tx_num);
+            if (maxTxsPerBlock > tx_num && m_syncTxPool == true && !reachBlockIntervalTime())
+                loadTransactions(maxTxsPerBlock - tx_num);
             /// check enough or reach block interval
-            if (!checkTxsEnough(maxBlockCanSeal()))
+            if (!checkTxsEnough(maxTxsPerBlock))
             {
                 ///< 10 milliseconds to next loop
                 std::unique_lock<std::mutex> l(x_signalled);

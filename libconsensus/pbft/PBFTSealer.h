@@ -55,7 +55,7 @@ public:
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
-        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1, _2));
+        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1));
         m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this, _1, _2, _3));
         m_lastBlockNumber = m_blockChain->number();
     }
@@ -69,8 +69,6 @@ public:
         return Sealer::shouldResetSealing() &&
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
-
-    void calculateMaxPackTxNum(uint64_t& maxBlockCanSeal) override;
 
 protected:
     void handleBlock() override;
@@ -97,7 +95,7 @@ protected:
     void setBlock();
 
 private:
-    void onTimeout(unsigned const& changeCycle, uint64_t sealingTxNumber);
+    void onTimeout(uint64_t const& sealingTxNumber);
     void onCommitBlock(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
     /// reset block when view changes
@@ -150,7 +148,7 @@ protected:
     uint64_t m_lastTimeoutTx = 0;
     uint64_t m_maxNoTimeoutTx = 0;
     int64_t m_timeoutCount = 0;
-    int64_t m_lastBlockNumber = 0;
+    uint64_t m_lastBlockNumber = 0;
 };
 }  // namespace consensus
 }  // namespace dev

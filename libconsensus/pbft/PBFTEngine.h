@@ -159,13 +159,13 @@ public:
         m_onNotifyNextLeaderReset = _f;
     }
 
-    void onTimeout(
-        std::function<void(unsigned const& changeCycle, uint64_t const& sealingTxNumber)> const& _f)
+    void onTimeout(std::function<void(uint64_t const& sealingTxNumber)> const& _f)
     {
         m_onTimeout = _f;
     }
 
-    void onCommitBlock(std::function <void((uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)> const& _f)
+    void onCommitBlock(std::function<void(uint64_t const& blockNumber,
+            uint64_t const& sealingTxNumber, unsigned const& changeCycle)> const& _f)
     {
         m_onCommitBlock = _f;
     }
@@ -584,8 +584,10 @@ protected:
 
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
-    std::function<void(unsigned const& changeCycle)> m_onTimeout;
-    std::function <void(uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)> m_onCommitBlock;
+    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout;
+    std::function<void(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
+        m_onCommitBlock;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

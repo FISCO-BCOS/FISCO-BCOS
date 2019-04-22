@@ -991,11 +991,10 @@ void PBFTEngine::reportBlock(Block const& block)
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
-    m_onCommitBlock(
-        block.blockHeader().number(), block.getTransactionSize(), m_timeManager.m_changeCycle);
-
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
+        m_onCommitBlock(
+            block.blockHeader().number(), block.getTransactionSize(), m_timeManager.m_changeCycle);
         /// remove invalid future block
         m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
@@ -1325,7 +1324,7 @@ void PBFTEngine::checkTimeout()
                 m_fastViewChange = false;
                 m_timeManager.updateChangeCycle();
                 /// notify sealer that the consensus has been timeout
-                m_onTimeout(m_timeManager.m_changeCycle, sealingTxNumber());
+                m_onTimeout(sealingTxNumber());
             }
             Timer t;
             m_toView += 1;

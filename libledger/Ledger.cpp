@@ -345,7 +345,7 @@ bool Ledger::initBlockVerifier()
     {
         enableParallel = true;
     }
-
+    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());

@@ -99,7 +99,7 @@ void PBFTSealer::stop()
 }
 
 /// decrease maxBlockCanSeal to half when timeout
-void PBFTSealer::onTimeout(uint64_t const& changeCycle, uint64_t const& sealingTxNumber)
+void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
 {
     /// if is syncing, return directly
     if (m_blockSync->isSyncing())
@@ -136,7 +136,7 @@ void PBFTSealer::onTimeout(uint64_t const& changeCycle, uint64_t const& sealingT
 
 /// increase maxBlockCanSeal when commitBlock with no-timeout
 void PBFTSealer::onCommitBlock(
-    uint64_t const& blockNumber, uint64_t const& sealingTxNumber, uint64_t changeCycle)
+    uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)
 {
     /// if is syncing, return directly
     if (m_blockSync->isSyncing() || changeCycle > 0)
@@ -160,7 +160,7 @@ void PBFTSealer::onCommitBlock(
         return;
     }
 
-    if (m_lastTimeoutTx != 0 && maxBlockCanSeal >= lastTimeoutTx())
+    if (m_lastTimeoutTx != 0 && maxBlockCanSeal() >= m_lastTimeoutTx)
     {
         return;
     }
