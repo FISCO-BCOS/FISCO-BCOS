@@ -40,8 +40,6 @@ namespace storage
 class MemoryTable2 : public Table
 {
 public:
-    using CacheType = tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>;
-    using CacheIter = typename CacheType::iterator;
     using Ptr = std::shared_ptr<MemoryTable2>;
 
     MemoryTable2();
@@ -89,41 +87,17 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    bool dump(dev::storage::TableData::Ptr data) override
-    {
-        data->info = m_tableInfo;
-        data->entries = std::make_shared<Entries>();
-        for (auto it : m_dirty)
-        {
-            if (!it.second->deleted())
-            {
-                data->entries->addEntry(it.second);
-            }
-        }
-
-        for (size_t i = 0; i < m_newEntries->size(); ++i)
-        {
-            if (!m_newEntries->get(i)->deleted())
-            {
-                data->entries->addEntry(m_newEntries->get(i));
-            }
-        }
-
-        return true;
-    }
+    bool dump(dev::storage::TableData::Ptr data) override;
 
     void rollback(const Change& _change) override;
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    using EntriesType = ConcurrentEntries;
-    using EntriesPtr = EntriesType::Ptr;
-    EntriesPtr m_newEntries;
+    Entries::Ptr m_newEntries;
+    tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
 
-    CacheType m_dirty;
-    bool Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs);
-    std::vector<size_t> processEntries(EntriesType::Ptr entries, Condition::Ptr condition)
+    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());

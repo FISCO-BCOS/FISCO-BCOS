@@ -151,12 +151,15 @@ public:
         bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
         if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
         {
-#if OPENSSL_VERSION_NUMBER < 0x001100000
+#if OPENSSL_VERSION_NUMBER < 0x110000000
             x509_store_ctx->current_cert = x509;
 #else
             X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
 #endif
         }
+        // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+        // x509_store_ctx->current_cert = x509;
+        // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
         boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
 
         callback(true, verifyContext);
