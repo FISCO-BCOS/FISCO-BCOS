@@ -97,9 +97,9 @@ protected:
     void setBlock();
 
 private:
-    void onTimeout(uint64_t const& changeCycle, uint64_t sealingTxNumber);
+    void onTimeout(unsigned const& changeCycle, uint64_t sealingTxNumber);
     void onCommitBlock(
-        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, uint64_t const& changeCycle);
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
     /// reset block when view changes
     void resetBlockForViewChange()
     {
