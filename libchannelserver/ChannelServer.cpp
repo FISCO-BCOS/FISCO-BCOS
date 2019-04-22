@@ -34,7 +34,8 @@ using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
 {
-    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 8);
+    // ChannelReq process more request, should be larger
+    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 16);
     m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
     if (!m_listenHost.empty() && m_listenPort > 0)
     {

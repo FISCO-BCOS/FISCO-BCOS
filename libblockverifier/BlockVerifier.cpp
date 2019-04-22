@@ -226,13 +226,15 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 {
                     if (utcTime() >= parallelTimeOut)
                     {
-                        BLOCKVERIFIER_LOG(ERROR)
+                        BLOCKVERIFIER_LOG(WARNING)
                             << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("blockNumber", block.blockHeader().number());
 
+#if 0
                         BOOST_THROW_EXCEPTION(BlockExecutionFailed()
                                               << errinfo_comment("Para execute block timeout"));
+#endif
                     }
 
                     txDag->executeUnit();

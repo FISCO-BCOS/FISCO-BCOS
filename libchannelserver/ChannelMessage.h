@@ -30,6 +30,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
+#include <climits>
 #include <queue>
 #include <string>
 #include <thread>
@@ -71,10 +72,12 @@ public:
 
         _length = ntohl(*((uint32_t*)&buffer[0]));
 
+#if 0
         if (_length > MAX_LENGTH)
         {
             return -1;
         }
+#endif
 
         if (size < _length)
         {
@@ -94,7 +97,7 @@ protected:
     const static size_t MIN_HEADER_LENGTH = 4;
 
     const static size_t HEADER_LENGTH = 4 + 2 + 32 + 4;
-    const static size_t MAX_LENGTH = 10 * 1024 * 1024;  // max 10M
+    const static size_t MAX_LENGTH = ULONG_MAX;  // max 4G
 };
 
 class ChannelMessageFactory : public MessageFactory

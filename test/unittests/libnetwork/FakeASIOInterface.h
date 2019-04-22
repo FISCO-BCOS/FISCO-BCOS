@@ -130,7 +130,7 @@ public:
         X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
         X509_STORE_CTX_set_cert(x509_store_ctx, x509);
         // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
-        x509_store_ctx->current_cert = x509;
+        // x509_store_ctx->current_cert = x509;
         // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
         boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
         callback(true, verifyContext);
