@@ -441,7 +441,7 @@ generate_config_ini()
     ; nodes to connect
     $ip_list
     ;enable/disable network compress
-    enable_compress=${enable_compress}
+    ;enable_compress=false
 
 ;certificate rejected list		
 [certificate_blacklist]		
