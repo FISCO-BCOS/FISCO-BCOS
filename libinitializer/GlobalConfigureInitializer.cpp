@@ -27,20 +27,25 @@ using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
+DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
+
 void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
 {
-    /// init version
+    /// default version is RC1
     std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
-    if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
+    if (dev::stringCmpIgnoreCase(version, "2.0.0-rc1") == 0)
+    {
+        g_BCOSConfig.setVersion(RC1_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc1");
+    }
+    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
     {
         g_BCOSConfig.setVersion(RC2_VERSION);
         g_BCOSConfig.setSupportedVersion("2.0.0-rc2");
     }
-    /// default is RC1
     else
     {
-        g_BCOSConfig.setVersion(RC1_VERSION);
-        g_BCOSConfig.setSupportedVersion("2.0.0-rc1");
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion());
     }
 
 
