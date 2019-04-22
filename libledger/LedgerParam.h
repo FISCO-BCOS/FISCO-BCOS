@@ -35,20 +35,20 @@ namespace ledger
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
 struct TxPoolParam
 {
-    uint64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
+    int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
 };
 struct ConsensusParam
 {
     std::string consensusType;
     dev::h512s sealerList = dev::h512s();
     dev::h512s observerList = dev::h512s();
-    uint64_t maxTransactions;
-    uint8_t maxTTL;
+    int64_t maxTransactions;
+    int8_t maxTTL;
     /// the minimum block time
-    unsigned minBlockGenTime = 0;
+    signed minBlockGenTime = 0;
     /// unsigned intervalBlockTime;
-    uint64_t minElectTime;
-    uint64_t maxElectTime;
+    int64_t minElectTime;
+    int64_t maxElectTime;
     /// enable dynamic block size or not
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
@@ -66,7 +66,7 @@ struct AMDBParam
 struct SyncParam
 {
     /// TODO: syncParam related
-    unsigned idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam
@@ -94,7 +94,7 @@ struct StateParam
 };
 struct TxParam
 {
-    uint64_t txGasLimit;
+    int64_t txGasLimit;
     bool enableParallel;
 };
 class LedgerParam : public LedgerParamInterface

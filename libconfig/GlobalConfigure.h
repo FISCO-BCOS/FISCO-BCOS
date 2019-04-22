@@ -46,8 +46,8 @@ public:
 
     bool compressEnabled() const { return m_compress; }
 
-    void setChainId(uint64_t _chainId) { m_chainId = _chainId; }
-    uint64_t chainId() const { return m_chainId; }
+    void setChainId(int64_t _chainId) { m_chainId = _chainId; }
+    int64_t chainId() const { return m_chainId; }
 
     void setSupportedVersion(std::string const& _supportedVersion)
     {
@@ -76,7 +76,7 @@ public:
 private:
     VERSION m_version = RC2_VERSION;
     bool m_compress;
-    uint64_t m_chainId = 1;
+    int64_t m_chainId = 1;
     std::string m_supportedVersion;
 };
 

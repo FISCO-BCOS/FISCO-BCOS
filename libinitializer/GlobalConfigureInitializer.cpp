@@ -59,6 +59,13 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     g_BCOSConfig.diskEncryption.keyCenterIP =
         _pt.get<std::string>(sectionName + ".key_manager_ip", "");
     g_BCOSConfig.diskEncryption.keyCenterPort = _pt.get<int>(sectionName + ".key_manager_port", 0);
+    if (!isValidPort(g_BCOSConfig.diskEncryption.keyCenterPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidPort() << errinfo_comment("P2PInitializer:  initConfig for storage_security "
+                                             "failed! Invalid key_manange_port!"));
+    }
+
     g_BCOSConfig.diskEncryption.cipherDataKey =
         _pt.get<std::string>(sectionName + ".cipher_data_key", "");
 
@@ -67,8 +74,14 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     g_BCOSConfig.setCompress(enableCompress);
 
     /// init version
-    uint64_t chainId = _pt.get<uint64_t>("chain.id", 1);
+    int64_t chainId = _pt.get<int64_t>("chain.id", 1);
+    if (chainId < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive !"));
+    }
     g_BCOSConfig.setChainId(chainId);
+
 
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
                            << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)

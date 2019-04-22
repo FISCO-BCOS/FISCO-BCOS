@@ -160,7 +160,13 @@ void Ledger::initTxPoolConfig(ptree const& pt)
     try
     {
         m_param->mutableTxPoolParam().txPoolLimit =
-            pt.get<uint64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
+            pt.get<int64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
+        if (m_param->mutableTxPoolParam().txPoolLimit < 0)
+        {
+            BOOST_THROW_EXCEPTION(
+                ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
+        }
+
         Ledger_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
                           << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
     }
@@ -174,16 +180,34 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
-    m_param->mutableConsensusParam().maxTTL = pt.get<uint8_t>("consensus.ttl", MAXTTL);
+    m_param->mutableConsensusParam().maxTTL = pt.get<int8_t>("consensus.ttl", MAXTTL);
+    if (m_param->mutableConsensusParam().maxTTL < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set consensus.ttl to positive !"));
+    }
+
     /// the minimum block generation time(ms)
     m_param->mutableConsensusParam().minBlockGenTime =
-        pt.get<unsigned>("consensus.min_block_generation_time", 500);
+        pt.get<signed>("consensus.min_block_generation_time", 500);
+    if (m_param->mutableConsensusParam().minBlockGenTime < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.min_block_generation_time to positive !"));
+    }
+
     /// enable dynamic block size
     m_param->mutableConsensusParam().enableDynamicBlockSize =
         pt.get<bool>("consensus.enable_dynamic_block_size", true);
     /// obtain block size increase ratio
     m_param->mutableConsensusParam().blockSizeIncreaseRatio =
         pt.get<float>("consensus.block_size_increase_ratio", 0.5);
+
+    if (m_param->mutableConsensusParam().blockSizeIncreaseRatio < 0 ||
+        m_param->mutableConsensusParam().blockSizeIncreaseRatio > 2)
+    {
+        m_param->mutableConsensusParam().blockSizeIncreaseRatio = 0.5;
+    }
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusIniConfig")
                       << LOG_KV("maxTTL", std::to_string(m_param->mutableConsensusParam().maxTTL))
                       << LOG_KV("minBlockGenerationTime",
@@ -206,13 +230,28 @@ void Ledger::initConsensusConfig(ptree const& pt)
         pt.get<std::string>("consensus.consensus_type", "pbft");
 
     m_param->mutableConsensusParam().maxTransactions =
-        pt.get<uint64_t>("consensus.max_trans_num", 1000);
-
+        pt.get<int64_t>("consensus.max_trans_num", 1000);
+    if (m_param->mutableConsensusParam().maxTransactions < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.max_trans_num to positive !"));
+    }
 
     m_param->mutableConsensusParam().minElectTime =
-        pt.get<uint64_t>("consensus.min_elect_time", 1000);
+        pt.get<int64_t>("consensus.min_elect_time", 1000);
+    if (m_param->mutableConsensusParam().minElectTime < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.min_elect_time to positive !"));
+    }
+
     m_param->mutableConsensusParam().maxElectTime =
-        pt.get<uint64_t>("consensus.max_elect_time", 2000);
+        pt.get<int64_t>("consensus.max_elect_time", 2000);
+    if (m_param->mutableConsensusParam().maxElectTime < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.max_elect_time to positive !"));
+    }
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
                       << LOG_KV("type", m_param->mutableConsensusParam().consensusType)
@@ -251,7 +290,13 @@ void Ledger::initSyncConfig(ptree const& pt)
     try
     {
         m_param->mutableSyncParam().idleWaitMs =
-            pt.get<unsigned>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+            pt.get<signed>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+        if (m_param->mutableSyncParam().idleWaitMs < 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue()
+                                  << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
+        }
+
         Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
     }
@@ -275,7 +320,19 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
     m_param->mutableStorageParam().maxStoreKey = pt.get<int>("storage.max_store_key", 10000);
+    if (m_param->mutableStorageParam().maxStoreKey < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
+                              << errinfo_comment("Please set storage.max_store_key to positive !"));
+    }
+
     m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 100);
+    if (m_param->mutableStorageParam().maxForwardBlock < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set storage.max_forward_block to positive !"));
+    }
+
     if (m_param->mutableStorageParam().maxRetry <= 0)
     {
         m_param->mutableStorageParam().maxRetry = 100;
@@ -292,7 +349,13 @@ void Ledger::initDBConfig(ptree const& pt)
 /// 1. gasLimit: default is 300000000
 void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
 {
-    m_param->mutableTxParam().txGasLimit = pt.get<unsigned>("tx.gas_limit", 300000000);
+    m_param->mutableTxParam().txGasLimit = pt.get<int64_t>("tx.gas_limit", 300000000);
+    if (m_param->mutableTxParam().txGasLimit < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set tx.gas_limit to positive !"));
+    }
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initTxConfig")
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
@@ -418,7 +481,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                       << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<Sealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
+    std::shared_ptr<PBFTSealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
         m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
         m_param->mutableConsensusParam().sealerList);
 
