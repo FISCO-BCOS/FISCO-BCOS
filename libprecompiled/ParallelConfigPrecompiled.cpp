@@ -94,7 +94,7 @@ bytes ParallelConfigPrecompiled::call(
 Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,
     Address const& contractAddress, Address const& origin, bool needCreate)
 {
-    string tableName = "_contract_parallel_func_" + contractAddress.hex() + "_";
+    string tableName = "_parallel_func_" + contractAddress.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
     if (!tableFactoryPrecompiled)
