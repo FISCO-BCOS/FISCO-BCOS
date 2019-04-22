@@ -152,7 +152,7 @@ public:
         bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
         if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
         {
-#if OPENSSL_VERSION_NUMBER < 0x110000000
+#if OPENSSL_VERSION_NUMBER < 0x1010007fL
             x509_store_ctx->current_cert = x509;
 #else
             X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
