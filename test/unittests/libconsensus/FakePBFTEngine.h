@@ -57,7 +57,6 @@ public:
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         setHighest(highest);
         setOmitEmpty(true);
-        setStorage(nullptr);
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);

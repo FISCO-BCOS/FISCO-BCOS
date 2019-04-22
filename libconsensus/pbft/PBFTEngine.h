@@ -163,7 +163,6 @@ public:
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
-    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
@@ -543,8 +542,6 @@ protected:
     std::string m_baseDir;
     bool m_leaderFailed = false;
     bool m_notifyNextLeaderSeal = false;
-
-    dev::storage::Storage::Ptr m_storage;
 
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
