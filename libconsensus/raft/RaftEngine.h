@@ -95,12 +95,6 @@ public:
         return m_lastLeaderTerm;
     }
 
-    void setStorage(dev::storage::Storage::Ptr storage)
-    {
-        Guard Guard(m_mutex);
-        m_storage = storage;
-    }
-
     void start() override;
     void reportBlock(dev::eth::Block const& _block) override;
     bool shouldSeal();
@@ -228,7 +222,6 @@ protected:
     std::unordered_map<h512, BlockRef> m_memberBlock;  // <node_id, BlockRef>
     static const unsigned c_PopWaitSeconds = 5;
 
-    dev::storage::Storage::Ptr m_storage;
     // the block number that update the sealer list
     int64_t m_lastObtainSealerNum = 0;
     uint64_t m_lastBlockTime;
