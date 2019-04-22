@@ -108,7 +108,7 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
         return;
     }
     m_timeoutCount++;
-    /// the last minimum transaction number that lead to timeout
+    /// update the last minimum transaction number that lead to timeout
     if (sealingTxNumber > 0 && (m_lastTimeoutTx == 0 || (m_lastTimeoutTx > sealingTxNumber &&
                                                             sealingTxNumber > m_maxNoTimeoutTx)))
     {
@@ -118,6 +118,7 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
     {
         m_lastTimeoutTx = m_maxNoTimeoutTx;
     }
+    /// update the maxBlockCanSeal
     {
         UpgradableGuard l(x_maxBlockCanSeal);
         if (m_maxBlockCanSeal > 2)
@@ -126,7 +127,6 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
             m_maxBlockCanSeal /= 2;
         }
     }
-
     PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
                           << LOG_KV("org_maxBlockCanSeal", m_maxBlockCanSeal * 2)
                           << LOG_KV("halfed_maxBlockCanSeal", m_maxBlockCanSeal)
@@ -149,7 +149,7 @@ void PBFTSealer::onCommitBlock(
         return;
     }
     m_lastBlockNumber = m_blockChain->number();
-    /// update the last-timeout-tx-number
+    /// update the maximum number of transactions that has been consensused without timeout
     if (sealingTxNumber > 0 && (m_maxNoTimeoutTx == 0 || m_maxNoTimeoutTx < sealingTxNumber))
     {
         m_maxNoTimeoutTx = sealingTxNumber;
@@ -162,11 +162,13 @@ void PBFTSealer::onCommitBlock(
         m_timeoutCount--;
         return;
     }
+    /// only if m_timeoutCount decreases to 0 and the current maxBlockCanSeal is smaller than
+    /// maxBlockTransactions, increase maxBlockCanSeal
     if (maxBlockCanSeal() >= m_pbftEngine->maxBlockTransactions())
     {
         return;
     }
-
+    /// if the current maxBlockCanSeal is larger than m_lastTimeoutTx, return directly
     if (m_lastTimeoutTx != 0 && maxBlockCanSeal() >= m_lastTimeoutTx)
     {
         return;

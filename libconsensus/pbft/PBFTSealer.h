@@ -144,9 +144,11 @@ private:
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
-    uint64_t m_lastChangeCycle = 0;
+    /// the minimum number of transactions that caused timeout
     uint64_t m_lastTimeoutTx = 0;
+    /// the maximum number of transactions that has been consensused without timeout
     uint64_t m_maxNoTimeoutTx = 0;
+    /// timeout counter
     int64_t m_timeoutCount = 0;
     uint64_t m_lastBlockNumber = 0;
 };
