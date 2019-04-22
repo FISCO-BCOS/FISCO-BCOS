@@ -80,6 +80,8 @@ private:
     void initSQLStorage();
     /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
+
+    void initLevelDBStorage2();
     /// TOCHECK: create storage/mpt state
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
