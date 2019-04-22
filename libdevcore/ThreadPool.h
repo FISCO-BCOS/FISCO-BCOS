@@ -38,17 +38,12 @@ class ThreadPool
 public:
     typedef std::shared_ptr<ThreadPool> Ptr;
 
-    explicit ThreadPool(const std::string& threadName, size_t size) : _work(_ioService)
+    explicit ThreadPool(const std::string& threadName, size_t size) : m_work(_ioService)
     {
         _threadName = threadName;
 
         for (size_t i = 0; i < size; ++i)
         {
-#if 0
-			_workers.create_thread(
-					boost::bind(&boost::asio::io_service::run, &_ioService));
-#endif
-
             _workers.create_thread([&] {
                 dev::pthread_setThreadName(_threadName);
                 _ioService.run();
@@ -73,7 +68,8 @@ private:
     std::string _threadName;
     boost::thread_group _workers;
     boost::asio::io_service _ioService;
-    boost::asio::io_service::work _work;
+    // m_work ensures that io_service's run() function will not exit while work is underway
+    boost::asio::io_service::work m_work;
 };
 
 }  // namespace dev

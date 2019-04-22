@@ -420,7 +420,6 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
-    pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     return pbftSealer;
@@ -451,7 +450,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
     /// set params for RaftEngine
     std::shared_ptr<RaftEngine> raftEngine =
         std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
-    raftEngine->setStorage(m_dbInitializer->storage());
     return raftSealer;
 }
 

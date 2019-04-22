@@ -58,8 +58,6 @@ public:
     void start() override {}
     void disconnect(dev::network::DisconnectReason) override {}
 
-    bool isConnected() const override { return true; }
-
     void asyncSendMessage(Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(
