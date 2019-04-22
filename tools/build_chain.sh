@@ -441,7 +441,7 @@ generate_config_ini()
     ; nodes to connect
     $ip_list
     ;enable/disable network compress
-    ;enable_compress=false
+    ;enable_compress=true
 
 ;certificate rejected list		
 [certificate_blacklist]		
@@ -509,10 +509,6 @@ generate_group_genesis()
     max_trans_num=1000
     ;the node id of leaders
     ${node_list}
-[storage]
-    ;storage db type, leveldb or external
-    type=${storage_type}
-    topic=DB
 [state]
     ;support mpt/storage
     type=${state_type}
@@ -536,7 +532,14 @@ function generate_group_ini()
     ;min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
-
+[storage]
+    ;storage db type, leveldb or external
+    type=${storage_type}
+    max_retry=100
+    max_store_key=10000
+    max_forward_block=100
+    ;topic only for external
+    topic=DB
 ;txpool limit
 [tx_pool]
     limit=150000

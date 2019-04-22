@@ -136,10 +136,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
-    dev::GROUP_ID group_id = 10;
+    dev::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
     FakeLedgerForTest fakeLedger(
-        txpool_creator.m_topicService, group_id, key_pair, "", configurationPath);
+        txpool_creator.m_topicService, groupId, key_pair, "", configurationPath);
     BOOST_CHECK(fakeLedger.configFileName() == configurationPath);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
@@ -222,20 +222,23 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
 {
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
-    std::shared_ptr<LedgerManager> ledgerManager =
-        std::make_shared<LedgerManager>(txpool_creator.m_topicService, key_pair);
-    dev::GROUP_ID group_id = 10;
+    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
+    dev::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
-    ledgerManager->initSingleLedger<FakeLedgerForTest>(group_id, "", configurationPath);
+
+    std::shared_ptr<LedgerInterface> ledger = std::make_shared<FakeLedgerForTest>(
+        txpool_creator.m_topicService, groupId, key_pair, "", configurationPath);
+    ledger->initLedger();
+    ledgerManager->insertLedger(groupId, ledger);
     std::shared_ptr<LedgerParam> param =
-        std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(group_id));
+        std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(groupId));
     /// check BlockChain
-    std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(group_id);
+    std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(groupId);
     std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
     Block populateBlock;
     populateBlock.resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
-    BOOST_CHECK(ledgerManager->blockChain(group_id)->number() == 1);
+    BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -96,8 +96,6 @@ void Ledger::initConfig(std::string const& configPath)
         read_ini(configPath, pt);
         /// init params related to consensus
         initConsensusConfig(pt);
-        /// db params initialization
-        initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
         /// init params related to genesis: timestamp
@@ -122,12 +120,13 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     ptree pt;
     /// read the configuration file for a specified group
     read_ini(iniConfigFileName, pt);
+    /// db params initialization
+    initDBConfig(pt);
     /// init params related to txpool
     initTxPoolConfig(pt);
     /// init params related to sync
     initSyncConfig(pt);
     initTxExecuteConfig(pt);
-
     /// init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
 }
