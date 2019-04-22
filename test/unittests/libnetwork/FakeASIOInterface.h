@@ -26,6 +26,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
+#define ERROR_SOCKET_PORT 8889
+#define EMPTY_CERT_SOCKET_PORT 8887
+
 namespace dev
 {
 namespace network
@@ -56,27 +59,37 @@ public:
         m_listenPort = listenPort;
     }
 
-    void run() override { std::this_thread::sleep_for(std::chrono::seconds(5)); }
-
-    void stop() override {}
-
-    void reset() override {}
-
     void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
         boost::system::error_code = boost::system::error_code()) override
     {
-        // m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
-        m_acceptorInfo = std::make_pair(socket, handler);
+        if (m_allowAccept)
+        {
+            m_acceptorInfo = std::make_pair(socket, handler);
+            m_allowAccept = false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        m_ioService->post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(20)); });
     }
-
-    void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint peer_endpoint,
+    void callAcceptHandler(boost::system::error_code e = boost::system::error_code())
+    {
+        m_allowAccept = true;
+        m_acceptorInfo.second(e);
+    }
+    void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint endpoint,
         Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();
-        fakeSocket->setRemoteEndpoint(peer_endpoint);
-        boost::system::error_code ec;
-        handler(ec);
+        fakeSocket->setRemoteEndpoint(endpoint);
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
     void asyncWrite(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
@@ -103,36 +116,63 @@ public:
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         auto size = fakeSocket->doRead(buffers);
         boost::system::error_code ec;
-        handler(ec, size);
+        m_ioService->post([handler, ec, size]() { handler(ec, size); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     void asyncHandshake(std::shared_ptr<SocketFace> socket,
         ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
-        (void)socket;
         (void)type;
-        boost::system::error_code ec;
-        handler(ec);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
     void setVerifyCallback(
         std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true) override
     {
         (void)socket;
-        // auto s = m_sslContext->m_sslContext();
-        // auto x509 = SSL_CTX_get0_certificate(s);
-        // auto store = SSL_CTX_get_cert_store(s);
+        auto s = m_sslContext->native_handle();
+        auto store = SSL_CTX_get_cert_store(s);
+        // auto ssl = SSL_new(s);
+        // auto x509 = SSL_get_peer_certificate(ssl);
+        // auto chain = SSL_get_peer_cert_chain(ssl);
+        auto x509 = SSL_CTX_get0_certificate(s);
         auto x509_store_ctx = X509_STORE_CTX_new();
-        // auto chain = SSL_get_peer_cert_chain();
-        // X509_STORE_CTX_init(x509_store_ctx,store,x509,chain);
+        X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
+        // X509_STORE_CTX_set_cert(x509_store_ctx, x509);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
+        {
+#if OPENSSL_VERSION_NUMBER < 0x110000000
+            x509_store_ctx->current_cert = x509;
+#else
+            X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+#endif
+        }
+        // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+        // x509_store_ctx->current_cert = x509;
+        // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
         boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
+
         callback(true, verifyContext);
     }
 
-    // std::shared_ptr<SocketFace> m_socket;
-    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
     std::string m_listenHost;
     uint16_t m_listenPort;
+
+    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
+
+private:
+    bool m_allowAccept = true;
 };
 }  // namespace network
 }  // namespace dev

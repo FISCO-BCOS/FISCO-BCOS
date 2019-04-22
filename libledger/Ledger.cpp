@@ -35,7 +35,6 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <tbb/tbb.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -346,8 +345,6 @@ bool Ledger::initBlockVerifier()
     {
         enableParallel = true;
     }
-
-    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
 
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
