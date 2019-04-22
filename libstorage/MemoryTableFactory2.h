@@ -72,7 +72,7 @@ private:
     h256 m_blockHash;
     int m_blockNum;
     // this map can't be changed, hash() need ordered data
-    std::map<std::string, Table::Ptr> m_name2Table;
+    tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
     tbb::enumerable_thread_specific<std::vector<Change> > s_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;

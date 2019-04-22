@@ -72,6 +72,12 @@ macro(configure_project)
     if (DEBUG)
         add_definitions(-DETH_DEBUG)
     endif()
+    
+    #perf
+    eth_default_option(PROF OFF)
+    if (PROF)
+    	add_definitions(-DPROF)
+	endif()
 
 
     # Define a matching property name of each of the "features".
@@ -114,6 +120,7 @@ macro(print_config NAME)
     message("-- TESTS            Build tests                        ${TESTS}")
     message("-- EasyLog          Enable easyLog                     ${EASYLOG}")
     message("-- ARCH_TYPE                                           ${ARCH_TYPE}")
+    message("-- PROF                                                ${PROF}")
     message("------------------------------------------------------------------------")
 if (BUILD_GM)
     message("-- GM               Build GM                           ${BUILD_GM}")

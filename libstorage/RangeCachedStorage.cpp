@@ -201,7 +201,9 @@ size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<Tabl
 {
     (void)hash;
     (void)num;
+    (void)datas;
 
+#if 0
     for (auto it : datas)
     {
         auto tableIt = m_caches.find(it->tableName);
@@ -224,6 +226,7 @@ size_t RangeCachedStorage::commit(h256 hash, int64_t num, const std::vector<Tabl
             }
         }
     }
+#endif
 
     return 0;
 }

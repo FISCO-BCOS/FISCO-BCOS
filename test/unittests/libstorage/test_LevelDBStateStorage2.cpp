@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
     size_t c = levelDB->commit(h, num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(exception)
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
     entries->get(0)->setField("Name", "Exception");
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
     BOOST_CHECK_THROW(levelDB->commit(h, num, datas), boost::exception);
     std::string table("e");
