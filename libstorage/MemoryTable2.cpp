@@ -27,6 +27,7 @@
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
+#include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
@@ -37,7 +38,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<EntriesType>()) {}
+MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<Entries>()) {}
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
@@ -169,7 +170,7 @@ int MemoryTable2::insert(
         entry->setField(m_tableInfo->key, key);
         // Change::Record record(m_newEntries->size());
         auto iter = m_newEntries->addEntry(entry);
-        Change::Record record(iter - m_newEntries->begin());
+        Change::Record record(iter);
 
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
@@ -231,79 +232,34 @@ int MemoryTable2::remove(
     return 0;
 }
 
-bool MemoryTable2::Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs)
-{
-    auto ret = lhs->getField(m_tableInfo->key).compare(rhs->getField(m_tableInfo->key));
-    if (ret > 0)
-    {
-        return true;
-    }
-
-    if (ret < 0)
-    {
-        return false;
-    }
-
-    auto& lFields = *lhs->fields();
-    auto& rFields = *rhs->fields();
-
-    if (lFields.size() > rFields.size())
-    {
-        return true;
-    }
-
-    if (lFields.size() < rFields.size())
-    {
-        return false;
-    }
-
-    for (auto lIter = lFields.begin(), rIter = rFields.begin();
-         lIter != lFields.end() && rIter != rFields.end(); ++lIter, ++rIter)
-    {
-        if (lIter->first != rIter->first)
-        {
-            return static_cast<bool>(lIter->first.compare(rIter->first));
-        }
-
-        if (lIter->second != rIter->second)
-        {
-            return static_cast<bool>(lIter->second.compare(rIter->second));
-        }
-    }
-
-    return false;
-}
-
 dev::h256 MemoryTable2::hash()
 {
-    bytes data;
     auto tempEntries = std::vector<Entry::Ptr>();
     auto size = m_dirty.size() + m_newEntries->size();
-    tempEntries.reserve(size);
+    tempEntries.resize(size);
 
-    for (auto it : m_dirty)
-    {
-        auto entry = it.second;
-        tempEntries.push_back(entry);
-    }
+    tbb::atomic<size_t> j = 0;
+    tbb::parallel_for(m_dirty.range(),
+        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                tempEntries[j.fetch_and_increment()] = (*it).second;
+            }
+        });
 
-    std::sort(tempEntries.begin(), tempEntries.begin() + m_dirty.size(),
-        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
+    // parallel import unless > 10 * 1000 items
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                tempEntries[j.fetch_and_increment()] = m_newEntries->get(i);
+            }
+        });
 
-    for (size_t i = 0; i < m_newEntries->size(); ++i)
-    {
-        auto entry = m_newEntries->get(i);
-        while (entry.get() == nullptr)
-        {
-            std::this_thread::yield();
-        }
-        tempEntries.push_back(entry);
-    }
+    tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
 
-    std::sort(tempEntries.begin() + m_dirty.size(), tempEntries.begin() + size,
-        std::bind(&MemoryTable2::Comparator, this, std::placeholders::_1, std::placeholders::_1));
-
-    for (size_t i = 0; i < size; ++i)
+    bytes data;
+    for (size_t i = 0; i < tempEntries.size(); ++i)
     {
         auto entry = tempEntries[i];
         if (!entry->deleted())
@@ -328,6 +284,37 @@ dev::h256 MemoryTable2::hash()
     h256 hash = dev::sha256(bR);
 
     return hash;
+}
+
+bool MemoryTable2::dump(dev::storage::TableData::Ptr data)
+{
+    data->info = m_tableInfo;
+    data->dirtyEntries = std::make_shared<Entries>();
+
+    tbb::parallel_for(m_dirty.range(),
+        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                if (!it->second->deleted())
+                {
+                    data->dirtyEntries->addEntry(it->second);
+                }
+            }
+        });
+
+    data->newEntries = std::make_shared<Entries>();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (auto i = range.begin(); i < range.end(); ++i)
+            {
+                if (!m_newEntries->get(i)->deleted())
+                {
+                    data->newEntries->addEntry(m_newEntries->get(i));
+                }
+            }
+        });
+
+    return true;
 }
 
 void MemoryTable2::rollback(const Change& _change)
@@ -355,7 +342,8 @@ void MemoryTable2::rollback(const Change& _change)
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
 
         auto entry = m_newEntries->get(_change.value[0].index);
-        entry->setStatus(1);
+        // entry->setStatus(1);
+        entry->setDeleted(true);
         // m_newEntries->removeEntry(_change.value[0].newIndex);
         break;
     }
@@ -410,18 +398,4 @@ void MemoryTable2::rollback(const Change& _change)
     }
 
     LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
-    for (size_t i = 0; i < m_newEntries->size(); ++i)
-    {
-        auto entry = m_newEntries->get(i);
-
-        std::stringstream ss;
-        ss << i;
-        ss << "," << entry->getStatus();
-
-        for (auto it : *(entry->fields()))
-        {
-            ss << "," << it.first << ":" << it.second;
-        }
-        LOG(TRACE) << ss.str();
-    }
 }

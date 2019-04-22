@@ -34,11 +34,13 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
     {
         g_BCOSConfig.setVersion(RC2_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc2");
     }
     /// default is RC1
     else
     {
         g_BCOSConfig.setVersion(RC1_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc1");
     }
 
 
@@ -59,6 +61,10 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
     g_BCOSConfig.setCompress(enableCompress);
 
+    /// init version
+    uint64_t chainId = _pt.get<uint64_t>("chain.id", 1);
+    g_BCOSConfig.setChainId(chainId);
+
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
                            << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
                            << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
@@ -67,5 +73,6 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
                            << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
                            << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
                            << LOG_KV("version_str", version)
-                           << LOG_KV("version", g_BCOSConfig.version());
+                           << LOG_KV("version", g_BCOSConfig.version())
+                           << LOG_KV("chainId", g_BCOSConfig.chainId());
 }

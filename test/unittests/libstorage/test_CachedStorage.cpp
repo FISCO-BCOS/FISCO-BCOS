@@ -26,6 +26,8 @@
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 
 using namespace dev;
 using namespace dev::storage;
@@ -87,18 +89,18 @@ public:
         (void)datas;
 
         BOOST_CHECK(hash == h256());
-        BOOST_CHECK(num == 101);
+        BOOST_CHECK(num == commitNum);
 
         BOOST_CHECK(datas.size() == 2);
         for (auto it : datas)
         {
             if (it->info->name == "t_test")
             {
-                BOOST_CHECK(it->entries->size() == 1);
+                BOOST_CHECK(it->newEntries->size() == 1);
             }
             else if (it->info->name == SYS_CURRENT_STATE)
             {
-                BOOST_CHECK(it->entries->size() == 1);
+                BOOST_CHECK(it->dirtyEntries->size() == 1);
             }
             else
             {
@@ -113,6 +115,99 @@ public:
     bool onlyDirty() override { return true; }
 
     bool commited = false;
+    int64_t commitNum = 50;
+};
+
+class MockStorageParallel : public Storage
+{
+public:
+    MockStorageParallel()
+    {
+        for (size_t i = 100; i < 200; ++i)
+        {
+            auto tableName = "t_test" + boost::lexical_cast<std::string>(i);
+
+            Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setField("Name", "LiSi1");
+            entry->setField("id", boost::lexical_cast<std::string>(i));
+            entry->setID(1000 + i);
+            tableKey2Entry.insert(std::make_pair(tableName + entry->getField("Name"), entry));
+
+            entry = std::make_shared<Entry>();
+            entry->setField("Name", "LiSi2");
+            entry->setField("id", boost::lexical_cast<std::string>(i + 1));
+            entry->setID(1001 + i);
+            tableKey2Entry.insert(std::make_pair(tableName + entry->getField("Name"), entry));
+
+            entry = std::make_shared<Entry>();
+            entry->setField("Name", "LiSi3");
+            entry->setField("id", boost::lexical_cast<std::string>(i + 2));
+            entry->setID(1002 + i);
+            tableKey2Entry.insert(std::make_pair(tableName + entry->getField("Name"), entry));
+        }
+    }
+
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override
+    {
+        (void)hash;
+        (void)num;
+        (void)condition;
+
+        auto tableKey = tableInfo->name + key;
+        auto it = tableKey2Entry.find(tableKey);
+
+        auto entries = std::make_shared<Entries>();
+        entries->addEntry(it->second);
+        return entries;
+    }
+
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    {
+        BOOST_CHECK(hash == h256());
+        BOOST_CHECK(num == commitNum);
+
+        BOOST_CHECK(datas.size() == 101);
+        for (size_t i = 0; i < 100; ++i)
+        {
+            auto tableData = datas[i];
+            BOOST_TEST(
+                tableData->info->name == "t_test" + boost::lexical_cast<std::string>(100 + i));
+            BOOST_TEST(tableData->dirtyEntries->size() == 3);
+            BOOST_TEST(tableData->newEntries->size() == 3);
+
+            for (size_t j = 0; j < 3; ++j)
+            {
+                auto entry = tableData->dirtyEntries->get(j);
+                BOOST_TEST(entry->getID() == 1000 + 100 + i + j);
+                BOOST_TEST(entry->getField("id") == boost::lexical_cast<std::string>(i + 100 + j));
+                BOOST_TEST(
+                    entry->getField("Name") == "LiSi" + boost::lexical_cast<std::string>(j + 1));
+
+                auto tableKey = tableData->info->name + entry->getField(tableData->info->key);
+                auto it = tableKey2Entry.find(tableKey);
+                BOOST_TEST(entry->getField("Name") == it->second->getField("Name"));
+                BOOST_TEST(entry->getField("id") == it->second->getField("id"));
+                BOOST_TEST(entry->getID() == it->second->getID());
+
+                entry = tableData->newEntries->get(j);
+                BOOST_TEST(
+                    entry->getField("id") == boost::lexical_cast<std::string>(i + 100 + 100 + j));
+                BOOST_TEST(entry->getID() == i * 3 + j + 2);
+                BOOST_TEST(entry->getField("Name") == "ZhangSan");
+            }
+        }
+
+        commited = true;
+        return 0;
+    }
+
+    bool onlyDirty() override { return true; }
+
+    bool commited = false;
+    int64_t commitNum = 50;
+
+    tbb::concurrent_unordered_map<std::string, Entry::Ptr> tableKey2Entry;
 };
 
 struct CachedStorageFixture
@@ -202,21 +297,22 @@ BOOST_AUTO_TEST_CASE(select_condition)
 BOOST_AUTO_TEST_CASE(commit)
 {
     h256 h;
-    int64_t num = 101;
+    int64_t num = 50;
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
 
     BOOST_TEST(cachedStorage->syncNum() == 0);
+    mockStorage->commitNum = 50;
     size_t c = cachedStorage->commit(h, num, datas);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    BOOST_TEST(cachedStorage->syncNum() == 101);
+    BOOST_TEST(cachedStorage->syncNum() == 50);
 
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
@@ -243,6 +339,102 @@ BOOST_AUTO_TEST_CASE(commit)
             BOOST_TEST(false);
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(parllel_commit)
+{
+    h256 h;
+    int64_t num = 50;
+    std::vector<dev::storage::TableData::Ptr> datas;
+
+    for (size_t i = 100; i < 200; ++i)
+    {
+        dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+        tableData->info->name = "t_test" + boost::lexical_cast<std::string>(i);
+        tableData->info->key = "Name";
+        tableData->info->fields.push_back("id");
+
+        Entries::Ptr entries = std::make_shared<Entries>();
+
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("Name", "LiSi1");
+        entry->setField("id", boost::lexical_cast<std::string>(i));
+        entry->setID(1000 + i);
+        entries->addEntry(entry);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("Name", "LiSi2");
+        entry->setField("id", boost::lexical_cast<std::string>(i + 1));
+        entry->setID(1001 + i);
+        entries->addEntry(entry);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("Name", "LiSi3");
+        entry->setField("id", boost::lexical_cast<std::string>(i + 2));
+        entry->setID(1002 + i);
+        entries->addEntry(entry);
+        tableData->dirtyEntries = entries;
+
+        entries = std::make_shared<Entries>();
+        entry = std::make_shared<Entry>();
+        entry->setField("Name", "ZhangSan");
+        entry->setField("id", boost::lexical_cast<std::string>(i + 100));
+        entry->setForce(true);
+        entries->addEntry(entry);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("Name", "ZhangSan");
+        entry->setField("id", boost::lexical_cast<std::string>(i + 101));
+        entry->setForce(true);
+        entries->addEntry(entry);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("Name", "ZhangSan");
+        entry->setField("id", boost::lexical_cast<std::string>(i + 102));
+        entry->setForce(true);
+        entries->addEntry(entry);
+
+        tableData->newEntries = entries;
+        datas.push_back(tableData);
+    }
+
+    cachedStorage->setBackend(std::make_shared<MockStorageParallel>());
+
+    BOOST_TEST(cachedStorage->syncNum() == 0);
+    mockStorage->commitNum = 50;
+    size_t c = cachedStorage->commit(h, num, datas);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    BOOST_TEST(cachedStorage->syncNum() == 50);
+
+    BOOST_CHECK_EQUAL(c, 600u);
+
+
+#if 0
+	std::string table("t_test");
+	std::string key("LiSi");
+	auto tableInfo = std::make_shared<TableInfo>();
+	tableInfo->name = table;
+	entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+	BOOST_CHECK_EQUAL(entries->size(), 2u);
+
+	for (size_t i = 0; i < entries->size(); ++i)
+	{
+		auto entry = entries->get(i);
+		if (entry->getField("id") == "1")
+		{
+			BOOST_TEST(entry->getID() == 1);
+		}
+		else if (entry->getField("id") == "2")
+		{
+			BOOST_TEST(entry->getID() == 2);
+		}
+		else
+		{
+			BOOST_TEST(false);
+		}
+	}
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(exception)

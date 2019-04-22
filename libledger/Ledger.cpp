@@ -35,7 +35,6 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <tbb/tbb.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -347,8 +346,6 @@ bool Ledger::initBlockVerifier()
         enableParallel = true;
     }
 
-    tbb::task_scheduler_init init(tbb::task_scheduler_init::automatic);
-
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
@@ -423,7 +420,6 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
-    pbftEngine->setStorage(m_dbInitializer->storage());
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     return pbftSealer;
@@ -454,7 +450,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
     /// set params for RaftEngine
     std::shared_ptr<RaftEngine> raftEngine =
         std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
-    raftEngine->setStorage(m_dbInitializer->storage());
     return raftSealer;
 }
 

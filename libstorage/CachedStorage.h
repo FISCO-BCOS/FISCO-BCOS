@@ -40,14 +40,18 @@ public:
     typedef std::shared_ptr<Caches> Ptr;
     virtual ~Caches(){};
 
+    virtual std::string key();
+    virtual void setKey(const std::string& key);
     virtual Entries::Ptr entries();
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
 private:
+    std::string m_key;
     Entries::Ptr m_entries;
-    int64_t m_num;
+    // int64_t m_num;
+    tbb::atomic<int64_t> m_num;
 };
 
 class TableCaches
@@ -60,7 +64,8 @@ public:
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
     virtual Caches::Ptr findCache(const std::string& key);
-    virtual void addCache(const std::string& key, Caches::Ptr cache);
+    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
+    addCache(const std::string& key, Caches::Ptr cache);
     virtual void removeCache(const std::string& key);
 
     virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
@@ -77,8 +82,8 @@ public:
     typedef std::shared_ptr<Task> Ptr;
 
     h256 hash;
-    int64_t num;
-    std::vector<TableData::Ptr> datas;
+    int64_t num = 0;
+    std::shared_ptr<std::vector<TableData::Ptr> > datas;
 };
 
 class CachedStorage : public Storage
@@ -87,7 +92,7 @@ public:
     typedef std::shared_ptr<CachedStorage> Ptr;
     CachedStorage();
 
-    virtual ~CachedStorage(){};
+    virtual ~CachedStorage();
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
@@ -108,6 +113,7 @@ public:
     size_t ID();
 
 private:
+    void touchMRU(std::string table, std::string key);
     void checkAndClear();
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
@@ -129,6 +135,10 @@ private:
     std::mutex m_mutex;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
+
+    // stat
+    tbb::atomic<uint64_t> m_hitTimes = 0;
+    tbb::atomic<uint64_t> m_queryTimes = 0;
 };
 
 }  // namespace storage

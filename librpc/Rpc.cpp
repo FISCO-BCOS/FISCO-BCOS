@@ -25,6 +25,7 @@
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
@@ -305,6 +306,8 @@ Json::Value Rpc::getClientVersion()
         Json::Value version;
 
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+        version["Supported Version"] = g_BCOSConfig.supportedVersion();
+        version["Chain Id"] = toString(g_BCOSConfig.chainId());
         version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
         version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
                                 std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
