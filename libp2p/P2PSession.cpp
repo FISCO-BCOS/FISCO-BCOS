@@ -32,7 +32,7 @@ using namespace dev::p2p;
 
 void P2PSession::start()
 {
-    if (!m_run)
+    if (!m_run && m_session)
     {
         m_run = true;
 
@@ -46,7 +46,7 @@ void P2PSession::stop(dev::network::DisconnectReason reason)
     if (m_run)
     {
         m_run = false;
-        if (m_session->actived())
+        if (m_session && m_session->actived())
         {
             m_session->disconnect(reason);
         }
@@ -55,14 +55,14 @@ void P2PSession::stop(dev::network::DisconnectReason reason)
 
 void P2PSession::heartBeat()
 {
-    SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
-                       << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
-                       << LOG_KV("name", m_session->nodeIPEndpoint().name());
     auto service = m_service.lock();
     if (service && service->actived())
     {
-        if (m_session->isConnected())
+        if (m_session && m_session->actived())
         {
+            SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
+                               << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
+                               << LOG_KV("name", m_session->nodeIPEndpoint().name());
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 

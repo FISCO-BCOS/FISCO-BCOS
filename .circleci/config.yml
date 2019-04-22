@@ -3,7 +3,7 @@ jobs:
   build_static_test:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies

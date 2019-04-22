@@ -775,7 +775,7 @@ do
         echo " \${node} isn't running."
         exit 0
     fi
-    [ ! -z \${node_pid} ] && ${stop_cmd} 2> /dev/null
+    [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
     sleep 0.6
     node_pid=${ps_cmd}
     if [ -z \${node_pid} ];then
