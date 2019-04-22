@@ -159,6 +159,18 @@ public:
         m_onNotifyNextLeaderReset = _f;
     }
 
+    void onTimeout(
+        std::function < void(uint64_t const& changeCycle, uint64_t const& sealingTxNumber))
+    {
+        m_onTimeout = _f;
+    }
+
+    void onCommitBlock(
+        std::function < void(uint64_t const& blockNumber, uint64_t const& sealingTxNumber))
+    {
+        m_onCommitBlock = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
@@ -181,9 +193,9 @@ public:
     }
 
     bool timeout() { return m_timeManager.m_changeCycle > 0; }
-    uint64_t const& changeCycle() const { return m_timeManager.m_changeCycle; }
-    VIEWTYPE const& view() const { return m_view; }
-    uint64_t const& sealingTxNumber() const
+    uint64_t changeCycle() const { return m_timeManager.m_changeCycle; }
+    VIEWTYPE view() const { return m_view; }
+    uint64_t sealingTxNumber() const
     {
         ReadGuard l(x_sealingNumber);
         return m_sealingNumber;
@@ -573,8 +585,12 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
+
     std::function<void()> m_onViewChange;
     std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
+    std::function<void(uint64_t const& changeCycle)> m_onTimeout;
+    std::function < void(uint64_t const& blockNumber, uint64_t const& sealingTxNumber,
+                        uint64_t const& changeCycle) m_onCommitBlock;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

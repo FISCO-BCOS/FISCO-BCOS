@@ -165,6 +165,11 @@ protected:
     }
 
 protected:
+    uint64_t maxBlockCanSeal()
+    {
+        ReadGuard l(x_maxBlockCanSeal);
+        return m_maxBlockCanSeal;
+    }
     /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block-sync module
@@ -201,6 +206,7 @@ protected:
     Handler<int64_t> m_blockSubmitted;
 
     uint64_t m_maxBlockCanSeal;
+    Mutex x_maxBlockCanSeal;
 };
 }  // namespace consensus
 }  // namespace dev

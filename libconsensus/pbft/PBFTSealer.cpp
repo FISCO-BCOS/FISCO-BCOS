@@ -99,7 +99,7 @@ void PBFTSealer::stop()
 }
 
 /// decrease maxBlockCanSeal to half when timeout
-void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal) if (m_blockSync->isSyncing())
+void PBFTSealer::onTimeout(uint64_t const& changeCycle, uint64_t const& sealingTxNumber)
 {
     /// if is syncing, return directly
     if (m_blockSync->isSyncing())
@@ -107,60 +107,87 @@ void PBFTSealer::calculateMaxPackTxNum(uint64_t& maxBlockCanSeal) if (m_blockSyn
         m_lastBlockNumber = m_blockSync->status().knownHighestNumber;
         return;
     }
-    /// timeout :
-    /// 1. decrease maxBlockCanSeal to half
-    /// 2. record the transaction num that leads to timeout
-    else if (m_pbftEngine->timeout() && m_lastChangeCycle != m_pbftEngine->changeCycle() &&
-             maxBlockCanSeal >= 2)
+    m_timeoutCount++;
+    /// the last minimum transaction number that lead to timeout
+    if (sealingTxNumber > 0 && (m_lastTimeoutTx == 0 || (m_lastTimeoutTx > sealingTxNumber &&
+                                                            sealingTxNumber > m_maxNoTimeoutTx)))
     {
-        maxBlockCanSeal /= 2;
-        m_timeoutCount++;
-        auto txNum = m_pbftEngine->sealingTxNumber();
-        /// the last minimum transaction number that lead to timeout
-        if (m_lastTimeoutTx == 0 || m_lastTimeoutTx > txNum)
-        {
-            m_lastTimeoutTx = txNum;
-        }
-        PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
-                              << LOG_KV("org_maxBlockCanSeal", maxBlockCanSeal * 2)
-                              << LOG_KV("halfed_maxBlockCanSeal", maxBlockCanSeal)
-                              << LOG_KV("timeoutCount", m_timeoutCount)
-                              << LOG_KV("lastTimeoutTx", m_lastTimeoutTx);
+        m_lastTimeoutTx = sealingTxNumber;
     }
-    else if (m_blockChain->number() > m_lastBlockNumber && !m_pbftEngine->timeout() &&
-             m_pbftEngine->view() == 0)
+    else
     {
-        /// if is syncing block, return directly
-        if (m_blockSync->isSyncing())
+        m_lastTimeoutTx = m_maxNoTimeoutTx;
+    }
+    {
+        UpgradableGuard l(x_maxBlockCanSeal);
+        if (m_maxBlockCanSeal > 2)
         {
-            return;
+            UpgradeGuard ul(l);
+            m_maxBlockCanSeal /= 2;
         }
-        /// increase the maxBlockCanSeal when its current value is smaller than m_lastTimeoutTx
-        if ((m_timeoutCount == 0) && maxBlockCanSeal < m_pbftEngine->maxBlockTransactions())
-        {
-            if (m_lastTimeoutTx == 0 || maxBlockCanSeal < m_lastTimeoutTx)
-            {
-                maxBlockCanSeal += (0.5 * maxBlockCanSeal);
-                if (maxBlockCanSeal > m_lastTimeoutTx)
-                {
-                    maxBlockCanSeal = m_lastTimeoutTx;
-                }
-                if (maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
-                {
-                    maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
-                }
-                PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxBlockCanSeal")
-                                      << LOG_KV("increased_maxBlockCanSeal", maxBlockCanSeal);
-            }
-        }
-        /// sealing more transactions while no timeout
-        if (m_pbftEngine->sealingTxNumber() >= maxBlockCanSeal && m_timeoutCount > 0)
-        {
-            m_timeoutCount--;
-        }
+    }
+
+    PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
+                          << LOG_KV("org_maxBlockCanSeal", m_maxBlockCanSeal * 2)
+                          << LOG_KV("halfed_maxBlockCanSeal", m_maxBlockCanSeal)
+                          << LOG_KV("timeoutCount", m_timeoutCount)
+                          << LOG_KV("lastTimeoutTx", m_lastTimeoutTx);
+}
+
+/// increase maxBlockCanSeal when commitBlock with no-timeout
+void PBFTSealer::onCommitBlock(
+    uint64_t const& blockNumber, uint64_t const& sealingTxNumber, uint64_t changeCycle)
+{
+    /// if is syncing, return directly
+    if (m_blockSync->isSyncing() || changeCycle > 0)
+    {
+        m_lastBlockNumber = m_blockSync->status().knownHighestNumber;
+        return;
+    }
+    if (blockNumber <= m_lastBlockNumber)
+    {
+        return;
     }
     m_lastBlockNumber = m_blockChain->number();
-    m_lastChangeCycle = m_pbftEngine->changeCycle();
+    /// sealing more transactions while no timeout
+    if (m_timeoutCount > 0)
+    {
+        m_timeoutCount--;
+        return;
+    }
+    if (maxBlockCanSeal() >= m_pbftEngine->maxBlockTransactions())
+    {
+        return;
+    }
+
+    if (m_lastTimeoutTx != 0 && maxBlockCanSeal >= lastTimeoutTx())
+    {
+        return;
+    }
+    /// increase the maxBlockCanSeal when its current value is smaller than the
+    /// last-timeout-tx-number
+    {
+        WriteGuard l(x_maxBlockCanSeal);
+        m_maxBlockCanSeal += (0.5 * m_maxBlockCanSeal);
+        if (m_lastTimeoutTx > 0 && m_maxBlockCanSeal > m_lastTimeoutTx)
+        {
+            m_maxBlockCanSeal = m_lastTimeoutTx;
+        }
+        if (m_maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
+        {
+            m_maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
+        }
+        PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase m_maxBlockCanSeal")
+                              << LOG_KV("increased_maxBlockCanSeal", m_maxBlockCanSeal);
+    }
+    /// update the last-timeout-tx-number
+    if (sealingTxNumber > 0 && (m_maxNoTimeoutTx == 0 || m_maxNoTimeoutTx <= sealingTxNumber))
+    {
+        m_maxNoTimeoutTx = sealingTxNumber;
+        PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxNoTimeoutTx")
+                              << LOG_KV("maxNoTimeoutTx", m_maxNoTimeoutTx);
+    }
 }
+
 }  // namespace consensus
 }  // namespace dev

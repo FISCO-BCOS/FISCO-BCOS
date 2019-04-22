@@ -55,6 +55,8 @@ public:
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1, _2));
+        m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this, _1, _2, _3));
         m_lastBlockNumber = m_blockChain->number();
     }
 
@@ -95,6 +97,9 @@ protected:
     void setBlock();
 
 private:
+    void onTimeout(uint64_t const& changeCycle, uint64_t sealingTxNumber);
+    void onCommitBlock(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, uint64_t const& changeCycle);
     /// reset block when view changes
     void resetBlockForViewChange()
     {
@@ -143,6 +148,7 @@ protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
     uint64_t m_lastChangeCycle = 0;
     uint64_t m_lastTimeoutTx = 0;
+    uint64_t m_maxNoTimeoutTx = 0;
     int64_t m_timeoutCount = 0;
     int64_t m_lastBlockNumber = 0;
 };
