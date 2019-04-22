@@ -103,7 +103,8 @@ enum class ImportResult
     ZeroSignature,
     TransactionNonceCheckFail,
     TxPoolNonceCheckFail,
-    TransactionPoolIsFull
+    TransactionPoolIsFull,
+    InvalidChainIdOrGroupId
 };
 
 struct ImportRequirements
