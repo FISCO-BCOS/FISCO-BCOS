@@ -67,7 +67,8 @@ public:
             m_acceptorInfo = std::make_pair(socket, handler);
             m_allowAccept = false;
         }
-        m_ioService->post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(200)); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        m_ioService->post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(20)); });
     }
     void callAcceptHandler(boost::system::error_code e = boost::system::error_code())
     {
@@ -115,8 +116,8 @@ public:
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         auto size = fakeSocket->doRead(buffers);
         boost::system::error_code ec;
-        handler(ec, size);
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        m_ioService->post([handler, ec, size]() { handler(ec, size); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     void asyncHandshake(std::shared_ptr<SocketFace> socket,

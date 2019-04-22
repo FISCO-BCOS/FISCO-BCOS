@@ -64,7 +64,7 @@ struct HostFixture
         m_host->setMessageFactory(m_messageFactory);
 
         m_host->setHostPort(m_hostIP, m_port);
-        m_threadPool = std::make_shared<ThreadPool>("P2PTest", 1);
+        m_threadPool = std::make_shared<ThreadPool>("P2PTest", 2);
         m_host->setThreadPool(m_threadPool);
 
         m_host->setCRL(m_certBlacklist);
@@ -130,6 +130,7 @@ BOOST_AUTO_TEST_CASE(Hostfunctions)
     BOOST_CHECK(m_threadPool == m_host->threadPool());
 }
 
+#ifndef FISCO_GM
 BOOST_AUTO_TEST_CASE(Host_run)
 {
     m_host->start();
@@ -211,7 +212,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
 
     m_host->stop();
 }
-
+#endif
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_Host
