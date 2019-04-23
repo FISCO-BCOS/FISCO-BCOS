@@ -76,12 +76,13 @@ protected:
     virtual void createExecutiveContext();
 
 private:
-    /// TODO: init AMOP storage
-    void initSQLStorage();
-    /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
-
+    // below use MemoryTableFactory2
+    void initSQLStorage();
+    void initTableFactory2(dev::storage::Storage::Ptr _backend);
     void initLevelDBStorage2();
+    void initRocksDBStorage();
+
     /// TOCHECK: create storage/mpt state
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);

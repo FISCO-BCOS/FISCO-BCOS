@@ -533,7 +533,7 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ;storage db type, leveldb or external
+    ;storage db type, leveldb/external/rocksdb are supported
     type=${storage_type}
     max_retry=100
     max_store_key=10000

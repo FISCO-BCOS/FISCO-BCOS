@@ -19,11 +19,13 @@
  *  @date 20180921
  */
 
-#include "LevelDBStorage2.h"
+#include "RocksDBStorage.h"
+#include "StorageException.h"
 #include "Table.h"
-#include <leveldb/db.h>
-#include <leveldb/write_batch.h>
-#include <libdevcore/BasicLevelDB.h>
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/write_batch.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
@@ -35,8 +37,9 @@
 
 using namespace dev;
 using namespace dev::storage;
+using namespace rocksdb;
 
-Entries::Ptr LevelDBStorage2::select(
+Entries::Ptr RocksDBStorage::select(
     h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
@@ -46,7 +49,7 @@ Entries::Ptr LevelDBStorage2::select(
 
         std::string value;
         // ReadGuard l(m_remoteDBMutex);
-        auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+        auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
         // l.unlock();
         if (!s.ok() && !s.IsNotFound())
         {
@@ -97,13 +100,13 @@ Entries::Ptr LevelDBStorage2::select(
     return Entries::Ptr();
 }
 
-size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
         auto hex = hash.hex();
 
-        std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
+        WriteBatch batch;
         for (size_t i = 0; i < datas.size(); ++i)
         {
             std::shared_ptr<std::map<std::string, Json::Value> > key2value =
@@ -120,11 +123,11 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
                 std::stringstream ssOut;
                 ssOut << it.second;
 
-                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+                batch.Put(Slice(entryKey), Slice(ssOut.str()));
             }
         }
 
-        m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
+        m_db->Write(WriteOptions(), &batch);
         return datas.size();
     }
     catch (std::exception& e)
@@ -137,17 +140,17 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
     return 0;
 }
 
-bool LevelDBStorage2::onlyDirty()
+bool RocksDBStorage::onlyDirty()
 {
     return false;
 }
 
-void LevelDBStorage2::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
+void RocksDBStorage::setDB(std::shared_ptr<rocksdb::DB> db)
 {
     m_db = db;
 }
 
-void LevelDBStorage2::processEntries(h256 hash, int64_t num,
+void RocksDBStorage::processEntries(h256 hash, int64_t num,
     std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
     Entries::Ptr entries)
 {
@@ -163,7 +166,7 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
             entryKey.append("_").append(key);
 
             std::string value;
-            auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+            auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
             // l.unlock();
             if (!s.ok() && !s.IsNotFound())
             {
