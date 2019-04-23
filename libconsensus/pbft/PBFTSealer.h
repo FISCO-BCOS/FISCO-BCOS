@@ -67,6 +67,16 @@ public:
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
+    void setEnableDynamicBlockSize(bool enableDynamicBlockSize)
+    {
+        m_enableDynamicBlockSize = enableDynamicBlockSize;
+    }
+
+    void setBlockSizeIncreaseRatio(bool blockSizeIncreaseRatio)
+    {
+        m_blockSizeIncreaseRatio = blockSizeIncreaseRatio;
+    }
+
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
@@ -92,6 +102,10 @@ protected:
     void setBlock();
 
 private:
+    void onTimeout(uint64_t const& sealingTxNumber);
+    void increaseMaxTxsCanSeal();
+    void onCommitBlock(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
     /// reset block when view changes
     void resetBlockForViewChange()
     {
@@ -138,6 +152,15 @@ private:
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
+    /// the minimum number of transactions that caused timeout
+    uint64_t m_lastTimeoutTx = 0;
+    /// the maximum number of transactions that has been consensused without timeout
+    uint64_t m_maxNoTimeoutTx = 0;
+    /// timeout counter
+    int64_t m_timeoutCount = 0;
+    uint64_t m_lastBlockNumber = 0;
+    bool m_enableDynamicBlockSize = true;
+    float m_blockSizeIncreaseRatio = 0.5;
 };
 }  // namespace consensus
 }  // namespace dev
