@@ -31,7 +31,7 @@ using namespace dev::precompiled;
 using namespace dev::blockverifier;
 
 /*
-    table name: __contract_parallel_func_CONTRACTADDR_
+    table name: PARA_CONFIG_TABLE_PREFIX_CONTRACTADDR_
     | key      | index | selector   | functionName                    | criticalSize |
     | -------- | ----- | ---------- | ------------------------------- | ------------ |
     | parallel | 0     | 0x12345678 | transfer(string,string,uint256) | 2            |
@@ -94,7 +94,7 @@ bytes ParallelConfigPrecompiled::call(
 Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,
     Address const& contractAddress, Address const& origin, bool needCreate)
 {
-    string tableName = "_parallel_func_" + contractAddress.hex() + "_";
+    string tableName = PARA_CONFIG_TABLE_PREFIX + contractAddress.hex() + "_";
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
     if (!tableFactoryPrecompiled)
