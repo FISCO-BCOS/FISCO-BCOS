@@ -38,6 +38,12 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
+    if (!isValidPort(listenPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidPort() << errinfo_comment(
+                "P2PInitializer:  initConfig for P2PInitializer failed! Invalid ListenPort!"));
+    }
     std::string certBlacklistSection = "crl";
     if (_pt.get_child_optional("certificate_blacklist"))
     {
