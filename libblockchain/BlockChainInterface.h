@@ -54,8 +54,8 @@ struct GenesisBlockParam
     std::string consensusType;  // the type of consensus, now pbft
     std::string storageType;    // the type of storage, now LevelDB
     std::string stateType;      // the type of state, now mpt/storage
-    uint64_t txCountLimit;      // the maximum number of transactions recorded in a block
-    uint64_t txGasLimit;        // the maximum gas required to execute a transaction
+    int64_t txCountLimit;       // the maximum number of transactions recorded in a block
+    int64_t txGasLimit;         // the maximum gas required to execute a transaction
     uint64_t timeStamp;         /// the timestamp of genesis block
 };
 class BlockChainInterface

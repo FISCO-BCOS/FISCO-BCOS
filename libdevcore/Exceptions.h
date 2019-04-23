@@ -99,6 +99,8 @@ DEV_SIMPLE_EXCEPTION(StorageError);
 DEV_SIMPLE_EXCEPTION(OpenLevelDBFailed);
 DEV_SIMPLE_EXCEPTION(LevelDBNotOpened);
 DEV_SIMPLE_EXCEPTION(UnsupportedInParallelMode);
+DEV_SIMPLE_EXCEPTION(ForbidNegativeValue);
+DEV_SIMPLE_EXCEPTION(InvalidPort);
 /**
  * @brief : error information to be added to exceptions
  */

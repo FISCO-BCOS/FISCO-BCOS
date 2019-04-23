@@ -646,6 +646,10 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
+    {
+        WriteGuard l(x_sealingNumber);
+        m_sealingNumber = sealing.block.getTransactionSize();
+    }
 
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -989,6 +993,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
+        if (m_onCommitBlock)
+        {
+            m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
+                m_timeManager.m_changeCycle);
+        }
         /// remove invalid future block
         m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
@@ -1316,11 +1325,18 @@ void PBFTEngine::checkTimeout()
             if (m_timeManager.m_lastConsensusTime != 0)
             {
                 m_fastViewChange = false;
+                m_timeManager.updateChangeCycle();
+                /// notify sealer that the consensus has been timeout
+                /// and the timeout is not caused by unworked-leader(the case that the node not
+                /// receive the prepare packet)
+                if (m_onTimeout && m_reqCache->prepareCache().height > m_highestBlock.number())
+                {
+                    m_onTimeout(sealingTxNumber());
+                }
             }
             Timer t;
             m_toView += 1;
             m_leaderFailed = true;
-            m_timeManager.updateChangeCycle();
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
