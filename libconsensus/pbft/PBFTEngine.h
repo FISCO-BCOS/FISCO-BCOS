@@ -159,6 +159,17 @@ public:
         m_onNotifyNextLeaderReset = _f;
     }
 
+    void onTimeout(std::function<void(uint64_t const& sealingTxNumber)> const& _f)
+    {
+        m_onTimeout = _f;
+    }
+
+    void onCommitBlock(std::function<void(uint64_t const& blockNumber,
+            uint64_t const& sealingTxNumber, unsigned const& changeCycle)> const& _f)
+    {
+        m_onCommitBlock = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
@@ -177,6 +188,12 @@ public:
             return std::make_pair(false, MAXIDX);
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
+    }
+
+    uint64_t sealingTxNumber() const
+    {
+        ReadGuard l(x_sealingNumber);
+        return m_sealingNumber;
     }
 
 protected:
@@ -536,6 +553,7 @@ protected:
         m_viewMap[idx] = view;
     }
 
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
@@ -560,8 +578,13 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
-    std::function<void()> m_onViewChange;
-    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
+
+    std::function<void()> m_onViewChange = nullptr;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
+    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout = nullptr;
+    std::function<void(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
+        m_onCommitBlock = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
@@ -572,6 +595,9 @@ protected:
     /// map between nodeIdx to view
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
+
+    uint64_t m_sealingNumber = 0;
+    mutable SharedMutex x_sealingNumber;
 };
 }  // namespace consensus
 }  // namespace dev

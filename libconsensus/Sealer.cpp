@@ -46,6 +46,7 @@ void Sealer::start()
     SEAL_LOG(INFO) << "[#Start sealer module]";
     resetSealingBlock();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+    m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
     m_syncBlock = false;
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
@@ -104,8 +105,6 @@ void Sealer::doWork(bool wait)
         {
             /// get current transaction num
             uint64_t tx_num = m_sealing.block.getTransactionSize();
-            /// obtain the transaction num should be packed
-            uint64_t max_blockCanSeal = calculateMaxPackTxNum();
 
             /// add this to in case of unlimited-loop
             if (m_txPool->status().current == 0)
@@ -116,11 +115,12 @@ void Sealer::doWork(bool wait)
             {
                 m_syncTxPool = true;
             }
+            auto maxTxsPerBlock = maxBlockCanSeal();
             /// load transaction from transaction queue
-            if (m_syncTxPool == true && !reachBlockIntervalTime())
-                loadTransactions(max_blockCanSeal - tx_num);
+            if (maxTxsPerBlock > tx_num && m_syncTxPool == true && !reachBlockIntervalTime())
+                loadTransactions(maxTxsPerBlock - tx_num);
             /// check enough or reach block interval
-            if (!checkTxsEnough(max_blockCanSeal))
+            if (!checkTxsEnough(maxTxsPerBlock))
             {
                 ///< 10 milliseconds to next loop
                 std::unique_lock<std::mutex> l(x_signalled);
