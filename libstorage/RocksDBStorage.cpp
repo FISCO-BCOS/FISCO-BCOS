@@ -14,9 +14,9 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file SealerPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+/** @file RocksDBStorage.cpp
+ *  @author bxq
+ *  @date 20180423
  */
 
 #include "RocksDBStorage.h"
@@ -48,15 +48,13 @@ Entries::Ptr RocksDBStorage::select(
         entryKey.append("_").append(key);
 
         std::string value;
-        // ReadGuard l(m_remoteDBMutex);
         auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
-        // l.unlock();
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_LEVELDB_LOG(ERROR)
-                << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
-            BOOST_THROW_EXCEPTION(StorageException(-1, "Query leveldb exception:" + s.ToString()));
+            BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
         }
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -91,7 +89,7 @@ Entries::Ptr RocksDBStorage::select(
     }
     catch (std::exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query leveldb exception")
+        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(e);
@@ -132,7 +130,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
     }
     catch (std::exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
+        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -171,10 +169,10 @@ void RocksDBStorage::processEntries(h256 hash, int64_t num,
             if (!s.ok() && !s.IsNotFound())
             {
                 STORAGE_LEVELDB_LOG(ERROR)
-                    << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                    << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
                 BOOST_THROW_EXCEPTION(
-                    StorageException(-1, "Query leveldb exception:" + s.ToString()));
+                    StorageException(-1, "Query rocksdb exception:" + s.ToString()));
             }
 
             if (s.IsNotFound())

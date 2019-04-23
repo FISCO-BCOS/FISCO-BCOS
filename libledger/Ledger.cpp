@@ -49,8 +49,22 @@ namespace dev
 {
 namespace ledger
 {
-bool Ledger::initLedger()
+bool Ledger::initLedger(const std::string& _configFilePath)
 {
+    Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
+                     << LOG_KV("baseDir", m_param->baseDir());
+    /// The file group.X.genesis is required, otherwise the program terminates.
+    /// load genesis config of group
+    initConfig(_configFilePath);
+    /// The file group.X.ini is available by default.
+    /// In this case, the configuration item uses the default value.
+    /// load ini config of group for TxPool/Sync modules
+    std::string iniConfigFileName = _configFilePath;
+    boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+
+    /// you should invoke initConfig first before invoke initIniConfig
+    initIniConfig(iniConfigFileName);
+    initMark();
     if (!m_param)
         return false;
     /// init dbInitializer
@@ -367,7 +381,10 @@ void Ledger::initMark()
     s << int(m_groupId) << "-";
     s << m_param->mutableGenesisParam().nodeListMark << "-";
     s << m_param->mutableConsensusParam().consensusType << "-";
-    s << m_param->mutableStorageParam().type << "-";
+    if (g_BCOSConfig.version() < RC3_VERSION)
+    {
+        s << m_param->mutableStorageParam().type << "-";
+    }
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
     s << m_param->mutableTxParam().txGasLimit;

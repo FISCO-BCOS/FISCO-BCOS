@@ -20,22 +20,22 @@ ExternalProject_Add(rocksdb
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     BUILD_COMMAND ""
+    INSTALL_COMMAND ""
     UPDATE_DISCONNECTED 1
-    ${_overwrite_install_command}
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
     LOG_UPDATE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/librocksdb.a
+    BUILD_BYPRODUCTS <SOURCE_DIR>/librocksdb.a
 )
 
-ExternalProject_Get_Property(rocksdb INSTALL_DIR)
+ExternalProject_Get_Property(rocksdb SOURCE_DIR)
 add_library(RocksDB STATIC IMPORTED GLOBAL)
 
-set(ROCKSDB_INCLUDE_DIR ${INSTALL_DIR}/include/)
-set(ROCKSDB_LIBRARY ${INSTALL_DIR}/${CMAKE_INSTALL_LIBDIR}/librocksdb.a)
+set(ROCKSDB_INCLUDE_DIR ${SOURCE_DIR}/include/)
+set(ROCKSDB_LIBRARY ${SOURCE_DIR}/librocksdb.a)
 file(MAKE_DIRECTORY ${ROCKSDB_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET RocksDB PROPERTY IMPORTED_LOCATION ${ROCKSDB_LIBRARY})
@@ -43,4 +43,4 @@ set_property(TARGET RocksDB PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ROCKSDB_INC
 set_property(TARGET RocksDB PROPERTY INTERFACE_LINK_LIBRARIES Snappy)
 
 add_dependencies(RocksDB rocksdb)
-unset(INSTALL_DIR)
+unset(SOURCE_DIR)

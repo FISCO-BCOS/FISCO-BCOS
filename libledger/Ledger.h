@@ -60,12 +60,8 @@ public:
      * by the param ${configFileName}
      */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir,
-        std::string const& configFileName)
-      : m_service(service),
-        m_groupId(_groupId),
-        m_keyPair(_keyPair),
-        m_configFileName(configFileName)
+        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+      : m_service(service), m_groupId(_groupId), m_keyPair(_keyPair)
     {
         m_param = std::make_shared<LedgerParam>();
         std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
@@ -73,23 +69,6 @@ public:
             prefix = "./group" + std::to_string(_groupId);
         m_param->setBaseDir(prefix);
         assert(m_service);
-        if (m_configFileName == "")
-            m_configFileName = "./group." + std::to_string(_groupId) + m_postfixGenesis;
-
-        Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", m_configFileName)
-                         << LOG_KV("baseDir", m_param->baseDir());
-        /// The file group.X.genesis is required, otherwise the program terminates.
-        /// load genesis config of group
-        initConfig(m_configFileName);
-        /// The file group.X.ini is available by default.
-        /// In this case, the configuration item uses the default value.
-        /// load ini config of group for TxPool/Sync modules
-        std::string iniConfigFileName = m_configFileName;
-        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
-
-        /// you should invoke initConfig first before invoke initIniConfig
-        initIniConfig(iniConfigFileName);
-        initMark();
     }
 
     /// start all modules(sync, consensus)
@@ -112,7 +91,7 @@ public:
 
     virtual ~Ledger(){};
 
-    bool initLedger() override;
+    bool initLedger(const std::string& _configFilePath = "config.ini") override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -182,7 +161,6 @@ protected:
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::GROUP_ID m_groupId;
     dev::KeyPair m_keyPair;
-    std::string m_configFileName = "config";
     std::string m_postfixGenesis = ".genesis";
     std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;

@@ -212,7 +212,8 @@ void DBInitializer::initRocksDBStorage()
     rocksdb::DB* db = nullptr;
     try
     {
-        boost::filesystem::create_directories(m_param->mutableStorageParam().path + "/RocksDB");
+        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
+        boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         options.IncreaseParallelism();
         options.OptimizeLevelStyleCompaction();
         options.create_if_missing = true;
@@ -226,7 +227,7 @@ void DBInitializer::initRocksDBStorage()
 
         if (!status.ok())
         {
-            throw std::runtime_error("open LevelDB failed");
+            throw std::runtime_error("open RocksDB failed");
         }
         DBInitializer_LOG(DEBUG) << LOG_KV("status", status.ok());
         std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();

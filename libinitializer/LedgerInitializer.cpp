@@ -113,10 +113,10 @@ bool LedgerInitializer::initLedger(
         return false;
     }
     std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir, configFileName);
+        std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir);
     INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
     ledger->setChannelRPCServer(m_channelRPCServer);
-    bool succ = ledger->initLedger();
+    bool succ = ledger->initLedger(configFileName);
     if (!succ)
         return false;
     m_ledgerManager->insertLedger(_groupId, ledger);

@@ -43,6 +43,11 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
         g_BCOSConfig.setVersion(RC2_VERSION);
         g_BCOSConfig.setSupportedVersion("2.0.0-rc2");
     }
+    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc3") == 0)
+    {
+        g_BCOSConfig.setVersion(RC3_VERSION);
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc3");
+    }
     else
     {
         BOOST_THROW_EXCEPTION(UnknowSupportVersion());

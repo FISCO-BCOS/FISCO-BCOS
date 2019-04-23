@@ -14,9 +14,9 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file SealerPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+/** @file RocksDBStorage.h
+ *  @author bxq
+ *  @date 20180423
  */
 #pragma once
 
@@ -54,7 +54,6 @@ private:
         Entries::Ptr entries);
 
     std::shared_ptr<rocksdb::DB> m_db;
-    dev::SharedMutex m_remoteDBMutex;
 };
 
 }  // namespace storage

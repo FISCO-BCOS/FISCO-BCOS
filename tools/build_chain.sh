@@ -48,7 +48,7 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
     -d <docker mode>                    Default off. If set -d, build with docker
     -s <State type>                     Default storage. if set -s, use mpt 
-    -S <Storage type>                   Default leveldb. if set -S, use external
+    -S <Storage type>                   Default leveldb. Options can be leveldb/external/rocksdb
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
@@ -78,7 +78,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdC:S" option;do
+while getopts "f:l:o:p:e:t:v:icszhgTFdC:S:" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -94,14 +94,19 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdC:S" option;do
     ;;
     e) bin_path=$OPTARG;;
     s) state_type=mpt;;
-    S) storage_type="external";;
+    S) storage_type=$OPTARG
+        if [ -z "${storage_type}" ];then
+            LOG_WARN "${storage_type} is not supported storage."
+            exit 1;
+        fi
+    ;;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
-      if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
-        LOG_WARN "${chain_id} is not a positive integer."
-        exit 1;
-      fi
+        if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
+            LOG_WARN "${chain_id} is not a positive integer."
+            exit 1;
+        fi
     ;;
     T) debug_log="true"
     log_level="debug"

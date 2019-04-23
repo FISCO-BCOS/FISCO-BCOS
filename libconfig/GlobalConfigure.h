@@ -29,7 +29,8 @@ namespace dev
 enum VERSION
 {
     RC1_VERSION = 1,
-    RC2_VERSION = 2
+    RC2_VERSION = 2,
+    RC3_VERSION = 3
 };
 class GlobalConfigure
 {
