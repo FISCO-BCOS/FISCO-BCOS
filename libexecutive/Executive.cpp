@@ -158,21 +158,24 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
                     _p.staticCall);
             }
         }
+        // Transfer ether.
+        m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
     }
     catch (dev::eth::PrecompiledError const& e)
     {
         revert();
-        LOG(TRACE) << LOG_DESC("revert for precompile error");
-        m_excepted = toTransactionException(e);
+        m_excepted = TransactionException::PrecompiledError;
+    }
+    catch (NotEnoughCash const& _e)
+    {
+        revert();
+        m_excepted = TransactionException::NotEnoughCash;
     }
     catch (std::exception const& e)
     {
         revert();
         m_excepted = TransactionException::Unknown;
     }
-
-    // Transfer ether.
-    m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
     return !m_ext;
 }
 
@@ -377,6 +380,16 @@ bool Executive::go(OnOpFunc const& _onOp)
         {
             revert();
             m_excepted = TransactionException::PermissionDenied;
+        }
+        catch (NotEnoughCash const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::NotEnoughCash;
+        }
+        catch (PrecompiledError const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::PrecompiledError;
         }
         catch (InternalVMError const& _e)
         {
