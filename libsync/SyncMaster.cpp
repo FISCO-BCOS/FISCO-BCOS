@@ -589,7 +589,8 @@ void SyncMaster::maintainPeersConnection()
         hasMyself |= (member == m_nodeId);
     }
 
-    // Set flag to check packet from group peers
+    // Set flag to check packet from group peers if the node is sealer or observer and not a new
+    // start node
     int64_t currentNumber = m_blockChain->number();
     if (!isSyncing())
     {
@@ -597,8 +598,7 @@ void SyncMaster::maintainPeersConnection()
     }
 
 
-    // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
-    // other peers)
+    // Delete uncorrelated peers(only if the node need to check packet in group)
     if (m_msgEngine->needCheckPacketInGroup)
     {
         NodeIDs nodeIds = m_syncStatus->peers();
