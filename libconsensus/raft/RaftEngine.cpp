@@ -266,7 +266,7 @@ void RaftEngine::workLoop()
         auto isSyncing = m_blockSync->isSyncing();
         if (isSyncing)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
+            RAFTENGINE_LOG(TRACE) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
