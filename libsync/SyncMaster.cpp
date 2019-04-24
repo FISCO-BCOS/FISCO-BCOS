@@ -591,7 +591,7 @@ void SyncMaster::maintainPeersConnection()
 
     // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
     // other peers)
-    if (hasMyself)
+    if (hasMyself && m_msgEngine->needCheckPacketInGroup)
     {
         NodeIDs nodeIds = m_syncStatus->peers();
         for (NodeID const& id : nodeIds)
