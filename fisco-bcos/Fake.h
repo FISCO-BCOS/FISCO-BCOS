@@ -241,8 +241,12 @@ public:
       : Ledger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger(const std::string&) override
+    bool initLedger(const std::string& _configPath) override
     {
+        initConfig(_configPath);
+        std::string iniConfigFileName = _configPath;
+        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+        initIniConfig(_configPath);
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain

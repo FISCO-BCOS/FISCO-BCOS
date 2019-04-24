@@ -114,6 +114,10 @@ void Ledger::initConfig(std::string const& configPath)
         initTxConfig(pt);
         /// init params related to genesis: timestamp
         initGenesisConfig(pt);
+        /// set state db related param
+        m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+        // Compatibility with previous versions RC2/RC1
+        m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
     }
     catch (std::exception& e)
     {
@@ -147,14 +151,14 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
 
 void Ledger::initTxExecuteConfig(ptree const& pt)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
     {
-        m_param->mutableTxParam().enableParallel = false;
+        m_param->mutableTxParam().enableParallel =
+            pt.get<bool>("tx_execute.enable_parallel", false);
     }
     else
     {
-        bool enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
-        m_param->mutableTxParam().enableParallel = enableParallel;
+        m_param->mutableTxParam().enableParallel = false;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
                       << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
@@ -320,7 +324,7 @@ void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
     /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
@@ -342,8 +346,7 @@ void Ledger::initDBConfig(ptree const& pt)
     {
         m_param->mutableStorageParam().maxRetry = 100;
     }
-    /// set state db related param
-    m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)

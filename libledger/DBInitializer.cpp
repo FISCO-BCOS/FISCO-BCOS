@@ -73,8 +73,8 @@ void DBInitializer::initStorageDB()
     }
     else
     {
-        DBInitializer_LOG(ERROR) << LOG_DESC(
-            "Unsupported dbType, current version only supports levelDB");
+        DBInitializer_LOG(ERROR) << LOG_DESC("Unsupported dbType")
+                                 << LOG_KV("config storage", m_param->mutableStorageParam().type);
         BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
     }
 }

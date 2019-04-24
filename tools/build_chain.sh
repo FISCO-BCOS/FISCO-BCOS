@@ -13,7 +13,7 @@ ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
-storage_type=LevelDB
+storage_type=RocksDB
 conf_path="conf"
 bin_path=
 make_tar=
@@ -28,6 +28,7 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
+enable_parallel=false
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
@@ -49,6 +50,7 @@ Usage:
     -d <docker mode>                    Default off. If set -d, build with docker
     -s <State type>                     Default storage. if set -s, use mpt 
     -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
+    -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
@@ -78,7 +80,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdC:S:" option;do
+while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -100,6 +102,7 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdC:S:" option;do
             exit 1;
         fi
     ;;
+    P) enable_parallel="true";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
@@ -549,7 +552,7 @@ function generate_group_ini()
 [tx_pool]
     limit=150000
 [tx_execute]
-    enable_parallel=true
+    enable_parallel=${enable_parallel}
 EOF
 }
 

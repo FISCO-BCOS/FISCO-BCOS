@@ -473,7 +473,6 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-// class FakeLedger : public LedgerInterface
 class FakeLedger : public LedgerInterface
 {
 public:

@@ -45,13 +45,14 @@ public:
       : FakeLedger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger(const std::string&) override
+    bool initLedger(const std::string& _configPath) override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
+        FakeLedger::initConfig(_configPath);
         /// init blockChain
         FakeLedger::initBlockChain();
         /// intit blockVerifier
@@ -94,7 +95,7 @@ public:
     {
         FakeLedger::initGenesisConfig(pt);
     }
-
+    void init(std::string const& _configPath) { return FakeLedger::initConfig(_configPath); }
     void initMark() { FakeLedger::initMark(); }
     void initIniConfig(std::string const& iniConfigFileName)
     {
@@ -113,8 +114,18 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(LedgerTest, TestOutputHelperFixture)
-void checkGenesisParam(std::shared_ptr<LedgerParam> param)
+
+/// test init ini config and genesis config
+BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
+    TxPoolFixture txpool_creator;
+    KeyPair key_pair = KeyPair::create();
+    dev::GROUP_ID groupId = 10;
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
+    FakeLedgerForTest fakeLedger(txpool_creator.m_topicService, groupId, key_pair, "");
+    fakeLedger.init(configurationPath);
+    std::shared_ptr<LedgerParam> param =
+        std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
     /// check consensus params
     BOOST_CHECK(param->mutableConsensusParam().consensusType == "raft");
     BOOST_CHECK(param->mutableConsensusParam().maxTransactions == 2000);
@@ -127,19 +138,6 @@ void checkGenesisParam(std::shared_ptr<LedgerParam> param)
     /// check state DB param
     BOOST_CHECK(param->mutableStorageParam().type == "sql");
     BOOST_CHECK(param->mutableStateParam().type == "mpt");
-}
-
-/// test init ini config and genesis config
-BOOST_AUTO_TEST_CASE(testGensisConfig)
-{
-    TxPoolFixture txpool_creator;
-    KeyPair key_pair = KeyPair::create();
-    dev::GROUP_ID groupId = 10;
-    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
-    FakeLedgerForTest fakeLedger(txpool_creator.m_topicService, groupId, key_pair, "");
-    std::shared_ptr<LedgerParam> param =
-        std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
-    checkGenesisParam(param);
 
     /// check timestamp
     /// init genesis configuration
@@ -151,18 +149,28 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
     /// check with valid timestamp
     pt.put("group.timestamp", 1553520855);
+    pt.put("state.type", "storage");
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
-
 
     /// check groupMark
     fakeLedger.initMark();
     std::string mark =
         "10-"
-        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
+        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc"
+        "2aeb"
         "f4746846c0db2604adebf9c70c7f418d4d5a61,"
-        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
-        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-sql-mpt-2000-300000000";
+        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc"
+        "1c15"
+        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-";
+    if (g_BCOSConfig.version() < RC3_VERSION)
+    {
+        mark += "sql-mpt-2000-300000000";
+    }
+    else
+    {
+        mark += "mpt-2000-300000000";
+    }
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().genesisMark == mark);
 
     /// init ini config
@@ -174,10 +182,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// modify state to storage(the default option)
     fakeLedger.initDBConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "LevelDB");
-    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
+    BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
+    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "mpt");
     fakeLedger.initIniConfig(configurationPath);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =

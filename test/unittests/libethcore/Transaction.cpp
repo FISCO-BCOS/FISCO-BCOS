@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
 
     // RC1_VERSION encode and decode
-    g_BCOSConfig.setVersion(RC1_VERSION);
+    g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
     /// test encode
     bytes encodeBytesRC1;
     BOOST_CHECK_NO_THROW(tx.encode(encodeBytesRC1, eth::IncludeSignature::WithSignature));
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
 #endif
     Transaction decodeTxRC2;
     BOOST_CHECK_NO_THROW(decodeTxRC2.decode(ref(rlpBytes)));
-    g_BCOSConfig.setVersion(RC2_VERSION);
+    g_BCOSConfig.setSupportedVersion("2.0.0-rc2", RC2_VERSION);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
