@@ -589,9 +589,17 @@ void SyncMaster::maintainPeersConnection()
         hasMyself |= (member == m_nodeId);
     }
 
+    // Set flag to check packet from group peers
+    int64_t currentNumber = m_blockChain->number();
+    if (!isSyncing())
+    {
+        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
+    }
+
+
     // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
     // other peers)
-    if (hasMyself && m_msgEngine->needCheckPacketInGroup)
+    if (m_msgEngine->needCheckPacketInGroup)
     {
         NodeIDs nodeIds = m_syncStatus->peers();
         for (NodeID const& id : nodeIds)
@@ -605,7 +613,6 @@ void SyncMaster::maintainPeersConnection()
 
 
     // Add new peers
-    int64_t currentNumber = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& member : memberSet)
     {
@@ -638,12 +645,6 @@ void SyncMaster::maintainPeersConnection()
         _p->isSealer = (sealerSet.find(_p->nodeId) != sealerSet.end());
         return true;
     });
-
-    if (!isSyncing())
-    {
-        // Set flag to check packet from group peers
-        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
-    }
 
     // If myself is not in group, no need to maintain transactions(send transactions to peers)
     m_needMaintainTransactions = hasMyself;
