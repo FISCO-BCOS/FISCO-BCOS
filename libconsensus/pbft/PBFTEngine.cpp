@@ -258,6 +258,7 @@ bool PBFTEngine::generatePrepare(Block const& block)
         {
             m_leaderFailed = true;
             changeViewForFastViewChange();
+            m_timeManager.m_changeCycle = 0;
             return true;
         }
         handlePrepareMsg(prepare_req);
@@ -815,6 +816,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     if (needOmit(workingSealing))
     {
         changeViewForFastViewChange();
+        m_timeManager.m_changeCycle = 0;
         return true;
     }
 
@@ -1286,6 +1288,7 @@ void PBFTEngine::checkAndChangeView()
             m_fastViewChange = false;
         }
         m_leaderFailed = false;
+        m_timeManager.m_changeCycle = 0;
         m_timeManager.m_lastConsensusTime = utcTime();
         m_view = m_toView;
         m_notifyNextLeaderSeal = false;
