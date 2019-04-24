@@ -76,8 +76,12 @@ macro(configure_project)
     #perf
     eth_default_option(PROF OFF)
     if (PROF)
-    	add_definitions(-DPROF)
+    	#add_definitions(-DPROF)
 	endif()
+	
+	eth_default_option(STORAGE_JNI ON)
+	if (STORAGE_JNI)
+	endif ()
 
 
     # Define a matching property name of each of the "features".
@@ -120,6 +124,7 @@ macro(print_config NAME)
     message("-- TESTS            Build tests                        ${TESTS}")
     message("-- EasyLog          Enable easyLog                     ${EASYLOG}")
     message("-- ARCH_TYPE                                           ${ARCH_TYPE}")
+    message("-- STORAGE_JNI                                         ${STORAGE_JNI}")
     message("-- PROF                                                ${PROF}")
     message("------------------------------------------------------------------------")
 if (BUILD_GM)
