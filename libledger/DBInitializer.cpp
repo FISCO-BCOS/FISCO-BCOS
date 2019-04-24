@@ -174,6 +174,7 @@ void DBInitializer::initLevelDBStorage2()
     dev::db::BasicLevelDB* pleveldb = nullptr;
     try
     {
+        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/LevelDB2";
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
         ldb_option.create_if_missing = true;
         ldb_option.max_open_files = 1000;

@@ -51,7 +51,7 @@ public:
      */
     bool insertLedger(dev::GROUP_ID const& _groupId, std::shared_ptr<LedgerInterface> ledger)
     {
-        if ((_groupId <= 0) || (_groupId > maxGroupID))
+        if (_groupId <= 0)
         {
             LedgerManager_LOG(ERROR)
                 << "[initSingleLedger] invalid GroupId: " << _groupId << ", must between [1"

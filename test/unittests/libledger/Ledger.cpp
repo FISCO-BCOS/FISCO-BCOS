@@ -41,12 +41,11 @@ class FakeLedgerForTest : public FakeLedger
 {
 public:
     FakeLedgerForTest(std::shared_ptr<dev::p2p::P2PInterface> service,
-        dev::GROUP_ID const& _groupId, dev::KeyPair const& _keyPair, std::string const& _baseDir,
-        std::string const& _configFile)
-      : FakeLedger(service, _groupId, _keyPair, _baseDir, _configFile)
+        dev::GROUP_ID const& _groupId, dev::KeyPair const& _keyPair, std::string const& _baseDir)
+      : FakeLedger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger() override
+    bool initLedger(const std::string&) override
     {
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
@@ -111,7 +110,6 @@ public:
     {
         m_dbInitializer = _dbInitializer;
     }
-    std::string const& configFileName() { return m_configFileName; }
 };
 
 BOOST_FIXTURE_TEST_SUITE(LedgerTest, TestOutputHelperFixture)
@@ -138,9 +136,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     KeyPair key_pair = KeyPair::create();
     dev::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
-    FakeLedgerForTest fakeLedger(
-        txpool_creator.m_topicService, groupId, key_pair, "", configurationPath);
-    BOOST_CHECK(fakeLedger.configFileName() == configurationPath);
+    FakeLedgerForTest fakeLedger(txpool_creator.m_topicService, groupId, key_pair, "");
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(fakeLedger.getParam());
     checkGenesisParam(param);
@@ -226,9 +222,9 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     dev::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
 
-    std::shared_ptr<LedgerInterface> ledger = std::make_shared<FakeLedgerForTest>(
-        txpool_creator.m_topicService, groupId, key_pair, "", configurationPath);
-    ledger->initLedger();
+    std::shared_ptr<LedgerInterface> ledger =
+        std::make_shared<FakeLedgerForTest>(txpool_creator.m_topicService, groupId, key_pair, "");
+    ledger->initLedger(configurationPath);
     ledgerManager->insertLedger(groupId, ledger);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(groupId));

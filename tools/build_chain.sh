@@ -48,7 +48,7 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
     -d <docker mode>                    Default off. If set -d, build with docker
     -s <State type>                     Default storage. if set -s, use mpt 
-    -S <Storage type>                   Default leveldb. Options can be leveldb/external/rocksdb
+    -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
@@ -538,7 +538,7 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ;storage db type, leveldb/external/rocksdb are supported
+    ;storage db type, leveldb/leveldb2/external/rocksdb are supported
     type=${storage_type}
     max_retry=100
     max_store_key=10000
