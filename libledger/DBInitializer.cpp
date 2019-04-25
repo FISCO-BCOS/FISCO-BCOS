@@ -60,10 +60,10 @@ void DBInitializer::initStorageDB()
     {
         initLevelDBStorage();
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
-    {
-        initLevelDBStorage2();
-    }
+    // else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
+    // {
+    //     initLevelDBStorage2();
+    // }
     else
     {
         DBInitializer_LOG(ERROR) << LOG_DESC(
