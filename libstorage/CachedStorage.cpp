@@ -621,7 +621,7 @@ void CachedStorage::checkAndClear()
                     {
                         if (cache->num() <= m_syncNum)
                         {
-                            STORAGE_LOG(INFO)
+                            STORAGE_LOG(TRACE)
                                 << "Clear last recent record: "
                                 << tableIt->second->tableInfo()->name << "-" << it->second;
                             tableIt->second->removeCache(it->second);
