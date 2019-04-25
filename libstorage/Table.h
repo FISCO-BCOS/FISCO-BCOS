@@ -96,6 +96,8 @@ public:
     virtual bool deleted() const;
     virtual void setDeleted(bool deleted);
 
+    virtual size_t capacity() const;
+
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
@@ -105,6 +107,8 @@ private:
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
+
+    size_t m_capacity = 0;
 };
 
 class EntryLess
