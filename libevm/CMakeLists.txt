@@ -7,7 +7,6 @@ target_link_libraries(
     evm
     PRIVATE interpreter evmc::loader ethcore evmc::evmc Boost::program_options devcore 
 )
-target_link_libraries(evm PUBLIC TBB)
 
 if(EVM_OPTIMIZE)
     target_compile_definitions(evm PRIVATE EVM_OPTIMIZE)

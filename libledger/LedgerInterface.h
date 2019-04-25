@@ -41,7 +41,7 @@ public:
     LedgerInterface() = default;
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
-    virtual bool initLedger() = 0;
+    virtual bool initLedger(const std::string& _configFilePath = "config.ini") = 0;
 
     virtual void initConfig(std::string const& configPath) = 0;
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const = 0;
