@@ -356,7 +356,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 		tbb::blocked_range<size_t>(0, commitDatas->size()), [&](const tbb::blocked_range<size_t>& range) {
     	for(size_t i=range.begin(); i<range.end(); ++i) {
     		auto commitData = (*commitDatas)[i];
-    		tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatas->size()), [&](const tbb::blocked_range<size_t>& dataRange) {
+    		tbb::parallel_for(tbb::blocked_range<size_t>(0, commitData->newEntries->size()), [&](const tbb::blocked_range<size_t>& dataRange) {
 				for (size_t j = dataRange.begin(); j < dataRange.end(); ++j)
 				{
 					++total;

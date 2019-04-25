@@ -298,6 +298,7 @@ BOOST_AUTO_TEST_CASE(commit)
 {
     h256 h;
     int64_t num = 50;
+    cachedStorage->setMaxForwardBlock(100);
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "t_test";
@@ -346,6 +347,7 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
     h256 h;
     int64_t num = 50;
     std::vector<dev::storage::TableData::Ptr> datas;
+    cachedStorage->setMaxForwardBlock(100);
 
     for (size_t i = 100; i < 200; ++i)
     {
@@ -435,6 +437,10 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 		}
 	}
 #endif
+}
+
+BOOST_AUTO_TEST_CASE(checkAndClear) {
+
 }
 
 BOOST_AUTO_TEST_CASE(exception)

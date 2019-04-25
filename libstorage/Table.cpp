@@ -275,7 +275,7 @@ Entry::ConstPtr Entries::get(size_t i) const
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+        BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -287,7 +287,7 @@ Entry::Ptr Entries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -343,7 +343,7 @@ Entry::Ptr ConcurrentEntries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
