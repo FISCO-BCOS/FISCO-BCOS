@@ -451,7 +451,6 @@ generate_config_ini()
     ;enable/disable network compress
     ;enable_compress=true
 
-;certificate rejected list		
 [certificate_blacklist]		
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
@@ -473,7 +472,6 @@ generate_config_ini()
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
 
-; storage security releated configurations
 [storage_security]
 ; enable storage_security or not
 ;enable=true
@@ -487,7 +485,6 @@ generate_config_ini()
     id=${chain_id}
 [compatibility]
     supported_version=${fisco_version}
-;log configurations
 [log]
     ; the directory of the log
     log_path=./log
@@ -509,20 +506,18 @@ generate_group_genesis()
     local index=$2
     local node_list=$3
     cat << EOF > ${output} 
-;consensus configuration
 [consensus]
-    ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
-    ;the max number of transactions of a block
+    ; the max number of transactions of a block
     max_trans_num=1000
-    ;the node id of leaders
+    ; the node id of leaders
     ${node_list}
 [state]
-    ;support mpt/storage
+    ; support mpt/storage
     type=${state_type}
-
-;tx gas limit
 [tx]
+    ; transaction gas limit
     gas_limit=300000000
 [group]
     id=${index}
@@ -534,21 +529,20 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
-; the ttl for broadcasting pbft message
 [consensus]
+    ; the ttl for broadcasting pbft message
     ;ttl=2
-    ;min block generation time(ms), the max block generation time is 1000 ms
+    ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ;storage db type, leveldb/leveldb2/external/rocksdb are supported
+    ; storage db type, leveldb/leveldb2/external/rocksdb are supported
     type=${storage_type}
     max_retry=100
     max_store_key=10000
     max_forward_block=100
-    ;topic only for external
+    ; topic only for external
     topic=DB
-;txpool limit
 [tx_pool]
     limit=150000
 [tx_execute]

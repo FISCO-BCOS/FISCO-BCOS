@@ -199,7 +199,7 @@ void DBInitializer::initLevelDBStorage2()
     }
     catch (std::exception& e)
     {
-        DBInitializer_LOG(ERROR) << LOG_DESC("initLevelDBStorage failed")
+        DBInitializer_LOG(ERROR) << LOG_DESC("initLevelDBStorage2 failed")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }

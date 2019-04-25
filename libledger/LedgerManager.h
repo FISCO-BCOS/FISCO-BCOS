@@ -58,19 +58,15 @@ public:
                 << ", " << maxGroupID << "]";
             return false;
         }
-        if (m_ledgerMap.count(_groupId) > 0)
-        {
-            LedgerManager_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
-                                     << std::to_string(_groupId);
-            return false;
-        }
-        m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        auto ret = m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        if (ret.second)
         {
             WriteGuard l(x_groupListCache);
             m_groupListCache.insert(_groupId);
         }
-        return true;
+        return ret.second;
     }
+
     bool isLedgerExist(dev::GROUP_ID const& _groupId) { return m_ledgerMap.count(_groupId); }
     /**
      * @brief : start a single ledger by groupId

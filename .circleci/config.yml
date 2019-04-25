@@ -3,13 +3,13 @@ jobs:
   build_static_test:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:18.04
+      - image: ubuntu:16.04
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git g++ make curl lcov build-essential autoconf texinfo cmake libssl-dev ccache
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -80,13 +80,13 @@ jobs:
   build_static:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ gcc ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -119,13 +119,13 @@ jobs:
   build_guomi:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ gcc ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -158,7 +158,7 @@ jobs:
   deploy_static:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
@@ -184,7 +184,7 @@ jobs:
   deploy_guomi:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
