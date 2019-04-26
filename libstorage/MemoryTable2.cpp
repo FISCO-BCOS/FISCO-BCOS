@@ -303,7 +303,7 @@ bool MemoryTable2::dump(dev::storage::TableData::Ptr data)
         });
 
     data->newEntries = std::make_shared<Entries>();
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 1000),
         [&](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
