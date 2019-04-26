@@ -226,8 +226,8 @@ public:
     virtual void LT(const std::string& key, const std::string& value);
     virtual void LE(const std::string& key, const std::string& value);
 
-    virtual void limit(int count);
-    virtual void limit(int offset, int count);
+    virtual void limit(int64_t count);
+    virtual void limit(int64_t offset, int64_t count);
 
     virtual std::map<std::string, Range>* getConditions();
 
@@ -244,8 +244,8 @@ public:
 
 
 private:
-    int m_offset = -1;
-    int m_count = -1;
+    int64_t m_offset = -1;
+    int64_t m_count = -1;
     std::map<std::string, Range> m_conditions;
     const std::string UNLIMITED = "_VALUE_UNLIMITED_";
 };
