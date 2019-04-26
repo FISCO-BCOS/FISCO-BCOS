@@ -93,16 +93,18 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-    // dev::WriteGuard l(x_fields);
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
     {
+        // m_capacity -= (key.size() + it->second.size());
         it->second = value;
+        // m_capacity += (key.size() + value.size());
     }
     else
     {
         m_fields.insert(std::make_pair(key, value));
+        // m_capacity += (key.size() + value.size());
     }
 
     m_dirty = true;
@@ -211,6 +213,11 @@ void Entry::setDeleted(bool deleted)
     m_deleted = deleted;
 }
 
+size_t Entry::capacity() const
+{
+    return m_capacity;
+}
+
 void Entry::copyFrom(Entry::Ptr entry)
 {
     m_dirty = entry->m_dirty;
@@ -219,6 +226,7 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_force = entry->m_force;
     m_ID = entry->m_ID;
     m_deleted = entry->m_deleted;
+    m_capacity = entry->m_capacity;
 }
 
 bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
@@ -268,7 +276,8 @@ Entry::ConstPtr Entries::get(size_t i) const
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -280,7 +289,8 @@ Entry::Ptr Entries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -336,7 +346,8 @@ Entry::Ptr ConcurrentEntries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-        throw StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -463,15 +474,25 @@ void Condition::LE(const std::string& key, const std::string& value)
     }
 }
 
-void Condition::limit(size_t count)
+void Condition::limit(int64_t count)
 {
     limit(0, count);
 }
 
-void Condition::limit(size_t offset, size_t count)
+void Condition::limit(int64_t offset, int64_t count)
 {
     m_offset = offset;
     m_count = count;
+}
+
+int Condition::getOffset()
+{
+    return m_offset;
+}
+
+int Condition::getCount()
+{
+    return m_count;
 }
 
 std::map<std::string, Condition::Range>* Condition::getConditions()

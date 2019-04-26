@@ -25,6 +25,7 @@
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
+#include <tbb/mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -128,11 +129,12 @@ private:
 
     boost::atomic_int64_t m_syncNum;
     boost::atomic_int64_t m_commitNum;
+    boost::atomic_int64_t m_capacity;
 
     size_t m_maxStoreKey = 1000;
-    size_t m_maxForwardBlock = 100;
+    size_t m_maxForwardBlock = 10;
 
-    std::mutex m_mutex;
+    tbb::mutex m_mutex;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
 
