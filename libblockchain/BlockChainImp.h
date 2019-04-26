@@ -110,7 +110,13 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+    void setStoragePath(std::string const& storagePath)
+    {
+        m_storagePathHandler = boost::filesystem::path(storagePath);
+    }
+
 private:
+    boost::filesystem::path m_storagePathHandler;
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
