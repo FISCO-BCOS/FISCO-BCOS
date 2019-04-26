@@ -442,7 +442,6 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
-    blockChain->setStoragePath(m_param->mutableStorageParam().path);
     m_blockChain = blockChain;
     std::string consensusType = m_param->mutableConsensusParam().consensusType;
     std::string storageType = m_param->mutableStorageParam().type;

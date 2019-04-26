@@ -1076,15 +1076,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
-            /// the disk available space is less than 100M, exit directly
-            if (boost::filesystem::space(m_storagePathHandler).available <= 1024 * 1024 * 100)
-            {
-                BLOCKCHAIN_LOG(ERROR) << LOG_DESC(
-                    "[#commitBlock]Commit fail ! The disk available space is less than 100M, "
-                    "please clean the disk and restart again!");
-                BOOST_THROW_EXCEPTION(StorageException(-1, "Disk Space Less Than 100MB"));
-            }
-
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
             writeHash2Block(block, context);
