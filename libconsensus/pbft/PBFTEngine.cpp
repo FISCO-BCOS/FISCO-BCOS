@@ -233,17 +233,17 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     _msg.encode(message_data);
     try
     {
-        leveldb::Status s = m_backupDB->insert(_key, toHex(message_data));
-        if (!s.ok() && !s.IsNotFound())
-        {
-            PBFTENGINE_LOG(FATAL) << LOG_DESC("Access pbft backup database Failed, please delete " +
-                                              c_backupMsgDirName + " and restart again");
-            exit(1);
-        }
+        m_backupDB->insert(_key, toHex(message_data));
     }
-    catch (std::exception& e)
+    catch (DatabaseError const& e)
     {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC("backupMsg failed")
+        PBFTENGINE_LOG(FATAL) << LOG_DESC("store backupMsg to leveldb failed")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
+        exit(1);
+    }
+    catch (std::exception const& e)
+    {
+        PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
 }
