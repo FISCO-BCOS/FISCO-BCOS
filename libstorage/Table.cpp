@@ -97,14 +97,14 @@ void Entry::setField(const std::string& key, const std::string& value)
 
     if (it != m_fields.end())
     {
-        m_capacity -= (key.size() + it->second.size());
+        // m_capacity -= (key.size() + it->second.size());
         it->second = value;
-        m_capacity += (key.size() + value.size());
+        // m_capacity += (key.size() + value.size());
     }
     else
     {
         m_fields.insert(std::make_pair(key, value));
-        m_capacity += (key.size() + value.size());
+        // m_capacity += (key.size() + value.size());
     }
 
     m_dirty = true;
