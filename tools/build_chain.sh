@@ -744,6 +744,7 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
+    echo "start time: "\$(date '+%Y-%m-%d %H:%M:%S') >> nohup.out
     sleep 1
 fi
 try_times=5
