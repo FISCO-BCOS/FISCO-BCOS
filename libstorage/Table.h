@@ -96,6 +96,8 @@ public:
     virtual bool deleted() const;
     virtual void setDeleted(bool deleted);
 
+    virtual size_t capacity() const;
+
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
@@ -105,6 +107,8 @@ private:
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
+
+    size_t m_capacity = 0;
 };
 
 class EntryLess
@@ -222,9 +226,8 @@ public:
     virtual void LT(const std::string& key, const std::string& value);
     virtual void LE(const std::string& key, const std::string& value);
 
-    virtual void limit(int count);
-    virtual void limit(int offset, int count);
-
+    virtual void limit(int64_t count);
+    virtual void limit(int64_t offset, int64_t count);
     virtual std::map<std::string, Range>* getConditions();
 
     virtual bool process(Entry::Ptr entry);
@@ -240,8 +243,8 @@ public:
 
 
 private:
-    int m_offset = -1;
-    int m_count = -1;
+    int64_t m_offset = -1;
+    int64_t m_count = -1;
     std::map<std::string, Range> m_conditions;
     const std::string UNLIMITED = "_VALUE_UNLIMITED_";
 };

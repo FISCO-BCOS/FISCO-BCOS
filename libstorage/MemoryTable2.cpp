@@ -127,7 +127,7 @@ int MemoryTable2::update(
             {
                 //_id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
-                if (it.first != "_id_")
+                if (it.first != "_id_" && it.first != m_tableInfo->key)
                 {
                     records.emplace_back(updateEntry->getTempIndex(), it.first,
                         updateEntry->getField(it.first), updateEntry->getID());
@@ -303,7 +303,7 @@ bool MemoryTable2::dump(dev::storage::TableData::Ptr data)
         });
 
     data->newEntries = std::make_shared<Entries>();
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 1000),
         [&](const tbb::blocked_range<size_t>& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {

@@ -15,7 +15,7 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /** @file RocksDBStorage.cpp
- *  @author bxq
+ *  @author xingqiangbai
  *  @date 20180423
  */
 
