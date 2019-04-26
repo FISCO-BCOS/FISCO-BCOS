@@ -120,8 +120,17 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
-    /// read the configuration file for a specified group
-    read_ini(iniConfigFileName, pt);
+    try
+    {
+        /// read the configuration file for a specified group
+        read_ini(iniConfigFileName, pt);
+    }
+    catch (const std::exception& e)
+    {
+        Ledger_LOG(ERROR) << LOG_DESC("initIniConfig Failed")
+                          << LOG_KV("iniConfigFile", iniConfigFileName)
+                          << LOG_KV("EINFO", boost::diagnostic_information(e));
+    }
     /// init params related to txpool
     initTxPoolConfig(pt);
     /// init params related to sync
@@ -433,6 +442,7 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+    blockChain->setStoragePath(m_param->mutableStorageParam().path);
     m_blockChain = blockChain;
     std::string consensusType = m_param->mutableConsensusParam().consensusType;
     std::string storageType = m_param->mutableStorageParam().type;
