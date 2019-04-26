@@ -233,7 +233,13 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     _msg.encode(message_data);
     try
     {
-        m_backupDB->insert(_key, toHex(message_data));
+        auto s = m_backupDB->insert(_key, toHex(message_data));
+        if (!s.ok() && !s.IsNotFound())
+        {
+            PBFTENGINE_LOG(FATAL) << LOG_DESC("Access pbft backup database Failed, please delete " +
+                                              c_backupMsgDirName + " and restart again");
+            exit(1);
+        }
     }
     catch (std::exception& e)
     {
