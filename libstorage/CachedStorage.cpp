@@ -112,6 +112,7 @@ CachedStorage::CachedStorage()
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
     m_syncNum.store(0);
     m_commitNum.store(0);
+    m_capacity.store(0);
 }
 
 CachedStorage::~CachedStorage()
