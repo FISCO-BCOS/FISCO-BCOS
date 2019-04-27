@@ -130,9 +130,9 @@ BOOST_AUTO_TEST_CASE(Hostfunctions)
     BOOST_CHECK(m_threadPool == m_host->threadPool());
 }
 
-#ifndef FISCO_GM
 BOOST_AUTO_TEST_CASE(Host_run)
 {
+#ifndef FISCO_GM
     m_host->start();
     // start() will create a new thread and call host->startAccept, so wait
     this_thread::sleep_for(chrono::milliseconds(50));
@@ -187,10 +187,6 @@ BOOST_AUTO_TEST_CASE(Host_run)
     this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(2u == m_sessions.size());
 
-    // // dup socket
-    // m_host->asyncConnect(nodeIP, fp);
-    // this_thread::sleep_for(chrono::milliseconds(50));
-    // BOOST_CHECK(2u == m_sessions.size());
     // Session unit test
     auto s = std::dynamic_pointer_cast<Session>(m_sessions[0]);
     s->nodeIPEndpoint();
@@ -211,8 +207,8 @@ BOOST_AUTO_TEST_CASE(Host_run)
     BOOST_CHECK(nullptr == s->getCallbackBySeq(0u));
 
     m_host->stop();
-}
 #endif
+}
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_Host
