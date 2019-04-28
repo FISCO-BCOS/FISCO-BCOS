@@ -154,7 +154,7 @@ public:
         /// at least one sealer when resetConfig
         if (m_sealerList.size() == 0)
         {
-            m_sealerList.push_back(KeyPair::create());
+            m_sealerList.push_back(KeyPair::create().pub());
             needClear = true;
         }
         PBFTEngine::resetConfig();
