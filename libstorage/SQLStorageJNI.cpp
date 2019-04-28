@@ -20,92 +20,110 @@
  */
 
 #include "SQLStorageJNI.h"
-#include <libdevcore/easylog.h>
 #include <jni.h>
+#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::storage;
 
-void SQLStorageJNI::init() {
-	JavaVMInitArgs vmArg;
-	vmArg.version = JNI_VERSION_1_8;
+void SQLStorageJNI::init()
+{
+    JavaVMInitArgs vmArg;
+    vmArg.version = JNI_VERSION_1_8;
 
-	JavaVMOption options[1];
+    JavaVMOption options[1];
 
-	m_classpath = "-cp'amdb/conf/:amdb/lib/*:amdb/apps/*'";
-	options[0].optionString = new char[m_classpath.size() + 1];
-	strncpy(options[0].optionString, m_classpath.c_str(), m_classpath.size());
-	options[0].extraInfo = NULL;
-	vmArg.options = options;
-	vmArg.nOptions = 1;
-	vmArg.options = options;
+    m_classpath = "-cp'amdb/conf/:amdb/lib/*:amdb/apps/*'";
+    options[0].optionString = new char[m_classpath.size() + 1];
+    strncpy(options[0].optionString, m_classpath.c_str(), m_classpath.size());
+    options[0].extraInfo = NULL;
+    vmArg.options = options;
+    vmArg.nOptions = 1;
+    vmArg.options = options;
 
-	JavaVM *jvm = NULL;
-	JNIEnv *env = NULL;
-	::JNI_CreateJavaVM(&jvm, (void**)&env, (void*)&vmArg);
+    JavaVM* jvm = NULL;
+    JNIEnv* env = NULL;
+    ::JNI_CreateJavaVM(&jvm, (void**)&env, (void*)&vmArg);
 
-	m_jvm.reset(jvm);
-	m_env.reset(env);
+    m_jvm.reset(jvm);
+    m_env.reset(env);
 
-	auto appClaz = m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
-	if(!appClaz) {
-		STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
-	}
-	auto appInitFunc = m_env->GetMethodID(appClaz, "<init>", "()V");
-	if(!appInitFunc) {
-		STORAGE_LOG(ERROR) << "Cannot find class applicationContext init function";
-	}
-	auto appObj = m_env->NewObject(appClaz, appInitFunc);
-	if(!appObj) {
-		STORAGE_LOG(ERROR) << "Create applicationContext error";
-	}
+    auto appClaz =
+        m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
+    if (!appClaz)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
+    }
+    auto appInitFunc = m_env->GetMethodID(appClaz, "<init>", "()V");
+    if (!appInitFunc)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find class applicationContext init function";
+    }
+    auto appObj = m_env->NewObject(appClaz, appInitFunc);
+    if (!appObj)
+    {
+        STORAGE_LOG(ERROR) << "Create applicationContext error";
+    }
 
-	auto dbServiceClaz = m_env->FindClass("org/bcos/amdb/service/DBService");
-	if(!dbServiceClaz) {
-		STORAGE_LOG(ERROR) << "Cannot find class DBService";
-	}
+    auto dbServiceClaz = m_env->FindClass("org/bcos/amdb/service/DBService");
+    if (!dbServiceClaz)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find class DBService";
+    }
 
-	auto getBeanFunc = m_env->GetMethodID(appClaz, "getBean", "(Ljava/lang/String;)Lorg/fisco/bcos/channel/client/Service;");
-	if(getBeanFunc) {
-		STORAGE_LOG(ERROR) << "Cannot find method getBean";
-	}
+    auto getBeanFunc = m_env->GetMethodID(
+        appClaz, "getBean", "(Ljava/lang/String;)Lorg/fisco/bcos/channel/client/Service;");
+    if (getBeanFunc)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find method getBean";
+    }
 
-	auto dbServiceName = m_env->NewStringUTF("DBChannelService");
+    auto dbServiceName = m_env->NewStringUTF("DBChannelService");
 
-	auto channelService = m_env->CallObjectMethod(appObj, getBeanFunc, dbServiceName);
-	if(!channelService) {
-		STORAGE_LOG(ERROR) << "Cannot get bean of dbService";
-	}
+    auto channelService = m_env->CallObjectMethod(appObj, getBeanFunc, dbServiceName);
+    if (!channelService)
+    {
+        STORAGE_LOG(ERROR) << "Cannot get bean of dbService";
+    }
 
-	auto channelServiceClaz = m_env->FindClass("org/fisco/bcos/channel/client/Service");
-	if(!dbServiceClaz) {
-		STORAGE_LOG(ERROR) << "Cannot find class ChannelService";
-	}
+    auto channelServiceClaz = m_env->FindClass("org/fisco/bcos/channel/client/Service");
+    if (!dbServiceClaz)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find class ChannelService";
+    }
 
-	auto runFunc = m_env->GetMethodID(channelServiceClaz, "run", "()V");
-	if(runFunc) {
-		STORAGE_LOG(ERROR) << "Cannot find run func";
-	}
+    auto runFunc = m_env->GetMethodID(channelServiceClaz, "run", "()V");
+    if (runFunc)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find run func";
+    }
 
-	m_env->CallVoidMethod(channelService, runFunc);
+    m_env->CallVoidMethod(channelService, runFunc);
 
-	//m_dbService = channelService;
+    m_dbService = m_env->FindClass("org/bcos/amdb/service/DBService");
+    if (m_dbService)
+    {
+        STORAGE_LOG
+    }
 
-
+    // m_dbService = channelService;
 }
 
-Entries::Ptr SQLStorageJNI::select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
-        Condition::Ptr condition) {
-	(void)hash;
-	(void)num;
-	(void)tableInfo;
-	(void)key;
-	(void)condition;
+Entries::Ptr SQLStorageJNI::select(
+    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+{
+    (void)hash;
+    (void)num;
+    (void)tableInfo;
+    (void)key;
+    (void)condition;
 
-	auto appClaz = m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
-	if(!appClaz) {
-		STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
-	}
+    auto appClaz =
+        m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
+    if (!appClaz)
+    {
+        STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
+    }
 
 #if 0
 	auto appObj = m_env->NewObject(appClaz, appInitFunc);
@@ -114,5 +132,5 @@ Entries::Ptr SQLStorageJNI::select(h256 hash, int num, TableInfo::Ptr tableInfo,
 	}
 #endif
 
-	return Entries::Ptr();
+    return Entries::Ptr();
 }

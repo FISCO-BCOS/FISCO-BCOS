@@ -97,14 +97,14 @@ void Entry::setField(const std::string& key, const std::string& value)
 
     if (it != m_fields.end())
     {
-    	m_capacity -= ( key.size() + it->second.size());
+        m_capacity -= (key.size() + it->second.size());
         it->second = value;
-        m_capacity += ( key.size() + value.size());
+        m_capacity += (key.size() + value.size());
     }
     else
     {
         m_fields.insert(std::make_pair(key, value));
-        m_capacity += ( key.size() + value.size());
+        m_capacity += (key.size() + value.size());
     }
 
     m_dirty = true;
@@ -213,8 +213,9 @@ void Entry::setDeleted(bool deleted)
     m_deleted = deleted;
 }
 
-size_t Entry::capacity() const {
-	return m_capacity;
+size_t Entry::capacity() const
+{
+    return m_capacity;
 }
 
 void Entry::copyFrom(Entry::Ptr entry)
@@ -275,7 +276,8 @@ Entry::ConstPtr Entries::get(size_t i) const
 {
     if (m_entries.size() <= i)
     {
-        BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -287,7 +289,8 @@ Entry::Ptr Entries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-    	BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }
@@ -343,7 +346,8 @@ Entry::Ptr ConcurrentEntries::get(size_t i)
 {
     if (m_entries.size() <= i)
     {
-    	BOOST_THROW_EXCEPTION(StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Entries no exists: " + boost::lexical_cast<std::string>(i)));
 
         return Entry::Ptr();
     }

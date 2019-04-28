@@ -22,10 +22,10 @@
 #pragma once
 
 #include "Storage.h"
+#include <jni.h>
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <memory>
-#include <jni.h>
 
 namespace dev
 {
@@ -56,11 +56,18 @@ private:
 
     std::shared_ptr<JavaVM> m_jvm;
     std::shared_ptr<JNIEnv> m_env;
-    jobject m_dbService;
 
     jclass m_dbServiceClaz;
-    jmethodID m_selectMethod;
-    jmethodID m_commitMethod;
+    jobject m_dbService;
+
+    jclass m_selectClaz;
+    jmethodID m_selectInit;
+    jclass m_selectResponseClaz;
+    jmethodID m_dbSelectMethod;
+
+    jclass m_commitClaz;
+    jmethodID m_commitInit;
+    jmethodID m_dbCommitMethod;
 
     std::string m_classpath;
 };
