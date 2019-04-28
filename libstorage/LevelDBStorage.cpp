@@ -211,12 +211,13 @@ size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
 
         return total.load();
     }
-    catch (std::exception& e)
+    catch (std::exception const& e)
     {
         // This should never happen, if happened exit.
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Commit leveldb exception:" + boost::diagnostic_information(e)));
     }
 
     return 0;
