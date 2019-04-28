@@ -67,8 +67,6 @@ bytes TableFactoryPrecompiled::call(
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
-        STORAGE_LOG(DEBUG) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("open table")
-                           << LOG_KV("table name", tableName);
         tableName = storage::USER_TABLE_PREFIX + tableName;
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
@@ -80,9 +78,9 @@ bytes TableFactoryPrecompiled::call(
         }
         else
         {
-            STORAGE_LOG(DEBUG) << LOG_BADGE("TableFactoryPrecompiled")
-                               << LOG_DESC("Open new table failed")
-                               << LOG_KV("table name", tableName);
+            STORAGE_LOG(WARNING) << LOG_BADGE("TableFactoryPrecompiled")
+                                 << LOG_DESC("Open new table failed")
+                                 << LOG_KV("table name", tableName);
         }
 
         out = abi.abiIn("", address);

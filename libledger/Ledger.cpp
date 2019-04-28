@@ -120,8 +120,11 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
-    /// read the configuration file for a specified group
-    read_ini(iniConfigFileName, pt);
+    if (boost::filesystem::exists(iniConfigFileName))
+    {
+        /// read the configuration file for a specified group
+        read_ini(iniConfigFileName, pt);
+    }
     /// init params related to txpool
     initTxPoolConfig(pt);
     /// init params related to sync
