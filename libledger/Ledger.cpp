@@ -120,16 +120,10 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
-    try
+    if (boost::filesystem::exists(iniConfigFileName))
     {
         /// read the configuration file for a specified group
         read_ini(iniConfigFileName, pt);
-    }
-    catch (const std::exception& e)
-    {
-        Ledger_LOG(ERROR) << LOG_DESC("initIniConfig Failed")
-                          << LOG_KV("iniConfigFile", iniConfigFileName)
-                          << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
     /// init params related to txpool
     initTxPoolConfig(pt);
