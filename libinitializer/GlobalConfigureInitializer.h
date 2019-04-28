@@ -35,6 +35,7 @@ public:
     typedef std::shared_ptr<GlobalConfigureInitializer> Ptr;
 
     void initConfig(const boost::property_tree::ptree& _pt);
+    bool getVersionNumber(const std::string& _version, uint32_t& _versionNumber);
 };
 
 }  // namespace initializer

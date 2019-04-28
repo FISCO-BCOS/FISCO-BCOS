@@ -13,4 +13,4 @@ target_link_libraries(storage PRIVATE ${JNI_LIBRARIES})
 endif ()
 
 target_link_libraries(storage PRIVATE blockverifier ethcore)
-target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Thread)
+target_link_libraries(storage PUBLIC devcore TBB JsonCpp Boost::Thread RocksDB)

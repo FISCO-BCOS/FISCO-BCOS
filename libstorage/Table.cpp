@@ -470,12 +470,12 @@ void Condition::LE(const std::string& key, const std::string& value)
     }
 }
 
-void Condition::limit(int count)
+void Condition::limit(int64_t count)
 {
     limit(0, count);
 }
 
-void Condition::limit(int offset, int count)
+void Condition::limit(int64_t offset, int64_t count)
 {
     m_offset = offset;
     m_count = count;

@@ -473,7 +473,6 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-// class FakeLedger : public LedgerInterface
 class FakeLedger : public LedgerInterface
 {
 public:
@@ -491,7 +490,7 @@ public:
         /// init
         initLedgerParam();
     }
-    bool initLedger() override { return true; };
+    bool initLedger(const std::string&) override { return true; };
     void initConfig(std::string const&) override{};
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
