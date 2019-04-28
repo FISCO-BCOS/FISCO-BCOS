@@ -54,7 +54,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # for easy log
     add_compile_options(-DELPP_THREAD_SAFE)
     add_compile_options(-DELPP_NO_DEFAULT_LOG_FILE)
-    
+    # build deps lib Release
+    set(_only_release_configuration "-DCMAKE_BUILD_TYPE=Release")
+
     if(STATIC_BUILD)
     SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
     SET(BUILD_SHARED_LIBRARIES OFF)

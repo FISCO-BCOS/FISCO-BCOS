@@ -37,8 +37,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     m_groupDataDir = _pt.get<string>("group.group_data_path", "data/");
     auto groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
     assert(m_p2pService);
-    m_ledgerManager = make_shared<LedgerManager>(m_p2pService, m_keyPair);
-    m_ledgerManager->setChannelRPCServer(m_channelRPCServer);
+    m_ledgerManager = make_shared<LedgerManager>();
     map<GROUP_ID, h512s> groudID2NodeList;
     bool succ = true;
     try
@@ -55,7 +54,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     boost::property_tree::ptree pt;
                     boost::property_tree::read_ini(iter->path().string(), pt);
                     auto groupID = pt.get<int>("group.id", 0);
-                    if (groupID <= 0)
+                    if (groupID <= 0 || groupID > maxGroupID)
                     {
                         INITIALIZER_LOG(ERROR)
                             << LOG_BADGE("LedgerInitializer") << LOG_DESC("groupID invalid")
@@ -63,7 +62,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                             << LOG_KV("configFile", iter->path().string());
                         continue;
                     }
-                    succ = initSingleGroup(groupID, iter->path().string(), groudID2NodeList);
+                    succ = initLedger(groupID, m_groupDataDir, iter->path().string());
                     if (!succ)
                     {
                         INITIALIZER_LOG(ERROR)
@@ -74,6 +73,9 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                                      << LOG_KV("configFile", iter->path().string()) << endl;
                         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
                     }
+                    groudID2NodeList[groupID] = m_ledgerManager->getParamByGroupId(groupID)
+                                                    ->mutableConsensusParam()
+                                                    .sealerList;
                     LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
                               << LOG_KV("groupID", groupID);
                 }
@@ -101,18 +103,22 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
 }
 
-bool LedgerInitializer::initSingleGroup(
-    GROUP_ID _groupID, string const& _path, map<GROUP_ID, h512s>& _groudID2NodeList)
+bool LedgerInitializer::initLedger(
+    dev::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& configFileName)
 {
-    bool succ = m_ledgerManager->initSingleLedger<Ledger>(_groupID, m_groupDataDir, _path);
-    if (!succ)
+    if (m_ledgerManager->isLedgerExist(_groupId))
     {
-        return succ;
+        INITIALIZER_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
+                               << std::to_string(_groupId);
+        return false;
     }
-    _groudID2NodeList[_groupID] =
-        m_ledgerManager->getParamByGroupId(_groupID)->mutableConsensusParam().sealerList;
-
-    INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup")
-                           << LOG_KV("groupID", to_string(_groupID));
-    return succ;
+    std::shared_ptr<LedgerInterface> ledger =
+        std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir);
+    INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
+    ledger->setChannelRPCServer(m_channelRPCServer);
+    bool succ = ledger->initLedger(configFileName);
+    if (!succ)
+        return false;
+    m_ledgerManager->insertLedger(_groupId, ledger);
+    return true;
 }

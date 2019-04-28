@@ -36,9 +36,9 @@ class ExecutiveContext;
     "56004b6a": "createTable(string,string,string)",
     "f23f63c9": "openTable(string)"
 }
-contract DBFactory {
+contract TableFactory {
     function openTable(string) public constant returns (Table);
-    function createTable(string, string, string) public constant returns (int);
+    function createTable(string, string, string) public returns (int);
 }
 #endif
 

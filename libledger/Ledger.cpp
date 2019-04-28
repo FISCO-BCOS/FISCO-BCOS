@@ -49,8 +49,22 @@ namespace dev
 {
 namespace ledger
 {
-bool Ledger::initLedger()
+bool Ledger::initLedger(const std::string& _configFilePath)
 {
+    Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
+                     << LOG_KV("baseDir", m_param->baseDir());
+    /// The file group.X.genesis is required, otherwise the program terminates.
+    /// load genesis config of group
+    initConfig(_configFilePath);
+    /// The file group.X.ini is available by default.
+    /// In this case, the configuration item uses the default value.
+    /// load ini config of group for TxPool/Sync modules
+    std::string iniConfigFileName = _configFilePath;
+    boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+
+    /// you should invoke initConfig first before invoke initIniConfig
+    initIniConfig(iniConfigFileName);
+    initMark();
     if (!m_param)
         return false;
     /// init dbInitializer
@@ -96,12 +110,14 @@ void Ledger::initConfig(std::string const& configPath)
         read_ini(configPath, pt);
         /// init params related to consensus
         initConsensusConfig(pt);
-        /// db params initialization
-        initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
         /// init params related to genesis: timestamp
         initGenesisConfig(pt);
+        /// set state db related param
+        m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+        // Compatibility with previous versions RC2/RC1
+        m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
     }
     catch (std::exception& e)
     {
@@ -120,31 +136,34 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
+    /// read the configuration file for a specified group
+    read_ini(iniConfigFileName, pt);
     if (boost::filesystem::exists(iniConfigFileName))
     {
         /// read the configuration file for a specified group
         read_ini(iniConfigFileName, pt);
     }
+    /// db params initialization
+    initDBConfig(pt);
     /// init params related to txpool
     initTxPoolConfig(pt);
     /// init params related to sync
     initSyncConfig(pt);
     initTxExecuteConfig(pt);
-
     /// init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
 }
 
 void Ledger::initTxExecuteConfig(ptree const& pt)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
     {
-        m_param->mutableTxParam().enableParallel = false;
+        m_param->mutableTxParam().enableParallel =
+            pt.get<bool>("tx_execute.enable_parallel", false);
     }
     else
     {
-        bool enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
-        m_param->mutableTxParam().enableParallel = enableParallel;
+        m_param->mutableTxParam().enableParallel = false;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
                       << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
@@ -310,7 +329,7 @@ void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
     /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
@@ -332,8 +351,7 @@ void Ledger::initDBConfig(ptree const& pt)
     {
         m_param->mutableStorageParam().maxRetry = 100;
     }
-    /// set state db related param
-    m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
@@ -371,7 +389,10 @@ void Ledger::initMark()
     s << int(m_groupId) << "-";
     s << m_param->mutableGenesisParam().nodeListMark << "-";
     s << m_param->mutableConsensusParam().consensusType << "-";
-    s << m_param->mutableStorageParam().type << "-";
+    if (g_BCOSConfig.version() < RC3_VERSION)
+    {
+        s << m_param->mutableStorageParam().type << "-";
+    }
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
     s << m_param->mutableTxParam().txGasLimit;

@@ -291,13 +291,13 @@ void Session::drop(DisconnectReason _reason)
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remoteEndpoint()
+                SESSION_LOG(DEBUG) << "[drop] closing remote " << m_socket->remoteEndpoint()
                                    << LOG_KV("reason", reasonOf(_reason))
                                    << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remoteEndpoint()
+                SESSION_LOG(WARNING) << "[drop] closing remote " << m_socket->remoteEndpoint()
                                      << LOG_KV("reason", reasonOf(_reason))
                                      << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }

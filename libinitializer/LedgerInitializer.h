@@ -67,9 +67,8 @@ public:
     }
 
 private:
-    bool initSingleGroup(
-        GROUP_ID _groupID, std::string const& _path, std::map<GROUP_ID, h512s>& _groudID2NodeList);
-
+    bool initLedger(dev::GROUP_ID const& _groupId, std::string const& _dataDir = "data",
+        std::string const& configFileName = "");
     std::shared_ptr<LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> m_p2pService;
     ChannelRPCServer::Ptr m_channelRPCServer;

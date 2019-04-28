@@ -13,7 +13,7 @@ ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
-storage_type=LevelDB
+storage_type=RocksDB
 conf_path="conf"
 bin_path=
 make_tar=
@@ -28,6 +28,7 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
+enable_parallel=false
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
@@ -48,7 +49,8 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
     -d <docker mode>                    Default off. If set -d, build with docker
     -s <State type>                     Default storage. if set -s, use mpt 
-    -S <Storage type>                   Default leveldb. if set -S, use external
+    -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
+    -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
@@ -78,7 +80,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdC:S" option;do
+while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -94,14 +96,20 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdC:S" option;do
     ;;
     e) bin_path=$OPTARG;;
     s) state_type=mpt;;
-    S) storage_type="external";;
+    S) storage_type=$OPTARG
+        if [ -z "${storage_type}" ];then
+            LOG_WARN "${storage_type} is not supported storage."
+            exit 1;
+        fi
+    ;;
+    P) enable_parallel="true";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
-      if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
-        LOG_WARN "${chain_id} is not a positive integer."
-        exit 1;
-      fi
+        if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
+            LOG_WARN "${chain_id} is not a positive integer."
+            exit 1;
+        fi
     ;;
     T) debug_log="true"
     log_level="debug"
@@ -441,9 +449,8 @@ generate_config_ini()
     ; nodes to connect
     $ip_list
     ;enable/disable network compress
-    ;enable_compress=false
+    ;enable_compress=true
 
-;certificate rejected list		
 [certificate_blacklist]		
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
@@ -465,7 +472,6 @@ generate_config_ini()
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
 
-; storage security releated configurations
 [storage_security]
 ; enable storage_security or not
 ;enable=true
@@ -479,7 +485,6 @@ generate_config_ini()
     id=${chain_id}
 [compatibility]
     supported_version=${fisco_version}
-;log configurations
 [log]
     ; the directory of the log
     log_path=./log
@@ -501,24 +506,18 @@ generate_group_genesis()
     local index=$2
     local node_list=$3
     cat << EOF > ${output} 
-;consensus configuration
 [consensus]
-    ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
-    ;the max number of transactions of a block
+    ; the max number of transactions of a block
     max_trans_num=1000
-    ;the node id of leaders
+    ; the node id of leaders
     ${node_list}
-[storage]
-    ;storage db type, leveldb or external
-    type=${storage_type}
-    topic=DB
 [state]
-    ;support mpt/storage
+    ; support mpt/storage
     type=${state_type}
-
-;tx gas limit
 [tx]
+    ; transaction gas limit
     gas_limit=300000000
 [group]
     id=${index}
@@ -530,18 +529,24 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
-; the ttl for broadcasting pbft message
 [consensus]
+    ; the ttl for broadcasting pbft message
     ;ttl=2
-    ;min block generation time(ms), the max block generation time is 1000 ms
+    ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
-
-;txpool limit
+[storage]
+    ; storage db type, leveldb/leveldb2/external/rocksdb are supported
+    type=${storage_type}
+    max_retry=100
+    max_store_key=10000
+    max_forward_block=100
+    ; topic only for external
+    topic=DB
 [tx_pool]
     limit=150000
 [tx_execute]
-    enable_parallel=true
+    enable_parallel=${enable_parallel}
 EOF
 }
 

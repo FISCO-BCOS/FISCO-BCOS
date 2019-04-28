@@ -228,7 +228,6 @@ public:
 
     virtual void limit(int64_t count);
     virtual void limit(int64_t offset, int64_t count);
-
     virtual std::map<std::string, Range>* getConditions();
 
     virtual bool process(Entry::Ptr entry);

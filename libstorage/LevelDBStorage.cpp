@@ -35,9 +35,8 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
 {
-    (void)condition;
     try
     {
         std::string entryKey = tableInfo->name;

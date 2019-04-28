@@ -40,53 +40,34 @@ public:
      * @param _keyPair: the keyPair used to init consensus module
      * @param _preCompile: map that stores the PrecompiledContract (required by blockverifier)
      */
-    LedgerManager(std::shared_ptr<dev::p2p::P2PInterface> _service, dev::KeyPair keyPair)
-      : m_service(_service), m_keyPair(keyPair)
-    {
-        assert(m_service);
-    }
+    LedgerManager() = default;
     virtual ~LedgerManager() = default;
     /**
      * @brief : init a single ledger with the given params
      *
      * @param _groupId : the groupId of the ledger need to be inited
-     * @param _baseDir: baseDir used to place the data of the group
-     * @param configFileName: the configuration file path of the group to be inited
      * @return true: init single ledger succeed
      * @return false: init single ledger failed
      */
-    template <class T>
-    bool initSingleLedger(dev::GROUP_ID const& _groupId, std::string const& _baseDir = "data",
-        std::string const& configFileName = "")
+    bool insertLedger(dev::GROUP_ID const& _groupId, std::shared_ptr<LedgerInterface> ledger)
     {
-        if ((_groupId <= 0) || (_groupId > maxGroupID))
+        if (_groupId <= 0)
         {
             LedgerManager_LOG(ERROR)
                 << "[initSingleLedger] invalid GroupId: " << _groupId << ", must between [1"
                 << ", " << maxGroupID << "]";
             return false;
         }
-        if (m_ledgerMap.count(_groupId) > 0)
-        {
-            LedgerManager_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
-                                     << std::to_string(_groupId);
-            return false;
-        }
-        std::shared_ptr<LedgerInterface> ledger =
-            std::make_shared<T>(m_service, _groupId, m_keyPair, _baseDir, configFileName);
-        LedgerManager_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
-        ledger->setChannelRPCServer(m_channelRPCServer);
-        bool succ = ledger->initLedger();
-        if (!succ)
-            return false;
-        m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        auto ret = m_ledgerMap.insert(std::make_pair(_groupId, ledger));
+        if (ret.second)
         {
             WriteGuard l(x_groupListCache);
             m_groupListCache.insert(_groupId);
         }
-        return true;
+        return ret.second;
     }
 
+    bool isLedgerExist(dev::GROUP_ID const& _groupId) { return m_ledgerMap.count(_groupId); }
     /**
      * @brief : start a single ledger by groupId
      * @param groupId : the ledger need to be started
@@ -186,22 +167,12 @@ public:
         return m_groupListCache;
     }
 
-    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
-    {
-        m_channelRPCServer = channelRPCServer;
-    }
-
 private:
     mutable SharedMutex x_groupListCache;
     /// cache for the group List
     std::set<dev::GROUP_ID> m_groupListCache;
     /// map used to store the mappings between groupId and created ledger objects
     std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
-    /// p2p service shared by all the ledgers
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
-    ChannelRPCServer::Ptr m_channelRPCServer;
-    /// keyPair shared by all the ledgers
-    dev::KeyPair m_keyPair;
 };
 }  // namespace ledger
 }  // namespace dev
