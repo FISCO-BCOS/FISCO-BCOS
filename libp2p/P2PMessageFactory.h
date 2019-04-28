@@ -31,6 +31,8 @@ namespace p2p
 class P2PMessageFactory : public dev::network::MessageFactory
 {
 public:
+    typedef std::shared_ptr<P2PMessageFactory> Ptr;
+
     virtual ~P2PMessageFactory() {}
     dev::network::Message::Ptr buildMessage() override
     {

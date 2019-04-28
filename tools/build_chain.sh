@@ -118,7 +118,7 @@ done
 print_result()
 {
 echo "================================================================"
-LOG_INFO "Execute the following command to get the FISCO-BCOS console"
+LOG_INFO "Execute the following command to get FISCO-BCOS console"
 echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
 echo "================================================================"
 [ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
@@ -744,10 +744,9 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
-    echo "start time: "\$(date '+%Y-%m-%d %H:%M:%S') >> nohup.out
-    sleep 1
+    sleep 1.5
 fi
-try_times=5
+try_times=4
 i=0
 while [ \$i -lt \${try_times} ]
 do
