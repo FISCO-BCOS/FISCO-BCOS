@@ -290,52 +290,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 tbb::parallel_sort(commitData->newEntries->entries()->begin(),
                     commitData->newEntries->entries()->end(), EntryLess(requestData->info));
 
-#if 0
-                tbb::parallel_for(
-						tbb::blocked_range<size_t>(0, commitData->newEntries->size()), [&](const tbb::blocked_range<size_t>& range) {
-					for(auto i=range.begin(); i<range.end(); ++i) {
-						auto commitEntry = commitData->newEntries->get(i);
-						commitEntry->setID(m_ID + idx * commitData->newEntries->size() + i + 1);
-
-						auto key = commitEntry->getField(commitData->info->key);
-
-						auto cacheEntry = std::make_shared<Entry>();
-						cacheEntry->copyFrom(commitEntry);
-
-						if (cacheEntry->force())
-						{
-							auto tableIt = m_caches.find(commitData->info->name);
-							if (tableIt == m_caches.end())
-							{
-								tableIt = m_caches
-											  .insert(std::make_pair(
-												  commitData->info->name, std::make_shared<TableCaches>()))
-											  .first;
-								tableIt->second->tableInfo()->name = commitData->info->name;
-							}
-
-							auto caches = std::make_shared<Caches>();
-							auto newEntries = std::make_shared<Entries>();
-							caches->setEntries(newEntries);
-							caches->setNum(num);
-
-							auto newIt = tableIt->second->addCache(key, caches);
-							newIt.first->second->entries()->addEntry(cacheEntry);
-
-							newEntries->addEntry(cacheEntry);
-						}
-						else
-						{
-							auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
-							caches->entries()->addEntry(cacheEntry);
-							caches->setNum(num);
-						}
-
-						LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
-					}
-				});
-#endif
-
                 (*commitDatas)[idx] = commitData;
             }
         });
@@ -402,55 +356,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     		});
 		}
     });
-#if 0
-    for (size_t i = 0; i < commitDatas->size(); ++i)
-    {
-        auto commitData = (*commitDatas)[i];
-        for (size_t j = 0; j < commitData->newEntries->size(); ++j)
-        {
-            ++total;
-
-            auto commitEntry = commitData->newEntries->get(j);
-            commitEntry->setID(++m_ID);
-
-            auto key = commitEntry->getField(commitData->info->key);
-
-            auto cacheEntry = std::make_shared<Entry>();
-            cacheEntry->copyFrom(commitEntry);
-
-            if (cacheEntry->force())
-            {
-                auto tableIt = m_caches.find(commitData->info->name);
-                if (tableIt == m_caches.end())
-                {
-                    tableIt = m_caches
-                                  .insert(std::make_pair(
-                                      commitData->info->name, std::make_shared<TableCaches>()))
-                                  .first;
-                    tableIt->second->tableInfo()->name = commitData->info->name;
-                }
-
-                auto caches = std::make_shared<Caches>();
-                auto newEntries = std::make_shared<Entries>();
-                caches->setEntries(newEntries);
-                caches->setNum(num);
-
-                auto newIt = tableIt->second->addCache(key, caches);
-                newIt.first->second->entries()->addEntry(cacheEntry);
-
-                newEntries->addEntry(cacheEntry);
-            }
-            else
-            {
-                auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
-                caches->entries()->addEntry(cacheEntry);
-                caches->setNum(num);
-            }
-
-            LOG(TRACE) << "Set new entry ID: " << cacheEntry->getID();
-        }
-    }
-#endif
 
     // new task write to backend
     Task::Ptr task = std::make_shared<Task>();
