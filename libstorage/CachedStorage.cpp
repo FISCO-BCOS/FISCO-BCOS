@@ -87,7 +87,7 @@ Caches::Ptr TableCaches::findCache(const std::string& key)
 std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
 TableCaches::addCache(const std::string& key, Caches::Ptr cache)
 {
-	auto it = m_caches.insert(std::make_pair(key, cache));
+    auto it = m_caches.insert(std::make_pair(key, cache));
     return it;
 }
 
@@ -231,8 +231,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     currentStateIdx = idx;
                 }
 
-                tbb::parallel_for(
-                    tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
                     [&](const tbb::blocked_range<size_t>& rangeEntries) {
                         for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
                         {
@@ -295,68 +294,72 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
-    //Set ID
-    for (size_t i = 0; i < commitDatas->size(); ++i) {
-		auto commitData = (*commitDatas)[i];
-		for (size_t j = 0; j < commitData->newEntries->size(); ++j)
-		{
-			auto commitEntry = commitData->newEntries->get(j);
-			commitEntry->setID(++m_ID);
+    // Set ID
+    for (size_t i = 0; i < commitDatas->size(); ++i)
+    {
+        auto commitData = (*commitDatas)[i];
+        for (size_t j = 0; j < commitData->newEntries->size(); ++j)
+        {
+            auto commitEntry = commitData->newEntries->get(j);
+            commitEntry->setID(++m_ID);
 
-			LOG(TRACE) << "Set new entry ID: " << m_ID;
-		}
-	}
+            LOG(TRACE) << "Set new entry ID: " << m_ID;
+        }
+    }
 
-    tbb::parallel_for(
-		tbb::blocked_range<size_t>(0, commitDatas->size()), [&](const tbb::blocked_range<size_t>& range) {
-    	for(size_t i=range.begin(); i<range.end(); ++i) {
-    		auto commitData = (*commitDatas)[i];
-    		tbb::parallel_for(tbb::blocked_range<size_t>(0, commitData->newEntries->size()), [&](const tbb::blocked_range<size_t>& dataRange) {
-				for (size_t j = dataRange.begin(); j < dataRange.end(); ++j)
-				{
-					++total;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatas->size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
+            {
+                auto commitData = (*commitDatas)[i];
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, commitData->newEntries->size()),
+                    [&](const tbb::blocked_range<size_t>& dataRange) {
+                        for (size_t j = dataRange.begin(); j < dataRange.end(); ++j)
+                        {
+                            ++total;
 
-					auto commitEntry = commitData->newEntries->get(j);
+                            auto commitEntry = commitData->newEntries->get(j);
 
-					auto key = commitEntry->getField(commitData->info->key);
+                            auto key = commitEntry->getField(commitData->info->key);
 
-					auto cacheEntry = std::make_shared<Entry>();
-					cacheEntry->copyFrom(commitEntry);
+                            auto cacheEntry = std::make_shared<Entry>();
+                            cacheEntry->copyFrom(commitEntry);
 
-					if (cacheEntry->force())
-					{
-						auto tableIt = m_caches.find(commitData->info->name);
-						if (tableIt == m_caches.end())
-						{
-							tableIt = m_caches
-										  .insert(std::make_pair(
-											  commitData->info->name, std::make_shared<TableCaches>()))
-										  .first;
-							tableIt->second->tableInfo()->name = commitData->info->name;
-						}
+                            if (cacheEntry->force())
+                            {
+                                auto tableIt = m_caches.find(commitData->info->name);
+                                if (tableIt == m_caches.end())
+                                {
+                                    tableIt = m_caches
+                                                  .insert(std::make_pair(commitData->info->name,
+                                                      std::make_shared<TableCaches>()))
+                                                  .first;
+                                    tableIt->second->tableInfo()->name = commitData->info->name;
+                                }
 
-						auto caches = std::make_shared<Caches>();
-						auto newEntries = std::make_shared<Entries>();
-						caches->setEntries(newEntries);
-						caches->setNum(num);
+                                auto caches = std::make_shared<Caches>();
+                                auto newEntries = std::make_shared<Entries>();
+                                caches->setEntries(newEntries);
+                                caches->setNum(num);
 
-						auto newIt = tableIt->second->addCache(key, caches);
-						newIt.first->second->entries()->addEntry(cacheEntry);
+                                auto newIt = tableIt->second->addCache(key, caches);
+                                newIt.first->second->entries()->addEntry(cacheEntry);
 
-						newEntries->addEntry(cacheEntry);
-					}
-					else
-					{
-						auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
-						caches->entries()->addEntry(cacheEntry);
-						caches->setNum(num);
-					}
+                                newEntries->addEntry(cacheEntry);
+                            }
+                            else
+                            {
+                                auto caches =
+                                    selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                                caches->entries()->addEntry(cacheEntry);
+                                caches->setNum(num);
+                            }
 
-					touchMRU(commitData->info->name, key);
-				}
-    		});
-		}
-    });
+                            touchMRU(commitData->info->name, key);
+                        }
+                    });
+            }
+        });
 
     // new task write to backend
     Task::Ptr task = std::make_shared<Task>();

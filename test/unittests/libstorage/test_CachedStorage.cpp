@@ -439,9 +439,7 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 #endif
 }
 
-BOOST_AUTO_TEST_CASE(checkAndClear) {
-
-}
+BOOST_AUTO_TEST_CASE(checkAndClear) {}
 
 BOOST_AUTO_TEST_CASE(exception)
 {
