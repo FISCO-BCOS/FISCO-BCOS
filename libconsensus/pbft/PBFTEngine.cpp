@@ -138,6 +138,12 @@ void PBFTEngine::resetConfig()
         }
         m_nodeNum = m_sealerList.size();
     }
+    if (m_nodeNum < 1)
+    {
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("Must set at least one pbft sealer, current number of sealers is zero"));
+        BOOST_THROW_EXCEPTION(
+            EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
+    }
     m_f = (m_nodeNum - 1) / 3;
     m_cfgErr = (node_idx == MAXIDX);
     {
