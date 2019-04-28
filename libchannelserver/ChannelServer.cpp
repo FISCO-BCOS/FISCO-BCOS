@@ -176,7 +176,6 @@ void dev::channel::ChannelServer::stop()
     {
         CHANNEL_LOG(ERROR) << LOG_DESC("Close ioService")
                            << LOG_KV("what", boost::diagnostic_information(e));
-        ;
     }
     m_serverThread->join();
 }
