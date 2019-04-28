@@ -138,6 +138,11 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
     ptree pt;
     /// read the configuration file for a specified group
     read_ini(iniConfigFileName, pt);
+    if (boost::filesystem::exists(iniConfigFileName))
+    {
+        /// read the configuration file for a specified group
+        read_ini(iniConfigFileName, pt);
+    }
     /// db params initialization
     initDBConfig(pt);
     /// init params related to txpool

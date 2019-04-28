@@ -484,6 +484,7 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
+        /// to ensure that the signReq can reach to consensus even if the view has been changed
         if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             return true;
@@ -542,9 +543,10 @@ protected:
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
+    /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
-        return boost::filesystem::space(path).available > 1024;
+        return boost::filesystem::space(path).available > 1024 * 1024 * 100;
     }
 
     void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)

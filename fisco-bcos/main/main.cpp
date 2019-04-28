@@ -26,6 +26,7 @@
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
 #include <clocale>
+#include <ctime>
 #include <iostream>
 #include <memory>
 
@@ -114,6 +115,7 @@ int main(int argc, const char* argv[])
     auto initialize = std::make_shared<Initializer>();
     try
     {
+        std::cout << "Initializing..." << std::endl;
         initialize->init(configPath);
     }
     catch (std::exception& e)
@@ -121,8 +123,12 @@ int main(int argc, const char* argv[])
         std::cerr << "Init failed!!!" << std::endl;
         return -1;
     }
-    /// input the success info
     version();
+    // get datetime and output welcome info
+    char buffer[40];
+    auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+    std::cout << "[" << buffer << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;
     ExitHandler exitHandler;
     signal(SIGABRT, &ExitHandler::exitHandler);
@@ -135,6 +141,9 @@ int main(int argc, const char* argv[])
         LogInitializer::logRotateByTime();
     }
     initialize.reset();
+    currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+    std::cout << "[" << buffer << "] ";
     std::cout << "FISCO-BCOS program exit normally." << std::endl;
     return 0;
 }

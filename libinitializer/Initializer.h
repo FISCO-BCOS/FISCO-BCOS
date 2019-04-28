@@ -63,11 +63,6 @@ public:
         {
             m_p2pInitializer->stop();
         }
-        /// stop log
-        if (m_logInitializer)
-        {
-            m_logInitializer->stopLogging();
-        }
     }
     void init(std::string const& _path);
 
@@ -82,12 +77,12 @@ public:
     LogInitializer::Ptr logInitializer() { return m_logInitializer; }
 
 private:
+    LogInitializer::Ptr m_logInitializer;
+    RPCInitializer::Ptr m_rpcInitializer;
     GlobalConfigureInitializer::Ptr m_globalConfigureInitializer;
     LedgerInitializer::Ptr m_ledgerInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
-    RPCInitializer::Ptr m_rpcInitializer;
 
-    LogInitializer::Ptr m_logInitializer;
     SecureInitializer::Ptr m_secureInitializer;
 };
 

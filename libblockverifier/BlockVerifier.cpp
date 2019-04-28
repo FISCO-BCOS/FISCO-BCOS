@@ -138,6 +138,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         {
             BLOCKVERIFIER_LOG(ERROR)
                 << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
+                << LOG_KV("blkNum", block.blockHeader().number())
                 << LOG_KV("originHash", tmpHeader.hash().abridged())
                 << LOG_KV("curHash", block.header().hash().abridged())
                 << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
@@ -279,6 +280,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         {
             BLOCKVERIFIER_LOG(ERROR)
                 << "Invalid Block with bad stateRoot or receiptRoot or dbHash"
+                << LOG_KV("blkNum", block.blockHeader().number())
                 << LOG_KV("originHash", tmpHeader.hash().abridged())
                 << LOG_KV("curHash", block.header().hash().abridged())
                 << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
