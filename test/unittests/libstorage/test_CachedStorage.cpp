@@ -218,6 +218,7 @@ struct CachedStorageFixture
         mockStorage = std::make_shared<MockStorage>();
 
         cachedStorage->setBackend(mockStorage);
+        cachedStorage->setMaxForwardBlock(51);
     }
 
     Entries::Ptr getEntries()
