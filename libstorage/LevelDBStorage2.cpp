@@ -131,7 +131,8 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
     {
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, "Commit leveldb exception:" + boost::diagnostic_information(e)));
     }
 
     return 0;
