@@ -111,6 +111,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
             set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -pthread -DETH_DEBUG")
         endif()
+        # set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
         add_compile_options(-fstack-protector)
         add_compile_options(-Winconsistent-missing-override)
         # Some Linux-specific Clang settings.  We don't want these for OS X.
