@@ -58,7 +58,6 @@ struct TimeManager
     {
         m_lastConsensusTime = 0;
         m_lastSignTime = 0;
-        m_changeCycle = 0;
     }
 
     inline void updateChangeCycle()

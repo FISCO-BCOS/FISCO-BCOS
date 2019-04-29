@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(testDevGuards)
 {
     Mutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
         DEV_GUARDED(mutex)
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(testReadGuard)
 {
     SharedMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
         DEV_READ_GUARDED(mutex) { count++; }
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(testWriteGuard)
 {
     SharedMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
         DEV_WRITE_GUARDED(mutex)
@@ -149,7 +149,7 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
 {
     RecursiveMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f0 = [&]() {
         DEV_RECURSIVE_GUARDED(mutex) { count++; }

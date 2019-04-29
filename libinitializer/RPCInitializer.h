@@ -46,12 +46,16 @@ public:
         if (m_channelRPCHttpServer)
         {
             m_channelRPCHttpServer->StopListening();
-            INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer stoped.";
+            delete m_channelRPCHttpServer;
+            m_channelRPCHttpServer = nullptr;
+            INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer deleted.";
         }
         if (m_jsonrpcHttpServer)
         {
             m_jsonrpcHttpServer->StopListening();
-            INITIALIZER_LOG(INFO) << "JsonrpcHttpServer stoped.";
+            delete m_jsonrpcHttpServer;
+            m_jsonrpcHttpServer = nullptr;
+            INITIALIZER_LOG(INFO) << "JsonrpcHttpServer deleted.";
         }
     }
 
