@@ -23,6 +23,7 @@ Version 2.0 introduces new internal block data formats and network protocols for
 - Star our project.
 - Submit pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
 - [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
+- [Report bugs.](https://security.webank.com)
 - Join the discussion in [WeChat](docs/images/WeChatQR.jpeg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
 
 ## Features

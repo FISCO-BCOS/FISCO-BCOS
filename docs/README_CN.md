@@ -23,7 +23,7 @@
 
 - 点亮我们的小星星！  
 - 提交代码(Pull requests)，我们有[代码贡献流程](CONTRIBUTING_CN.md)和[编码规范](../CODING_STYLE.md)。
-- 也可以[提问](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)和[提交BUG](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
+- 也可以[提问](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)和[提交BUG](https://security.webank.com)。
 - 或者可以在[微信群](images/WeChatQR.jpeg)和[Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
 
 ## 关键特性
