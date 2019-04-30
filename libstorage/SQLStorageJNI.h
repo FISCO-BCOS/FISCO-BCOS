@@ -19,6 +19,8 @@
  *  @date 20190424
  */
 
+#ifndef USE_JNI
+
 #pragma once
 
 #include "Storage.h"
@@ -62,6 +64,12 @@ private:
 
     jclass m_selectClaz;
     jmethodID m_selectInit;
+    jmethodID m_selectSetCondition;
+    jmethodID m_selectSetBlockHash;
+    jmethodID m_selectSetNum;
+    jmethodID m_selectSetTable;
+    jmethodID m_selectSetKey;
+
     jclass m_selectResponseClaz;
     jmethodID m_dbSelectMethod;
 
@@ -75,3 +83,5 @@ private:
 }  // namespace storage
 
 }  // namespace dev
+
+#endif
