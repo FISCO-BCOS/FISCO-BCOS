@@ -48,6 +48,7 @@
 | generator | 1.0.0-rc2+                                          |                                                              |
 | 浏览器    | 2.0.0-rc2+                                          |                                                              |
 | Solidity  | 最高支持 solidity 0.5.2                             |                                                              |
+| AMDB      | 2.0.0+                                              |                                                              |
 
 更多，请参考[版本与兼容性描述](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/compatibility.html)。
 
