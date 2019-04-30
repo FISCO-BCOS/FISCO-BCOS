@@ -183,18 +183,14 @@ public:
 
     inline std::pair<bool, IDXTYPE> getLeader() const
     {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256 || m_nodeNum == 0)
         {
             return std::make_pair(false, MAXIDX);
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
 
-    uint64_t sealingTxNumber() const
-    {
-        ReadGuard l(x_sealingNumber);
-        return m_sealingNumber;
-    }
+    uint64_t sealingTxNumber() const { return m_sealingNumber; }
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -560,8 +556,8 @@ protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
     std::string m_baseDir;
-    bool m_leaderFailed = false;
-    bool m_notifyNextLeaderSeal = false;
+    std::atomic_bool m_leaderFailed = {false};
+    std::atomic_bool m_notifyNextLeaderSeal = {false};
 
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
@@ -590,7 +586,7 @@ protected:
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
-    bool m_fastViewChange = false;
+    std::atomic_bool m_fastViewChange = {false};
 
     uint8_t maxTTL = MAXTTL;
 
@@ -598,8 +594,7 @@ protected:
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
-    uint64_t m_sealingNumber = 0;
-    mutable SharedMutex x_sealingNumber;
+    std::atomic<uint64_t> m_sealingNumber = {0};
 };
 }  // namespace consensus
 }  // namespace dev

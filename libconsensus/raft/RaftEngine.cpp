@@ -71,7 +71,6 @@ void RaftEngine::initRaftEnv()
         m_heartbeatTimeout = m_minElectTimeout;
         m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
         m_increaseTime = (m_maxElectTimeout - m_minElectTimeout) / 4;
-        m_connectedNode = m_nodeNum;
     }
 
     resetElectTimeout();
@@ -114,7 +113,6 @@ void RaftEngine::resetConfig()
         {
             m_nodeNum = nodeNum;
             m_idx = nodeIdx;
-            m_idx = m_idx;
             m_f = (m_nodeNum - 1) / 2;
             shouldSwitchToFollower = true;
             RAFTENGINE_LOG(INFO) << LOG_DESC("[#resetConfig]Reset config")
@@ -199,7 +197,7 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
     }
     /// check whether this node is in the sealer list
     h512 nodeId;
-    bool isSealer = getNodeIdByIndex(nodeId, m_idx);
+    bool isSealer = getNodeIdByIndex(nodeId, nodeIdx());
     if (!isSealer || _session->nodeID() == nodeId)
     {
         RAFTENGINE_LOG(WARNING) << LOG_DESC("[#isValidReq]I'm not a sealer");
