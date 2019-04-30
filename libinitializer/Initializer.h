@@ -48,25 +48,20 @@ public:
     virtual ~Initializer()
     {
         /// modify the destructure order to ensure that the log is destructed at last
-        /// stop rpc
-        if (m_rpcInitializer)
-        {
-            m_rpcInitializer->stop();
-        }
         /// stop the ledger
         if (m_ledgerInitializer)
         {
             m_ledgerInitializer->stopAll();
         }
+        /// stop rpc
+        if (m_rpcInitializer)
+        {
+            m_rpcInitializer->stop();
+        }
         /// stop p2p
         if (m_p2pInitializer)
         {
             m_p2pInitializer->stop();
-        }
-        /// stop log
-        if (m_logInitializer)
-        {
-            m_logInitializer->stopLogging();
         }
     }
     void init(std::string const& _path);
@@ -82,12 +77,12 @@ public:
     LogInitializer::Ptr logInitializer() { return m_logInitializer; }
 
 private:
+    LogInitializer::Ptr m_logInitializer;
+    RPCInitializer::Ptr m_rpcInitializer;
     GlobalConfigureInitializer::Ptr m_globalConfigureInitializer;
     LedgerInitializer::Ptr m_ledgerInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
-    RPCInitializer::Ptr m_rpcInitializer;
 
-    LogInitializer::Ptr m_logInitializer;
     SecureInitializer::Ptr m_secureInitializer;
 };
 

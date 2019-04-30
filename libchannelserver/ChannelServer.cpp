@@ -34,26 +34,28 @@ using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
 {
-    _threadPool = std::make_shared<ThreadPool>("ChannelWorker", 8);
-    if (!_listenHost.empty() && _listenPort > 0)
+    // ChannelReq process more request, should be larger
+    m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 16);
+    m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
+    if (!m_listenHost.empty() && m_listenPort > 0)
     {
-        _acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
-            *_ioService, boost::asio::ip::tcp::endpoint(
-                             boost::asio::ip::address::from_string(_listenHost), _listenPort));
+        m_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
+            *m_ioService, boost::asio::ip::tcp::endpoint(
+                              boost::asio::ip::address::from_string(m_listenHost), m_listenPort));
 
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
-        _acceptor->set_option(optionReuseAddress);
+        m_acceptor->set_option(optionReuseAddress);
     }
 
-    _serverThread = std::make_shared<std::thread>([=]() {
+    m_serverThread = std::make_shared<std::thread>([=]() {
         pthread_setThreadName("ChannelServer");
 
-        while (_acceptor && _acceptor->is_open())
+        while (m_acceptor && m_acceptor->is_open())
         {
             try
             {
                 startAccept();
-                _ioService->run();
+                m_ioService->run();
             }
             catch (std::exception& e)
             {
@@ -64,10 +66,10 @@ void dev::channel::ChannelServer::run()
 
             sleep(1);
 
-            if (_acceptor->is_open() && _ioService->stopped())
+            if (m_acceptor->is_open() && m_ioService->stopped())
             {
                 CHANNEL_LOG(WARNING) << LOG_DESC("io_service reset");
-                _ioService->reset();
+                m_ioService->reset();
             }
         }
     });
@@ -87,7 +89,7 @@ void dev::channel::ChannelServer::onAccept(
         session->setHost(remoteEndpoint.address().to_string());
         session->setPort(remoteEndpoint.port());
 
-        if (_enableSSL)
+        if (m_enableSSL)
         {
             CHANNEL_LOG(TRACE) << LOG_DESC("Start SSL handshake");
             session->sslSocket()->async_handshake(boost::asio::ssl::stream_base::server,
@@ -98,9 +100,9 @@ void dev::channel::ChannelServer::onAccept(
         {
             CHANNEL_LOG(TRACE) << LOG_DESC("Call connectionHandler");
 
-            if (_connectionHandler)
+            if (m_connectionHandler)
             {
-                _connectionHandler(ChannelException(), session);
+                m_connectionHandler(ChannelException(), session);
             }
         }
     }
@@ -127,16 +129,16 @@ void dev::channel::ChannelServer::startAccept()
     try
     {
         ChannelSession::Ptr session = std::make_shared<ChannelSession>();
-        session->setThreadPool(_threadPool);
-        session->setIOService(_ioService);
-        session->setEnableSSL(_enableSSL);
-        session->setMessageFactory(_messageFactory);
+        session->setThreadPool(m_requestThreadPool, m_responseThreadPool);
+        session->setIOService(m_ioService);
+        session->setEnableSSL(m_enableSSL);
+        session->setMessageFactory(m_messageFactory);
 
         session->setSSLSocket(
             std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> >(
-                *_ioService, *_sslContext));
+                *m_ioService, *m_sslContext));
 
-        _acceptor->async_accept(session->sslSocket()->lowest_layer(),
+        m_acceptor->async_accept(session->sslSocket()->lowest_layer(),
             boost::bind(&ChannelServer::onAccept, shared_from_this(),
                 boost::asio::placeholders::error, session));
     }
@@ -153,10 +155,10 @@ void dev::channel::ChannelServer::stop()
     {
         CHANNEL_LOG(DEBUG) << LOG_DESC("Close acceptor");
 
-        if (_acceptor->is_open())
+        if (m_acceptor->is_open())
         {
-            _acceptor->cancel();
-            _acceptor->close();
+            m_acceptor->cancel();
+            m_acceptor->close();
         }
     }
     catch (std::exception& e)
@@ -168,15 +170,14 @@ void dev::channel::ChannelServer::stop()
     try
     {
         CHANNEL_LOG(DEBUG) << LOG_DESC("Close ioService");
-        _ioService->stop();
+        m_ioService->stop();
     }
     catch (std::exception& e)
     {
         CHANNEL_LOG(ERROR) << LOG_DESC("Close ioService")
                            << LOG_KV("what", boost::diagnostic_information(e));
-        ;
     }
-    _serverThread->join();
+    m_serverThread->join();
 }
 
 void dev::channel::ChannelServer::onHandshake(
@@ -187,9 +188,9 @@ void dev::channel::ChannelServer::onHandshake(
         if (!error)
         {
             CHANNEL_LOG(TRACE) << LOG_DESC("SSL handshake success");
-            if (_connectionHandler)
+            if (m_connectionHandler)
             {
-                _connectionHandler(ChannelException(), session);
+                m_connectionHandler(ChannelException(), session);
             }
             else
             {

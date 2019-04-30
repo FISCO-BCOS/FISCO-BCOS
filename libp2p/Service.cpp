@@ -22,6 +22,7 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
@@ -50,14 +51,15 @@ void Service::start()
         m_run = true;
 
         auto self = std::weak_ptr<Service>(shared_from_this());
-        m_host->setConnectionHandler([self](dev::network::NetworkException e, NodeID nodeID,
-                                         std::shared_ptr<dev::network::SessionFace> session) {
-            auto service = self.lock();
-            if (service)
-            {
-                service->onConnect(e, nodeID, session);
-            }
-        });
+        m_host->setConnectionHandler(
+            [self](dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
+                std::shared_ptr<dev::network::SessionFace> session) {
+                auto service = self.lock();
+                if (service)
+                {
+                    service->onConnect(e, nodeInfo, session);
+                }
+            });
         m_host->start();
 
         heartBeat();
@@ -171,9 +173,10 @@ void Service::updateStaticNodes(
     }
 }
 
-void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID nodeID,
+void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
     std::shared_ptr<dev::network::SessionFace> session)
 {
+    NodeID nodeID = nodeInfo.nodeID;
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
@@ -204,7 +207,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeID n
 
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
-    p2pSession->setNodeID(nodeID);
+    p2pSession->setNodeInfo(nodeInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
@@ -384,7 +387,6 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 
         if (it != m_sessions.end() && it->second->actived())
         {
-            message->setLength(P2PMessage::HEADER_LENGTH + message->buffer()->size());
             if (message->seq() == 0)
             {
                 message->setSeq(m_p2pMessageFactory->newSeq());
@@ -675,7 +677,7 @@ P2PSessionInfos Service::sessionInfos()
         for (auto const& i : s)
         {
             infos.push_back(P2PSessionInfo(
-                i.first, i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                i.second->nodeInfo(), i.second->session()->nodeIPEndpoint(), (i.second->topics())));
         }
     }
     catch (std::exception& e)
@@ -711,8 +713,8 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             }
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
-                infos.push_back(P2PSessionInfo(
-                    i.first, i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                infos.push_back(P2PSessionInfo(i.second->nodeInfo(),
+                    i.second->session()->nodeIPEndpoint(), (i.second->topics())));
             }
         }
     }

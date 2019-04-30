@@ -106,8 +106,10 @@ BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
 
 void DownloadingBlockQueue::clear()
 {
-    WriteGuard l(x_buffer);
-    m_buffer->clear();
+    {
+        WriteGuard l(x_buffer);
+        m_buffer->clear();
+    }
 
     clearQueue();
 }
@@ -155,7 +157,8 @@ void DownloadingBlockQueue::flushBufferToQueue()
         {
             try
             {
-                shared_ptr<Block> block = make_shared<Block>(rlps[i].toBytes());
+                shared_ptr<Block> block =
+                    make_shared<Block>(rlps[i].toBytes(), CheckTransaction::Everything, false);
                 if (isNewerBlock(block))
                 {
                     successCnt++;

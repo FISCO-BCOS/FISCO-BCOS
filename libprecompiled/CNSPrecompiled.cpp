@@ -87,12 +87,12 @@ bytes CNSPrecompiled::call(
                 }
             }
         }
+        int result = 0;
         if (exist)
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
-
-            out = abi.abiIn("", CODE_ADDRESS_AND_VERSION_EXIST);
+            result = CODE_ADDRESS_AND_VERSION_EXIST;
         }
         else
         {
@@ -105,18 +105,18 @@ bytes CNSPrecompiled::call(
             int count = table->insert(contractName, entry, std::make_shared<AccessOptions>(origin));
             if (count == storage::CODE_NO_AUTHORIZED)
             {
-                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("non-authorized");
-
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+                PRECOMPILED_LOG(DEBUG)
+                    << LOG_BADGE("CNSPrecompiled") << LOG_DESC("permission denied");
+                result = storage::CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", count);
+                result = count;
             }
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {

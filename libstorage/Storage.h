@@ -15,26 +15,18 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 /** @file storage.h
- *  @author ancelmo
+ *  @author monan
  *  @date 20180921
  */
 #pragma once
 
 #include "Table.h"
+#include <libdevcore/FixedHash.h>
 
 namespace dev
 {
 namespace storage
 {
-class TableData
-{
-public:
-    typedef std::shared_ptr<TableData> Ptr;
-
-    std::string tableName;
-    std::map<std::string, Entries::Ptr> data;
-};
-
 class Storage : public std::enable_shared_from_this<Storage>
 {
 public:
@@ -42,10 +34,10 @@ public:
 
     virtual ~Storage(){};
 
-    virtual Entries::Ptr select(
-        h256 hash, int num, const std::string& table, const std::string& key) = 0;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas,
-        h256 const& blockHash) = 0;
+    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
+        const std::string& key, Condition::Ptr condition = nullptr) = 0;
+    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
+
     virtual bool onlyDirty() = 0;
 };
 

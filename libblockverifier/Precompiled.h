@@ -21,6 +21,7 @@
 #pragma once
 
 #include <libdevcore/Address.h>
+#include <libstorage/Table.h>
 #include <map>
 #include <memory>
 
@@ -46,6 +47,13 @@ public:
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         bytesConstRef _param, Address const& _origin = Address()) = 0;
 
+    // is this precompiled need parallel processing, default false.
+    virtual bool isParallelPrecompiled() { return false; }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef /*param*/)
+    {
+        return std::vector<std::string>();
+    }
+
     virtual uint32_t getParamFunc(bytesConstRef _param)
     {
         auto funcBytes = _param.cropped(0, 4);
@@ -62,7 +70,7 @@ protected:
     std::map<std::string, uint32_t> name2Selector;
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        const std::string& _tableName);
+        const std::string& tableName);
     std::shared_ptr<dev::storage::Table> createTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,

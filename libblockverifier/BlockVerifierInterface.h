@@ -55,7 +55,5 @@ public:
     executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) = 0;
 };
-
 }  // namespace blockverifier
-
 }  // namespace dev

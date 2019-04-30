@@ -29,8 +29,9 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <tbb/parallel_for.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -107,11 +108,15 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
     m_stateFactory = _stateFactory;
 }
 
-shared_ptr<MemoryTableFactory> BlockChainImp::getMemoryTableFactory()
+shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory()
 {
+#if 0
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
         std::make_shared<dev::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(m_stateStorage);
+#endif
+
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), 0);
     return memoryTableFactory;
 }
 
@@ -141,7 +146,12 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
 
 std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     auto cachedBlock = m_blockCache.get(_blockHash);
+    auto getCache_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     if (bool(cachedBlock.first))
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache hit, read from cache");
@@ -150,21 +160,118 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
     else
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage");
-
         string strBlock = "";
         Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        auto openTable_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         if (tb)
         {
             auto entries = tb->select(_blockHash.hex(), tb->newCondition());
+            auto select_time_cost = utcTime() - record_time;
+            record_time = utcTime();
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
                 strBlock = entry->getField(SYS_VALUE);
+                auto getField_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
                 auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                auto constructBlock_time_cost = utcTime() - record_time;
+                record_time = utcTime();
 
                 BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Write to cache");
                 auto blockPtr = m_blockCache.add(block);
+                auto addCache_time_cost = utcTime() - record_time;
+                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block from leveldb")
+                                      << LOG_KV("getCacheTimeCost", getCache_time_cost)
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("selectTimeCost", select_time_cost)
+                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
+                                      << LOG_KV("constructBlockTimeCost", constructBlock_time_cost)
+                                      << LOG_KV("addCacheTimeCost", addCache_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
                 return blockPtr;
+            }
+        }
+
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockHash", _blockHash);
+        return nullptr;
+    }
+}
+
+std::shared_ptr<bytes> BlockChainImp::getBlockRLP(int64_t _i)
+{
+    /// the future block
+    if (_i > number())
+    {
+        return nullptr;
+    }
+    string blockHash = "";
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
+    if (tb)
+    {
+        auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            h256 blockHash = h256((entry->getField(SYS_VALUE)));
+            return getBlockRLP(blockHash);
+        }
+    }
+
+    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Can't find block") << LOG_KV("height", _i);
+    return nullptr;
+}
+
+std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
+{
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+    auto cachedBlock = m_blockCache.get(_blockHash);
+    auto getCache_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
+    if (bool(cachedBlock.first))
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Cache hit, read from cache");
+        std::shared_ptr<bytes> blockRLP = cachedBlock.first->rlpP();
+        BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from cache")
+                              << LOG_KV("getCacheTimeCost", getCache_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+        return blockRLP;
+    }
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Cache missed, read from storage");
+        string strBlock = "";
+        Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        auto openTable_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+        if (tb)
+        {
+            auto entries = tb->select(_blockHash.hex(), tb->newCondition());
+            auto select_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+            if (entries->size() > 0)
+            {
+                auto entry = entries->get(0);
+                strBlock = entry->getField(SYS_VALUE);
+                auto getField_time_cost = utcTime() - record_time;
+                record_time = utcTime();
+
+                auto blockRLP = std::make_shared<bytes>(fromHex(strBlock.c_str()));
+                auto blockRLP_time_cost = utcTime() - record_time;
+
+                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from leveldb")
+                                      << LOG_KV("getCacheTimeCost", getCache_time_cost)
+                                      << LOG_KV("openTableTimeCost", openTable_time_cost)
+                                      << LOG_KV("selectTimeCost", select_time_cost)
+                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
+                                      << LOG_KV("constructblockRLPTimeCost", blockRLP_time_cost)
+                                      << LOG_KV("totalTimeCost", utcTime() - start_time);
+                return blockRLP;
             }
         }
 
@@ -298,19 +405,36 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
     }
 }
 
+std::shared_ptr<bytes> BlockChainImp::getBlockRLPByHash(h256 const& _blockHash)
+{
+    auto block = getBlockRLP(_blockHash);
+    if (bool(block))
+    {
+        return block;
+    }
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
+            "[#getBlockRLPByHash]Can't find the block, return nullptr");
+        return nullptr;
+    }
+}
+
 bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
 {
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
         block = std::make_shared<Block>();
-        block->setEmptyBlock();
+        /// modification 2019.3.20: set timestamp to block header
+        block->setEmptyBlock(initParam.timeStamp);
         block->header().appendExtraDataArray(asBytes(initParam.groupMark));
-        shared_ptr<MemoryTableFactory> mtb = getMemoryTableFactory();
+        shared_ptr<TableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);
         if (tb)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
+            entry->setField("number", lexical_cast<std::string>(block->blockHeader().number()));
             entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
             tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
         }
@@ -399,7 +523,6 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
-                assert(s.size() == 7);
                 initParam.consensusType = s[2];
                 initParam.storageType = s[3];
                 initParam.stateType = s[4];
@@ -588,11 +711,30 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
     }
 }
 
+std::shared_ptr<bytes> BlockChainImp::getBlockRLPByNumber(int64_t _i)
+{
+    /// return directly if the blocknumber is invalid
+    if (_i > number())
+    {
+        return nullptr;
+    }
+    auto block = getBlockRLP(_i);
+    if (bool(block))
+    {
+        return block;
+    }
+    else
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLPByNumber]Can't find block, return nullptr");
+        return nullptr;
+    }
+}
+
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -621,7 +763,7 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 {
     string strblockhash = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -652,7 +794,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 {
     string strblock = "";
     string txIndex = "";
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -680,7 +822,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
 {
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
@@ -751,8 +893,9 @@ void BlockChainImp::writeTotalTransactionCount(
             auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
             currentCount += block.transactions().size();
 
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
-            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, tb->newCondition());
+            auto updateEntry = tb->newEntry();
+            updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, updateEntry, tb->newCondition());
         }
         else
         {
@@ -769,27 +912,81 @@ void BlockChainImp::writeTotalTransactionCount(
 
 void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
 {
-    Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false);
+    auto start_time = utcTime();
+    auto record_time = utcTime();
+    Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     Table::Ptr tb_nonces = context->getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES, false);
+    auto openTable_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+
     if (tb && tb_nonces)
     {
         const std::vector<Transaction>& txs = block.transactions();
         std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
+        auto constructVector_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        // auto constructEntry_time_cost = 0;
+        // auto insertTb_time_cost = 0;
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
+                for (size_t i = _r.begin(); i != _r.end(); ++i)
+                {
+                    // record_time = utcTime();
+                    Entry::Ptr entry = std::make_shared<Entry>();
+                    entry->setField(
+                        SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+                    entry->setField("index", lexical_cast<std::string>(i));
+                    entry->setForce(true);
+                    // constructEntry_time_cost += utcTime() - record_time;
+                    // record_time = utcTime();
+
+                    tb->insert(txs[i].sha3().hex(), entry,
+                        std::make_shared<dev::storage::AccessOptions>(), false);
+                    nonce_vector[i] = txs[i].nonce();
+                    // insertTb_time_cost += utcTime() - record_time;
+                    // record_time = utcTime();
+                }
+            });
+        /*
         for (uint i = 0; i < txs.size(); i++)
         {
+            // record_time = utcTime();
             Entry::Ptr entry = std::make_shared<Entry>();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
             entry->setField("index", lexical_cast<std::string>(i));
-            tb->insert(txs[i].sha3().hex(), entry);
-            nonce_vector[i] = txs[i].nonce();
-        }
+            // constructEntry_time_cost += utcTime() - record_time;
+            // record_time = utcTime();
 
+            tb->insert(
+                txs[i].sha3().hex(), entry, std::make_shared<dev::storage::AccessOptions>(), false);
+            nonce_vector[i] = txs[i].nonce();
+            // insertTb_time_cost += utcTime() - record_time;
+            // record_time = utcTime();
+        }
+        */
+
+        auto insertTable_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         /// insert tb2Nonces
         RLPStream rs;
         rs.appendVector(nonce_vector);
+        auto encodeNonceVector_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
         entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
+        auto insertNonceVector_time_cost = utcTime() - record_time;
+        BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
+                              << LOG_DESC("Write tx to block time record")
+                              << LOG_KV("openTableTimeCost", openTable_time_cost)
+                              << LOG_KV("constructVectorTimeCost", constructVector_time_cost)
+                              << LOG_KV("insertTableTimeCost", insertTable_time_cost)
+                              << LOG_KV("encodeNonceVectorTimeCost", encodeNonceVector_time_cost)
+                              << LOG_KV("insertNonceVectorTimeCost", insertNonceVector_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
     }
     else
     {
@@ -804,6 +1001,7 @@ void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<Executi
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
+        entry->setForce(true);
         tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
     }
     else
@@ -821,6 +1019,7 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         bytes out;
         block.encode(out);
         entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
     else
@@ -850,6 +1049,8 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 
 CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
 {
+    auto start_time = utcTime();
+    auto record_time = utcTime();
     if (!isBlockShouldCommit(block.blockHeader().number()))
     {
         return CommitResult::ERROR_NUMBER;
@@ -867,25 +1068,74 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
     try
     {
+        auto before_write_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
             if (!isBlockShouldCommit(block.blockHeader().number()))
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
-            writeBlockInfo(block, context);
+            auto write_record_time = utcTime();
+            // writeBlockInfo(block, context);
+            writeHash2Block(block, context);
+            auto writeHash2Block_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
+            writeNumber2Hash(block, context);
+            auto writeNumber2Hash_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
 
             writeNumber(block, context);
+            auto writeNumber_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             writeTotalTransactionCount(block, context);
+            auto writeTotalTransactionCount_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             writeTxToBlock(block, context);
+            auto writeTxToBlock_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
+
             context->dbCommit(block);
+            auto dbCommit_time_cost = utcTime() - write_record_time;
+            write_record_time = utcTime();
             {
                 WriteGuard ll(m_blockNumberMutex);
                 m_blockNumber = block.blockHeader().number();
             }
+            auto updateBlockNumber_time_cost = utcTime() - write_record_time;
+
+            BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
+                                  << LOG_DESC("Commit block time record(write)")
+                                  << LOG_KV("writeHash2BlockTimeCost", writeHash2Block_time_cost)
+                                  << LOG_KV("writeNumber2HashTimeCost", writeNumber2Hash_time_cost)
+                                  << LOG_KV("writeNumberTimeCost", writeNumber_time_cost)
+                                  << LOG_KV("writeTotalTransactionCountTimeCost",
+                                         writeTotalTransactionCount_time_cost)
+                                  << LOG_KV("writeTxToBlockTimeCost", writeTxToBlock_time_cost)
+                                  << LOG_KV("dbCommitTimeCost", dbCommit_time_cost)
+                                  << LOG_KV(
+                                         "updateBlockNumberTimeCost", updateBlockNumber_time_cost);
         }
+        auto writeBlock_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
         m_blockCache.add(block);
+        auto addBlockCache_time_cost = utcTime() - record_time;
+        record_time = utcTime();
         m_onReady(m_blockNumber);
+        auto noteReady_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit block time record")
+                              << LOG_KV("beforeTimeCost", before_write_time_cost)
+                              << LOG_KV("writeBlockTimeCost", writeBlock_time_cost)
+                              << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
+                              << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
+                              << LOG_KV("totalTimeCost", utcTime() - start_time);
+
         return CommitResult::OK;
     }
     catch (OpenSysTableFailed&)
@@ -893,5 +1143,12 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
             "[#commitBlock]System meets error when try to write block to storage");
         throw;
+    }
+    /// leveldb caused exception: database corruption or the disk has no space left
+    catch (StorageException& e)
+    {
+        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
+        exit(1);
     }
 }

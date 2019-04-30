@@ -61,73 +61,68 @@ public:
     static OverlayDB openDB(boost::filesystem::path const& _path, h256 const& _genesisHash,
         WithExisting _we = WithExisting::Trust);
 
-    virtual bool addressInUse(Address const& _address) const override;
+    bool addressInUse(Address const& _address) const override;
 
-    virtual bool accountNonemptyAndExisting(Address const& _address) const override;
+    bool accountNonemptyAndExisting(Address const& _address) const override;
 
-    virtual bool addressHasCode(Address const& _address) const override;
+    bool addressHasCode(Address const& _address) const override;
 
-    virtual u256 balance(Address const& _id) const override;
+    u256 balance(Address const& _id) const override;
 
-    virtual void addBalance(Address const& _id, u256 const& _amount) override;
+    void addBalance(Address const& _id, u256 const& _amount) override;
 
-    virtual void subBalance(Address const& _addr, u256 const& _value) override;
+    void subBalance(Address const& _addr, u256 const& _value) override;
 
-    virtual void setBalance(Address const& _addr, u256 const& _value) override;
+    void setBalance(Address const& _addr, u256 const& _value) override;
 
-    virtual void transferBalance(
-        Address const& _from, Address const& _to, u256 const& _value) override;
+    void transferBalance(Address const& _from, Address const& _to, u256 const& _value) override;
 
-    virtual h256 storageRoot(Address const& _contract) const override;
+    h256 storageRoot(Address const& _contract) const override;
 
-    virtual u256 storage(Address const& _contract, u256 const& _memory) override;
+    u256 storage(Address const& _contract, u256 const& _memory) override;
 
-    virtual void setStorage(
-        Address const& _contract, u256 const& _location, u256 const& _value) override;
+    void setStorage(Address const& _contract, u256 const& _location, u256 const& _value) override;
 
-    virtual void clearStorage(Address const& _contract) override;
+    void clearStorage(Address const& _contract) override;
 
-    virtual void createContract(Address const& _address) override;
+    void createContract(Address const& _address) override;
 
-    virtual void setCode(Address const& _address, bytes&& _code) override;
+    void setCode(Address const& _address, bytes&& _code) override;
 
-    virtual void kill(Address _a) override;
+    void kill(Address _a) override;
 
-    // virtual std::map<h256, std::pair<u256, u256>> storage(Address const& _contract) const
-    // override;
+    bytes const code(Address const& _addr) const override;
 
-    virtual bytes const& code(Address const& _addr) const override;
+    h256 codeHash(Address const& _contract) const override;
 
-    virtual h256 codeHash(Address const& _contract) const override;
+    size_t codeSize(Address const& _contract) const override;
 
-    virtual size_t codeSize(Address const& _contract) const override;
+    void incNonce(Address const& _id) override;
 
-    virtual void incNonce(Address const& _id) override;
+    void setNonce(Address const& _addr, u256 const& _newNonce) override;
 
-    virtual void setNonce(Address const& _addr, u256 const& _newNonce) override;
+    u256 getNonce(Address const& _addr) const override;
 
-    virtual u256 getNonce(Address const& _addr) const override;
+    h256 rootHash(bool _needCal = true) const override;
+    void commit() override;
 
-    virtual h256 rootHash(bool _needCal = true) const override;
-    virtual void commit() override;
+    void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override;
 
-    virtual void dbCommit(h256 const& _blockHash, int64_t _blockNumber) override;
+    void setRoot(h256 const& _root) override;
 
-    virtual void setRoot(h256 const& _root) override;
+    u256 const& accountStartNonce() const override;
 
-    virtual u256 const& accountStartNonce() const override;
+    u256 const& requireAccountStartNonce() const override;
 
-    virtual u256 const& requireAccountStartNonce() const override;
+    void noteAccountStartNonce(u256 const& _actual) override;
 
-    virtual void noteAccountStartNonce(u256 const& _actual) override;
+    size_t savepoint() const override;
 
-    virtual size_t savepoint() const override;
+    void rollback(size_t _savepoint) override;
 
-    virtual void rollback(size_t _savepoint) override;
+    void clear() override;
 
-    virtual void clear() override;
-
-    virtual bool checkAuthority(Address const& _origin, Address const& _contract) const override;
+    bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
     State& getState();
 

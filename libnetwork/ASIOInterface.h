@@ -97,7 +97,7 @@ public:
     virtual void stop()
     {
         // shutdown acceptor
-        if (m_acceptor->is_open())
+        if (m_acceptor && m_acceptor->is_open())
         {
             m_acceptor->cancel();
             m_acceptor->close();
@@ -225,7 +225,7 @@ public:
 
     virtual void strandPost(Base_Handler handler) { m_strand->post(handler); }
 
-private:
+protected:
     std::shared_ptr<ba::io_service> m_ioService;
     std::shared_ptr<ba::io_service::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;

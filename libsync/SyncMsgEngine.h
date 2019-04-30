@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include "DownloadingTxsQueue.h"
 #include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
@@ -45,12 +46,14 @@ public:
     SyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<SyncMasterStatus> _syncStatus, PROTOCOL_ID const& _protocolId,
+        std::shared_ptr<SyncMasterStatus> _syncStatus,
+        std::shared_ptr<DownloadingTxsQueue> _txQueue, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, h256 const& _genesisHash)
       : m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_syncStatus(_syncStatus),
+        m_txQueue(_txQueue),
         m_protocolId(_protocolId),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
@@ -83,6 +86,7 @@ private:
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
+    std::shared_ptr<DownloadingTxsQueue> m_txQueue;
 
     // Internal data
     PROTOCOL_ID m_protocolId;
@@ -103,6 +107,7 @@ public:
     ~DownloadBlocksContainer() { clearBatchAndSend(); }
 
     void batchAndSend(BlockPtr _block);
+    void batchAndSend(std::shared_ptr<bytes> _blockRLP);
 
 private:
     void clearBatchAndSend();

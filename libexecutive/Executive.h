@@ -111,7 +111,7 @@ public:
     /// @returns true if the transaction is done, false if go() must be called.
 
     void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction const& _t,
-        dev::eth::BlockHeader const& _header, u256 const& _gasUsed) const;
+        dev::eth::BlockHeader const& _header, u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().
@@ -141,6 +141,8 @@ public:
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
     bool call(dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+    bool callRC2(
+        dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
     void accrueSubState(dev::eth::SubState& _parentContext);
 

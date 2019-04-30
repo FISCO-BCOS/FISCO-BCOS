@@ -46,14 +46,20 @@ public:
         if (m_channelRPCHttpServer)
         {
             m_channelRPCHttpServer->StopListening();
-            INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer stoped.";
+            delete m_channelRPCHttpServer;
+            m_channelRPCHttpServer = nullptr;
+            INITIALIZER_LOG(INFO) << "ChannelRPCHttpServer deleted.";
         }
         if (m_jsonrpcHttpServer)
         {
             m_jsonrpcHttpServer->StopListening();
-            INITIALIZER_LOG(INFO) << "JsonrpcHttpServer stoped.";
+            delete m_jsonrpcHttpServer;
+            m_jsonrpcHttpServer = nullptr;
+            INITIALIZER_LOG(INFO) << "JsonrpcHttpServer deleted.";
         }
     }
+
+    void initChannelRPCServer(boost::property_tree::ptree const& _pt);
 
     void initConfig(boost::property_tree::ptree const& _pt);
     void setP2PService(std::shared_ptr<p2p::P2PInterface> _p2pService)
@@ -68,6 +74,8 @@ public:
     {
         m_ledgerManager = _ledgerManager;
     }
+
+    ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
 
 private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;

@@ -14,11 +14,11 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file AuthorityPrecompiled.h
+/** @file PermissionPrecompiled.h
  *  @author caryliao
  *  @date 20181205
  */
-#include "AuthorityPrecompiled.h"
+#include "PermissionPrecompiled.h"
 #include "libstorage/Table.h"
 #include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -37,22 +37,22 @@ const char* const AUP_METHOD_REM = "remove(string,string)";
 const char* const AUP_METHOD_QUE = "queryByName(string)";
 
 
-AuthorityPrecompiled::AuthorityPrecompiled()
+PermissionPrecompiled::PermissionPrecompiled()
 {
     name2Selector[AUP_METHOD_INS] = getFuncSelector(AUP_METHOD_INS);
     name2Selector[AUP_METHOD_REM] = getFuncSelector(AUP_METHOD_REM);
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
 }
 
-std::string AuthorityPrecompiled::toString()
+std::string PermissionPrecompiled::toString()
 {
     return "Authority";
 }
 
-bytes AuthorityPrecompiled::call(
+bytes PermissionPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
 
     // parse function name
@@ -61,14 +61,14 @@ bytes AuthorityPrecompiled::call(
 
     dev::eth::ContractABI abi;
     bytes out;
-
+    int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
     {
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
@@ -78,9 +78,8 @@ bytes AuthorityPrecompiled::call(
         if (entries->size() != 0u)
         {
             PRECOMPILED_LOG(WARNING)
-                << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("tableName and address exist");
-
-            out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_EXIST);
+                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
+            result = CODE_TABLE_AND_ADDRESS_EXIST;
         }
         else
         {
@@ -90,21 +89,12 @@ bytes AuthorityPrecompiled::call(
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
-
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("insert successfully");
-
-                out = abi.abiIn("", count);
-            }
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
     {
@@ -113,7 +103,7 @@ bytes AuthorityPrecompiled::call(
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
 
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -123,30 +113,20 @@ bytes AuthorityPrecompiled::call(
         auto entries = table->select(tableName, condition);
         if (entries->size() == 0u)
         {
-            PRECOMPILED_LOG(WARNING) << LOG_BADGE("AuthorityPrecompiled")
+            PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                      << LOG_DESC("tableName and address does not exist");
-
-            out = abi.abiIn("", CODE_TABLE_AND_ADDRESS_NOT_EXIST);
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
         else
         {
             int count =
                 table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("non-authorized");
-
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("remove successfully");
-
-                out = abi.abiIn("", count);
-            }
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
+        getOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
     {
@@ -155,7 +135,7 @@ bytes AuthorityPrecompiled::call(
         abi.abiOut(data, tableName);
         addPrefixToUserTable(tableName);
 
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("AuthorityPrecompiled") << LOG_DESC("queryByName func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryByName func")
                                << LOG_KV("tableName", tableName);
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -184,13 +164,13 @@ bytes AuthorityPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthorityPrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
 }
 
-void AuthorityPrecompiled::addPrefixToUserTable(std::string& table_name)
+void PermissionPrecompiled::addPrefixToUserTable(std::string& table_name)
 {
     if (table_name == SYS_ACCESS_TABLE || table_name == SYS_CONSENSUS || table_name == SYS_TABLES ||
         table_name == SYS_CNS || table_name == SYS_CONFIG)

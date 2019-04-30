@@ -22,16 +22,18 @@
  */
 
 #pragma once
+#include <libconfig/GlobalConfigure.h>
 #include <stdint.h>
 #include <iosfwd>
 
 namespace dev
 {
-typedef int8_t GROUP_ID;
-typedef uint8_t MODULE_ID;
-typedef int16_t PROTOCOL_ID;
+typedef int16_t GROUP_ID;
+typedef uint16_t MODULE_ID;
+typedef int32_t PROTOCOL_ID;
 typedef uint16_t PACKET_TYPE;
-static const GROUP_ID maxGroupID = 127;
+typedef uint16_t VERSION_TYPE;
+static const GROUP_ID maxGroupID = 32767;
 namespace eth
 {
 enum ProtocolID
@@ -44,6 +46,11 @@ enum ProtocolID
     Raft = 11
 };
 
+enum VersionFlag
+{
+    CompressFlag = 0x8000  /// compressFlag
+};
+
 enum ExtraIndex
 {
     PBFTExtraData = 0,
@@ -54,16 +61,28 @@ inline PROTOCOL_ID getGroupProtoclID(GROUP_ID groupID, MODULE_ID moduleID)
 {
     if (groupID < 0)
         return 0;
-    else
-        return (groupID << (8 * sizeof(MODULE_ID))) | moduleID;
+    if (g_BCOSConfig.version() <= RC1_VERSION)
+    {
+        return (groupID << 8) | moduleID;
+    }
+    return (groupID << (8 * sizeof(MODULE_ID))) | moduleID;
 }
 
 inline std::pair<GROUP_ID, MODULE_ID> getGroupAndProtocol(PROTOCOL_ID id)
 {
     ///< The base should be 1, not 2.
-    int32_t high = (1 << (8 * sizeof(GROUP_ID))) - 1;
-    int32_t low = (1 << (8 * sizeof(MODULE_ID))) - 1;
-    return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
+    if (g_BCOSConfig.version() <= RC1_VERSION)
+    {
+        int32_t high = (1 << 8) - 1;
+        int32_t low = (1 << 8) - 1;
+        return std::make_pair((id >> 8) & high, id & low);
+    }
+    else
+    {
+        int32_t high = (1 << (8 * sizeof(GROUP_ID))) - 1;
+        int32_t low = (1 << (8 * sizeof(MODULE_ID))) - 1;
+        return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
+    }
 }
 
 }  // namespace eth

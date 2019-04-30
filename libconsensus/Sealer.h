@@ -62,7 +62,10 @@ public:
     {
         assert(m_txPool && m_blockSync && m_blockChain);
         if (m_txPool->status().current > 0)
+        {
             m_syncTxPool = true;
+        }
+
         /// register a handler to be called once new transactions imported
         m_tqReady = m_txPool->onReady([=]() { this->onTransactionQueueReady(); });
         m_blockSubmitted = m_blockChain->onReady([=](int64_t) { this->onBlockChanged(); });
@@ -114,7 +117,6 @@ protected:
     virtual bool shouldWait(bool const& wait) const;
     /// load transactions from transaction pool
     void loadTransactions(uint64_t const& transToFetch);
-    virtual uint64_t calculateMaxPackTxNum() { return m_consensusEngine->maxBlockTransactions(); }
     virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
     {
         uint64_t tx_num = m_sealing.block.getTransactionSize();
@@ -139,7 +141,8 @@ protected:
 
     inline void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {
-        SEAL_LOG(DEBUG) << "[#resetSealingBlock] [number]" << m_blockChain->number();
+        SEAL_LOG(DEBUG) << "[#resetSealingBlock]" << LOG_KV("blkNum", m_blockChain->number())
+                        << LOG_KV("sealingNum", m_sealing.block.blockHeader().number());
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         resetSealingBlock(m_sealing, filter, resetNextLeader);
     }
@@ -160,6 +163,11 @@ protected:
     }
 
 protected:
+    uint64_t maxBlockCanSeal()
+    {
+        ReadGuard l(x_maxBlockCanSeal);
+        return m_maxBlockCanSeal;
+    }
     /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
     /// handler of the block-sync module
@@ -194,6 +202,10 @@ protected:
     /// handler
     Handler<> m_tqReady;
     Handler<int64_t> m_blockSubmitted;
+
+    /// the maximum transaction number that can be sealed in a block
+    uint64_t m_maxBlockCanSeal = 1000;
+    mutable SharedMutex x_maxBlockCanSeal;
 };
 }  // namespace consensus
 }  // namespace dev

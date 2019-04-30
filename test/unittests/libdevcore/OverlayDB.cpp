@@ -95,12 +95,13 @@ BOOST_AUTO_TEST_CASE(testOverlayDBAux)
 
     h256 key = dev::sha3("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
 
-    bytesConstRef value("helloworld");
+    string valueStr = "helloworld";
+    bytesConstRef value(valueStr);
     overlayDB.insertAux(key, value);
     overlayDB.commit();
 
     auto valueBytes = overlayDB.lookupAux(key);
-    string valueStr = dev::asString(valueBytes);
+    valueStr = dev::asString(valueBytes);
     BOOST_CHECK(valueStr == "helloworld");
 
     boost::filesystem::remove_all(path);

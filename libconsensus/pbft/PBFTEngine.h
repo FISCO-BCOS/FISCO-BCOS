@@ -30,12 +30,15 @@
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
 #include <sstream>
 
-#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
+
+#include <libsync/SyncStatus.h>
 
 namespace dev
 {
@@ -77,36 +80,45 @@ public:
 
     std::string const& getBaseDir() { return m_baseDir; }
 
-    inline void setIntervalBlockTime(unsigned const& _intervalBlockTime)
+    /// set max block generation time
+    inline void setEmptyBlockGenTime(unsigned const& _intervalBlockTime)
     {
-        m_timeManager.m_intervalBlockTime = _intervalBlockTime;
+        m_timeManager.m_emptyBlockGenTime = _intervalBlockTime;
     }
 
-    inline unsigned const& getIntervalBlockTime() const
+    /// get max block generation time
+    inline unsigned const& getEmptyBlockGenTime() const
     {
-        return m_timeManager.m_intervalBlockTime;
+        return m_timeManager.m_emptyBlockGenTime;
     }
+
+    /// set mininum block generation time
+    void setMinBlockGenerationTime(unsigned const& time)
+    {
+        if (time < m_timeManager.m_emptyBlockGenTime)
+        {
+            m_timeManager.m_minBlockGenTime = time;
+        }
+        PBFTENGINE_LOG(INFO) << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime);
+    }
+
     void start() override;
+
+    /// reach the minimum block generation time
+    virtual bool reachMinBlockGenTime()
+    {
+        /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
+        /// handled before the current leader generate a new block, it's no need to add other
+        /// conditions to enforce this striction
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_minBlockGenTime;
+    }
 
     virtual bool reachBlockIntervalTime()
     {
-        if (false == getLeader().first)
-        {
-            return false;
-        }
-        /// the block is sealed by the next leader, and can execute after the last block has been
-        /// consensused
-        if (m_notifyNextLeaderSeal)
-        {
-            /// represent that the latest block has not been consensused
-            if (getNextLeader() == nodeIdx())
-            {
-                return false;
-            }
-            return true;
-        }
-        /// the block is sealed by the current leader
-        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_intervalBlockTime;
+        /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
+        /// handled before the current leader generate a new block, the conditions before can be
+        /// deleted
+        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
@@ -147,11 +159,21 @@ public:
         m_onNotifyNextLeaderReset = _f;
     }
 
+    void onTimeout(std::function<void(uint64_t const& sealingTxNumber)> const& _f)
+    {
+        m_onTimeout = _f;
+    }
+
+    void onCommitBlock(std::function<void(uint64_t const& blockNumber,
+            uint64_t const& sealingTxNumber, unsigned const& changeCycle)> const& _f)
+    {
+        m_onCommitBlock = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
-    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
@@ -166,6 +188,12 @@ public:
             return std::make_pair(false, MAXIDX);
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
+    }
+
+    uint64_t sealingTxNumber() const
+    {
+        ReadGuard l(x_sealingNumber);
+        return m_sealingNumber;
     }
 
 protected:
@@ -291,7 +319,8 @@ protected:
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
         PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
-        dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
+        dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+            m_service->p2pMessageFactory()->buildMessage());
         // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         bytes ret_data;
         PBFTMsgPacket packet;
@@ -369,6 +398,15 @@ protected:
     template <class T>
     inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
     {
+        if (isSyncingHigherBlock(req))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Is Syncing higher number")
+                                  << LOG_KV("ReqNumber", req.height)
+                                  << LOG_KV(
+                                         "syncingNumber", m_blockSync->status().knownHighestNumber);
+            return CheckResult::INVALID;
+        }
+
         if (m_reqCache->prepareCache().block_hash != req.block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
@@ -428,6 +466,16 @@ protected:
         return false;
     }
 
+    /// in case of con-current execution of block
+    template <class T>
+    inline bool isSyncingHigherBlock(T const& req) const
+    {
+        if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
     /**
      * @brief : decide the sign or commit request is the future request or not
      *          1. the block number is no smalller than the current consensused block number
@@ -436,6 +484,7 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
+        /// to ensure that the signReq can reach to consensus even if the view has been changed
         if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             return true;
@@ -487,17 +536,17 @@ protected:
     /// check block
     bool checkBlock(dev::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
-    void changeViewForEmptyBlock()
+    void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
-        m_timeManager.m_changeCycle = 0;
         m_fastViewChange = true;
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
+    /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
-        return boost::filesystem::space(path).available > 1024;
+        return boost::filesystem::space(path).available > 1024 * 1024 * 100;
     }
 
     void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
@@ -506,14 +555,13 @@ protected:
         m_viewMap[idx] = view;
     }
 
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
     std::string m_baseDir;
     bool m_leaderFailed = false;
     bool m_notifyNextLeaderSeal = false;
-
-    dev::storage::Storage::Ptr m_storage;
 
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
@@ -532,8 +580,13 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
-    std::function<void()> m_onViewChange;
-    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
+
+    std::function<void()> m_onViewChange = nullptr;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
+    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout = nullptr;
+    std::function<void(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
+        m_onCommitBlock = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
@@ -544,6 +597,9 @@ protected:
     /// map between nodeIdx to view
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
+
+    uint64_t m_sealingNumber = 0;
+    mutable SharedMutex x_sealingNumber;
 };
 }  // namespace consensus
 }  // namespace dev

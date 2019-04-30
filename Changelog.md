@@ -1,3 +1,57 @@
+### v2.0.0-rc2
+
+(2019-04-25)
+
+**New Feature**
+
+* 并行计算模型：可并行合约开发框架、交易并行执行引擎（PTE）
+* 分布式存储：AMDB、SQLStorage
+
+**Update**
+
+* 优化了区块打包交易数的逻辑，根据执行时间动态的调整区块打包交易数
+* 优化了区块同步的流程，让区块同步更快
+* 并行优化了将交易的编解码、交易的验签和落盘的编码
+* 优化了交易执行返回码的逻辑，让返回码更准确
+* 升级了存储模块，支持并发读写
+
+**Add**
+
+* 加入[网络数据包压缩](<https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/design/features/network_compress.html>)
+* 加入[兼容性配置](<https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/manual/configuration.html#id7>)
+* 交易编码中加入chainID和groupID
+* 交易中加入二进制缓存
+* 创世块中加入timestamp信息
+* 增加了一些precompile的demo
+* 支持用Docker搭链
+
+**Fix**
+
+* RPC中处理参数时asInt异常造成程序退出的bug
+* 交易执行Out of gas时交易一直在交易池中不被处理的bug
+* 不同组间可以用相同的交易二进制重放的bug
+* insert操作造成的性能衰减问题
+* 一些稳定性修复
+
+**Detele**
+
+* 删除不必要的日志
+* 删除不必要的重复操作
+
+**Compatibility**
+
+|           | 兼容版本                                            | 说明                                                         |
+| --------- | --------------------------------------------------- | ------------------------------------------------------------ |
+| 节点      | 向下兼容 FISCO BCOS 2.0.0 rc1，不兼容FISCO BCOS 1.x | 此版本可直接跑在v2.0.0-rc1的配置和数据上，但不会有此版本的新特性，仅仅相当于稳定性提升。若需要用此版本的新特性，需重新搭链。 |
+| 控制台    | 1.0.3+                                              |                                                              |
+| SDK       | 2.0.0-rc2+                                          |                                                              |
+| generator | 1.0.0-rc2+                                          |                                                              |
+| 浏览器    | 2.0.0-rc2+                                          |                                                              |
+| Solidity  | 最高支持 solidity 0.5.2                             |                                                              |
+| AMDB      | 2.0.0+                                              |                                                              |
+
+更多，请参考[版本与兼容性描述](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/compatibility.html)。
+
 ### v2.0.0-rc1
 
 (2019-03-18)

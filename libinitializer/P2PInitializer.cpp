@@ -21,7 +21,7 @@
  */
 
 #include "P2PInitializer.h"
-#include "libp2p/P2PMessage.h"
+#include "libp2p/P2PMessageFactory.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <boost/algorithm/algorithm.hpp>
@@ -38,6 +38,17 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig");
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);
+    if (!isValidPort(listenPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidPort() << errinfo_comment(
+                "P2PInitializer:  initConfig for P2PInitializer failed! Invalid ListenPort!"));
+    }
+    std::string certBlacklistSection = "crl";
+    if (_pt.get_child_optional("certificate_blacklist"))
+    {
+        certBlacklistSection = "certificate_blacklist";
+    }
     try
     {
         std::map<NodeIPEndpoint, NodeID> nodes;
@@ -84,11 +95,11 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
         }
 
-        std::vector<std::string> crl;
+        std::vector<std::string> certBlacklist;
         /// CRL means certificate rejected list, CRL optional in config.ini
-        if (_pt.get_child_optional("crl"))
+        if (_pt.get_child_optional(certBlacklistSection))
         {
-            for (auto it : _pt.get_child("crl"))
+            for (auto it : _pt.get_child(certBlacklistSection))
             {
                 if (it.first.find("crl.") == 0)
                 {
@@ -98,7 +109,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         INITIALIZER_LOG(TRACE) << LOG_BADGE("P2PInitializer")
                                                << LOG_DESC("get certificate rejected by nodeID")
                                                << LOG_KV("nodeID", nodeID);
-                        crl.push_back(nodeID);
+                        certBlacklist.push_back(nodeID);
                     }
                     catch (std::exception& e)
                     {
@@ -115,7 +126,16 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         asioInterface->setSSLContext(m_SSLContext);
         asioInterface->setType(dev::network::ASIOInterface::SSL);
 
-        auto messageFactory = std::make_shared<P2PMessageFactory>();
+        std::shared_ptr<P2PMessageFactory> messageFactory = nullptr;
+
+        if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+        {
+            messageFactory = std::make_shared<P2PMessageFactoryRC2>();
+        }
+        else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        {
+            messageFactory = std::make_shared<P2PMessageFactory>();
+        }
 
         auto host = std::make_shared<dev::network::Host>();
         host->setASIOInterface(asioInterface);
@@ -123,14 +143,13 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         host->setMessageFactory(messageFactory);
         host->setHostPort(listenIP, listenPort);
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));
-        host->setCRL(crl);
+        host->setCRL(certBlacklist);
 
         m_p2pService = std::make_shared<Service>();
         m_p2pService->setHost(host);
         m_p2pService->setStaticNodes(nodes);
         m_p2pService->setKeyPair(m_keyPair);
         m_p2pService->setP2PMessageFactory(messageFactory);
-
         m_p2pService->start();
     }
     catch (std::exception& e)

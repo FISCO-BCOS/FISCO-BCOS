@@ -59,11 +59,13 @@ public:
     {
         NodeID nodeID = h512(100);
         NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
-        P2PSessionInfo info(nodeID, m_endpoint, std::set<std::string>());
+        dev::network::NodeInfo node_info;
+        node_info.nodeID = nodeID;
+        P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
         std::set<std::string> topics;
         std::string topic = "Topic1";
         topics.insert(topic);
-        m_sessionInfos.push_back(P2PSessionInfo(nodeID, m_endpoint, topics));
+        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topics));
         h512s nodeList;
         nodeList.push_back(
             h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
@@ -153,8 +155,8 @@ public:
 
     virtual ~MockBlockChain() {}
 
-    virtual int64_t number() override { return m_blockNumber; }
-    virtual std::pair<int64_t, int64_t> totalTransactionCount() override
+    int64_t number() override { return m_blockNumber; }
+    std::pair<int64_t, int64_t> totalTransactionCount() override
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
@@ -183,6 +185,17 @@ public:
             "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
             "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
             "8fd63b88e817");
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            rlpBytes = fromHex(
+                "f90114a003eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd598411e1a300"
+                "84b2d05e008201f594bab78cea98af2320ad4ee81bba8a7473e0c8c48d80a48fff0fc4000000000000"
+                "00000000000000000000000000000000000000000000000000040101a48fff0fc40000000000000000"
+                "000000000000000000000000000000000000000000000004b8408234c544a9f3ce3b401a92cc717560"
+                "2ce2a1e29b1ec135381c7d2a9e8f78f3edc9c06ee55252857c9a4560cb39e9d70d40f4331cace4d2b3"
+                "121b967fa7a829f0a00f16d87c5065ad5c3b110ef0b97fe9a67b62443cb8ddde60d4e001a64429dc6e"
+                "a03d2569e0449e9a900c236541afb9d8a8d5e1a36844439c7076f6e75ed624256f");
+        }
 #else
         bytes rlpBytes = fromHex(
             "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
@@ -191,6 +204,16 @@ public:
             "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
             "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
             "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            rlpBytes = fromHex(
+                "f8d3a003922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c8411e1a30084"
+                "11e1a3008201f894d6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f80a466c9913900000000000000"
+                "000000000000000000000000000000000000000000000000040101a466c99139000000000000000000"
+                "00000000000000000000000000000000000000000000041ba08e0d3fae10412c584c977721aeda88df"
+                "932b2a019f084feda1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719b"
+                "edee212b7972f775");
+        }
 #endif
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
@@ -198,14 +221,24 @@ public:
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
-    virtual std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
 
-    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
+    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
+    {
+        return getBlockByHash(_blockHash)->rlpP();
+    }
+
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    {
+        return getBlockRLPByHash(numberHash(_i));
+    }
+
+    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
     {
         return LocalisedTransaction(transaction, blockHash, 0, 0);
     }
@@ -229,7 +262,7 @@ public:
 
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
 
-    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
+    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
     {
         LogEntries entries;
         LogEntry entry;
@@ -287,8 +320,8 @@ public:
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
+        const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
     {
         dev::executive::ExecutionResult res;
         dev::eth::TransactionReceipt reciept;
@@ -314,6 +347,17 @@ public:
             "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
             "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
             "8fd63b88e817");
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            rlpBytes = fromHex(
+                "f90114a003eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd598411e1a300"
+                "84b2d05e008201f594bab78cea98af2320ad4ee81bba8a7473e0c8c48d80a48fff0fc4000000000000"
+                "00000000000000000000000000000000000000000000000000040101a48fff0fc40000000000000000"
+                "000000000000000000000000000000000000000000000004b8408234c544a9f3ce3b401a92cc717560"
+                "2ce2a1e29b1ec135381c7d2a9e8f78f3edc9c06ee55252857c9a4560cb39e9d70d40f4331cace4d2b3"
+                "121b967fa7a829f0a00f16d87c5065ad5c3b110ef0b97fe9a67b62443cb8ddde60d4e001a64429dc6e"
+                "a03d2569e0449e9a900c236541afb9d8a8d5e1a36844439c7076f6e75ed624256f");
+        }
 #else
         bytes rlpBytes = fromHex(
             "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
@@ -322,6 +366,16 @@ public:
             "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
             "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
             "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
+        if (g_BCOSConfig.version() >= RC2_VERSION)
+        {
+            rlpBytes = fromHex(
+                "f8d3a003922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c8411e1a30084"
+                "11e1a3008201f894d6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f80a466c9913900000000000000"
+                "000000000000000000000000000000000000000000000000040101a466c99139000000000000000000"
+                "00000000000000000000000000000000000000000000041ba08e0d3fae10412c584c977721aeda88df"
+                "932b2a019f084feda1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719b"
+                "edee212b7972f775");
+        }
 #endif
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
@@ -329,38 +383,34 @@ public:
         transactions.push_back(transaction);
     };
     virtual ~MockTxPool(){};
-    virtual dev::eth::Transactions pendingList() const override { return transactions; };
-    virtual size_t pendingSize() override { return 1; }
-    virtual dev::eth::Transactions topTransactions(
-        uint64_t const&, h256Hash&, bool = false) override
+    dev::eth::Transactions pendingList() const override { return transactions; };
+    size_t pendingSize() override { return 1; }
+    dev::eth::Transactions topTransactions(uint64_t const&, h256Hash&, bool = false) override
     {
         return transactions;
     }
-    virtual dev::eth::Transactions topTransactions(uint64_t const&) override
-    {
-        return transactions;
-    }
-    virtual bool drop(h256 const&) override { return true; }
-    virtual bool dropBlockTrans(dev::eth::Block const&) override { return true; }
+    dev::eth::Transactions topTransactions(uint64_t const&) override { return transactions; }
+    bool drop(h256 const&) override { return true; }
+    bool dropBlockTrans(dev::eth::Block const&) override { return true; }
     bool handleBadBlock(Block const&) override { return true; }
-    virtual PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
-    virtual TxPoolStatus status() const override
+    PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
+    TxPoolStatus status() const override
     {
         TxPoolStatus status;
         status.current = 1;
         status.dropped = 0;
         return status;
     }
-    virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
+    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
     {
         return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
     }
-    virtual dev::eth::ImportResult import(
+    dev::eth::ImportResult import(
         dev::eth::Transaction&, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
-    virtual dev::eth::ImportResult import(
+    dev::eth::ImportResult import(
         bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
@@ -423,6 +473,7 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
+// class FakeLedger : public LedgerInterface
 class FakeLedger : public LedgerInterface
 {
 public:
@@ -440,22 +491,18 @@ public:
         /// init
         initLedgerParam();
     }
-    virtual bool initLedger() override { return true; };
-    virtual void initConfig(std::string const&) override{};
-    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override
-    {
-        return m_txPool;
-    }
-    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier()
-        const override
+    bool initLedger() override { return true; };
+    void initConfig(std::string const&) override{};
+    std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
+    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
     }
-    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
     {
         return m_blockChain;
     }
-    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
+    std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
     {
         FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
         std::shared_ptr<dev::consensus::ConsensusInterface> consensusInterface =
@@ -463,7 +510,7 @@ public:
         return consensusInterface;
     }
     virtual std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    void initBlockChain()
+    virtual void initBlockChain()
     {
         m_blockChain = std::make_shared<MockBlockChain>();
         dev::h512s sealerList;
@@ -471,21 +518,21 @@ public:
             dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                       "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
         GenesisBlockParam initParam = {
-            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000};
+            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
-    void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
-    void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
-    void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
-    void initLedgerParam()
+    virtual void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
+    virtual void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
+    virtual void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
+    virtual void initLedgerParam()
     {
         m_param = std::make_shared<LedgerParam>();
         m_param->mutableConsensusParam().consensusType = "pbft";
     }
-    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
-    virtual std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
-    virtual void startAll() override {}
-    virtual void stopAll() override {}
+    dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
+    void startAll() override {}
+    void stopAll() override {}
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

@@ -30,7 +30,7 @@
 #include <libethcore/Block.h>
 #include <libnetwork/Common.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libstorage/Storage.h>
 #include <libsync/SyncInterface.h>
@@ -93,12 +93,6 @@ public:
     {
         Guard Guard(m_mutex);
         return m_lastLeaderTerm;
-    }
-
-    void setStorage(dev::storage::Storage::Ptr storage)
-    {
-        Guard Guard(m_mutex);
-        m_storage = storage;
     }
 
     void start() override;
@@ -228,7 +222,6 @@ protected:
     std::unordered_map<h512, BlockRef> m_memberBlock;  // <node_id, BlockRef>
     static const unsigned c_PopWaitSeconds = 5;
 
-    dev::storage::Storage::Ptr m_storage;
     // the block number that update the sealer list
     int64_t m_lastObtainSealerNum = 0;
     uint64_t m_lastBlockTime;

@@ -29,8 +29,9 @@
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>
+#include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
-#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/Table.h>
 #include <memory>
 
 namespace dev
@@ -54,7 +55,13 @@ public:
 
     ExecutiveContext() {}
 
-    virtual ~ExecutiveContext(){};
+    virtual ~ExecutiveContext()
+    {
+        if (m_memoryTableFactory)
+        {
+            m_memoryTableFactory->commit();
+        }
+    };
 
     virtual bytes call(Address const& origin, Address address, bytesConstRef param);
 
@@ -85,12 +92,12 @@ public:
 
     void dbCommit(dev::eth::Block& block);
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::MemoryTableFactory> memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::MemoryTableFactory> getMemoryTableFactory()
+    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory()
     {
         return m_memoryTableFactory;
     }
@@ -98,13 +105,16 @@ public:
     uint64_t txGasLimit() const { return m_txGasLimit; }
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
 
+    // Get transaction criticals, return nullptr if critical to all
+    std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
+
 private:
     std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
     int m_addressCount = 0x10000;
     BlockInfo m_blockInfo;
     std::shared_ptr<dev::executive::StateFace> m_stateFace;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
-    std::shared_ptr<dev::storage::MemoryTableFactory> m_memoryTableFactory;
+    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
 };
 

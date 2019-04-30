@@ -52,7 +52,7 @@ bytes SystemConfigPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
     int count = 0;
-
+    int result = 0;
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -70,7 +70,7 @@ bytes SystemConfigPrecompiled::call(
                 << LOG_BADGE("SystemConfigPrecompiled")
                 << LOG_DESC("SystemConfigPrecompiled set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-            out = abi.abiIn("", CODE_INVALID_CONFIGURATION_VALUES);
+            getOut(out, CODE_INVALID_CONFIGURATION_VALUES);
             return out;
         }
 
@@ -90,16 +90,14 @@ bytes SystemConfigPrecompiled::call(
             if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
-
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
+                result = storage::CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                        << LOG_DESC("setValueByKey successfully");
-
-                out = abi.abiIn("", count);
+                result = count;
             }
         }
         else
@@ -109,16 +107,14 @@ bytes SystemConfigPrecompiled::call(
             if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("non-authorized");
-
-                out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
+                result = storage::CODE_NO_AUTHORIZED;
             }
             else
             {
                 PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
                                        << LOG_DESC("update value by key successfully");
-
-                out = abi.abiIn("", count);
+                result = count;
             }
         }
     }
@@ -127,6 +123,7 @@ bytes SystemConfigPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
+    getOut(out, result);
     return out;
 }
 

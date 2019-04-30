@@ -85,7 +85,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            out = abi.abiIn("", storage::CODE_NO_AUTHORIZED);
+            getOut(out, storage::CODE_NO_AUTHORIZED);
             return out;
         }
     }
@@ -129,14 +129,15 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         if (count == storage::CODE_NO_AUTHORIZED)
         {  //  permission denied
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
-                                   << LOG_DESC("non-authorized");
+                                   << LOG_DESC("permission denied");
         }
-        out = abi.abiIn("", count);
+        getOut(out, count);
     }
     else
-    {  // unkown function call
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unkown func ")
+    {  // unknown function call
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unknown func ")
                                << LOG_KV("func", func);
+        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
     }
 
     return out;

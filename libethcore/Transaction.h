@@ -46,11 +46,14 @@ enum class CheckTransaction
     Cheap,
     Everything
 };
+
+const int c_fieldCountRC1WithOutSig = 7;
+const int c_fieldCountRC2WithOutSig = 10;
+const int c_sigCount = 3;
+
 /// function called after the transaction has been submitted
 using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
-/// Remove m_chainId ,EIP155 value for calculating transaction hash
-/// https://github.com/ethereum/EIPs/issues/155
 class Transaction
 {
 public:
@@ -63,7 +66,8 @@ public:
     Transaction() {}
     /// Constructs an unsigned message-call transaction.
     Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, Address const& _dest,
-        bytes const& _data, u256 const& _nonce = u256(0))
+        bytes const& _data, u256 const& _nonce = u256(0), u256 _chainId = u256(1),
+        u256 _groupId = u256(1))
       : m_type(MessageCall),
         m_nonce(_nonce),
         m_value(_value),
@@ -71,19 +75,25 @@ public:
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes()),
+        m_chainId(_chainId),
+        m_groupId(_groupId)
     {}
 
     /// Constructs an unsigned contract-creation transaction.
     Transaction(u256 const& _value, u256 const& _gasPrice, u256 const& _gas, bytes const& _data,
-        u256 const& _nonce = u256(0))
+        u256 const& _nonce = u256(0), u256 _chainId = u256(1), u256 _groupId = u256(1))
       : m_type(ContractCreation),
         m_nonce(_nonce),
         m_value(_value),
         m_gasPrice(_gasPrice),
         m_gas(_gas),
         m_data(_data),
-        m_rpcCallback(nullptr)
+        m_rpcCallback(nullptr),
+        m_rlpBuffer(bytes()),
+        m_chainId(_chainId),
+        m_groupId(_groupId)
     {}
 
     /// Constructs a transaction from the given RLP.
@@ -134,6 +144,10 @@ public:
     /// @returns the RLP serialisation of this transaction.
     bytes rlp(IncludeSignature _sig = WithSignature) const
     {
+        if (m_rlpBuffer != bytes())
+        {
+            return m_rlpBuffer;
+        }
         bytes out;
         encode(out, _sig);
         return out;
@@ -176,6 +190,7 @@ public:
         clearSignature();
         m_nonce = _n;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     void setBlockLimit(u256 const& _blockLimit)
@@ -183,6 +198,7 @@ public:
         clearSignature();
         m_blockLimit = _blockLimit;
         m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
     }
 
     /// @returns the latest block number to be packaged for transaction.
@@ -209,6 +225,7 @@ public:
         m_vrs = sig;
         m_hashWith = h256(0);
         m_sender = Address();
+        m_rlpBuffer = bytes();
     }
     /// @returns amount of gas required for the basic payment.
     int64_t baseGasRequired(EVMSchedule const& _es) const
@@ -221,7 +238,12 @@ public:
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
     void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
-    void tiggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
+    RPCCallback rpcCallback() const { return m_rpcCallback; }
+    void triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
+
+    void updateTransactionHashWithSig(dev::h256 const& txHash);
+
+    bool checkChainIdAndGroupId(u256 _chainId, u256 _groupId);
 
 protected:
     /// Type of transaction.
@@ -235,6 +257,11 @@ protected:
     };
 
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
+
+    void encodeRC1(bytes& _trans, IncludeSignature _sig = WithSignature) const;
+    void encodeRC2(bytes& _trans, IncludeSignature _sig = WithSignature) const;
+    void decodeRC1(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
+    void decodeRC2(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
 
     /// Clears the signature.
     void clearSignature()
@@ -266,6 +293,13 @@ protected:
     u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 
     RPCCallback m_rpcCallback;
+
+    bytes m_rlpBuffer;  /// < The buffer to cache origin RLP sequence. It will be reused when the tx
+                        /// < needs to be encocoded again;
+
+    u256 m_chainId;     /// < The scenario to which the transaction belongs.
+    u256 m_groupId;     /// < The group to which the transaction belongs.
+    bytes m_extraData;  /// < Reserved fields, distinguished by "##".
 };
 
 /// Nice name for vector of Transaction.

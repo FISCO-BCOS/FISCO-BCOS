@@ -25,7 +25,7 @@ list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
 project(FISCO-BCOS VERSION "2.0.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -52,6 +52,7 @@ include(EthCompilerSettings)
 include(EthDependencies)
 
 # install dependencies
+include(ProjectTBB)
 include(ProjectSnappy)
 include(ProjectLevelDB)
 include(ProjectMHD)
@@ -96,6 +97,7 @@ add_subdirectory(fisco-bcos)
 
 if (TESTS)
     enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
 

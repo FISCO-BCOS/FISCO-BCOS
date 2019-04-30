@@ -7,6 +7,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -27,8 +28,10 @@ struct ConsensusPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         consensusPrecompiled = std::make_shared<ConsensusPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
@@ -37,7 +40,7 @@ struct ConsensusPrecompiledFixture
     ~ConsensusPrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory::Ptr memoryTableFactory;
+    TableFactory::Ptr memoryTableFactory;
     ConsensusPrecompiled::Ptr consensusPrecompiled;
     BlockInfo blockInfo;
 };
@@ -186,17 +189,17 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
     u256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 156u);
+    BOOST_TEST(count == CODE_INVALID_NODEID);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
@@ -227,13 +230,13 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 157u);
+    BOOST_TEST(count == CODE_LAST_SEALER);
 
     in = abi.abiIn("addObserver(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == 157u);
+    BOOST_TEST(count == CODE_LAST_SEALER);
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)

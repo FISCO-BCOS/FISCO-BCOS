@@ -56,9 +56,13 @@ public:
         setLeaderFailed(false);
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         setHighest(highest);
+        setOmitEmpty(true);
+        setMaxTTL(1);
+        setEmptyBlockGenTime(1000);
         setNodeNum(3);
     }
     void updateConsensusNodeList() override {}
+    void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
     KeyPair const& keyPair() const { return m_keyPair; }
     const std::shared_ptr<PBFTBroadcastCache> broadCastCache() const { return m_broadCastCache; }
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
@@ -68,6 +72,7 @@ public:
     bool const& leaderFailed() const { return m_leaderFailed; }
     int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
     VIEWTYPE const& toView() const { return m_toView; }
+    void setToView(VIEWTYPE const& view) { m_toView = view; }
     VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
@@ -119,6 +124,11 @@ public:
     {
         return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }
+    void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
+
+    void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
+
+    bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
@@ -138,6 +148,14 @@ public:
     bool const& cfgErr() { return m_cfgErr; }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
+
+    void onNotifyNextLeaderReset()
+    {
+        PBFTEngine::onNotifyNextLeaderReset(
+            boost::bind(&FakePBFTEngine::resetBlockForNextLeaderTest, this, _1));
+    }
+    void resetBlockForNextLeaderTest(dev::h256Hash const&) {}
+
     void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
     static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
     bool broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
@@ -149,18 +167,37 @@ public:
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
     }
+
+    bool isValidViewChangeReq(ViewChangeReq const& req, IDXTYPE const& source)
+    {
+        std::ostringstream oss;
+        return PBFTEngine::isValidViewChangeReq(req, source, oss);
+    }
+
     bool& mutableLeaderFailed() { return m_leaderFailed; }
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
+
+    void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
+    void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
+
+    /// handle sign
     bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
+
+    /// handle viewchange
+    bool handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    {
+        return PBFTEngine::handleViewChangeMsg(viewChange_req, pbftMsg);
+    }
+
     CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
@@ -182,6 +219,11 @@ public:
     void setNodeIdx(IDXTYPE const& _idx) { m_idx = _idx; }
     void collectGarbage() { return PBFTEngine::collectGarbage(); }
     void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
+    /// NodeAccountType accountType() override { return m_accountType; }
+    void setAccountType(NodeAccountType const& accountType) { m_accountType = accountType; }
+
+    bool notifyNextLeaderSeal() { return m_notifyNextLeaderSeal; }
+    IDXTYPE getNextLeader() const { return PBFTEngine::getNextLeader(); }
 };
 
 template <typename T>
@@ -208,7 +250,9 @@ public:
         for (size_t i = 0; i < m_sealerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
-            P2PSessionInfo info(m_sealerList[i], m_endpoint, std::set<std::string>());
+            dev::network::NodeInfo node_info;
+            node_info.nodeID = m_sealerList[i];
+            P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
             service->appendSessionInfo(info);
         }
     }
@@ -249,15 +293,17 @@ public:
       : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _baseDir, _key_pair, _sealerList)
     {
-        m_pbftEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
+        m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
+            _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
+        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
     }
 
     void loadTransactions(uint64_t const& transToFetch)
     {
         return PBFTSealer::loadTransactions(transToFetch);
     }
-    virtual bool checkTxsEnough(uint64_t maxTxsCanSeal)
+
+    bool checkTxsEnough(uint64_t maxTxsCanSeal) override
     {
         return PBFTSealer::checkTxsEnough(maxTxsCanSeal);
     }
@@ -269,6 +315,33 @@ public:
         assert(fake_pbft);
         return fake_pbft;
     }
+
+    void setStartConsensus(bool startConsensus) { m_startConsensus = startConsensus; }
+    bool getStartConsensus() { return m_startConsensus; }
+
+    bool syncBlock() { return m_syncBlock; }
+    uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
+    Sealing const& sealing() const { return m_sealing; }
+    void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
+    bool shouldSeal() override { return Sealer::shouldSeal(); }
+    bool canHandleBlockForNextLeader() override
+    {
+        return PBFTSealer::canHandleBlockForNextLeader();
+    }
+    bool reachBlockIntervalTime() override { return PBFTSealer::reachBlockIntervalTime(); }
+    void doWork(bool wait) override { return PBFTSealer::doWork(wait); }
+    bool shouldHandleBlock() override { return PBFTSealer::shouldHandleBlock(); }
+    void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
+    {
+        return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
+    }
+    void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
+    {
+        return PBFTSealer::resetBlock(block, resetNextLeader);
+    }
+    void setBlock() { return PBFTSealer::setBlock(); }
+    void start() override { return Sealer::start(); }
+    bool shouldResetSealing() override { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
 }  // namespace dev

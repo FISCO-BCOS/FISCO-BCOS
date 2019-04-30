@@ -25,6 +25,7 @@
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
@@ -84,12 +85,12 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
-std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
+std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
+                      << LOG_KV("groupID", _groupID) << LOG_KV("key", key);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -305,6 +306,8 @@ Json::Value Rpc::getClientVersion()
         Json::Value version;
 
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+        version["Supported Version"] = g_BCOSConfig.supportedVersion();
+        version["Chain Id"] = toString(g_BCOSConfig.chainId());
         version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
         version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
                                 std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
@@ -339,9 +342,12 @@ Json::Value Rpc::getPeers(int _groupID)
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
             Json::Value node;
-            node["NodeID"] = it->nodeID.hex();
+            node["NodeID"] = it->nodeInfo.nodeID.hex();
             node["IPAndPort"] = it->nodeIPEndpoint.name();
+            node["Agency"] = it->nodeInfo.agencyName;
+            node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
+
             for (std::string topic : it->topics)
                 node["Topic"].append(topic);
             response.append(node);
@@ -375,7 +381,7 @@ Json::Value Rpc::getNodeIDList(int _groupID)
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
-            response.append(it->nodeID.hex());
+            response.append(it->nodeID().hex());
         }
 
         return response;
@@ -539,6 +545,8 @@ Json::Value Rpc::getBlockByNumber(
         response["parentHash"] = toJS(block->header().parentHash());
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
+        response["dbHash"] = toJS(block->header().dbHash());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);
@@ -924,8 +932,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
-                      << LOG_KV("callParams", request.toStyledString());
+        RPC_LOG(TRACE) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("callParams", request.toStyledString());
 
         checkRequest(_groupID);
         if (request["from"].empty() || request["from"].asString().empty())
@@ -950,6 +958,7 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 
         Json::Value response;
         response["currentBlockNumber"] = toJS(blockNumber);
+        response["status"] = toJS(executionResult.second.status());
         response["output"] = toJS(executionResult.second.outputBytes());
         return response;
     }
@@ -968,9 +977,9 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
-        RPC_LOG(DEBUG) << LOG_BADGE("sendRawTransaction") << LOG_KV("rlp", _rlp);
+        RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
+                       << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
+
         checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
 

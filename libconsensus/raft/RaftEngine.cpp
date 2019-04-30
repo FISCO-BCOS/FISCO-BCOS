@@ -100,7 +100,7 @@ void RaftEngine::resetConfig()
         auto iter = std::find(m_sealerList.begin(), m_sealerList.end(), m_keyPair.pub());
         if (iter == m_sealerList.end())
         {
-            RAFTENGINE_LOG(WARNING) << LOG_DESC(
+            RAFTENGINE_LOG(TRACE) << LOG_DESC(
                 "[#resetConfig]Reset config error: can't find myself in "
                 "sealer list, stop sealing");
             m_cfgErr = true;
@@ -263,11 +263,23 @@ void RaftEngine::workLoop()
 {
     while (isWorking())
     {
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            RAFTENGINE_LOG(TRACE) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        resetConfig();
+
         if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#workLoop]Config error or I'm not a sealer");
+            RAFTENGINE_LOG(DEBUG) << LOG_DESC(
+                                         "[#workLoop]work loop suspend due to disturbing config")
+                                  << LOG_KV("cfgError", m_cfgErr)
+                                  << LOG_KV("accountType", m_accountType);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            resetConfig();
             continue;
         }
 
@@ -538,9 +550,20 @@ void RaftEngine::runAsLeader()
     m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
-    while (isWorking() && runAsLeaderImp(memberHeartbeatLog))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsLeaderImp(memberHeartbeatLog))
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -672,9 +695,20 @@ void RaftEngine::runAsCandidate()
         return;
     }
 
-    while (isWorking() && runAsCandidateImp(voteState))
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsCandidateImp(voteState))
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -748,9 +782,20 @@ bool RaftEngine::runAsFollowerImp()
 
 void RaftEngine::runAsFollower()
 {
-    while (isWorking() && runAsFollowerImp())
+    while (isWorking())
     {
-        this_thread::sleep_for(chrono::milliseconds(1));
+        auto isSyncing = m_blockSync->isSyncing();
+        if (isSyncing)
+        {
+            break;
+        }
+
+        if (!runAsFollowerImp())
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -877,7 +922,8 @@ void RaftEngine::broadcastVoteReq()
 P2PMessage::Ptr RaftEngine::transDataToMessage(
     bytesConstRef _data, RaftPacketType const& _packetType, PROTOCOL_ID const& _protocolId)
 {
-    dev::p2p::P2PMessage::Ptr message = std::make_shared<dev::p2p::P2PMessage>();
+    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+        m_service->p2pMessageFactory()->buildMessage());
     std::shared_ptr<dev::bytes> dataPtr = std::make_shared<dev::bytes>();
     RaftMsgPacket packet;
 
@@ -900,14 +946,14 @@ void RaftEngine::broadcastMsg(P2PMessage::Ptr _data)
     m_connectedNode = sessions.size();
     for (auto session : sessions)
     {
-        if (getIndexBySealer(session.nodeID) < 0)
+        if (getIndexBySealer(session.nodeID()) < 0)
         {
             continue;
         }
 
-        m_service->asyncSendMessageByNodeID(session.nodeID, _data, nullptr);
+        m_service->asyncSendMessageByNodeID(session.nodeID(), _data, nullptr);
         RAFTENGINE_LOG(TRACE) << LOG_DESC("[#broadcastMsg]Raft msg sent")
-                              << LOG_KV("peer", session.nodeID);
+                              << LOG_KV("peer", session.nodeID());
     }
 }
 
@@ -1205,7 +1251,7 @@ void RaftEngine::switchToCandidate()
 bool RaftEngine::sendResponse(
     u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _msg)
 {
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send sesponse") << LOG_KV("to", _to)
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#sendResponse]Ready to send response") << LOG_KV("to", _to)
                           << LOG_KV("term", _msg.term) << LOG_KV("packetType", _packetType);
 
     RLPStream ts;
@@ -1214,13 +1260,13 @@ bool RaftEngine::sendResponse(
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     for (auto session : sessions)
     {
-        if (session.nodeID != _node || getIndexBySealer(session.nodeID) < 0)
+        if (session.nodeID() != _node || getIndexBySealer(session.nodeID()) < 0)
         {
             continue;
         }
 
-        m_service->asyncSendMessageByNodeID(
-            session.nodeID, transDataToMessage(ref(ts.out()), _packetType, m_protocolId), nullptr);
+        m_service->asyncSendMessageByNodeID(session.nodeID(),
+            transDataToMessage(ref(ts.out()), _packetType, m_protocolId), nullptr);
         RAFTENGINE_LOG(TRACE) << LOG_DESC("[#sendResponse]Response sent");
         return true;
     }
@@ -1393,18 +1439,13 @@ bool RaftEngine::shouldSeal()
 
 bool RaftEngine::commit(Block const& _block)
 {
-    {
-        Guard guard(m_commitMutex);
-        m_uncommittedBlock = _block;
-        m_uncommittedBlockNumber = m_consensusBlockNumber;
-        RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Prepare to commit block")
-                              << LOG_KV("nextHeight", m_uncommittedBlockNumber);
-    }
-
     std::unique_lock<std::mutex> ul(m_commitMutex);
+    m_uncommittedBlock = _block;
+    m_uncommittedBlockNumber = m_consensusBlockNumber;
     m_waitingForCommitting = true;
     m_commitReady = false;
-    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Wait to commit block");
+    RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#commit]Wait to commit block")
+                          << LOG_KV("nextHeight", m_uncommittedBlockNumber);
     m_commitCV.wait(ul, [this]() { return m_commitReady; });
 
     m_commitReady = false;
@@ -1526,18 +1567,18 @@ const std::string RaftEngine::consensusStatus()
     json_spirit::Array status;
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
-    // get current leader idx
-    statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     // get current leader ID
     h512 leaderId;
     auto isSucc = getNodeIdByIndex(leaderId, m_leader);
     if (isSucc)
     {
         statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
     }
     else
     {
         statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
+        statusObj.push_back(json_spirit::Pair("leaderIdx", "NULL"));
     }
     status.push_back(statusObj);
     json_spirit::Value value(status);
