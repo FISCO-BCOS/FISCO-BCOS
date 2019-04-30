@@ -229,10 +229,16 @@ workflows:
           filters:
             branches:
               ignore: /^pull.*/
+            tags:
+              only:
+                - /v2.*/
       - build_guomi:
           filters:
             branches:
               ignore: /^pull.*/
+            tags:
+              only:
+                - /v2.*/
       - deploy_static:
           requires:
             - build_static

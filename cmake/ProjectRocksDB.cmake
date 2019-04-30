@@ -34,7 +34,7 @@ ExternalProject_Add(rocksdb
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
     LOG_UPDATE 1
-    LOG_BUILD 1
+    LOG_BUILD 0
     LOG_INSTALL 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/librocksdb.a
 )
