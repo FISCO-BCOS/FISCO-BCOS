@@ -437,14 +437,10 @@ generate_config_ini()
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
-    ; channelserver listen port
     channel_listen_port=$(( offset + port_start[1] ))
-    ; jsonrpc listen port
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
-    ; p2p listen ip
     listen_ip=0.0.0.0
-    ; p2p listen port
     listen_port=$(( offset + port_start[0] ))
     ; nodes to connect
     $ip_list
@@ -455,13 +451,10 @@ generate_config_ini()
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
-;group configurations
-;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
     group_config_path=${conf_path}/
 
-;certificate configuration
 [network_security]
     ; directory the certificates located in
     data_path=${conf_path}/
@@ -473,20 +466,18 @@ generate_config_ini()
     ca_cert=${prefix}ca.crt
 
 [storage_security]
-; enable storage_security or not
-;enable=true
+enable=false
 ; the IP of key mananger
-;key_manager_ip=
+key_manager_ip=
 ; the Port of key manager
-;key_manager_port=
-;cipher_data_key=
+key_manager_port=
+cipher_data_key=
 
 [chain]
     id=${chain_id}
 [compatibility]
     supported_version=${fisco_version}
 [log]
-    ; the directory of the log
     log_path=./log
     ; info debug trace 
     level=${log_level}
@@ -511,7 +502,7 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
-    ; the node id of leaders
+    ; the node id of consensusers
     ${node_list}
 [state]
     ; support mpt/storage
