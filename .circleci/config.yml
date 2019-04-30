@@ -92,6 +92,7 @@ jobs:
       - restore_cache:
           keys:
             - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
@@ -131,6 +132,7 @@ jobs:
       - restore_cache:
           keys:
             - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
