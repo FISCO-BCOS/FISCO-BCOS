@@ -82,6 +82,10 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
         BOOST_THROW_EXCEPTION(UnknowSupportVersion());
     }
 
+
+    INITIALIZER_LOG(INFO) << LOG_KV("compatibility", version)
+                          << LOG_KV("versionNumber", versionNumber);
+
     std::string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
     {

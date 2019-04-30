@@ -324,12 +324,10 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         ++retry;
         if (m_maxRetry != 0 && retry >= m_maxRetry)
         {
-            LOG(ERROR) << "Reach max retry:" << retry;
-
-            // The storage doesn't works well, the program will exit with abnormal
-            // status
+            LOG(ERROR) << "SQLStorage unreachable" << LOG_KV("maxRetry", retry);
+            // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
-            std::cout << "because the storage doesn't works well,"
+            std::cout << "The sqlstorage doesn't work well,"
                       << "the program will exit with abnormal status" << std::endl;
 
             m_fatalHandler(e);

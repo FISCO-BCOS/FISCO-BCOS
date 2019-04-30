@@ -140,11 +140,11 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
             m_maxBlockCanSeal /= 2;
         }
     }
-    PBFTSEALER_LOG(DEBUG) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
-                          << LOG_KV("org_maxBlockCanSeal", m_maxBlockCanSeal * 2)
-                          << LOG_KV("halfed_maxBlockCanSeal", m_maxBlockCanSeal)
-                          << LOG_KV("timeoutCount", m_timeoutCount)
-                          << LOG_KV("lastTimeoutTx", m_lastTimeoutTx);
+    PBFTSEALER_LOG(INFO) << LOG_DESC("decrease maxBlockCanSeal to half for PBFT timeout")
+                         << LOG_KV("org_maxBlockCanSeal", m_maxBlockCanSeal * 2)
+                         << LOG_KV("halfed_maxBlockCanSeal", m_maxBlockCanSeal)
+                         << LOG_KV("timeoutCount", m_timeoutCount)
+                         << LOG_KV("lastTimeoutTx", m_lastTimeoutTx);
 }
 
 /// increase maxBlockCanSeal when commitBlock with no-timeout
@@ -172,8 +172,8 @@ void PBFTSealer::onCommitBlock(
     if (sealingTxNumber > 0 && (m_maxNoTimeoutTx == 0 || m_maxNoTimeoutTx < sealingTxNumber))
     {
         m_maxNoTimeoutTx = sealingTxNumber;
-        PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase maxNoTimeoutTx")
-                              << LOG_KV("maxNoTimeoutTx", m_maxNoTimeoutTx);
+        PBFTSEALER_LOG(INFO) << LOG_DESC("increase maxNoTimeoutTx")
+                             << LOG_KV("maxNoTimeoutTx", m_maxNoTimeoutTx);
     }
     /// only if m_timeoutCount decreases to 0 and the current maxBlockCanSeal is smaller than
     /// maxBlockTransactions, increase maxBlockCanSeal
@@ -212,8 +212,8 @@ void PBFTSealer::increaseMaxTxsCanSeal()
     {
         m_maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
     }
-    PBFTSEALER_LOG(DEBUG) << LOG_DESC("increase m_maxBlockCanSeal")
-                          << LOG_KV("increased_maxBlockCanSeal", m_maxBlockCanSeal);
+    PBFTSEALER_LOG(INFO) << LOG_DESC("increase m_maxBlockCanSeal")
+                         << LOG_KV("increased_maxBlockCanSeal", m_maxBlockCanSeal);
 }
 
 }  // namespace consensus

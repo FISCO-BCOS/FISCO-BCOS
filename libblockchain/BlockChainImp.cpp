@@ -1076,7 +1076,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
-
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
             writeHash2Block(block, context);
