@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
         entry->setField("value", std::to_string((i + 1) * 100));
         table->update(key, entry, table->newCondition());
         entries = table->select(key, table->newCondition());
-        BOOST_TEST(entries->size() == 1);
+        BOOST_TEST(entries->size() == size1);
         BOOST_TEST(entries->get(0)->getField("value") == std::to_string((i + 1) * 100));
 
         memoryDBFactory->rollback(savepoint1);
