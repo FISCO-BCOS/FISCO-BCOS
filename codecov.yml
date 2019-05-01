@@ -3,7 +3,7 @@ codecov:
 coverage:
   range: 30...100
   notify:
-    require_ci_to_pass: no
+    # require_ci_to_pass: no
     gitter:
       default:
         threshold: 0
