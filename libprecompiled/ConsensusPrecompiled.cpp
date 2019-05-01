@@ -20,7 +20,6 @@
  */
 
 #include "ConsensusPrecompiled.h"
-
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
@@ -69,7 +68,7 @@ bytes ConsensusPrecompiled::call(
 
     showConsensusTable(context);
 
-
+    int result = 0;
     if (func == name2Selector[CSS_METHOD_ADD_SEALER])
     {
         // addSealer(string)
@@ -80,12 +79,11 @@ bytes ConsensusPrecompiled::call(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
                                << LOG_KV("nodeID", nodeID);
-
         if (nodeID.size() != 128u)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
+            result = CODE_INVALID_NODEID;
         }
         else
         {
@@ -110,15 +108,13 @@ bytes ConsensusPrecompiled::call(
                     {
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
-
-                        out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                        result = storage::CODE_NO_AUTHORIZED;
                     }
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                                << LOG_DESC("addSealer successfully");
-
-                        out = abi.abiIn("", u256(count));
+                        result = count;
                     }
                 }
                 else
@@ -129,15 +125,13 @@ bytes ConsensusPrecompiled::call(
                     {
                         PRECOMPILED_LOG(DEBUG)
                             << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
-
-                        out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                        result = storage::CODE_NO_AUTHORIZED;
                     }
                     else
                     {
                         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                                << LOG_DESC("addSealer successfully");
-
-                        out = abi.abiIn("", u256(count));
+                        result = count;
                     }
                 }
             }
@@ -156,7 +150,7 @@ bytes ConsensusPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
+            result = CODE_INVALID_NODEID;
         }
         else
         {
@@ -179,15 +173,13 @@ bytes ConsensusPrecompiled::call(
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
-
-                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    result = storage::CODE_NO_AUTHORIZED;
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addObserver successfully");
-
-                    out = abi.abiIn("", u256(count));
+                    result = count;
                 }
             }
             else if (!checkIsLastSealer(table, nodeID))
@@ -198,20 +190,18 @@ bytes ConsensusPrecompiled::call(
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
-
-                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    result = storage::CODE_NO_AUTHORIZED;
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
                                            << LOG_DESC("addObserver successfully");
-
-                    out = abi.abiIn("", u256(count));
+                    result = count;
                 }
             }
             else
             {
-                out = abi.abiIn("", u256(CODE_LAST_SEALER));
+                result = CODE_LAST_SEALER;
             }
         }
     }
@@ -228,7 +218,7 @@ bytes ConsensusPrecompiled::call(
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                    << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
-            out = abi.abiIn("", u256(CODE_INVALID_NODEID));
+            result = CODE_INVALID_NODEID;
         }
         else
         {
@@ -243,20 +233,18 @@ bytes ConsensusPrecompiled::call(
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
-
-                    out = abi.abiIn("", u256(storage::CODE_NO_AUTHORIZED));
+                    result = storage::CODE_NO_AUTHORIZED;
                 }
                 else
                 {
                     PRECOMPILED_LOG(DEBUG)
                         << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
-
-                    out = abi.abiIn("", u256(count));
+                    result = count;
                 }
             }
             else
             {
-                out = abi.abiIn("", u256(CODE_LAST_SEALER));
+                result = CODE_LAST_SEALER;
             }
         }
     }
@@ -265,6 +253,7 @@ bytes ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
+    getOut(out, result);
     return out;
 }
 

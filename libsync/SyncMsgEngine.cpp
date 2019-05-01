@@ -34,7 +34,7 @@ static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 void SyncMsgEngine::messageHandler(
     NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
+    SYNC_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());
     if (!checkSession(_session) || !checkMessage(_msg))
     {
@@ -141,14 +141,6 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
-    struct SyncPeerInfo
-    {
-        NodeID nodeId;
-        int64_t number;
-        h256 genesisHash;
-        h256 latestHash;
-    };
-
     if (status == nullptr)
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
@@ -202,7 +194,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 
     if (rlp.itemCount() != 2)
     {
-        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                         << LOG_DESC("Receive invalid request blocks packet format")
                         << LOG_KV("peer", _packet.nodeId.abridged());
         return;
@@ -212,7 +204,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
     int64_t from = rlp[0].toInt<int64_t>();
     unsigned size = rlp[1].toInt<unsigned>();
 
-    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                     << LOG_DESC("Receive block request")
                     << LOG_KV("peer", _packet.nodeId.abridged()) << LOG_KV("from", from)
                     << LOG_KV("to", from + size - 1);
@@ -261,7 +253,7 @@ void DownloadBlocksContainer::clearBatchAndSend()
 
     auto msg = retPacket.toMessage(m_protocolId);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
-    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request") << LOG_BADGE("BlockSync")
+    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request") << LOG_BADGE("BlockSync")
                     << LOG_DESC("Send block packet") << LOG_KV("peer", m_nodeId.abridged())
                     << LOG_KV("blocks", m_blockRLPsBatch.size())
                     << LOG_KV("bytes(V)", msg->buffer()->size());
@@ -277,7 +269,7 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
 
     auto msg = retPacket.toMessage(m_protocolId);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
-    SYNC_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Send") << LOG_BADGE("Download")
+    SYNC_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("Send") << LOG_BADGE("Download")
                     << LOG_DESC("Block back") << LOG_KV("peer", m_nodeId.abridged())
                     << LOG_KV("blocks", 1) << LOG_KV("bytes(B)", msg->buffer()->size());
 }

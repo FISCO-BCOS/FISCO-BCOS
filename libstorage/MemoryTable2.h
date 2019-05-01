@@ -23,6 +23,7 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -39,30 +40,28 @@ namespace storage
 class MemoryTable2 : public Table
 {
 public:
-    using CacheType = tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>;
-    using CacheIter = typename CacheType::iterator;
     using Ptr = std::shared_ptr<MemoryTable2>;
 
     MemoryTable2();
 
     virtual ~MemoryTable2(){};
 
-    virtual Entries::Ptr select(const std::string& key, Condition::Ptr condition) override;
+    Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
 
-    virtual int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
+    int update(const std::string& key, Entry::Ptr entry, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
-    virtual int insert(const std::string& key, Entry::Ptr entry,
+    int insert(const std::string& key, Entry::Ptr entry,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>(),
         bool needSelect = true) override;
 
-    virtual int remove(const std::string& key, Condition::Ptr condition,
+    int remove(const std::string& key, Condition::Ptr condition,
         AccessOptions::Ptr options = std::make_shared<AccessOptions>()) override;
 
-    virtual h256 hash() override;
+    h256 hash() override;
 
-    virtual void clear() override { m_dirty.clear(); }
-    virtual bool empty() override
+    void clear() override { m_dirty.clear(); }
+    bool empty() override
     {
         for (auto iter : m_dirty)
         {
@@ -88,33 +87,17 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    virtual bool dump(dev::storage::TableData::Ptr data) override
-    {
-        data->info = m_tableInfo;
-        data->entries = std::make_shared<Entries>();
-        for (auto it : m_dirty)
-        {
-            data->entries->addEntry(it.second);
-        }
+    bool dump(dev::storage::TableData::Ptr data) override;
 
-        for (size_t i = 0; i < m_newEntries->size(); ++i)
-        {
-            data->entries->addEntry(m_newEntries->get(i));
-        }
-
-        return true;
-    }
-
-    virtual void rollback(const Change& _change) override;
+    void rollback(const Change& _change) override;
 
 private:
-    using EntriesType = ConcurrentEntries;
-    using EntriesPtr = EntriesType::Ptr;
-    EntriesPtr m_newEntries;
+    Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    CacheType m_dirty;
-    bool Comparator(const Entry::Ptr& lhs, const Entry::Ptr& rhs);
-    std::vector<size_t> processEntries(EntriesType::Ptr entries, Condition::Ptr condition)
+    Entries::Ptr m_newEntries;
+    tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
+
+    std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
@@ -150,7 +133,7 @@ private:
             // same as above
             if (entry != nullptr)
             {
-                if (processCondition(entry, condition))
+                if (condition->process(entry))
                 {
                     indexes.push_back(i);
                 }
@@ -158,101 +141,6 @@ private:
         }
 
         return indexes;
-    }
-
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
-    {
-        try
-        {
-            for (auto& it : *condition->getConditions())
-            {
-                if (entry->getStatus() == Entry::Status::DELETED)
-                {
-                    return false;
-                }
-
-                std::string lhs = entry->getField(it.first);
-                std::string rhs = it.second.second;
-
-                if (it.second.first == Condition::Op::eq)
-                {
-                    if (lhs != rhs)
-                    {
-                        return false;
-                    }
-                }
-                else if (it.second.first == Condition::Op::ne)
-                {
-                    if (lhs == rhs)
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    if (lhs.empty())
-                    {
-                        lhs = "0";
-                    }
-                    if (rhs.empty())
-                    {
-                        rhs = "0";
-                    }
-
-                    int lhsNum = boost::lexical_cast<int>(lhs);
-                    int rhsNum = boost::lexical_cast<int>(rhs);
-
-                    switch (it.second.first)
-                    {
-                    case Condition::Op::eq:
-                    case Condition::Op::ne:
-                    {
-                        break;
-                    }
-                    case Condition::Op::gt:
-                    {
-                        if (lhsNum <= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::ge:
-                    {
-                        if (lhsNum < rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::lt:
-                    {
-                        if (lhsNum >= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::le:
-                    {
-                        if (lhsNum > rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    }
-                }
-            }
-        }
-        catch (std::exception& e)
-        {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
-                               << LOG_KV("msg", boost::diagnostic_information(e));
-            return false;
-        }
-
-        return true;
     }
 
     bool isHashField(const std::string& _key)

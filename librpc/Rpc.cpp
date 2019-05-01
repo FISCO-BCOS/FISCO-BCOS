@@ -25,6 +25,7 @@
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
@@ -84,12 +85,12 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
-std::string Rpc::getSystemConfigByKey(int _groupID, std::string const& key)
+std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
+                      << LOG_KV("groupID", _groupID) << LOG_KV("key", key);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -305,6 +306,8 @@ Json::Value Rpc::getClientVersion()
         Json::Value version;
 
         version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+        version["Supported Version"] = g_BCOSConfig.supportedVersion();
+        version["Chain Id"] = toString(g_BCOSConfig.chainId());
         version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
         version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
                                 std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
@@ -542,6 +545,8 @@ Json::Value Rpc::getBlockByNumber(
         response["parentHash"] = toJS(block->header().parentHash());
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
+        response["dbHash"] = toJS(block->header().dbHash());
         response["stateRoot"] = toJS(block->header().stateRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);
@@ -953,6 +958,7 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 
         Json::Value response;
         response["currentBlockNumber"] = toJS(blockNumber);
+        response["status"] = toJS(executionResult.second.status());
         response["output"] = toJS(executionResult.second.outputBytes());
         return response;
     }

@@ -67,6 +67,16 @@ public:
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
+    void setEnableDynamicBlockSize(bool enableDynamicBlockSize)
+    {
+        m_enableDynamicBlockSize = enableDynamicBlockSize;
+    }
+
+    void setBlockSizeIncreaseRatio(bool blockSizeIncreaseRatio)
+    {
+        m_blockSizeIncreaseRatio = blockSizeIncreaseRatio;
+    }
+
 protected:
     void handleBlock() override;
     bool shouldSeal() override;
@@ -92,6 +102,10 @@ protected:
     void setBlock();
 
 private:
+    void onTimeout(uint64_t const& sealingTxNumber);
+    void increaseMaxTxsCanSeal();
+    void onCommitBlock(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
     /// reset block when view changes
     void resetBlockForViewChange()
     {
@@ -103,12 +117,19 @@ private:
         /// blockNumber(m_sealing) = n + 1 the result is: generate two block with the same block in
         /// a period solution: if there has been  a higher sealed block, return directly without
         /// reset
-        if (m_sealing.block.isSealed() && shouldHandleBlock())
         {
-            return;
-        }
-        {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
+            if (m_sealing.block.isSealed() && shouldHandleBlock())
+            {
+                PBFTSEALER_LOG(DEBUG)
+                    << LOG_DESC("sealing block have already been sealed and should be handled")
+                    << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                    << LOG_KV("curNum", m_blockChain->number());
+                return;
+            }
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for viewchange")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
         }
         m_signalled.notify_all();
@@ -119,7 +140,10 @@ private:
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
         {
-            DEV_WRITE_GUARDED(x_sealing)
+            WriteGuard l(x_sealing);
+            PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
+                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock(filter, true);
         }
         m_signalled.notify_all();
@@ -128,6 +152,15 @@ private:
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine;
+    /// the minimum number of transactions that caused timeout
+    uint64_t m_lastTimeoutTx = 0;
+    /// the maximum number of transactions that has been consensused without timeout
+    uint64_t m_maxNoTimeoutTx = 0;
+    /// timeout counter
+    int64_t m_timeoutCount = 0;
+    uint64_t m_lastBlockNumber = 0;
+    bool m_enableDynamicBlockSize = true;
+    float m_blockSizeIncreaseRatio = 0.5;
 };
 }  // namespace consensus
 }  // namespace dev

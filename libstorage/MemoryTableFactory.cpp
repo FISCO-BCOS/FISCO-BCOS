@@ -24,6 +24,7 @@
 #include "StorageException.h"
 #include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
@@ -34,8 +35,6 @@
 using namespace dev;
 using namespace dev::storage;
 using namespace std;
-
-thread_local std::vector<Change> MemoryTableFactory::s_changeLog = std::vector<Change>();
 
 const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
     SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
@@ -151,7 +150,6 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
                            << LOG_DESC("table already exist in _sys_tables_")
                            << LOG_KV("table name", tableName);
-
         return nullptr;
     }
     // Write table entry
@@ -216,7 +214,7 @@ h256 MemoryTableFactory::hash()
 
 std::vector<Change>& MemoryTableFactory::getChangeLog()
 {
-    return s_changeLog;
+    return s_changeLog.local();
 }
 
 void MemoryTableFactory::rollback(size_t _savepoint)
@@ -264,7 +262,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
+        stateStorage()->commit(_blockHash, _blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();

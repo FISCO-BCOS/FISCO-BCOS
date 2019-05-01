@@ -141,6 +141,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.
+        rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_safeHttpServer.reset(
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);

@@ -26,10 +26,11 @@
 
 namespace dev
 {
-enum VERSION
+enum VERSION : uint32_t
 {
     RC1_VERSION = 1,
-    RC2_VERSION = 2
+    RC2_VERSION = 2,
+    RC3_VERSION = 3
 };
 class GlobalConfigure
 {
@@ -39,12 +40,21 @@ public:
         static GlobalConfigure ins;
         return ins;
     }
-    void setVersion(VERSION _version) { m_version = _version; }
 
     VERSION const& version() const { return m_version; }
     void setCompress(bool const& compress) { m_compress = compress; }
 
     bool compressEnabled() const { return m_compress; }
+
+    void setChainId(int64_t _chainId) { m_chainId = _chainId; }
+    int64_t chainId() const { return m_chainId; }
+
+    void setSupportedVersion(std::string const& _supportedVersion, VERSION _versionNumber)
+    {
+        m_supportedVersion = _supportedVersion;
+        m_version = _versionNumber;
+    }
+    std::string const& supportedVersion() { return m_supportedVersion; }
 
     struct DiskEncryption
     {
@@ -67,6 +77,8 @@ public:
 private:
     VERSION m_version = RC2_VERSION;
     bool m_compress;
+    int64_t m_chainId = 1;
+    std::string m_supportedVersion;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

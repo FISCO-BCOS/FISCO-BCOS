@@ -22,12 +22,12 @@
 
 #include "Storage.h"
 #include "StorageException.h"
-#include "Table.h"
 #include <json/json.h>
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+#include <map>
 
 namespace dev
 {
@@ -40,19 +40,20 @@ public:
 
     virtual ~LevelDBStorage2(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, const std::string& table,
-        const std::string& key, Condition::Ptr condition) override;
-    virtual size_t commit(
-        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const&) override;
-    virtual bool onlyDirty() override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
+    void processEntries(h256 hash, int64_t num,
+        std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
+        Entries::Ptr entries);
+
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
-
-    const char* COUNTER_KEY = "_sys_counter_";
 };
 
 }  // namespace storage

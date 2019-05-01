@@ -37,8 +37,9 @@
 using namespace dev;
 using namespace dev::network;
 
-Session::Session()
+Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
+    m_recvBuffer.resize(bufferSize);
     m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
 }
 
@@ -66,6 +67,12 @@ Session::~Session()
 NodeIPEndpoint Session::nodeIPEndpoint() const
 {
     return m_socket->nodeIPEndpoint();
+}
+
+bool Session::actived() const
+{
+    auto server = m_server.lock();
+    return m_actived && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
 void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFunc callback)
@@ -105,14 +112,6 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     send(p_buffer);
-}
-
-bool Session::actived() const
-{
-    auto server = m_server.lock();
-    if (m_actived && server && server->haveNetwork())
-        return true;
-    return false;
 }
 
 void Session::send(std::shared_ptr<bytes> _msg)
@@ -169,16 +168,6 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
         drop(TCPError);
         return;
     }
-}
-
-bool Session::isConnected() const
-{
-    auto server = m_server.lock();
-    if (!m_actived || !server || !server->haveNetwork() || !m_socket)
-    {
-        return false;
-    }
-    return m_socket->isConnected();
 }
 
 void Session::write()
@@ -302,13 +291,13 @@ void Session::drop(DisconnectReason _reason)
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG) << "[drop] closing remote" << m_socket->remoteEndpoint()
+                SESSION_LOG(DEBUG) << "[drop] closing remote " << m_socket->remoteEndpoint()
                                    << LOG_KV("reason", reasonOf(_reason))
                                    << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
             else
             {
-                SESSION_LOG(WARNING) << "[drop] closing remote" << m_socket->remoteEndpoint()
+                SESSION_LOG(WARNING) << "[drop] closing remote " << m_socket->remoteEndpoint()
                                      << LOG_KV("reason", reasonOf(_reason))
                                      << LOG_KV("endpoint", m_socket->nodeIPEndpoint().name());
             }
@@ -411,8 +400,8 @@ void Session::doRead()
                     s->drop(TCPError);
                     return;
                 }
-                s->m_data.insert(
-                    s->m_data.end(), s->m_recvBuffer, s->m_recvBuffer + bytesTransferred);
+                s->m_data.insert(s->m_data.end(), s->m_recvBuffer.begin(),
+                    s->m_recvBuffer.begin() + bytesTransferred);
 
                 while (true)
                 {
@@ -446,7 +435,7 @@ void Session::doRead()
         if (m_socket->isConnected())
         {
             server->asioInterface()->asyncReadSome(
-                m_socket, boost::asio::buffer(m_recvBuffer, BUFFER_LENGTH), asyncRead);
+                m_socket, boost::asio::buffer(m_recvBuffer, m_recvBuffer.size()), asyncRead);
         }
         else
         {

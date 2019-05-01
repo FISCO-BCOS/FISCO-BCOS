@@ -14,9 +14,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
@@ -24,7 +24,7 @@ jobs:
             cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON ..
             make -j2
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -52,17 +52,17 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON -DEASYLOG=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON -DEASYLOG=ON ..
             make -j2
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -80,18 +80,19 @@ jobs:
   build_static:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ gcc ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
           keys:
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
@@ -99,7 +100,7 @@ jobs:
             CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON ..
             make -j2
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -119,18 +120,19 @@ jobs:
   build_guomi:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ gcc ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
           keys:
-            - dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
@@ -138,7 +140,7 @@ jobs:
             CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON ..
             make -j2
       - save_cache:
-          key: dependency-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -158,7 +160,7 @@ jobs:
   deploy_static:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
@@ -184,7 +186,7 @@ jobs:
   deploy_guomi:
     working_directory: /FISCO-BCOS
     docker:
-      - image: ubuntu:16.04
+      - image: ubuntu:18.04
     steps:
       - run:
           name: Setup dependencies
@@ -227,12 +229,18 @@ workflows:
     jobs:
       - build_static:
           filters:
+            branches:
+              ignore: /^pull.*/
             tags:
-              ignore: /.*/
+              only:
+                - /v2.*/
       - build_guomi:
           filters:
+            branches:
+              ignore: /^pull.*/
             tags:
-              ignore: /.*/
+              only:
+                - /v2.*/
       - deploy_static:
           requires:
             - build_static

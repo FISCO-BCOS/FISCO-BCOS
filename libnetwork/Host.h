@@ -65,8 +65,7 @@ public:
 
     virtual bool haveNetwork() const { return m_run; }
 
-    virtual std::string listenHost() { return m_listenHost; }
-    virtual uint16_t listenPort() { return m_listenPort; }
+    virtual std::string listenHost() const { return m_listenHost; }
     virtual void setHostPort(std::string host, uint16_t port)
     {
         m_listenHost = host;
@@ -74,7 +73,7 @@ public:
     }
 
     virtual std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
-    connectionHandler()
+    connectionHandler() const
     {
         return m_connectionHandler;
     }
@@ -85,25 +84,25 @@ public:
         m_connectionHandler = connectionHandler;
     }
 
-    virtual std::shared_ptr<dev::ThreadPool> threadPool() { return m_threadPool; }
+    virtual std::shared_ptr<dev::ThreadPool> threadPool() const { return m_threadPool; }
     virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
     {
         m_threadPool = threadPool;
     }
 
-    virtual std::shared_ptr<ASIOInterface> asioInterface() { return m_asioInterface; }
+    virtual std::shared_ptr<ASIOInterface> asioInterface() const { return m_asioInterface; }
     virtual void setASIOInterface(std::shared_ptr<ASIOInterface> asioInterface)
     {
         m_asioInterface = asioInterface;
     }
 
-    virtual std::shared_ptr<SessionFactory> sessionFactory() { return m_sessionFactory; }
+    virtual std::shared_ptr<SessionFactory> sessionFactory() const { return m_sessionFactory; }
     virtual void setSessionFactory(std::shared_ptr<SessionFactory> sessionFactory)
     {
         m_sessionFactory = sessionFactory;
     }
 
-    virtual MessageFactory::Ptr messageFactory() { return m_messageFactory; }
+    virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
     virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
     {
         m_messageFactory = _messageFactory;

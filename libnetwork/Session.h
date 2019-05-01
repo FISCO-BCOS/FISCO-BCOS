@@ -46,20 +46,16 @@ class SocketFace;
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
-    Session();
+    Session(size_t _bufferSize = 4096);
     virtual ~Session();
 
     typedef std::shared_ptr<Session> Ptr;
-    static const size_t BUFFER_LENGTH = 1024;
 
     virtual void start() override;
     virtual void disconnect(DisconnectReason _reason) override;
 
-    virtual bool isConnected() const override;
-
     virtual void asyncSendMessage(
         Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override;
-    // virtual Message::Ptr sendMessage(Message::Ptr message, Options options) override;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const override;
 
@@ -123,7 +119,8 @@ private:
 
     void doRead();
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
-    byte m_recvBuffer[BUFFER_LENGTH];
+    std::vector<byte> m_recvBuffer;
+    const size_t bufferSize;
 
     /// Drop the connection for the reason @a _r.
     void drop(DisconnectReason _r);

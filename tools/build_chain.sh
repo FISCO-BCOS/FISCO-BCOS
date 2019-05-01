@@ -13,7 +13,7 @@ ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
-storage_type=LevelDB
+storage_type=RocksDB
 conf_path="conf"
 bin_path=
 make_tar=
@@ -28,9 +28,11 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
+enable_parallel=false
 auto_flush="true"
-timestamp=$(date +%s)
-enable_compress="true"
+# trans timestamp from seconds to milliseconds
+timestamp=$(($(date '+%s')*1000))
+chain_id=1
 fisco_version=""
 OS=
 
@@ -46,9 +48,11 @@ Usage:
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
-    -C <disable compress>               Default enable. If set -C, disable compress
     -s <State type>                     Default storage. if set -s, use mpt 
+    -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
+    -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
+    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -76,7 +80,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
+while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -92,10 +96,21 @@ while getopts "f:l:o:p:e:t:v:icszhgTFdCS" option;do
     ;;
     e) bin_path=$OPTARG;;
     s) state_type=mpt;;
-    S) storage_type="external";;
+    S) storage_type=$OPTARG
+        if [ -z "${storage_type}" ];then
+            LOG_WARN "${storage_type} is not supported storage."
+            exit 1;
+        fi
+    ;;
+    P) enable_parallel="true";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
-    C) enable_compress="false";;
+    C) chain_id=$OPTARG
+        if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
+            LOG_WARN "${chain_id} is not a positive integer."
+            exit 1;
+        fi
+    ;;
     T) debug_log="true"
     log_level="debug"
     ;;
@@ -110,8 +125,12 @@ done
 
 print_result()
 {
-echo "=============================================================="
-LOG_INFO "FISCO-BCOS Path   : $bin_path"
+echo "================================================================"
+LOG_INFO "Execute the following command to get FISCO-BCOS console"
+echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
+echo "================================================================"
+[ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
+[ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : ${port_start[*]}"
@@ -122,7 +141,7 @@ LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
-echo "=============================================================="
+echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
 
@@ -418,32 +437,24 @@ generate_config_ini()
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
-    ; channelserver listen port
     channel_listen_port=$(( offset + port_start[1] ))
-    ; jsonrpc listen port
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
-    ; p2p listen ip
     listen_ip=0.0.0.0
-    ; p2p listen port
     listen_port=$(( offset + port_start[0] ))
     ; nodes to connect
     $ip_list
     ;enable/disable network compress
-    enable_compress=${enable_compress}
+    ;enable_compress=true
 
-;certificate rejected list		
 [certificate_blacklist]		
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
-;group configurations
-;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
     group_config_path=${conf_path}/
 
-;certificate configuration
 [network_security]
     ; directory the certificates located in
     data_path=${conf_path}/
@@ -454,21 +465,19 @@ generate_config_ini()
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
 
-; storage security releated configurations
 [storage_security]
-; enable storage_security or not
-;enable=true
+enable=false
 ; the IP of key mananger
-;key_manager_ip=
+key_manager_ip=
 ; the Port of key manager
-;key_manager_port=
-;cipher_data_key=
+key_manager_port=
+cipher_data_key=
 
+[chain]
+    id=${chain_id}
 [compatibility]
     supported_version=${fisco_version}
-;log configurations
 [log]
-    ; the directory of the log
     log_path=./log
     ; info debug trace 
     level=${log_level}
@@ -488,25 +497,18 @@ generate_group_genesis()
     local index=$2
     local node_list=$3
     cat << EOF > ${output} 
-;consensus configuration
 [consensus]
-    ;consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
-    ;the max number of transactions of a block
+    ; the max number of transactions of a block
     max_trans_num=1000
-    ;the node id of leaders
+    ; the node id of consensusers
     ${node_list}
-
-[storage]
-    ;storage db type, leveldb or external
-    type=${storage_type}
-    topic=DB
 [state]
-    ;support mpt/storage
+    ; support mpt/storage
     type=${state_type}
-
-;tx gas limit
 [tx]
+    ; transaction gas limit
     gas_limit=300000000
 [group]
     id=${index}
@@ -518,16 +520,24 @@ function generate_group_ini()
 {
     local output="${1}"
     cat << EOF > ${output}
-; the ttl for broadcasting pbft message
 [consensus]
+    ; the ttl for broadcasting pbft message
     ;ttl=2
-    ;min block generation time(ms), the max block generation time is 1000 ms
+    ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
-;txpool limit
+    ;enable_dynamic_block_size=true
+[storage]
+    ; storage db type, leveldb/leveldb2/external/rocksdb are supported
+    type=${storage_type}
+    max_retry=100
+    max_store_key=10000
+    max_forward_block=100
+    ; topic only for external
+    topic=DB
 [tx_pool]
     limit=150000
 [tx_execute]
-    enable_parallel=true
+    enable_parallel=${enable_parallel}
 EOF
 }
 
@@ -730,9 +740,9 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     ${start_cmd} &
-    sleep 1
+    sleep 1.5
 fi
-try_times=5
+try_times=4
 i=0
 while [ \$i -lt \${try_times} ]
 do
@@ -744,7 +754,7 @@ do
     sleep 0.5
     ((i=i+1))
 done
-echo -e "\033[31m \${node} starting excess waiting time \033[0m"
+echo -e "\033[31m  Exceed waiting time. Please try again to start \${node} \033[0m"
 ${log_cmd}
 exit 1
 EOF
@@ -761,7 +771,7 @@ do
         echo " \${node} isn't running."
         exit 0
     fi
-    [ ! -z \${node_pid} ] && ${stop_cmd} 2> /dev/null
+    [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
     sleep 0.6
     node_pid=${ps_cmd}
     if [ -z \${node_pid} ];then
@@ -770,7 +780,7 @@ do
     fi
     ((i=i+1))
 done
-echo " stop \${node} failed, exceed maximum number of retries."
+echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
 }
@@ -787,6 +797,7 @@ genTransTest()
 ip_port=http://127.0.0.1:$(( port_start[2] ))
 trans_num=1
 target_group=1
+version=
 if [ \$# -ge 1 ];then
     trans_num=\$1
 fi
@@ -794,25 +805,35 @@ if [ \$# -ge 2 ];then
     target_group=\$2
 fi
 
+getNodeVersion()
+{
+    result="\$(curl -X POST --data '{"jsonrpc":"2.0","method":"getClientVersion","params":[],"id":1}' \${ip_port})"
+    version="\$(echo \${result} | cut -c250- | cut -d \" -f3)"
+}
+
 block_limit()
 {
-    result=\`curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \$1\`
-    if [ \`echo \${result} | grep -i failed | wc -l\` -gt 0 ] || [ -z \${result} ];then
+    result=\$(curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \${ip_port})
+    if [ \$(echo \${result} | grep -i failed | wc -l) -gt 0 ] || [ -z \${result} ];then
         echo "getBlockNumber error!"
         exit 1
     fi
-    blockNumber=\`echo \${result}| cut -d \" -f 10\`
+    blockNumber=\$(echo \${result}| cut -d \" -f 10)
     printf "%04x" \$((\$blockNumber+0x100))
 }
 
 send_a_tx()
 {
-    limit=\$(block_limit \$1)
+    limit=\$(block_limit)
     random_id="\$(date +%s)\$(printf "%09d" \${RANDOM})"
     if [ \${#limit} -gt 4 ];then echo "blockLimit exceed 0xffff, this scripts is unavailable!"; exit 0;fi
-    txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\${random_id}85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    if [ "\${version}" == "2.0.0-rc1" ];then
+        txBytes="f8f0a02ade583745343a8f9a70b40db996fbe69c63531832858\${random_id}85174876e7ff8609184e729fff82\${limit}94d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01b86a371ca0e33891be86f781ebacdafd543b9f4f98243f7b52d52bac9efa24b89e257a354da07ff477eb0ba5c519293112f1704de86bd2938369fbf0db2dff3b4d9723b9a87d"
+    else
+        txBytes="f8eca003eb675ec791c2d19858c91d0046821c27d815e2e9c15\${random_id}0a8402faf08082\${limit}948c17cf316c1063ab6c89df875e96c9f0f5b2f74480b8644ed3885e0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a464953434f2042434f53000000000000000000000000000000000000000000000101801ba09edf7c0cb63645442aff11323916d51ec5440de979950747c0189f338afdcefda02f3473184513c6a3516e066ea98b7cfb55a79481c9db98e658dd016c37f03dcf"
+    fi
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \$1
+    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \${ip_port}
 }
 
 send_many_tx()
@@ -823,7 +844,8 @@ send_many_tx()
         send_a_tx \${ip_port} 
     done
 }
-
+getNodeVersion
+echo "Use version:\${version}"
 send_many_tx \${trans_num}
 
 EOF

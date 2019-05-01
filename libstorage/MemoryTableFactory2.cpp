@@ -28,6 +28,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <thread>
@@ -37,8 +40,6 @@
 using namespace dev;
 using namespace dev::storage;
 using namespace std;
-
-thread_local std::vector<Change> MemoryTableFactory2::s_changeLog = std::vector<Change>();
 
 MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 {
@@ -192,22 +193,35 @@ void MemoryTableFactory2::setBlockNum(int64_t blockNum)
 
 h256 MemoryTableFactory2::hash()
 {
-    bytes data;
-    for (auto& it : m_name2Table)
+    std::vector<std::pair<std::string, Table::Ptr> > tables;
+    for (auto it : m_name2Table)
     {
-        auto table = it.second;
-        h256 hash = table->hash();
-        if (hash == h256())
-        {
-            continue;
-        }
-
-        bytes tableHash = hash.asBytes();
-        // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
-        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
-
-        data.insert(data.end(), tableHash.begin(), tableHash.end());
+        tables.push_back(std::make_pair(it.first, it.second));
     }
+
+    tbb::parallel_sort(tables.begin(), tables.end(),
+        [](const std::pair<std::string, Table::Ptr>& lhs,
+            const std::pair<std::string, Table::Ptr>& rhs) { return lhs.first < rhs.first; });
+
+    bytes data;
+    data.resize(tables.size() * 32);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                auto table = tables[it];
+                h256 hash = table.second->hash();
+                if (hash == h256())
+                {
+                    continue;
+                }
+
+                bytes tableHash = hash.asBytes();
+
+                memcpy(&data[it * 32], &tableHash[0], tableHash.size());
+            }
+        });
+
     if (data.empty())
     {
         return h256();
@@ -218,7 +232,7 @@ h256 MemoryTableFactory2::hash()
 
 std::vector<Change>& MemoryTableFactory2::getChangeLog()
 {
-    return s_changeLog;
+    return s_changeLog.local();
 }
 
 void MemoryTableFactory2::rollback(size_t _savepoint)
@@ -249,7 +263,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         auto tableData = std::make_shared<TableData>();
         table->dump(tableData);
 
-        if (tableData->entries->size() > 0)
+        if (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0)
         {
             datas.push_back(tableData);
         }
@@ -259,7 +273,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas, _blockHash);
+        stateStorage()->commit(_blockHash, _blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();

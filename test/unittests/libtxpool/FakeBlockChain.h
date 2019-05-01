@@ -234,7 +234,7 @@ public:
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
-        PROTOCOL_ID protocol = getGroupProtoclID(0, dev::eth::ProtocolID::TxPool);
+        PROTOCOL_ID protocol = getGroupProtoclID(1, dev::eth::ProtocolID::TxPool);
         m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain, 1024000, protocol);
     }
 

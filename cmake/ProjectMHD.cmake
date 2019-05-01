@@ -5,11 +5,13 @@ set(MHD_BUILD make)
 
 ExternalProject_Add(mhd
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libmicrohttpd-0.9.44.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.44.tar.gz 
-        # https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.44.tar.gz
-    URL_HASH SHA256=f2739cc05112dc00a5ebe1a470174970ca3a3fd71dcd67fb7539af9d83b8411e
+    DOWNLOAD_NAME libmicrohttpd-0.9.63.tar.gz
+    # URL https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.44.tar.gz
+    #     # https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.44.tar.gz 
+    # URL_HASH SHA256=f2739cc05112dc00a5ebe1a470174970ca3a3fd71dcd67fb7539af9d83b8411e
+    URL https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz
+    URL_HASH SHA256=37c36f1be177f0e37ef181a645cd3baac1000bd322a01c2eff70f3cc8c91749c
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${MHD_CONFIG}
     LOG_CONFIGURE 1

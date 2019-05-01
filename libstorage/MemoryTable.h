@@ -24,6 +24,7 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -54,7 +55,7 @@ public:
 
     virtual ~MemoryTable(){};
 
-    virtual typename Entries::Ptr select(const std::string& key, Condition::Ptr condition) override
+    typename Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override
     {
         try
         {
@@ -141,6 +142,11 @@ public:
             auto entries = selectFromCache(key, needSelect);
 
             checkField(entry);
+
+            // Bug: Not set key, but for compatible with RC1, leave bug here. This MemoryTable will
+            // be instead by MemoryTable2, not to fix any more.
+            // entry->setField(m_tableInfo->key, key); bug fix here
+
             Change::Record record(entries->size());
             std::vector<Change::Record> value{record};
             if (m_recorder)
@@ -210,7 +216,7 @@ public:
                 data.insert(data.end(), it.first.begin(), it.first.end());
                 for (size_t i = 0; i < it.second->size(); ++i)
                 {
-                    if (it.second->get(i)->dirty())
+                    if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
                         for (auto& fieldIt : *(it.second->get(i)->fields()))
                         {
@@ -362,7 +368,7 @@ private:
             // These code is fast with no rollback
             if (m_remoteDB && needSelect)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo->name, key);
+                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key);
                 // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
                 // dropped.
                 m_cache.insert(std::make_pair(key, entries));
@@ -380,147 +386,29 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
-        if (condition->getConditions()->empty())
+        for (size_t i = 0; i < entries->size(); ++i)
         {
-            for (size_t i = 0; i < entries->size(); ++i)
+            Entry::Ptr entry = entries->get(i);
+            if (condition->process(entry))
             {
-                indexes.emplace_back(i);
-            }
-            if (condition->getOffset() < 0 || condition->getCount() < 0)
-            {
-                return indexes;
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < entries->size(); ++i)
-            {
-                Entry::Ptr entry = entries->get(i);
-                if (processCondition(entry, condition))
-                {
-                    indexes.push_back(i);
-                }
+                indexes.push_back(i);
             }
         }
         if (condition->getOffset() >= 0 && condition->getCount() >= 0)
         {
-            int offset = condition->getOffset();
-            int count = condition->getCount();
+            int begin = condition->getOffset();
+            int end = begin + condition->getCount();
             std::vector<size_t> limitedIndex;
             int size = indexes.size();
-            if (offset >= size)
+            if (begin >= size)
             {
                 return limitedIndex;
             }
-            if (offset + count > size)
-            {
-                count = size - offset;
-            }
-            for (int j = offset; j < offset + count && j < size; j++)
-            {
-                limitedIndex.push_back(indexes[j]);
-            }
-            return limitedIndex;
-        }
-        else
-        {
-            return indexes;
-        }
-    }
-
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
-    {
-        try
-        {
-            for (auto& it : *condition->getConditions())
-            {
-                if (entry->getStatus() == Entry::Status::DELETED)
-                {
-                    return false;
-                }
-
-                std::string lhs = entry->getField(it.first);
-                std::string rhs = it.second.second;
-
-                if (it.second.first == Condition::Op::eq)
-                {
-                    if (lhs != rhs)
-                    {
-                        return false;
-                    }
-                }
-                else if (it.second.first == Condition::Op::ne)
-                {
-                    if (lhs == rhs)
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    if (lhs.empty())
-                    {
-                        lhs = "0";
-                    }
-                    if (rhs.empty())
-                    {
-                        rhs = "0";
-                    }
-
-                    int lhsNum = boost::lexical_cast<int>(lhs);
-                    int rhsNum = boost::lexical_cast<int>(rhs);
-
-                    switch (it.second.first)
-                    {
-                    case Condition::Op::eq:
-                    case Condition::Op::ne:
-                    {
-                        break;
-                    }
-                    case Condition::Op::gt:
-                    {
-                        if (lhsNum <= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::ge:
-                    {
-                        if (lhsNum < rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::lt:
-                    {
-                        if (lhsNum >= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::le:
-                    {
-                        if (lhsNum > rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    }
-                }
-            }
-        }
-        catch (std::exception& e)
-        {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
-                               << LOG_KV("msg", boost::diagnostic_information(e));
-            return false;
+            return std::vector<size_t>(indexes.begin() + begin,
+                indexes.begin() + end > indexes.end() ? indexes.end() : indexes.begin() + end);
         }
 
-        return true;
+        return indexes;
     }
 
     bool isHashField(const std::string& _key)

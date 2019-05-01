@@ -893,8 +893,9 @@ void BlockChainImp::writeTotalTransactionCount(
             auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
             currentCount += block.transactions().size();
 
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
-            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, tb->newCondition());
+            auto updateEntry = tb->newEntry();
+            updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, updateEntry, tb->newCondition());
         }
         else
         {
@@ -936,6 +937,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                     entry->setField(
                         SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
                     entry->setField("index", lexical_cast<std::string>(i));
+                    entry->setForce(true);
                     // constructEntry_time_cost += utcTime() - record_time;
                     // record_time = utcTime();
 
@@ -974,6 +976,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
         entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
@@ -998,6 +1001,7 @@ void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<Executi
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
+        entry->setForce(true);
         tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
     }
     else
@@ -1015,6 +1019,7 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         bytes out;
         block.encode(out);
         entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
     else
@@ -1071,7 +1076,6 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
-
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
             writeHash2Block(block, context);

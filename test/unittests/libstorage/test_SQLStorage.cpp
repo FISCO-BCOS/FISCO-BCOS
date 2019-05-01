@@ -31,12 +31,12 @@
 using namespace dev;
 using namespace dev::storage;
 
-namespace test_AMOPStateStorage
+namespace test_SQLStorage
 {
 class MockChannelRPCServer : public dev::ChannelRPCServer
 {
 public:
-    virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
+    dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message) override
     {
         std::string jsonStr(message->data(), message->data() + message->dataSize());
@@ -112,14 +112,14 @@ public:
     }
 };
 
-struct AMOPFixture
+struct SQLStorageFixture
 {
-    AMOPFixture()
+    SQLStorageFixture()
     {
-        AMOP = std::make_shared<dev::storage::SQLStorage>();
+        sqlStorage = std::make_shared<dev::storage::SQLStorage>();
         std::shared_ptr<MockChannelRPCServer> mockChannel =
             std::make_shared<MockChannelRPCServer>();
-        AMOP->setChannelRPCServer(mockChannel);
+        sqlStorage->setChannelRPCServer(mockChannel);
     }
     Entries::Ptr getEntries()
     {
@@ -130,15 +130,15 @@ struct AMOPFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::SQLStorage::Ptr AMOP;
+    dev::storage::SQLStorage::Ptr sqlStorage;
 };
 
-BOOST_FIXTURE_TEST_SUITE(AMOP, AMOPFixture)
+BOOST_FIXTURE_TEST_SUITE(SQLStorageTest, SQLStorageFixture)
 
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(AMOP->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(sqlStorage->onlyDirty(), true);
 }
 
 BOOST_AUTO_TEST_CASE(empty_select)
@@ -147,7 +147,11 @@ BOOST_AUTO_TEST_CASE(empty_select)
     int num = 1;
     std::string table("t_test");
     std::string key("id");
-    Entries::Ptr entries = AMOP->select(h, num, table, key, std::make_shared<Condition>());
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    Entries::Ptr entries =
+        sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -158,12 +162,17 @@ BOOST_AUTO_TEST_CASE(select_condition)
     std::string table("t_test");
     auto condition = std::make_shared<Condition>();
     condition->EQ("id", "2");
-    Entries::Ptr entries = AMOP->select(h, num, table, "LiSi", condition);
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    Entries::Ptr entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1");
-    entries = AMOP->select(h, num, table, "LiSi", condition);
+    tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -178,13 +187,15 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = AMOP->commit(h, num, datas, blockHash);
+    size_t c = sqlStorage->commit(h, num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
-    entries = AMOP->select(h, num, table, key, std::make_shared<Condition>());
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    entries = sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -203,14 +214,14 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->entries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(AMOP->commit(h, num, datas, blockHash), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->commit(h, num, datas, blockHash), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(AMOP->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
 #endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_AMOPStateStorage
+}  // namespace test_SQLStorage

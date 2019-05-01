@@ -88,7 +88,7 @@ public:
 
     Table::Ptr getContract(const Address& _address)
     {
-        return memoryTableFactory->openTable("_contract_parallel_func_" + _address.hex() + "_");
+        return memoryTableFactory->openTable(PARA_CONFIG_TABLE_PREFIX + _address.hex() + "_");
     }
 
     bool hasRegistered(const Address& _address, const string& _functionName)

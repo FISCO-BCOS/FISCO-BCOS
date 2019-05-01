@@ -1,6 +1,11 @@
 include(ExternalProject)
 
 set(TBB_LIB_SUFFIX a)
+if (APPLE)
+    set(ENABLE_STD_LIB cpp0x=1 stdlib=libc++)
+else()
+    set(ENABLE_STD_LIB cpp0x=1)
+endif()
 
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -13,7 +18,7 @@ ExternalProject_Add(tbb
     LOG_BUILD 1
     LOG_INSTALL 1
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND make extra_inc=big_iron.inc
+    BUILD_COMMAND make extra_inc=big_iron.inc ${ENABLE_STD_LIB}
     INSTALL_COMMAND bash -c "cp ./build/*_release/*.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib"
 )
 

@@ -45,16 +45,25 @@ public:
         ba::io_service& _ioService, ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint)
       : m_nodeIPEndpoint(_nodeIPEndpoint)
     {
-        m_wsSocket =
-            std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>>(
-                _ioService, _sslContext);
+        try
+        {
+            m_wsSocket =
+                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>>(
+                    _ioService, _sslContext);
+        }
+        catch (Exception const& _e)
+        {
+            SESSION_LOG(ERROR) << "ERROR: " << diagnostic_information(_e);
+            SESSION_LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
+        }
     }
     ~FakeSocket() { close(); }
 
-    bool isConnected() const override { return m_wsSocket->lowest_layer().is_open(); }
+    bool isConnected() const override { return m_alive; }
 
     void close() override
     {
+        m_alive = false;
         try
         {
             boost::system::error_code ec;
@@ -66,10 +75,42 @@ public:
         {
         }
     }
-
-    bi::tcp::endpoint remoteEndpoint() override
+    void open() { m_alive = true; }
+    void write(boost::asio::mutable_buffers_1 buffers)
     {
-        return m_wsSocket->lowest_layer().remote_endpoint();
+        auto b = std::make_shared<boost::asio::streambuf>();
+        boost::asio::streambuf::mutable_buffers_type bufs = b->prepare(buffers.size());
+        auto copydSize = boost::asio::buffer_copy(bufs, buffers);
+        b->commit(copydSize);
+        m_queue.push(b);
+    }
+
+    size_t doRead(boost::asio::mutable_buffers_1 buffers)
+    {
+        if (!m_alive || m_queue.size() == 0)
+        {
+            return 0;
+        }
+        auto p = m_queue.front();
+        if (p->size() == 0)
+        {
+            return 0;
+        }
+        auto copydSize = boost::asio::buffer_copy(buffers, p->data(), buffers.size());
+        p->consume(copydSize);
+        if (p->size() == 0)
+        {
+            m_queue.pop();
+        }
+        return copydSize;
+    }
+    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override
+    {
+        return m_nodeIPEndpoint;
+    }
+    void setRemoteEndpoint(const bi::tcp::endpoint& end)
+    {
+        m_nodeIPEndpoint = NodeIPEndpoint(end.address(), 0, end.port());
     }
 
     bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
@@ -87,8 +128,9 @@ public:
 
 
 protected:
-    bool m_alive = false;
+    bool m_alive = true;
     NodeIPEndpoint m_nodeIPEndpoint;
+    std::queue<std::shared_ptr<boost::asio::streambuf>> m_queue;
     std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>> m_wsSocket;
 };
 

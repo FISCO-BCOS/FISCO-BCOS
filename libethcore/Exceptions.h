@@ -82,6 +82,9 @@ DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
 DEV_SIMPLE_EXCEPTION_RLP(ErrorBlockHash);
 
+/// block execution related
+DEV_SIMPLE_EXCEPTION(BlockExecutionFailed);
+
 /// sync related
 DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
 DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
@@ -93,6 +96,7 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
+DEV_SIMPLE_EXCEPTION(EmptySealers);
 
 struct VMException : Exception
 {

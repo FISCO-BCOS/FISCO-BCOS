@@ -19,7 +19,6 @@
  *  @date 20180921
  */
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <string>
 
 namespace dev
@@ -31,11 +30,13 @@ namespace storage
 
 /// \brief Sign of the DB key is valid or not
 const char* const ID_FIELD = "_id_";
+const char* const NUM_FIELD = "_num_";
 const char* const STATUS = "_status_";
 const char* const SYS_TABLES = "_sys_tables_";
 const char* const SYS_CONSENSUS = "_sys_consensus_";
 const char* const SYS_CURRENT_STATE = "_sys_current_state_";
 const char* const SYS_KEY_CURRENT_NUMBER = "current_number";
+const char* const SYS_KEY_CURRENT_ID = "current_id";
 const char* const SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 const char* const SYS_VALUE = "value";
 const char* const SYS_KEY = "key";

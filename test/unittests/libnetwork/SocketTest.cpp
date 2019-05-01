@@ -55,6 +55,11 @@ BOOST_AUTO_TEST_CASE(testSocket)
     auto sslContext = secureInitializer->SSLContext();
 
     Socket m_socket(m_io_service, *sslContext, m_endpoint);
+    m_socket.ref();
+    m_socket.sslref();
+    m_socket.wsref();
+    auto endpoint = m_socket.nodeIPEndpoint();
+    m_socket.setNodeIPEndpoint(endpoint);
     BOOST_CHECK(m_socket.isConnected() == false);
     BOOST_CHECK(SSL_get_verify_mode(m_socket.sslref().native_handle()) ==
                 (boost::asio::ssl::verify_peer | boost::asio::ssl::verify_fail_if_no_peer_cert));

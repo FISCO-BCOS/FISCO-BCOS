@@ -130,7 +130,9 @@ void TxsParallelParser::decode(
         }
 
         // Get offsets space
-        vector_ref<Offset_t> offsets((Offset_t*)_bytes.cropped(sizeof(Offset_t)).data(), txNum + 1);
+        vector_ref<Offset_t> offsets(reinterpret_cast<Offset_t*>(const_cast<unsigned char*>(
+                                         _bytes.cropped(sizeof(Offset_t)).data())),
+            txNum + 1);
         _txs.resize(txNum);
 
         // Get objects space

@@ -241,6 +241,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         auto entry = table->newEntry();
         entry->setField(DAG_TRANSFER_FIELD_NAME, user);
         entry->setField(DAG_TRANSFER_FIELD_BALANCE, amount.str());
+        entry->setForce(true);
 
         auto count = table->insert(user, entry, std::make_shared<AccessOptions>(origin));
         if (count == CODE_NO_AUTHORIZED)
@@ -254,7 +255,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -326,12 +327,12 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
                 break;
             }
 
-            entry = table->newEntry();
-            entry->setField(DAG_TRANSFER_FIELD_NAME, user);
-            entry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
+            auto updateEntry = table->newEntry();
+            updateEntry->setField(DAG_TRANSFER_FIELD_NAME, user);
+            updateEntry->setField(DAG_TRANSFER_FIELD_BALANCE, new_balance.str());
 
             auto count = table->update(
-                user, entry, table->newCondition(), std::make_shared<AccessOptions>(origin));
+                user, updateEntry, table->newCondition(), std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
             {  // permission denied
                 strErrorMsg = "permission denied";
@@ -343,7 +344,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -416,7 +417,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }
 
 void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
@@ -460,7 +461,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret, balance);
+    out = abi.abiIn("", u256(ret), balance);
 }
 
 void DagTransferPrecompiled::userTransferCall(
@@ -582,5 +583,5 @@ void DagTransferPrecompiled::userTransferCall(
         ret = 0;
     } while (0);
 
-    out = abi.abiIn("", ret);
+    out = abi.abiIn("", u256(ret));
 }

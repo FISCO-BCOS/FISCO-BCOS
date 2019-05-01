@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(testDevGuards)
 {
     Mutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
         DEV_GUARDED(mutex)
@@ -77,14 +77,10 @@ BOOST_AUTO_TEST_CASE(testReadGuard)
 {
     SharedMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
-        DEV_READ_GUARDED(mutex)
-        {
-            count++;
-            usleep(1000);  // 1 ms
-        }
+        DEV_READ_GUARDED(mutex) { count++; }
     };
 
     struct timeval begin;
@@ -107,13 +103,15 @@ BOOST_AUTO_TEST_CASE(testReadGuard)
     uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
     uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
     BOOST_CHECK((end_time - begin_time) <= (uint64_t(max) * 1000));
+    BOOST_CHECK(count == max);
+    delete[] t;
 }
 
 BOOST_AUTO_TEST_CASE(testWriteGuard)
 {
     SharedMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f = [&]() {
         DEV_WRITE_GUARDED(mutex)
@@ -151,7 +149,7 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
 {
     RecursiveMutex mutex;
     int count = 0;
-    int max = 10;
+    int max = 8;
 
     auto f0 = [&]() {
         DEV_RECURSIVE_GUARDED(mutex) { count++; }

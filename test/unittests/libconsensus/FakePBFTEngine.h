@@ -57,7 +57,6 @@ public:
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         setHighest(highest);
         setOmitEmpty(true);
-        setStorage(nullptr);
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
@@ -70,8 +69,9 @@ public:
     TimeManager const& timeManager() const { return m_timeManager; }
     TimeManager& mutableTimeManager() { return m_timeManager; }
     const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
-    bool const& leaderFailed() const { return m_leaderFailed; }
-    int64_t const& consensusBlockNumber() const { return m_consensusBlockNumber; }
+    int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
+    void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
+
     VIEWTYPE const& toView() const { return m_toView; }
     void setToView(VIEWTYPE const& view) { m_toView = view; }
     VIEWTYPE const& view() const { return m_view; }
@@ -99,8 +99,7 @@ public:
         resetSealingHeader(block.header());
     }
 
-    IDXTYPE const& f() { return m_f; }
-    void resetConfig() override { PBFTEngine::resetConfig(); }
+    IDXTYPE f() const { return m_f; }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
     void onRecvPBFTMessage(
         NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
@@ -141,14 +140,29 @@ public:
     void setHighest(BlockHeader const& header) { m_highestBlock = header; }
     BlockHeader& mutableHighest() { return m_highestBlock; }
     void setNodeNum(IDXTYPE const& nodeNum) { m_nodeNum = nodeNum; }
-    IDXTYPE const& nodeNum() { return m_nodeNum; }
-    IDXTYPE const& fValue() { return m_f; }
+    IDXTYPE nodeNum() const { return m_nodeNum; }
+    IDXTYPE fValue() const { return m_f; }
     void setF(IDXTYPE const& fValue) { m_f = fValue; }
-    int64_t& mutableConsensusNumber() { return m_consensusBlockNumber; }
-    bool const& leaderFailed() { return m_leaderFailed; }
-    bool const& cfgErr() { return m_cfgErr; }
+    bool leaderFailed() const { return m_leaderFailed; }
+    bool cfgErr() const { return m_cfgErr; }
 
     void initPBFTEnv(unsigned _view_timeout) { return PBFTEngine::initPBFTEnv(_view_timeout); }
+
+    void resetConfig() override
+    {
+        bool needClear = false;
+        /// at least one sealer when resetConfig
+        if (m_sealerList.size() == 0)
+        {
+            m_sealerList.push_back(KeyPair::create().pub());
+            needClear = true;
+        }
+        PBFTEngine::resetConfig();
+        if (needClear)
+        {
+            m_sealerList.clear();
+        }
+    }
 
     void onNotifyNextLeaderReset()
     {
@@ -175,7 +189,6 @@ public:
         return PBFTEngine::isValidViewChangeReq(req, source, oss);
     }
 
-    bool& mutableLeaderFailed() { return m_leaderFailed; }
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
 

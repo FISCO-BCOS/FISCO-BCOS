@@ -214,7 +214,10 @@ BOOST_AUTO_TEST_CASE(empty_select)
     int num = 1;
     std::string table("t_test");
     std::string key("id");
-    Entries::Ptr entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    Entries::Ptr entries = levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -229,13 +232,16 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = levelDB->commit(h, num, datas, blockHash);
+    size_t c = levelDB->commit(h, num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
-    entries = levelDB->select(h, num, table, key, std::make_shared<Condition>());
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    entries = levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -251,14 +257,16 @@ BOOST_AUTO_TEST_CASE(exception)
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
     entries->get(0)->setField("Name", "Exception");
-    tableData->entries = entries;
+    tableData->newEntries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(levelDB->commit(h, num, datas, blockHash), boost::exception);
+    BOOST_CHECK_THROW(levelDB->commit(h, num, datas), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
     BOOST_CHECK_THROW(
-        levelDB->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+        levelDB->select(h, num, tableInfo, key, std::make_shared<Condition>()), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

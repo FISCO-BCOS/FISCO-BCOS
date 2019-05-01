@@ -26,6 +26,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
+#define ERROR_SOCKET_PORT 8889
+#define EMPTY_CERT_SOCKET_PORT 8887
+
 namespace dev
 {
 namespace network
@@ -41,165 +44,135 @@ public:
     typedef boost::function<void(const boost::system::error_code, std::size_t)> ReadWriteHandler;
     typedef boost::function<bool(bool, boost::asio::ssl::verify_context&)> VerifyCallback;
 
-    virtual ~FakeASIOInterface() = default;
-    virtual void setType(int type) { m_type = type; }
+    ~FakeASIOInterface() = default;
 
-    virtual std::shared_ptr<ba::io_service> ioService() { return m_ioService; }
-    virtual void setIOService(std::shared_ptr<ba::io_service> ioService)
+    std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint()) override
     {
-        m_ioService = ioService;
+        return std::make_shared<FakeSocket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
     }
 
-    virtual std::shared_ptr<ba::ssl::context> sslContext() { return m_sslContext; }
-    virtual void setSSLContext(std::shared_ptr<ba::ssl::context> sslContext)
-    {
-        m_sslContext = sslContext;
-    }
-
-    virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
-    {
-        return std::make_shared<boost::asio::deadline_timer>(
-            *m_ioService, boost::posix_time::milliseconds(timeout));
-    }
-
-    virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
-    {
-        std::shared_ptr<SocketFace> m_socket =
-            std::make_shared<FakeSocket>(*m_ioService, *m_sslContext, nodeIPEndpoint);
-        return m_socket;
-    }
-
-    virtual std::shared_ptr<bi::tcp::acceptor> acceptor() { return m_acceptor; }
-
-    virtual void init(std::string listenHost, uint16_t listenPort)
+    void init(std::string listenHost, uint16_t listenPort) override
     {
         m_strand = std::make_shared<boost::asio::io_service::strand>(*m_ioService);
-        // m_acceptor = std::make_shared<bi::tcp::acceptor>(
-        //     *m_ioService, boost::asio::ip::tcp::endpoint(
-        //                       boost::asio::ip::address::from_string(listenHost), listenPort));
-        // boost::asio::socket_base::reuse_address optionReuseAddress(true);
-        // m_acceptor->set_option(optionReuseAddress);
-        (void)listenHost;
-        (void)listenPort;
+        m_acceptor = std::make_shared<bi::tcp::acceptor>(*m_ioService);
+        m_listenHost = listenHost;
+        m_listenPort = listenPort;
     }
 
-    virtual void run() {}
-
-    virtual void stop() {}
-
-    virtual void reset() {}
-
-    virtual void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        boost::system::error_code = boost::system::error_code())
+    void asyncAccept(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+        boost::system::error_code = boost::system::error_code()) override
     {
-        // m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
-        m_acceptorInfo = std::make_pair(socket, handler);
+        if (m_allowAccept)
+        {
+            m_acceptorInfo = std::make_pair(socket, handler);
+            m_allowAccept = false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        m_ioService->post([]() { std::this_thread::sleep_for(std::chrono::milliseconds(20)); });
+    }
+    void callAcceptHandler(boost::system::error_code e = boost::system::error_code())
+    {
+        m_allowAccept = true;
+        m_acceptorInfo.second(e);
+    }
+    void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint endpoint,
+        Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
+    {
+        auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
+        fakeSocket->open();
+        fakeSocket->setRemoteEndpoint(endpoint);
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
-    virtual void asyncConnect(std::shared_ptr<SocketFace> socket,
-        const bi::tcp::endpoint peer_endpoint, Handler_Type handler,
-        boost::system::error_code = boost::system::error_code())
+    void asyncWrite(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler) override
     {
-        (void)socket;
-        (void)peer_endpoint;
-        (void)handler;
-        // socket->ref().async_connect(peer_endpoint, handler);
-    }
-
-    virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
-    {
-        auto type = m_type;
-        m_ioService->post([type, socket, buffers, handler]() {
+        m_ioService->post([socket, buffers, handler]() {
             if (socket->isConnected())
             {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, handler);
-                    break;
-                }
-                case SSL:
-                {
-                    // ba::async_write(socket->sslref(), buffers, handler);
-                    break;
-                }
-                }
+                auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
+                fakeSocket->write(buffers);
+                boost::system::error_code ec;
+                handler(ec, buffers.size());
             }
         });
     }
 
-    virtual void asyncRead(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+    void asyncRead(
+        std::shared_ptr<SocketFace>, boost::asio::mutable_buffers_1, ReadWriteHandler) override
+    {}
+
+    void asyncReadSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffers_1 buffers,
+        ReadWriteHandler handler) override
     {
-        switch (m_type)
-        {
-        case TCP_ONLY:
-        {
-            ba::async_read(socket->ref(), buffers, handler);
-            break;
-        }
-        case SSL:
-        {
-            // ba::async_read(socket->sslref(), buffers, handler);
-            break;
-        }
-        }
+        auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
+        auto size = fakeSocket->doRead(buffers);
+        boost::system::error_code ec;
+        m_ioService->post([handler, ec, size]() { handler(ec, size); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    virtual void asyncReadSome(std::shared_ptr<SocketFace> socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+    void asyncHandshake(std::shared_ptr<SocketFace> socket,
+        ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
-        switch (m_type)
-        {
-        case TCP_ONLY:
-        {
-            socket->ref().async_read_some(buffers, handler);
-            break;
-        }
-        case SSL:
-        {
-            // socket->sslref().async_read_some(buffers, handler);
-            break;
-        }
-        }
-    }
-
-    virtual void asyncHandshake(std::shared_ptr<SocketFace> socket,
-        ba::ssl::stream_base::handshake_type type, Handler_Type handler)
-    {
-        (void)socket;
         (void)type;
-        (void)handler;
-        // socket->sslref().async_handshake(type, handler);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
     }
 
-    virtual void asyncWait(boost::asio::deadline_timer* m_timer,
-        boost::asio::io_service::strand& m_strand, Handler_Type handler,
-        boost::system::error_code = boost::system::error_code())
-    {
-        if (m_timer)
-            m_timer->async_wait(m_strand.wrap(handler));
-    }
-
-    virtual void setVerifyCallback(
-        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true)
+    void setVerifyCallback(
+        std::shared_ptr<SocketFace> socket, VerifyCallback callback, bool = true) override
     {
         (void)socket;
-        (void)callback;
-        // socket->sslref().set_verify_callback(callback);
+        auto s = m_sslContext->native_handle();
+        auto store = SSL_CTX_get_cert_store(s);
+        // auto ssl = SSL_new(s);
+        // auto x509 = SSL_get_peer_certificate(ssl);
+        // auto chain = SSL_get_peer_cert_chain(ssl);
+        auto x509 = SSL_CTX_get0_certificate(s);
+        auto x509_store_ctx = X509_STORE_CTX_new();
+        X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
+        // X509_STORE_CTX_set_cert(x509_store_ctx, x509);
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
+        {
+#if OPENSSL_VERSION_NUMBER < 0x1010007fL
+            x509_store_ctx->current_cert = x509;
+#else
+            X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+#endif
+        }
+        // X509_STORE_CTX_set_current_cert(x509_store_ctx, x509);
+        // x509_store_ctx->current_cert = x509;
+        // X509* cert = X509_STORE_CTX_get_current_cert(x509_store_ctx);
+        boost::asio::ssl::verify_context verifyContext(x509_store_ctx);
+
+        callback(true, verifyContext);
     }
 
-    virtual void strandPost(Base_Handler handler) { m_strand->post(handler); }
+    std::string m_listenHost;
+    uint16_t m_listenPort;
+
+    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
 
 private:
-    std::shared_ptr<ba::io_service> m_ioService;
-    std::shared_ptr<ba::io_service::strand> m_strand;
-    std::shared_ptr<bi::tcp::acceptor> m_acceptor = nullptr;
-    std::shared_ptr<ba::ssl::context> m_sslContext;
-    std::pair<std::shared_ptr<SocketFace>, Handler_Type> m_acceptorInfo;
-    int m_type = 0;
+    bool m_allowAccept = true;
 };
 }  // namespace network
 }  // namespace dev

@@ -159,11 +159,21 @@ public:
         m_onNotifyNextLeaderReset = _f;
     }
 
+    void onTimeout(std::function<void(uint64_t const& sealingTxNumber)> const& _f)
+    {
+        m_onTimeout = _f;
+    }
+
+    void onCommitBlock(std::function<void(uint64_t const& blockNumber,
+            uint64_t const& sealingTxNumber, unsigned const& changeCycle)> const& _f)
+    {
+        m_onCommitBlock = _f;
+    }
+
     bool inline shouldReset(dev::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
-    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
     const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
 
@@ -173,12 +183,14 @@ public:
 
     inline std::pair<bool, IDXTYPE> getLeader() const
     {
-        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+        if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256 || m_nodeNum == 0)
         {
             return std::make_pair(false, MAXIDX);
         }
         return std::make_pair(true, (m_view + m_highestBlock.number()) % m_nodeNum);
     }
+
+    uint64_t sealingTxNumber() const { return m_sealingNumber; }
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -468,6 +480,7 @@ protected:
     template <typename T>
     inline bool isFutureBlock(T const& req) const
     {
+        /// to ensure that the signReq can reach to consensus even if the view has been changed
         if (req.height >= m_consensusBlockNumber || req.view > m_view)
         {
             return true;
@@ -526,9 +539,10 @@ protected:
         m_signalled.notify_all();
     }
     void notifySealing(dev::eth::Block const& block);
+    /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
-        return boost::filesystem::space(path).available > 1024;
+        return boost::filesystem::space(path).available > 1024 * 1024 * 100;
     }
 
     void updateViewMap(IDXTYPE const& idx, VIEWTYPE const& view)
@@ -537,14 +551,13 @@ protected:
         m_viewMap[idx] = view;
     }
 
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
     std::string m_baseDir;
-    bool m_leaderFailed = false;
-    bool m_notifyNextLeaderSeal = false;
-
-    dev::storage::Storage::Ptr m_storage;
+    std::atomic_bool m_leaderFailed = {false};
+    std::atomic_bool m_notifyNextLeaderSeal = {false};
 
     // backup msg
     std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
@@ -563,18 +576,25 @@ protected:
     std::condition_variable m_signalled;
     Mutex x_signalled;
 
-    std::function<void()> m_onViewChange;
-    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset;
+
+    std::function<void()> m_onViewChange = nullptr;
+    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
+    std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout = nullptr;
+    std::function<void(
+        uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
+        m_onCommitBlock = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
-    bool m_fastViewChange = false;
+    std::atomic_bool m_fastViewChange = {false};
 
     uint8_t maxTTL = MAXTTL;
 
     /// map between nodeIdx to view
     mutable SharedMutex x_viewMap;
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
+
+    std::atomic<uint64_t> m_sealingNumber = {0};
 };
 }  // namespace consensus
 }  // namespace dev

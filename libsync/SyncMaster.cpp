@@ -80,9 +80,8 @@ string const SyncMaster::syncInfo() const
     syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
     syncInfo.push_back(
         json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
-    // syncInfo.push_back(json_spirit::Pair("knownHighestNumber",
-    // m_syncStatus->knownHighestNumber)); syncInfo.push_back(json_spirit::Pair("knownLatestHash",
-    // toHex(m_syncStatus->knownLatestHash)));
+    syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
+    syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
     syncInfo.push_back(json_spirit::Pair("txPoolSize", std::to_string(m_txPool->pendingSize())));
 
     json_spirit::Array peersInfo;
@@ -341,6 +340,14 @@ void SyncMaster::maintainPeersStatus()
         m_syncStatus->knownHighestNumber = maxPeerNumber;
         m_syncStatus->knownLatestHash = latestHash;
     }
+    else
+    {
+        // No need to send sync request
+        WriteGuard l(m_syncStatus->x_known);
+        m_syncStatus->knownHighestNumber = currentNumber;
+        m_syncStatus->knownLatestHash = m_blockChain->numberHash(currentNumber);
+        return;
+    }
 
     // Not to start download when mining or no need
     {
@@ -401,6 +408,13 @@ void SyncMaster::maintainPeersStatus()
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            if (m_syncStatus->knownHighestNumber <= 0 ||
+                _p->number != m_syncStatus->knownHighestNumber)
+            {
+                // Only send request to nodes which are not syncing(has max number)
+                return true;
+            }
+
             // shard: [from, to]
             int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
             int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
@@ -443,10 +457,12 @@ void SyncMaster::maintainPeersStatus()
 bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
-    if (currentNumber >= m_syncStatus->knownHighestNumber)
-        return true;
-
     DownloadingBlockQueue& bq = m_syncStatus->bq();
+    if (currentNumber >= m_syncStatus->knownHighestNumber)
+    {
+        bq.clear();
+        return true;
+    }
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
@@ -489,7 +505,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 }
                 else
                 {
-                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                     << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
@@ -529,7 +545,7 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
-        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                         << LOG_DESC("Download finish")
                         << LOG_KV("latestHash", latestHash.abridged())
                         << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
@@ -573,9 +589,17 @@ void SyncMaster::maintainPeersConnection()
         hasMyself |= (member == m_nodeId);
     }
 
-    // Delete uncorrelated peers(only if the node the sealer or observer, check the identities of
-    // other peers)
-    if (hasMyself)
+    // Set flag to check packet from group peers if the node is sealer or observer and not a new
+    // start node
+    int64_t currentNumber = m_blockChain->number();
+    if (!isSyncing())
+    {
+        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
+    }
+
+
+    // Delete uncorrelated peers(only if the node need to check packet in group)
+    if (m_msgEngine->needCheckPacketInGroup)
     {
         NodeIDs nodeIds = m_syncStatus->peers();
         for (NodeID const& id : nodeIds)
@@ -589,7 +613,6 @@ void SyncMaster::maintainPeersConnection()
 
 
     // Add new peers
-    int64_t currentNumber = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& member : memberSet)
     {
@@ -622,12 +645,6 @@ void SyncMaster::maintainPeersConnection()
         _p->isSealer = (sealerSet.find(_p->nodeId) != sealerSet.end());
         return true;
     });
-
-    if (!isSyncing())
-    {
-        // Set flag to check packet from group peers
-        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
-    }
 
     // If myself is not in group, no need to maintain transactions(send transactions to peers)
     m_needMaintainTransactions = hasMyself;
@@ -669,7 +686,7 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
                 if (!blockRLP)
                 {
-                    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                     << LOG_DESC("Get block for node failed")
                                     << LOG_KV("reason", "block is null") << LOG_KV("number", number)
                                     << LOG_KV("nodeId", _p->nodeId.abridged());

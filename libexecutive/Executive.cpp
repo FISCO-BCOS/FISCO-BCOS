@@ -66,7 +66,7 @@ void Executive::initialize(Transaction const& _transaction)
 }
 
 void Executive::verifyTransaction(
-    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&) const
+    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&)
 {
     eth::EVMSchedule const& schedule = DefaultSchedule;
 
@@ -75,8 +75,11 @@ void Executive::verifyTransaction(
     // Pre calculate the gas needed for execution
     if ((_ir & ImportRequirements::TransactionBasic) &&
         _t.baseGasRequired(schedule) > (bigint)txGasLimit)
+    {
+        m_excepted = TransactionException::OutOfGasIntrinsic;
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
+    }
 }
 
 bool Executive::execute()
@@ -106,7 +109,6 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     {
         return callRC2(_p, _gasPrice, _origin);
     }
-
     // If external transaction.
     if (m_t)
     {
@@ -120,42 +122,60 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 
     m_savepoint = m_s->savepoint();
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
-    if (m_envInfo.precompiledEngine() &&
-        m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+    try
     {
-        m_gas = _p.gas;
-        bytes output;
-        bool success;
-        tie(success, output) =
-            m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
-        size_t outputSize = output.size();
-        m_output = owning_bytes_ref{std::move(output), 0, outputSize};
-    }
-    else if (m_envInfo.precompiledEngine() &&
-             m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
-    {
-        m_gas = _p.gas;
-
-        LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
-
-        auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
-        size_t outputSize = result.size();
-        m_output = owning_bytes_ref{std::move(result), 0, outputSize};
-    }
-    else
-    {
-        m_gas = _p.gas;
-        if (m_s->addressHasCode(_p.codeAddress))
+        if (m_envInfo.precompiledEngine() &&
+            m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
         {
-            bytes const& c = m_s->code(_p.codeAddress);
-            h256 codeHash = m_s->codeHash(_p.codeAddress);
-            m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-                _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+            m_gas = _p.gas;
+            bytes output;
+            bool success;
+            tie(success, output) =
+                m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
+            size_t outputSize = output.size();
+            m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
-    }
+        else if (m_envInfo.precompiledEngine() &&
+                 m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
+        {
+            m_gas = _p.gas;
 
-    // Transfer ether.
-    m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+            LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
+
+            auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
+            size_t outputSize = result.size();
+            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        }
+        else
+        {
+            m_gas = _p.gas;
+            if (m_s->addressHasCode(_p.codeAddress))
+            {
+                bytes const& c = m_s->code(_p.codeAddress);
+                h256 codeHash = m_s->codeHash(_p.codeAddress);
+                m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
+                    _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
+                    _p.staticCall);
+            }
+        }
+        // Transfer ether.
+        m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
+    }
+    catch (dev::eth::PrecompiledError const& e)
+    {
+        revert();
+        m_excepted = TransactionException::PrecompiledError;
+    }
+    catch (NotEnoughCash const& _e)
+    {
+        revert();
+        m_excepted = TransactionException::NotEnoughCash;
+    }
+    catch (std::exception const& e)
+    {
+        revert();
+        m_excepted = TransactionException::Unknown;
+    }
     return !m_ext;
 }
 
@@ -344,6 +364,11 @@ bool Executive::go(OnOpFunc const& _onOp)
             m_output = _e.output();
             m_excepted = TransactionException::RevertInstruction;
         }
+        catch (OutOfGas& _e)
+        {
+            revert();
+            m_excepted = TransactionException::OutOfGas;
+        }
         catch (VMException const& _e)
         {
             LOG(TRACE) << "Safe VM Exception. " << diagnostic_information(_e);
@@ -355,6 +380,16 @@ bool Executive::go(OnOpFunc const& _onOp)
         {
             revert();
             m_excepted = TransactionException::PermissionDenied;
+        }
+        catch (NotEnoughCash const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::NotEnoughCash;
+        }
+        catch (PrecompiledError const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::PrecompiledError;
         }
         catch (InternalVMError const& _e)
         {

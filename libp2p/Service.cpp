@@ -134,8 +134,7 @@ void Service::heartBeat()
     }
     {
         RecursiveGuard l(x_sessions);
-        SERVICE_LOG(INFO) << LOG_DESC("heartBeat connected count")
-                          << LOG_KV("size", m_sessions.size());
+        SERVICE_LOG(INFO) << LOG_DESC("heartBeat") << LOG_KV("connected count", m_sessions.size());
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
