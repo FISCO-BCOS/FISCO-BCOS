@@ -84,6 +84,10 @@ private:
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 
+    /// TODO: init zdb storage
+    void  initZdbStorage();
+
+
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;

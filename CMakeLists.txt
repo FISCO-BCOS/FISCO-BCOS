@@ -62,6 +62,7 @@ include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectTASSL)
 include(ProjectBoost)
+include(ProjectLibzdb)
 
 #Global include path for all libs.
 include_directories("${CMAKE_SOURCE_DIR}" "utils")

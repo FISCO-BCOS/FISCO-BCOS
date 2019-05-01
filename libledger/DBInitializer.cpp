@@ -32,6 +32,7 @@
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/SQLStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <libstorage/ZdbStorage.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -57,6 +58,10 @@ void DBInitializer::initStorageDB()
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
         initLevelDBStorage();
+    }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "zdbstorage"))
+    {
+        initZdbStorage();
     }
     else
     {
@@ -144,6 +149,27 @@ void DBInitializer::initSQLStorage()
 
     m_storage = sqlStorage;
 
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    tableFactoryFactory->setStorage(m_storage);
+
+    m_tableFactoryFactory = tableFactoryFactory;
+}
+
+void  DBInitializer::initZdbStorage()
+{
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
+    auto zdbStorage = std::make_shared<ZdbStorage>();
+
+    zdbStorage->initSqlAccess(m_param->mutableStorageParam().dbtype,
+                    m_param->mutableStorageParam().dbip,
+                    m_param->mutableStorageParam().dbport,
+                    m_param->mutableStorageParam().dbusername,
+                    m_param->mutableStorageParam().dbpasswd,
+                    m_param->mutableStorageParam().dbname,
+                    m_param->mutableStorageParam().dbcharset,
+                    m_param->mutableStorageParam().initconnections,
+                    m_param->mutableStorageParam().maxconnections);
+    m_storage = zdbStorage;
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(m_storage);
 
