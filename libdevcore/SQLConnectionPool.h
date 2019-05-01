@@ -32,6 +32,7 @@
 #include<Connection.h>
 #include<ConnectionPool.h>
 #include<URL.h>
+#include <iostream>
 
 namespace dev
 {

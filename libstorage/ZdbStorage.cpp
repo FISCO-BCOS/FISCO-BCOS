@@ -32,16 +32,18 @@ using namespace dev::storage;
 ZdbStorage::ZdbStorage() {}
 
 Entries::Ptr ZdbStorage::select(
-    h256 hash, int num, const std::string& table, const std::string& key, Condition::Ptr condition)
+    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     Json::Value responseJson;
-    int iRet = m_oSqlBasicAcc.Select(hash,num,table,key,condition,responseJson);
+    int iRet = m_oSqlBasicAcc.Select(hash,num,tableInfo->name,key,condition,responseJson);
     if(iRet < 0)
     {
         LOG(ERROR) << "Remote database return error:" << iRet;
         throw StorageException(-1, 
             "Remote database return error:" + boost::lexical_cast<std::string>(iRet));
     }
+
+
     LOG(DEBUG)<<"select resp:"<<responseJson.toStyledString();
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
@@ -73,9 +75,9 @@ Entries::Ptr ZdbStorage::select(
 }
 
 size_t ZdbStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, h256 const& blockHash)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash,(int32_t)num,datas,blockHash);
+    int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash,(int32_t)num,datas);
     if(dwRowCount < 0)
     {
         LOG(ERROR) << "database return error:" << dwRowCount;

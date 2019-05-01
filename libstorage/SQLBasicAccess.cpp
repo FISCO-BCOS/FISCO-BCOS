@@ -38,9 +38,9 @@ int SQLBasicAccess::Select(h256 hash, int num,
     {
         for (auto it : *(condition->getConditions()))
         {
-            PreparedStatement_setString(oPreSatement,++dwIndex,it.second.second.c_str());
+            PreparedStatement_setString(oPreSatement,++dwIndex,it.second.right.second.c_str());
             LOG(DEBUG) << "hash:"<<hash.hex()<<" num:"<<num<<" table:"
-                    <<table<<" key:"<<key<<" index:"<<dwIndex<<" value:"<<it.second.second;
+                    <<table<<" key:"<<key<<" index:"<<dwIndex<<" value:"<<it.second.right.second;
         }
     }
 
@@ -69,8 +69,8 @@ int SQLBasicAccess::Select(h256 hash, int num,
     {
         LOG(ERROR)<<"exception:";
         fprintf(stderr,"exception:%u",__LINE__);
-	m_oConnPool.ReturnConnection(oConn);
-        return 1;
+        m_oConnPool.ReturnConnection(oConn);
+        return 0;
     }
     END_TRY;
     m_oConnPool.ReturnConnection(oConn);
@@ -92,11 +92,11 @@ std::string SQLBasicAccess::BuildQuerySql(
             if(dwIndex == 0)
             {
                 ++dwIndex;
-                strSql.append(GenerateConditionSql(" where",it));
+                strSql.append(GenerateConditionSql(" where",it,condition));
             }
             else
             {
-                strSql.append(GenerateConditionSql(" and",it));
+                strSql.append(GenerateConditionSql(" and",it,condition));
             }
         }
     }
@@ -105,48 +105,50 @@ std::string SQLBasicAccess::BuildQuerySql(
 }
 
 std::string SQLBasicAccess::GenerateConditionSql(const std::string &strPrefix,
-                std::map<std::string, std::pair<Condition::Op, std::string>>::iterator &it)
+                std::map<std::string, Condition::Range>::iterator &it,
+                Condition::Ptr condition)
 {
     
     string  strConditionSql = strPrefix;
-    if(it->second.first == Condition::Op::eq)
+    if(it->second.left.second == it->second.right.second && it->second.left.first &&
+                    it->second.right.first)
     {
         strConditionSql.append(" `").append(it->first).append("`=").append("?");
     }
-    else if(it->second.first ==  Condition::Op::ne)
-    {
-        strConditionSql.append(" `").append(it->first).append("`!=").append("?");
-    }
-    else if(it->second.first ==  Condition::Op::gt)
-    {
-        strConditionSql.append(" `").append(it->first).append("`>").append("?");
-    }
-    else if(it->second.first ==  Condition::Op::ge)
-    {
-        strConditionSql.append(" `").append(it->first).append("`>=").append("?");
-    }
-    else if(it->second.first ==  Condition::Op::lt)
-    {
-        strConditionSql.append(" `").append(it->first).append("`<").append("?");
-    }
-    else if(it->second.first ==  Condition::Op::le)
-    {
-        strConditionSql.append(" `").append(it->first).append("`<=").append("?");
-    }
     else
     {
-        LOG(ERROR) << "error op code:"<<it->second.first;
-        return "";
+        if (it->second.left.second != condition->unlimitedField())
+        {
+            if (it->second.left.first)
+            {
+                strConditionSql.append(" `").append(it->first).append("`>=").append("?");
+            }
+            else
+            {
+                strConditionSql.append(" `").append(it->first).append("`>").append("?");
+            }
+        }
+
+        if (it->second.right.second != condition->unlimitedField())
+        {
+            if (it->second.right.first)
+            {
+                strConditionSql.append(" `").append(it->first).append("`<=").append("?");
+            }
+            else
+            {
+                strConditionSql.append(" `").append(it->first).append("`<").append("?");
+            }
+        }
     }
     return strConditionSql;
 }
 
 
 int SQLBasicAccess::Commit(h256 hash, int num,
-            const std::vector<TableData::Ptr>& datas,
-            h256 const& blockHash)
+            const std::vector<TableData::Ptr>& datas)
 {
-    LOG(DEBUG)<<" commit hash:"<<hash.hex()<<" num:"<<num<<" blockhash:"<<blockHash.hex();
+    LOG(DEBUG)<<" commit hash:"<<hash.hex()<<" num:"<<num;
     char cNum[16] = {0};
     snprintf(cNum,sizeof(cNum),"%u",num);
     if (datas.size() == 0)
@@ -154,6 +156,11 @@ int SQLBasicAccess::Commit(h256 hash, int num,
         LOG(DEBUG) << "Empty data just return";
         return 0;
     }
+
+    /*create table*/
+
+    /*execute commit operation*/
+
     int32_t dwRowCount = 0;
     Connection_T    oConn = m_oConnPool.GetConnection();
     m_oConnPool.BeginTransaction(oConn);
@@ -166,9 +173,9 @@ int SQLBasicAccess::Commit(h256 hash, int num,
             std::vector<std::string> oVecFieldName;
             std::vector<std::string> oVecFieldValue;
             /*different rows*/
-            for (size_t i = 0; i < it->entries->size(); ++i)
+            for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
             {
-                auto entry = it->entries->get(i);
+                Entry::Ptr entry = it->dirtyEntries->get(i);
                 /*different fields*/
                 for (auto fieldIt : *entry->fields())
                 {
@@ -180,14 +187,12 @@ int SQLBasicAccess::Commit(h256 hash, int num,
                 }
                 oVecFieldValue.push_back(hash.hex());
                 oVecFieldValue.push_back(cNum);
-
             }
             oVecFieldName.push_back("_hash_");
             oVecFieldName.push_back("_num_");
             /*build commit sql*/
             string  strSql = this->BuildCommitSql(strTableName,oVecFieldName,oVecFieldValue);
-            LOG(DEBUG)<<" commit hash:"<<hash.hex()<<" num:"
-                <<num<<" blockhash:"<<blockHash.hex()<<" commit sql:"<<strSql;
+            LOG(DEBUG)<<" commit hash:"<<hash.hex()<<" num:"<<num<<" commit sql:"<<strSql;
             PreparedStatement_T oPreSatement = Connection_prepareStatement(oConn,"%s",strSql.c_str());
             int32_t    dwIndex = 0;
             auto itValue = oVecFieldValue.begin();
@@ -205,7 +210,7 @@ int SQLBasicAccess::Commit(h256 hash, int num,
         LOG(ERROR)<<"exception:";
         m_oConnPool.RollBack(oConn);
         m_oConnPool.ReturnConnection(oConn);
-        return 1;
+        return 0;
     }
     END_TRY;
     m_oConnPool.Commit(oConn);

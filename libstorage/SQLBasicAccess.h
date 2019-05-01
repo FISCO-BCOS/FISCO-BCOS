@@ -38,11 +38,12 @@ public:
     int Select(h256 hash, int num, const std::string& table, const std::string& key,
                 Condition::Ptr condition,Json::Value &respJson);
     int Commit(h256 hash, int num, 
-            const std::vector<TableData::Ptr>& datas,h256 const& blockHash);
+            const std::vector<TableData::Ptr>& datas);
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
     std::string GenerateConditionSql(const std::string &strPrefix,
-                std::map<std::string, std::pair<Condition::Op, std::string>>::iterator &it);
+                std::map<std::string, Condition::Range>::iterator &it,
+                Condition::Ptr condition);
     
     std::string BuildCommitSql(const std::string& table,
         const std::vector<std::string> &oVecFieldName,
