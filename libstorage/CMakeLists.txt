@@ -4,7 +4,7 @@ file(GLOB HEADERS "*.h")
 
 add_library(storage ${SRC_LIST} ${HEADERS})
 
-if (STORAGE_JNI)
+if (USE_JNI)
 FIND_PACKAGE(Java REQUIRED)
 FIND_PACKAGE(JNI REQUIRED)
 target_include_directories(storage PRIVATE ${JAVA_INCLUDE_PATH})

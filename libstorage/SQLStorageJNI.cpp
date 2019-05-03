@@ -19,9 +19,12 @@
  *  @date 20190424
  */
 
+#ifndef USE_JNI
+
 #include "SQLStorageJNI.h"
 #include <jni.h>
 #include <libdevcore/easylog.h>
+#include "StorageException.h"
 
 using namespace dev;
 using namespace dev::storage;
@@ -33,6 +36,7 @@ void SQLStorageJNI::init()
 
     JavaVMOption options[1];
 
+    // classpath
     m_classpath = "-cp'amdb/conf/:amdb/lib/*:amdb/apps/*'";
     options[0].optionString = new char[m_classpath.size() + 1];
     strncpy(options[0].optionString, m_classpath.c_str(), m_classpath.size());
@@ -52,59 +56,106 @@ void SQLStorageJNI::init()
         m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
     if (!appClaz)
     {
-        STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
+        BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find class applicationContext"));
     }
     auto appInitFunc = m_env->GetMethodID(appClaz, "<init>", "()V");
     if (!appInitFunc)
     {
-        STORAGE_LOG(ERROR) << "Cannot find class applicationContext init function";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find class applicationContext init function"));
     }
     auto appObj = m_env->NewObject(appClaz, appInitFunc);
     if (!appObj)
     {
-        STORAGE_LOG(ERROR) << "Create applicationContext error";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Create applicationContext error"));
     }
 
     auto dbServiceClaz = m_env->FindClass("org/bcos/amdb/service/DBService");
     if (!dbServiceClaz)
     {
-        STORAGE_LOG(ERROR) << "Cannot find class DBService";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find class DBService"));
     }
 
     auto getBeanFunc = m_env->GetMethodID(
         appClaz, "getBean", "(Ljava/lang/String;)Lorg/fisco/bcos/channel/client/Service;");
-    if (getBeanFunc)
+    if (!getBeanFunc)
     {
-        STORAGE_LOG(ERROR) << "Cannot find method getBean";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find method getBean"));
     }
 
-    auto dbServiceName = m_env->NewStringUTF("DBChannelService");
+    auto dbChannelServiceName = m_env->NewStringUTF("DBChannelService");
 
-    auto channelService = m_env->CallObjectMethod(appObj, getBeanFunc, dbServiceName);
+    auto channelService = m_env->CallObjectMethod(appObj, getBeanFunc, dbChannelServiceName);
     if (!channelService)
     {
-        STORAGE_LOG(ERROR) << "Cannot get bean of dbService";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot get bean of dbService"));
     }
 
     auto channelServiceClaz = m_env->FindClass("org/fisco/bcos/channel/client/Service");
     if (!dbServiceClaz)
     {
-        STORAGE_LOG(ERROR) << "Cannot find class ChannelService";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find class ChannelService"));
     }
 
     auto runFunc = m_env->GetMethodID(channelServiceClaz, "run", "()V");
     if (runFunc)
     {
-        STORAGE_LOG(ERROR) << "Cannot find run func";
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find run func"));
     }
 
     m_env->CallVoidMethod(channelService, runFunc);
 
-    m_dbService = m_env->FindClass("org/bcos/amdb/service/DBService");
-    if (m_dbService)
+    m_dbServiceClaz = m_env->FindClass("org/bcos/amdb/service/DBService");
+    if (m_dbServiceClaz)
     {
-        STORAGE_LOG
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find DBService class"));
     }
+
+    auto dbServiceName = m_env->NewStringUTF("DBService");
+    m_dbService = m_env->CallObjectMethod(appObj, getBeanFunc, dbServiceName);
+    if(!m_dbService) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find DBService bean"));
+    }
+
+    m_selectClaz = m_env->FindClass("org/bcos/amdb/dto/SelectRequest");
+    if(!m_selectClaz) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find SelectRequest class"));
+    }
+
+    m_selectInit = m_env->GetMethodID(m_selectClaz, "<init>", "()V");
+    if(!m_selectInit) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find SelectRequest init method"));
+    }
+
+    m_selectSetCondition = m_env->GetMethodID(m_selectClaz, "SetCondition", "(Ljava/util/List;)V");
+    m_selectSetBlockHash = m_env->;GetMethodID(m_selectClaz, "SetCondition", "(Ljava/lang/String;)V")
+    jmethodID m_selectSetNum;
+    jmethodID m_selectSetTable;
+    jmethodID m_selectSetKey;
+
+    m_selectResponseClaz = m_env->FindClass("org/bcos/amdb/dto/SelectResponse");
+    if(!m_selectResponseClaz) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find SelectResponse class"));
+    }
+
+    m_dbSelectMethod = m_env->GetMethodID(m_dbServiceClaz, "select", "(Lorg/bcos/amdb/dto/SelectResponse;)Lorg/bcos/amdb/dto/SelectRequest");
+    if(!m_dbSelectMethod) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find DBService select method"));
+    }
+
+    m_commitClaz = m_env->FindClass("org/bcos/amdb/dto/CommitRequest");
+    if(!m_commitClaz) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find CommitRequest class"));
+    }
+
+    m_commitInit = m_env->GetMethodID(m_commitClaz, "<init>", "()V");
+    if(m_commitInit) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find CommitRequest init method"));
+    }
+
+    m_dbCommitMethod = m_env->GetMethodID(m_dbServiceClaz, "commit", "(Lorg/bcos/amdb/dto/CommitResponse;)Lorg/bcos/amdb/dto/CommitRequest");
+    if(!m_dbSelectMethod) {
+		BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find DBService commit method"));
+	}
 
     // m_dbService = channelService;
 }
@@ -118,19 +169,14 @@ Entries::Ptr SQLStorageJNI::select(
     (void)key;
     (void)condition;
 
-    auto appClaz =
-        m_env->FindClass("org/springframework/context/support/ClassPathXmlApplicationContext");
-    if (!appClaz)
-    {
-        STORAGE_LOG(ERROR) << "Cannot find class applicationContext";
+    auto selectRequest = m_env->NewObject(m_selectClaz, m_selectInit);
+    if(!selectRequest) {
+    	BOOST_THROW_EXCEPTION(StorageException(-1, "Create selectRequest failed"));
     }
 
-#if 0
-	auto appObj = m_env->NewObject(appClaz, appInitFunc);
-	if(!appObj) {
-		STORAGE_LOG(ERROR) << "Create applicationContext error";
-	}
-#endif
+    //m_env->CallObjectMethod(m_dbService, );
 
     return Entries::Ptr();
 }
+
+#endif
