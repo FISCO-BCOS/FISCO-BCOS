@@ -1,12 +1,12 @@
 include(ExternalProject)
 
-set(configure_command ./configure --without-sqlite --without-postgresql)
+set(configure_command ./configure --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
 
 ExternalProject_Add(libzdb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libzdb-3.1.tar.gz
+    DOWNLOAD_NAME libzdb-3.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://tildeslash.com/libzdb/dist/libzdb-3.1.tar.gz
+    URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
     URL_HASH SHA256=0f01abb1b01d1a1f4ab9b55ad3ba445d203fc3b4757abdf53e1d85e2b7b42695
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
@@ -28,6 +28,7 @@ file(MAKE_DIRECTORY ${LIBZDB_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET zdb PROPERTY IMPORTED_LOCATION ${LIBZDB_LIBRARY})
 set_property(TARGET zdb PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBZDB_INCLUDE_DIR})
+set_property(TARGET zdb PROPERTY INTERFACE_LINK_LIBRARIES mysqlclient z)
 
 add_dependencies(zdb libzdb)
 unset(SOURCE_DIR)
