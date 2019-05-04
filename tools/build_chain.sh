@@ -502,7 +502,7 @@ generate_group_genesis()
     ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
-    max_trans_num=1500
+    max_trans_num=1000
     ; the node id of consensusers
     ${node_list}
 [state]
@@ -918,7 +918,7 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # get fisco_version
-fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | head -n 1 | cut -d \" -f 4)
+fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | head -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 # fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"
