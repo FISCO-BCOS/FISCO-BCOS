@@ -48,11 +48,11 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
+    -s <DB type>                        Default rocksdb. Options can be rocksdb/leveldb2/external/leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
-    -s <State type>                     Default storage. if set -s, use mpt 
-    -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
     -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -81,7 +81,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -96,8 +96,8 @@ while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    s) state_type=mpt;;
-    S) storage_type=$OPTARG
+    m) state_type=mpt;;
+    s) storage_type=$OPTARG
         if [ -z "${storage_type}" ];then
             LOG_WARN "${storage_type} is not supported storage."
             exit 1;

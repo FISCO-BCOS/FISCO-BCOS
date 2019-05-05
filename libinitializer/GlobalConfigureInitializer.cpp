@@ -32,8 +32,9 @@ using namespace dev::initializer;
 
 DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 
-bool GlobalConfigureInitializer::getVersionNumber(const string& _version, uint32_t& _versionNumber)
+bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versionNumber)
 {
+    // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
     boost::split(versions, _version, boost::is_any_of("."));
     if (versions.size() != 3)
@@ -56,7 +57,7 @@ bool GlobalConfigureInitializer::getVersionNumber(const string& _version, uint32
     return true;
 }
 
-void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
+void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 {
     /// default version is RC1
     std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
@@ -81,10 +82,6 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     {
         BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(version));
     }
-
-
-    INITIALIZER_LOG(INFO) << LOG_KV("compatibility", version)
-                          << LOG_KV("versionNumber", versionNumber);
 
     std::string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
@@ -116,7 +113,7 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     if (chainId < 0)
     {
         BOOST_THROW_EXCEPTION(
-            ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive !"));
+            ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive!"));
     }
     g_BCOSConfig.setChainId(chainId);
 
@@ -128,7 +125,7 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
                                  std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
                           << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
-                          << LOG_KV("version", version)
+                          << LOG_KV("compatibilityVersion", version)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("chainId", g_BCOSConfig.chainId());
 }
