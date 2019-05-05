@@ -37,7 +37,7 @@ namespace test_GlobalConfig
 {
 struct GlobalConfigFixture
 {
-    GlobalConfigFixture() { pt.put("storage_security.enable", true); }
+    GlobalConfigFixture() { pt.put("storage_security.enable", false); }
     boost::property_tree::ptree pt;
 };
 
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(test_initGlobalConfig)
     initGlobalConfig(pt);
     BOOST_CHECK(g_BCOSConfig.version() == RC1_VERSION);
     BOOST_CHECK(g_BCOSConfig.compressEnabled() == true);
-    BOOST_CHECK(g_BCOSConfig.diskEncryption.enable == true);
+    BOOST_CHECK(g_BCOSConfig.diskEncryption.enable == false);
     BOOST_CHECK(g_BCOSConfig.diskEncryption.keyCenterIP == "");
     BOOST_CHECK(g_BCOSConfig.diskEncryption.keyCenterPort == 20000);
     BOOST_CHECK(g_BCOSConfig.diskEncryption.cipherDataKey == "");
