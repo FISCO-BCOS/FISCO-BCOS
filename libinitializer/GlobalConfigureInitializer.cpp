@@ -79,7 +79,7 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     }
     else
     {
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion());
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(version));
     }
 
 

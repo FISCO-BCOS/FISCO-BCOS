@@ -2,13 +2,14 @@
 
 set -e
 
+# default value 
 ca_file= #CA key
 node_num=1 
 ip_file=
-agency_array=
-group_array=
 ip_param=
 use_ip_param=
+agency_array=
+group_array=
 ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
@@ -33,7 +34,7 @@ auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
-fisco_version=""
+compatibility_version=""
 OS=
 
 help() {
@@ -46,7 +47,7 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
+    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
     -d <docker mode>                    Default off. If set -d, build with docker
     -s <State type>                     Default storage. if set -s, use mpt 
     -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
@@ -90,7 +91,7 @@ while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
-    v) fisco_version="$OPTARG";;
+    v) compatibility_version="$OPTARG";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
@@ -476,7 +477,7 @@ cipher_data_key=
 [chain]
     id=${chain_id}
 [compatibility]
-    supported_version=${fisco_version}
+    supported_version=${compatibility_version}
 [log]
     log_path=./log
     ; info debug trace 
@@ -917,8 +918,10 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # get fisco_version
-if [ -z "${fisco_version}" ];then
-    fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | head -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+# fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+if [ -z "${compatibility_version}" ];then
+    compatibility_version="${fisco_version}"
 fi
 
 # download fisco-bcos and check it
