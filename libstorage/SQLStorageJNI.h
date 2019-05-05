@@ -71,11 +71,20 @@ private:
     jmethodID m_selectSetKey;
 
     jclass m_selectResponseClaz;
+    jmethodID m_selectResponseGetColumns;
+    jmethodID m_selectResponseGetData;
+
     jmethodID m_dbSelectMethod;
 
     jclass m_commitClaz;
     jmethodID m_commitInit;
     jmethodID m_dbCommitMethod;
+
+    jclass m_listClaz;
+    jmethodID m_listInitMethod;
+    jmethodID m_listAddMethod;
+    jmethodID m_listGetMethod;
+    jmethodID m_listSizeMethod;
 
     std::string m_classpath;
 };

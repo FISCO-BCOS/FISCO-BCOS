@@ -127,8 +127,8 @@ void SQLStorageJNI::init()
     }
 
     m_selectSetCondition = m_env->GetMethodID(m_selectClaz, "SetCondition", "(Ljava/util/List;)V");
-    m_selectSetBlockHash = m_env->;GetMethodID(m_selectClaz, "SetCondition", "(Ljava/lang/String;)V")
-    jmethodID m_selectSetNum;
+    m_selectSetBlockHash = m_env->GetMethodID(m_selectClaz, "SetBlockHash", "(Ljava/lang/String;)V");
+    m_selectSetNum = m_env->GetMethodID(m_selectClaz, "SetCondition", "(Ljava/lang/String;)V");
     jmethodID m_selectSetTable;
     jmethodID m_selectSetKey;
 
@@ -157,26 +157,93 @@ void SQLStorageJNI::init()
 		BOOST_THROW_EXCEPTION(StorageException(-1, "Cannot find DBService commit method"));
 	}
 
+    m_listClaz = m_env->FindClass("java.util.List");
+    m_listInitMethod = m_env->GetMethodID(m_listClaz, "<init>", "()V");
+    m_listAddMethod = m_env->GetMethodID(m_listClaz, "add", "(Ljava/lang/Object;)Z");
+
     // m_dbService = channelService;
 }
 
 Entries::Ptr SQLStorageJNI::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
-    (void)hash;
-    (void)num;
-    (void)tableInfo;
-    (void)key;
-    (void)condition;
-
     auto selectRequest = m_env->NewObject(m_selectClaz, m_selectInit);
     if(!selectRequest) {
     	BOOST_THROW_EXCEPTION(StorageException(-1, "Create selectRequest failed"));
     }
 
     //m_env->CallObjectMethod(m_dbService, );
+    m_env->CallVoidMethod(selectRequest, m_selectSetTable, m_env->NewStringUTF(tableInfo->name.c_str()));
+    m_env->CallVoidMethod(selectRequest, m_selectSetKey, m_env->NewStringUTF(key.c_str()));
+    m_env->CallVoidMethod(selectRequest, m_selectSetBlockHash, m_env->NewStringUTF(hash.hex().c_str()));
+    m_env->CallVoidMethod(selectRequest, m_selectSetNum, num);
 
-    return Entries::Ptr();
+    auto listConditions = m_env->NewObject(m_listClaz, m_listInitMethod);
+    if(condition) {
+		for(auto it: *(condition->getConditions())) {
+			auto conditionItem = m_env->NewObject(m_listClaz, m_listInitMethod);
+
+			m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(it.first.c_str()));
+			if (it.second.left.second == it.second.right.second && it.second.left.first &&
+				it.second.right.first)
+			{
+				m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(boost::lexical_cast<std::string>(Condition::eq).c_str()));
+				m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(it.second.right.second.c_str()));
+			}
+			else
+			{
+				if (it.second.left.second != condition->unlimitedField())
+				{
+					if (it.second.left.first)
+					{
+						m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(boost::lexical_cast<std::string>(Condition::ge).c_str()));
+					}
+					else
+					{
+						m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(boost::lexical_cast<std::string>(Condition::gt).c_str()));
+					}
+					m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(it.second.right.second.c_str()));
+				}
+
+				if (it.second.right.second != condition->unlimitedField())
+				{
+					if (it.second.right.first)
+					{
+						m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(boost::lexical_cast<std::string>(Condition::le).c_str()));
+					}
+					else
+					{
+						m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(boost::lexical_cast<std::string>(Condition::lt).c_str()));
+					}
+					m_env->CallBooleanMethod(conditionItem, m_listAddMethod, m_env->NewStringUTF(it.second.right.second.c_str()));
+				}
+			}
+
+			m_env->CallBooleanMethod(listConditions, m_listAddMethod, conditionItem);
+		}
+    }
+
+    m_env->CallVoidMethod(selectRequest, m_selectSetCondition, listConditions);
+
+    auto dbSelectResponse = m_env->CallObjectMethod(m_dbService, m_dbSelectMethod, selectRequest);
+    auto columns = m_env->CallObjectMethod(dbSelectResponse, m_selectResponseGetColumns);
+    auto datas = m_env->CallObjectMethod(dbSelectResponse, m_selectResponseGetData);
+    auto size = m_env->CallIntMethod(datas, m_listSizeMethod);
+
+    auto entries = std::make_shared<Entries>();
+    for(size_t i=0; i<size; ++i) {
+    	auto entryMap = m_env->CallObjectMethod(datas, m_listGetMethod, i);
+
+    	auto mapSize = m_env->CallObjectMethod(entryMap, m_listSizeMethod);
+    	for(size_t j=0; j<size; ++j) {
+    		auto entryObj = m_env->CallObjectMethod(entryMap, m_listGetMethod, j);
+    		auto columnObj = m_env->CallObjectMethod(columns, m_listGetMethod, j);
+    	}
+    }
+
+
+
+
 }
 
 #endif
