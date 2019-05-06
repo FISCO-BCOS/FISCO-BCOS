@@ -28,7 +28,11 @@ file(MAKE_DIRECTORY ${LIBZDB_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET zdb PROPERTY IMPORTED_LOCATION ${LIBZDB_LIBRARY})
 set_property(TARGET zdb PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBZDB_INCLUDE_DIR})
-set_property(TARGET zdb PROPERTY INTERFACE_LINK_LIBRARIES mysqlclient z)
+find_library(MYSQL_CLIENT_LIB NAMES mysqlclient PATHS /usr/lib64/mysql)
+if (NOT MYSQL_CLIENT_LIB)
+message(FATAL_ERROR "libmysqlclient can't find. Please install libmysqlclient-dev on Ubuntu, mysql-devel on CentOS")
+endif()
+set_property(TARGET zdb PROPERTY INTERFACE_LINK_LIBRARIES ${MYSQL_CLIENT_LIB} z)
 
 add_dependencies(zdb libzdb)
 unset(SOURCE_DIR)

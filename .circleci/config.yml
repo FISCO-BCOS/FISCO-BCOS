@@ -47,7 +47,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl mysql-devel ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
