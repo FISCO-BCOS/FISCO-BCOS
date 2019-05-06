@@ -7,7 +7,7 @@ WORKDIR /
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     git clang make build-essential cmake libssl-dev \
     ca-certificates tzdata \
-    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && dpkg-reconfigure -f noninteractive tzdata \
     && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git \
     && cd FISCO-BCOS && git checkout master \
