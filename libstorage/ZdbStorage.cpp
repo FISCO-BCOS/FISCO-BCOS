@@ -77,6 +77,35 @@ Entries::Ptr ZdbStorage::select(
 size_t ZdbStorage::commit(
     h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
+   
+    for (auto it : datas)
+    {
+        for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
+        {
+            Entry::Ptr entry = it->dirtyEntries->get(i);
+            for (auto fieldIt : *entry->fields())
+            {
+                if(fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                {
+                    continue;
+                }
+            LOG(DEBUG)<<"new entry key:"<<fieldIt.first<<" value:"<<fieldIt.second;
+            }
+        }
+        for (size_t i = 0; i < it->newEntries->size(); ++i)
+        {
+            Entry::Ptr entry = it->newEntries->get(i);
+            for (auto fieldIt : *entry->fields())
+            {
+                if(fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                {
+                continue;
+                }
+                LOG(DEBUG)<<"new entry key:"<<fieldIt.first<<" value:"<<fieldIt.second;
+            }
+        }
+    }    
+
     int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash,(int32_t)num,datas);
     if(dwRowCount < 0)
     {

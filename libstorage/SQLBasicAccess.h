@@ -48,6 +48,15 @@ private:
     std::string BuildCommitSql(const std::string& table,
         const std::vector<std::string> &oVecFieldName,
         const std::vector<std::string> &oVecFieldValue);
+
+    std::string BuildCreateTableSql(
+        const std::string &tablename,
+        const std::string &keyfield,
+        const std::string &valuefield
+    );
+
+    std::vector<std::string> Split(const std::string &str2split,const char *delim = ",");
+
 public:
     void initConnPool( const std::string &dbtype,
         const std::string &dbip,

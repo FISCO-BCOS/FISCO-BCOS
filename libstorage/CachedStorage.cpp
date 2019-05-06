@@ -254,12 +254,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 if (entryIt != data->end() && (*entryIt)->getID() == id)
                                 {
                                     for (auto fieldIt : *entry->fields())
-                                    {
+                                     {
                                         if (fieldIt.first != "_id_")
                                         {
                                             (*entryIt)->setField(fieldIt.first, fieldIt.second);
                                         }
-                                    }
+                                     }
 
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
@@ -397,10 +397,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     m_commitNum.store(num);
     m_taskThreadPool->enqueue([backend, task, self]() {
         STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
+    backend->commit(task->hash, task->num, *(task->datas));
 
-        backend->commit(task->hash, task->num, *(task->datas));
-
-        auto storage = self.lock();
+    auto storage = self.lock();
         if (storage)
         {
             storage->setSyncNum(task->num);

@@ -43,7 +43,7 @@ class SQLConnectionPool
 {
 public:
     SQLConnectionPool(){};
-    ~SQLConnectionPool(){};
+    ~SQLConnectionPool();
     int  InitConnectionPool(const std::string &strDbType,
                 const std::string &strDbIp,
                 uint32_t    dwDbPort,
