@@ -57,6 +57,7 @@ addons:
     - libssl-dev
     - clang
     - ccache
+    - libmysqlclient-dev
     # - ninja-build
     - libomp-dev
     - openssl
@@ -64,6 +65,7 @@ addons:
     packages:
     - openssl
     - clang-format
+    - mysql-connector-c
     - clang-omp
     - ccache
 install: |

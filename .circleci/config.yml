@@ -9,7 +9,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev ccache
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev libmysqlclient-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -86,13 +86,12 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ libmysqlclient-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
           keys:
             - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
@@ -126,13 +125,12 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ libmysqlclient-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
           keys:
             - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
       - run:
           name: Compile
           command: |
