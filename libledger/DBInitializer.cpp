@@ -265,11 +265,12 @@ void  DBInitializer::initZdbStorage()
                     m_param->mutableStorageParam().dbcharset,
                     m_param->mutableStorageParam().initconnections,
                     m_param->mutableStorageParam().maxconnections);
-    m_storage = zdbStorage;
+    /*m_storage = zdbStorage;
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(m_storage);
 
-    m_tableFactoryFactory = tableFactoryFactory;
+    m_tableFactoryFactory = tableFactoryFactory;*/
+    initTableFactory2(zdbStorage);
 }
 
 /// create ExecutiveContextFactory

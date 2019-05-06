@@ -50,21 +50,25 @@ int  SQLConnectionPool::InitConnectionPool(const std::string &strDbType,
             errorExitOut(_exitInfo);
         }
         LOG(DEBUG)<<"init connection pool  url:"<<strConnetionBuf;
-	try
+
+        TRY
         {
             m_oPool = ConnectionPool_new(oUrl);
             ConnectionPool_setInitialConnections(m_oPool, dwInitConnections);
             ConnectionPool_setMaxConnections(m_oPool, dwMaxConnection);
             ConnectionPool_start(m_oPool);
         }
-	catch(Exception_T &e)
-	{
+       CATCH (SQLException)
+        {
+             URL_free(&oUrl);
             LOG(ERROR)<<"init connection pool failed url:"<<strConnetionBuf<<" please check";
              stringstream _exitInfo;
             _exitInfo<<"init connection pool failed url:"<<strConnetionBuf<<" please check";
             errorExitOut(_exitInfo);
         }
-        
+        END_TRY;
+
+        URL_free(&oUrl);
     }
     else
     {
@@ -110,3 +114,9 @@ int SQLConnectionPool::RollBack(const Connection_T &t)
     Connection_rollback(t);
     return 0;
 }
+
+ SQLConnectionPool::~SQLConnectionPool()
+ {
+    ConnectionPool_stop(m_oPool);
+    ConnectionPool_free(&m_oPool);
+ }

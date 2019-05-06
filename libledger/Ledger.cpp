@@ -329,11 +329,11 @@ void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
     /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "zdbstorage");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
-    m_param->mutableStorageParam().maxStoreKey = pt.get<int>("storage.max_store_key", 10000);
+    m_param->mutableStorageParam().maxStoreKey = pt.get<int>("storage.max_store_key", 1000);
     if (m_param->mutableStorageParam().maxStoreKey < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()

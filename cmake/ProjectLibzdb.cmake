@@ -7,7 +7,7 @@ ExternalProject_Add(libzdb
     DOWNLOAD_NAME libzdb-3.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
-    URL_HASH SHA256=0f01abb1b01d1a1f4ab9b55ad3ba445d203fc3b4757abdf53e1d85e2b7b42695
+    URL_HASH SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
