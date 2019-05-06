@@ -238,6 +238,8 @@ Entries::Ptr SQLStorageJNI::select(
     	for(size_t j=0; j<size; ++j) {
     		auto entryObj = m_env->CallObjectMethod(entryMap, m_listGetMethod, j);
     		auto columnObj = m_env->CallObjectMethod(columns, m_listGetMethod, j);
+
+
     	}
     }
 
