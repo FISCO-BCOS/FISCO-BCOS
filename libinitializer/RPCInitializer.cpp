@@ -56,6 +56,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
     m_channelRPCServer->setChannelServer(server);
+
+    /// must startListening RPC here for init the first block should access AMDB through network
+    m_channelRPCServer->StartListening();
 }
 
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
