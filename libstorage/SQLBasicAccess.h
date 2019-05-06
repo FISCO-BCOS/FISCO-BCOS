@@ -24,8 +24,8 @@
 
 #include "Storage.h"
 #include "Table.h"
-#include <json/json.h>
 #include "libdevcore/SQLConnectionPool.h"
+#include <json/json.h>
 
 
 namespace dev
@@ -36,37 +36,31 @@ class SQLBasicAccess
 {
 public:
     int Select(h256 hash, int num, const std::string& table, const std::string& key,
-                Condition::Ptr condition,Json::Value &respJson);
-    int Commit(h256 hash, int num, 
-            const std::vector<TableData::Ptr>& datas);
+        Condition::Ptr condition, Json::Value& respJson);
+    int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
+
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
-    std::string GenerateConditionSql(const std::string &strPrefix,
-                std::map<std::string, Condition::Range>::iterator &it,
-                Condition::Ptr condition);
-    
+    std::string GenerateConditionSql(const std::string& strPrefix,
+        std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition);
+
     std::string BuildCommitSql(const std::string& table,
-        const std::vector<std::string> &oVecFieldName,
-        const std::vector<std::string> &oVecFieldValue);
+        const std::vector<std::string>& oVecFieldName,
+        const std::vector<std::string>& oVecFieldValue);
 
     std::string BuildCreateTableSql(
-        const std::string &tablename,
-        const std::string &keyfield,
-        const std::string &valuefield
-    );
+        const std::string& tablename, const std::string& keyfield, const std::string& valuefield);
 
-    std::vector<std::string> Split(const std::string &str2split,const char *delim = ",");
+    std::string GetCreateTableSql(const Entry::Ptr& data);
+    void GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 hash, const std::string& strNum,
+        std::vector<std::string>& oVecFieldName, std::vector<std::string>& oVecFieldValue,
+        bool& bHasGetField);
 
 public:
-    void initConnPool( const std::string &dbtype,
-        const std::string &dbip,
-        uint32_t    dbport,
-        const std::string &dbusername,
-        const std::string &dbpasswd,
-        const std::string &dbname,
-        const std::string &dbcharset,
-        uint32_t    initconnections,
-        uint32_t    maxconnections);
+    void initConnPool(const std::string& dbtype, const std::string& dbip, uint32_t dbport,
+        const std::string& dbusername, const std::string& dbpasswd, const std::string& dbname,
+        const std::string& dbcharset, uint32_t initconnections, uint32_t maxconnections);
+
 private:
     dev::db::SQLConnectionPool m_oConnPool;
 };

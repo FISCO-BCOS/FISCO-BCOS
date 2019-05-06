@@ -21,9 +21,9 @@
 
 #pragma once
 
+#include "SQLBasicAccess.h"
 #include "Storage.h"
 #include <json/json.h>
-#include "SQLBasicAccess.h"
 
 
 namespace dev
@@ -38,26 +38,18 @@ public:
     ZdbStorage();
     virtual ~ZdbStorage(){};
 
-    virtual Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr) override;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    virtual bool onlyDirty() override;
+    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr) override;
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyDirty() override;
 
 public:
-    void initSqlAccess(
-        const std::string &dbtype,
-        const std::string &dbip,
-        uint32_t    dbport,
-        const std::string &dbusername,
-        const std::string &dbpasswd,
-        const std::string &dbname,
-        const std::string &dbcharset,
-        uint32_t    initconnections,
-        uint32_t    maxconnections
-    );
+    void initSqlAccess(const std::string& dbtype, const std::string& dbip, uint32_t dbport,
+        const std::string& dbusername, const std::string& dbpasswd, const std::string& dbname,
+        const std::string& dbcharset, uint32_t initconnections, uint32_t maxconnections);
 
 private:
-    SQLBasicAccess  m_oSqlBasicAcc;
+    SQLBasicAccess m_oSqlBasicAcc;
 };
 
 }  // namespace storage

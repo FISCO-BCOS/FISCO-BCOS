@@ -19,11 +19,11 @@
  *  @date 2019-04-24
  */
 
-#include "StorageException.h"
-#include <libdevcore/easylog.h>
-#include "Common.h"
 #include "ZdbStorage.h"
+#include "Common.h"
+#include "StorageException.h"
 #include "Table.h"
+#include <libdevcore/easylog.h>
 
 
 using namespace dev;
@@ -35,16 +35,16 @@ Entries::Ptr ZdbStorage::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     Json::Value responseJson;
-    int iRet = m_oSqlBasicAcc.Select(hash,num,tableInfo->name,key,condition,responseJson);
-    if(iRet < 0)
+    int iRet = m_oSqlBasicAcc.Select(hash, num, tableInfo->name, key, condition, responseJson);
+    if (iRet < 0)
     {
         LOG(ERROR) << "Remote database return error:" << iRet;
-        throw StorageException(-1, 
-            "Remote database return error:" + boost::lexical_cast<std::string>(iRet));
+        throw StorageException(
+            -1, "Remote database return error:" + boost::lexical_cast<std::string>(iRet));
     }
 
 
-    LOG(DEBUG)<<"select resp:"<<responseJson.toStyledString();
+    LOG(DEBUG) << "select resp:" << responseJson.toStyledString();
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
     {
@@ -69,15 +69,13 @@ Entries::Ptr ZdbStorage::select(
             entry->setDirty(false);
             entries->addEntry(entry);
         }
-        }
-        entries->setDirty(false);
-        return entries;
+    }
+    entries->setDirty(false);
+    return entries;
 }
 
-size_t ZdbStorage::commit(
-    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t ZdbStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-   
     for (auto it : datas)
     {
         for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
@@ -85,11 +83,11 @@ size_t ZdbStorage::commit(
             Entry::Ptr entry = it->dirtyEntries->get(i);
             for (auto fieldIt : *entry->fields())
             {
-                if(fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
                 {
                     continue;
                 }
-            LOG(DEBUG)<<"new entry key:"<<fieldIt.first<<" value:"<<fieldIt.second;
+                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
             }
         }
         for (size_t i = 0; i < it->newEntries->size(); ++i)
@@ -97,21 +95,21 @@ size_t ZdbStorage::commit(
             Entry::Ptr entry = it->newEntries->get(i);
             for (auto fieldIt : *entry->fields())
             {
-                if(fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
                 {
-                continue;
+                    continue;
                 }
-                LOG(DEBUG)<<"new entry key:"<<fieldIt.first<<" value:"<<fieldIt.second;
+                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
             }
         }
-    }    
+    }
 
-    int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash,(int32_t)num,datas);
-    if(dwRowCount < 0)
+    int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash, (int32_t)num, datas);
+    if (dwRowCount < 0)
     {
         LOG(ERROR) << "database return error:" << dwRowCount;
-        throw StorageException(-1, 
-            "database return error:" + boost::lexical_cast<std::string>(dwRowCount));
+        throw StorageException(
+            -1, "database return error:" + boost::lexical_cast<std::string>(dwRowCount));
     }
     return dwRowCount;
 }
@@ -122,18 +120,10 @@ bool ZdbStorage::onlyDirty()
 }
 
 
-void ZdbStorage::initSqlAccess(
-        const std::string &dbtype,
-        const std::string &dbip,
-        uint32_t    dbport,
-        const std::string &dbusername,
-        const std::string &dbpasswd,
-        const std::string &dbname,
-        const std::string &dbcharset,
-        uint32_t    initconnections,
-        uint32_t    maxconnections
-    )
+void ZdbStorage::initSqlAccess(const std::string& dbtype, const std::string& dbip, uint32_t dbport,
+    const std::string& dbusername, const std::string& dbpasswd, const std::string& dbname,
+    const std::string& dbcharset, uint32_t initconnections, uint32_t maxconnections)
 {
-    m_oSqlBasicAcc.initConnPool(dbtype,dbip,dbport,
-        dbusername,dbpasswd,dbname,dbcharset,initconnections,maxconnections);
+    m_oSqlBasicAcc.initConnPool(dbtype, dbip, dbport, dbusername, dbpasswd, dbname, dbcharset,
+        initconnections, maxconnections);
 }

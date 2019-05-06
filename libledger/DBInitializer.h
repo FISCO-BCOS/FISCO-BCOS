@@ -88,7 +88,7 @@ private:
     void createMptState(dev::h256 const& genesisHash);
 
     /// TODO: init zdb storage
-    void  initZdbStorage();
+    void initZdbStorage();
 
 
 private:

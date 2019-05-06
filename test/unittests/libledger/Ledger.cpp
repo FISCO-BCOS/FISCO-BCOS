@@ -177,15 +177,15 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
     BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
 
     /// modify state to storage(the default option)
     fakeLedger.initDBConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
-    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "mpt");
+    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =

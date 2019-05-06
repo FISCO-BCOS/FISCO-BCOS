@@ -24,43 +24,34 @@
 
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
+#include <zdb.h>
 #include <csignal>
+#include <iostream>
 #include <memory>
 #include <string>
-#include<zdb.h>
-#include<Exception.h>
-#include<Connection.h>
-#include<ConnectionPool.h>
-#include<URL.h>
-#include <iostream>
 
 namespace dev
 {
 namespace db
 {
-
 class SQLConnectionPool
 {
 public:
     SQLConnectionPool(){};
     ~SQLConnectionPool();
-    int  InitConnectionPool(const std::string &strDbType,
-                const std::string &strDbIp,
-                uint32_t    dwDbPort,
-                const std::string &strDbname,
-                const std::string &strDbUser,
-                const std::string   &strDbPasswd,
-                const std::string &strDbCharset,
-                uint32_t    dwInitConnections,
-                uint32_t    dwMaxInitConnection);
-        Connection_T    GetConnection();
-        int ReturnConnection(const Connection_T &t);
-        int BeginTransaction(const Connection_T &t);
-        int Commit(const Connection_T &t);
-        int RollBack(const Connection_T &t);
+    int InitConnectionPool(const std::string& strDbType, const std::string& strDbIp,
+        uint32_t dwDbPort, const std::string& strDbname, const std::string& strDbUser,
+        const std::string& strDbPasswd, const std::string& strDbCharset, uint32_t dwInitConnections,
+        uint32_t dwMaxInitConnection);
+    Connection_T GetConnection();
+    int ReturnConnection(const Connection_T& t);
+    int BeginTransaction(const Connection_T& t);
+    int Commit(const Connection_T& t);
+    int RollBack(const Connection_T& t);
 
-    private:
-        ConnectionPool_T    m_oPool;
+private:
+    ConnectionPool_T m_oPool;
+
 protected:
 };
 

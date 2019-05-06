@@ -329,7 +329,7 @@ void Ledger::initDBConfig(ptree const& pt)
 {
     /// init the basic config
     /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "zdbstorage");
+    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
@@ -354,16 +354,16 @@ void Ledger::initDBConfig(ptree const& pt)
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
 
-    //read db config from config eg:mysqlip mysqlport and so on
-    m_param->mutableStorageParam().dbtype =  pt.get<std::string>("storage.dbtype", "mysql");
-    m_param->mutableStorageParam().dbip =  pt.get<std::string>("storage.dbip", "127.0.0.1");
-    m_param->mutableStorageParam().dbport =  pt.get<int>("storage.dbport", 3306);
-    m_param->mutableStorageParam().dbusername =  pt.get<std::string>("storage.dbusername", "root");
-    m_param->mutableStorageParam().dbpasswd =  pt.get<std::string>("storage.dbpasswd", "123456");
-    m_param->mutableStorageParam().dbname =  pt.get<std::string>("storage.dbname", "bcos");
-    m_param->mutableStorageParam().dbcharset =  pt.get<std::string>("storage.dbcharset", "utf8");
-    m_param->mutableStorageParam().initconnections =  pt.get<int>("storage.initconnections", 5);
-    m_param->mutableStorageParam().maxconnections =  pt.get<int>("storage.maxconnections", 10);
+    // read db config from config eg:mysqlip mysqlport and so on
+    m_param->mutableStorageParam().dbtype = pt.get<std::string>("storage.dbtype", "mysql");
+    m_param->mutableStorageParam().dbip = pt.get<std::string>("storage.dbip", "127.0.0.1");
+    m_param->mutableStorageParam().dbport = pt.get<int>("storage.dbport", 3306);
+    m_param->mutableStorageParam().dbusername = pt.get<std::string>("storage.dbusername", "");
+    m_param->mutableStorageParam().dbpasswd = pt.get<std::string>("storage.dbpasswd", "");
+    m_param->mutableStorageParam().dbname = pt.get<std::string>("storage.dbname", "");
+    m_param->mutableStorageParam().dbcharset = pt.get<std::string>("storage.dbcharset", "utf8");
+    m_param->mutableStorageParam().initconnections = pt.get<int>("storage.initconnections", 5);
+    m_param->mutableStorageParam().maxconnections = pt.get<int>("storage.maxconnections", 10);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
