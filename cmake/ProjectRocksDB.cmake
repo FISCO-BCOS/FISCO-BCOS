@@ -13,8 +13,8 @@ ExternalProject_Add(rocksdb
     URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.0.2
     URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
-    PATCH_COMMAND ${SED_CMMAND} "217d" CMakeLists.txt COMMAND ${SED_CMMAND} "463d" CMakeLists.txt COMMAND ${SED_CMMAND} "738,748d" CMakeLists.txt COMMAND ${SED_CMMAND} "804,812d" CMakeLists.txt
-    BUILD_IN_SOURCE 0
+    PATCH_COMMAND ${SED_CMMAND} "s#-march=native#-march=x86-64 -mtune=generic#g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt
+    BUILD_IN_SOURCE 1
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=on
@@ -26,15 +26,15 @@ ExternalProject_Add(rocksdb
     -DWITH_TOOLS=off
     -DBUILD_SHARED_LIBS=Off
     -DUSE_RTTI=on
-    -DCMAKE_C_FLAGS=-march=x86-64 -mtune=generic ${CMAKE_C_FLAGS}
-    -DCMAKE_CXX_FLAGS=-march=x86-64 -mtune=generic ${CMAKE_CXX_FLAGS}
+    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} -march=x86-64 -mtune=generic
+    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -march=x86-64 -mtune=generic
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     # INSTALL_COMMAND ""
     LOG_CONFIGURE 1
     LOG_DOWNLOAD 1
     LOG_UPDATE 1
-    LOG_BUILD 0
+    LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/librocksdb.a
 )

@@ -253,6 +253,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                                 if (entryIt != data->end() && (*entryIt)->getID() == id)
                                 {
+                                    // FIXME: the for below is useless, delete it.
                                     for (auto fieldIt : *entry->fields())
                                      {
                                         if (fieldIt.first != "_id_")

@@ -21,6 +21,7 @@
  */
 
 #include "Initializer.h"
+#include "GlobalConfigureInitializer.h"
 
 using namespace dev;
 using namespace dev::initializer;
@@ -38,7 +39,7 @@ void Initializer::init(std::string const& _path)
         m_logInitializer->initLog(pt);
 
         /// init global config
-        m_globalConfigureInitializer->initConfig(pt);
+        initGlobalConfig(pt);
 
         /// init key center
         KeyCenterInitializer::init();
