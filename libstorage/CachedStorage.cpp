@@ -212,7 +212,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     std::shared_ptr<std::vector<TableData::Ptr> > commitDatas =
         std::make_shared<std::vector<TableData::Ptr> >();
-    ;
+
     commitDatas->resize(datas.size());
 
     ssize_t currentStateIdx = -1;
@@ -224,7 +224,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 auto requestData = datas[idx];
                 auto commitData = std::make_shared<TableData>();
                 commitData->info = requestData->info;
-                commitData->dirtyEntries->entries()->resize(requestData->dirtyEntries->size());
+                commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
 
                 if (currentStateIdx < 0 && commitData->info->name == SYS_CURRENT_STATE)
                 {
@@ -245,27 +245,21 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             {
                                 auto caches =
                                     selectNoCondition(h256(), 0, requestData->info, key, nullptr);
-                                auto data = caches->entries()->entries();
-                                auto entryIt = std::lower_bound(data->begin(), data->end(), entry,
+                                auto entryIt = std::lower_bound(caches->entries()->begin(), caches->entries()->end(), entry,
                                     [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
                                         return lhs->getID() < rhs->getID();
                                     });
 
-                                if (entryIt != data->end() && (*entryIt)->getID() == id)
+                                if (entryIt != caches->entries()->end() && (*entryIt)->getID() == id)
                                 {
-                                    // FIXME: the for below is useless, delete it.
                                     for (auto fieldIt : *entry->fields())
                                     {
-                                        if (fieldIt.first != "_id_")
-                                        {
-                                            (*entryIt)->setField(fieldIt.first, fieldIt.second);
-                                        }
+										(*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
 
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
-                                    // commitData->dirtyEntries->addEntry(commitEntry);
-                                    (*commitData->dirtyEntries->entries())[i] = commitEntry;
+                                    (*commitData->dirtyEntries)[i] = commitEntry;
                                 }
                                 else
                                 {
@@ -284,12 +278,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                         }
                     });
 
-                tbb::parallel_sort(commitData->dirtyEntries->entries()->begin(),
-                    commitData->dirtyEntries->entries()->end(), EntryLess(requestData->info));
+                tbb::parallel_sort(commitData->dirtyEntries->begin(),
+                    commitData->dirtyEntries->end(), EntryLess(requestData->info));
 
                 commitData->newEntries->copyFrom(requestData->newEntries);
-                tbb::parallel_sort(commitData->newEntries->entries()->begin(),
-                    commitData->newEntries->entries()->end(), EntryLess(requestData->info));
+                tbb::parallel_sort(commitData->newEntries->begin(),
+                    commitData->newEntries->end(), EntryLess(requestData->info));
 
                 (*commitDatas)[idx] = commitData;
             }
