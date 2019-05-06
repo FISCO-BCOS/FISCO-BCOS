@@ -79,12 +79,6 @@ macro(configure_project)
     	#add_definitions(-DPROF)
 	endif()
 	
-	eth_default_option(USE_JNI OFF)
-	if (USE_JNI)
-		add_definitions(-DUSE_JNI)
-	endif ()
-
-
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
         set(SUPPORT_${FEATURE} TRUE)
@@ -125,7 +119,6 @@ macro(print_config NAME)
     message("-- TESTS            Build tests                        ${TESTS}")
     message("-- EasyLog          Enable easyLog                     ${EASYLOG}")
     message("-- ARCH_TYPE                                           ${ARCH_TYPE}")
-    message("-- USE_JNI                                             ${USE_JNI}")
     message("-- PROF                                                ${PROF}")
     message("------------------------------------------------------------------------")
 if (BUILD_GM)
