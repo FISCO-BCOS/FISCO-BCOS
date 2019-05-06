@@ -19,7 +19,7 @@
  *  @date 20190424
  */
 
-#ifndef USE_JNI
+#ifdef USE_JNI
 
 #include "SQLStorageJNI.h"
 #include <jni.h>
@@ -167,6 +167,8 @@ void SQLStorageJNI::init()
 Entries::Ptr SQLStorageJNI::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
+	//only for test
+
     auto selectRequest = m_env->NewObject(m_selectClaz, m_selectInit);
     if(!selectRequest) {
     	BOOST_THROW_EXCEPTION(StorageException(-1, "Create selectRequest failed"));
@@ -234,18 +236,27 @@ Entries::Ptr SQLStorageJNI::select(
     for(size_t i=0; i<size; ++i) {
     	auto entryMap = m_env->CallObjectMethod(datas, m_listGetMethod, i);
 
+    	auto entry = std::make_shared<Entry>();
     	auto mapSize = m_env->CallObjectMethod(entryMap, m_listSizeMethod);
     	for(size_t j=0; j<size; ++j) {
     		auto entryObj = m_env->CallObjectMethod(entryMap, m_listGetMethod, j);
     		auto columnObj = m_env->CallObjectMethod(columns, m_listGetMethod, j);
 
-
+    		entry->setField(entryObj, columnObj);
     	}
+
+    	entries->addEntry(entry);
     }
 
+    return entries;
+}
 
+size_t SQLStorageJNI::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) {
+	//TODO
+}
 
-
+bool SQLStorageJNI::onlyDirty() {
+	return true;
 }
 
 #endif

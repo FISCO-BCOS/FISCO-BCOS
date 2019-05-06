@@ -19,7 +19,7 @@
  *  @date 20190424
  */
 
-#ifndef USE_JNI
+#ifdef USE_JNI
 
 #pragma once
 
