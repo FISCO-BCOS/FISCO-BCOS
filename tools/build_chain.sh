@@ -2,13 +2,14 @@
 
 set -e
 
+# default value 
 ca_file= #CA key
 node_num=1 
 ip_file=
-agency_array=
-group_array=
 ip_param=
 use_ip_param=
+agency_array=
+group_array=
 ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
@@ -33,7 +34,7 @@ auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
-fisco_version=""
+compatibility_version=""
 OS=
 
 help() {
@@ -46,12 +47,12 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc1
+    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
+    -s <DB type>                        Default rocksdb. Options can be rocksdb/leveldb2/external/leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
-    -s <State type>                     Default storage. if set -s, use mpt 
-    -S <Storage type>                   Default leveldb. Options can be leveldb/leveldb2/external/rocksdb
     -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -80,7 +81,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -90,13 +91,13 @@ while getopts "f:l:o:p:e:t:v:C:S:icszhgTFdP" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0";;
-    v) fisco_version="$OPTARG";;
+    v) compatibility_version="$OPTARG";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    s) state_type=mpt;;
-    S) storage_type=$OPTARG
+    m) state_type=mpt;;
+    s) storage_type=$OPTARG
         if [ -z "${storage_type}" ];then
             LOG_WARN "${storage_type} is not supported storage."
             exit 1;
@@ -437,14 +438,10 @@ generate_config_ini()
 [rpc]
     ; rpc listen ip
     listen_ip=${listen_ip}
-    ; channelserver listen port
     channel_listen_port=$(( offset + port_start[1] ))
-    ; jsonrpc listen port
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
-    ; p2p listen ip
     listen_ip=0.0.0.0
-    ; p2p listen port
     listen_port=$(( offset + port_start[0] ))
     ; nodes to connect
     $ip_list
@@ -455,13 +452,10 @@ generate_config_ini()
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
-;group configurations
-;WARNING: group 0 is forbided
 [group]
     group_data_path=data/
     group_config_path=${conf_path}/
 
-;certificate configuration
 [network_security]
     ; directory the certificates located in
     data_path=${conf_path}/
@@ -473,20 +467,18 @@ generate_config_ini()
     ca_cert=${prefix}ca.crt
 
 [storage_security]
-; enable storage_security or not
-;enable=true
+enable=false
 ; the IP of key mananger
-;key_manager_ip=
+key_manager_ip=
 ; the Port of key manager
-;key_manager_port=
-;cipher_data_key=
+key_manager_port=
+cipher_data_key=
 
 [chain]
     id=${chain_id}
 [compatibility]
-    supported_version=${fisco_version}
+    supported_version=${compatibility_version}
 [log]
-    ; the directory of the log
     log_path=./log
     ; info debug trace 
     level=${log_level}
@@ -511,7 +503,7 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
-    ; the node id of leaders
+    ; the node id of consensusers
     ${node_list}
 [state]
     ; support mpt/storage
@@ -926,8 +918,10 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # get fisco_version
-if [ -z "${fisco_version}" ];then
-    fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | head -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+# fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+if [ -z "${compatibility_version}" ];then
+    compatibility_version="${fisco_version}"
 fi
 
 # download fisco-bcos and check it
