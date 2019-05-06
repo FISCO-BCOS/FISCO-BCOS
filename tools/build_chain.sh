@@ -35,6 +35,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
+default_version="2.0.0-rc3"
 OS=
 
 help() {
@@ -930,6 +931,10 @@ fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/relea
 # fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"
+fi
+# in case network is broken
+if [ -z "${compatibility_version}" ];then
+    compatibility_version="${default_version}"
 fi
 
 # download fisco-bcos and check it

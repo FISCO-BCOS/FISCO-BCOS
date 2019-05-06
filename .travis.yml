@@ -57,7 +57,6 @@ addons:
     - libssl-dev
     - clang
     - ccache
-    - libmysqlclient-dev
     # - ninja-build
     - libomp-dev
     - openssl
