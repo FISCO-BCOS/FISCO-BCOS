@@ -248,6 +248,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
         auto tableData = table->dump();
+        tableData->tableName = dbIt.first;
 
         if (!tableData->data.empty())
         {
