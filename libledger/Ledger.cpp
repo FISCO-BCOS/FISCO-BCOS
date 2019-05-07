@@ -80,7 +80,7 @@ bool Ledger::initLedger(const std::string& _configFilePath)
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    m_dbInitializer->initStateDB(genesisHash);
+    m_dbInitializer->initState(genesisHash);
     if (!m_dbInitializer->stateFactory())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")

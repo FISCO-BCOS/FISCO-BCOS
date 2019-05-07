@@ -38,7 +38,6 @@ matrix:
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
         - os: osx
-          osx_image: xcode10.1
           osx_image: xcode10.2
           env: 
             - CACHE_NAME=osx

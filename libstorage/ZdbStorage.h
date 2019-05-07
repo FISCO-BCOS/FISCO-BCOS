@@ -38,16 +38,16 @@ public:
     ZdbStorage();
     virtual ~ZdbStorage(){};
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
-        Condition::Ptr condition = nullptr) override;
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    Entries::Ptr select(h256 _hash, int _num, TableInfo::Ptr _tableInfo, const std::string& _key,
+        Condition::Ptr _condition = nullptr) override;
+    size_t commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
     bool onlyDirty() override;
 
 public:
     void initSqlAccess(const ZDBConfig& _dbConfig);
 
 private:
-    SQLBasicAccess m_oSqlBasicAcc;
+    SQLBasicAccess m_sqlBasicAcc;
 };
 
 }  // namespace storage

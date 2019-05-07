@@ -31,11 +31,11 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
-Entries::Ptr ZdbStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
+    const std::string& _key, Condition::Ptr _condition)
 {
     Json::Value responseJson;
-    int iRet = m_oSqlBasicAcc.Select(hash, num, tableInfo->name, key, condition, responseJson);
+    int iRet = m_sqlBasicAcc.Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
     if (iRet < 0)
     {
         LOG(ERROR) << "Remote database return error:" << iRet;
@@ -48,8 +48,7 @@ Entries::Ptr ZdbStorage::select(
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
     {
-        std::string fieldName = responseJson["result"]["columns"].get(i, "").asString();
-        columns.push_back(fieldName);
+        columns.push_back(responseJson["result"]["columns"].get(i, "").asString());
     }
 
     Entries::Ptr entries = std::make_shared<Entries>();
@@ -74,9 +73,9 @@ Entries::Ptr ZdbStorage::select(
     return entries;
 }
 
-size_t ZdbStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    for (auto it : datas)
+    for (auto it : _datas)
     {
         for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
         {
@@ -104,7 +103,7 @@ size_t ZdbStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         }
     }
 
-    int32_t dwRowCount = m_oSqlBasicAcc.Commit(hash, (int32_t)num, datas);
+    int32_t dwRowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
     if (dwRowCount < 0)
     {
         LOG(ERROR) << "database return error:" << dwRowCount;
@@ -121,5 +120,5 @@ bool ZdbStorage::onlyDirty()
 
 void ZdbStorage::initSqlAccess(const storage::ZDBConfig& _dbConfig)
 {
-    m_oSqlBasicAcc.initConnPool(_dbConfig);
+    m_sqlBasicAcc.initConnPool(_dbConfig);
 }

@@ -56,21 +56,21 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
                            << " value:" << it.second.right.second;
             }
         }
-        ResultSet_T oResult = PreparedStatement_executeQuery(oPreSatement);
+        ResultSet_T result = PreparedStatement_executeQuery(oPreSatement);
         string strColumnName;
-        int32_t iColumnCnt = ResultSet_getColumnCount(oResult);
+        int32_t iColumnCnt = ResultSet_getColumnCount(result);
         for (int32_t iIndex = 1; iIndex <= iColumnCnt; ++iIndex)
         {
-            strColumnName = ResultSet_getColumnName(oResult, iIndex);
+            strColumnName = ResultSet_getColumnName(result, iIndex);
             respJson["result"]["columns"].append(strColumnName);
         }
 
-        while (ResultSet_next(oResult))
+        while (ResultSet_next(result))
         {
             Json::Value oValueJson;
             for (int32_t iIndex = 1; iIndex <= iColumnCnt; ++iIndex)
             {
-                oValueJson.append(ResultSet_getString(oResult, iIndex));
+                oValueJson.append(ResultSet_getString(result, iIndex));
             }
             respJson["result"]["data"].append(oValueJson);
         }
@@ -187,9 +187,9 @@ std::string SQLBasicAccess::BuildCreateTableSql(
 std::string SQLBasicAccess::GetCreateTableSql(const Entry::Ptr& entry)
 {
     auto fields = *entry->fields();
-    string strTableName = fields["table_name"];
-    string strKeyField = fields["key_field"];
-    string strValueField = fields["value_field"];
+    string strTableName(fields["table_name"]);
+    string strKeyField(fields["key_field"]);
+    string strValueField(fields["value_field"]);
     /*generate create table sql*/
     string strSql = BuildCreateTableSql(strTableName, strKeyField, strValueField);
     LOG(DEBUG) << "create table:" << strTableName << " keyfield:" << strKeyField
@@ -234,16 +234,12 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
 int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas)
 {
     LOG(DEBUG) << " commit hash:" << hash.hex() << " num:" << num;
-    char cNum[16] = {0};
-    snprintf(cNum, sizeof(cNum), "%d", num);
-    string strNum = cNum;
+    string strNum = to_string(num);
     if (datas.size() == 0)
     {
         LOG(DEBUG) << "Empty data just return";
         return 0;
     }
-
-    /*create table*/
 
     /*execute commit operation*/
 

@@ -118,7 +118,7 @@ void DBInitializer::initLevelDBStorage()
 
         if (!status.ok())
         {
-            throw std::runtime_error("open LevelDB failed");
+            BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment(status.ToString()));
         }
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());

@@ -49,7 +49,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
-    -s <DB type>                        Default rocksdb. Options can be rocksdb/external/mysql/leveldb
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / external / mysql / leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
     -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft

@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     BOOST_CHECK(dbInitializer->stateFactory() == nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() == nullptr);
     /// create executiveContext and stateFactory
-    dbInitializer->initStateDB(genesisHash);
+    dbInitializer->initState(genesisHash);
     BOOST_CHECK(dbInitializer->stateFactory() != nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() != nullptr);
     fakeLedger.setDBInitializer(dbInitializer);

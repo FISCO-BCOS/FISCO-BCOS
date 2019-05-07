@@ -46,7 +46,7 @@ public:
     ///  must be open before init
     virtual void initStorageDB();
     virtual ~DBInitializer() = default;
-    virtual void initStateDB(dev::h256 const& genesisHash)
+    virtual void initState(dev::h256 const& genesisHash)
     {
         if (!m_param)
             return;
@@ -83,11 +83,9 @@ private:
     void initLevelDBStorage2();
     void initRocksDBStorage();
 
-    /// TOCHECK: create storage/mpt state
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 
-    /// TODO: init zdb storage
     void initZdbStorage();
 
 
