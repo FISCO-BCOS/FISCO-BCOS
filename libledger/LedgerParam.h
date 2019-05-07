@@ -87,13 +87,13 @@ struct StorageParam
     size_t maxRetry;
 
     // for zdb storage
-    std::string dbtype;
-    std::string dbip;
-    uint32_t dbport;
-    std::string dbusername;
-    std::string dbpasswd;
-    std::string dbname;
-    std::string dbcharset;
+    std::string db_type;
+    std::string db_ip;
+    uint32_t db_port;
+    std::string db_username;
+    std::string db_passwd;
+    std::string db_name;
+    std::string db_charset;
     uint32_t initconnections;
     uint32_t maxconnections;
     int maxStoreKey;

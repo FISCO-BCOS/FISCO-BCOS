@@ -64,7 +64,7 @@ void DBInitializer::initStorageDB()
     {
         initLevelDBStorage();
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQLStorage"))
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
         initZdbStorage();
     }
@@ -258,10 +258,10 @@ void DBInitializer::initZdbStorage()
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
     auto zdbStorage = std::make_shared<ZdbStorage>();
 
-    zdbStorage->initSqlAccess(m_param->mutableStorageParam().dbtype,
-        m_param->mutableStorageParam().dbip, m_param->mutableStorageParam().dbport,
-        m_param->mutableStorageParam().dbusername, m_param->mutableStorageParam().dbpasswd,
-        m_param->mutableStorageParam().dbname, m_param->mutableStorageParam().dbcharset,
+    zdbStorage->initSqlAccess(m_param->mutableStorageParam().db_type,
+        m_param->mutableStorageParam().db_ip, m_param->mutableStorageParam().db_port,
+        m_param->mutableStorageParam().db_username, m_param->mutableStorageParam().db_passwd,
+        m_param->mutableStorageParam().db_name, m_param->mutableStorageParam().db_charset,
         m_param->mutableStorageParam().initconnections,
         m_param->mutableStorageParam().maxconnections);
     initTableFactory2(zdbStorage);
