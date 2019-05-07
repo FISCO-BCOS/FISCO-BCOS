@@ -44,9 +44,7 @@ public:
     bool onlyDirty() override;
 
 public:
-    void initSqlAccess(const std::string& dbtype, const std::string& dbip, uint32_t dbport,
-        const std::string& dbusername, const std::string& dbpasswd, const std::string& dbname,
-        const std::string& dbcharset, uint32_t initconnections, uint32_t maxconnections);
+    void initSqlAccess(const ZDBConfig& _dbConfig);
 
 private:
     SQLBasicAccess m_oSqlBasicAcc;

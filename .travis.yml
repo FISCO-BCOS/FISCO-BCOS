@@ -39,6 +39,7 @@ matrix:
             - ZIP_SUFFIX=ubuntu-xenial
         - os: osx
           osx_image: xcode10.1
+          osx_image: xcode10.2
           env: 
             - CACHE_NAME=osx
 git:
@@ -64,7 +65,6 @@ addons:
     packages:
     - openssl
     - clang-format
-    - mysql-connector-c
     - clang-omp
     - ccache
 install: |

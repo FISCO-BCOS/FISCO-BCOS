@@ -257,13 +257,12 @@ void DBInitializer::initZdbStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
     auto zdbStorage = std::make_shared<ZdbStorage>();
-
-    zdbStorage->initSqlAccess(m_param->mutableStorageParam().db_type,
-        m_param->mutableStorageParam().db_ip, m_param->mutableStorageParam().db_port,
-        m_param->mutableStorageParam().db_username, m_param->mutableStorageParam().db_passwd,
-        m_param->mutableStorageParam().db_name, m_param->mutableStorageParam().db_charset,
-        m_param->mutableStorageParam().initconnections,
-        m_param->mutableStorageParam().maxconnections);
+    ZDBConfig zdbConfig{m_param->mutableStorageParam().dbType, m_param->mutableStorageParam().dbIP,
+        m_param->mutableStorageParam().dbPort, m_param->mutableStorageParam().dbUsername,
+        m_param->mutableStorageParam().dbPasswd, m_param->mutableStorageParam().dbName,
+        m_param->mutableStorageParam().dbCharset, m_param->mutableStorageParam().initConnections,
+        m_param->mutableStorageParam().maxConnections};
+    zdbStorage->initSqlAccess(zdbConfig);
     initTableFactory2(zdbStorage);
 }
 

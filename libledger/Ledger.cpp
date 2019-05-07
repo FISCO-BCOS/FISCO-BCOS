@@ -355,29 +355,29 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
 
     // read db config from config eg:mysqlip mysqlport and so on
-    m_param->mutableStorageParam().db_type = pt.get<std::string>("storage.db_type", "mysql");
-    m_param->mutableStorageParam().db_ip = pt.get<std::string>("storage.db_ip", "127.0.0.1");
-    m_param->mutableStorageParam().db_port = pt.get<int>("storage.db_port", 3306);
-    m_param->mutableStorageParam().db_username = pt.get<std::string>("storage.db_username", "");
-    m_param->mutableStorageParam().db_passwd = pt.get<std::string>("storage.db_passwd", "");
-    m_param->mutableStorageParam().db_name = pt.get<std::string>("storage.db_name", "");
-    m_param->mutableStorageParam().db_charset = pt.get<std::string>("storage.db_charset", "utf8");
-    m_param->mutableStorageParam().initconnections = pt.get<int>("storage.init_connections", 5);
-    m_param->mutableStorageParam().maxconnections = pt.get<int>("storage.max_connections", 10);
+    m_param->mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
+    m_param->mutableStorageParam().dbIP = pt.get<std::string>("storage.db_ip", "127.0.0.1");
+    m_param->mutableStorageParam().dbPort = pt.get<int>("storage.db_port", 3306);
+    m_param->mutableStorageParam().dbUsername = pt.get<std::string>("storage.db_username", "");
+    m_param->mutableStorageParam().dbPasswd = pt.get<std::string>("storage.db_passwd", "");
+    m_param->mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
+    m_param->mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
+    m_param->mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 5);
+    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 10);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
                       << LOG_KV("baseDir", m_param->baseDir())
-                      << LOG_KV("dbtype", m_param->mutableStorageParam().db_type)
-                      << LOG_KV("dbip", m_param->mutableStorageParam().db_ip)
-                      << LOG_KV("dbport", m_param->mutableStorageParam().db_port)
-                      << LOG_KV("dbusername", m_param->mutableStorageParam().db_username)
-                      << LOG_KV("dbpasswd", m_param->mutableStorageParam().db_passwd)
-                      << LOG_KV("dbname", m_param->mutableStorageParam().db_name)
-                      << LOG_KV("dbcharset", m_param->mutableStorageParam().db_charset)
-                      << LOG_KV("initconnections", m_param->mutableStorageParam().initconnections)
-                      << LOG_KV("maxconnections", m_param->mutableStorageParam().maxconnections);
+                      << LOG_KV("dbtype", m_param->mutableStorageParam().dbType)
+                      << LOG_KV("dbip", m_param->mutableStorageParam().dbIP)
+                      << LOG_KV("dbport", m_param->mutableStorageParam().dbPort)
+                      << LOG_KV("dbusername", m_param->mutableStorageParam().dbUsername)
+                      << LOG_KV("dbpasswd", m_param->mutableStorageParam().dbPasswd)
+                      << LOG_KV("dbname", m_param->mutableStorageParam().dbName)
+                      << LOG_KV("dbcharset", m_param->mutableStorageParam().dbCharset)
+                      << LOG_KV("initconnections", m_param->mutableStorageParam().initConnections)
+                      << LOG_KV("maxconnections", m_param->mutableStorageParam().maxConnections);
 }
 
 /// init tx related configurations

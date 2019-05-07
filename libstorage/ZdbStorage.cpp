@@ -119,11 +119,7 @@ bool ZdbStorage::onlyDirty()
     return true;
 }
 
-
-void ZdbStorage::initSqlAccess(const std::string& dbtype, const std::string& dbip, uint32_t dbport,
-    const std::string& dbusername, const std::string& dbpasswd, const std::string& dbname,
-    const std::string& dbcharset, uint32_t initconnections, uint32_t maxconnections)
+void ZdbStorage::initSqlAccess(const storage::ZDBConfig& _dbConfig)
 {
-    m_oSqlBasicAcc.initConnPool(dbtype, dbip, dbport, dbusername, dbpasswd, dbname, dbcharset,
-        initconnections, maxconnections);
+    m_oSqlBasicAcc.initConnPool(_dbConfig);
 }
