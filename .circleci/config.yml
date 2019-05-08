@@ -9,7 +9,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev ccache
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev zlib1g-dev ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -86,7 +86,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -125,7 +125,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
