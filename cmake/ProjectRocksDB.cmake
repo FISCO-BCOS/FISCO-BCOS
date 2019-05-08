@@ -14,7 +14,7 @@ ExternalProject_Add(rocksdb
     URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
     PATCH_COMMAND ${SED_CMMAND} "s#-march=native#-march=x86-64 -mtune=generic#g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt
-    BUILD_IN_SOURCE 1
+    BUILD_IN_SOURCE 0
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=on
@@ -51,5 +51,5 @@ set_property(TARGET RocksDB PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${ROCKSDB_INC
 set_property(TARGET RocksDB PROPERTY INTERFACE_LINK_LIBRARIES Snappy)
 
 add_dependencies(rocksdb Snappy)
-add_dependencies(RocksDB rocksdb Snappy)
+add_dependencies(RocksDB rocksdb)
 unset(INSTALL_DIR)
