@@ -21,6 +21,11 @@
 
 #include "LevelDBStorage2.h"
 #include "Table.h"
+#include "boost/archive/binary_iarchive.hpp"
+#include "boost/archive/binary_oarchive.hpp"
+#include "boost/serialization/map.hpp"
+#include "boost/serialization/serialization.hpp"
+#include "boost/serialization/vector.hpp"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/BasicLevelDB.h>
@@ -33,6 +38,7 @@
 #include <memory>
 #include <thread>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 
@@ -59,21 +65,18 @@ Entries::Ptr LevelDBStorage2::select(
         Entries::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
-            // parse json
-            std::stringstream ssIn;
-            ssIn << value;
+            std::vector<std::map<std::string, std::string>> res;
+            stringstream ss(value);
+            boost::archive::binary_iarchive ia(ss);
+            ia >> res;
 
-            Json::Value valueJson;
-            ssIn >> valueJson;
-
-            Json::Value values = valueJson["values"];
-            for (auto it = values.begin(); it != values.end(); ++it)
+            for (auto it = res.begin(); it != res.end(); ++it)
             {
                 Entry::Ptr entry = std::make_shared<Entry>();
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    entry->setField(valueIt.key().asString(), valueIt->asString());
+                    entry->setField(valueIt->first, valueIt->second);
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
@@ -106,8 +109,9 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
         for (size_t i = 0; i < datas.size(); ++i)
         {
-            std::shared_ptr<std::map<std::string, Json::Value> > key2value =
-                std::make_shared<std::map<std::string, Json::Value> >();
+            std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+                key2value = std::make_shared<
+                    std::map<std::string, std::vector<std::map<std::string, std::string>>>>();
 
             auto tableInfo = datas[i]->info;
 
@@ -117,10 +121,11 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
             for (auto it : *key2value)
             {
                 std::string entryKey = tableInfo->name + "_" + it.first;
-                std::stringstream ssOut;
-                ssOut << it.second;
+                stringstream ss;
+                boost::archive::binary_oarchive oa(ss);
+                oa << it.second;
 
-                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ss.str()));
             }
         }
 
@@ -149,8 +154,9 @@ void LevelDBStorage2::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
 }
 
 void LevelDBStorage2::processEntries(h256 hash, int64_t num,
-    std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
-    Entries::Ptr entries)
+    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+        key2value,
+    TableInfo::Ptr tableInfo, Entries::Ptr entries)
 {
     for (size_t j = 0; j < entries->size(); ++j)
     {
@@ -177,21 +183,22 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
 
             if (s.IsNotFound())
             {
-                it = key2value->insert(std::make_pair(key, Json::Value())).first;
+                it = key2value
+                         ->insert(
+                             std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
+                         .first;
             }
             else
             {
-                std::stringstream ssIn;
-                ssIn << value;
-
-                Json::Value valueJson;
-                ssIn >> valueJson;
-
-                it = key2value->emplace(key, valueJson).first;
+                std::vector<std::map<std::string, std::string>> res;
+                stringstream ss(value);
+                boost::archive::binary_iarchive ia(ss);
+                ia >> res;
+                it = key2value->emplace(key, res).first;
             }
         }
 
-        Json::Value value;
+        std::map<std::string, std::string> value;
         for (auto& fieldIt : *(entry->fields()))
         {
             value[fieldIt.first] = fieldIt.second;
@@ -199,21 +206,19 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
 
-        auto searchIt = std::lower_bound(it->second["values"].begin(), it->second["values"].end(),
-            value, [](const Json::Value& lhs, const Json::Value& rhs) {
-                // LOG(ERROR) << "lhs: " << lhs.toStyledString() << "rhs: " <<
-                // rhs.toStyledString();
-                return boost::lexical_cast<size_t>(lhs["_id_"].asString()) <
-                       boost::lexical_cast<size_t>(rhs["_id_"].asString());
+        auto searchIt = std::lower_bound(it->second.begin(), it->second.end(), value,
+            [](const std::map<std::string, std::string>& lhs,
+                const std::map<std::string, std::string>& rhs) {
+                return lhs.at("_id_") < rhs.at("_id_");
             });
 
-        if (searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"])
+        if (searchIt != it->second.end() && (*searchIt)["_id_"] == value["_id_"])
         {
             *searchIt = value;
         }
         else
         {
-            it->second["values"].append(value);
+            it->second.push_back(value);
         }
     }
 }
