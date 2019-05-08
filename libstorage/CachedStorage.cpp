@@ -415,21 +415,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         {
             storage->setSyncNum(task->num);
 
-            std::stringstream capacityNum;
-
-            if(storage->m_capacity > 1024 * 1024 * 1024) {
-            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024*1024*1024)) << " GB";
-            }
-            else if(storage->m_capacity > 1024 * 1024) {
-            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024*1024)) << " MB";
-            }
-            else if(storage->m_capacity > 1024) {
-            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024)) << " KB";
-            }
-            else {
-            	capacityNum << storage->m_capacity << " B";
-            }
-
             std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
             STORAGE_LOG(INFO) << "\n---------------------------------------------------------------------\n"
             				<< "Commit block: " << task->num
@@ -444,7 +429,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                               << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
                               << std::setprecision(4) << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
 							  << "\n\n"
-							  << "Cache capacity: " << capacityNum.str()
+							  << "Cache capacity: " << storage->readableCapacity(storage->m_capacity)
 							  << "\n---------------------------------------------------------------------\n";
         }
     });
@@ -529,6 +514,8 @@ void CachedStorage::checkAndClear()
 
     size_t clearCount = 0;
 	auto currentCapacity = m_capacity;
+
+	auto now = std::chrono::system_clock::now();
     do
     {
         needClear = false;
@@ -553,7 +540,6 @@ void CachedStorage::checkAndClear()
         	needClear = true;
         }
 
-
         if (needClear)
         {
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
@@ -570,16 +556,17 @@ void CachedStorage::checkAndClear()
                                 << "Clear last recent record: "
                                 << tableIt->second->tableInfo()->name << "-" << it->second;
 
+                            size_t totalCapacity = 0;
                             for(auto entryIt: *(cache->entries())) {
-                            	updateCapacity(entryIt->capacity(), 0);
+                            	totalCapacity += entryIt->capacity();
 
                             	++clearCount;
                             }
 
+                            updateCapacity(totalCapacity, 0);
+
                             tableIt->second->removeCache(it->second);
                             it = m_mru.erase(it);
-
-
                         }
                     }
                     else
@@ -597,13 +584,13 @@ void CachedStorage::checkAndClear()
                     break;
                 }
             }
+            ++clearTimes;
         }
-
-        ++clearTimes;
     } while (needClear);
 
     if(clearTimes > 0) {
-    	LOG(INFO) << "Clear finished, total: " << clearCount << " entries, " << readableCapacity(currentCapacity - m_capacity) << " capacity";
+    	std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+    	LOG(INFO) << "Clear finished, total: " << clearCount << " entries, " << readableCapacity(currentCapacity - m_capacity) << " capacity, elapsed: " << elapsed.count() << "s";
     }
 }
 

@@ -118,6 +118,7 @@ void Entry::setField(const std::string& key, const std::string& value)
         m_capacity += (key.size() + value.size());
     }
 
+    assert(m_capacity >= 0);
     m_dirty = true;
 }
 
@@ -230,7 +231,7 @@ void Entry::setDeleted(bool deleted)
     m_deleted = deleted;
 }
 
-size_t Entry::capacity() const
+ssize_t Entry::capacity() const
 {
     return m_capacity;
 }
