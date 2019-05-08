@@ -117,6 +117,7 @@ private:
     void touchMRU(std::string table, std::string key);
     void checkAndClear();
     void updateCapacity(ssize_t oldSize, ssize_t newSize);
+    std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<std::pair<std::string, std::string>,
@@ -130,7 +131,7 @@ private:
 
     boost::atomic_size_t m_syncNum;
     boost::atomic_size_t m_commitNum;
-    boost::atomic_int64_t m_capacity;
+    tbb::atomic<int64_t> m_capacity;
 
     size_t m_maxForwardBlock = 10;
     size_t m_maxCapacity = 256 * 1024 * 1024; // default 256MB for cache

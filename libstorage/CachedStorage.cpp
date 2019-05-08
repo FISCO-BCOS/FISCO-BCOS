@@ -190,12 +190,20 @@ Caches::Ptr CachedStorage::selectNoCondition(
             tableIt->second->setTableInfo(tableInfo);
         }
 
+        STORAGE_LOG(DEBUG) << tableInfo->name << "-" << key << " miss the cache";
+
         auto caches = std::make_shared<Caches>();
         caches->setKey(key);
         caches->setEntries(backendData);
 
         auto newIt = tableIt->second->addCache(key, caches);
 
+        size_t totalCapacity = 0;
+        for(auto it: *backendData) {
+        	totalCapacity += it->capacity();
+        }
+
+        updateCapacity(0, totalCapacity);
         touchMRU(tableInfo->name, key);
 
         return newIt.first->second;
@@ -422,12 +430,13 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             	capacityNum << storage->m_capacity << " B";
             }
 
+            std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
             STORAGE_LOG(INFO) << "\n---------------------------------------------------------------------\n"
             				<< "Commit block: " << task->num
                               << " to backend storage finished, current syncd block: "
                               << storage->syncNum()
 							  << "\n"
-							  << "Flush elapsed time: " << (std::chrono::system_clock::now() - now).count() << "s"
+							  << "Flush elapsed time: " << elapsed.count() << "s"
 							  << "\n\n"
             				  << "Total query: " << storage->m_queryTimes << "\n"
                               << "Total cache hit: " << storage->m_hitTimes << "\n"
@@ -518,6 +527,8 @@ void CachedStorage::checkAndClear()
     bool needClear = false;
     size_t clearTimes = 0;
 
+    size_t clearCount = 0;
+	auto currentCapacity = m_capacity;
     do
     {
         needClear = false;
@@ -542,6 +553,7 @@ void CachedStorage::checkAndClear()
         	needClear = true;
         }
 
+
         if (needClear)
         {
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
@@ -560,10 +572,14 @@ void CachedStorage::checkAndClear()
 
                             for(auto entryIt: *(cache->entries())) {
                             	updateCapacity(entryIt->capacity(), 0);
+
+                            	++clearCount;
                             }
 
                             tableIt->second->removeCache(it->second);
                             it = m_mru.erase(it);
+
+
                         }
                     }
                     else
@@ -585,8 +601,31 @@ void CachedStorage::checkAndClear()
 
         ++clearTimes;
     } while (needClear);
+
+    if(clearTimes > 0) {
+    	LOG(INFO) << "Clear finished, total: " << clearCount << " entries, " << readableCapacity(currentCapacity - m_capacity) << " capacity";
+    }
 }
 
 void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize) {
 	m_capacity += (newSize - oldSize);
+}
+
+std::string CachedStorage::readableCapacity(size_t num) {
+	std::stringstream capacityNum;
+
+	if(num > 1024 * 1024 * 1024) {
+		capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)num / (1024*1024*1024)) << " GB";
+	}
+	else if(num > 1024 * 1024) {
+		capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)num / (1024*1024)) << " MB";
+	}
+	else if(num > 1024) {
+		capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)num / (1024)) << " KB";
+	}
+	else {
+		capacityNum << num << " B";
+	}
+
+	return capacityNum.str();
 }
