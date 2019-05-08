@@ -115,8 +115,8 @@ std::string Rpc::getBlockNumber(int _groupID)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getBlockNumber") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
+        RPC_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_DESC("request")
+                       << LOG_KV("groupID", _groupID);
 
         checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);

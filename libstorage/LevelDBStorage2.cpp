@@ -205,7 +205,6 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
                 // rhs.toStyledString();
                 return boost::lexical_cast<size_t>(lhs["_id_"].asString()) <
                        boost::lexical_cast<size_t>(rhs["_id_"].asString());
-                return false;
             });
 
         if (searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"])
