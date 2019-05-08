@@ -588,5 +588,5 @@ void CachedStorage::checkAndClear()
 }
 
 void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize) {
-	m_capacity += (oldSize - newSize);
+	m_capacity += (newSize - oldSize);
 }
