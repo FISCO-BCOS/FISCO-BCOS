@@ -157,6 +157,12 @@ std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
 std::string SQLBasicAccess::BuildCreateTableSql(
     const std::string& tablename, const std::string& keyfield, const std::string& valuefield)
 {
+    boost::algorithm::replace_all_copy(tablename, "\\", "\\\\");
+    boost::algorithm::replace_all_copy(tablename, "`", "\\`");
+
+    boost::algorithm::replace_all_copy(keyfield, "\\", "\\\\");
+    boost::algorithm::replace_all_copy(keyfield, "`", "\\`");
+
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << tablename << "`(\n";
     ss << " `_id_` int unsigned auto_increment,\n";
@@ -171,6 +177,8 @@ std::string SQLBasicAccess::BuildCreateTableSql(
     auto it = vecSplit.begin();
     for (; it != vecSplit.end(); ++it)
     {
+        boost::algorithm::replace_all_copy(*it, "\\", "\\\\");
+        boost::algorithm::replace_all_copy(*it, "`", "\\`");
         ss << "`" << *it << "` text default '',\n";
     }
     LOG(DEBUG) << "valuefield:" << valuefield;
@@ -187,14 +195,14 @@ std::string SQLBasicAccess::BuildCreateTableSql(
 std::string SQLBasicAccess::GetCreateTableSql(const Entry::Ptr& entry)
 {
     auto fields = *entry->fields();
-    string strTableName(fields["table_name"]);
-    string strKeyField(fields["key_field"]);
-    string strValueField(fields["value_field"]);
+    string table_name(fields["table_name"]);
+    string key_field(fields["key_field"]);
+    string value_field(fields["value_field"]);
     /*generate create table sql*/
-    string strSql = BuildCreateTableSql(strTableName, strKeyField, strValueField);
-    LOG(DEBUG) << "create table:" << strTableName << " keyfield:" << strKeyField
-               << " value field:" << strValueField << " sql:" << strSql;
-    return strSql;
+    string _sql = BuildCreateTableSql(table_name, key_field, value_field);
+    LOG(DEBUG) << "create table:" << table_name << " keyfield:" << key_field
+               << " value field:" << value_field << " sql:" << _sql;
+    return _sql;
 }
 
 
@@ -375,4 +383,24 @@ std::string SQLBasicAccess::BuildCommitSql(const std::string& _table,
 bool SQLBasicAccess::initConnPool(const storage::ZDBConfig& _dbConfig)
 {
     return m_oConnPool.InitConnectionPool(_dbConfig);
+}
+
+void SQLBasicAccess::ExecuteSql(const std::string& _sql)
+{
+    Connection_T conn = m_oConnPool.GetConnection();
+    if (conn == NULL)
+    {
+        LOG(DEBUG) << "get connection failed sql:" << _sql;
+        THROW(SQLException, "PreparedStatement_executeQuery");
+    }
+
+    TRY { Connection_execute(conn, "%s", _sql.c_str()); }
+    CATCH(SQLException)
+    {
+        LOG(ERROR) << "execute sql failed sql:" << _sql;
+        m_oConnPool.ReturnConnection(conn);
+    }
+    END_TRY;
+    LOG(ERROR) << "execute sql success sql:" << _sql;
+    m_oConnPool.ReturnConnection(conn);
 }
