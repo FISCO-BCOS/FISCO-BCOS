@@ -422,7 +422,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             	capacityNum << storage->m_capacity << " B";
             }
 
-            STORAGE_LOG(INFO) << "---------------------------------------------------------------------\n"
+            STORAGE_LOG(INFO) << "\n---------------------------------------------------------------------\n"
             				<< "Commit block: " << task->num
                               << " to backend storage finished, current syncd block: "
                               << storage->syncNum()
@@ -436,7 +436,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                               << std::setprecision(4) << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
 							  << "\n\n"
 							  << "Cache capacity: " << capacityNum.str()
-							  << "---------------------------------------------------------------------\n";
+							  << "\n---------------------------------------------------------------------\n";
         }
     });
 
@@ -537,7 +537,7 @@ void CachedStorage::checkAndClear()
                               << ", waiting...";
             needClear = true;
         }
-        else if(m_capacity > m_maxCapacity) {
+        else if(m_capacity > (int64_t)m_maxCapacity) {
         	STORAGE_LOG(INFO) << "Current capacity: " << m_capacity << " greater than max capacity: " << m_maxCapacity << ", waiting...";
         	needClear = true;
         }
@@ -576,7 +576,7 @@ void CachedStorage::checkAndClear()
                     it = m_mru.erase(it);
                 }
 
-                if (m_capacity <= m_maxCapacity)
+                if (m_capacity <= (int64_t)m_maxCapacity)
                 {
                     break;
                 }
@@ -587,11 +587,6 @@ void CachedStorage::checkAndClear()
     } while (needClear);
 }
 
-void CachedStorage::updateCapacity(size_t oldSize, size_t newSize) {
-	if(oldSize > m_capacity) {
-		STORAGE_LOG(FATAL) << "oldSize: " << oldSize << " greater than capacity: " << m_capacity;
-	}
-
-	assert(m_capacity >= oldSize);
-	m_capacity += (ssize_t((ssize_t)oldSize - (ssize_t)newSize));
+void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize) {
+	m_capacity += (oldSize - newSize);
 }
