@@ -56,6 +56,7 @@ private:
 
 public:
     bool initConnPool(const storage::ZDBConfig& _dbConfig);
+    void ExecuteSql(const std::string& _sql);
 
 private:
     dev::storage::SQLConnectionPool m_oConnPool;
