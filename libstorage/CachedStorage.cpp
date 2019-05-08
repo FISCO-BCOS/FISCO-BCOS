@@ -252,10 +252,14 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                                 if (entryIt != caches->entries()->end() && (*entryIt)->getID() == id)
                                 {
+                                	auto oldSize = (*entryIt)->capacity();
+
                                     for (auto fieldIt : *entry->fields())
                                     {
 										(*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
+
+                                    updateCapacity(oldSize, (*entryIt)->capacity());
 
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
@@ -338,7 +342,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 caches->setNum(num);
 
                                 auto newIt = tableIt->second->addCache(key, caches);
+
                                 newIt.first->second->entries()->addEntry(cacheEntry);
+                                updateCapacity(0, cacheEntry->capacity());
 
                                 newEntries->addEntry(cacheEntry);
                             }
@@ -457,9 +463,9 @@ void CachedStorage::setSyncNum(int64_t syncNum)
     m_syncNum.store(syncNum);
 }
 
-void CachedStorage::setMaxStoreKey(size_t maxStoreKey)
+void CachedStorage::setMaxCapacity(size_t maxCapacity)
 {
-    m_maxStoreKey = maxStoreKey;
+    m_maxCapacity = maxCapacity;
 }
 
 void CachedStorage::setMaxForwardBlock(size_t maxForwardBlock)
@@ -492,29 +498,28 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
+        tbb::mutex::scoped_lock lock(m_mutex);
+
         if (clearTimes > 1)
         {
             size_t sleepTimes = clearTimes < 20 ? clearTimes * 100 : 20 * 100;
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
         }
 
-        if (m_mru.size() > m_maxStoreKey)
-        {
-            STORAGE_LOG(INFO) << "Total keys: " << m_mru.size()
-                              << " greater than maxStoreKey: " << m_maxStoreKey << ", waiting...";
-            needClear = true;
-        }
-        else if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
+        if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
         {
             STORAGE_LOG(INFO) << "Current block number: " << m_commitNum
                               << " greater than syncd block number: " << m_syncNum
                               << ", waiting...";
             needClear = true;
         }
+        else if(m_capacity > m_maxCapacity) {
+        	STORAGE_LOG(INFO) << "Current capacity: " << m_capacity << " greater than max capacity: " << m_maxCapacity << ", waiting...";
+        	needClear = true;
+        }
 
         if (needClear)
         {
-            tbb::mutex::scoped_lock lock(m_mutex);
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
                 auto tableIt = m_caches.find(it->first);
@@ -528,6 +533,11 @@ void CachedStorage::checkAndClear()
                             STORAGE_LOG(TRACE)
                                 << "Clear last recent record: "
                                 << tableIt->second->tableInfo()->name << "-" << it->second;
+
+                            for(auto entryIt: *(cache->entries())) {
+                            	updateCapacity(entryIt->capacity(), 0);
+                            }
+
                             tableIt->second->removeCache(it->second);
                             it = m_mru.erase(it);
                         }
@@ -542,7 +552,7 @@ void CachedStorage::checkAndClear()
                     it = m_mru.erase(it);
                 }
 
-                if (m_mru.size() <= m_maxStoreKey)
+                if (m_capacity <= m_maxCapacity)
                 {
                     break;
                 }
@@ -551,4 +561,13 @@ void CachedStorage::checkAndClear()
 
         ++clearTimes;
     } while (needClear);
+}
+
+void CachedStorage::updateCapacity(size_t oldSize, size_t newSize) {
+	if(oldSize > m_capacity) {
+		STORAGE_LOG(FATAL) << "oldSize: " << oldSize << " greater than capacity: " << m_capacity;
+	}
+
+	assert(m_capacity >= oldSize);
+	m_capacity += (ssize_t((ssize_t)oldSize - (ssize_t)newSize));
 }
