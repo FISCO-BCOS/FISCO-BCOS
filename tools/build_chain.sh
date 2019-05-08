@@ -35,6 +35,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
+default_version="2.0.0-rc3"
 OS=
 
 help() {
@@ -48,7 +49,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
-    -s <DB type>                        Default rocksdb. Options can be rocksdb/leveldb2/external/leveldb
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / external / mysql / leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
     -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
@@ -528,13 +529,19 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ; storage db type, leveldb/leveldb2/external/rocksdb are supported
+    ; storage db type, rocksdb / external / mysql / leveldb are supported
     type=${storage_type}
-    max_retry=100
     max_store_key=10000
     max_forward_block=100
-    ; topic only for external
+    ; only for external
+    max_retry=100
     topic=DB
+    ; only for mysql
+    db_ip=127.0.0.1
+    db_port=3306
+    db_username=
+    db_passwd=
+    db_name=
 [tx_pool]
     limit=150000
 [tx_execute]
@@ -930,6 +937,10 @@ fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/relea
 # fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"
+fi
+# in case network is broken
+if [ -z "${compatibility_version}" ];then
+    compatibility_version="${default_version}"
 fi
 
 # download fisco-bcos and check it
