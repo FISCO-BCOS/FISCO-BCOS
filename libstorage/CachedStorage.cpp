@@ -590,7 +590,11 @@ void CachedStorage::checkAndClear()
 
     if(clearTimes > 0) {
     	std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-    	LOG(INFO) << "Clear finished, total: " << clearCount << " entries, " << readableCapacity(currentCapacity - m_capacity) << " capacity, elapsed: " << elapsed.count() << "s";
+    	LOG(INFO) << "Clear finished, total: "
+    			<< clearCount << " entries, "
+				<< readableCapacity(currentCapacity - m_capacity)
+				<< " capacity, elapsed: " << elapsed.count() << "s\n"
+				<< "Current total cached entries: " << m_mru.size() << ", total capacaity: " << readableCapacity(m_capacity);
     }
 }
 
