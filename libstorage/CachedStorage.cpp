@@ -344,7 +344,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 auto newIt = tableIt->second->addCache(key, caches);
 
                                 newIt.first->second->entries()->addEntry(cacheEntry);
-                                updateCapacity(0, cacheEntry->capacity());
 
                                 newEntries->addEntry(cacheEntry);
                             }
@@ -356,6 +355,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 caches->setNum(num);
                             }
 
+                            updateCapacity(0, cacheEntry->capacity());
                             touchMRU(commitData->info->name, key);
                         }
                     });
@@ -397,6 +397,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     m_commitNum.store(num);
     m_taskThreadPool->enqueue([backend, task, self]() {
+    	auto now = std::chrono::system_clock::now();
         STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
 
         backend->commit(task->hash, task->num, *(task->datas));
@@ -405,14 +406,37 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         if (storage)
         {
             storage->setSyncNum(task->num);
-            STORAGE_LOG(INFO) << "Commit block: " << task->num
+
+            std::stringstream capacityNum;
+
+            if(storage->m_capacity > 1024 * 1024 * 1024) {
+            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024*1024*1024)) << " GB";
+            }
+            else if(storage->m_capacity > 1024 * 1024) {
+            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024*1024)) << " MB";
+            }
+            else if(storage->m_capacity > 1024) {
+            	capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4) << ((double)storage->m_capacity / (1024)) << " KB";
+            }
+            else {
+            	capacityNum << storage->m_capacity << " B";
+            }
+
+            STORAGE_LOG(INFO) << "---------------------------------------------------------------------\n"
+            				<< "Commit block: " << task->num
                               << " to backend storage finished, current syncd block: "
-                              << storage->syncNum();
-            STORAGE_LOG(INFO) << "Total query: " << storage->m_queryTimes
-                              << " cache hit: " << storage->m_hitTimes
-                              << " hit ratio: " << std::setiosflags(std::ios::fixed)
-                              << std::setprecision(4)
-                              << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%";
+                              << storage->syncNum()
+							  << "\n"
+							  << "Flush elapsed time: " << (std::chrono::system_clock::now() - now).count() << "s"
+							  << "\n\n"
+            				  << "Total query: " << storage->m_queryTimes << "\n"
+                              << "Total cache hit: " << storage->m_hitTimes << "\n"
+							  << "Total cache miss: " << storage->m_queryTimes - storage->m_hitTimes << "\n"
+                              << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
+                              << std::setprecision(4) << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
+							  << "\n\n"
+							  << "Cache capacity: " << capacityNum.str()
+							  << "---------------------------------------------------------------------\n";
         }
     });
 
@@ -528,7 +552,7 @@ void CachedStorage::checkAndClear()
                     auto cache = tableIt->second->findCache(it->second);
                     if (cache)
                     {
-                        if (cache->num() <= m_syncNum)
+                        if ((size_t)cache->num() <= m_syncNum)
                         {
                             STORAGE_LOG(TRACE)
                                 << "Clear last recent record: "
