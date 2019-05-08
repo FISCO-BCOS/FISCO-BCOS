@@ -20,6 +20,7 @@
  */
 
 #include "SQLBasicAccess.h"
+#include "StorageException.h"
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -399,8 +400,9 @@ void SQLBasicAccess::ExecuteSql(const std::string& _sql)
     {
         LOG(ERROR) << "execute sql failed sql:" << _sql;
         m_oConnPool.ReturnConnection(conn);
+        throw StorageException(-1, "execute sql failed sql:" + _sql);
     }
     END_TRY;
-    LOG(ERROR) << "execute sql success sql:" << _sql;
+    LOG(DEBUG) << "execute sql success sql:" << _sql;
     m_oConnPool.ReturnConnection(conn);
 }
