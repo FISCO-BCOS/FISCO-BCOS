@@ -49,8 +49,9 @@ public:
 
 private:
     void processEntries(h256 hash, int64_t num,
-        std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
-        Entries::Ptr entries);
+        std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+            key2value,
+        TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
