@@ -48,6 +48,20 @@ public:
 
 private:
     SQLBasicAccess m_sqlBasicAcc;
+
+private:
+    void initSysTables();
+    void createSysTables();
+    void createSysConsensus();
+    void createAccessTables();
+    void createCurrentStateTables();
+    void createNumber2HashTables();
+    void createTxHash2BlockTables();
+    void createHash2BlockTables();
+    void createCnsTables();
+    void createSysConfigTables();
+    void createSysBlock2NoncesTables();
+    void insertSysTables();
 };
 
 }  // namespace storage
