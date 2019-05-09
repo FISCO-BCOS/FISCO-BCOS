@@ -124,3 +124,12 @@ SQLConnectionPool::~SQLConnectionPool()
     ConnectionPool_stop(m_connectionPool);
     ConnectionPool_free(&m_connectionPool);
 }
+
+int SQLConnectionPool::GetActiveConnections()
+{
+    return ConnectionPool_active(m_connectionPool);
+}
+int SQLConnectionPool::GetMaxConnections()
+{
+    return ConnectionPool_getMaxConnections(m_connectionPool);
+}
