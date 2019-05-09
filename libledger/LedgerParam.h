@@ -85,7 +85,7 @@ struct StorageParam
     std::string topic;
     size_t timeout;
     int maxRetry;
-    //int maxStoreKey;
+    // int maxStoreKey;
     int maxCapacity;
     int maxForwardBlock;
 };

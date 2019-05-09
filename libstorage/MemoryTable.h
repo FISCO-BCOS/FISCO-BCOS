@@ -276,8 +276,8 @@ public:
 
     virtual TableData::Ptr dump() override
     {
-    	auto _data = std::make_shared<TableData>();
-    	bool dirtyTable = false;
+        auto _data = std::make_shared<TableData>();
+        bool dirtyTable = false;
 
         for (auto it : m_cache)
         {
@@ -289,11 +289,13 @@ public:
             }
         }
 
-        if(dirtyTable) {
-        	return _data;
+        if (dirtyTable)
+        {
+            return _data;
         }
-        else {
-        	return std::make_shared<TableData>();
+        else
+        {
+            return std::make_shared<TableData>();
         }
     }
 

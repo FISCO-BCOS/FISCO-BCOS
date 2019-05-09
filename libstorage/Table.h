@@ -71,7 +71,7 @@ public:
 
     virtual uint32_t getID() const;
     virtual void setID(uint32_t id);
-    virtual void setID(const std::string &id);
+    virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
@@ -83,7 +83,7 @@ public:
 
     virtual int getStatus() const;
     virtual void setStatus(int status);
-    virtual void setStatus(const std::string &status);
+    virtual void setStatus(const std::string& status);
 
     virtual uint32_t num() const;
     virtual void setNum(uint32_t num);
@@ -130,7 +130,7 @@ private:
 class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
-	typedef tbb::concurrent_vector<Entry::Ptr> Vector;
+    typedef tbb::concurrent_vector<Entry::Ptr> Vector;
 
     typedef std::shared_ptr<Entries> Ptr;
     typedef std::shared_ptr<const Entries> ConstPtr;

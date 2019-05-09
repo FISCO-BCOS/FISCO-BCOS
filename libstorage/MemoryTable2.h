@@ -171,7 +171,7 @@ private:
     h256 m_blockHash;
     int m_blockNum = 0;
 
-    bool m_isDirty = false; // mark if the tableData had been dump
+    bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
     dev::storage::TableData::Ptr m_tableData;
 };

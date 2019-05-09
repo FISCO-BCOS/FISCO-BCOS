@@ -234,7 +234,7 @@ void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
             std::string entryKey = tableInfo->name;
             entryKey.append("_").append(key);
 
-			it = key2value->insert(std::make_pair(key, Json::Value())).first;
+            it = key2value->insert(std::make_pair(key, Json::Value())).first;
         }
 
         Json::Value value;
@@ -245,6 +245,6 @@ void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
 
-		it->second["values"].append(value);
+        it->second["values"].append(value);
     }
 }

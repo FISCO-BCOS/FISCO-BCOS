@@ -134,7 +134,7 @@ private:
     tbb::atomic<int64_t> m_capacity;
 
     size_t m_maxForwardBlock = 10;
-    size_t m_maxCapacity = 256 * 1024 * 1024; // default 256MB for cache
+    size_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
 
     tbb::mutex m_mutex;
 

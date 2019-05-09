@@ -333,7 +333,8 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
-    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256 * 1024 * 1024);
+    m_param->mutableStorageParam().maxCapacity =
+        pt.get<int>("storage.max_capacity", 256 * 1024 * 1024);
     if (m_param->mutableStorageParam().maxCapacity < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()

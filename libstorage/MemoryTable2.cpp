@@ -75,13 +75,14 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
         }
 
         auto it = m_newEntries.find(key);
-        if(it != m_newEntries.end()) {
-			auto indices = processEntries(it->second, condition);
-			for (auto itIndex : indices)
-			{
-				it->second->get(itIndex)->setTempIndex(itIndex);
-				entries->addEntry(it->second->get(itIndex));
-			}
+        if (it != m_newEntries.end())
+        {
+            auto indices = processEntries(it->second, condition);
+            for (auto itIndex : indices)
+            {
+                it->second->get(itIndex)->setTempIndex(itIndex);
+                entries->addEntry(it->second->get(itIndex));
+            }
         }
 
         return entries;
@@ -172,13 +173,14 @@ int MemoryTable2::insert(
         entry->setField(m_tableInfo->key, key);
         auto it = m_newEntries.find(key);
 
-        if(it == m_newEntries.end()) {
-        	Entries::Ptr entries = std::make_shared<Entries>();
-        	it = m_newEntries.insert(std::make_pair(key, entries)).first;
+        if (it == m_newEntries.end())
+        {
+            Entries::Ptr entries = std::make_shared<Entries>();
+            it = m_newEntries.insert(std::make_pair(key, entries)).first;
         }
         auto iter = it->second->addEntry(entry);
 
-        //auto iter = m_newEntries->addEntry(entry);
+        // auto iter = m_newEntries->addEntry(entry);
         Change::Record record(iter);
 
         std::vector<Change::Record> value{record};
@@ -245,76 +247,83 @@ int MemoryTable2::remove(
 
 dev::h256 MemoryTable2::hash()
 {
-	if(m_isDirty) {
-		m_tableData.reset(new dev::storage::TableData());
-		dump();
-	}
+    if (m_isDirty)
+    {
+        m_tableData.reset(new dev::storage::TableData());
+        dump();
+    }
 
-	return m_hash;
+    return m_hash;
 }
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-	if(m_isDirty) {
-		m_tableData = std::make_shared<dev::storage::TableData>();
-		m_tableData->info = m_tableInfo;
-		m_tableData->dirtyEntries = std::make_shared<Entries>();
+    if (m_isDirty)
+    {
+        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData->info = m_tableInfo;
+        m_tableData->dirtyEntries = std::make_shared<Entries>();
 
-		auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
+        auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
-		tbb::parallel_for(m_dirty.range(),
-			[&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
-				for (auto it = range.begin(); it != range.end(); ++it)
-				{
-					if (!it->second->deleted())
-					{
-						m_tableData->dirtyEntries->addEntry(it->second);
-						tempEntries.push_back(it->second);
-					}
-				}
-			});
+        tbb::parallel_for(m_dirty.range(),
+            [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    if (!it->second->deleted())
+                    {
+                        m_tableData->dirtyEntries->addEntry(it->second);
+                        tempEntries.push_back(it->second);
+                    }
+                }
+            });
 
-		m_tableData->newEntries = std::make_shared<Entries>();
-		tbb::parallel_for(m_newEntries.range(), [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
-			for(auto it = range.begin(); it != range.end(); ++it) {
-				tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000), [&](tbb::blocked_range<size_t>& rangeIndex) {
-					for(auto i = rangeIndex.begin(); i< rangeIndex.end(); ++i) {
-						if(!it->second->get(i)->deleted()) {
-							m_tableData->newEntries->addEntry(it->second->get(i));
-							tempEntries.push_back(it->second->get(i));
-						}
-					}
-				});
-			}
-		});
+        m_tableData->newEntries = std::make_shared<Entries>();
+        tbb::parallel_for(m_newEntries.range(),
+            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
+                        [&](tbb::blocked_range<size_t>& rangeIndex) {
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            {
+                                if (!it->second->get(i)->deleted())
+                                {
+                                    m_tableData->newEntries->addEntry(it->second->get(i));
+                                    tempEntries.push_back(it->second->get(i));
+                                }
+                            }
+                        });
+                }
+            });
 
-		tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
-		bytes allData;
-		for (size_t i = 0; i < tempEntries.size(); ++i)
-		{
-			auto entry = tempEntries[i];
-			for (auto fieldIt : *(entry->fields()))
-			{
-				if (isHashField(fieldIt.first))
-				{
-					allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
-					allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
-				}
-			}
-		}
+        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
+        bytes allData;
+        for (size_t i = 0; i < tempEntries.size(); ++i)
+        {
+            auto entry = tempEntries[i];
+            for (auto fieldIt : *(entry->fields()))
+            {
+                if (isHashField(fieldIt.first))
+                {
+                    allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                    allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
+                }
+            }
+        }
 
-		if (allData.empty())
-		{
-			m_hash = h256();
-		}
+        if (allData.empty())
+        {
+            m_hash = h256();
+        }
 
-		bytesConstRef bR(allData.data(), allData.size());
-		m_hash = dev::sha256(bR);
+        bytesConstRef bR(allData.data(), allData.size());
+        m_hash = dev::sha256(bR);
 
-		m_isDirty = false;
-	}
+        m_isDirty = false;
+    }
 
-	return m_tableData;
+    return m_tableData;
 }
 
 void MemoryTable2::rollback(const Change& _change)
@@ -328,9 +337,10 @@ void MemoryTable2::rollback(const Change& _change)
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
 
         auto it = m_newEntries.find(_change.key);
-        if(it != m_newEntries.end()) {
-        	auto entry = it->second->get(_change.value[0].index);
-        	entry->setDeleted(true);
+        if (it != m_newEntries.end())
+        {
+            auto entry = it->second->get(_change.value[0].index);
+            entry->setDeleted(true);
         }
         break;
     }
@@ -350,11 +360,12 @@ void MemoryTable2::rollback(const Change& _change)
             }
             else
             {
-            	auto it = m_newEntries.find(_change.key);
-				if(it != m_newEntries.end()) {
-					auto entry = it->second->get(record.index);
-					entry->setField(record.key, record.oldValue);
-				}
+                auto it = m_newEntries.find(_change.key);
+                if (it != m_newEntries.end())
+                {
+                    auto entry = it->second->get(record.index);
+                    entry->setField(record.key, record.oldValue);
+                }
             }
         }
         break;
@@ -376,10 +387,11 @@ void MemoryTable2::rollback(const Change& _change)
             else
             {
                 auto it = m_newEntries.find(_change.key);
-				if(it != m_newEntries.end()) {
-					auto entry = it->second->get(record.index);
-					entry->setStatus(0);
-				}
+                if (it != m_newEntries.end())
+                {
+                    auto entry = it->second->get(record.index);
+                    entry->setStatus(0);
+                }
             }
         }
         break;
@@ -390,5 +402,5 @@ void MemoryTable2::rollback(const Change& _change)
         break;
     }
 
-    //LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
+    // LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
 }
