@@ -565,6 +565,10 @@ void CachedStorage::checkAndClear()
 
                             size_t totalCapacity = 0;
                             for(auto entryIt: *(cache->entries())) {
+                            	LOG(TRACE) << "entry remove capacity: " << tableIt->second->tableInfo()->name << "-" << it->second << ", capacity: " << entryIt->capacity();
+                            	for(auto fieldIt: *(entryIt->fields())) {
+                            		STORAGE_LOG(TRACE) << "field: " << fieldIt.first << ", value: " << fieldIt.second;
+                            	}
                             	totalCapacity += entryIt->capacity();
                             }
 
