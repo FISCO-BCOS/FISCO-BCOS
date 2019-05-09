@@ -46,7 +46,8 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     }
 
 
-    LOG(DEBUG) << "select resp:" << responseJson.toStyledString();
+    LOG(DEBUG) << " tablename:" << _tableInfo->name
+               << "select resp:" << responseJson.toStyledString();
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
     {
