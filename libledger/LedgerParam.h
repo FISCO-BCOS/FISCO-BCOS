@@ -97,8 +97,6 @@ struct StorageParam
     std::string dbCharset;
     uint32_t initConnections;
     uint32_t maxConnections;
-    int maxStoreKey;
->>>>>>> upstream/dev
     int maxForwardBlock;
 };
 struct StateParam
