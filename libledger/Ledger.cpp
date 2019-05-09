@@ -55,16 +55,17 @@ bool Ledger::initLedger(const std::string& _configFilePath)
                      << LOG_KV("baseDir", m_param->baseDir());
     /// The file group.X.genesis is required, otherwise the program terminates.
     /// load genesis config of group
-    initConfig(_configFilePath);
+    initGenesisConfig(_configFilePath);
+    GenesisBlockParam genesisParam;
+    initGenesisMark(genesisParam);
     /// The file group.X.ini is available by default.
     /// In this case, the configuration item uses the default value.
     /// load ini config of group for TxPool/Sync modules
     std::string iniConfigFileName = _configFilePath;
     boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
 
-    /// you should invoke initConfig first before invoke initIniConfig
+    /// you should invoke initGenesisConfig first before invoke initIniConfig
     initIniConfig(iniConfigFileName);
-    initMark();
     if (!m_param)
         return false;
     /// init dbInitializer
@@ -76,7 +77,7 @@ bool Ledger::initLedger(const std::string& _configFilePath)
         return false;
     m_dbInitializer->initStorageDB();
     /// init the DB
-    bool ret = initBlockChain();
+    bool ret = initBlockChain(genesisParam);
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
@@ -98,11 +99,11 @@ bool Ledger::initLedger(const std::string& _configFilePath)
  * @brief: init configuration related to the ledger with specified configuration file
  * @param configPath: the path of the config file
  */
-void Ledger::initConfig(std::string const& configPath)
+void Ledger::initGenesisConfig(std::string const& configPath)
 {
     try
     {
-        Ledger_LOG(INFO) << LOG_BADGE("initConfig")
+        Ledger_LOG(INFO) << LOG_BADGE("initGenesisConfig")
                          << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig")
                          << LOG_KV("configFile", configPath);
         ptree pt;
@@ -123,7 +124,7 @@ void Ledger::initConfig(std::string const& configPath)
     {
         std::string error_info = "init genesis config failed for " + toString(m_groupId) +
                                  " failed, error_msg: " + boost::diagnostic_information(e);
-        Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
+        Ledger_LOG(ERROR) << LOG_DESC("initGenesisConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
         exit(1);
@@ -405,7 +406,7 @@ void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
 }
 
 /// init mark of this group
-void Ledger::initMark()
+void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
 {
     std::stringstream s;
     s << int(m_groupId) << "-";
@@ -419,6 +420,11 @@ void Ledger::initMark()
     s << m_param->mutableConsensusParam().maxTransactions << "-";
     s << m_param->mutableTxParam().txGasLimit;
     m_param->mutableGenesisParam().genesisMark = s.str();
+    genesisParam = GenesisBlockParam{m_param->mutableGenesisParam().genesisMark,
+        m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
+        m_param->mutableConsensusParam().consensusType, m_param->mutableStorageParam().type,
+        m_param->mutableStateParam().type, m_param->mutableConsensusParam().maxTransactions,
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);
 }
@@ -467,7 +473,7 @@ bool Ledger::initBlockVerifier()
     return true;
 }
 
-bool Ledger::initBlockChain()
+bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
     if (!m_dbInitializer->storage())
@@ -479,23 +485,16 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
-    m_blockChain = blockChain;
-    std::string consensusType = m_param->mutableConsensusParam().consensusType;
-    std::string storageType = m_param->mutableStorageParam().type;
-    std::string stateType = m_param->mutableStateParam().type;
-    GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
-        m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
-        consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
-    bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
+
+    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)
     {
         /// It is a subsequent block without same extra data, so do reset.
         Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
                           << LOG_DESC("The configuration item will be reset");
-        m_param->mutableConsensusParam().consensusType = initParam.consensusType;
-        m_param->mutableStorageParam().type = initParam.storageType;
-        m_param->mutableStateParam().type = initParam.stateType;
+        m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
+        m_param->mutableStorageParam().type = _genesisParam.storageType;
+        m_param->mutableStateParam().type = _genesisParam.stateType;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
