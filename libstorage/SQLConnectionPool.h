@@ -23,8 +23,8 @@
 
 #include <zdb.h>
 #include <iostream>
-#include <string>
 #include <memory>
+#include <string>
 namespace dev
 {
 namespace storage
