@@ -24,7 +24,7 @@
 #include <zdb.h>
 #include <iostream>
 #include <string>
-
+#include <memory>
 namespace dev
 {
 namespace storage
@@ -45,6 +45,8 @@ struct ZDBConfig
 class SQLConnectionPool
 {
 public:
+    typedef std::shared_ptr<SQLConnectionPool> Ptr;
+
     SQLConnectionPool(){};
     ~SQLConnectionPool();
     bool InitConnectionPool(const ZDBConfig& _dbConfig);
@@ -53,6 +55,9 @@ public:
     int BeginTransaction(const Connection_T& _connection);
     int Commit(const Connection_T& _connection);
     int RollBack(const Connection_T& _connection);
+
+    int GetActiveConnections();
+    int GetMaxConnections();
 
 private:
     ConnectionPool_T m_connectionPool;
