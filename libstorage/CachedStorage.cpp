@@ -353,7 +353,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                                 auto newIt = tableIt->second->addCache(key, caches);
 
-                                cacheEntry->setNum(num);
                                 newIt.first->second->entries()->addEntry(cacheEntry);
 
                                 newEntries->addEntry(cacheEntry);
@@ -366,6 +365,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 caches->setNum(num);
                             }
 
+                            cacheEntry->setNum(num);
                             updateCapacity(0, cacheEntry->capacity());
                             touchMRU(commitData->info->name, key);
                         }
@@ -421,8 +421,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
             STORAGE_LOG(INFO) << "\n---------------------------------------------------------------------\n"
             				<< "Commit block: " << task->num
-                              << " to backend storage finished, current syncd block: "
-                              << storage->syncNum()
+                              << " to backend storage finished, current cached block: "
+                              << storage->m_commitNum
 							  << "\n"
 							  << "Flush elapsed time: " << elapsed.count() << "s"
 							  << "\n\n"
@@ -556,17 +556,16 @@ void CachedStorage::checkAndClear()
                     {
                         if ((size_t)cache->num() <= m_syncNum)
                         {
-                            STORAGE_LOG(TRACE)
+                            STORAGE_LOG(DEBUG)
                                 << "Clear last recent record: "
                                 << tableIt->second->tableInfo()->name << "-" << it->second;
 
                             size_t totalCapacity = 0;
                             for(auto entryIt: *(cache->entries())) {
                             	totalCapacity += entryIt->capacity();
-
-                            	++clearCount;
                             }
 
+                            ++clearCount;
                             updateCapacity(totalCapacity, 0);
 
                             tableIt->second->removeCache(it->second);
@@ -581,6 +580,10 @@ void CachedStorage::checkAndClear()
                 else
                 {
                     it = m_mru.erase(it);
+                }
+
+                if(tableIt->second->caches()->empty()) {
+                	m_caches.unsafe_erase(tableIt);
                 }
 
                 if (m_capacity <= (int64_t)m_maxCapacity)
