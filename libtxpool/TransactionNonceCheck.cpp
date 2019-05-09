@@ -64,28 +64,35 @@ void TransactionNonceCheck::getNonceAndUpdateCache(
     if (m_blockNonceCache.count(blockNumber))
     {
         nonceVec = m_blockNonceCache[blockNumber];
+        NONCECHECKER_LOG(DEBUG) << LOG_DESC("updateCache: getNonceAndUpdateCache cache hit ")
+                                << LOG_KV("blockNumber", blockNumber)
+                                << LOG_KV("nonceSize", nonceVec.size())
+                                << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
     }
-    else
+    /// block cache hit
+    else if (m_blockChain->number() == blockNumber)
     {
         std::shared_ptr<Block> pBlock = m_blockChain->getBlockByNumber(blockNumber);
         if (pBlock)
         {
             nonceVec = pBlock->getAllNonces();
             NONCECHECKER_LOG(DEBUG)
-                << LOG_DESC("updateCache: getNonceAndUpdateCache cache hit ")
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size());
+                << LOG_DESC("updateCache: getNonceAndUpdateCache block cache hit ")
+                << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size())
+                << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
         }
-        else
-        {
-            m_blockChain->getNonces(nonceVec, blockNumber);
-            NONCECHECKER_LOG(DEBUG)
-                << LOG_DESC("updateCache: getNonceAndUpdateCache cache miss ")
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size());
-        }
-        if (update && m_blockNonceCache.size() < m_maxBlockLimit)
-        {
-            m_blockNonceCache[blockNumber] = nonceVec;
-        }
+    }
+    else
+    {
+        m_blockChain->getNonces(nonceVec, blockNumber);
+        NONCECHECKER_LOG(DEBUG) << LOG_DESC("updateCache: getNonceAndUpdateCache cache miss ")
+                                << LOG_KV("blockNumber", blockNumber)
+                                << LOG_KV("nonceSize", nonceVec.size())
+                                << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
+    }
+    if (update && m_blockNonceCache.size() < m_maxBlockLimit)
+    {
+        m_blockNonceCache[blockNumber] = nonceVec;
     }
 }
 
