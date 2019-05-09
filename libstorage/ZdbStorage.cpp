@@ -39,9 +39,10 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     int iRet = m_sqlBasicAcc.Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
     if (iRet < 0)
     {
-        LOG(ERROR) << "Remote database return error:" << iRet;
-        throw StorageException(
-            -1, "Remote database return error:" + boost::lexical_cast<std::string>(iRet));
+        LOG(ERROR) << "Remote select datdbase return error:" << iRet
+                   << " table:" << _tableInfo->name;
+        throw StorageException(-1, "Remote select database return error: table:" +
+                                       _tableInfo->name + boost::lexical_cast<std::string>(iRet));
     }
 
 
@@ -72,6 +73,13 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     }
     entries->setDirty(false);
     return entries;
+}
+
+
+void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
+{
+    m_sqlBasicAcc.setConnPool(_connPool);
+    this->initSysTables();
 }
 
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
@@ -107,9 +115,9 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
     int32_t dwRowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
     if (dwRowCount < 0)
     {
-        LOG(ERROR) << "database return error:" << dwRowCount;
+        LOG(ERROR) << "database commit  return error:" << dwRowCount;
         throw StorageException(
-            -1, "database return error:" + boost::lexical_cast<std::string>(dwRowCount));
+            -1, "database commit return error:" + boost::lexical_cast<std::string>(dwRowCount));
     }
     return dwRowCount;
 }
@@ -117,12 +125,6 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
 bool ZdbStorage::onlyDirty()
 {
     return true;
-}
-
-void ZdbStorage::initSqlAccess(const storage::ZDBConfig& _dbConfig)
-{
-    m_sqlBasicAcc.initConnPool(_dbConfig);
-    this->initSysTables();
 }
 
 
