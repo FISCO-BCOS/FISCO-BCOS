@@ -55,11 +55,11 @@ private:
         bool& _hasGetField);
 
 public:
-    bool initConnPool(const storage::ZDBConfig& _dbConfig);
     void ExecuteSql(const std::string& _sql);
+    void setConnPool(SQLConnectionPool::Ptr& _connPool);
 
 private:
-    dev::storage::SQLConnectionPool m_oConnPool;
+    SQLConnectionPool::Ptr m_connPool;
 };
 
 }  // namespace storage
