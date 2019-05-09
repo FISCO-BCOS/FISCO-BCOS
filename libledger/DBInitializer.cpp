@@ -262,7 +262,10 @@ void DBInitializer::initZdbStorage()
         m_param->mutableStorageParam().dbPasswd, m_param->mutableStorageParam().dbName,
         m_param->mutableStorageParam().dbCharset, m_param->mutableStorageParam().initConnections,
         m_param->mutableStorageParam().maxConnections};
-    zdbStorage->initSqlAccess(zdbConfig);
+
+    auto sqlconnpool = std::make_shared<SQLConnectionPool>();
+    sqlconnpool->InitConnectionPool(zdbConfig);
+    zdbStorage->setConnPool(sqlconnpool);
     initTableFactory2(zdbStorage);
 }
 
