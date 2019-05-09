@@ -105,7 +105,7 @@ public:
     std::vector<u256> getAllNonces() const
     {
         std::vector<u256> nonce_vec;
-        for(auto const& trans: m_transactions)
+        for (auto const& trans : m_transactions)
         {
             nonce_vec.push_back(trans.nonce());
         }

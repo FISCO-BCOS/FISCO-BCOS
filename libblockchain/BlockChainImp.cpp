@@ -315,12 +315,12 @@ void BlockChainImp::getNonces(
 {
     if (_blockNumber > number())
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getNonces]Invalid block number")
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces: Invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
         return;
     }
-    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[#getNonces]") << LOG_KV("blkNumber", _blockNumber);
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
