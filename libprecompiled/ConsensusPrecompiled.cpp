@@ -253,7 +253,7 @@ bytes ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    getOut(out, result);
+    getErrorCodeOut(out, result);
     return out;
 }
 
