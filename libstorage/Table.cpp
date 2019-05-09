@@ -270,8 +270,18 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
     }
 
     for (auto lIter = lFields->begin(), rIter = rFields->begin();
-         lIter != lFields->end() && rIter != rFields->end(); ++lIter, ++rIter)
+         lIter != lFields->end() && rIter != rFields->end();)
     {
+    	if(lIter->first == NUM_FIELD) {
+    		++lIter;
+    		continue;
+    	}
+
+    	if(rIter->first == NUM_FIELD) {
+    		++rIter;
+    		continue;
+    	}
+
         if (lIter->first != rIter->first)
         {
             return lIter->first < rIter->first;
@@ -281,6 +291,9 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
         {
             return lIter->second < rIter->second;
         }
+
+        ++lIter;
+        ++rIter;
     }
 
     return false;

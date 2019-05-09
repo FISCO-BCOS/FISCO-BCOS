@@ -267,6 +267,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 										(*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
 
+                                    (*entryIt)->setNum(num);
+
                                     updateCapacity(oldSize, (*entryIt)->capacity());
 
                                     auto commitEntry = std::make_shared<Entry>();
@@ -351,6 +353,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                                 auto newIt = tableIt->second->addCache(key, caches);
 
+                                cacheEntry->setNum(num);
                                 newIt.first->second->entries()->addEntry(cacheEntry);
 
                                 newEntries->addEntry(cacheEntry);
@@ -429,7 +432,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                               << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
                               << std::setprecision(4) << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
 							  << "\n\n"
-							  << "Cache capacity: " << storage->readableCapacity(storage->m_capacity)
+							  << "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
+							  << "Cache size: " << storage->m_mru.size()
 							  << "\n---------------------------------------------------------------------\n";
         }
     });
