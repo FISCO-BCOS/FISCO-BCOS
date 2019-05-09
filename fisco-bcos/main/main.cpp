@@ -111,10 +111,15 @@ int main(int argc, const char* argv[])
     setDefaultOrCLocale();
     /// init params
     string configPath = initCommandLine(argc, argv);
+    char buffer[40];
+    auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    // get datetime and output welcome info
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
     try
     {
+        std::cout << "[" << buffer << "] ";
         std::cout << "Initializing..." << std::endl;
         initialize->init(configPath);
     }
@@ -124,9 +129,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
     version();
-    // get datetime and output welcome info
-    char buffer[40];
-    auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     std::cout << "[" << buffer << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;

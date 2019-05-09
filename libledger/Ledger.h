@@ -131,8 +131,6 @@ protected:
     /// init the blockSync
     virtual bool initSync();
 
-    /// make these functions protected for UT
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);

@@ -113,8 +113,10 @@ void Ledger::initGenesisConfig(std::string const& configPath)
         initConsensusConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
-        /// init params related to genesis: timestamp
-        initGenesisConfig(pt);
+        /// use UTCTime directly as timeStamp in case of the clock differences between machines
+        m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
+        Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+                          << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
         /// set state db related param
         m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
         // Compatibility with previous versions RC2/RC1
@@ -328,9 +330,10 @@ void Ledger::initSyncConfig(ptree const& pt)
 /// dbpath: data to place all data of the group, default is "data"
 void Ledger::initDBConfig(ptree const& pt)
 {
-    /// init the basic config
-    /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+    }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
@@ -396,15 +399,6 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
 
-/// init genesis configuration
-void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
-{
-    /// use UTCTime directly as timeStamp in case of the clock differences between machines
-    m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
-                      << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
-}
-
 /// init mark of this group
 void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
 {
@@ -412,7 +406,7 @@ void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
     s << int(m_groupId) << "-";
     s << m_param->mutableGenesisParam().nodeListMark << "-";
     s << m_param->mutableConsensusParam().consensusType << "-";
-    if (g_BCOSConfig.version() < RC3_VERSION)
+    if (g_BCOSConfig.version() <= RC2_VERSION)
     {
         s << m_param->mutableStorageParam().type << "-";
     }
@@ -485,7 +479,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
-
+    m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)
     {
@@ -493,7 +487,10 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
         Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
                           << LOG_DESC("The configuration item will be reset");
         m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
-        m_param->mutableStorageParam().type = _genesisParam.storageType;
+        if (g_BCOSConfig.version() <= RC2_VERSION)
+        {
+            m_param->mutableStorageParam().type = _genesisParam.storageType;
+        }
         m_param->mutableStateParam().type = _genesisParam.stateType;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
