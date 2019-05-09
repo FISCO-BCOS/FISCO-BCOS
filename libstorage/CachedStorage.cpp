@@ -356,8 +356,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 auto newIt = tableIt->second->addCache(key, caches);
 
                                 newIt.first->second->entries()->addEntry(cacheEntry);
-
-                                newEntries->addEntry(cacheEntry);
                             }
                             else
                             {
