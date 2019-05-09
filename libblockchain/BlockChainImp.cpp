@@ -320,6 +320,7 @@ void BlockChainImp::getNonces(
                               << LOG_KV("blockNumber", m_blockNumber);
         return;
     }
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[#getNonces]") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
@@ -1138,10 +1139,11 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
         return CommitResult::OK;
     }
-    catch (OpenSysTableFailed&)
+    catch (OpenSysTableFailed const& e)
     {
-        BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-            "[#commitBlock]System meets error when try to write block to storage");
+        BLOCKCHAIN_LOG(FATAL)
+            << LOG_DESC("[#commitBlock]System meets error when try to write block to storage")
+            << LOG_KV("EINFO", boost::diagnostic_information(e));
         throw;
     }
     /// leveldb caused exception: database corruption or the disk has no space left
