@@ -203,6 +203,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         	totalCapacity += it->capacity();
         }
 
+        LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key << ", capacity: " << totalCapacity;
         updateCapacity(0, totalCapacity);
         touchMRU(tableInfo->name, key);
 
@@ -267,9 +268,10 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 										(*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
 
-                                    (*entryIt)->setNum(num);
-
+                                    LOG(TRACE) << "update capacity: " << commitData->info->name << "-" << key << ", from capacity: " << oldSize << " to capacity: " << (*entryIt)->capacity();
                                     updateCapacity(oldSize, (*entryIt)->capacity());
+
+                                    (*entryIt)->setNum(num);
 
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
@@ -366,6 +368,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             }
 
                             cacheEntry->setNum(num);
+                            LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key << ", capacity: " << cacheEntry->capacity();
                             updateCapacity(0, cacheEntry->capacity());
                             touchMRU(commitData->info->name, key);
                         }
@@ -566,6 +569,8 @@ void CachedStorage::checkAndClear()
                             }
 
                             ++clearCount;
+
+                            LOG(TRACE) << "remove capacity: " << tableIt->second->tableInfo()->name << "-" << it->second << ", capacity: " << totalCapacity;
                             updateCapacity(totalCapacity, 0);
 
                             tableIt->second->removeCache(it->second);
