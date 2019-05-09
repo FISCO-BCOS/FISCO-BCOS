@@ -115,7 +115,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     else
     {
         m_fields.insert(std::make_pair(key, value));
-        m_capacity += (key.size() + value.size());
+        m_capacity += (key.size()+ value.size());
     }
 
     assert(m_capacity >= 0);

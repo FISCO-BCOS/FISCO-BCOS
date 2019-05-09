@@ -606,7 +606,9 @@ void CachedStorage::checkAndClear()
 }
 
 void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize) {
-	m_capacity += (newSize - oldSize);
+	LOG(TRACE) << "Capacity change by: " << (newSize - oldSize);
+	//m_capacity += (newSize - oldSize);
+	m_capacity.fetch_and_add((newSize - oldSize));
 }
 
 std::string CachedStorage::readableCapacity(size_t num) {
