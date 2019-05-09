@@ -36,6 +36,7 @@
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/SQLStorage.h>
+#include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -63,10 +64,16 @@ void DBInitializer::initStorageDB()
     {
         initLevelDBStorage();
     }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    {
+        initZdbStorage();
+    }
+#if 0
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();
     }
+#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
@@ -111,7 +118,7 @@ void DBInitializer::initLevelDBStorage()
 
         if (!status.ok())
         {
-            throw std::runtime_error("open LevelDB failed");
+            BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment(status.ToString()));
         }
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());
@@ -244,6 +251,19 @@ void DBInitializer::initRocksDBStorage()
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initRocksDBStorage failed"));
     }
+}
+
+void DBInitializer::initZdbStorage()
+{
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
+    auto zdbStorage = std::make_shared<ZdbStorage>();
+    ZDBConfig zdbConfig{m_param->mutableStorageParam().dbType, m_param->mutableStorageParam().dbIP,
+        m_param->mutableStorageParam().dbPort, m_param->mutableStorageParam().dbUsername,
+        m_param->mutableStorageParam().dbPasswd, m_param->mutableStorageParam().dbName,
+        m_param->mutableStorageParam().dbCharset, m_param->mutableStorageParam().initConnections,
+        m_param->mutableStorageParam().maxConnections};
+    zdbStorage->initSqlAccess(zdbConfig);
+    initTableFactory2(zdbStorage);
 }
 
 /// create ExecutiveContextFactory

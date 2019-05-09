@@ -418,7 +418,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     m_taskThreadPool->enqueue([backend, task, self]() {
         auto now = std::chrono::system_clock::now();
         STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
-
         backend->commit(task->hash, task->num, *(task->datas));
 
         auto storage = self.lock();

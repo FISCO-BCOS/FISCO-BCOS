@@ -85,8 +85,20 @@ struct StorageParam
     std::string topic;
     size_t timeout;
     int maxRetry;
-    // int maxStoreKey;
     int maxCapacity;
+
+    // for zdb storage
+    std::string dbType;
+    std::string dbIP;
+    uint32_t dbPort;
+    std::string dbUsername;
+    std::string dbPasswd;
+    std::string dbName;
+    std::string dbCharset;
+    uint32_t initConnections;
+    uint32_t maxConnections;
+    int maxStoreKey;
+>>>>>>> upstream/dev
     int maxForwardBlock;
 };
 struct StateParam

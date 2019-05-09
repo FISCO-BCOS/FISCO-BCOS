@@ -35,6 +35,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
+default_version="2.0.0-rc3"
 OS=
 
 help() {
@@ -48,7 +49,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
-    -s <DB type>                        Default rocksdb. Options can be rocksdb/leveldb2/external/leveldb
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / external / mysql / leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
     -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
@@ -528,13 +529,19 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ; storage db type, leveldb/leveldb2/external/rocksdb are supported
+    ; storage db type, rocksdb / external / mysql / leveldb are supported
     type=${storage_type}
-    max_retry=100
     max_store_key=10000
     max_forward_block=100
-    ; topic only for external
+    ; only for external
+    max_retry=100
     topic=DB
+    ; only for mysql
+    db_ip=127.0.0.1
+    db_port=3306
+    db_username=
+    db_passwd=
+    db_name=
 [tx_pool]
     limit=150000
 [tx_execute]
@@ -719,17 +726,19 @@ generate_node_scripts()
     local output=$1
     local docker_tag="latest"
     generate_script_template "$output/start.sh"
-    local ps_cmd="\`ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}'\`"
+    local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
     local start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
-    local log_cmd="cat nohup.out"
+    local log_cmd="tail -n20  nohup.out"
+    local check_success="\$(${log_cmd} | grep running)"
     if [ ! -z ${docker_mode} ];then
-        ps_cmd="\`docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}'\`"
-        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini >>nohup.out"
+        ps_cmd="\$(docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}')"
+        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini"
         stop_cmd="docker kill \${node_pid} 2>/dev/null"
         pid="container id"
-        log_cmd="docker logs \${SHELL_FOLDER//\//}"
+        log_cmd="tail -n20 \$(docker inspect --format='{{.LogPath}}' \${SHELL_FOLDER//\//})"
+        check_success="success"
     fi
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
@@ -748,7 +757,8 @@ i=0
 while [ \$i -lt \${try_times} ]
 do
     node_pid=${ps_cmd}
-    if [ ! -z \${node_pid} ];then
+    success_flag=${check_success}
+    if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
         echo -e "\033[32m \${node} start successfully\033[0m"
         exit 0
     fi
@@ -857,9 +867,14 @@ generate_server_scripts()
     local output=$1
     genTransTest "${output}"
     generate_script_template "$output/start_all.sh"
+    prepare_image=""
+    if [ ! -z ${docker_mode} ];then
+        prepare_image="docker pull fiscoorg/fiscobcos:latest"
+    fi
     # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "${output_dir}/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
+${prepare_image}
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
@@ -922,6 +937,10 @@ fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/relea
 # fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"
+fi
+# in case network is broken
+if [ -z "${compatibility_version}" ];then
+    compatibility_version="${default_version}"
 fi
 
 # download fisco-bcos and check it

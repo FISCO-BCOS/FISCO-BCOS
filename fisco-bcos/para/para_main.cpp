@@ -160,7 +160,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
-    dbInitializer->initStateDB(genesisHash);
+    dbInitializer->initState(genesisHash);
 
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(true);
     /// set params for blockverifier
