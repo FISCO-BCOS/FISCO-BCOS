@@ -315,7 +315,7 @@ void BlockChainImp::getNonces(
 {
     if (_blockNumber > number())
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces: Invalid block number")
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
         return;
