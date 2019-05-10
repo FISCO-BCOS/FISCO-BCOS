@@ -73,6 +73,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
 
     bytes out;
 
+    // ensured by the logic of code
     assert(m_condition);
     if (func == name2Selector[CONDITION_METHOD_EQ_STR_INT])
     {

@@ -125,7 +125,9 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
             }
         }
 
-        m_db->Write(WriteOptions(), &batch);
+        WriteOptions options;
+        options.sync = true;
+        m_db->Write(options, &batch);
         return datas.size();
     }
     catch (std::exception& e)

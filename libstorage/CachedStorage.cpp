@@ -438,7 +438,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 << "Total cache miss: " << storage->m_queryTimes - storage->m_hitTimes << "\n"
                 << "Total hit ratio: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
                 << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
-				<< "\n'n"
+                << "\n'n"
                 << "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
                 << "Cache size: " << storage->m_mru.size()
                 << "\n---------------------------------------------------------------------\n";
