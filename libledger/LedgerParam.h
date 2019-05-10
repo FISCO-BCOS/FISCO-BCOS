@@ -84,7 +84,8 @@ struct StorageParam
     // for amop storage
     std::string topic;
     size_t timeout;
-    size_t maxRetry;
+    int maxRetry;
+    int maxCapacity;
 
     // for zdb storage
     std::string dbType;
@@ -96,7 +97,6 @@ struct StorageParam
     std::string dbCharset;
     uint32_t initConnections;
     uint32_t maxConnections;
-    int maxStoreKey;
     int maxForwardBlock;
 };
 struct StateParam

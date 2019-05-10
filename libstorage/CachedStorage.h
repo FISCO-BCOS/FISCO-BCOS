@@ -108,7 +108,7 @@ public:
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
 
-    void setMaxStoreKey(size_t maxStoreKey);
+    void setMaxCapacity(size_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     size_t ID();
@@ -116,6 +116,8 @@ public:
 private:
     void touchMRU(std::string table, std::string key);
     void checkAndClear();
+    void updateCapacity(ssize_t oldSize, ssize_t newSize);
+    std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<std::pair<std::string, std::string>,
@@ -127,12 +129,12 @@ private:
     Storage::Ptr m_backend;
     size_t m_ID = 1;
 
-    boost::atomic_int64_t m_syncNum;
-    boost::atomic_int64_t m_commitNum;
-    boost::atomic_int64_t m_capacity;
+    boost::atomic_size_t m_syncNum;
+    boost::atomic_size_t m_commitNum;
+    tbb::atomic<int64_t> m_capacity;
 
-    size_t m_maxStoreKey = 1000;
     size_t m_maxForwardBlock = 10;
+    size_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
 
     tbb::mutex m_mutex;
 
