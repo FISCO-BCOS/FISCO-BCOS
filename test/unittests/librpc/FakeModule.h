@@ -491,7 +491,7 @@ public:
         initLedgerParam();
     }
     bool initLedger(const std::string&) override { return true; };
-    void initConfig(std::string const&) override{};
+    void initGenesisConfig(std::string const&) override{};
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
