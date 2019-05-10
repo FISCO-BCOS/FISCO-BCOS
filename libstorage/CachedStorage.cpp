@@ -586,7 +586,7 @@ void CachedStorage::checkAndClear()
                             ++clearCount;
 
                             LOG(TRACE) << "remove capacity: " << tableIt->second->tableInfo()->name
-                                       << "-" << it->second << ", capacity: " << totalCapacity;
+                                       << "-" << it->second << ", capacity: " << totalCapacity << ", current cache size: " << m_mru.size();
                             updateCapacity(totalCapacity, 0);
 
                             tableIt->second->removeCache(it->second);
