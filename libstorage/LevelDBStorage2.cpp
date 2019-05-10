@@ -40,6 +40,7 @@
 
 using namespace std;
 using namespace dev;
+using namespace leveldb;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage2::select(
@@ -51,9 +52,7 @@ Entries::Ptr LevelDBStorage2::select(
         entryKey.append("_").append(key);
 
         std::string value;
-        // ReadGuard l(m_remoteDBMutex);
-        auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
-        // l.unlock();
+        auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_LEVELDB_LOG(ERROR)
@@ -125,11 +124,11 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
                 boost::archive::binary_oarchive oa(ss);
                 oa << it.second;
 
-                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ss.str()));
+                batch->insertSlice(Slice(entryKey), Slice(ss.str()));
             }
         }
 
-        m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
+        m_db->Write(WriteOptions(), &batch->writeBatch());
         return datas.size();
     }
     catch (std::exception& e)
@@ -170,7 +169,7 @@ void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
             entryKey.append("_").append(key);
 
             std::string value;
-            auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+            auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
             // l.unlock();
             if (!s.ok() && !s.IsNotFound())
             {

@@ -59,7 +59,6 @@ private:
         TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
-    dev::SharedMutex m_remoteDBMutex;
 };
 
 }  // namespace storage

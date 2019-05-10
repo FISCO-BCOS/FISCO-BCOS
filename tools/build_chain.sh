@@ -476,6 +476,7 @@ cipher_data_key=
 [chain]
     id=${chain_id}
 [compatibility]
+    ; supported_version should nerver be changed
     supported_version=${compatibility_version}
 [log]
     log_path=./log
