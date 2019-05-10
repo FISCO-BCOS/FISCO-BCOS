@@ -31,18 +31,18 @@ namespace dev
 namespace rpc
 {
 ///< RPCExceptionCode
-enum RPCExceptionType
+enum RPCExceptionType : int
 {
     Success = 0,
-    GroupID = 40001,
-    JsonParse,
-    BlockHash,
-    BlockNumberT,
-    TransactionIndex,
-    CallFrom,
-    NoView,
-    InvalidSystemConfig,
-    InvalidRequest
+    InvalidRequest = -40009,
+    InvalidSystemConfig = -40008,
+    NoView = -40007,
+    CallFrom = -40006,
+    TransactionIndex = -40005,
+    BlockNumberT = -40004,
+    BlockHash = -40003,
+    JsonParse = -40002,
+    GroupID = -40001
 };
 
 extern std::map<int, std::string> RPCMsg;
