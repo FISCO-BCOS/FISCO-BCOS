@@ -187,7 +187,7 @@ size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
 
             // write batch
             leveldb::WriteOptions writeOptions;
-            writeOptions.sync = true;
+            writeOptions.sync = false;
             auto s = m_db->Write(writeOptions, &(batch->writeBatch()));
 
             if (!s.ok())
