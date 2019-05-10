@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
     bytes in =
         abi.abiIn("setValueByKey(string,string)", key1, boost::lexical_cast<std::string>(value1));
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 0;
+    s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
@@ -99,15 +99,29 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     bytes in =
         abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 1;
+    s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_INVALID_CONFIGURATION_VALUES);
+    }
 
     in = abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_INVALID_CONFIGURATION_VALUES);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

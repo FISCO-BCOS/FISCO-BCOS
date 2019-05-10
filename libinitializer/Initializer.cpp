@@ -38,7 +38,7 @@ void Initializer::init(std::string const& _path)
         m_logInitializer = std::make_shared<LogInitializer>();
         m_logInitializer->initLog(pt);
 
-        /// init global config
+        /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
 
         /// init key center
