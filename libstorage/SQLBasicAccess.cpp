@@ -38,26 +38,13 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
     Connection_T oConn = m_connPool->GetConnection();
     if (oConn == NULL)
     {
-        LOG(ERROR) << "hash:" << hash.hex() << " num:" << num << " table:" << _table
-                   << " key:" << key << " query sql:" << strSql << " can not get connection";
-        return -1;
+        LOG(DEBUG) << "table:" << _table << "sql:" << strSql << " threadid:" << pthread_self()
+                   << " get connection failed";
     }
+    LOG(DEBUG) << "table:" << _table << "sql:" << strSql << " threadid:" << pthread_self();
     TRY
     {
-        PreparedStatement_T oPreSatement = Connection_prepareStatement(oConn, "%s", strSql.c_str());
-        if (condition)
-        {
-            uint32_t dwIndex = 0;
-            for (auto it : *(condition->getConditions()))
-            {
-                PreparedStatement_setString(
-                    oPreSatement, ++dwIndex, it.second.right.second.c_str());
-                LOG(DEBUG) << "hash:" << hash.hex() << " num:" << num << " table:" << _table
-                           << " key:" << key << " index:" << dwIndex
-                           << " value:" << it.second.right.second;
-            }
-        }
-        ResultSet_T result = PreparedStatement_executeQuery(oPreSatement);
+        ResultSet_T result = Connection_executeQuery(oConn, "%s", strSql.c_str());
         string strColumnName;
         int32_t iColumnCnt = ResultSet_getColumnCount(result);
         for (int32_t iIndex = 1; iIndex <= iColumnCnt; ++iIndex)
@@ -69,6 +56,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
         while (ResultSet_next(result))
         {
             Json::Value oValueJson;
+
             for (int32_t iIndex = 1; iIndex <= iColumnCnt; ++iIndex)
             {
                 oValueJson.append(ResultSet_getString(result, iIndex));
@@ -84,6 +72,8 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
         return 0;
     }
     END_TRY;
+    LOG(DEBUG) << "table:" << _table << "sql:" << strSql << " threadid:" << pthread_self()
+               << " resp:" << respJson.toStyledString();
     LOG(DEBUG) << "commit now active connections:" << m_connPool->GetActiveConnections()
                << " max connections:" << m_connPool->GetMaxConnections();
     m_connPool->ReturnConnection(oConn);
@@ -119,11 +109,14 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
 std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
     std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition)
 {
+    string value = it->second.right.second;
+    boost::algorithm::replace_all_copy(value, "\\", "\\\\");
+    boost::algorithm::replace_all_copy(value, "`", "\\`");
     string strConditionSql = strPrefix;
     if (it->second.left.second == it->second.right.second && it->second.left.first &&
         it->second.right.first)
     {
-        strConditionSql.append(" `").append(it->first).append("`=").append("?");
+        strConditionSql.append(" `").append(it->first).append("`='").append(value).append("'");
     }
     else
     {
@@ -131,11 +124,13 @@ std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
         {
             if (it->second.left.first)
             {
-                strConditionSql.append(" `").append(it->first).append("`>=").append("?");
+                strConditionSql.append(" `").append(it->first).append("`>=").append(value).append(
+                    "'");
             }
             else
             {
-                strConditionSql.append(" `").append(it->first).append("`>").append("?");
+                strConditionSql.append(" `").append(it->first).append("`>").append(value).append(
+                    "'");
             }
         }
 
@@ -143,16 +138,16 @@ std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
         {
             if (it->second.right.first)
             {
-                strConditionSql.append(" `").append(it->first).append("`<=").append("?");
+                strConditionSql.append(" `").append(it->first).append("`<=").append(value).append(
+                    "'");
             }
             else
             {
-                strConditionSql.append(" `").append(it->first).append("`<").append("?");
+                strConditionSql.append(" `").append(it->first).append("`<").append(value).append(
+                    "'");
             }
         }
     }
-
-    LOG(DEBUG) << "value:" << it->second.right.second;
     return strConditionSql;
 }
 
