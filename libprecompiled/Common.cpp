@@ -22,13 +22,21 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
 
-void dev::precompiled::getOut(bytes& out, int const& result)
+void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
     dev::eth::ContractABI abi;
-
-    out = abi.abiIn("", u256(result));
+    if (result == 1)
+    {
+        out = abi.abiIn("", u256(result));
+        return;
+    }
+    out = abi.abiIn("", s256(result));
     if (g_BCOSConfig.version() < RC2_VERSION)
     {
-        out = abi.abiIn("", result);
+        out = abi.abiIn("", -result);
+    }
+    else if (g_BCOSConfig.version() == RC2_VERSION)
+    {
+        out = abi.abiIn("", u256(-result));
     }
 }
