@@ -124,7 +124,9 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
             }
         }
 
-        m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
+        leveldb::WriteOptions options;
+        options.sync = true;
+        m_db->Write(options, &batch->writeBatch());
         return datas.size();
     }
     catch (std::exception& e)
