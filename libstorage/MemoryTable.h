@@ -274,9 +274,11 @@ public:
         m_recorder = _recorder;
     }
 
-    virtual bool dump(TableData::Ptr _data) override
+    virtual TableData::Ptr dump() override
     {
+        auto _data = std::make_shared<TableData>();
         bool dirtyTable = false;
+
         for (auto it : m_cache)
         {
             _data->data.insert(make_pair(it.first, it.second));
@@ -286,7 +288,15 @@ public:
                 dirtyTable = true;
             }
         }
-        return dirtyTable;
+
+        if (dirtyTable)
+        {
+            return _data;
+        }
+        else
+        {
+            return std::make_shared<TableData>();
+        }
     }
 
     virtual void rollback(const Change& _change) override

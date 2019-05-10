@@ -247,12 +247,10 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
     {
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
-        dev::storage::TableData::Ptr tableData = make_shared<dev::storage::TableData>();
+        auto tableData = table->dump();
         tableData->tableName = dbIt.first;
 
-        bool dirtyTable = table->dump(tableData);
-
-        if (!tableData->data.empty() && dirtyTable)
+        if (!tableData->data.empty())
         {
             datas.push_back(tableData);
         }

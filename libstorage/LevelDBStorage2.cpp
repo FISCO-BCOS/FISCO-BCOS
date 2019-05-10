@@ -115,8 +115,8 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
 
             auto tableInfo = datas[i]->info;
 
-            processEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
+            processDirtyEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
+            processNewEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
 
             for (auto it : *key2value)
             {
@@ -153,7 +153,7 @@ void LevelDBStorage2::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
     m_db = db;
 }
 
-void LevelDBStorage2::processEntries(h256 hash, int64_t num,
+void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
     std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
         key2value,
     TableInfo::Ptr tableInfo, Entries::Ptr entries)
@@ -220,5 +220,39 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
         {
             it->second.push_back(value);
         }
+    }
+}
+
+void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
+    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+        key2value,
+    TableInfo::Ptr tableInfo, Entries::Ptr entries)
+{
+    for (size_t j = 0; j < entries->size(); ++j)
+    {
+        auto entry = entries->get(j);
+        auto key = entry->getField(tableInfo->key);
+
+        auto it = key2value->find(key);
+        if (it == key2value->end())
+        {
+            std::string entryKey = tableInfo->name;
+            entryKey.append("_").append(key);
+
+            it =
+                key2value
+                    ->insert(std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
+                    .first;
+        }
+
+        std::map<std::string, std::string> value;
+        for (auto& fieldIt : *(entry->fields()))
+        {
+            value[fieldIt.first] = fieldIt.second;
+        }
+        value["_hash_"] = hash.hex();
+        value["_num_"] = boost::lexical_cast<std::string>(num);
+
+        it->second.push_back(value);
     }
 }
