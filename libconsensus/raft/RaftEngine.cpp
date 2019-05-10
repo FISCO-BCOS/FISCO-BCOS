@@ -1451,7 +1451,6 @@ bool RaftEngine::commit(Block const& _block)
 
     if (!bool(m_uncommittedBlock))
     {
-        assert(m_uncommittedBlockNumber == 0);
         ul.unlock();
         return false;
     }
