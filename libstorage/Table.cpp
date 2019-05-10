@@ -43,22 +43,7 @@ Entry::Entry()
 
 uint32_t Entry::getID() const
 {
-    // dev::ReadGuard l(x_fields);
-    if (m_ID)
-    {
-        return m_ID;
-    }
-
-    auto it = m_fields.find(ID_FIELD);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        const_cast<Entry*>(this)->m_ID = boost::lexical_cast<uint32_t>(it->second);
-        return m_ID;
-    }
+    return m_ID;
 }
 
 void Entry::setID(uint32_t id)
@@ -78,6 +63,23 @@ void Entry::setID(uint32_t id)
     m_dirty = true;
 }
 
+void Entry::setID(const std::string& id)
+{
+    auto it = m_fields.find(ID_FIELD);
+    if (it == m_fields.end())
+    {
+        m_fields.insert(std::make_pair(ID_FIELD, id));
+    }
+    else
+    {
+        it->second = id;
+    }
+
+    m_ID = boost::lexical_cast<uint32_t>(id);
+
+    m_dirty = true;
+}
+
 std::string Entry::getField(const std::string& key) const
 {
     auto it = m_fields.find(key);
@@ -93,6 +95,18 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
+    if (key == ID_FIELD)
+    {
+        setID(value);
+        return;
+    }
+
+    if (key == STATUS)
+    {
+        setStatus(value);
+        return;
+    }
+
     auto it = m_fields.find(key);
 
     if (it != m_fields.end())
@@ -107,6 +121,7 @@ void Entry::setField(const std::string& key, const std::string& value)
         m_capacity += (key.size() + value.size());
     }
 
+    assert(m_capacity >= 0);
     m_dirty = true;
 }
 
@@ -125,23 +140,13 @@ const std::map<std::string, std::string>* Entry::fields() const
     return &m_fields;
 }
 
-uint32_t Entry::getStatus() const
+int Entry::getStatus() const
 {
-    // dev::ReadGuard l(x_fields);
-    auto it = m_fields.find(STATUS);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        return boost::lexical_cast<uint32_t>(it->second);
-    }
+    return m_status;
 }
 
 void Entry::setStatus(int status)
 {
-    // dev::WriteGuard l(x_fields);
     auto it = m_fields.find(STATUS);
     if (it == m_fields.end())
     {
@@ -152,6 +157,23 @@ void Entry::setStatus(int status)
         it->second = boost::lexical_cast<std::string>(status);
     }
 
+    m_status = status;
+    m_dirty = true;
+}
+
+void Entry::setStatus(const std::string& status)
+{
+    auto it = m_fields.find(STATUS);
+    if (it == m_fields.end())
+    {
+        m_fields.insert(std::make_pair(STATUS, status));
+    }
+    else
+    {
+        it->second = status;
+    }
+
+    m_status = boost::lexical_cast<int>(status);
     m_dirty = true;
 }
 
@@ -213,18 +235,19 @@ void Entry::setDeleted(bool deleted)
     m_deleted = deleted;
 }
 
-size_t Entry::capacity() const
+ssize_t Entry::capacity() const
 {
     return m_capacity;
 }
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
-    m_dirty = entry->m_dirty;
-    m_fields = entry->m_fields;
-    m_tempIndex = entry->m_tempIndex;
-    m_force = entry->m_force;
     m_ID = entry->m_ID;
+    m_status = entry->m_status;
+    m_tempIndex = entry->m_tempIndex;
+    m_fields = entry->m_fields;
+    m_dirty = entry->m_dirty;
+    m_force = entry->m_force;
     m_deleted = entry->m_deleted;
     m_capacity = entry->m_capacity;
 }
@@ -251,8 +274,20 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
     }
 
     for (auto lIter = lFields->begin(), rIter = rFields->begin();
-         lIter != lFields->end() && rIter != rFields->end(); ++lIter, ++rIter)
+         lIter != lFields->end() && rIter != rFields->end();)
     {
+        if (lIter->first == NUM_FIELD)
+        {
+            ++lIter;
+            continue;
+        }
+
+        if (rIter->first == NUM_FIELD)
+        {
+            ++rIter;
+            continue;
+        }
+
         if (lIter->first != rIter->first)
         {
             return lIter->first < rIter->first;
@@ -262,14 +297,37 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
         {
             return lIter->second < rIter->second;
         }
+
+        ++lIter;
+        ++rIter;
     }
 
     return false;
 }
 
+Entries::Vector::iterator Entries::begin()
+{
+    return m_entries.begin();
+}
+
+Entries::Vector::iterator Entries::end()
+{
+    return m_entries.end();
+}
+
+Entries::Vector::reference Entries::operator[](Vector::size_type index)
+{
+    return m_entries[index];
+}
+
 size_t Entries::size() const
 {
     return m_entries.size();
+}
+
+void Entries::resize(size_t n)
+{
+    m_entries.resize(n);
 }
 
 Entry::ConstPtr Entries::get(size_t i) const
@@ -300,8 +358,7 @@ Entry::Ptr Entries::get(size_t i)
 
 size_t Entries::addEntry(Entry::Ptr entry)
 {
-    auto index = m_entries.size();
-    m_entries.push_back(entry);
+    size_t index = m_entries.push_back(entry) - m_entries.begin();
     m_dirty = true;
 
     return index;
@@ -330,11 +387,6 @@ void Entries::copyFrom(Entries::Ptr entries)
 {
     m_entries = entries->m_entries;
     m_dirty = entries->m_dirty;
-}
-
-tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* Entries::entries()
-{
-    return &m_entries;
 }
 
 size_t ConcurrentEntries::size() const
@@ -513,6 +565,83 @@ bool Condition::process(Entry::Ptr entry)
         {
             auto fields = entry->fields();
 
+            for (auto it : m_conditions)
+            {
+                auto fieldIt = fields->find(it.first);
+                if (fieldIt != fields->end())
+                {
+                    if (it.second.left.second == it.second.right.second && it.second.left.first &&
+                        it.second.right.first)
+                    {
+                        if (it.second.left.second == fieldIt->second)
+                        {
+                            // point hited
+                            continue;
+                        }
+                        else
+                        {
+                            // point missed
+                            return false;
+                        }
+                    }
+
+                    if (it.second.left.second != UNLIMITED)
+                    {
+                        auto lhs = boost::lexical_cast<int64_t>(it.second.left.second);
+                        auto rhs = (int64_t)0;
+                        if (!fieldIt->second.empty())
+                        {
+                            rhs = boost::lexical_cast<int64_t>(fieldIt->second);
+                        }
+
+                        if (it.second.left.first)
+                        {
+                            if (!(lhs <= rhs))
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            if (!(lhs < rhs))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+
+                    if (it.second.right.second != UNLIMITED)
+                    {
+                        auto lhs = boost::lexical_cast<int64_t>(it.second.right.second);
+                        auto rhs = (int64_t)0;
+                        if (!fieldIt->second.empty())
+                        {
+                            rhs = boost::lexical_cast<int64_t>(fieldIt->second);
+                        }
+
+                        if (it.second.right.first)
+                        {
+                            if (!(lhs >= rhs))
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            if (!(lhs > rhs))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+#if 0
             for (auto it : *fields)
             {
                 auto condIt = m_conditions.find(it.first);
@@ -584,6 +713,7 @@ bool Condition::process(Entry::Ptr entry)
                     }
                 }
             }
+#endif
         }
     }
     catch (std::exception& e)

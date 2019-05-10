@@ -36,6 +36,7 @@
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/SQLStorage.h>
+#include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
@@ -62,6 +63,10 @@ void DBInitializer::initStorageDB()
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
         initLevelDBStorage();
+    }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    {
+        initZdbStorage();
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
@@ -111,7 +116,7 @@ void DBInitializer::initLevelDBStorage()
 
         if (!status.ok())
         {
-            throw std::runtime_error("open LevelDB failed");
+            BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment(status.ToString()));
         }
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());
@@ -138,7 +143,7 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(_backend);
-    cachedStorage->setMaxStoreKey(m_param->mutableStorageParam().maxStoreKey);
+    cachedStorage->setMaxCapacity(m_param->mutableStorageParam().maxCapacity);
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
 
     cachedStorage->init();
@@ -244,6 +249,22 @@ void DBInitializer::initRocksDBStorage()
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initRocksDBStorage failed"));
     }
+}
+
+void DBInitializer::initZdbStorage()
+{
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
+    auto zdbStorage = std::make_shared<ZdbStorage>();
+    ZDBConfig zdbConfig{m_param->mutableStorageParam().dbType, m_param->mutableStorageParam().dbIP,
+        m_param->mutableStorageParam().dbPort, m_param->mutableStorageParam().dbUsername,
+        m_param->mutableStorageParam().dbPasswd, m_param->mutableStorageParam().dbName,
+        m_param->mutableStorageParam().dbCharset, m_param->mutableStorageParam().initConnections,
+        m_param->mutableStorageParam().maxConnections};
+
+    auto sqlconnpool = std::make_shared<SQLConnectionPool>();
+    sqlconnpool->InitConnectionPool(zdbConfig);
+    zdbStorage->setConnPool(sqlconnpool);
+    initTableFactory2(zdbStorage);
 }
 
 /// create ExecutiveContextFactory

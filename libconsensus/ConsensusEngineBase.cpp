@@ -101,13 +101,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
                           << LOG_KV("hash", block_hash.abridged());
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
-    /// check existence of this block (Must non-exist)
-    if (blockExists(block_hash))
-    {
-        ENGINE_LOG(DEBUG) << LOG_DESC("checkBlockValid: Block already exist")
-                          << LOG_KV("hash", block_hash.abridged());
-        BOOST_THROW_EXCEPTION(ExistedBlock() << errinfo_comment("Block Already Existed, drop now"));
-    }
+
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {

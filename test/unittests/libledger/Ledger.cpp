@@ -52,9 +52,10 @@ public:
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
-        FakeLedger::initConfig(_configPath);
+        FakeLedger::initGenesisConfig(_configPath);
         /// init blockChain
-        FakeLedger::initBlockChain();
+        FakeLedger::initGenesisMark(m_genesisParam);
+        FakeLedger::initBlockChain(m_genesisParam);
         /// intit blockVerifier
         FakeLedger::initBlockVerifier();
         /// init txPool
@@ -67,7 +68,7 @@ public:
     bool initRealLedger()
     {
         bool ret = false;
-        ret = Ledger::initBlockChain();
+        ret = Ledger::initBlockChain(FakeLedger::m_genesisParam);
         if (!ret)
         {
             return false;
@@ -91,12 +92,12 @@ public:
         return ret;
     }
 
-    void initGenesisConfig(boost::property_tree::ptree const& pt)
+    void init(std::string const& _configPath) { return FakeLedger::initGenesisConfig(_configPath); }
+    void initMark()
     {
-        FakeLedger::initGenesisConfig(pt);
+        GenesisBlockParam m_genesisParam;
+        FakeLedger::initGenesisMark(m_genesisParam);
     }
-    void init(std::string const& _configPath) { return FakeLedger::initConfig(_configPath); }
-    void initMark() { FakeLedger::initMark(); }
     void initIniConfig(std::string const& iniConfigFileName)
     {
         return FakeLedger::initIniConfig(iniConfigFileName);
@@ -142,6 +143,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// check timestamp
     /// init genesis configuration
     boost::property_tree::ptree pt;
+#if 0
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
     /// check with invalid timestamp
@@ -152,7 +154,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     pt.put("state.type", "storage");
     fakeLedger.initGenesisConfig(pt);
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
-
+#endif
     /// check groupMark
     fakeLedger.initMark();
     std::string mark =
@@ -177,15 +179,23 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
     BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
 
     /// modify state to storage(the default option)
     fakeLedger.initDBConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
-    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "mpt");
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
+    }
+    else
+    {
+        fakeLedger.getParam()->mutableStorageParam().type = "LevelDB";
+    }
+
+    BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =
@@ -201,7 +211,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     BOOST_CHECK(dbInitializer->stateFactory() == nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() == nullptr);
     /// create executiveContext and stateFactory
-    dbInitializer->initStateDB(genesisHash);
+    dbInitializer->initState(genesisHash);
     BOOST_CHECK(dbInitializer->stateFactory() != nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() != nullptr);
     fakeLedger.setDBInitializer(dbInitializer);

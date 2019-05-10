@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
     LOG(INFO) << "Add a new node to sealer";
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 0;
+    s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     LOG(INFO) << "Add a new node to sealer";
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 0;
+    s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
@@ -187,19 +187,40 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     std::string nodeID("12345678");
     bytes in = abi.abiIn("addSealer(string)", nodeID);
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 1;
+    s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_INVALID_NODEID);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_INVALID_NODEID);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_INVALID_NODEID);
+    }
     in = abi.abiIn("addObserver(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_INVALID_NODEID);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_INVALID_NODEID);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_INVALID_NODEID);
+    }
     in = abi.abiIn("remove(string)", nodeID);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_INVALID_NODEID);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_INVALID_NODEID);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_INVALID_NODEID);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
@@ -212,7 +233,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
 
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
     bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
-    u256 count = 0;
+    s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
@@ -230,13 +251,26 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_LAST_SEALER);
-
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_LAST_SEALER);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_LAST_SEALER);
+    }
     in = abi.abiIn("addObserver(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    BOOST_TEST(count == CODE_LAST_SEALER);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(count == CODE_LAST_SEALER);
+    }
+    else
+    {
+        BOOST_TEST(count == -CODE_LAST_SEALER);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)

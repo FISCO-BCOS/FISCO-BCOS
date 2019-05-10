@@ -23,7 +23,6 @@
 #pragma once
 
 #include "Common.h"
-#include "GlobalConfigureInitializer.h"
 #include "InitializerInterface.h"
 #include "KeyCenterInitializer.h"
 #include "LedgerInitializer.h"
@@ -66,10 +65,6 @@ public:
     }
     void init(std::string const& _path);
 
-    GlobalConfigureInitializer::Ptr globalConfigureInitializer()
-    {
-        return m_globalConfigureInitializer;
-    }
     SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
     P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
     LedgerInitializer::Ptr ledgerInitializer() { return m_ledgerInitializer; }
@@ -79,7 +74,6 @@ public:
 private:
     LogInitializer::Ptr m_logInitializer;
     RPCInitializer::Ptr m_rpcInitializer;
-    GlobalConfigureInitializer::Ptr m_globalConfigureInitializer;
     LedgerInitializer::Ptr m_ledgerInitializer;
     P2PInitializer::Ptr m_p2pInitializer;
 

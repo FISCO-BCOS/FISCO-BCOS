@@ -102,6 +102,16 @@ public:
     h256 headerHash() const { return m_blockHeader.hash(); }
     std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
 
+    std::vector<u256> getAllNonces() const
+    {
+        std::vector<u256> nonce_vec;
+        for (auto const& trans : m_transactions)
+        {
+            nonce_vec.push_back(trans.nonce());
+        }
+        return nonce_vec;
+    }
+
     ///-----set interfaces
     /// set m_transactions
     void setTransactions(Transactions const& _trans)
