@@ -127,14 +127,21 @@ bytes TableFactoryPrecompiled::call(
             result = e.errorCode();
         }
 
-        out = abi.abiIn("", u256(result));
-        if (g_BCOSConfig.version() < RC2_VERSION)
+        if (result == 1)
+        {
+            out = abi.abiIn("", s256(result));
+        }
+        else if (g_BCOSConfig.version() < RC2_VERSION)
         {
             out = abi.abiIn("", -result);
         }
         else if (g_BCOSConfig.version() == RC2_VERSION)
         {
-            out = abi.abiIn("", u256(-result));
+            out = abi.abiIn("", s256(-result));
+        }
+        else
+        {
+            out = abi.abiIn("", s256(result));
         }
     }
     else

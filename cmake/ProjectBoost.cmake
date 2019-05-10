@@ -140,4 +140,9 @@ set_property(TARGET Boost::Log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_IN
 set_property(TARGET Boost::Log PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
 add_dependencies(Boost::Log boost)
 
+add_library(Boost::Serialization STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::Serialization PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_serialization${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::Serialization PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+add_dependencies(Boost::Serialization boost)
+
 unset(SOURCE_DIR)
