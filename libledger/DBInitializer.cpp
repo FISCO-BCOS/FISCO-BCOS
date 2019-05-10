@@ -68,12 +68,10 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
-#if 0
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();
     }
-#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
