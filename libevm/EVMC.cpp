@@ -35,6 +35,7 @@ using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc
 EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
 {
     assert(m_instance != nullptr);
+    // the abi_version of intepreter is EVMC_ABI_VERSION when callback VMFactory::create()
     assert(m_instance->abi_version == EVMC_ABI_VERSION);
 
     // Set the options.
@@ -45,6 +46,8 @@ EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
 
 owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp)
 {
+    // the block number will be larger than 0,
+    // can be controlled by the programmers
     assert(_ext.envInfo().number() >= 0);
 
     constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
@@ -52,8 +55,23 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
     // TODO: The following checks should be removed by changing the types
     //       used for gas, block number and timestamp.
     (void)int64max;
-    assert(io_gas <= int64max);
-    assert(_ext.envInfo().gasLimit() <= int64max);
+
+    // gas, gasLimit are u256 outside of EVM
+    // and can be passed inside by the outsider-users
+    // so we should remove the `assert`, and throw exceptions if this happend
+    // *origin code:
+    // assert(io_gas <= int64max);
+    // assert(_ext.envInfo().gasLimit() <= int64max);
+    // *modified code:
+    if (io_gas > int64max || _ext.envInfo().gasLimit() > int64max)
+    {
+        LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", io_gas)
+                   << LOG_KV("gasLimit", _ext.envInfo().gasLimit())
+                   << LOG_KV("max gas/gasLimit", int64max);
+        BOOST_THROW_EXCEPTION(GasOverflow());
+    }
+
+
     assert(_ext.depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
 
     auto gas = static_cast<int64_t>(io_gas);

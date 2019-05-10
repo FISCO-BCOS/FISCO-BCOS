@@ -64,7 +64,8 @@ enum class TransactionException : int
     InvalidZeroSignatureFormat = 23,
     AddressAlreadyUsed = 24,
     PermissionDenied = 25,
-    CallAddressError = 26
+    CallAddressError = 26,
+    GasOverflow = 27
 };
 
 enum class CodeDeposit
