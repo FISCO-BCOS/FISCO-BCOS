@@ -94,7 +94,7 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
-        getOut(out, result);
+        getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
     {
@@ -126,7 +126,7 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
-        getOut(out, result);
+        getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
     {
