@@ -32,7 +32,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
     # Use ISO C++11 standard language.
-    set(CMAKE_CXX_FLAGS "-std=c++11")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -pthread")
 
     # Enables all the warnings about constructions that some users consider questionable,
     # and that are easy to avoid.  Also enable some extra warning flags that are not
@@ -70,10 +70,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     endif ()
     
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g -pthread -DETH_DEBUG")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG -pthread")
-    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG -pthread")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -pthread")
+    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g  -DETH_DEBUG")
+    set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
     
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)
@@ -109,7 +109,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # Additional Clang-specific compiler settings.
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
-            set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -pthread -DETH_DEBUG")
+            set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -DETH_DEBUG")
         endif()
         # set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
         add_compile_options(-fstack-protector)

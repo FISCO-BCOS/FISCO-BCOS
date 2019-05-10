@@ -29,7 +29,7 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
-enable_parallel=false
+enable_parallel=true
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
@@ -51,7 +51,6 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
     -s <DB type>                        Default rocksdb. Options can be rocksdb / external / mysql / leveldb
     -d <docker mode>                    Default off. If set -d, build with docker
-    -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
@@ -82,7 +81,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -104,7 +103,6 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
             exit 1;
         fi
     ;;
-    P) enable_parallel="true";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
@@ -478,6 +476,7 @@ cipher_data_key=
 [chain]
     id=${chain_id}
 [compatibility]
+    ; supported_version should nerver be changed
     supported_version=${compatibility_version}
 [log]
     log_path=./log
@@ -933,7 +932,7 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # get fisco_version
-fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | head -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 # fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"

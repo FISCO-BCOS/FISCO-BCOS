@@ -49,8 +49,8 @@ const char* const SYS_ACCESS_TABLE = "_sys_table_access_";
 const char* const USER_TABLE_PREFIX = "_user_";
 const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 
-const int CODE_NO_AUTHORIZED = 50000;
-const int CODE_TABLE_NAME_ALREADY_EXIST = 50001;
+const int CODE_NO_AUTHORIZED = -50000;
+const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
 
 }  // namespace storage
 }  // namespace dev
