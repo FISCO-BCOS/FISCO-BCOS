@@ -525,8 +525,15 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
                 initParam.consensusType = s[2];
-                initParam.storageType = s[3];
-                initParam.stateType = s[4];
+                if (g_BCOSConfig.version() <= RC2_VERSION)
+                {
+                    initParam.storageType = s[3];
+                    initParam.stateType = s[4];
+                }
+                else
+                {
+                    initParam.stateType = s[3];
+                }
             }
             catch (std::exception& e)
             {

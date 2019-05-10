@@ -85,7 +85,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            getOut(out, storage::CODE_NO_AUTHORIZED);
+            getErrorCodeOut(out, storage::CODE_NO_AUTHORIZED);
             return out;
         }
     }
@@ -131,7 +131,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("permission denied");
         }
-        getOut(out, count);
+        getErrorCodeOut(out, count);
     }
     else
     {  // unknown function call

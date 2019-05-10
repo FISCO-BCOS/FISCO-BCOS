@@ -303,7 +303,7 @@ public:
     Entries::Ptr dirtyEntries;
     Entries::Ptr newEntries;
 
-    // for memorytable
+    // only for memorytable, memoryTable2 don't need
     std::string tableName;
     std::map<std::string, Entries::Ptr> data;
 };

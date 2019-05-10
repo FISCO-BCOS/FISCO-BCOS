@@ -121,19 +121,17 @@ public:
 
 protected:
     /// load genesis config of group
-    void initConfig(std::string const& configPath) override;
+    void initGenesisConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
-    virtual bool initBlockChain();
+    virtual bool initBlockChain(GenesisBlockParam& _genesisParam);
     /// create consensus moudle
     virtual bool consensusInitFactory();
     /// init the blockSync
     virtual bool initSync();
 
-    /// make these functions protected for UT
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
-    void initMark();
+    void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
