@@ -47,7 +47,7 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
 
-    /// programming assert for debug
+    // programming assert for debug
     assert(fromEvmC(*_addr) == env.myAddress());
     u256 key = fromEvmC(*_key);
     *o_result = toEvmC(env.store(key));
@@ -178,10 +178,10 @@ void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) no
 
 void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
 {
-    /// gas maybe smaller than 0 since outside gas is u256 and evmc_message is int64_t
-    /// so gas maybe smaller than 0 in some extreme cases
-    /// * orgin code: assert(_msg->gas >= 0)
-    /// * modified：
+    // gas maybe smaller than 0 since outside gas is u256 and evmc_message is int64_t
+    // so gas maybe smaller than 0 in some extreme cases
+    // * orgin code: assert(_msg->gas >= 0)
+    // * modified：
     if (_msg->gas < 0)
     {
         LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);

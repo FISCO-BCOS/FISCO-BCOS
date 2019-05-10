@@ -79,7 +79,7 @@ public:
 
 private:
     ExecutiveContext::Ptr m_exeEngine;
-    /// condition must been setted
+    // condition must been setted
     dev::storage::Condition::Ptr m_condition;
 };
 

@@ -411,7 +411,7 @@ void State::createContract(Address const& _address)
 
 void State::createAccount(Address const& _address, Account const&& _account)
 {
-    /// ensured by the program logic
+    // ensured by the program logic
     assert(!addressInUse(_address) && "Account already exists");
 
     m_cache[_address] = std::move(_account);
@@ -754,7 +754,7 @@ AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address
 
                 if (i.second.storageOverlay().empty())
                 {
-                    /// for programming debug
+                    // for programming debug
                     assert(i.second.baseRoot());
                     s.append(i.second.baseRoot());
                 }
@@ -766,7 +766,7 @@ AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address
                             storageDB.insert(j.first, rlp(j.second));
                         else
                             storageDB.remove(j.first);
-                    /// for programming debug
+                    // for programming debug
                     assert(storageDB.root());
                     s.append(storageDB.root());
                 }
