@@ -67,4 +67,43 @@ uint64_t utcTimeUs()
     return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
+thread_local std::string TimeRecorder::m_name;
+thread_local std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds> TimeRecorder::m_timePoint;
+thread_local std::vector<std::pair<std::string, std::chrono::duration<double> > > TimeRecorder::m_record;
+
+TimeRecorder::TimeRecorder(const std::string &function, const std::string &name) {
+	m_function = function;
+	if(m_timePoint ==  std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds>()) {
+		m_name = name;
+		m_timePoint == std::chrono::system_clock::now();
+	}
+	else {
+		auto now = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed = now - m_timePoint;
+		m_record.push_back(std::make_pair(name, elapsed));
+
+		m_name = name;
+		m_timePoint = now;
+	}
+}
+
+TimeRecorder::~TimeRecorder() {
+	if(m_timePoint !=  std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds>()) {
+		auto now = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapsed = now - m_timePoint;
+
+		m_record.push_back(std::make_pair(m_name, elapsed));
+
+		m_name = "";
+		m_timePoint = std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds>();
+
+		std::stringstream ss;
+		for(auto it: m_record) {
+			ss << " [" << it.first << "]: " << it.second.count();
+		}
+
+		LOG(DEBUG) << "TIME RECORDER- " << m_function << ":" << ss.str();
+	}
+}
+
 }  // namespace dev

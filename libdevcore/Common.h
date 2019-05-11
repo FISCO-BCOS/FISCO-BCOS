@@ -396,4 +396,21 @@ private:
     std::unordered_set<T> m_set;
     std::queue<T> m_queue;
 };
+
+// do not use TIME_RECORD in tbb code block
+#define __TIME_RECORD(name, var, line) ::dev::TimeRecorder var##line(__FUNCTION__ , name)
+#define _TIME_RECORD(name, line) __TIME_RECORD(name, _time_anonymous, line)
+#define TIME_RECORD(name) _TIME_RECORD(name, __LINE__)
+
+class TimeRecorder {
+public:
+	TimeRecorder(const std::string &function, const std::string &name);
+	~TimeRecorder();
+
+private:
+	std::string m_function;
+	thread_local static std::string m_name;
+	thread_local static std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds> m_timePoint;
+	thread_local static std::vector<std::pair<std::string, std::chrono::duration<double> > > m_record;
+};
 }  // namespace dev

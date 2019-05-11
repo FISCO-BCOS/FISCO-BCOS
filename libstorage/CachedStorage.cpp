@@ -21,6 +21,7 @@
 
 #include "CachedStorage.h"
 #include "StorageException.h"
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <tbb/concurrent_vector.h>
@@ -221,6 +222,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     tbb::atomic<size_t> total = 0;
 
+    TIME_RECORD("Process dirty entries");
     std::shared_ptr<std::vector<TableData::Ptr> > commitDatas =
         std::make_shared<std::vector<TableData::Ptr> >();
 
@@ -311,6 +313,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
+    TIME_RECORD("Set ID");
     // Set ID
     for (size_t i = 0; i < commitDatas->size(); ++i)
     {
@@ -324,6 +327,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         }
     }
 
+    TIME_RECORD("Process new entries");
     tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatas->size()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
@@ -381,6 +385,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
+    TIME_RECORD("Submit commit task");
     // new task write to backend
     Task::Ptr task = std::make_shared<Task>();
     task->hash = hash;
