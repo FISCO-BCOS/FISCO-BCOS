@@ -285,7 +285,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
                                 else
                                 {
-                                    STORAGE_LOG(ERROR)
+                                    STORAGE_LOG(FATAL)
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
 
@@ -523,9 +523,10 @@ void CachedStorage::checkAndClear()
     bool needClear = false;
     size_t clearTimes = 0;
 
-    size_t clearCount = 0;
     auto currentCapacity = m_capacity;
 
+    size_t clearCount = 0;
+	size_t clearThrough = 0;
     auto now = std::chrono::system_clock::now();
     do
     {
@@ -557,6 +558,7 @@ void CachedStorage::checkAndClear()
         {
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
+            	++clearThrough;
                 auto tableIt = m_caches.find(it->first);
                 if (tableIt != m_caches.end())
                 {
@@ -621,6 +623,7 @@ void CachedStorage::checkAndClear()
     {
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
         LOG(INFO) << "Clear finished, total: " << clearCount << " entries, "
+        		  << "through: " << clearThrough << "entries, "
                   << readableCapacity(currentCapacity - m_capacity)
                   << " capacity, elapsed: " << elapsed.count() << "s\n"
                   << "Current total cached entries: " << m_mru.size()

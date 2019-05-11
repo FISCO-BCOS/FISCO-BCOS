@@ -183,34 +183,11 @@ void Entry::setStatus(const std::string& status)
 
 uint32_t Entry::num() const
 {
-#if 0
-    auto it = m_fields.find(NUM_FIELD);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        return boost::lexical_cast<uint32_t>(it->second);
-    }
-#endif
     return m_num;
 }
 
 void Entry::setNum(uint32_t num)
 {
-#if 0
-    auto it = m_fields.find(NUM_FIELD);
-    if (it == m_fields.end())
-    {
-        m_fields.insert(std::make_pair(NUM_FIELD, boost::lexical_cast<std::string>(num)));
-    }
-    else
-    {
-        it->second = boost::lexical_cast<std::string>(num);
-    }
-#endif
-
     m_num = num;
     m_dirty = true;
 }
