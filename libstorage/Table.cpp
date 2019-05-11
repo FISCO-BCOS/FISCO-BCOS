@@ -102,7 +102,6 @@ void Entry::setField(const std::string& key, const std::string& value)
 	checkRef();
 
 	if(key == ID_FIELD) {
-		setID(value);
 		return;
 	}
 
