@@ -322,6 +322,7 @@ BOOST_AUTO_TEST_CASE(commit)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
+    tableInfo->key = "Name";
     entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 2u);
 
@@ -440,7 +441,62 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 #endif
 }
 
-BOOST_AUTO_TEST_CASE(checkAndClear) {}
+BOOST_AUTO_TEST_CASE(parallel_samekey_commit) {
+	cachedStorage->setBackend(std::make_shared<MockStorageParallel>());
+
+	auto entry = std::make_shared<Entry>();
+	entry->setField("key", "1");
+	entry->setField("value", "2");
+	entry->setID(100);
+
+	auto data = std::make_shared<dev::storage::TableData>();
+	data->dirtyEntries->addEntry(entry);
+
+	std::vector<dev::storage::TableData::Ptr> datas = std::make_shared<dev::storage::TableData>();
+	datas.push_back(data);
+	cachedStorage->commit(dev::h256(0), 99, datas);
+
+	auto tableInfo = std::make_shared<TableInfo>();
+	tableInfo->name = "t_test";
+	tableInfo->key = "key";
+	tableInfo->fields.push_back("value");
+
+	tbb::atomic<size_t> i = 0;
+	for(size_t i=0; i < 100; ++i) {
+		Caches::Ptr caches = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+		BOOST_TEST(caches->key() == "key");
+		BOOST_TEST(caches->num() == 99);
+
+		auto entries = caches->entries();
+		BOOST_TEST(entries->size() == 1);
+
+		auto cacheEntry = entries->get(0);
+		BOOST_TEST(cacheEntry != entry);
+
+		BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
+		BOOST_TEST(cacheEntry->getField("value") == entry->getField("value"));
+
+		cacheEntry->setID(0);
+		cacheEntry->setField("value", boost::lexical_cast<std::string>(i));
+
+		auto newData = std::make_shared<dev::storage::TableData>();
+		newData->newEntries->addEntry(cacheEntry);
+
+		std::vector<dev::storage::TableData::Ptr> newDatas = std::make_shared<dev::storage::TableData>();
+		newDatas.push_back(data);
+
+		cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
+	}
+
+	Caches::Ptr result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+	BOOST_TEST(result->num() == 199);
+	auto resultEntries = result->entries();
+	BOOST_TEST(resultEntries->size() == 100);
+}
+
+BOOST_AUTO_TEST_CASE(checkAndClear) {
+
+}
 
 BOOST_AUTO_TEST_CASE(exception)
 {

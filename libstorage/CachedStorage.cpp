@@ -451,6 +451,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     });
 
     STORAGE_LOG(INFO) << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
+
+    TIME_RECORD("Check and clear");
     checkAndClear();
 
     return total;

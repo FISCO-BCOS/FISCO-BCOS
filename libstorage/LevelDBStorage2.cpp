@@ -77,6 +77,7 @@ Entries::Ptr LevelDBStorage2::select(
                 {
                 	if(valueIt->first == ID_FIELD) {
                 		entry->setID(valueIt->second);
+                		continue;
                 	}
                     entry->setField(valueIt->first, valueIt->second);
                 }

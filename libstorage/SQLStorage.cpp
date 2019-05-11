@@ -123,6 +123,11 @@ Entries::Ptr SQLStorage::select(
             {
                 std::string fieldValue = line.get(j, "").asString();
 
+                if(columns[j] == ID_FIELD) {
+					entry->setID(fieldValue);
+					continue;
+				}
+
                 entry->setField(columns[j], fieldValue);
             }
 

@@ -410,7 +410,7 @@ public:
 private:
 	std::string m_function;
 	thread_local static std::string m_name;
-	thread_local static std::chrono::time_point<std::chrono::system_clock,std::chrono::nanoseconds> m_timePoint;
+	thread_local static std::chrono::system_clock::time_point m_timePoint;
 	thread_local static std::vector<std::pair<std::string, std::chrono::duration<double> > > m_record;
 };
 }  // namespace dev
