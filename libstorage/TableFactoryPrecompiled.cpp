@@ -101,18 +101,16 @@ bytes TableFactoryPrecompiled::call(
 
         int result = 0;
 
-        /// RC1 success result is 1
         if (g_BCOSConfig.version() < RC2_VERSION)
-        {
+        {  // RC1 success result is 1
             result = 1;
         }
         try
         {
-            /// table already exist
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
             if (!table)
-            {
+            {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
                 /// RC1 table already exist: 0
                 if (g_BCOSConfig.version() < RC2_VERSION)
@@ -128,7 +126,7 @@ bytes TableFactoryPrecompiled::call(
         }
 
         if (result == 1)
-        {
+        {  // RC1 success result is 1
             out = abi.abiIn("", s256(result));
         }
         else if (g_BCOSConfig.version() < RC2_VERSION)
