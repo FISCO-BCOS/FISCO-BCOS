@@ -303,7 +303,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 tbb::parallel_sort(commitData->dirtyEntries->begin(),
                     commitData->dirtyEntries->end(), EntryLess(requestData->info));
 
-                commitData->newEntries->copyFrom(requestData->newEntries);
+                commitData->newEntries->shallowFrom(requestData->newEntries);
                 tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
                     EntryLess(requestData->info));
 

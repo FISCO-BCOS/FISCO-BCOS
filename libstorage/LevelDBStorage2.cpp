@@ -206,21 +206,9 @@ void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
-        auto searchIt = std::lower_bound(it->second.begin(), it->second.end(), value,
-            [](const std::map<std::string, std::string>& lhs,
-                const std::map<std::string, std::string>& rhs) {
-                return lhs.at("_id_") < rhs.at("_id_");
-            });
-
-        if (searchIt != it->second.end() && (*searchIt)["_id_"] == value["_id_"])
-        {
-            *searchIt = value;
-        }
-        else
-        {
-            it->second.push_back(value);
-        }
+		it->second.push_back(value);
     }
 }
 
