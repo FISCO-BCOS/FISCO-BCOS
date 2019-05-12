@@ -118,6 +118,7 @@ CachedStorage::CachedStorage()
 
 CachedStorage::~CachedStorage()
 {
+	LOG(INFO) << "Stoping flushStorage thread";
     m_taskThreadPool->stop();
 }
 
@@ -130,26 +131,28 @@ Entries::Ptr CachedStorage::select(
 
     auto entries = selectNoCondition(hash, num, tableInfo, key, condition)->entries();
 
-    for (size_t i = 0; i < entries->size(); ++i)
-    {
-        auto entry = entries->get(i);
-        if (condition)
-        {
-            if (condition->process(entry))
-            {
-                auto outEntry = std::make_shared<Entry>();
-                outEntry->copyFrom(entry);
+    if(entries) {
+		for (size_t i = 0; i < entries->size(); ++i)
+		{
+			auto entry = entries->get(i);
+			if (condition)
+			{
+				if (condition->process(entry))
+				{
+					auto outEntry = std::make_shared<Entry>();
+					outEntry->copyFrom(entry);
 
-                out->addEntry(outEntry);
-            }
-        }
-        else
-        {
-            auto outEntry = std::make_shared<Entry>();
-            outEntry->copyFrom(entry);
+					out->addEntry(outEntry);
+				}
+			}
+			else
+			{
+				auto outEntry = std::make_shared<Entry>();
+				outEntry->copyFrom(entry);
 
-            out->addEntry(outEntry);
-        }
+				out->addEntry(outEntry);
+			}
+		}
     }
 
     return out;
@@ -213,7 +216,26 @@ Caches::Ptr CachedStorage::selectNoCondition(
         return newIt.first->second;
     }
 
-    return std::make_shared<Caches>();
+    // no found in cache or backend
+    STORAGE_LOG(TRACE) << "Key: " << key << " not found in cache or backend";
+    tableIt = m_caches.find(tableInfo->name);
+	if (tableIt == m_caches.end())
+	{
+		tableIt =
+			m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
+				.first;
+
+		tableIt->second->setTableInfo(tableInfo);
+	}
+
+	auto caches = std::make_shared<Caches>();
+	caches->setKey(key);
+	caches->setEntries(std::make_shared<Entries>());
+	caches->setNum(num);
+
+	auto newIt = tableIt->second->addCache(key, caches).first;
+
+    return newIt->second;
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -274,7 +296,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         (*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
 
-                                    LOG(TRACE) << "update capacity: " << commitData->info->name
+                                    STORAGE_LOG(TRACE) << "update capacity: " << commitData->info->name
                                                << "-" << key << ", from capacity: " << oldSize
                                                << " to capacity: " << (*entryIt)->capacity();
                                     updateCapacity(oldSize, (*entryIt)->capacity());
@@ -323,7 +345,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             auto commitEntry = commitData->newEntries->get(j);
             commitEntry->setID(++m_ID);
 
-            LOG(TRACE) << "Set new entry ID: " << m_ID;
+            STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
         }
     }
 
@@ -385,75 +407,80 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
-    TIME_RECORD("Submit commit task");
-    // new task write to backend
-    Task::Ptr task = std::make_shared<Task>();
-    task->hash = hash;
-    task->num = num;
-    task->datas = commitDatas;
+    if(m_backend) {
+		TIME_RECORD("Submit commit task");
+		// new task write to backend
+		Task::Ptr task = std::make_shared<Task>();
+		task->hash = hash;
+		task->num = num;
+		task->datas = commitDatas;
 
-    TableData::Ptr data;
-    if (currentStateIdx < 0)
-    {
-        data = std::make_shared<TableData>();
-        data->info->name = SYS_CURRENT_STATE;
-        data->info->key = SYS_KEY;
-        data->info->fields = std::vector<std::string>{"value"};
+		TableData::Ptr data;
+		if (currentStateIdx < 0)
+		{
+			data = std::make_shared<TableData>();
+			data->info->name = SYS_CURRENT_STATE;
+			data->info->key = SYS_KEY;
+			data->info->fields = std::vector<std::string>{"value"};
+		}
+		else
+		{
+			data = (*commitDatas)[currentStateIdx];
+		}
+
+		Entry::Ptr idEntry = std::make_shared<Entry>();
+		idEntry->setID(1);
+		idEntry->setNum(num);
+		idEntry->setStatus(0);
+		idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+		idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
+
+		data->dirtyEntries->addEntry(idEntry);
+
+		task->datas->push_back(data);
+		auto backend = m_backend;
+		auto self =
+			std::weak_ptr<CachedStorage>(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
+
+		m_commitNum.store(num);
+		m_taskThreadPool->enqueue([backend, task, self]() {
+			auto now = std::chrono::system_clock::now();
+			STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
+			backend->commit(task->hash, task->num, *(task->datas));
+
+			auto storage = self.lock();
+			if (storage)
+			{
+				storage->setSyncNum(task->num);
+
+				std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+				STORAGE_LOG(INFO)
+					<< "\n---------------------------------------------------------------------\n"
+					<< "Commit block: " << task->num
+					<< " to backend storage finished, current cached block: " << storage->m_commitNum
+					<< "\n"
+					<< "Flush elapsed time: " << std::setiosflags(std::ios::fixed) << std::setprecision(4) << elapsed.count() << "s"
+					<< "\n\n"
+					<< "Total query: " << storage->m_queryTimes << "\n"
+					<< "Total cache hit: " << storage->m_hitTimes << "\n"
+					<< "Total cache miss: " << storage->m_queryTimes - storage->m_hitTimes << "\n"
+					<< "Total hit ratio: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+					<< ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
+					<< "\n'n"
+					<< "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
+					<< "Cache size: " << storage->m_mru.size()
+					<< "\n---------------------------------------------------------------------\n";
+			}
+		});
+
+		STORAGE_LOG(INFO) << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
+
+		TIME_RECORD("Check and clear");
+		checkAndClear();
     }
-    else
-    {
-        data = (*commitDatas)[currentStateIdx];
+    else {
+    	STORAGE_LOG(INFO) << "No backend storage, skip commit...";
     }
-
-    Entry::Ptr idEntry = std::make_shared<Entry>();
-    idEntry->setID(1);
-    idEntry->setNum(num);
-    idEntry->setStatus(0);
-    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
-    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
-
-    data->dirtyEntries->addEntry(idEntry);
-
-    task->datas->push_back(data);
-    auto backend = m_backend;
-    auto self =
-        std::weak_ptr<CachedStorage>(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
-
-    m_commitNum.store(num);
-    m_taskThreadPool->enqueue([backend, task, self]() {
-        auto now = std::chrono::system_clock::now();
-        STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
-        backend->commit(task->hash, task->num, *(task->datas));
-
-        auto storage = self.lock();
-        if (storage)
-        {
-            storage->setSyncNum(task->num);
-
-            std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-            STORAGE_LOG(INFO)
-                << "\n---------------------------------------------------------------------\n"
-                << "Commit block: " << task->num
-                << " to backend storage finished, current cached block: " << storage->m_commitNum
-                << "\n"
-                << "Flush elapsed time: " << elapsed.count() << "s"
-                << "\n\n"
-                << "Total query: " << storage->m_queryTimes << "\n"
-                << "Total cache hit: " << storage->m_hitTimes << "\n"
-                << "Total cache miss: " << storage->m_queryTimes - storage->m_hitTimes << "\n"
-                << "Total hit ratio: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-                << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
-                << "\n'n"
-                << "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
-                << "Cache size: " << storage->m_mru.size()
-                << "\n---------------------------------------------------------------------\n";
-        }
-    });
-
-    STORAGE_LOG(INFO) << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
-
-    TIME_RECORD("Check and clear");
-    checkAndClear();
 
     return total;
 }

@@ -409,8 +409,9 @@ public:
 
 private:
 	std::string m_function;
-	thread_local static std::string m_name;
-	thread_local static std::chrono::system_clock::time_point m_timePoint;
-	thread_local static std::vector<std::pair<std::string, std::chrono::duration<double> > > m_record;
+	static thread_local std::string m_name;
+	static thread_local std::chrono::system_clock::time_point m_timePoint;
+	static thread_local size_t m_heapCount;
+	static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point> > m_record;
 };
 }  // namespace dev

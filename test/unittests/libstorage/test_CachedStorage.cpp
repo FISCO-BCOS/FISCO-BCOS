@@ -442,26 +442,25 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 }
 
 BOOST_AUTO_TEST_CASE(parallel_samekey_commit) {
-	cachedStorage->setBackend(std::make_shared<MockStorageParallel>());
-
-	auto entry = std::make_shared<Entry>();
-	entry->setField("key", "1");
-	entry->setField("value", "2");
-	entry->setID(100);
-
-	auto data = std::make_shared<dev::storage::TableData>();
-	data->dirtyEntries->addEntry(entry);
-
-	std::vector<dev::storage::TableData::Ptr> datas = std::make_shared<dev::storage::TableData>();
-	datas.push_back(data);
-	cachedStorage->commit(dev::h256(0), 99, datas);
+	cachedStorage->init();
 
 	auto tableInfo = std::make_shared<TableInfo>();
 	tableInfo->name = "t_test";
 	tableInfo->key = "key";
 	tableInfo->fields.push_back("value");
 
-	tbb::atomic<size_t> i = 0;
+	auto entry = std::make_shared<Entry>();
+	entry->setField("key", "1");
+	entry->setField("value", "2");
+
+	auto data = std::make_shared<dev::storage::TableData>();
+	data->newEntries->addEntry(entry);
+	data->info = tableInfo;
+
+	std::vector<dev::storage::TableData::Ptr> datas;
+	datas.push_back(data);
+	cachedStorage->commit(dev::h256(0), 99, datas);
+
 	for(size_t i=0; i < 100; ++i) {
 		Caches::Ptr caches = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
 		BOOST_TEST(caches->key() == "key");
@@ -481,8 +480,9 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit) {
 
 		auto newData = std::make_shared<dev::storage::TableData>();
 		newData->newEntries->addEntry(cacheEntry);
+		newData->info = tableInfo;
 
-		std::vector<dev::storage::TableData::Ptr> newDatas = std::make_shared<dev::storage::TableData>();
+		std::vector<dev::storage::TableData::Ptr> newDatas;
 		newDatas.push_back(data);
 
 		cachedStorage->commit(dev::h256(0), 100 + i, newDatas);

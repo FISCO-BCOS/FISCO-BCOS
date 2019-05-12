@@ -8,6 +8,7 @@
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/CachedStorage.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -29,7 +30,12 @@ struct ConsensusPrecompiledFixture
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
-        factory.setStateStorage(storage);
+
+        cachedStorage = std::make_shared<CachedStorage>();
+        tableFactoryFactory->setStorage(cachedStorage);
+
+        //factory.setStateStorage(storage);
+        factory.setStateStorage(cachedStorage);
         factory.setStateFactory(storageStateFactory);
         factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
@@ -41,6 +47,7 @@ struct ConsensusPrecompiledFixture
 
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
+    CachedStorage::Ptr cachedStorage;
     ConsensusPrecompiled::Ptr consensusPrecompiled;
     BlockInfo blockInfo;
 };
@@ -151,6 +158,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     BOOST_TEST(entries->size() == 1u);
     BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
 
+    memoryTableFactory->commitDB(h256(0x122), 998);
+
     LOG(INFO) << "Remove the sealer node";
     in = abi.abiIn("remove(string)", nodeID1);
     out = consensusPrecompiled->call(context, bytesConstRef(&in));
@@ -158,6 +167,9 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
+    memoryTableFactory->commitDB(h256(0x122), 998);
+
+    table = memoryTableFactory->openTable(SYS_CONSENSUS);
     condition = table->newCondition();
     condition->EQ(NODE_KEY_NODEID, nodeID1);
     entries = table->select(PRI_KEY, condition);
@@ -179,6 +191,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     entries = table->select(PRI_KEY, condition);
     BOOST_TEST(entries->size() == 1u);
+
+    memoryTableFactory->commitDB(h256(0x123), 999);
 }
 
 BOOST_AUTO_TEST_CASE(TestErrorNodeID)
