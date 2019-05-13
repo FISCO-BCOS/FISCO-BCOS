@@ -67,7 +67,7 @@ public:
     };
 
     Entry();
-    virtual ~Entry() {}
+    virtual ~Entry();
 
     virtual uint32_t getID() const;
     virtual void setID(uint32_t id);

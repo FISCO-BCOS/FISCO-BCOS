@@ -40,6 +40,17 @@ Entry::Entry()
     checkRef();
 }
 
+Entry::~Entry()
+{
+    if (m_data)
+    {
+        if ((*m_data->m_refCount) > 0)
+        {
+            --(*m_data->m_refCount);
+        }
+    }
+}
+
 uint32_t Entry::getID() const
 {
     return m_ID;
