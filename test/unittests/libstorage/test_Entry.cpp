@@ -31,9 +31,7 @@ namespace test_Entry
 {
 struct EntryFixture
 {
-    EntryFixture()
-    {
-    }
+    EntryFixture() {}
 
     Entry::Ptr entry;
 

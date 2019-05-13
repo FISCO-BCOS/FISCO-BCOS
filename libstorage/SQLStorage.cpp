@@ -123,10 +123,11 @@ Entries::Ptr SQLStorage::select(
             {
                 std::string fieldValue = line.get(j, "").asString();
 
-                if(columns[j] == ID_FIELD) {
-					entry->setID(fieldValue);
-					continue;
-				}
+                if (columns[j] == ID_FIELD)
+                {
+                    entry->setID(fieldValue);
+                    continue;
+                }
 
                 entry->setField(columns[j], fieldValue);
             }
@@ -187,6 +188,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                     value[fieldIt.first] = fieldIt.second;
                 }
 
+                value[ID_FIELD] = entry->getID();
+
                 tableData["entries"].append(value);
             }
 
@@ -200,6 +203,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                 {
                     value[fieldIt.first] = fieldIt.second;
                 }
+
+                value[ID_FIELD] = entry->getID();
 
                 tableData["entries"].append(value);
             }

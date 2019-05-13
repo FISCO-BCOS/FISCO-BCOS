@@ -103,16 +103,16 @@ public:
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
-    struct EntryData {
-    	typedef std::shared_ptr<EntryData> Ptr;
+    struct EntryData
+    {
+        typedef std::shared_ptr<EntryData> Ptr;
 
-    	EntryData(std::shared_ptr<size_t> refCount, std::shared_ptr<std::map<std::string, std::string> > fields):
-    		m_refCount(refCount),
-			m_fields(fields)
-			{};
+        EntryData(std::shared_ptr<size_t> refCount,
+            std::shared_ptr<std::map<std::string, std::string>> fields)
+          : m_refCount(refCount), m_fields(fields){};
 
-    	std::shared_ptr<size_t> m_refCount;
-		std::shared_ptr<std::map<std::string, std::string> > m_fields;
+        std::shared_ptr<size_t> m_refCount;
+        std::shared_ptr<std::map<std::string, std::string>> m_fields;
     };
 
     void checkRef();

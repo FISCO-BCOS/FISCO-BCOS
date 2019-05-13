@@ -398,20 +398,22 @@ private:
 };
 
 // do not use TIME_RECORD in tbb code block
-#define __TIME_RECORD(name, var, line) ::dev::TimeRecorder var##line(__FUNCTION__ , name)
+#define __TIME_RECORD(name, var, line) ::dev::TimeRecorder var##line(__FUNCTION__, name)
 #define _TIME_RECORD(name, line) __TIME_RECORD(name, _time_anonymous, line)
 #define TIME_RECORD(name) _TIME_RECORD(name, __LINE__)
 
-class TimeRecorder {
+class TimeRecorder
+{
 public:
-	TimeRecorder(const std::string &function, const std::string &name);
-	~TimeRecorder();
+    TimeRecorder(const std::string& function, const std::string& name);
+    ~TimeRecorder();
 
 private:
-	std::string m_function;
-	static thread_local std::string m_name;
-	static thread_local std::chrono::system_clock::time_point m_timePoint;
-	static thread_local size_t m_heapCount;
-	static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point> > m_record;
+    std::string m_function;
+    static thread_local std::string m_name;
+    static thread_local std::chrono::system_clock::time_point m_timePoint;
+    static thread_local size_t m_heapCount;
+    static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point>>
+        m_record;
 };
 }  // namespace dev
