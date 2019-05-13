@@ -195,6 +195,98 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     memoryTableFactory->commitDB(h256(0x124), 1000);
 }
 
+BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove) {
+	eth::ContractABI abi;
+	std::string nodeID1(
+		"10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
+		"fb6b32df4cf4fbadbccf7123b4dce271157aae");
+
+	LOG(INFO) << "Add a new node to sealer";
+	bytes in = abi.abiIn("addSealer(string)", nodeID1);
+	bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+	s256 count = 0;
+	abi.abiOut(bytesConstRef(&out), count);
+	BOOST_TEST(count == 1u);
+
+	memoryTableFactory->commitDB(h256(0x1), 1);
+
+	std::string nodeID2(
+		"10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
+		"fb6b32df4cf4fbadbccf7123b4dce271157aad");
+
+	LOG(INFO) << "Add a second node to sealer";
+	in = abi.abiIn("addSealer(string)", nodeID2);
+	out = consensusPrecompiled->call(context, bytesConstRef(&in));
+	count = 0;
+	abi.abiOut(bytesConstRef(&out), count);
+	BOOST_TEST(count == 1u);
+
+	memoryTableFactory->commitDB(h256(0x2), 2);
+
+	for(size_t i=3; i<103; ++i) {
+		std::string nodeID2(
+			"10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
+			"fb6b32df4cf4fbadbccf7123b4dce271157aad");
+
+		in = abi.abiIn("addSealer(string)", nodeID2);
+		out = consensusPrecompiled->call(context, bytesConstRef(&in));
+		count = 0;
+		abi.abiOut(bytesConstRef(&out), count);
+		BOOST_TEST(count == 1u);
+
+		memoryTableFactory->commitDB(h256(i), i);
+	}
+
+	auto table = memoryTableFactory->openTable(SYS_CONSENSUS);
+	auto condition = table->newCondition();
+	condition->EQ(NODE_KEY_NODEID, nodeID1);
+	auto entries = table->select(PRI_KEY, condition);
+	BOOST_TEST(entries->size() == 1u);
+	BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
+
+	condition = table->newCondition();
+	condition->EQ(NODE_KEY_NODEID, nodeID2);
+	entries = table->select(PRI_KEY, condition);
+	BOOST_TEST(entries->size() == 1u);
+	BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
+
+	memoryTableFactory->commitDB(h256(0x122), 998);
+
+	LOG(INFO) << "Remove the sealer node";
+	in = abi.abiIn("remove(string)", nodeID1);
+	out = consensusPrecompiled->call(context, bytesConstRef(&in));
+	count = 0;
+	abi.abiOut(bytesConstRef(&out), count);
+	BOOST_TEST(count == 1u);
+
+	memoryTableFactory->commitDB(h256(0x123), 999);
+
+	table = memoryTableFactory->openTable(SYS_CONSENSUS);
+	condition = table->newCondition();
+	condition->EQ(NODE_KEY_NODEID, nodeID1);
+	entries = table->select(PRI_KEY, condition);
+	BOOST_TEST(entries->size() == 0u);
+
+	LOG(INFO) << "Remove the sealer node again";
+	in = abi.abiIn("remove(string)", nodeID1);
+	out = consensusPrecompiled->call(context, bytesConstRef(&in));
+	count = 1;
+	abi.abiOut(bytesConstRef(&out), count);
+	BOOST_TEST(count == 0u);
+
+	LOG(INFO) << "Add the node again";
+	in = abi.abiIn("addSealer(string)", nodeID1);
+	out = consensusPrecompiled->call(context, bytesConstRef(&in));
+	count = 0;
+	abi.abiOut(bytesConstRef(&out), count);
+	BOOST_TEST(count == 1u);
+
+	entries = table->select(PRI_KEY, condition);
+	BOOST_TEST(entries->size() == 1u);
+
+	memoryTableFactory->commitDB(h256(0x124), 1000);
+}
+
 BOOST_AUTO_TEST_CASE(TestErrorNodeID)
 {
     eth::ContractABI abi;
