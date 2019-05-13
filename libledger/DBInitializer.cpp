@@ -262,6 +262,7 @@ void DBInitializer::initZdbStorage()
         m_param->mutableStorageParam().maxConnections};
 
     auto sqlconnpool = std::make_shared<SQLConnectionPool>();
+    sqlconnpool->createDataBase(zdbConfig);
     sqlconnpool->InitConnectionPool(zdbConfig);
     zdbStorage->setConnPool(sqlconnpool);
     initTableFactory2(zdbStorage);

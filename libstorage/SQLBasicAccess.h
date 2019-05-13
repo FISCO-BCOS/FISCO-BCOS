@@ -27,6 +27,9 @@
 #include "Table.h"
 #include <json/json.h>
 
+
+#define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
+
 namespace dev
 {
 namespace storage
