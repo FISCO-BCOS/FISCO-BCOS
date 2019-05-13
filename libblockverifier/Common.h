@@ -27,7 +27,8 @@
 #include <libdevcore/easylog.h>
 #include <memory>
 
-#define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKVERIFIER")
+#define BLOCKVERIFIER_LOG(LEVEL) \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "]" << LOG_BADGE("BLOCKVERIFIER")
 #define EXECUTIVECONTEXT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("EXECUTIVECONTEXT")
 #define PARA_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 

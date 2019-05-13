@@ -42,7 +42,8 @@
 #include <memory>
 #include <mutex>
 
-#define BLOCKCHAIN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKCHAIN")
+#define BLOCKCHAIN_LOG(LEVEL) \
+    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "]" << LOG_BADGE("BLOCKCHAIN")
 
 namespace dev
 {
@@ -110,6 +111,8 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+    void setGroupID(GROUP_ID const& groupId) { m_groupId = groupId; }
+
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
@@ -160,6 +163,7 @@ private:
     int64_t m_blockNumber = -1;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+    GROUP_ID m_groupId;
 };
 }  // namespace blockchain
 }  // namespace dev

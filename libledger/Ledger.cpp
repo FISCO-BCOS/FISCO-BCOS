@@ -463,6 +463,7 @@ bool Ledger::initBlockVerifier()
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setGroupID(m_groupId);
     m_blockVerifier = blockVerifier;
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC");
     return true;
@@ -480,6 +481,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+    blockChain->setGroupID(m_groupId);
     m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)

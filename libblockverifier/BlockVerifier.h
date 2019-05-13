@@ -94,11 +94,14 @@ public:
         m_pNumberHash = _pNumberHash;
     }
 
+    void setGroupID(GROUP_ID const& groupId) { m_groupId = groupId; }
+
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
     bool m_enableParallel;
     unsigned int m_threadNum = -1;
+    GROUP_ID m_groupId;
 };
 
 }  // namespace blockverifier
