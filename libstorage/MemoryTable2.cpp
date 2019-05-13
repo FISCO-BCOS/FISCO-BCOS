@@ -43,6 +43,37 @@ Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr co
     return selectNoLock(key, condition);
 }
 
+void MemoryTable2::proccessLimit(const Condition::Ptr& condition,
+    const std::shared_ptr<dev::storage::Entries>& entries, const Entries::Ptr& resultEntries)
+{
+    if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+    {
+        std::vector<size_t> limitedIndex;
+        limitedIndex.reserve(entries->size());
+        for (size_t i = 0; i < entries->size(); ++i)
+        {
+            limitedIndex.push_back(i);
+        }
+        int begin = condition->getOffset();
+        int end = begin + condition->getCount();
+        int size = limitedIndex.size();
+        if (begin >= size)
+        {
+            limitedIndex.clear();
+        }
+        else
+        {
+            limitedIndex = std::vector<size_t>(limitedIndex.begin() + begin,
+                limitedIndex.begin() + end > limitedIndex.end() ? limitedIndex.end() :
+                                                                  limitedIndex.begin() + end);
+        }
+        for (auto& i : limitedIndex)
+        {
+            resultEntries->addEntry(entries->get(i));
+        }
+    }
+}
+
 Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
 {
     try
@@ -54,12 +85,10 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
             // query remoteDB anyway
             Entries::Ptr dbEntries =
                 m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key, condition);
-
             if (!dbEntries)
             {
                 return entries;
             }
-
             for (size_t i = 0; i < dbEntries->size(); ++i)
             {
                 auto entryIt = m_dirty.find(dbEntries->get(i)->getID());
@@ -73,7 +102,6 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 }
             }
         }
-
         auto it = m_newEntries.find(key);
         if (it != m_newEntries.end())
         {
@@ -84,8 +112,9 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 entries->addEntry(it->second->get(itIndex));
             }
         }
-
-        return entries;
+        Entries::Ptr resultEntries = std::make_shared<Entries>();
+        proccessLimit(condition, entries, resultEntries);
+        return resultEntries->size() == 0 ? entries : resultEntries;
     }
     catch (std::exception& e)
     {
