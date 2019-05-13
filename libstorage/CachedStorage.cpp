@@ -587,7 +587,6 @@ void CachedStorage::checkAndClear()
 
     size_t clearCount = 0;
     size_t clearThrough = 0;
-    auto now = std::chrono::system_clock::now();
     do
     {
         needClear = false;
@@ -609,7 +608,7 @@ void CachedStorage::checkAndClear()
         }
         else if (m_capacity > (int64_t)m_maxCapacity)
         {
-            STORAGE_LOG(DEBUG) << "Current capacity: " << m_capacity
+            STORAGE_LOG(TRACE) << "Current capacity: " << m_capacity
                                << " greater than max capacity: " << m_maxCapacity << ", waiting...";
             needClear = true;
         }
@@ -682,11 +681,9 @@ void CachedStorage::checkAndClear()
 
     if (clearTimes > 0)
     {
-        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-        LOG(DEBUG) << "Clear finished, total: " << clearCount << " entries, "
+        LOG(TRACE) << "Clear finished, total: " << clearCount << " entries, "
                    << "through: " << clearThrough << " entries, "
                    << readableCapacity(currentCapacity - m_capacity)
-                   << " capacity, elapsed: " << elapsed.count() << "s\n"
                    << "Current total cached entries: " << m_mru.size()
                    << ", total capacaity: " << readableCapacity(m_capacity);
     }

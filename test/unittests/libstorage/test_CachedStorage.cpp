@@ -344,52 +344,53 @@ BOOST_AUTO_TEST_CASE(commit_single_data)
     }
 }
 
-BOOST_AUTO_TEST_CASE(commit_multi_data) {
-	h256 h;
-	int64_t num = 50;
-	cachedStorage->setMaxForwardBlock(100);
-	std::vector<dev::storage::TableData::Ptr> datas;
-	dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
-	tableData->info->name = "t_test";
-	tableData->info->key = "Name";
-	tableData->info->fields.push_back("id");
-	Entries::Ptr entries = getEntries();
-	tableData->newEntries = entries;
-	datas.push_back(tableData);
+BOOST_AUTO_TEST_CASE(commit_multi_data)
+{
+    h256 h;
+    int64_t num = 50;
+    cachedStorage->setMaxForwardBlock(100);
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+    Entries::Ptr entries = getEntries();
+    tableData->newEntries = entries;
+    datas.push_back(tableData);
 
-	BOOST_TEST(cachedStorage->syncNum() == 0);
-	mockStorage->commitNum = 50;
-	size_t c = cachedStorage->commit(h, num, datas);
+    BOOST_TEST(cachedStorage->syncNum() == 0);
+    mockStorage->commitNum = 50;
+    size_t c = cachedStorage->commit(h, num, datas);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	BOOST_TEST(cachedStorage->syncNum() == 50);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    BOOST_TEST(cachedStorage->syncNum() == 50);
 
-	BOOST_CHECK_EQUAL(c, 1u);
-	std::string table("t_test");
-	std::string key("LiSi");
+    BOOST_CHECK_EQUAL(c, 1u);
+    std::string table("t_test");
+    std::string key("LiSi");
 
-	auto tableInfo = std::make_shared<TableInfo>();
-	tableInfo->name = table;
-	tableInfo->key = "Name";
-	entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
-	BOOST_CHECK_EQUAL(entries->size(), 2u);
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    tableInfo->key = "Name";
+    entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    BOOST_CHECK_EQUAL(entries->size(), 2u);
 
-	for (size_t i = 0; i < entries->size(); ++i)
-	{
-		auto entry = entries->get(i);
-		if (entry->getField("id") == "1")
-		{
-			BOOST_TEST(entry->getID() == 1);
-		}
-		else if (entry->getField("id") == "2")
-		{
-			BOOST_TEST(entry->getID() == 2);
-		}
-		else
-		{
-			BOOST_TEST(false);
-		}
-	}
+    for (size_t i = 0; i < entries->size(); ++i)
+    {
+        auto entry = entries->get(i);
+        if (entry->getField("id") == "1")
+        {
+            BOOST_TEST(entry->getID() == 1);
+        }
+        else if (entry->getField("id") == "2")
+        {
+            BOOST_TEST(entry->getID() == 2);
+        }
+        else
+        {
+            BOOST_TEST(false);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(parllel_commit)
