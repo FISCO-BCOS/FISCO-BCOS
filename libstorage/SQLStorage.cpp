@@ -189,7 +189,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                     value[fieldIt.first] = fieldIt.second;
                 }
 
-                value[ID_FIELD] = entry->getID();
+                value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
 
                 tableData["entries"].append(value);
             }
@@ -205,7 +205,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                     value[fieldIt.first] = fieldIt.second;
                 }
 
-                value[ID_FIELD] = entry->getID();
+                value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
 
                 tableData["entries"].append(value);
             }

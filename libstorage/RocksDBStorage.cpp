@@ -270,7 +270,7 @@ void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
-        value["_id_"] = entry->getID();
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
         it->second.push_back(value);
     }
