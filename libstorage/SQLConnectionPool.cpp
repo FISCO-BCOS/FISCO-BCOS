@@ -158,7 +158,7 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
         SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
 
         ConnectionPool_T _connectionPool = nullptr;
-        Connection_T _connection = nullptr;
+        volatile Connection_T _connection = nullptr;
 
         TRY
         {
