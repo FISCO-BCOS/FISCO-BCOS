@@ -25,6 +25,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+
+#define SQLConnectionPool_LOG(LEVEL) LOG(LEVEL) << "[SQLConnectionPool] "
+
 namespace dev
 {
 namespace storage
@@ -42,6 +45,8 @@ struct ZDBConfig
     uint32_t maxConnections;
 };
 
+#define SQLConnectionPool_LOG(LEVEL) LOG(LEVEL) << "[SQLConnectionPool] "
+
 class SQLConnectionPool
 {
 public:
@@ -58,6 +63,9 @@ public:
 
     int GetActiveConnections();
     int GetMaxConnections();
+
+
+    void createDataBase(const ZDBConfig& _dbConfig);
 
 private:
     ConnectionPool_T m_connectionPool;
