@@ -137,21 +137,14 @@ Entries::Ptr CachedStorage::select(
         for (size_t i = 0; i < entries->size(); ++i)
         {
             auto entry = entries->get(i);
-            if (condition)
+            for (size_t i = 0; i < entries->size(); ++i)
             {
-                if (condition->process(entry))
+                if (condition && !condition->process(entry))
                 {
-                    auto outEntry = std::make_shared<Entry>();
-                    outEntry->copyFrom(entry);
-
-                    out->addEntry(outEntry);
+                    continue;
                 }
-            }
-            else
-            {
                 auto outEntry = std::make_shared<Entry>();
                 outEntry->copyFrom(entry);
-
                 out->addEntry(outEntry);
             }
         }
@@ -550,7 +543,7 @@ void CachedStorage::setSyncNum(int64_t syncNum)
     m_syncNum.store(syncNum);
 }
 
-void CachedStorage::setMaxCapacity(size_t maxCapacity)
+void CachedStorage::setMaxCapacity(int64_t maxCapacity)
 {
     m_maxCapacity = maxCapacity;
 }

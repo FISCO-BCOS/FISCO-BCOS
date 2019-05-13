@@ -108,7 +108,7 @@ public:
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
 
-    void setMaxCapacity(size_t maxCapacity);
+    void setMaxCapacity(int64_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     size_t ID();
@@ -134,7 +134,7 @@ private:
     tbb::atomic<int64_t> m_capacity;
 
     size_t m_maxForwardBlock = 10;
-    size_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
+    int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
 
     tbb::mutex m_mutex;
 
