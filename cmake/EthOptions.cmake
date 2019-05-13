@@ -80,10 +80,9 @@ macro(configure_project)
     #perf
     eth_default_option(PROF OFF)
     if (PROF)
-    	add_definitions(-DPROF)
+    	#add_definitions(-DPROF)
 	endif()
-
-
+	
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
         set(SUPPORT_${FEATURE} TRUE)

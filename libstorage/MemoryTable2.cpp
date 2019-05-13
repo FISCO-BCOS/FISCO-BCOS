@@ -38,8 +38,6 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-MemoryTable2::MemoryTable2() : m_newEntries(std::make_shared<Entries>()) {}
-
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
     return selectNoLock(key, condition);
@@ -76,11 +74,15 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
             }
         }
 
-        auto indices = processEntries(m_newEntries, condition);
-        for (auto it : indices)
+        auto it = m_newEntries.find(key);
+        if (it != m_newEntries.end())
         {
-            m_newEntries->get(it)->setTempIndex(it);
-            entries->addEntry(m_newEntries->get(it));
+            auto indices = processEntries(it->second, condition);
+            for (auto itIndex : indices)
+            {
+                it->second->get(itIndex)->setTempIndex(itIndex);
+                entries->addEntry(it->second->get(itIndex));
+            }
         }
 
         return entries;
@@ -138,6 +140,7 @@ int MemoryTable2::update(
 
         m_recorder(shared_from_this(), Change::Update, key, records);
 
+        m_isDirty = true;
         return entries->size();
     }
     catch (std::exception& e)
@@ -168,13 +171,22 @@ int MemoryTable2::insert(
         checkField(entry);
 
         entry->setField(m_tableInfo->key, key);
-        // Change::Record record(m_newEntries->size());
-        auto iter = m_newEntries->addEntry(entry);
+        auto it = m_newEntries.find(key);
+
+        if (it == m_newEntries.end())
+        {
+            Entries::Ptr entries = std::make_shared<Entries>();
+            it = m_newEntries.insert(std::make_pair(key, entries)).first;
+        }
+        auto iter = it->second->addEntry(entry);
+
+        // auto iter = m_newEntries->addEntry(entry);
         Change::Record record(iter);
 
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
 
+        m_isDirty = true;
         return 1;
     }
     catch (std::exception& e)
@@ -220,6 +232,7 @@ int MemoryTable2::remove(
 
         m_recorder(shared_from_this(), Change::Remove, key, records);
 
+        m_isDirty = true;
         return entries->size();
     }
     catch (std::exception& e)
@@ -234,106 +247,88 @@ int MemoryTable2::remove(
 
 dev::h256 MemoryTable2::hash()
 {
-    auto tempEntries = std::vector<Entry::Ptr>();
-    auto size = m_dirty.size() + m_newEntries->size();
-    tempEntries.resize(size);
-
-    tbb::atomic<size_t> j = 0;
-    tbb::parallel_for(m_dirty.range(),
-        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
-            for (auto it = range.begin(); it != range.end(); ++it)
-            {
-                tempEntries[j.fetch_and_increment()] = (*it).second;
-            }
-        });
-
-    // parallel import unless > 10 * 1000 items
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 10 * 1000),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                tempEntries[j.fetch_and_increment()] = m_newEntries->get(i);
-            }
-        });
-
-    tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
-
-    bytes data;
-    for (size_t i = 0; i < tempEntries.size(); ++i)
+    if (m_isDirty)
     {
-        auto entry = tempEntries[i];
-        if (!entry->deleted())
+        m_tableData.reset(new dev::storage::TableData());
+        dump();
+    }
+
+    return m_hash;
+}
+
+dev::storage::TableData::Ptr MemoryTable2::dump()
+{
+    if (m_isDirty)
+    {
+        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData->info = m_tableInfo;
+        m_tableData->dirtyEntries = std::make_shared<Entries>();
+
+        auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
+
+        tbb::parallel_for(m_dirty.range(),
+            [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    if (!it->second->deleted())
+                    {
+                        m_tableData->dirtyEntries->addEntry(it->second);
+                        tempEntries.push_back(it->second);
+                    }
+                }
+            });
+
+        m_tableData->newEntries = std::make_shared<Entries>();
+        tbb::parallel_for(m_newEntries.range(),
+            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
+                        [&](tbb::blocked_range<size_t>& rangeIndex) {
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            {
+                                if (!it->second->get(i)->deleted())
+                                {
+                                    m_tableData->newEntries->addEntry(it->second->get(i));
+                                    tempEntries.push_back(it->second->get(i));
+                                }
+                            }
+                        });
+                }
+            });
+
+        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
+        bytes allData;
+        for (size_t i = 0; i < tempEntries.size(); ++i)
         {
+            auto entry = tempEntries[i];
             for (auto fieldIt : *(entry->fields()))
             {
                 if (isHashField(fieldIt.first))
                 {
-                    data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
-                    data.insert(data.end(), fieldIt.second.begin(), fieldIt.second.end());
+                    allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                    allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
             }
         }
+
+        if (allData.empty())
+        {
+            m_hash = h256();
+        }
+
+        bytesConstRef bR(allData.data(), allData.size());
+        m_hash = dev::sha256(bR);
+
+        m_isDirty = false;
     }
 
-    if (data.empty())
-    {
-        return h256();
-    }
-
-    bytesConstRef bR(data.data(), data.size());
-    h256 hash = dev::sha256(bR);
-
-    return hash;
-}
-
-bool MemoryTable2::dump(dev::storage::TableData::Ptr data)
-{
-    data->info = m_tableInfo;
-    data->dirtyEntries = std::make_shared<Entries>();
-
-    tbb::parallel_for(m_dirty.range(),
-        [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
-            for (auto it = range.begin(); it != range.end(); ++it)
-            {
-                if (!it->second->deleted())
-                {
-                    data->dirtyEntries->addEntry(it->second);
-                }
-            }
-        });
-
-    data->newEntries = std::make_shared<Entries>();
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_newEntries->size(), 1000),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (auto i = range.begin(); i < range.end(); ++i)
-            {
-                if (!m_newEntries->get(i)->deleted())
-                {
-                    data->newEntries->addEntry(m_newEntries->get(i));
-                }
-            }
-        });
-
-    return true;
+    return m_tableData;
 }
 
 void MemoryTable2::rollback(const Change& _change)
 {
-    LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries->size();
-    for (size_t i = 0; i < m_newEntries->size(); ++i)
-    {
-        auto entry = m_newEntries->get(i);
-
-        std::stringstream ss;
-        ss << i;
-        ss << "," << entry->getStatus();
-
-        for (auto it : *(entry->fields()))
-        {
-            ss << "," << it.first << ":" << it.second;
-        }
-        LOG(TRACE) << ss.str();
-    }
+    LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries.size();
 
     switch (_change.kind)
     {
@@ -341,10 +336,12 @@ void MemoryTable2::rollback(const Change& _change)
     {
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
 
-        auto entry = m_newEntries->get(_change.value[0].index);
-        // entry->setStatus(1);
-        entry->setDeleted(true);
-        // m_newEntries->removeEntry(_change.value[0].newIndex);
+        auto it = m_newEntries.find(_change.key);
+        if (it != m_newEntries.end())
+        {
+            auto entry = it->second->get(_change.value[0].index);
+            entry->setDeleted(true);
+        }
         break;
     }
     case Change::Update:
@@ -363,8 +360,12 @@ void MemoryTable2::rollback(const Change& _change)
             }
             else
             {
-                auto entry = m_newEntries->get(record.index);
-                entry->setField(record.key, record.oldValue);
+                auto it = m_newEntries.find(_change.key);
+                if (it != m_newEntries.end())
+                {
+                    auto entry = it->second->get(record.index);
+                    entry->setField(record.key, record.oldValue);
+                }
             }
         }
         break;
@@ -385,8 +386,12 @@ void MemoryTable2::rollback(const Change& _change)
             }
             else
             {
-                auto entry = m_newEntries->get(record.index);
-                entry->setStatus(0);
+                auto it = m_newEntries.find(_change.key);
+                if (it != m_newEntries.end())
+                {
+                    auto entry = it->second->get(record.index);
+                    entry->setStatus(0);
+                }
             }
         }
         break;
@@ -397,5 +402,5 @@ void MemoryTable2::rollback(const Change& _change)
         break;
     }
 
-    LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
+    // LOG(TRACE) << "After rollback newEntries size: " << m_newEntries->size();
 }

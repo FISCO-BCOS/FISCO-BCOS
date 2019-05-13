@@ -42,8 +42,6 @@ class MemoryTable2 : public Table
 public:
     using Ptr = std::shared_ptr<MemoryTable2>;
 
-    MemoryTable2();
-
     virtual ~MemoryTable2(){};
 
     Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
@@ -87,14 +85,14 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    bool dump(dev::storage::TableData::Ptr data) override;
+    dev::storage::TableData::Ptr dump() override;
 
     void rollback(const Change& _change) override;
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    Entries::Ptr m_newEntries;
+    tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
 
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
@@ -172,6 +170,10 @@ private:
     Storage::Ptr m_remoteDB;
     h256 m_blockHash;
     int m_blockNum = 0;
+
+    bool m_isDirty = false;  // mark if the tableData had been dump
+    dev::h256 m_hash;
+    dev::storage::TableData::Ptr m_tableData;
 };
 }  // namespace storage
 }  // namespace dev
