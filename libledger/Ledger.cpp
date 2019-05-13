@@ -51,6 +51,9 @@ namespace ledger
 {
 bool Ledger::initLedger(const std::string& _configFilePath)
 {
+    BOOST_LOG_SCOPED_THREAD_ATTR(
+        "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
+
     Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
                      << LOG_KV("baseDir", m_param->baseDir());
     /// The file group.X.genesis is required, otherwise the program terminates.
@@ -76,6 +79,8 @@ bool Ledger::initLedger(const std::string& _configFilePath)
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
+    /// set group ID for storage
+    m_dbInitializer->storage()->setGroupID(m_groupId);
     /// init the DB
     bool ret = initBlockChain(genesisParam);
     if (!ret)

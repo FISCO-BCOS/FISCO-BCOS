@@ -24,7 +24,6 @@
 #include <pthread.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/log/attributes/constant.hpp>
 #include <chrono>
 #include <thread>
 using namespace std;

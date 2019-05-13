@@ -34,6 +34,10 @@ static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 void SyncMsgEngine::messageHandler(
     NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
+    /// tag this scope with GroupId
+    BOOST_LOG_SCOPED_THREAD_ATTR(
+        "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
+
     SYNC_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Receive packet from")
                     << LOG_KV("peer", _session->nodeID().abridged());
     if (!checkSession(_session) || !checkMessage(_msg))

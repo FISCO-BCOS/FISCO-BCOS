@@ -48,7 +48,6 @@ class DownloadingTxsQueue
 public:
     DownloadingTxsQueue(PROTOCOL_ID const& _protocolId, NodeID const& _nodeId)
       : m_protocolId(_protocolId),
-        m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_buffer(std::make_shared<std::vector<DownloadTxsShard>>())
     {}
@@ -61,7 +60,6 @@ public:
 
 private:
     PROTOCOL_ID m_protocolId;
-    GROUP_ID m_groupId;
     NodeID m_nodeId;
     std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
     mutable SharedMutex x_buffer;

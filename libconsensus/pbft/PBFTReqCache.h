@@ -36,9 +36,7 @@ class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
     PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol)
-    {
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
-    }
+    {}
 
     virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
     /// specified prepareRequest exists in raw-prepare-cache or not?
@@ -352,7 +350,6 @@ private:
 
 private:
     dev::PROTOCOL_ID m_protocolId;
-    dev::GROUP_ID m_groupId;
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
