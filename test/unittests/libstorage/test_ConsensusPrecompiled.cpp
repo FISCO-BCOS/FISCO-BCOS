@@ -167,7 +167,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
-    memoryTableFactory->commitDB(h256(0x122), 998);
+    memoryTableFactory->commitDB(h256(0x123), 999);
 
     table = memoryTableFactory->openTable(SYS_CONSENSUS);
     condition = table->newCondition();
@@ -192,7 +192,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     entries = table->select(PRI_KEY, condition);
     BOOST_TEST(entries->size() == 1u);
 
-    memoryTableFactory->commitDB(h256(0x123), 999);
+    memoryTableFactory->commitDB(h256(0x124), 1000);
 }
 
 BOOST_AUTO_TEST_CASE(TestErrorNodeID)
