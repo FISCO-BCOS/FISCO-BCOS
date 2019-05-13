@@ -88,7 +88,7 @@ Table::Ptr MemoryTableFactory2::openTable(
     tableInfo->fields.emplace_back(STATUS);
     tableInfo->fields.emplace_back(tableInfo->key);
     tableInfo->fields.emplace_back("_hash_");
-    tableInfo->fields.emplace_back("_num_");
+    tableInfo->fields.emplace_back(NUM_FIELD);
     tableInfo->fields.emplace_back("_id_");
 
     Table::Ptr memoryTable = nullptr;

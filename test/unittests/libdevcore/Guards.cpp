@@ -73,38 +73,6 @@ BOOST_AUTO_TEST_CASE(testDevGuards)
     BOOST_CHECK((end_time - begin_time) >= (uint64_t(max) * 1000));
 }
 
-BOOST_AUTO_TEST_CASE(testReadGuard)
-{
-    SharedMutex mutex;
-    int count = 0;
-    int max = 8;
-
-    auto f = [&]() {
-        DEV_READ_GUARDED(mutex) {}
-    };
-
-    struct timeval begin;
-    gettimeofday(&begin, NULL);
-
-    thread* t = new thread[max];
-    for (int i = 0; i < max; i++)
-    {
-        t[i] = thread(f);
-    }
-
-    for (int i = 0; i < max; i++)
-    {
-        t[i].join();
-    }
-
-    struct timeval end;
-    gettimeofday(&end, NULL);
-
-    uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
-    uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
-    delete[] t;
-}
-
 BOOST_AUTO_TEST_CASE(testWriteGuard)
 {
     SharedMutex mutex;

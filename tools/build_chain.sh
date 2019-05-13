@@ -530,8 +530,8 @@ function generate_group_ini()
 [storage]
     ; storage db type, rocksdb / external / mysql / leveldb are supported
     type=${storage_type}
-    max_store_key=10000
-    max_forward_block=100
+    max_capacity=268435456
+    max_forward_block=10
     ; only for external
     max_retry=100
     topic=DB
@@ -775,13 +775,13 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 try_times=5
 i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
 while [ \$i -lt \${try_times} ]
 do
-    if [ -z \${node_pid} ];then
-        echo " \${node} isn't running."
-        exit 0
-    fi
-    [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
     sleep 0.6
     node_pid=${ps_cmd}
     if [ -z \${node_pid} ];then
