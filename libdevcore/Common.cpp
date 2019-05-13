@@ -74,8 +74,8 @@ thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_
     TimeRecorder::m_record;
 
 TimeRecorder::TimeRecorder(const std::string& function, const std::string& name)
+  : m_function(function)
 {
-    m_function = function;
     auto now = std::chrono::system_clock::now();
     if (m_timePoint == std::chrono::system_clock::time_point())
     {
