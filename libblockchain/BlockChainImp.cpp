@@ -315,11 +315,12 @@ void BlockChainImp::getNonces(
 {
     if (_blockNumber > number())
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getNonces]Invalid block number")
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
         return;
     }
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
@@ -524,8 +525,15 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
                 initParam.consensusType = s[2];
-                initParam.storageType = s[3];
-                initParam.stateType = s[4];
+                if (g_BCOSConfig.version() <= RC2_VERSION)
+                {
+                    initParam.storageType = s[3];
+                    initParam.stateType = s[4];
+                }
+                else
+                {
+                    initParam.stateType = s[3];
+                }
             }
             catch (std::exception& e)
             {
@@ -1138,10 +1146,11 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
 
         return CommitResult::OK;
     }
-    catch (OpenSysTableFailed&)
+    catch (OpenSysTableFailed const& e)
     {
-        BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-            "[#commitBlock]System meets error when try to write block to storage");
+        BLOCKCHAIN_LOG(FATAL)
+            << LOG_DESC("[#commitBlock]System meets error when try to write block to storage")
+            << LOG_KV("EINFO", boost::diagnostic_information(e));
         throw;
     }
     /// leveldb caused exception: database corruption or the disk has no space left

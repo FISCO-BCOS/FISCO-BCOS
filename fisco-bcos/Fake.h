@@ -243,14 +243,14 @@ public:
     /// init the ledger(called by initializer)
     bool initLedger(const std::string& _configPath) override
     {
-        initConfig(_configPath);
+        initGenesisConfig(_configPath);
         std::string iniConfigFileName = _configPath;
         boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
         initIniConfig(_configPath);
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain
-        initBlockChain();
+        initBlockChain(m_genesisParam);
         /// intit blockVerifier
         initBlockVerifier();
         /// init txPool
@@ -268,11 +268,12 @@ public:
         m_blockVerifier = std::make_shared<FakeBlockVerifier>();
         return true;
     }
-    bool initBlockChain() override
+    bool initBlockChain(GenesisBlockParam&) override
     {
         m_blockChain = std::make_shared<FakeBlockChain>();
         return true;
     }
+    GenesisBlockParam m_genesisParam;
     /// init the blockSync
     /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };
