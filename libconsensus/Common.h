@@ -27,13 +27,12 @@
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 
-#define SEAL_LOG(LEVEL)                                                     \
-    LOG(LEVEL) << "[g:" << std::to_string(m_consensusEngine->groupId())     \
-               << "][p:" << std::to_string(m_consensusEngine->protocolId()) \
-               << "][CONSENSUS][SEAL]"
-#define ENGINE_LOG(LEVEL)                                                                      \
-    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][p:" << std::to_string(m_protocolId) \
-               << "][CONSENSUS][ConsensusEngine]"
+#define SEAL_LOG(LEVEL)                                                             \
+    LOG(LEVEL) << LOG_BADGE("p:" + std::to_string(m_consensusEngine->protocolId())) \
+               << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
+#define ENGINE_LOG(LEVEL)                                                                  \
+    LOG(LEVEL) << LOG_BADGE("p:" + std::to_string(m_protocolId)) << LOG_BADGE("CONSENSUS") \
+               << LOG_BADGE("ConsensusEngine")
 namespace dev
 {
 namespace consensus

@@ -22,6 +22,9 @@
 #include "Common.h"
 #include "easylog.h"
 #include <pthread.h>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/log/attributes/constant.hpp>
 #include <chrono>
 #include <thread>
 using namespace std;
@@ -50,6 +53,19 @@ void Worker::startWorking()
         m_state = WorkerState::Starting;
         m_state_notifier.notify_all();
         m_work.reset(new thread([&]() {
+            /// set threadName for log
+            std::vector<std::string> fields;
+            boost::split(fields, m_name, boost::is_any_of("-"), boost::token_compress_on);
+            if (fields.size() > 0)
+            {
+                boost::log::core::get()->add_thread_attribute(
+                    "ThreadName", boost::log::attributes::constant<std::string>(fields[1]));
+            }
+            else
+            {
+                boost::log::core::get()->add_thread_attribute(
+                    "ThreadName", boost::log::attributes::constant<std::string>(fields[0]));
+            }
             setThreadName(m_name.c_str());
             while (m_state != WorkerState::Killing)
             {

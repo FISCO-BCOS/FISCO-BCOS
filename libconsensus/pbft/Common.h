@@ -27,17 +27,15 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
-#define PBFTENGINE_LOG(LEVEL)                                                                  \
-    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][p:" << std::to_string(m_protocolId) \
-               << "][CONSENSUS][PBFT]"
 
-#define PBFTSEALER_LOG(LEVEL)                                      \
-    LOG(LEVEL) << "[g:" << std::to_string(m_pbftEngine->groupId()) \
-               << "][p:" << std::to_string(m_pbftEngine->protocolId()) << "][CONSENSUS][SEALER]"
-
-#define PBFTReqCache_LOG(LEVEL)                                                                 \
-    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "] [p:" << std::to_string(m_protocolId) \
-               << "][CONSENSUS]"
+#define PBFTENGINE_LOG(LEVEL)                                                              \
+    LOG(LEVEL) << LOG_BADGE("p:" + std::to_string(m_protocolId)) << LOG_BADGE("CONSENSUS") \
+               << LOG_BADGE("PBFT")
+#define PBFTSEALER_LOG(LEVEL)                                                  \
+    LOG(LEVEL) << LOG_BADGE("p:" + std::to_string(m_pbftEngine->protocolId())) \
+               << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
+#define PBFTReqCache_LOG(LEVEL) \
+    LOG(LEVEL) << LOG_BADGE("p:" + std::to_string(m_protocolId)) << LOG_BADGE("CONSENSUS")
 namespace dev
 {
 namespace consensus
