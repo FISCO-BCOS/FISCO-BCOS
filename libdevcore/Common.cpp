@@ -122,7 +122,7 @@ TimeRecorder::~TimeRecorder()
         }
 
         std::chrono::duration<double> totalElapsed = end - m_record[0].second;
-        LOG(DEBUG) << "TIME RECORDER-" << m_function
+        LOG(DEBUG) << "[TIME RECORDER]-" << m_function
                    << ": [TOTAL]: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
                    << totalElapsed.count() << ss.str();
 

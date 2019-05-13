@@ -24,6 +24,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
@@ -266,6 +267,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     currentStateIdx = idx;
                 }
 
+                // addtion data
+                tbb::concurrent_unordered_set<std::string> addtionKey;
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
                     [&](const tbb::blocked_range<size_t>& rangeEntries) {
                         for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
@@ -275,6 +278,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             auto entry = requestData->dirtyEntries->get(i);
                             auto key = entry->getField(requestData->info->key);
                             auto id = entry->getID();
+
 
                             if (id != 0)
                             {
@@ -307,6 +311,23 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
                                     (*commitData->dirtyEntries)[i] = commitEntry;
+
+                                    if (m_backend && !m_backend->onlyDirty())
+                                    {
+                                        auto inserted = addtionKey.insert(key).second;
+
+                                        if (inserted)
+                                        {
+                                            for (auto it = caches->entries()->begin();
+                                                 it != caches->entries()->end(); ++it)
+                                            {
+                                                if (it != entryIt)
+                                                {
+                                                    commitData->dirtyEntries->addEntry(*it);
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 else
                                 {
@@ -399,8 +420,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             }
 
                             cacheEntry->setNum(num);
-                            LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
-                                       << ", capacity: " << cacheEntry->capacity();
+                            STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-"
+                                               << key << ", capacity: " << cacheEntry->capacity();
                             updateCapacity(0, cacheEntry->capacity());
                             touchMRU(commitData->info->name, key);
                         }
@@ -571,7 +592,7 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
-        //tbb::mutex::scoped_lock lock(m_mutex);
+        // tbb::mutex::scoped_lock lock(m_mutex);
 
         if (clearTimes > 1)
         {
@@ -588,8 +609,8 @@ void CachedStorage::checkAndClear()
         }
         else if (m_capacity > (int64_t)m_maxCapacity)
         {
-            STORAGE_LOG(INFO) << "Current capacity: " << m_capacity
-                              << " greater than max capacity: " << m_maxCapacity << ", waiting...";
+            STORAGE_LOG(DEBUG) << "Current capacity: " << m_capacity
+                               << " greater than max capacity: " << m_maxCapacity << ", waiting...";
             needClear = true;
         }
 
@@ -662,12 +683,12 @@ void CachedStorage::checkAndClear()
     if (clearTimes > 0)
     {
         std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-        LOG(INFO) << "Clear finished, total: " << clearCount << " entries, "
-                  << "through: " << clearThrough << " entries, "
-                  << readableCapacity(currentCapacity - m_capacity)
-                  << " capacity, elapsed: " << elapsed.count() << "s\n"
-                  << "Current total cached entries: " << m_mru.size()
-                  << ", total capacaity: " << readableCapacity(m_capacity);
+        LOG(DEBUG) << "Clear finished, total: " << clearCount << " entries, "
+                   << "through: " << clearThrough << " entries, "
+                   << readableCapacity(currentCapacity - m_capacity)
+                   << " capacity, elapsed: " << elapsed.count() << "s\n"
+                   << "Current total cached entries: " << m_mru.size()
+                   << ", total capacaity: " << readableCapacity(m_capacity);
     }
 }
 
