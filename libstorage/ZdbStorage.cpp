@@ -39,15 +39,15 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     int iRet = m_sqlBasicAcc.Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
     if (iRet < 0)
     {
-        LOG(ERROR) << "Remote select datdbase return error:" << iRet
-                   << " table:" << _tableInfo->name;
+        ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << iRet
+                              << " table:" << _tableInfo->name;
         throw StorageException(-1, "Remote select database return error: table:" +
                                        _tableInfo->name + boost::lexical_cast<std::string>(iRet));
     }
 
 
-    LOG(DEBUG) << " tablename:" << _tableInfo->name
-               << "select resp:" << responseJson.toStyledString();
+    ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
+                          << "select resp:" << responseJson.toStyledString();
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
     {
@@ -96,7 +96,8 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
                 {
                     continue;
                 }
-                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
+                ZdbStorage_LOG(DEBUG)
+                    << "dirty entry key:" << fieldIt.first << " value:" << fieldIt.second;
             }
         }
         for (size_t i = 0; i < it->newEntries->size(); ++i)
@@ -108,19 +109,20 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
                 {
                     continue;
                 }
-                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
+                ZdbStorage_LOG(DEBUG)
+                    << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
             }
         }
     }
 
-    int32_t dwRowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
-    if (dwRowCount < 0)
+    int32_t _rowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
+    if (_rowCount < 0)
     {
-        LOG(ERROR) << "database commit  return error:" << dwRowCount;
+        ZdbStorage_LOG(ERROR) << "database commit  return error:" << _rowCount;
         throw StorageException(
-            -1, "database commit return error:" + boost::lexical_cast<std::string>(dwRowCount));
+            -1, "database commit return error:" + boost::lexical_cast<std::string>(_rowCount));
     }
-    return dwRowCount;
+    return _rowCount;
 }
 
 bool ZdbStorage::onlyDirty()
