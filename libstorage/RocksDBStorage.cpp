@@ -77,7 +77,14 @@ Entries::Ptr RocksDBStorage::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    entry->setField(valueIt->first, valueIt->second);
+                    if (valueIt->first == ID_FIELD)
+                    {
+                        entry->setID(valueIt->second);
+                    }
+                    else
+                    {
+                        entry->setField(valueIt->first, valueIt->second);
+                    }
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
@@ -215,6 +222,7 @@ void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = entry->getID();
 
         auto searchIt = std::lower_bound(it->second.begin(), it->second.end(), value,
             [](const std::map<std::string, std::string>& lhs,
@@ -262,6 +270,7 @@ void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = entry->getID();
 
         it->second.push_back(value);
     }

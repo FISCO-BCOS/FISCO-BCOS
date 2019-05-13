@@ -47,18 +47,6 @@ uint32_t Entry::getID() const
 
 void Entry::setID(uint32_t id)
 {
-#if 0
-    auto it = m_fields.find(ID_FIELD);
-    if (it == m_fields.end())
-    {
-        m_fields.insert(std::make_pair(ID_FIELD, boost::lexical_cast<std::string>(id)));
-    }
-    else
-    {
-        it->second = boost::lexical_cast<std::string>(id);
-    }
-#endif
-
     m_ID = id;
 
     m_dirty = true;
@@ -66,18 +54,6 @@ void Entry::setID(uint32_t id)
 
 void Entry::setID(const std::string& id)
 {
-#if 0
-    auto it = m_fields.find(ID_FIELD);
-    if (it == m_fields.end())
-    {
-        m_fields.insert(std::make_pair(ID_FIELD, id));
-    }
-    else
-    {
-        it->second = id;
-    }
-#endif
-
     m_ID = boost::lexical_cast<uint32_t>(id);
 
     m_dirty = true;

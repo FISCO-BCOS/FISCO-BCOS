@@ -126,10 +126,11 @@ Entries::Ptr SQLStorage::select(
                 if (columns[j] == ID_FIELD)
                 {
                     entry->setID(fieldValue);
-                    continue;
                 }
-
-                entry->setField(columns[j], fieldValue);
+                else
+                {
+                    entry->setField(columns[j], fieldValue);
+                }
             }
 
             if (entry->getStatus() == 0)
