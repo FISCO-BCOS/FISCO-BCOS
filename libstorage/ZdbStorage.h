@@ -26,6 +26,8 @@
 #include <json/json.h>
 
 
+#define ZdbStorage_LOG(LEVEL) LOG(LEVEL) << "[ZdbStorage] "
+
 namespace dev
 {
 namespace storage
