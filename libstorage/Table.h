@@ -67,7 +67,7 @@ public:
     };
 
     Entry();
-    virtual ~Entry() {}
+    virtual ~Entry();
 
     virtual uint32_t getID() const;
     virtual void setID(uint32_t id);
@@ -103,15 +103,30 @@ public:
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
+    struct EntryData
+    {
+        typedef std::shared_ptr<EntryData> Ptr;
+
+        EntryData(std::shared_ptr<size_t> refCount,
+            std::shared_ptr<std::map<std::string, std::string>> fields)
+          : m_refCount(refCount), m_fields(fields){};
+
+        std::shared_ptr<size_t> m_refCount;
+        std::shared_ptr<std::map<std::string, std::string>> m_fields;
+    };
+
+    void checkRef();
+
     uint32_t m_ID = 0;
     int m_status = 0;
     size_t m_tempIndex = 0;
-    std::map<std::string, std::string> m_fields;
+    uint32_t m_num = 0;
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
-
     ssize_t m_capacity = 0;
+
+    EntryData::Ptr m_data;
 };
 
 class EntryLess
@@ -150,7 +165,7 @@ public:
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
 
-    virtual void copyFrom(Entries::Ptr entries);
+    virtual void shallowFrom(Entries::Ptr entries);
 
 private:
     Vector m_entries;

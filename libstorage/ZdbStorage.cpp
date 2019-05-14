@@ -45,7 +45,6 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
                                        _tableInfo->name + boost::lexical_cast<std::string>(iRet));
     }
 
-
     ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
                           << "select resp:" << responseJson.toStyledString();
     std::vector<std::string> columns;
@@ -62,8 +61,15 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
 
         for (Json::ArrayIndex j = 0; j < line.size(); ++j)
         {
-            std::string fieldValue = line.get(j, "").asString();
-            entry->setField(columns[j], fieldValue);
+            if (columns[j] == ID_FIELD)
+            {
+                entry->setID(line.get(j, "").asString());
+            }
+            else
+            {
+                std::string fieldValue = line.get(j, "").asString();
+                entry->setField(columns[j], fieldValue);
+            }
         }
 
         if (entry->getStatus() == 0)

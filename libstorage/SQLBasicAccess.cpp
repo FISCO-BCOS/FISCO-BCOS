@@ -224,12 +224,14 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         }
         _fieldValue.push_back(hash.hex());
         _fieldValue.push_back(_num);
+        _fieldValue.push_back(boost::lexical_cast<std::string>(entry->getID()));
     }
 
     if (_fieldName.size() > 0 && !_hasGetField)
     {
         _fieldName.push_back("_hash_");
         _fieldName.push_back("_num_");
+        _fieldName.push_back("_id_");
         _hasGetField = true;
     }
 }

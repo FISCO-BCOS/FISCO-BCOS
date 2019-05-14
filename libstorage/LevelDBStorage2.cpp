@@ -75,6 +75,11 @@ Entries::Ptr LevelDBStorage2::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
+                    if (valueIt->first == ID_FIELD)
+                    {
+                        entry->setID(valueIt->second);
+                        continue;
+                    }
                     entry->setField(valueIt->first, valueIt->second);
                 }
 
@@ -128,7 +133,9 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
             }
         }
 
-        m_db->Write(WriteOptions(), &batch->writeBatch());
+        leveldb::WriteOptions options;
+        options.sync = false;
+        m_db->Write(options, &batch->writeBatch());
         return datas.size();
     }
     catch (std::exception& e)
@@ -204,21 +211,9 @@ void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
-        auto searchIt = std::lower_bound(it->second.begin(), it->second.end(), value,
-            [](const std::map<std::string, std::string>& lhs,
-                const std::map<std::string, std::string>& rhs) {
-                return lhs.at("_id_") < rhs.at("_id_");
-            });
-
-        if (searchIt != it->second.end() && (*searchIt)["_id_"] == value["_id_"])
-        {
-            *searchIt = value;
-        }
-        else
-        {
-            it->second.push_back(value);
-        }
+        it->second.push_back(value);
     }
 }
 
@@ -251,6 +246,7 @@ void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
         }
         value["_hash_"] = hash.hex();
         value["_num_"] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
         it->second.push_back(value);
     }
