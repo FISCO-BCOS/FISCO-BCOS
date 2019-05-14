@@ -80,9 +80,9 @@ void LogInitializer::initLog(
         << boost::log::expressions::attr<boost::log::trivial::severity_level>("Severity") << "|"
         << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
                "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-        << "|" << expr::if_(expr::has_attr(group_id))[expr::stream << "[g:" << group_id << "] "]
+        << "|" << expr::if_(expr::has_attr(group_id))[expr::stream << "[g:" << group_id << "]"]
         << expr::if_(expr::has_attr(thread_name) &&
-                     !expr::has_attr(group_id))[expr::stream << "[g:" << thread_name << "] "]
+                     !expr::has_attr(group_id))[expr::stream << "[g:" << thread_name << "]"]
         << boost::log::expressions::smessage);
     /// set log level
     unsigned log_level = getLogLevel(pt.get<std::string>("log.level", "info"));
