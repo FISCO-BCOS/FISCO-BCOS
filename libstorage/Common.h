@@ -27,7 +27,9 @@ namespace storage
 {
 #define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
 #define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("LEVELDB")
-#define CACHED_STORAGE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("CachedStorage")
+#define CACHED_STORAGE_LOG(LEVEL)                                                     \
+    LOG(LEVEL) << LOG_BADGE("g:" + std::to_string(groupID())) << LOG_BADGE("STORAGE") \
+               << LOG_BADGE("CachedStorage")
 
 /// \brief Sign of the DB key is valid or not
 const char* const ID_FIELD = "_id_";
