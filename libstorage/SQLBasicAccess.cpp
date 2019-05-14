@@ -235,7 +235,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
     {
         _fieldName.push_back("_hash_");
         _fieldName.push_back(NUM_FIELD);
-        _fieldName.push_back("_id_");
+        _fieldName.push_back(ID_FIELD);
         _hasGetField = true;
     }
 }

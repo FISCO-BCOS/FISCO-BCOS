@@ -435,7 +435,7 @@ private:
     {
         for (auto& it : *(entry->fields()))
         {
-            if (it.first == "_id_")
+            if (it.first == ID_FIELD)
             {
                 continue;
             }

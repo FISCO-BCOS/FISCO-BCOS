@@ -125,7 +125,6 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
             {
                 value[fieldIt.first] = fieldIt.second;
             }
-            value["_hash_"] = hash.hex();
             value[NUM_FIELD] = num;
             entry["values"].append(value);
         }
