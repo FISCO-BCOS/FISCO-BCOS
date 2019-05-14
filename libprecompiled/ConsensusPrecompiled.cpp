@@ -178,7 +178,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully insert");
                     result = count;
                 }
             }
@@ -195,7 +195,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully update");
                     result = count;
                 }
             }
