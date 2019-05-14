@@ -58,15 +58,10 @@ void Worker::startWorking()
             {
                 std::vector<std::string> fields;
                 boost::split(fields, m_name, boost::is_any_of("-"), boost::token_compress_on);
-                if (fields.size() > 0)
+                if (fields.size() > 1)
                 {
                     boost::log::core::get()->add_thread_attribute(
                         "ThreadName", boost::log::attributes::constant<std::string>(fields[1]));
-                }
-                else
-                {
-                    boost::log::core::get()->add_thread_attribute(
-                        "ThreadName", boost::log::attributes::constant<std::string>(fields[0]));
                 }
             }
 #endif
