@@ -38,7 +38,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
-#include <boost/regex.hpp>
 
 using namespace boost::property_tree;
 using namespace dev::blockverifier;
@@ -340,24 +339,8 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
     m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
-    auto maxCapacity = pt.get<std::string>("storage.max_capacity", "256M");
-    boost::regex expr{"(\\d+)(\\s*)([mMgG])"};
-    boost::smatch what;
-    if (boost::regex_search(maxCapacity, what, expr))
-    {
-        int count = boost::lexical_cast<int>(what[1]);
-        m_param->mutableStorageParam().maxCapacity = count;  // MB
-        if (!dev::stringCmpIgnoreCase(what[3], "g"))
-        {  // GB
-            m_param->mutableStorageParam().maxCapacity = count * 1024;
-        }
-    }
-    else
-    {
-        m_param->mutableStorageParam().maxCapacity = 256;
-    }
-    Ledger_LOG(INFO) << LOG_BADGE("initDBConfig")
-                     << LOG_KV("maxCapacity", m_param->mutableStorageParam().maxCapacity);
+    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
+
     if (m_param->mutableStorageParam().maxCapacity < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
