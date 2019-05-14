@@ -110,7 +110,7 @@ tbb::concurrent_unordered_map<std::string, Caches::Ptr>* TableCaches::caches()
 
 CachedStorage::CachedStorage()
 {
-    LOG(INFO) << "Init flushStorage thread";
+    STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
     m_syncNum.store(0);
     m_commitNum.store(0);
@@ -119,7 +119,7 @@ CachedStorage::CachedStorage()
 
 CachedStorage::~CachedStorage()
 {
-    LOG(INFO) << "Stoping flushStorage thread";
+    STORAGE_LOG(INFO) << "Stoping flushStorage thread";
     m_taskThreadPool->stop();
 }
 
@@ -137,16 +137,13 @@ Entries::Ptr CachedStorage::select(
         for (size_t i = 0; i < entries->size(); ++i)
         {
             auto entry = entries->get(i);
-            for (size_t i = 0; i < entries->size(); ++i)
+            if (condition && !condition->process(entry))
             {
-                if (condition && !condition->process(entry))
-                {
-                    continue;
-                }
-                auto outEntry = std::make_shared<Entry>();
-                outEntry->copyFrom(entry);
-                out->addEntry(outEntry);
+                continue;
             }
+            auto outEntry = std::make_shared<Entry>();
+            outEntry->copyFrom(entry);
+            out->addEntry(outEntry);
         }
     }
 
@@ -203,8 +200,8 @@ Caches::Ptr CachedStorage::selectNoCondition(
             totalCapacity += it->capacity();
         }
 
-        LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
-                   << ", capacity: " << totalCapacity;
+        STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
+                           << ", capacity: " << totalCapacity;
         updateCapacity(0, totalCapacity);
         touchMRU(tableInfo->name, key);
 
@@ -484,7 +481,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
                     << std::setprecision(4)
                     << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
-                    << "\n'n"
+                    << "\n\n"
                     << "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
                     << "Cache size: " << storage->m_mru.size()
                     << "\n---------------------------------------------------------------------\n";
@@ -626,9 +623,10 @@ void CachedStorage::checkAndClear()
                             size_t totalCapacity = 0;
                             for (auto entryIt : *(cache->entries()))
                             {
-                                LOG(TRACE) << "entry remove capacity: "
-                                           << tableIt->second->tableInfo()->name << "-"
-                                           << it->second << ", capacity: " << entryIt->capacity();
+                                STORAGE_LOG(TRACE)
+                                    << "entry remove capacity: "
+                                    << tableIt->second->tableInfo()->name << "-" << it->second
+                                    << ", capacity: " << entryIt->capacity();
                                 for (auto fieldIt : *(entryIt->fields()))
                                 {
                                     STORAGE_LOG(TRACE) << "field: " << fieldIt.first
@@ -639,9 +637,10 @@ void CachedStorage::checkAndClear()
 
                             ++clearCount;
 
-                            LOG(TRACE) << "remove capacity: " << tableIt->second->tableInfo()->name
-                                       << "-" << it->second << ", capacity: " << totalCapacity
-                                       << ", current cache size: " << m_mru.size();
+                            STORAGE_LOG(TRACE)
+                                << "remove capacity: " << tableIt->second->tableInfo()->name << "-"
+                                << it->second << ", capacity: " << totalCapacity
+                                << ", current cache size: " << m_mru.size();
                             updateCapacity(totalCapacity, 0);
 
                             tableIt->second->removeCache(it->second);
@@ -674,11 +673,11 @@ void CachedStorage::checkAndClear()
 
     if (clearTimes > 0)
     {
-        LOG(TRACE) << "Clear finished, total: " << clearCount << " entries, "
-                   << "through: " << clearThrough << " entries, "
-                   << readableCapacity(currentCapacity - m_capacity)
-                   << "Current total cached entries: " << m_mru.size()
-                   << ", total capacaity: " << readableCapacity(m_capacity);
+        STORAGE_LOG(TRACE) << "Clear finished, total: " << clearCount << " entries, "
+                           << "through: " << clearThrough << " entries, "
+                           << readableCapacity(currentCapacity - m_capacity)
+                           << "Current total cached entries: " << m_mru.size()
+                           << ", total capacaity: " << readableCapacity(m_capacity);
     }
 }
 
@@ -687,8 +686,8 @@ void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize)
     // m_capacity += (newSize - oldSize);
     auto oldValue = m_capacity.fetch_and_add((newSize - oldSize));
 
-    LOG(TRACE) << "Capacity change by: " << (newSize - oldSize) << " , from: " << oldValue
-               << " to: " << m_capacity;
+    STORAGE_LOG(TRACE) << "Capacity change by: " << (newSize - oldSize) << " , from: " << oldValue
+                       << " to: " << m_capacity;
 }
 
 std::string CachedStorage::readableCapacity(size_t num)

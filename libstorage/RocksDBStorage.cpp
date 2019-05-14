@@ -123,8 +123,8 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
             auto tableInfo = datas[i]->info;
 
-            processDirtyEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processNewEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
+            processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
+            processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
 
             for (auto it : *key2value)
             {
@@ -169,7 +169,7 @@ void RocksDBStorage::setDB(shared_ptr<rocksdb::DB> db)
     m_db = db;
 }
 
-void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
+void RocksDBStorage::processNewEntries(int64_t num,
     shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
     Entries::Ptr entries)
 {
@@ -215,14 +215,13 @@ void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
-        value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+        value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
         it->second.push_back(value);
     }
 }
 
-void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
+void RocksDBStorage::processDirtyEntries(int64_t num,
     shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
     Entries::Ptr entries)
 {
@@ -234,9 +233,6 @@ void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
         auto it = key2value->find(key);
         if (it == key2value->end())
         {
-            string entryKey = tableInfo->name;
-            entryKey.append("_").append(key);
-
             it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
 
@@ -245,9 +241,8 @@ void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
-        value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+        value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
         it->second.push_back(value);
     }
 }
