@@ -81,8 +81,6 @@ std::shared_ptr<Block> BlockCache::add(Block const& _block)
 
 std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
 {
-    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[get]Read block from block cache")
-                          << LOG_KV("blockHash", _hash.abridged());
     {
         ReadGuard guard(m_sharedMutex);
 

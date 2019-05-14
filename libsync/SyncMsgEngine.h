@@ -101,7 +101,9 @@ public:
     DownloadBlocksContainer(
         std::shared_ptr<dev::p2p::P2PInterface> _service, PROTOCOL_ID _protocolId, NodeID _nodeId)
       : m_service(_service), m_protocolId(_protocolId), m_nodeId(_nodeId), m_blockRLPsBatch()
-    {}
+    {
+        m_groupId = dev::eth::getGroupAndProtocol(_protocolId).first;
+    }
     ~DownloadBlocksContainer() { clearBatchAndSend(); }
 
     void batchAndSend(BlockPtr _block);
@@ -114,6 +116,7 @@ private:
 private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     PROTOCOL_ID m_protocolId;
+    GROUP_ID m_groupId;
     NodeID m_nodeId;
     std::vector<dev::bytes> m_blockRLPsBatch;
     size_t m_currentBatchSize = 0;
