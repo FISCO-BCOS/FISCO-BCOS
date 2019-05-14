@@ -40,7 +40,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
     {
         SQLBasicAccess_LOG(DEBUG) << "table:" << _table << "sql:" << _sql
                                   << " get connection failed";
-        THROW(SQLException, "SQLBasicAccess::Select get connection failed");
+        return -1;
     }
     TRY
     {
@@ -210,7 +210,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         /*different fields*/
         for (auto fieldIt : *entry->fields())
         {
-            if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+            if (fieldIt.first == "_num_" || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
             {
                 continue;
             }
@@ -236,9 +236,29 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
     }
 }
 
+
 int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas)
 {
-    LOG(DEBUG) << " commit hash:" << hash.hex() << " num:" << num;
+    string errmsg;
+    uint32_t retryCnt = 0;
+    uint32_t retryMax = 10;
+    int ret = CommitDo(hash, num, datas, errmsg);
+    while (ret < 0 && ++retryCnt < retryMax)
+    {
+        ret = CommitDo(hash, num, datas, errmsg);
+    }
+    if (ret < 0)
+    {
+        SQLBasicAccess_LOG(DEBUG) << "commit failed errmsg:" << errmsg;
+        return -1;
+    }
+    return ret;
+}
+
+int SQLBasicAccess::CommitDo(
+    h256 hash, int num, const std::vector<TableData::Ptr>& datas, string& errmsg)
+{
+    SQLBasicAccess_LOG(DEBUG) << " commit hash:" << hash.hex() << " num:" << num;
     string strNum = to_string(num);
     if (datas.size() == 0)
     {
@@ -261,24 +281,25 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
                 for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
                 {
                     Entry::Ptr entry = it->dirtyEntries->get(i);
-                    string strSql = GetCreateTableSql(entry);
-                    Connection_execute(oConn, "%s", strSql.c_str());
+                    string _sql = GetCreateTableSql(entry);
+                    Connection_execute(oConn, "%s", _sql.c_str());
                 }
 
                 for (size_t i = 0; i < it->newEntries->size(); ++i)
                 {
                     Entry::Ptr entry = it->newEntries->get(i);
-                    string strSql = GetCreateTableSql(entry);
-                    Connection_execute(oConn, "%s", strSql.c_str());
+                    string _sql = GetCreateTableSql(entry);
+                    Connection_execute(oConn, "%s", _sql.c_str());
                 }
             }
         }
     }
     CATCH(SQLException)
     {
-        SQLBasicAccess_LOG(ERROR) << "create table exception:";
+        errmsg = Exception_frame.message;
+        SQLBasicAccess_LOG(ERROR) << "create table exception:" << errmsg;
         m_connPool->ReturnConnection(oConn);
-        return 0;
+        return -1;
     }
     END_TRY;
 
@@ -309,7 +330,7 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
             for (; itValue != _fieldValue.end(); ++itValue)
             {
                 PreparedStatement_setString(oPreSatement, ++dwIndex, itValue->c_str());
-                SQLBasicAccess_LOG(DEBUG)
+                SQLBasicAccess_LOG(TRACE)
                     << " index:" << dwIndex << " num:" << num << " setString:" << itValue->c_str();
             }
             PreparedStatement_execute(oPreSatement);
@@ -319,11 +340,14 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
     }
     CATCH(SQLException)
     {
-        SQLBasicAccess_LOG(ERROR) << "insert data exception:";
+        errmsg = Exception_frame.message;
+        SQLBasicAccess_LOG(ERROR) << "insert data exception:" << errmsg;
+        SQLBasicAccess_LOG(DEBUG) << "active connections:" << m_connPool->GetActiveConnections()
+                                  << " max connetions:" << m_connPool->GetMaxConnections()
+                                  << " now connections:" << m_connPool->GetTotalConnections();
         m_connPool->RollBack(oConn);
         m_connPool->ReturnConnection(oConn);
-        string _errmsg = Exception_frame.message;
-        throw StorageException(-1, "database commit return error:" + _errmsg);
+        return -1;
     }
     END_TRY;
 

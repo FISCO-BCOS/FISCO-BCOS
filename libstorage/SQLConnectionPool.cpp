@@ -53,6 +53,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
             m_connectionPool = ConnectionPool_new(_url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
+            ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
+            ConnectionPool_setReaper(m_connectionPool, 10);
             ConnectionPool_start(m_connectionPool);
         }
         CATCH(SQLException)
@@ -77,6 +79,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
     }
     return true;
 }
+
+
 /*
     this function is used to obtain a new connection from the pool,
     If there are no connections available, a new connection is created
@@ -137,6 +141,10 @@ int SQLConnectionPool::GetMaxConnections()
     return ConnectionPool_getMaxConnections(m_connectionPool);
 }
 
+int SQLConnectionPool::GetTotalConnections()
+{
+    return ConnectionPool_size(m_connectionPool);
+}
 
 void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
 {

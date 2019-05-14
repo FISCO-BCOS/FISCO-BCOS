@@ -91,36 +91,6 @@ void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
 
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    for (auto it : _datas)
-    {
-        for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->dirtyEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                ZdbStorage_LOG(DEBUG)
-                    << "dirty entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
-        for (size_t i = 0; i < it->newEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->newEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                ZdbStorage_LOG(DEBUG)
-                    << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
-    }
-
     int32_t _rowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
     if (_rowCount < 0)
     {
