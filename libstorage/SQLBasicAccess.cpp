@@ -77,7 +77,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
     CATCH(SQLException)
     {
         respJson["result"]["columns"].resize(0);
-        SQLBasicAccess_LOG(ERROR) << "select exception:";
+        SQLBasicAccess_LOG(ERROR) << "select exception:" << Exception_frame.message;
         m_connPool->ReturnConnection(_conn);
         return 0;
     }
