@@ -35,8 +35,7 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol)
-    {}
+    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol) {}
 
     virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
     /// specified prepareRequest exists in raw-prepare-cache or not?
