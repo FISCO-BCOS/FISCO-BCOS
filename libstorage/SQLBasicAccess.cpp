@@ -214,7 +214,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         /*different fields*/
         for (auto fieldIt : *entry->fields())
         {
-            if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+            if (fieldIt.first == "_num_" || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
             {
                 continue;
             }
