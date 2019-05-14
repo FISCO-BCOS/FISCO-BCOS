@@ -320,7 +320,8 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
         SQLBasicAccess_LOG(ERROR) << "insert data exception:";
         m_connPool->RollBack(oConn);
         m_connPool->ReturnConnection(oConn);
-        return 0;
+        string _errmsg = Exception_frame.message;
+        throw StorageException(-1, "database commit return error:" + _errmsg);
     }
     END_TRY;
 
