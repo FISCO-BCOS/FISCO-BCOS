@@ -46,31 +46,28 @@ Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr co
 void MemoryTable2::proccessLimit(const Condition::Ptr& condition,
     const std::shared_ptr<dev::storage::Entries>& entries, const Entries::Ptr& resultEntries)
 {
-    if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+    std::vector<size_t> limitedIndex;
+    limitedIndex.reserve(entries->size());
+    for (size_t i = 0; i < entries->size(); ++i)
     {
-        std::vector<size_t> limitedIndex;
-        limitedIndex.reserve(entries->size());
-        for (size_t i = 0; i < entries->size(); ++i)
-        {
-            limitedIndex.push_back(i);
-        }
-        int begin = condition->getOffset();
-        int end = begin + condition->getCount();
-        int size = limitedIndex.size();
-        if (begin >= size)
-        {
-            limitedIndex.clear();
-        }
-        else
-        {
-            limitedIndex = std::vector<size_t>(limitedIndex.begin() + begin,
-                limitedIndex.begin() + end > limitedIndex.end() ? limitedIndex.end() :
-                                                                  limitedIndex.begin() + end);
-        }
-        for (auto& i : limitedIndex)
-        {
-            resultEntries->addEntry(entries->get(i));
-        }
+        limitedIndex.push_back(i);
+    }
+    int begin = condition->getOffset();
+    int end = begin + condition->getCount();
+    int size = limitedIndex.size();
+    if (begin >= size)
+    {
+        limitedIndex.clear();
+    }
+    else
+    {
+        limitedIndex = std::vector<size_t>(limitedIndex.begin() + begin,
+            limitedIndex.begin() + end > limitedIndex.end() ? limitedIndex.end() :
+                                                              limitedIndex.begin() + end);
+    }
+    for (auto& i : limitedIndex)
+    {
+        resultEntries->addEntry(entries->get(i));
     }
 }
 
@@ -112,9 +109,13 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 entries->addEntry(it->second->get(itIndex));
             }
         }
-        Entries::Ptr resultEntries = std::make_shared<Entries>();
-        proccessLimit(condition, entries, resultEntries);
-        return resultEntries->size() == 0 ? entries : resultEntries;
+        if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+        {
+            Entries::Ptr resultEntries = std::make_shared<Entries>();
+            proccessLimit(condition, entries, resultEntries);
+            return resultEntries;
+        }
+        return entries;
     }
     catch (std::exception& e)
     {
