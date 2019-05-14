@@ -85,6 +85,7 @@ struct StorageParam
     std::string topic;
     size_t timeout;
     int maxRetry;
+    // MB
     int maxCapacity;
 
     // for zdb storage

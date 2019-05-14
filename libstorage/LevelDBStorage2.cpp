@@ -113,9 +113,8 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
         for (size_t i = 0; i < datas.size(); ++i)
         {
-            std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
-                key2value = std::make_shared<
-                    std::map<std::string, std::vector<std::map<std::string, std::string>>>>();
+            shared_ptr<map<string, vector<map<string, string>>>> key2value =
+                make_shared<map<string, vector<map<string, string>>>>();
 
             auto tableInfo = datas[i]->info;
 
@@ -159,7 +158,7 @@ void LevelDBStorage2::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
     m_db = db;
 }
 
-void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
+void LevelDBStorage2::processNewEntries(h256, int64_t num,
     std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
         key2value,
     TableInfo::Ptr tableInfo, Entries::Ptr entries)
@@ -189,10 +188,7 @@ void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
 
             if (s.IsNotFound())
             {
-                it = key2value
-                         ->insert(
-                             std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
-                         .first;
+                it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
             }
             else
             {
@@ -209,15 +205,14 @@ void LevelDBStorage2::processNewEntries(h256 hash, int64_t num,
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
-        value["_num_"] = boost::lexical_cast<std::string>(num);
+        value[NUM_FIELD] = boost::lexical_cast<std::string>(num);
         value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
         it->second.push_back(value);
     }
 }
 
-void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
+void LevelDBStorage2::processDirtyEntries(h256, int64_t num,
     std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
         key2value,
     TableInfo::Ptr tableInfo, Entries::Ptr entries)
@@ -230,13 +225,7 @@ void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
         auto it = key2value->find(key);
         if (it == key2value->end())
         {
-            std::string entryKey = tableInfo->name;
-            entryKey.append("_").append(key);
-
-            it =
-                key2value
-                    ->insert(std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
-                    .first;
+            it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
 
         std::map<std::string, std::string> value;
@@ -244,8 +233,7 @@ void LevelDBStorage2::processDirtyEntries(h256 hash, int64_t num,
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
-        value["_num_"] = boost::lexical_cast<std::string>(num);
+        value[NUM_FIELD] = boost::lexical_cast<std::string>(num);
         value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
         it->second.push_back(value);
