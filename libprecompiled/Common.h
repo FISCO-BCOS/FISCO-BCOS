@@ -42,11 +42,9 @@ namespace precompiled
 enum PrecompiledError : int
 {
     // CRUDPrecompiled -51599 ~ -51500
-    CODE_CONDITION_OPERATION_UNDEFINED = -51504,
-    CODE_PARSE_CONDITION_ERROR = -51503,
-    CODE_PARSE_ENTRY_ERROR = -51502,
-    CODE_FUNCTION_NOT_EXIST = -51501,
-    CODE_TABLE_NOT_EXIST = -51500,
+    CODE_CONDITION_OPERATION_UNDEFINED = -51503,
+    CODE_PARSE_CONDITION_ERROR = -51502,
+    CODE_PARSE_ENTRY_ERROR = -51501,
 
     // DagTransferPrecompiled -51499 ~ -51400
     CODE_INVALID_OPENTALBLE_FAILED = -51406,
@@ -72,7 +70,8 @@ enum PrecompiledError : int
     CODE_TABLE_AND_ADDRESS_EXIST = -51000,
 
     // Common error code among all precompiled contracts -50199 ~ -50100
-    CODE_UNKNOW_FUNCTION_CALL = -50100,
+    CODE_UNKNOW_FUNCTION_CALL = -50101,
+    CODE_TABLE_NOT_EXIST = -50100,
 
     // correct return: code great or equal 0
     CODE_SUCCESS = 0

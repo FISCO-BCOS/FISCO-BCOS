@@ -46,26 +46,18 @@ Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr co
 void MemoryTable2::proccessLimit(const Condition::Ptr& condition,
     const std::shared_ptr<dev::storage::Entries>& entries, const Entries::Ptr& resultEntries)
 {
-    std::vector<size_t> limitedIndex;
-    limitedIndex.reserve(entries->size());
-    for (size_t i = 0; i < entries->size(); ++i)
-    {
-        limitedIndex.push_back(i);
-    }
     int begin = condition->getOffset();
     int end = begin + condition->getCount();
-    int size = limitedIndex.size();
+    int size = entries->size();
     if (begin >= size)
     {
-        limitedIndex.clear();
+        return;
     }
     else
     {
-        limitedIndex = std::vector<size_t>(limitedIndex.begin() + begin,
-            limitedIndex.begin() + end > limitedIndex.end() ? limitedIndex.end() :
-                                                              limitedIndex.begin() + end);
+        end = end > size ? size : end;
     }
-    for (auto& i : limitedIndex)
+    for (int i = begin; i < end; i++)
     {
         resultEntries->addEntry(entries->get(i));
     }
