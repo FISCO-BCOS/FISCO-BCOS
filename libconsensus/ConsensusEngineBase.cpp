@@ -101,6 +101,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
                           << LOG_KV("hash", block_hash.abridged());
         BOOST_THROW_EXCEPTION(InvalidBlockHeight() << errinfo_comment("Invalid block height"));
     }
+
     /// check the existence of the parent block (Must exist)
     if (!blockExists(block.blockHeader().parentHash()))
     {
