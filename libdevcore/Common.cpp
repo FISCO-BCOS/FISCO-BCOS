@@ -67,4 +67,69 @@ uint64_t utcTimeUs()
     return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
+thread_local std::string TimeRecorder::m_name;
+thread_local std::chrono::system_clock::time_point TimeRecorder::m_timePoint;
+thread_local size_t TimeRecorder::m_heapCount = 0;
+thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point> >
+    TimeRecorder::m_record;
+
+TimeRecorder::TimeRecorder(const std::string& function, const std::string& name)
+  : m_function(function)
+{
+    auto now = std::chrono::system_clock::now();
+    if (m_timePoint == std::chrono::system_clock::time_point())
+    {
+        m_name = name;
+        m_timePoint = now;
+    }
+    else
+    {
+        // std::chrono::duration<double> elapsed = now - m_timePoint;
+        m_record.push_back(std::make_pair(m_name, m_timePoint));
+
+        m_name = name;
+        m_timePoint = now;
+    }
+
+    ++m_heapCount;
+}
+
+TimeRecorder::~TimeRecorder()
+{
+    --m_heapCount;
+
+    if (!m_heapCount && m_timePoint != std::chrono::system_clock::time_point())
+    {
+        auto now = std::chrono::system_clock::now();
+        auto end = now;
+        m_record.push_back(std::make_pair(m_name, m_timePoint));
+
+        std::vector<std::chrono::duration<double> > elapseds;
+        elapseds.resize(m_record.size());
+        std::stringstream ss;
+        for (auto i = m_record.size(); i > 0; --i)
+        {
+            std::chrono::duration<double> elapsed = now - m_record[i - 1].second;
+            now = m_record[i - 1].second;
+
+            elapseds[i - 1] = elapsed;
+        }
+
+        for (size_t i = 0; i < m_record.size(); ++i)
+        {
+            ss << " [" << m_record[i].first << "]: " << std::setiosflags(std::ios::fixed)
+               << std::setprecision(4) << elapseds[i].count();
+        }
+
+        std::chrono::duration<double> totalElapsed = end - m_record[0].second;
+        LOG(DEBUG) << "[TIME RECORDER]-" << m_function
+                   << ": [TOTAL]: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+                   << totalElapsed.count() << ss.str();
+
+        m_name = "";
+        m_timePoint = std::chrono::system_clock::time_point();
+        m_record.clear();
+    }
+}
+
 }  // namespace dev

@@ -29,7 +29,7 @@ namespace dev
 {
 namespace storage
 {
-class MemoryStorage : public Storage
+class MemoryStorage2 : public Storage
 {
 public:
     typedef std::shared_ptr<MemoryStorage> Ptr;
@@ -221,8 +221,8 @@ public:
     bool onlyDirty() override { return false; }
 
 private:
-    std::map<std::string, TableData::Ptr> tableData;
-    std::map<std::string, size_t> tableCounter;
+    tbb::concurrent_unordered_map<std::string, TableData::Ptr> tableData;
+    tbb::concurrent_unordered_map<std::string, size_t> tableCounter;
 };
 }  // namespace storage
 
