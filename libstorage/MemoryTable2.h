@@ -167,8 +167,8 @@ private:
         }
     }
 
-    void proccessLimit(const Condition::Ptr& condition,
-        const std::shared_ptr<dev::storage::Entries>& entries, const Entries::Ptr& resultEntries);
+    void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
+        const Entries::Ptr& resultEntries);
 
     Storage::Ptr m_remoteDB;
     h256 m_blockHash;

@@ -43,8 +43,8 @@ Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr co
     return selectNoLock(key, condition);
 }
 
-void MemoryTable2::proccessLimit(const Condition::Ptr& condition,
-    const std::shared_ptr<dev::storage::Entries>& entries, const Entries::Ptr& resultEntries)
+void MemoryTable2::proccessLimit(
+    const Condition::Ptr& condition, const Entries::Ptr& entries, const Entries::Ptr& resultEntries)
 {
     int begin = condition->getOffset();
     int end = begin + condition->getCount();
