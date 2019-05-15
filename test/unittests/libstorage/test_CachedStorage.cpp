@@ -544,7 +544,6 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 
 BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 {
-#if 0
 	cachedStorage->init();
 
 	auto tableInfo = std::make_shared<TableInfo>();
@@ -595,10 +594,20 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 	BOOST_TEST(result->num() == 199);
 	auto resultEntries = result->entries();
 	BOOST_TEST(resultEntries->size() == 100);
-#endif
 }
 
-BOOST_AUTO_TEST_CASE(checkAndClear) {}
+BOOST_AUTO_TEST_CASE(checkAndClear) {
+	cachedStorage->setMaxCapacity(0);
+	cachedStorage->setMaxForwardBlock(0);
+
+	auto backend = std::make_shared<CachedStorage>();
+	cachedStorage->setBackend(backend);
+
+	ordered_commit_invoker();
+	parllel_commit_invoker();
+	select_condition_invoker();
+
+}
 
 BOOST_AUTO_TEST_CASE(exception)
 {

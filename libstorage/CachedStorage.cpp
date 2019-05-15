@@ -511,7 +511,6 @@ void CachedStorage::init()
     }
 }
 
-
 int64_t CachedStorage::syncNum()
 {
     return m_syncNum;
@@ -550,6 +549,12 @@ void CachedStorage::touchMRU(std::string table, std::string key)
     checkAndClear();
 }
 
+Caches::Ptr CachedStorage::touchCache(std::string table, std::string key) {
+	(void)table;
+	(void)key;
+	return Caches::Ptr();
+}
+
 void CachedStorage::checkAndClear()
 {
     bool needClear = false;
@@ -563,27 +568,27 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
-        // tbb::mutex::scoped_lock lock(m_mutex);
-
         if (clearTimes > 1)
         {
             size_t sleepTimes = clearTimes < 20 ? clearTimes * 100 : 20 * 100;
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
         }
 
-        if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
-        {
-            CACHED_STORAGE_LOG(INFO)
-                << "Current block number: " << m_commitNum
-                << " greater than syncd block number: " << m_syncNum << ", waiting...";
-            needClear = true;
-        }
-        else if (m_capacity > (int64_t)m_maxCapacity)
-        {
-            CACHED_STORAGE_LOG(TRACE)
-                << "Current capacity: " << m_capacity
-                << " greater than max capacity: " << m_maxCapacity << ", waiting...";
-            needClear = true;
+        if(m_syncNum > 0) {
+			if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
+			{
+				CACHED_STORAGE_LOG(INFO)
+					<< "Current block number: " << m_commitNum
+					<< " greater than syncd block number: " << m_syncNum << ", waiting...";
+				needClear = true;
+			}
+			else if (m_capacity > (int64_t)m_maxCapacity && !m_mru.empty())
+			{
+				CACHED_STORAGE_LOG(TRACE)
+					<< "Current capacity: " << m_capacity
+					<< " greater than max capacity: " << m_maxCapacity << ", waiting...";
+				needClear = true;
+			}
         }
 
         if (needClear)
@@ -597,7 +602,7 @@ void CachedStorage::checkAndClear()
                     auto cache = tableIt->second->findCache(it->second);
                     if (cache)
                     {
-                        if ((size_t)cache->num() <= m_syncNum)
+                        if (m_syncNum > 0 && ((size_t)cache->num() <= m_syncNum))
                         {
                             CACHED_STORAGE_LOG(TRACE)
                                 << "Clear last recent record: "
@@ -644,7 +649,7 @@ void CachedStorage::checkAndClear()
                     m_caches.unsafe_erase(tableIt);
                 }
 
-                if (m_capacity <= (int64_t)m_maxCapacity)
+                if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
                 {
                     break;
                 }
