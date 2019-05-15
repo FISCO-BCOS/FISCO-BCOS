@@ -46,6 +46,10 @@ public:
         m_consensusEngine = std::make_shared<RaftEngine>(_service, _txPool, _blockChain, _blockSync,
             _blockVerifier, _keyPair, _minElectTime, _maxElectTime, _protocolId, _sealerList);
         m_raftEngine = std::dynamic_pointer_cast<RaftEngine>(m_consensusEngine);
+
+        /// set thread name for PBFTSealer
+        std::string threadName = "RaftSealer-" + std::to_string(m_raftEngine->groupId());
+        setName(threadName);
     }
     void start() override;
     void stop() override;
