@@ -203,6 +203,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         caches->setEntries(backendData);
 
         auto newIt = tableIt->second->addCache(key, caches);
+        auto cache = newIt.first->second;
 
         size_t totalCapacity = 0;
         for (auto it : *backendData)
@@ -215,7 +216,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         updateCapacity(0, totalCapacity);
         touchMRU(tableInfo->name, key);
 
-        return newIt.first->second;
+        return cache;
     }
 
     // no found in cache or backend
