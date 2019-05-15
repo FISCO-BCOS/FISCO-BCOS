@@ -32,7 +32,7 @@ BOOST_FIXTURE_TEST_SUITE(PBFTReqCacheTest, TestOutputHelperFixture)
 /// test add-and-exists related functions
 BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 {
-    PBFTReqCache req_cache(0);
+    PBFTReqCache req_cache;
     KeyPair key_pair;
     /// test addRawPrepare
     PrepareReq prepare_req = FakePrepareReq(key_pair);
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
 BOOST_AUTO_TEST_CASE(testSigListSetting)
 {
     size_t node_num = 3;
-    PBFTReqCache req_cache(0);
+    PBFTReqCache req_cache;
     /// fake prepare req
     KeyPair key_pair;
     PrepareReq prepare_req = FakePrepareReq(key_pair);
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
 /// test collectGarbage
 BOOST_AUTO_TEST_CASE(testCollectGarbage)
 {
-    PBFTReqCache req_cache(0);
+    PBFTReqCache req_cache;
     PrepareReq req;
     size_t invalidHeightNum = 2;
     size_t invalidHash = 1;
@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)
 {
     KeyPair key_pair;
-    PBFTReqCache req_cache(0);
+    PBFTReqCache req_cache;
     PrepareReq prepare_req = FakePrepareReq(key_pair);
     req_cache.addRawPrepare(prepare_req);
     prepare_req.height += 1;
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
 {
     KeyPair key_pair = KeyPair::create();
     ViewChangeReq viewChange_req(key_pair, 100, 1, 1, sha3("test_view"));
-    PBFTReqCache req_cache(2);
+    PBFTReqCache req_cache;
     /// test exists of viewchange
     req_cache.addViewChangeReq(viewChange_req);
     BOOST_CHECK(req_cache.isExistViewChange(viewChange_req));

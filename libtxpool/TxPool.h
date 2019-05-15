@@ -77,8 +77,8 @@ public:
         if (m_protocolId == 0)
             BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
-        m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain, m_protocolId);
-        m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>(m_protocolId);
+        m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
+        m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>();
     }
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }

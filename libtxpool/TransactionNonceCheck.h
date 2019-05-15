@@ -41,9 +41,8 @@ using NonceVec = std::vector<dev::eth::NonceKeyType>;
 class TransactionNonceCheck : public CommonTransactionNonceCheck
 {
 public:
-    TransactionNonceCheck(std::shared_ptr<dev::blockchain::BlockChainInterface> const& _blockChain,
-        dev::PROTOCOL_ID const& protocolId)
-      : CommonTransactionNonceCheck(protocolId), m_blockChain(_blockChain)
+    TransactionNonceCheck(std::shared_ptr<dev::blockchain::BlockChainInterface> const& _blockChain)
+      : CommonTransactionNonceCheck(), m_blockChain(_blockChain)
     {
         init();
     }

@@ -46,10 +46,8 @@ public:
 class DownloadingTxsQueue
 {
 public:
-    DownloadingTxsQueue(PROTOCOL_ID const& _protocolId, NodeID const& _nodeId)
-      : m_protocolId(_protocolId),
-        m_nodeId(_nodeId),
-        m_buffer(std::make_shared<std::vector<DownloadTxsShard>>())
+    DownloadingTxsQueue(PROTOCOL_ID const&, NodeID const& _nodeId)
+      : m_nodeId(_nodeId), m_buffer(std::make_shared<std::vector<DownloadTxsShard>>())
     {}
     // push txs bytes in queue
     void push(bytesConstRef _txsBytes, NodeID const& _fromPeer);
@@ -59,7 +57,6 @@ public:
         dev::eth::CheckTransaction _checkSig = dev::eth::CheckTransaction::None);
 
 private:
-    PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;
     std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
     mutable SharedMutex x_buffer;
