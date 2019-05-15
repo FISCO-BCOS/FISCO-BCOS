@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 
 
@@ -41,8 +42,11 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << iRet
                               << " table:" << _tableInfo->name;
-        throw StorageException(-1, "Remote select database return error: table:" +
-                                       _tableInfo->name + boost::lexical_cast<std::string>(iRet));
+        auto e =
+            StorageException(-1, "Remote select database return error: table:" + _tableInfo->name +
+                                     boost::lexical_cast<std::string>(iRet));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
 
     ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
@@ -95,8 +99,10 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
     if (_rowCount < 0)
     {
         ZdbStorage_LOG(ERROR) << "database commit  return error:" << _rowCount;
-        throw StorageException(
-            -1, "database commit return error:" + boost::lexical_cast<std::string>(_rowCount));
+        auto e = StorageException(-1, "Remote select database return error: table:" +
+                                          boost::lexical_cast<std::string>(_rowCount));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
     return _rowCount;
 }

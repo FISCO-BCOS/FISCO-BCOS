@@ -187,6 +187,8 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             string _sql = "CREATE DATABASE IF NOT EXISTS ";
             _sql.append(_dbName);
             Connection_execute(_connection, "%s", _sql.c_str());
+            _sql = "set global max_allowed_packet = 1073741824";
+            Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)
         {
