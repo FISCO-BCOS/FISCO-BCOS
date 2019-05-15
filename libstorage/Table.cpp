@@ -44,7 +44,6 @@ Entry::~Entry()
 {
     if (m_data)
     {
-    	tbb::mutex::scoped_lock lock(m_data->m_mutex);
         if ((*m_data->m_refCount) > 0)
         {
             --(*m_data->m_refCount);
