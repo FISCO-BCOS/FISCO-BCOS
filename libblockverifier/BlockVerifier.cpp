@@ -202,7 +202,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
-    txDag->init(executiveContext, block.transactions());
+    txDag->init(executiveContext, block.transactions(), block.blockHeader().number());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);

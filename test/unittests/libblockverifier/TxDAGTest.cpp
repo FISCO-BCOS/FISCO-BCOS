@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(PureParallelTxDAGTest)
     trans.emplace_back(createParallelTransferTx("A", "D", 100));
     trans.emplace_back(createParallelTransferTx("D", "F", 100));
 
-    txDag->init(executiveContext, trans);
+    txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
     trans.emplace_back(createParallelTransferTx("A", "D", 100));
     trans.emplace_back(createParallelTransferTx("D", "F", 100));
 
-    txDag->init(executiveContext, trans);
+    txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
