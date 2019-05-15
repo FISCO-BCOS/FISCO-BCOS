@@ -23,8 +23,8 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/tbb_allocator.h>
 #include <tbb/mutex.h>
+#include <tbb/tbb_allocator.h>
 #include <atomic>
 #include <map>
 #include <memory>
