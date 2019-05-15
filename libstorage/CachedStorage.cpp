@@ -119,7 +119,7 @@ CachedStorage::CachedStorage()
 
 CachedStorage::~CachedStorage()
 {
-    LOG(INFO) << "Stoping flushStorage thread";
+    STORAGE_LOG(INFO) << "Stoping flushStorage thread";
     m_taskThreadPool->stop();
 }
 
@@ -137,23 +137,13 @@ Entries::Ptr CachedStorage::select(
         for (size_t i = 0; i < entries->size(); ++i)
         {
             auto entry = entries->get(i);
-            if (condition)
+            if (condition && !condition->process(entry))
             {
-                if (condition->process(entry))
-                {
-                    auto outEntry = std::make_shared<Entry>();
-                    outEntry->copyFrom(entry);
-
-                    out->addEntry(outEntry);
-                }
+                continue;
             }
-            else
-            {
-                auto outEntry = std::make_shared<Entry>();
-                outEntry->copyFrom(entry);
-
-                out->addEntry(outEntry);
-            }
+            auto outEntry = std::make_shared<Entry>();
+            outEntry->copyFrom(entry);
+            out->addEntry(outEntry);
         }
     }
 
@@ -209,7 +199,6 @@ Caches::Ptr CachedStorage::selectNoCondition(
         {
             totalCapacity += it->capacity();
         }
-
         CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
                                   << ", capacity: " << totalCapacity;
         updateCapacity(0, totalCapacity);
@@ -493,7 +482,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
                     << std::setprecision(4)
                     << ((double)storage->m_hitTimes / storage->m_queryTimes) * 100 << "%"
-                    << "\n'n"
+                    << "\n\n"
                     << "Cache capacity: " << storage->readableCapacity(storage->m_capacity) << "\n"
                     << "Cache size: " << storage->m_mru.size()
                     << "\n---------------------------------------------------------------------\n";
@@ -551,7 +540,7 @@ void CachedStorage::setSyncNum(int64_t syncNum)
     m_syncNum.store(syncNum);
 }
 
-void CachedStorage::setMaxCapacity(size_t maxCapacity)
+void CachedStorage::setMaxCapacity(int64_t maxCapacity)
 {
     m_maxCapacity = maxCapacity;
 }
@@ -648,7 +637,6 @@ void CachedStorage::checkAndClear()
                             }
 
                             ++clearCount;
-
                             CACHED_STORAGE_LOG(TRACE)
                                 << "remove capacity: " << tableIt->second->tableInfo()->name << "-"
                                 << it->second << ", capacity: " << totalCapacity
@@ -697,7 +685,6 @@ void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize)
 {
     // m_capacity += (newSize - oldSize);
     auto oldValue = m_capacity.fetch_and_add((newSize - oldSize));
-
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (newSize - oldSize)
                               << " , from: " << oldValue << " to: " << m_capacity;
 }
@@ -710,21 +697,13 @@ std::string CachedStorage::readableCapacity(size_t num)
     {
         capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
                     << ((double)num / (1024 * 1024 * 1024)) << " GB";
-    }
-    else if (num > 1024 * 1024)
-    {
-        capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-                    << ((double)num / (1024 * 1024)) << " MB";
-    }
-    else if (num > 1024)
-    {
-        capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-                    << ((double)num / (1024)) << " KB";
-    }
-    else
-    {
-        capacityNum << num << " B";
-    }
+        else if (num > 1024 * 1024)
+        {
+            {
+                capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+                            << ((double)num / (1024)) << " KB";
+            }
+            else { capacityNum << num << " B"; }
 
-    return capacityNum.str();
-}
+            return capacityNum.str();
+        }

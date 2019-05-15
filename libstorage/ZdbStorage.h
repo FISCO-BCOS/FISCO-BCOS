@@ -45,11 +45,18 @@ public:
     size_t commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
     bool onlyDirty() override;
 
+    virtual void setFatalHandler(std::function<void(std::exception&)> fatalHandler)
+    {
+        m_fatalHandler = fatalHandler;
+    }
+
+
 public:
     void setConnPool(SQLConnectionPool::Ptr& _connPool);
 
 private:
     SQLBasicAccess m_sqlBasicAcc;
+    std::function<void(std::exception&)> m_fatalHandler;
 
 private:
     void initSysTables();

@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 
 
@@ -41,8 +42,11 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << iRet
                               << " table:" << _tableInfo->name;
-        throw StorageException(-1, "Remote select database return error: table:" +
-                                       _tableInfo->name + boost::lexical_cast<std::string>(iRet));
+        auto e =
+            StorageException(-1, "Remote select database return error: table:" + _tableInfo->name +
+                                     boost::lexical_cast<std::string>(iRet));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
 
     ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
@@ -91,42 +95,14 @@ void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
 
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    for (auto it : _datas)
-    {
-        for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->dirtyEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                ZdbStorage_LOG(DEBUG)
-                    << "dirty entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
-        for (size_t i = 0; i < it->newEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->newEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                ZdbStorage_LOG(DEBUG)
-                    << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
-    }
-
     int32_t _rowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
     if (_rowCount < 0)
     {
         ZdbStorage_LOG(ERROR) << "database commit  return error:" << _rowCount;
-        throw StorageException(
-            -1, "database commit return error:" + boost::lexical_cast<std::string>(_rowCount));
+        auto e = StorageException(-1, "Remote select database return error: table:" +
+                                          boost::lexical_cast<std::string>(_rowCount));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
     return _rowCount;
 }

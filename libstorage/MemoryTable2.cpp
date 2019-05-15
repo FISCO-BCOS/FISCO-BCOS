@@ -43,6 +43,26 @@ Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr co
     return selectNoLock(key, condition);
 }
 
+void MemoryTable2::proccessLimit(
+    const Condition::Ptr& condition, const Entries::Ptr& entries, const Entries::Ptr& resultEntries)
+{
+    int begin = condition->getOffset();
+    int end = begin + condition->getCount();
+    int size = entries->size();
+    if (begin >= size)
+    {
+        return;
+    }
+    else
+    {
+        end = end > size ? size : end;
+    }
+    for (int i = begin; i < end; i++)
+    {
+        resultEntries->addEntry(entries->get(i));
+    }
+}
+
 Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
 {
     try
@@ -54,12 +74,10 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
             // query remoteDB anyway
             Entries::Ptr dbEntries =
                 m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key, condition);
-
             if (!dbEntries)
             {
                 return entries;
             }
-
             for (size_t i = 0; i < dbEntries->size(); ++i)
             {
                 auto entryIt = m_dirty.find(dbEntries->get(i)->getID());
@@ -73,7 +91,6 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 }
             }
         }
-
         auto it = m_newEntries.find(key);
         if (it != m_newEntries.end())
         {
@@ -84,7 +101,12 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 entries->addEntry(it->second->get(itIndex));
             }
         }
-
+        if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+        {
+            Entries::Ptr resultEntries = std::make_shared<Entries>();
+            proccessLimit(condition, entries, resultEntries);
+            return resultEntries;
+        }
         return entries;
     }
     catch (std::exception& e)
@@ -129,7 +151,7 @@ int MemoryTable2::update(
             {
                 //_id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
-                if (it.first != "_id_" && it.first != m_tableInfo->key)
+                if (it.first != ID_FIELD && it.first != m_tableInfo->key)
                 {
                     records.emplace_back(updateEntry->getTempIndex(), it.first,
                         updateEntry->getField(it.first), updateEntry->getID());

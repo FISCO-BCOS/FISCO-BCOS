@@ -143,7 +143,8 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(_backend);
-    cachedStorage->setMaxCapacity(m_param->mutableStorageParam().maxCapacity);
+    cachedStorage->setMaxCapacity(
+        m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
 
     cachedStorage->init();
@@ -265,6 +266,13 @@ void DBInitializer::initZdbStorage()
     sqlconnpool->createDataBase(zdbConfig);
     sqlconnpool->InitConnectionPool(zdbConfig);
     zdbStorage->setConnPool(sqlconnpool);
+
+    zdbStorage->setFatalHandler([](std::exception& e) {
+        (void)e;
+        LOG(FATAL) << "access mysql failed exit";
+        exit(1);
+    });
+
     initTableFactory2(zdbStorage);
 }
 
