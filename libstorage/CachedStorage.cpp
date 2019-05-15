@@ -697,13 +697,20 @@ std::string CachedStorage::readableCapacity(size_t num)
     {
         capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
                     << ((double)num / (1024 * 1024 * 1024)) << " GB";
-        else if (num > 1024 * 1024)
-        {
-            {
-                capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-                            << ((double)num / (1024)) << " KB";
-            }
-            else { capacityNum << num << " B"; }
-
-            return capacityNum.str();
-        }
+    }
+    else if (num > 1024 * 1024)
+    {
+        capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+                    << ((double)num / (1024 * 1024)) << " MB";
+    }
+    else if (num > 1024)
+    {
+        capacityNum << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+                    << ((double)num / (1024)) << " KB";
+    }
+    else
+    {
+        capacityNum << num << " B";
+    }
+    return capacityNum.str();
+}
