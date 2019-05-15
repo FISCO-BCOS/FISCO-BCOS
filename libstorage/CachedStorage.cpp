@@ -95,7 +95,6 @@ TableCaches::addCache(const std::string& key, Caches::Ptr cache)
 
 void TableCaches::removeCache(const std::string& key)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_caches.find(key);
     if (it != m_caches.end())
     {
