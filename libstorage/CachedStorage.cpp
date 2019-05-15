@@ -348,8 +348,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
-    TIME_RECORD("Set ID");
-    // Set ID
+    TIME_RECORD("Process new entries");
     for (size_t i = 0; i < commitDatas->size(); ++i)
     {
         auto commitData = (*commitDatas)[i];
@@ -359,9 +358,51 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             commitEntry->setID(++m_ID);
 
             STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
+
+            ++total;
+
+            auto key = commitEntry->getField(commitData->info->key);
+
+            auto cacheEntry = std::make_shared<Entry>();
+            cacheEntry->copyFrom(commitEntry);
+
+            if (cacheEntry->force())
+            {
+                auto tableIt = m_caches.find(commitData->info->name);
+                if (tableIt == m_caches.end())
+                {
+                    tableIt = m_caches
+                                  .insert(std::make_pair(
+                                      commitData->info->name, std::make_shared<TableCaches>()))
+                                  .first;
+                    tableIt->second->tableInfo()->name = commitData->info->name;
+                }
+
+                auto caches = std::make_shared<Caches>();
+                auto newEntries = std::make_shared<Entries>();
+                caches->setEntries(newEntries);
+                caches->setNum(num);
+
+                auto newIt = tableIt->second->addCache(key, caches);
+
+                newIt.first->second->entries()->addEntry(cacheEntry);
+            }
+            else
+            {
+                auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                caches->entries()->addEntry(cacheEntry);
+                caches->setNum(num);
+            }
+
+            cacheEntry->setNum(num);
+            STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
+                               << ", capacity: " << cacheEntry->capacity();
+            updateCapacity(0, cacheEntry->capacity());
+            touchMRU(commitData->info->name, key);
         }
     }
 
+#if 0
     TIME_RECORD("Process new entries");
     tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatas->size()),
         [&](const tbb::blocked_range<size_t>& range) {
@@ -419,6 +460,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     });
             }
         });
+#endif
 
     if (m_backend)
     {
