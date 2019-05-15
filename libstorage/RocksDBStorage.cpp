@@ -46,14 +46,14 @@ using namespace dev::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     try
     {
-        std::string entryKey = tableInfo->name;
+        string entryKey = tableInfo->name;
         entryKey.append("_").append(key);
 
-        std::string value;
+        string value;
         auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
@@ -63,17 +63,17 @@ Entries::Ptr RocksDBStorage::select(
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
         }
 
-        Entries::Ptr entries = std::make_shared<Entries>();
+        Entries::Ptr entries = make_shared<Entries>();
         if (!s.IsNotFound())
         {
-            std::vector<std::map<std::string, std::string>> res;
+            vector<map<string, string>> res;
             stringstream ss(value);
             boost::archive::binary_iarchive ia(ss);
             ia >> res;
 
             for (auto it = res.begin(); it != res.end(); ++it)
             {
-                Entry::Ptr entry = std::make_shared<Entry>();
+                Entry::Ptr entry = make_shared<Entry>();
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
@@ -97,7 +97,7 @@ Entries::Ptr RocksDBStorage::select(
 
         return entries;
     }
-    catch (std::exception& e)
+    catch (exception& e)
     {
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
@@ -108,7 +108,7 @@ Entries::Ptr RocksDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Ptr>& datas)
 {
     try
     {
@@ -118,18 +118,17 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
         WriteBatch batch;
         for (size_t i = 0; i < datas.size(); ++i)
         {
-            std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
-                key2value = std::make_shared<
-                    std::map<std::string, std::vector<std::map<std::string, std::string>>>>();
+            shared_ptr<map<string, vector<map<string, string>>>> key2value =
+                make_shared<map<string, vector<map<string, string>>>>();
 
             auto tableInfo = datas[i]->info;
 
-            processDirtyEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processNewEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
+            processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
+            processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
 
             for (auto it : *key2value)
             {
-                std::string entryKey = tableInfo->name + "_" + it.first;
+                string entryKey = tableInfo->name + "_" + it.first;
                 stringstream ss;
                 boost::archive::binary_oarchive oa(ss);
                 oa << it.second;
@@ -150,7 +149,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
 
         return datas.size();
     }
-    catch (std::exception& e)
+    catch (exception& e)
     {
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
@@ -165,15 +164,14 @@ bool RocksDBStorage::onlyDirty()
     return false;
 }
 
-void RocksDBStorage::setDB(std::shared_ptr<rocksdb::DB> db)
+void RocksDBStorage::setDB(shared_ptr<rocksdb::DB> db)
 {
     m_db = db;
 }
 
-void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
-    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
-        key2value,
-    TableInfo::Ptr tableInfo, Entries::Ptr entries)
+void RocksDBStorage::processNewEntries(int64_t num,
+    shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
+    Entries::Ptr entries)
 {
     for (size_t j = 0; j < entries->size(); ++j)
     {
@@ -183,10 +181,10 @@ void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
         auto it = key2value->find(key);
         if (it == key2value->end())
         {
-            std::string entryKey = tableInfo->name;
+            string entryKey = tableInfo->name;
             entryKey.append("_").append(key);
 
-            std::string value;
+            string value;
             auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
             // l.unlock();
             if (!s.ok() && !s.IsNotFound())
@@ -200,14 +198,11 @@ void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
 
             if (s.IsNotFound())
             {
-                it = key2value
-                         ->insert(
-                             std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
-                         .first;
+                it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
             }
             else
             {
-                std::vector<std::map<std::string, std::string>> res;
+                vector<map<string, string>> res;
                 stringstream ss(value);
                 boost::archive::binary_iarchive ia(ss);
                 ia >> res;
@@ -215,23 +210,20 @@ void RocksDBStorage::processNewEntries(h256 hash, int64_t num,
             }
         }
 
-        std::map<std::string, std::string> value;
+        map<string, string> value;
         for (auto& fieldIt : *(entry->fields()))
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
-        value["_num_"] = boost::lexical_cast<std::string>(num);
-        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
-
+        value[NUM_FIELD] = boost::lexical_cast<string>(num);
+        value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
         it->second.push_back(value);
     }
 }
 
-void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
-    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
-        key2value,
-    TableInfo::Ptr tableInfo, Entries::Ptr entries)
+void RocksDBStorage::processDirtyEntries(int64_t num,
+    shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
+    Entries::Ptr entries)
 {
     for (size_t j = 0; j < entries->size(); ++j)
     {
@@ -241,24 +233,16 @@ void RocksDBStorage::processDirtyEntries(h256 hash, int64_t num,
         auto it = key2value->find(key);
         if (it == key2value->end())
         {
-            std::string entryKey = tableInfo->name;
-            entryKey.append("_").append(key);
-
-            it =
-                key2value
-                    ->insert(std::make_pair(key, std::vector<std::map<std::string, std::string>>()))
-                    .first;
+            it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
 
-        std::map<std::string, std::string> value;
+        map<string, string> value;
         for (auto& fieldIt : *(entry->fields()))
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
-        value["_num_"] = boost::lexical_cast<std::string>(num);
-        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
-
+        value[NUM_FIELD] = boost::lexical_cast<string>(num);
+        value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
         it->second.push_back(value);
     }
 }
