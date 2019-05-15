@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(CRUD)
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     u256 funcResult = 0;
     abi.abiOut(&out, funcResult);
-    BOOST_TEST(funcResult == CODE_FUNCTION_NOT_EXIST);
+    BOOST_TEST(funcResult == CODE_UNKNOW_FUNCTION_CALL);
 }
 
 BOOST_AUTO_TEST_CASE(toString)

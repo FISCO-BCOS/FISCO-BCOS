@@ -64,6 +64,7 @@ public:
     int GetActiveConnections();
     int GetMaxConnections();
 
+    int GetTotalConnections();
 
     void createDataBase(const ZDBConfig& _dbConfig);
 
