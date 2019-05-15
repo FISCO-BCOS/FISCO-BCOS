@@ -44,6 +44,7 @@ Entry::~Entry()
 {
     if (m_data)
     {
+    	tbb::mutex::scoped_lock lock(m_data->m_mutex);
         if ((*m_data->m_refCount) > 0)
         {
             --(*m_data->m_refCount);
@@ -233,6 +234,8 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_capacity = entry->m_capacity;
 
     m_data = entry->m_data;
+
+    tbb::mutex::scoped_lock lock(m_data->m_mutex);
     *(m_data->m_refCount) += 1;
 }
 
