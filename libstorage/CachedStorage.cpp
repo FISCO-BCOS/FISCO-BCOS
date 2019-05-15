@@ -129,8 +129,10 @@ Entries::Ptr CachedStorage::select(
                               << " key: " << key;
     auto out = std::make_shared<Entries>();
 
+    TIME_RECORD("Select no condition");
     auto entries = selectNoCondition(hash, num, tableInfo, key, condition)->entries();
 
+    TIME_RECORD("Process condition");
     if (entries)
     {
         for (size_t i = 0; i < entries->size(); ++i)
