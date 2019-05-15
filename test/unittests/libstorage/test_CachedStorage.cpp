@@ -25,6 +25,8 @@
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -488,6 +490,56 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 		}
 	}
 #endif
+}
+
+BOOST_AUTO_TEST_CASE(ordered_commit)
+{
+    cachedStorage->init();
+    cachedStorage->setBackend(dev::storage::Storage::Ptr());
+
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+
+    Entries::Ptr entries = std::make_shared<Entries>();
+
+    for (size_t i = 0; i < 50; ++i)
+    {
+        boost::random::mt19937 rng;
+        boost::random::uniform_int_distribution<> rand(0, 1000);
+
+        int num = rand(rng);
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("Name", "node");
+        entry->setField("id", boost::lexical_cast<std::string>(num));
+        entries->addEntry(entry);
+    }
+
+    tableData->newEntries = entries;
+
+    std::vector<dev::storage::TableData::Ptr> datas;
+    datas.push_back(tableData);
+
+    cachedStorage->commit(dev::h256(), 0, datas);
+
+    auto cache = cachedStorage->selectNoCondition(
+        dev::h256(), 0, tableData->info, "node", std::make_shared<Condition>());
+
+    ssize_t currentID = -1;
+    for (auto it : *cache->entries())
+    {
+        if (currentID == -1)
+        {
+            currentID = it->getID();
+        }
+        else
+        {
+            BOOST_TEST(currentID <= it->getID());
+            currentID = it->getID();
+        }
+        LOG(TRACE) << "CurrentID: " << it->getID();
+    }
 }
 
 BOOST_AUTO_TEST_CASE(parallel_samekey_commit)

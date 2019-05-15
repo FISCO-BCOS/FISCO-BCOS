@@ -74,7 +74,7 @@ public:
 private:
     TableInfo::Ptr m_tableInfo;
     tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
-    std::mutex m_mutex;
+    tbb::mutex m_mutex;
 };
 
 class Task
