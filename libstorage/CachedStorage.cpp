@@ -95,7 +95,6 @@ TableCaches::addCache(const std::string& key, Caches::Ptr cache)
 
 void TableCaches::removeCache(const std::string& key)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_caches.find(key);
     if (it != m_caches.end())
     {
@@ -193,6 +192,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         caches->setEntries(backendData);
 
         auto newIt = tableIt->second->addCache(key, caches);
+        auto cache = newIt.first->second;
 
         size_t totalCapacity = 0;
         for (auto it : *backendData)
@@ -204,7 +204,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         updateCapacity(0, totalCapacity);
         touchMRU(tableInfo->name, key);
 
-        return newIt.first->second;
+        return cache;
     }
 
     // no found in cache or backend
@@ -346,8 +346,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
         });
 
-    TIME_RECORD("Set ID");
-    // Set ID
+    TIME_RECORD("Process new entries");
     for (size_t i = 0; i < commitDatas->size(); ++i)
     {
         auto commitData = (*commitDatas)[i];
@@ -355,68 +354,51 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         {
             auto commitEntry = commitData->newEntries->get(j);
             commitEntry->setID(++m_ID);
-            CACHED_STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
+
+            STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
+
+            ++total;
+
+            auto key = commitEntry->getField(commitData->info->key);
+
+            auto cacheEntry = std::make_shared<Entry>();
+            cacheEntry->copyFrom(commitEntry);
+
+            if (cacheEntry->force())
+            {
+                auto tableIt = m_caches.find(commitData->info->name);
+                if (tableIt == m_caches.end())
+                {
+                    tableIt = m_caches
+                                  .insert(std::make_pair(
+                                      commitData->info->name, std::make_shared<TableCaches>()))
+                                  .first;
+                    tableIt->second->tableInfo()->name = commitData->info->name;
+                }
+
+                auto caches = std::make_shared<Caches>();
+                auto newEntries = std::make_shared<Entries>();
+                caches->setEntries(newEntries);
+                caches->setNum(num);
+
+                auto newIt = tableIt->second->addCache(key, caches);
+
+                newIt.first->second->entries()->addEntry(cacheEntry);
+            }
+            else
+            {
+                auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                caches->entries()->addEntry(cacheEntry);
+                caches->setNum(num);
+            }
+
+            cacheEntry->setNum(num);
+            STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
+                               << ", capacity: " << cacheEntry->capacity();
+            updateCapacity(0, cacheEntry->capacity());
+            touchMRU(commitData->info->name, key);
         }
     }
-
-    TIME_RECORD("Process new entries");
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatas->size()),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                auto commitData = (*commitDatas)[i];
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, commitData->newEntries->size()),
-                    [&](const tbb::blocked_range<size_t>& dataRange) {
-                        for (size_t j = dataRange.begin(); j < dataRange.end(); ++j)
-                        {
-                            ++total;
-
-                            auto commitEntry = commitData->newEntries->get(j);
-
-                            auto key = commitEntry->getField(commitData->info->key);
-
-                            auto cacheEntry = std::make_shared<Entry>();
-                            cacheEntry->copyFrom(commitEntry);
-
-                            if (cacheEntry->force())
-                            {
-                                auto tableIt = m_caches.find(commitData->info->name);
-                                if (tableIt == m_caches.end())
-                                {
-                                    tableIt = m_caches
-                                                  .insert(std::make_pair(commitData->info->name,
-                                                      std::make_shared<TableCaches>()))
-                                                  .first;
-                                    tableIt->second->tableInfo()->name = commitData->info->name;
-                                }
-
-                                auto caches = std::make_shared<Caches>();
-                                auto newEntries = std::make_shared<Entries>();
-                                caches->setEntries(newEntries);
-                                caches->setNum(num);
-
-                                auto newIt = tableIt->second->addCache(key, caches);
-
-                                newIt.first->second->entries()->addEntry(cacheEntry);
-                            }
-                            else
-                            {
-                                auto caches =
-                                    selectNoCondition(h256(), 0, commitData->info, key, nullptr);
-                                caches->entries()->addEntry(cacheEntry);
-                                caches->setNum(num);
-                            }
-
-                            cacheEntry->setNum(num);
-                            CACHED_STORAGE_LOG(TRACE)
-                                << "new cached: " << commitData->info->name << "-" << key
-                                << ", capacity: " << cacheEntry->capacity();
-                            updateCapacity(0, cacheEntry->capacity());
-                            touchMRU(commitData->info->name, key);
-                        }
-                    });
-            }
-        });
 
     if (m_backend)
     {
