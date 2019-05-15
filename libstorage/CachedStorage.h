@@ -115,6 +115,7 @@ public:
 
 private:
     void touchMRU(std::string table, std::string key);
+    Caches::Ptr touchCache(std::string table, std::string key);
     void checkAndClear();
     void updateCapacity(ssize_t oldSize, ssize_t newSize);
     std::string readableCapacity(size_t num);
