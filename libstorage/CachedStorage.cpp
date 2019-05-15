@@ -165,7 +165,7 @@ Caches::Ptr CachedStorage::selectNoCondition(
         if (caches)
         {
             ++m_hitTimes;
-            touchMRU(tableInfo->name, key);
+            touchMRU(tableInfo->name, key, 0);
 
             return caches;
         }
@@ -203,14 +203,15 @@ Caches::Ptr CachedStorage::selectNoCondition(
         }
         CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
                                   << ", capacity: " << totalCapacity;
-        updateCapacity(0, totalCapacity);
-        touchMRU(tableInfo->name, key);
+
+        //updateCapacity(0, totalCapacity);
+        touchMRU(tableInfo->name, key, totalCapacity);
 
         return cache;
     }
 
     // no found in cache or backend
-    STORAGE_LOG(TRACE) << "Key: " << key << " not found in cache or backend";
+    CACHED_STORAGE_LOG(WARNING) << "Key: " << key << " not found in cache or backend";
     tableIt = m_caches.find(tableInfo->name);
     if (tableIt == m_caches.end())
     {
@@ -270,7 +271,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             auto key = entry->getField(requestData->info->key);
                             auto id = entry->getID();
 
-
+                            ssize_t change = 0;
                             if (id != 0)
                             {
                                 auto caches =
@@ -295,7 +296,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         << "update capacity: " << commitData->info->name << "-"
                                         << key << ", from capacity: " << oldSize
                                         << " to capacity: " << (*entryIt)->capacity();
-                                    updateCapacity(oldSize, (*entryIt)->capacity());
+
+                                    change = (ssize_t)((ssize_t)(*entryIt)->capacity() - (ssize_t)oldSize);
 
                                     (*entryIt)->setNum(num);
 
@@ -333,7 +335,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
                             }
 
-                            touchMRU(requestData->info->name, key);
+                            touchMRU(requestData->info->name, key, change);
                         }
                     });
 
@@ -397,8 +399,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             cacheEntry->setNum(num);
             STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
                                << ", capacity: " << cacheEntry->capacity();
-            updateCapacity(0, cacheEntry->capacity());
-            touchMRU(commitData->info->name, key);
+
+            touchMRU(commitData->info->name, key, cacheEntry->capacity());
         }
     }
 
@@ -538,9 +540,11 @@ size_t CachedStorage::ID()
     return m_ID;
 }
 
-void CachedStorage::touchMRU(std::string table, std::string key)
+void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacity)
 {
     tbb::mutex::scoped_lock lock(m_mutex);
+
+    updateCapacity(capacity);
 
     auto r = m_mru.push_back(std::make_pair(table, key));
     if (!r.second)
@@ -630,7 +634,7 @@ void CachedStorage::checkAndClear()
                                 << "remove capacity: " << tableIt->second->tableInfo()->name << "-"
                                 << it->second << ", capacity: " << totalCapacity
                                 << ", current cache size: " << m_mru.size();
-                            updateCapacity(totalCapacity, 0);
+                            updateCapacity(0 - (ssize_t)totalCapacity);
 
                             tableIt->second->removeCache(it->second);
                             it = m_mru.erase(it);
@@ -670,11 +674,11 @@ void CachedStorage::checkAndClear()
     }
 }
 
-void CachedStorage::updateCapacity(ssize_t oldSize, ssize_t newSize)
+void CachedStorage::updateCapacity(ssize_t capacity)
 {
     // m_capacity += (newSize - oldSize);
-    auto oldValue = m_capacity.fetch_and_add((newSize - oldSize));
-    CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (newSize - oldSize)
+    auto oldValue = m_capacity.fetch_and_add(capacity);
+    CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity)
                               << " , from: " << oldValue << " to: " << m_capacity;
 }
 

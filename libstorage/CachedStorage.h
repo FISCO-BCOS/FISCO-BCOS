@@ -114,10 +114,10 @@ public:
     size_t ID();
 
 private:
-    void touchMRU(std::string table, std::string key);
+    void touchMRU(std::string table, std::string key, ssize_t capacity);
     Caches::Ptr touchCache(std::string table, std::string key);
     void checkAndClear();
-    void updateCapacity(ssize_t oldSize, ssize_t newSize);
+    void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
