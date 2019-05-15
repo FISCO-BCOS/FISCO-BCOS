@@ -31,14 +31,11 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
 
-#define RAFTENGINE_LOG(LEVEL)                                                            \
-    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "]"                              \
-               << "[p:" << std::to_string(m_protocolId) << "]" << LOG_BADGE("CONSENSUS") \
+#define RAFTENGINE_LOG(LEVEL)                                                             \
+    LOG(LEVEL) << "[p:" << std::to_string(m_protocolId) << "] " << LOG_BADGE("CONSENSUS") \
                << LOG_BADGE("RAFTENGINE")
-
-#define RAFTSEALER_LOG(LEVEL)                                                \
-    LOG(LEVEL) << "[g:" << std::to_string(m_raftEngine->groupId()) << "]"    \
-               << "[p:" << std::to_string(m_raftEngine->protocolId()) << "]" \
+#define RAFTSEALER_LOG(LEVEL)                                                 \
+    LOG(LEVEL) << "[p:" << std::to_string(m_raftEngine->protocolId()) << "] " \
                << LOG_BADGE("CONSENSUS") << LOG_BADGE("RAFTSEALER")
 
 namespace dev

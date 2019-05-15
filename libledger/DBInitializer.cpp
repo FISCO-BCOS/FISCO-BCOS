@@ -266,6 +266,13 @@ void DBInitializer::initZdbStorage()
     sqlconnpool->createDataBase(zdbConfig);
     sqlconnpool->InitConnectionPool(zdbConfig);
     zdbStorage->setConnPool(sqlconnpool);
+
+    zdbStorage->setFatalHandler([](std::exception& e) {
+        (void)e;
+        LOG(FATAL) << "access mysql failed exit";
+        exit(1);
+    });
+
     initTableFactory2(zdbStorage);
 }
 
