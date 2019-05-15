@@ -74,6 +74,10 @@ public:
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
+
+        /// set thread name
+        std::string threadName = "Sync-" + std::to_string(m_groupId);
+        setName(threadName);
     }
 
     virtual ~SyncMaster() { stop(); };

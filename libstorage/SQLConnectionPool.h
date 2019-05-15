@@ -23,7 +23,10 @@
 
 #include <zdb.h>
 #include <iostream>
+#include <memory>
 #include <string>
+
+#define SQLConnectionPool_LOG(LEVEL) LOG(LEVEL) << "[SQLConnectionPool] "
 
 namespace dev
 {
@@ -42,9 +45,13 @@ struct ZDBConfig
     uint32_t maxConnections;
 };
 
+#define SQLConnectionPool_LOG(LEVEL) LOG(LEVEL) << "[SQLConnectionPool] "
+
 class SQLConnectionPool
 {
 public:
+    typedef std::shared_ptr<SQLConnectionPool> Ptr;
+
     SQLConnectionPool(){};
     ~SQLConnectionPool();
     bool InitConnectionPool(const ZDBConfig& _dbConfig);
@@ -53,6 +60,13 @@ public:
     int BeginTransaction(const Connection_T& _connection);
     int Commit(const Connection_T& _connection);
     int RollBack(const Connection_T& _connection);
+
+    int GetActiveConnections();
+    int GetMaxConnections();
+
+    int GetTotalConnections();
+
+    void createDataBase(const ZDBConfig& _dbConfig);
 
 private:
     ConnectionPool_T m_connectionPool;

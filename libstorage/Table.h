@@ -23,6 +23,7 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/mutex.h>
 #include <tbb/tbb_allocator.h>
 #include <atomic>
 #include <map>
@@ -67,10 +68,11 @@ public:
     };
 
     Entry();
-    virtual ~Entry() {}
+    virtual ~Entry();
 
     virtual uint32_t getID() const;
     virtual void setID(uint32_t id);
+    virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
     virtual void setField(const std::string& key, const std::string& value);
@@ -80,8 +82,9 @@ public:
 
     virtual const std::map<std::string, std::string>* fields() const;
 
-    virtual uint32_t getStatus() const;
+    virtual int getStatus() const;
     virtual void setStatus(int status);
+    virtual void setStatus(const std::string& status);
 
     virtual uint32_t num() const;
     virtual void setNum(uint32_t num);
@@ -96,19 +99,36 @@ public:
     virtual bool deleted() const;
     virtual void setDeleted(bool deleted);
 
-    virtual size_t capacity() const;
+    virtual ssize_t capacity() const;
 
     virtual void copyFrom(Entry::Ptr entry);
 
 private:
+    struct EntryData
+    {
+        typedef std::shared_ptr<EntryData> Ptr;
+
+        EntryData(std::shared_ptr<size_t> refCount,
+            std::shared_ptr<std::map<std::string, std::string>> fields)
+          : m_refCount(refCount), m_fields(fields){};
+
+        tbb::mutex m_mutex;
+        std::shared_ptr<size_t> m_refCount;
+        std::shared_ptr<std::map<std::string, std::string>> m_fields;
+    };
+
+    void checkRef();
+
     uint32_t m_ID = 0;
+    int m_status = 0;
     size_t m_tempIndex = 0;
-    std::map<std::string, std::string> m_fields;
+    uint32_t m_num = 0;
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
+    ssize_t m_capacity = 0;
 
-    size_t m_capacity = 0;
+    EntryData::Ptr m_data;
 };
 
 class EntryLess
@@ -127,24 +147,30 @@ private:
 class Entries : public std::enable_shared_from_this<Entries>
 {
 public:
+    typedef tbb::concurrent_vector<Entry::Ptr> Vector;
+
     typedef std::shared_ptr<Entries> Ptr;
     typedef std::shared_ptr<const Entries> ConstPtr;
     virtual ~Entries(){};
 
+    virtual Vector::iterator begin();
+    virtual Vector::iterator end();
+
+    virtual Vector::reference operator[](Vector::size_type index);
+
     virtual Entry::ConstPtr get(size_t i) const;
     virtual Entry::Ptr get(size_t i);
     virtual size_t size() const;
+    virtual void resize(size_t n);
     virtual size_t addEntry(Entry::Ptr entry);
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
     virtual void removeEntry(size_t index);
 
-    virtual void copyFrom(Entries::Ptr entries);
-
-    virtual tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>>* entries();
+    virtual void shallowFrom(Entries::Ptr entries);
 
 private:
-    tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr>> m_entries;
+    Vector m_entries;
     bool m_dirty = false;
 };
 
@@ -303,7 +329,7 @@ public:
     Entries::Ptr dirtyEntries;
     Entries::Ptr newEntries;
 
-    // for memorytable
+    // only for memorytable, memoryTable2 don't need
     std::string tableName;
     std::map<std::string, Entries::Ptr> data;
 };
@@ -330,7 +356,7 @@ public:
     virtual h256 hash() = 0;
     virtual void clear() = 0;
 
-    virtual bool dump(dev::storage::TableData::Ptr _data) = 0;
+    virtual dev::storage::TableData::Ptr dump() = 0;
     virtual void rollback(const Change& _change) = 0;
     virtual bool empty() = 0;
     virtual void setRecorder(

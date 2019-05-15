@@ -76,6 +76,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[#executeBlock] Error during initExecutiveContext")
+                                 << LOG_KV("blkNum", block.blockHeader().number())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
@@ -110,6 +111,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock")
                                  << LOG_DESC("Error during serial block execution")
+                                 << LOG_KV("blkNum", block.blockHeader().number())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(
@@ -147,8 +149,10 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                 << LOG_KV("curState", block.header().stateRoot().abridged())
                 << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
                 << LOG_KV("curDBHash", block.header().dbHash().abridged());
-            BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
-                                      "Invalid Block with bad stateRoot or ReceiptRoot"));
+            BOOST_THROW_EXCEPTION(
+                InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
+                    "Invalid Block with bad stateRoot or ReceiptRoot, orgBlockHash " +
+                    block.header().hash().abridged()));
         }
     }
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")

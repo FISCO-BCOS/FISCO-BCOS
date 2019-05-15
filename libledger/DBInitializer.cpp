@@ -68,12 +68,11 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
-#if 0
+    // TODO: delete this before release RC3
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();
     }
-#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
@@ -145,7 +144,8 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(_backend);
-    cachedStorage->setMaxStoreKey(m_param->mutableStorageParam().maxStoreKey);
+    cachedStorage->setMaxCapacity(
+        m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
 
     cachedStorage->init();
@@ -262,7 +262,18 @@ void DBInitializer::initZdbStorage()
         m_param->mutableStorageParam().dbPasswd, m_param->mutableStorageParam().dbName,
         m_param->mutableStorageParam().dbCharset, m_param->mutableStorageParam().initConnections,
         m_param->mutableStorageParam().maxConnections};
-    zdbStorage->initSqlAccess(zdbConfig);
+
+    auto sqlconnpool = std::make_shared<SQLConnectionPool>();
+    sqlconnpool->createDataBase(zdbConfig);
+    sqlconnpool->InitConnectionPool(zdbConfig);
+    zdbStorage->setConnPool(sqlconnpool);
+
+    zdbStorage->setFatalHandler([](std::exception& e) {
+        (void)e;
+        LOG(FATAL) << "access mysql failed exit";
+        exit(1);
+    });
+
     initTableFactory2(zdbStorage);
 }
 

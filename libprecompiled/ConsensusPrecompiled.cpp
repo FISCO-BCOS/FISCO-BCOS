@@ -178,7 +178,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully insert");
                     result = count;
                 }
             }
@@ -195,7 +195,7 @@ bytes ConsensusPrecompiled::call(
                 else
                 {
                     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully");
+                                           << LOG_DESC("addObserver successfully update");
                     result = count;
                 }
             }
@@ -253,7 +253,7 @@ bytes ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    getOut(out, result);
+    getErrorCodeOut(out, result);
     return out;
 }
 

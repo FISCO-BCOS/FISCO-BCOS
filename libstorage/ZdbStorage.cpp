@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
+#include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 
 
@@ -39,13 +40,17 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     int iRet = m_sqlBasicAcc.Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
     if (iRet < 0)
     {
-        LOG(ERROR) << "Remote database return error:" << iRet;
-        throw StorageException(
-            -1, "Remote database return error:" + boost::lexical_cast<std::string>(iRet));
+        ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << iRet
+                              << " table:" << _tableInfo->name;
+        auto e =
+            StorageException(-1, "Remote select database return error: table:" + _tableInfo->name +
+                                     boost::lexical_cast<std::string>(iRet));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
 
-
-    LOG(DEBUG) << "select resp:" << responseJson.toStyledString();
+    ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
+                          << "select resp:" << responseJson.toStyledString();
     std::vector<std::string> columns;
     for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
     {
@@ -60,8 +65,15 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
 
         for (Json::ArrayIndex j = 0; j < line.size(); ++j)
         {
-            std::string fieldValue = line.get(j, "").asString();
-            entry->setField(columns[j], fieldValue);
+            if (columns[j] == ID_FIELD)
+            {
+                entry->setID(line.get(j, "").asString());
+            }
+            else
+            {
+                std::string fieldValue = line.get(j, "").asString();
+                entry->setField(columns[j], fieldValue);
+            }
         }
 
         if (entry->getStatus() == 0)
@@ -74,55 +86,30 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     return entries;
 }
 
+
+void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
+{
+    m_sqlBasicAcc.setConnPool(_connPool);
+    this->initSysTables();
+}
+
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    for (auto it : _datas)
+    int32_t _rowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
+    if (_rowCount < 0)
     {
-        for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->dirtyEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
-        for (size_t i = 0; i < it->newEntries->size(); ++i)
-        {
-            Entry::Ptr entry = it->newEntries->get(i);
-            for (auto fieldIt : *entry->fields())
-            {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
-                {
-                    continue;
-                }
-                LOG(DEBUG) << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
-            }
-        }
+        ZdbStorage_LOG(ERROR) << "database commit  return error:" << _rowCount;
+        auto e = StorageException(-1, "Remote select database return error: table:" +
+                                          boost::lexical_cast<std::string>(_rowCount));
+        m_fatalHandler(e);
+        BOOST_THROW_EXCEPTION(e);
     }
-
-    int32_t dwRowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
-    if (dwRowCount < 0)
-    {
-        LOG(ERROR) << "database return error:" << dwRowCount;
-        throw StorageException(
-            -1, "database return error:" + boost::lexical_cast<std::string>(dwRowCount));
-    }
-    return dwRowCount;
+    return _rowCount;
 }
 
 bool ZdbStorage::onlyDirty()
 {
     return true;
-}
-
-void ZdbStorage::initSqlAccess(const storage::ZDBConfig& _dbConfig)
-{
-    m_sqlBasicAcc.initConnPool(_dbConfig);
-    this->initSysTables();
 }
 
 

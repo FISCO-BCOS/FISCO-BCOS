@@ -14,7 +14,7 @@ ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
-storage_type=RocksDB
+storage_type=rocksdb
 conf_path="conf"
 bin_path=
 make_tar=
@@ -29,7 +29,7 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
-enable_parallel=false
+enable_parallel=true
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
@@ -49,9 +49,8 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
-    -s <DB type>                        Default rocksdb. Options can be rocksdb / external / mysql / leveldb
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
-    -P <Parallel Execute Transaction>   Default false. if set -P, enable Parallel Execute Transaction
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
@@ -82,7 +81,7 @@ LOG_INFO()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -104,7 +103,6 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFdP" option;do
             exit 1;
         fi
     ;;
-    P) enable_parallel="true";;
     t) CertConfig=$OPTARG;;
     c) consensus_type="raft";;
     C) chain_id=$OPTARG
@@ -478,6 +476,7 @@ cipher_data_key=
 [chain]
     id=${chain_id}
 [compatibility]
+    ; supported_version should nerver be changed
     supported_version=${compatibility_version}
 [log]
     log_path=./log
@@ -529,10 +528,11 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ; storage db type, rocksdb / external / mysql / leveldb are supported
+    ; storage db type, rocksdb / mysql / external, rocksdb is recommended
     type=${storage_type}
-    max_store_key=10000
-    max_forward_block=100
+    ; max cache memeory, MB
+    max_capacity=256
+    max_forward_block=10
     ; only for external
     max_retry=100
     topic=DB
@@ -724,7 +724,7 @@ EOF
 generate_node_scripts()
 {
     local output=$1
-    local docker_tag="latest"
+    local docker_tag="v${compatibility_version}"
     generate_script_template "$output/start.sh"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
     local start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
@@ -776,13 +776,13 @@ node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 try_times=5
 i=0
+if [ -z \${node_pid} ];then
+    echo " \${node} isn't running."
+    exit 0
+fi
+[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
 while [ \$i -lt \${try_times} ]
 do
-    if [ -z \${node_pid} ];then
-        echo " \${node} isn't running."
-        exit 0
-    fi
-    [ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
     sleep 0.6
     node_pid=${ps_cmd}
     if [ -z \${node_pid} ];then
@@ -867,14 +867,9 @@ generate_server_scripts()
     local output=$1
     genTransTest "${output}"
     generate_script_template "$output/start_all.sh"
-    prepare_image=""
-    if [ ! -z ${docker_mode} ];then
-        prepare_image="docker pull fiscoorg/fiscobcos:latest"
-    fi
     # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "${output_dir}/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
-${prepare_image}
 for directory in \`ls \${SHELL_FOLDER}\`  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
@@ -933,8 +928,7 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 # get fisco_version
-fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | head -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
-# fisco_version=$(curl -s https://raw.githubusercontent.com/FISCO-BCOS/FISCO-BCOS/master/release_note.txt | sed "s/^[vV]//")
+fisco_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${fisco_version}"
 fi
@@ -949,7 +943,7 @@ if [ -z ${docker_mode} ];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${fisco_version}/${package_name}"
+        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
         LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}

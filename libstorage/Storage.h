@@ -22,6 +22,7 @@
 
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Protocol.h>
 
 namespace dev
 {
@@ -39,6 +40,12 @@ public:
     virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
 
     virtual bool onlyDirty() = 0;
+
+    void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
+    dev::GROUP_ID groupID() const { return m_groupID; }
+
+protected:
+    dev::GROUP_ID m_groupID = 0;
 };
 
 }  // namespace storage

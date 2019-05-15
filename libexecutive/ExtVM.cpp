@@ -232,6 +232,7 @@ evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _c
         result = e.createOpcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin());
     else
     {
+        // TODO: when new CREATE opcode added, this logic maybe affected
         assert(_op == Instruction::CREATE2);
         result =
             e.create2Opcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin(), _salt);

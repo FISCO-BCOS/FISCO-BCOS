@@ -87,9 +87,8 @@ Table::Ptr MemoryTableFactory2::openTable(
     }
     tableInfo->fields.emplace_back(STATUS);
     tableInfo->fields.emplace_back(tableInfo->key);
-    tableInfo->fields.emplace_back("_hash_");
-    tableInfo->fields.emplace_back("_num_");
-    tableInfo->fields.emplace_back("_id_");
+    tableInfo->fields.emplace_back(NUM_FIELD);
+    tableInfo->fields.emplace_back(ID_FIELD);
 
     Table::Ptr memoryTable = nullptr;
     if (isPara)
@@ -260,10 +259,10 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
     {
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
-        auto tableData = std::make_shared<TableData>();
-        table->dump(tableData);
+        STORAGE_LOG(TRACE) << "Dumping table: " << dbIt.first;
+        auto tableData = table->dump();
 
-        if (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0)
+        if (tableData && (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0))
         {
             datas.push_back(tableData);
         }

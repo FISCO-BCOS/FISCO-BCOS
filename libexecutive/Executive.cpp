@@ -85,7 +85,19 @@ void Executive::verifyTransaction(
 bool Executive::execute()
 {
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    assert(m_t.gas() >= (u256)m_baseGasRequired);
+    // bug fix:
+    // modify assert->BOOST_THROW_EXCEPTION, in case of coredump of the nodes when gas is not
+    // enough
+    // *origin code:
+    // assert(m_t.gas() >= (u256)m_baseGasRequired);
+    // *modified:
+    if (m_t.gas() < (u256)m_baseGasRequired)
+    {
+        m_excepted = TransactionException::OutOfGasBase;
+        BOOST_THROW_EXCEPTION(
+            OutOfGasBase() << errinfo_comment(
+                "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+    }
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
@@ -368,6 +380,11 @@ bool Executive::go(OnOpFunc const& _onOp)
         {
             revert();
             m_excepted = TransactionException::OutOfGas;
+        }
+        catch (GasOverflow const& _e)
+        {
+            revert();
+            m_excepted = TransactionException::GasOverflow;
         }
         catch (VMException const& _e)
         {

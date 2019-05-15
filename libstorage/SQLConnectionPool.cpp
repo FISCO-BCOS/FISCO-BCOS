@@ -21,6 +21,8 @@
 
 #include "SQLConnectionPool.h"
 #include <libdevcore/easylog.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <csignal>
 #include <memory>
 
@@ -36,34 +38,37 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
            << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
            << "&charset=" << _dbConfig.dbCharset;
         auto connetionBuf = ss.str();
-        URL_T oUrl = URL_new(connetionBuf.c_str());
-        if (oUrl == NULL)
+        URL_T _url = URL_new(connetionBuf.c_str());
+        if (_url == NULL)
         {
             stringstream _exitInfo;
             _exitInfo << "parse url[" << connetionBuf << "] error please check";
             // TODO: chang errorExitOut to throw exception
             errorExitOut(_exitInfo);
         }
-        LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
+        SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
 
         TRY
         {
-            m_connectionPool = ConnectionPool_new(oUrl);
+            m_connectionPool = ConnectionPool_new(_url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
+            ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
+            ConnectionPool_setReaper(m_connectionPool, 10);
             ConnectionPool_start(m_connectionPool);
         }
         CATCH(SQLException)
         {
-            URL_free(&oUrl);
-            LOG(ERROR) << "init connection pool failed url:" << connetionBuf << " please check";
+            URL_free(&_url);
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed url:" << connetionBuf << " please check";
             stringstream _exitInfo;
             _exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
             errorExitOut(_exitInfo);
         }
         END_TRY;
 
-        URL_free(&oUrl);
+        URL_free(&_url);
     }
     else
     {
@@ -74,6 +79,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
     }
     return true;
 }
+
+
 /*
     this function is used to obtain a new connection from the pool,
     If there are no connections available, a new connection is created
@@ -114,7 +121,7 @@ int SQLConnectionPool::RollBack(const Connection_T& _connection)
 // TODO: chang errorExitOut to throw exception
 inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 {
-    LOG(ERROR) << _exitInfo.str();
+    SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
     std::cerr << _exitInfo.str();
     raise(SIGTERM);
 }
@@ -123,4 +130,94 @@ SQLConnectionPool::~SQLConnectionPool()
 {
     ConnectionPool_stop(m_connectionPool);
     ConnectionPool_free(&m_connectionPool);
+}
+
+int SQLConnectionPool::GetActiveConnections()
+{
+    return ConnectionPool_active(m_connectionPool);
+}
+int SQLConnectionPool::GetMaxConnections()
+{
+    return ConnectionPool_getMaxConnections(m_connectionPool);
+}
+
+int SQLConnectionPool::GetTotalConnections()
+{
+    return ConnectionPool_size(m_connectionPool);
+}
+
+void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
+{
+    if (_dbConfig.dbType == "mysql")
+    {
+        stringstream ss;
+        ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+           << "/information_schema?user=" << _dbConfig.dbUsername
+           << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset;
+        auto connetionBuf = ss.str();
+        URL_T _url = URL_new(connetionBuf.c_str());
+        if (_url == NULL)
+        {
+            stringstream _exitInfo;
+            _exitInfo << "parse url[" << connetionBuf << "] error please check";
+            // TODO: chang errorExitOut to throw exception
+            errorExitOut(_exitInfo);
+        }
+        SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
+
+        ConnectionPool_T _connectionPool = nullptr;
+        volatile Connection_T _connection = nullptr;
+
+        TRY
+        {
+            _connectionPool = ConnectionPool_new(_url);
+            ConnectionPool_setInitialConnections(_connectionPool, 2);
+            ConnectionPool_setMaxConnections(_connectionPool, 2);
+            ConnectionPool_start(_connectionPool);
+
+            _connection = ConnectionPool_getConnection(_connectionPool);
+            if (_connection == nullptr)
+            {
+                THROW(SQLException, "create database get connection failed");
+            }
+
+            string _dbName = _dbConfig.dbName;
+            boost::algorithm::replace_all_copy(_dbName, "\\", "\\\\");
+            boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
+            string _sql = "CREATE DATABASE IF NOT EXISTS ";
+            _sql.append(_dbName);
+            Connection_execute(_connection, "%s", _sql.c_str());
+            _sql = "set global max_allowed_packet = 1073741824";
+            Connection_execute(_connection, "%s", _sql.c_str());
+        }
+        CATCH(SQLException)
+        {
+            if (_connection)
+            {
+                ConnectionPool_returnConnection(_connectionPool, _connection);
+            }
+            ConnectionPool_stop(_connectionPool);
+            ConnectionPool_free(&_connectionPool);
+            URL_free(&_url);
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed url:" << connetionBuf << " please check";
+            stringstream _exitInfo;
+            _exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
+            errorExitOut(_exitInfo);
+        }
+
+
+        END_TRY;
+        ConnectionPool_returnConnection(_connectionPool, _connection);
+        ConnectionPool_stop(_connectionPool);
+        ConnectionPool_free(&_connectionPool);
+        URL_free(&_url);
+    }
+    else
+    {
+        stringstream _exitInfo;
+        _exitInfo << "not support db type:" << _dbConfig.dbType;
+        // TODO: chang errorExitOut to throw exception
+        errorExitOut(_exitInfo);
+    }
 }

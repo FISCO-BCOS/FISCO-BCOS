@@ -67,14 +67,14 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
     {
         std::stringstream exitInfo;
         exitInfo << "Database open error"
-                 << ", path=" << _name << endl;
+                 << ", path=" << _name << ", error_info=" << m_openStatus.ToString() << endl;
         errorExit(exitInfo);
     }
     m_db.reset(db);
 
     if (!empty())
     {
-        // If the DB is encrypted. Exist
+        // If the DB is encrypted. Exit
         std::string key;
         leveldb::Status status =
             m_db->Get(leveldb::ReadOptions(), leveldb::Slice(c_cipherDataKeyName), &key);

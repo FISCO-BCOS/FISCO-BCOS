@@ -116,7 +116,7 @@ bytes CNSPrecompiled::call(
                 result = count;
             }
         }
-        getOut(out, result);
+        getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {

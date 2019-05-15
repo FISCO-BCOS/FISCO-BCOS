@@ -27,6 +27,9 @@
 #include "Table.h"
 #include <json/json.h>
 
+
+#define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
+
 namespace dev
 {
 namespace storage
@@ -54,12 +57,14 @@ private:
         std::vector<std::string>& _fieldName, std::vector<std::string>& _fieldValue,
         bool& _hasGetField);
 
+    int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
+
 public:
-    bool initConnPool(const storage::ZDBConfig& _dbConfig);
     void ExecuteSql(const std::string& _sql);
+    void setConnPool(SQLConnectionPool::Ptr& _connPool);
 
 private:
-    dev::storage::SQLConnectionPool m_oConnPool;
+    SQLConnectionPool::Ptr m_connPool;
 };
 
 }  // namespace storage
