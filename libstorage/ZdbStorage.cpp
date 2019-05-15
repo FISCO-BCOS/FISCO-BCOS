@@ -98,7 +98,7 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
             Entry::Ptr entry = it->dirtyEntries->get(i);
             for (auto fieldIt : *entry->fields())
             {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_")
                 {
                     continue;
                 }
@@ -111,7 +111,7 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
             Entry::Ptr entry = it->newEntries->get(i);
             for (auto fieldIt : *entry->fields())
             {
-                if (fieldIt.first == "_num_" || fieldIt.first == "_hash_")
+                if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_")
                 {
                     continue;
                 }
