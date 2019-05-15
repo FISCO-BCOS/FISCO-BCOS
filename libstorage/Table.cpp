@@ -235,7 +235,6 @@ void Entry::copyFrom(Entry::Ptr entry)
 
     m_data = entry->m_data;
 
-    tbb::mutex::scoped_lock lock(m_data->m_mutex);
     *(m_data->m_refCount) += 1;
 }
 
