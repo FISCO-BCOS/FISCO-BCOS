@@ -468,7 +468,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                 std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
                 STORAGE_LOG(INFO)
-                    << LOG_BADGE("g:" + std::to_string(storage->groupID()))
+                    << "[g:" << std::to_string(storage->groupID()) << "]"
                     << "\n---------------------------------------------------------------------\n"
                     << "Commit block: " << task->num
                     << " to backend storage finished, current cached block: "
