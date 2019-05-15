@@ -205,7 +205,7 @@ bytes CRUDPrecompiled::call(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        out = abi.abiIn("", u256(CODE_FUNCTION_NOT_EXIST));
+        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
 
         return out;
     }
