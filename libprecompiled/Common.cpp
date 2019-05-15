@@ -25,7 +25,7 @@
 void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
     dev::eth::ContractABI abi;
-    if (result == 1)
+    if (result > 0 && result < 128)
     {
         out = abi.abiIn("", u256(result));
         return;

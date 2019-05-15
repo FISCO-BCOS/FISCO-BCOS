@@ -214,7 +214,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         /*different fields*/
         for (auto fieldIt : *entry->fields())
         {
-            if (fieldIt.first == "_num_" || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
+            if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
             {
                 continue;
             }
@@ -234,8 +234,8 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
     if (_fieldName.size() > 0 && !_hasGetField)
     {
         _fieldName.push_back("_hash_");
-        _fieldName.push_back("_num_");
-        _fieldName.push_back("_id_");
+        _fieldName.push_back(NUM_FIELD);
+        _fieldName.push_back(ID_FIELD);
         _hasGetField = true;
     }
 }
