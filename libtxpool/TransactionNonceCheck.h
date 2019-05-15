@@ -30,9 +30,8 @@
 using namespace dev::eth;
 using namespace dev::blockchain;
 
-#define NONCECHECKER_LOG(LEVEL)                                                        \
-    LOG(LEVEL) << "[p:" << std::to_string(m_protocolId) << "] " << LOG_BADGE("TXPOOL") \
-               << LOG_BADGE("TransactionNonceChecker")
+#define NONCECHECKER_LOG(LEVEL) \
+    LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("TransactionNonceChecker")
 
 namespace dev
 {

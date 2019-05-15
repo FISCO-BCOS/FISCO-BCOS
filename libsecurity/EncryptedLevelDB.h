@@ -34,9 +34,7 @@ namespace dev
 {
 namespace db
 {
-#define ENCDB_LOG(_OBV)                 \
-    LOG(_OBV) << "[g:" << m_name << "]" \
-              << "[p:null][ENCDB]"
+#define ENCDB_LOG(_OBV) LOG(_OBV) << "[g:" << m_name << "][ENCDB]"
 
 class EncryptedLevelDBWriteBatch : public LevelDBWriteBatch
 {
