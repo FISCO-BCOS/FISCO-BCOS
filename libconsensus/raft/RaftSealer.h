@@ -48,7 +48,7 @@ public:
         m_raftEngine = std::dynamic_pointer_cast<RaftEngine>(m_consensusEngine);
 
         /// set thread name for PBFTSealer
-        std::string threadName = "RaftSealer-" + std::to_string(m_raftEngine->groupId());
+        std::string threadName = "RaftSeal-" + std::to_string(m_raftEngine->groupId());
         setName(threadName);
     }
     void start() override;
