@@ -530,7 +530,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 	tbb::mutex::scoped_lock lock(m_cachesMutex);
 
 	auto tableIt = m_caches.find(tableInfo->name);
-	if (tableIt != m_caches.end())
+	if (tableIt == m_caches.end())
 	{
 		tableIt =
 			m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
