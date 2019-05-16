@@ -70,7 +70,7 @@ public:
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
         m_blockSync->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
         /// set thread name for raftEngine
-        std::string threadName = "RaftEngine-" + std::to_string(m_groupId);
+        std::string threadName = "Raft-" + std::to_string(m_groupId);
         setName(threadName);
     }
 

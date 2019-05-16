@@ -129,6 +129,8 @@ void Ledger::initGenesisConfig(std::string const& configPath)
         m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
         // Compatibility with previous versions RC2/RC1
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+        m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+        m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
     }
     catch (std::exception& e)
     {
@@ -341,10 +343,19 @@ void Ledger::initDBConfig(ptree const& pt)
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+        m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+        m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+// TODO: use below before release RC3
+#if 0
+        if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
+        {
+            m_param->mutableStorageParam().type = "RocksDB";
+            Ledger_LOG(WARNING) << "LevelDB is deprecated!! RocksDB is now recommended, because "
+                                   "RocksDB is better than LevelDB in performance.";
+        }
+#endif
     }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
-    m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
-    m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
     m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
 
     if (m_param->mutableStorageParam().maxCapacity < 0)

@@ -62,19 +62,15 @@ public:
 
 public:
     DownloadingBlockQueue(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID _protocolId, NodeID const& _nodeId)
+        PROTOCOL_ID, NodeID const& _nodeId)
       : m_blockChain(_blockChain),
-        m_protocolId(_protocolId),
         m_nodeId(_nodeId),
         m_blocks(),
         m_buffer(std::make_shared<ShardPtrVec>())
     {}
 
     DownloadingBlockQueue()
-      : m_blockChain(nullptr),
-        m_protocolId(0),
-        m_blocks(),
-        m_buffer(std::make_shared<ShardPtrVec>())
+      : m_blockChain(nullptr), m_blocks(), m_buffer(std::make_shared<ShardPtrVec>())
     {}
 
     /// PUsh a block packet
@@ -106,9 +102,7 @@ public:
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    PROTOCOL_ID m_protocolId;
     NodeID m_nodeId;
-
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
     std::shared_ptr<ShardPtrVec> m_buffer;  // use buffer for faster push return
 

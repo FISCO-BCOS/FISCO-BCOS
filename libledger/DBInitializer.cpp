@@ -68,6 +68,7 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
+    // TODO: delete this before release RC3
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();

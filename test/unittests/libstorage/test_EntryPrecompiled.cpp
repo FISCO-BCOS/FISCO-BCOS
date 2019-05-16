@@ -90,6 +90,13 @@ BOOST_AUTO_TEST_CASE(testSetInt)
     bytes sstr = abi.abiIn("set(string,int256)", std::string("keyInt"), u256(200));
     entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     BOOST_TEST_TRUE(entry->getField("keyInt") == boost::lexical_cast<std::string>(200));
+    sstr = abi.abiIn("set(string,int256)", std::string("keyInt"), s256(-1));
+    entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
+    bytes bint = abi.abiIn("getInt(string)", std::string("keyInt"));
+    bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    s256 num;
+    abi.abiOut(bytesConstRef(&out), num);
+    BOOST_TEST_TRUE(num == -1);
 }
 
 BOOST_AUTO_TEST_CASE(testSetString)

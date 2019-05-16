@@ -347,8 +347,7 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             auto entry = entries->get(0);
             std::string strCount = entry->getField(SYS_VALUE);
             count = lexical_cast<int64_t>(strCount);
-            std::string strNumber = entry->getField("_num_");
-            number = lexical_cast<int64_t>(strNumber);
+            number = entry->num();
         }
     }
     return std::make_pair(count, number);
