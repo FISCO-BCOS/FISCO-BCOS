@@ -55,6 +55,10 @@ public:
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+
+        /// set thread name for PBFTSealer
+        std::string threadName = "PBFTSealer-" + std::to_string(m_pbftEngine->groupId());
+        setName(threadName);
     }
 
     void start() override;

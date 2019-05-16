@@ -99,7 +99,7 @@ void Service::heartBeat()
     }
     std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes;
     {
-        RecursiveGuard l(x_sessions);
+        RecursiveGuard l(x_nodes);
         staticNodes = m_staticNodes;
     }
 

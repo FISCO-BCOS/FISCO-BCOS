@@ -53,6 +53,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
             m_connectionPool = ConnectionPool_new(_url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
+            ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
+            ConnectionPool_setReaper(m_connectionPool, 10);
             ConnectionPool_start(m_connectionPool);
         }
         CATCH(SQLException)
@@ -77,6 +79,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
     }
     return true;
 }
+
+
 /*
     this function is used to obtain a new connection from the pool,
     If there are no connections available, a new connection is created
@@ -137,6 +141,10 @@ int SQLConnectionPool::GetMaxConnections()
     return ConnectionPool_getMaxConnections(m_connectionPool);
 }
 
+int SQLConnectionPool::GetTotalConnections()
+{
+    return ConnectionPool_size(m_connectionPool);
+}
 
 void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
 {
@@ -178,6 +186,8 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
             string _sql = "CREATE DATABASE IF NOT EXISTS ";
             _sql.append(_dbName);
+            Connection_execute(_connection, "%s", _sql.c_str());
+            _sql = "set global max_allowed_packet = 1073741824";
             Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)

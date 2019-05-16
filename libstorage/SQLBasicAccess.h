@@ -57,6 +57,8 @@ private:
         std::vector<std::string>& _fieldName, std::vector<std::string>& _fieldValue,
         bool& _hasGetField);
 
+    int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
+
 public:
     void ExecuteSql(const std::string& _sql);
     void setConnPool(SQLConnectionPool::Ptr& _connPool);

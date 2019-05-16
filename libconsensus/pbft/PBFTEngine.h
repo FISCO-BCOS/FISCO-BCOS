@@ -72,6 +72,10 @@ public:
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
 
+        /// set thread name for PBFTEngine
+        std::string threadName = "PBFTEngine-" + std::to_string(m_groupId);
+        setName(threadName);
+
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
     }

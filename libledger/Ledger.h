@@ -34,7 +34,7 @@
 #include <libp2p/Service.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
-#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][LEDGER]"
+#define Ledger_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace dev
 {
@@ -75,6 +75,12 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
+#ifndef FISCO_EASYLOG
+        /// tag this scope with GroupId
+        BOOST_LOG_SCOPED_THREAD_ATTR(
+            "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
+#endif
+
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();

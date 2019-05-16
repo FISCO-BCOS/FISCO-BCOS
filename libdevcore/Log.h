@@ -22,6 +22,8 @@
  */
 #pragma once
 
+#include <boost/log/attributes/constant.hpp>
+#include <boost/log/attributes/scoped_attribute.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
