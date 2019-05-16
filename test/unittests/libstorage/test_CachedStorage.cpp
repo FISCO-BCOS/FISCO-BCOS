@@ -554,7 +554,7 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 
 	auto entry = std::make_shared<Entry>();
 	entry->setField("key", "1");
-	entry->setField("value", "2");
+	entry->setField("value", "200");
 
 	auto data = std::make_shared<dev::storage::TableData>();
 	data->newEntries->addEntry(entry);
@@ -568,22 +568,25 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 		auto result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
 		Caches::Ptr caches = std::get<0>(result);
 		BOOST_TEST(caches->key() == "key");
-		BOOST_TEST(caches->num() == 99);
+		BOOST_TEST(caches->num() == 100 + i - 1);
 
 		auto entries = caches->entries();
-		BOOST_TEST(entries->size() == 1);
+		BOOST_TEST(entries->size() == i + 1);
 
-		auto cacheEntry = entries->get(0);
-		BOOST_TEST(cacheEntry != entry);
+		for(int j=0; j<entries->size(); ++j) {
+			auto cacheEntry = entries->get(j);
+			BOOST_TEST(cacheEntry != entry);
 
-		BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
-		BOOST_TEST(cacheEntry->getField("value") == entry->getField("value"));
+			BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
+			BOOST_TEST(cacheEntry->getField("value") == boost::lexical_cast<std::string>(200 + j));
+		}
 
-		cacheEntry->setID(0);
-		cacheEntry->setField("value", boost::lexical_cast<std::string>(i));
+		auto newEntry = std::make_shared<Entry>();
+		newEntry->setField("key", "1");
+		newEntry->setField("value", boost::lexical_cast<std::string>(200 + i));
 
 		auto newData = std::make_shared<dev::storage::TableData>();
-		newData->newEntries->addEntry(cacheEntry);
+		newData->newEntries->addEntry(newEntry);
 		newData->info = tableInfo;
 
 		std::vector<dev::storage::TableData::Ptr> newDatas;
