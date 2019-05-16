@@ -176,8 +176,8 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
     ++m_queryTimes;
 
-    auto result = touchCache(tableInfo, key);
-    auto caches = std::get<0>(result);
+	auto result = touchCache(tableInfo, key);
+	auto caches = std::get<0>(result);
 
     if(caches->empty()) {
     	if (m_backend)
@@ -255,7 +255,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             ssize_t change = 0;
                             if (id != 0)
                             {
-                                auto result = touchCache(requestData->info, key, true);
+                                auto result = touchCacheNoLock(requestData->info, key, true);
 
                                 auto caches = std::get<0>(result);
                                 auto entryIt = std::lower_bound(caches->entries()->begin(),
@@ -541,6 +541,10 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key, bool write) {
 	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
 
+	return touchCacheNoLock(tableInfo, key, write);
+}
+
+std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touchCacheNoLock(TableInfo::Ptr tableInfo, std::string key, bool write) {
 	auto tableIt = m_caches.find(tableInfo->name);
 	if (tableIt == m_caches.end())
 	{

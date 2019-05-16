@@ -128,6 +128,7 @@ public:
 private:
     void touchMRU(std::string table, std::string key, ssize_t capacity);
     std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCache(TableInfo::Ptr tableInfo, std::string key, bool write = false);
+    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(TableInfo::Ptr tableInfo, std::string key, bool write = false);
     void checkAndClear();
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
