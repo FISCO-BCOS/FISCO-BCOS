@@ -153,7 +153,7 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory() override
+    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t) override
     {
         return m_memoryTableFactory;
     }

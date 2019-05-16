@@ -28,6 +28,7 @@
 #include <tbb/mutex.h>
 #include <tbb/recursive_mutex.h>
 #include <tbb/spin_rw_mutex.h>
+#include <tbb/spin_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -137,13 +138,14 @@ private:
 
     std::map<std::string, TableCaches::Ptr> m_caches;
     tbb::recursive_mutex m_cachesMutex;
+    tbb::spin_mutex m_cachesSpinMutex;
 
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > >
         m_mru;
-    tbb::recursive_mutex m_mruMutex;
+    tbb::spin_mutex m_mruMutex;
 
     // boost::multi_index
     Storage::Ptr m_backend;
