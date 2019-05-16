@@ -126,6 +126,8 @@ public:
     {
         entry->setField(
             "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
+        entry->setNum(boost::lexical_cast<int64_t>(
+            m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value")));
         m_fakeStorage[m_table][key] = entry;
         return 0;
     }
