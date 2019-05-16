@@ -22,6 +22,8 @@
 #include "Common.h"
 #include "easylog.h"
 #include <pthread.h>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <chrono>
 #include <thread>
 using namespace std;
@@ -50,6 +52,19 @@ void Worker::startWorking()
         m_state = WorkerState::Starting;
         m_state_notifier.notify_all();
         m_work.reset(new thread([&]() {
+/// set threadName for log
+#ifndef FISCO_EASYLOG
+            if (boost::log::core::get())
+            {
+                std::vector<std::string> fields;
+                boost::split(fields, m_name, boost::is_any_of("-"), boost::token_compress_on);
+                if (fields.size() > 1)
+                {
+                    boost::log::core::get()->add_thread_attribute(
+                        "ThreadName", boost::log::attributes::constant<std::string>(fields[1]));
+                }
+            }
+#endif
             setThreadName(m_name.c_str());
             while (m_state != WorkerState::Killing)
             {

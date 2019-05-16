@@ -577,13 +577,13 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == true);
     /// update the committedPrepareCache, callback reHandleCommitPrepareCache
-    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
+    fake_pbft.consensus()->setConsensusBlockNumber(prepareReq.height);
 
     fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
     fake_pbft.consensus()->reqCache()->updateCommittedPrepare();
     /// update the rawPrepareReq
     PrepareReq new_req;
-    new_req.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
+    new_req.height = fake_pbft.consensus()->consensusBlockNumber() + 1;
     fake_pbft.consensus()->reqCache()->addRawPrepare(new_req);
 
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
@@ -647,7 +647,7 @@ BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PrepareReq prepareReq;
     TestIsValidPrepare(fake_pbft, prepareReq, true);
-    prepareReq.height = fake_pbft.consensus()->mutableConsensusNumber();
+    prepareReq.height = fake_pbft.consensus()->consensusBlockNumber();
     prepareReq.view = fake_pbft.consensus()->view();
     fake_pbft.consensus()->reqCache()->addFuturePrepareCache(prepareReq);
     BOOST_CHECK(

@@ -21,6 +21,11 @@
 
 #include "LevelDBStorage2.h"
 #include "Table.h"
+#include "boost/archive/binary_iarchive.hpp"
+#include "boost/archive/binary_oarchive.hpp"
+#include "boost/serialization/map.hpp"
+#include "boost/serialization/serialization.hpp"
+#include "boost/serialization/vector.hpp"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/BasicLevelDB.h>
@@ -33,7 +38,9 @@
 #include <memory>
 #include <thread>
 
+using namespace std;
 using namespace dev;
+using namespace leveldb;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage2::select(
@@ -45,9 +52,7 @@ Entries::Ptr LevelDBStorage2::select(
         entryKey.append("_").append(key);
 
         std::string value;
-        // ReadGuard l(m_remoteDBMutex);
-        auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
-        // l.unlock();
+        auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_LEVELDB_LOG(ERROR)
@@ -59,21 +64,23 @@ Entries::Ptr LevelDBStorage2::select(
         Entries::Ptr entries = std::make_shared<Entries>();
         if (!s.IsNotFound())
         {
-            // parse json
-            std::stringstream ssIn;
-            ssIn << value;
+            std::vector<std::map<std::string, std::string>> res;
+            stringstream ss(value);
+            boost::archive::binary_iarchive ia(ss);
+            ia >> res;
 
-            Json::Value valueJson;
-            ssIn >> valueJson;
-
-            Json::Value values = valueJson["values"];
-            for (auto it = values.begin(); it != values.end(); ++it)
+            for (auto it = res.begin(); it != res.end(); ++it)
             {
                 Entry::Ptr entry = std::make_shared<Entry>();
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    entry->setField(valueIt.key().asString(), valueIt->asString());
+                    if (valueIt->first == ID_FIELD)
+                    {
+                        entry->setID(valueIt->second);
+                        continue;
+                    }
+                    entry->setField(valueIt->first, valueIt->second);
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
@@ -106,25 +113,28 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
         std::shared_ptr<dev::db::LevelDBWriteBatch> batch = m_db->createWriteBatch();
         for (size_t i = 0; i < datas.size(); ++i)
         {
-            std::shared_ptr<std::map<std::string, Json::Value> > key2value =
-                std::make_shared<std::map<std::string, Json::Value> >();
+            shared_ptr<map<string, vector<map<string, string>>>> key2value =
+                make_shared<map<string, vector<map<string, string>>>>();
 
             auto tableInfo = datas[i]->info;
 
-            processEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
+            processDirtyEntries(hash, num, key2value, tableInfo, datas[i]->dirtyEntries);
+            processNewEntries(hash, num, key2value, tableInfo, datas[i]->newEntries);
 
             for (auto it : *key2value)
             {
                 std::string entryKey = tableInfo->name + "_" + it.first;
-                std::stringstream ssOut;
-                ssOut << it.second;
+                stringstream ss;
+                boost::archive::binary_oarchive oa(ss);
+                oa << it.second;
 
-                batch->insertSlice(leveldb::Slice(entryKey), leveldb::Slice(ssOut.str()));
+                batch->insertSlice(Slice(entryKey), Slice(ss.str()));
             }
         }
 
-        m_db->Write(leveldb::WriteOptions(), &batch->writeBatch());
+        leveldb::WriteOptions options;
+        options.sync = false;
+        m_db->Write(options, &batch->writeBatch());
         return datas.size();
     }
     catch (std::exception& e)
@@ -148,9 +158,10 @@ void LevelDBStorage2::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
     m_db = db;
 }
 
-void LevelDBStorage2::processEntries(h256 hash, int64_t num,
-    std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
-    Entries::Ptr entries)
+void LevelDBStorage2::processNewEntries(h256, int64_t num,
+    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+        key2value,
+    TableInfo::Ptr tableInfo, Entries::Ptr entries)
 {
     for (size_t j = 0; j < entries->size(); ++j)
     {
@@ -164,7 +175,7 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
             entryKey.append("_").append(key);
 
             std::string value;
-            auto s = m_db->Get(leveldb::ReadOptions(), leveldb::Slice(entryKey), &value);
+            auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
             // l.unlock();
             if (!s.ok() && !s.IsNotFound())
             {
@@ -177,45 +188,54 @@ void LevelDBStorage2::processEntries(h256 hash, int64_t num,
 
             if (s.IsNotFound())
             {
-                it = key2value->insert(std::make_pair(key, Json::Value())).first;
+                it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
             }
             else
             {
-                std::stringstream ssIn;
-                ssIn << value;
-
-                Json::Value valueJson;
-                ssIn >> valueJson;
-
-                it = key2value->emplace(key, valueJson).first;
+                std::vector<std::map<std::string, std::string>> res;
+                stringstream ss(value);
+                boost::archive::binary_iarchive ia(ss);
+                ia >> res;
+                it = key2value->emplace(key, res).first;
             }
         }
 
-        Json::Value value;
+        std::map<std::string, std::string> value;
         for (auto& fieldIt : *(entry->fields()))
         {
             value[fieldIt.first] = fieldIt.second;
         }
-        value["_hash_"] = hash.hex();
-        ;
-        value["_num_"] = boost::lexical_cast<std::string>(num);
+        value[NUM_FIELD] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
 
-        auto searchIt = std::lower_bound(it->second["values"].begin(), it->second["values"].end(),
-            value, [](const Json::Value& lhs, const Json::Value& rhs) {
-                // LOG(ERROR) << "lhs: " << lhs.toStyledString() << "rhs: " <<
-                // rhs.toStyledString();
-                return boost::lexical_cast<size_t>(lhs["_id_"].asString()) <
-                       boost::lexical_cast<size_t>(rhs["_id_"].asString());
-                return false;
-            });
+        it->second.push_back(value);
+    }
+}
 
-        if (searchIt != it->second["values"].end() && (*searchIt)["_id_"] == value["_id_"])
+void LevelDBStorage2::processDirtyEntries(h256, int64_t num,
+    std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+        key2value,
+    TableInfo::Ptr tableInfo, Entries::Ptr entries)
+{
+    for (size_t j = 0; j < entries->size(); ++j)
+    {
+        auto entry = entries->get(j);
+        auto key = entry->getField(tableInfo->key);
+
+        auto it = key2value->find(key);
+        if (it == key2value->end())
         {
-            *searchIt = value;
+            it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
-        else
+
+        std::map<std::string, std::string> value;
+        for (auto& fieldIt : *(entry->fields()))
         {
-            it->second["values"].append(value);
+            value[fieldIt.first] = fieldIt.second;
         }
+        value[NUM_FIELD] = boost::lexical_cast<std::string>(num);
+        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
+
+        it->second.push_back(value);
     }
 }

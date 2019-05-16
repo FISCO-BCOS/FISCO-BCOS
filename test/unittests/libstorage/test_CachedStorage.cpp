@@ -25,6 +25,8 @@
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -295,10 +297,11 @@ BOOST_AUTO_TEST_CASE(select_condition)
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
-BOOST_AUTO_TEST_CASE(commit)
+BOOST_AUTO_TEST_CASE(commit_single_data)
 {
     h256 h;
     int64_t num = 50;
+    cachedStorage->setMaxForwardBlock(100);
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
     tableData->info->name = "t_test";
@@ -321,6 +324,56 @@ BOOST_AUTO_TEST_CASE(commit)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
+    tableInfo->key = "Name";
+    entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    BOOST_CHECK_EQUAL(entries->size(), 2u);
+
+    for (size_t i = 0; i < entries->size(); ++i)
+    {
+        auto entry = entries->get(i);
+        if (entry->getField("id") == "1")
+        {
+            BOOST_TEST(entry->getID() == 1);
+        }
+        else if (entry->getField("id") == "2")
+        {
+            BOOST_TEST(entry->getID() == 2);
+        }
+        else
+        {
+            BOOST_TEST(false);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(commit_multi_data)
+{
+    h256 h;
+    int64_t num = 50;
+    cachedStorage->setMaxForwardBlock(100);
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+    Entries::Ptr entries = getEntries();
+    tableData->newEntries = entries;
+    datas.push_back(tableData);
+
+    BOOST_TEST(cachedStorage->syncNum() == 0);
+    mockStorage->commitNum = 50;
+    size_t c = cachedStorage->commit(h, num, datas);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    BOOST_TEST(cachedStorage->syncNum() == 50);
+
+    BOOST_CHECK_EQUAL(c, 1u);
+    std::string table("t_test");
+    std::string key("LiSi");
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    tableInfo->key = "Name";
     entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 2u);
 
@@ -347,6 +400,7 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
     h256 h;
     int64_t num = 50;
     std::vector<dev::storage::TableData::Ptr> datas;
+    cachedStorage->setMaxForwardBlock(100);
 
     for (size_t i = 100; i < 200; ++i)
     {
@@ -437,6 +491,114 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 	}
 #endif
 }
+
+BOOST_AUTO_TEST_CASE(ordered_commit)
+{
+    cachedStorage->init();
+    cachedStorage->setBackend(dev::storage::Storage::Ptr());
+
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+
+    Entries::Ptr entries = std::make_shared<Entries>();
+
+    for (size_t i = 0; i < 50; ++i)
+    {
+        boost::random::mt19937 rng;
+        boost::random::uniform_int_distribution<> rand(0, 1000);
+
+        int num = rand(rng);
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("Name", "node");
+        entry->setField("id", boost::lexical_cast<std::string>(num));
+        entries->addEntry(entry);
+    }
+
+    tableData->newEntries = entries;
+
+    std::vector<dev::storage::TableData::Ptr> datas;
+    datas.push_back(tableData);
+
+    cachedStorage->commit(dev::h256(), 0, datas);
+
+    auto cache = cachedStorage->selectNoCondition(
+        dev::h256(), 0, tableData->info, "node", std::make_shared<Condition>());
+
+    ssize_t currentID = -1;
+    for (auto it : *cache->entries())
+    {
+        if (currentID == -1)
+        {
+            currentID = it->getID();
+        }
+        else
+        {
+            BOOST_TEST(currentID <= it->getID());
+            currentID = it->getID();
+        }
+        LOG(TRACE) << "CurrentID: " << it->getID();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
+{
+#if 0
+	cachedStorage->init();
+
+	auto tableInfo = std::make_shared<TableInfo>();
+	tableInfo->name = "t_test";
+	tableInfo->key = "key";
+	tableInfo->fields.push_back("value");
+
+	auto entry = std::make_shared<Entry>();
+	entry->setField("key", "1");
+	entry->setField("value", "2");
+
+	auto data = std::make_shared<dev::storage::TableData>();
+	data->newEntries->addEntry(entry);
+	data->info = tableInfo;
+
+	std::vector<dev::storage::TableData::Ptr> datas;
+	datas.push_back(data);
+	cachedStorage->commit(dev::h256(0), 99, datas);
+
+	for(size_t i=0; i < 100; ++i) {
+		Caches::Ptr caches = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+		BOOST_TEST(caches->key() == "key");
+		BOOST_TEST(caches->num() == 99);
+
+		auto entries = caches->entries();
+		BOOST_TEST(entries->size() == 1);
+
+		auto cacheEntry = entries->get(0);
+		BOOST_TEST(cacheEntry != entry);
+
+		BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
+		BOOST_TEST(cacheEntry->getField("value") == entry->getField("value"));
+
+		cacheEntry->setID(0);
+		cacheEntry->setField("value", boost::lexical_cast<std::string>(i));
+
+		auto newData = std::make_shared<dev::storage::TableData>();
+		newData->newEntries->addEntry(cacheEntry);
+		newData->info = tableInfo;
+
+		std::vector<dev::storage::TableData::Ptr> newDatas;
+		newDatas.push_back(data);
+
+		cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
+	}
+
+	Caches::Ptr result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+	BOOST_TEST(result->num() == 199);
+	auto resultEntries = result->entries();
+	BOOST_TEST(resultEntries->size() == 100);
+#endif
+}
+
+BOOST_AUTO_TEST_CASE(checkAndClear) {}
 
 BOOST_AUTO_TEST_CASE(exception)
 {

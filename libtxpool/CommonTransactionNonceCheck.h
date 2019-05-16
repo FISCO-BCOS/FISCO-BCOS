@@ -36,10 +36,7 @@ namespace txpool
 class CommonTransactionNonceCheck
 {
 public:
-    CommonTransactionNonceCheck(dev::PROTOCOL_ID const& protocolId) : m_protocolId(protocolId)
-    {
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
-    }
+    CommonTransactionNonceCheck(dev::PROTOCOL_ID const& protocolId) : m_protocolId(protocolId) {}
     virtual ~CommonTransactionNonceCheck() = default;
     virtual void delCache(dev::eth::NonceKeyType const& key);
     virtual void delCache(dev::eth::Transactions const& _transcations);
@@ -50,7 +47,6 @@ public:
 
 protected:
     dev::PROTOCOL_ID m_protocolId;
-    dev::GROUP_ID m_groupId;
     mutable SharedMutex m_lock;
     std::unordered_set<dev::eth::NonceKeyType> m_cache;
 };

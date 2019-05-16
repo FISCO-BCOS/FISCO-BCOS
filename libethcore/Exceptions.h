@@ -96,6 +96,7 @@ DEV_SIMPLE_EXCEPTION(InvalidAddress);
 DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
+DEV_SIMPLE_EXCEPTION(EmptySealers);
 
 struct VMException : Exception
 {
@@ -108,6 +109,7 @@ struct VMException : Exception
 ETH_SIMPLE_EXCEPTION_VM(BadInstruction);
 ETH_SIMPLE_EXCEPTION_VM(BadJumpDestination);
 ETH_SIMPLE_EXCEPTION_VM(OutOfGas);
+ETH_SIMPLE_EXCEPTION_VM(GasOverflow);
 ETH_SIMPLE_EXCEPTION_VM(OutOfStack);
 ETH_SIMPLE_EXCEPTION_VM(StackUnderflow);
 ETH_SIMPLE_EXCEPTION_VM(DisallowedStateChange);

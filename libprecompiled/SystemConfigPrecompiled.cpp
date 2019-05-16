@@ -70,7 +70,7 @@ bytes SystemConfigPrecompiled::call(
                 << LOG_BADGE("SystemConfigPrecompiled")
                 << LOG_DESC("SystemConfigPrecompiled set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-            getOut(out, CODE_INVALID_CONFIGURATION_VALUES);
+            getErrorCodeOut(out, CODE_INVALID_CONFIGURATION_VALUES);
             return out;
         }
 
@@ -123,7 +123,7 @@ bytes SystemConfigPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    getOut(out, result);
+    getErrorCodeOut(out, result);
     return out;
 }
 

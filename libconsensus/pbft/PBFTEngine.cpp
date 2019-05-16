@@ -60,7 +60,6 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
-    m_connectedNode = m_nodeNum;
     PBFTENGINE_LOG(INFO) << "[#PBFT init env successfully]";
 }
 
@@ -138,12 +137,16 @@ void PBFTEngine::resetConfig()
         }
         m_nodeNum = m_sealerList.size();
     }
+    if (m_nodeNum < 1)
+    {
+        PBFTENGINE_LOG(ERROR) << LOG_DESC(
+            "Must set at least one pbft sealer, current number of sealers is zero");
+        BOOST_THROW_EXCEPTION(
+            EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
+    }
     m_f = (m_nodeNum - 1) / 3;
     m_cfgErr = (node_idx == MAXIDX);
-    {
-        WriteGuard l(m_idxMutex);
-        m_idx = node_idx;
-    }
+    m_idx = node_idx;
 }
 
 /// init pbftMsgBackup
@@ -654,10 +657,8 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
-    {
-        WriteGuard l(x_sealingNumber);
-        m_sealingNumber = sealing.block.getTransactionSize();
-    }
+
+    m_sealingNumber = sealing.block.getTransactionSize();
 
     /// return directly if it's an empty block
     if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -1544,13 +1545,13 @@ const std::string PBFTEngine::consensusStatus()
     json_spirit::Object statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("connectedNodes", m_connectedNode));
+    statusObj.push_back(json_spirit::Pair("connectedNodes", IDXTYPE(m_connectedNode)));
     /// get the current view
     statusObj.push_back(json_spirit::Pair("currentView", m_view));
     /// get toView
     statusObj.push_back(json_spirit::Pair("toView", m_toView));
     /// get leader failed or not
-    statusObj.push_back(json_spirit::Pair("leaderFailed", m_leaderFailed));
+    statusObj.push_back(json_spirit::Pair("leaderFailed", bool(m_leaderFailed)));
     status.push_back(statusObj);
 
     /// get view of node id

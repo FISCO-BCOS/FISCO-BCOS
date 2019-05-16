@@ -37,76 +37,85 @@ using namespace dev::storage;
 
 Entry::Entry()
 {
-    m_fields.insert(std::make_pair(ID_FIELD, "0"));
-    m_fields.insert(std::make_pair(STATUS, "0"));
+    checkRef();
+}
+
+Entry::~Entry()
+{
+    if (m_data)
+    {
+        if ((*m_data->m_refCount) > 0)
+        {
+            --(*m_data->m_refCount);
+        }
+    }
 }
 
 uint32_t Entry::getID() const
 {
-    // dev::ReadGuard l(x_fields);
-    if (m_ID)
-    {
-        return m_ID;
-    }
-
-    auto it = m_fields.find(ID_FIELD);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        const_cast<Entry*>(this)->m_ID = boost::lexical_cast<uint32_t>(it->second);
-        return m_ID;
-    }
+    return m_ID;
 }
 
 void Entry::setID(uint32_t id)
 {
-    auto it = m_fields.find(ID_FIELD);
-    if (it == m_fields.end())
-    {
-        m_fields.insert(std::make_pair(ID_FIELD, boost::lexical_cast<std::string>(id)));
-    }
-    else
-    {
-        it->second = boost::lexical_cast<std::string>(id);
-    }
-
     m_ID = id;
+
+    m_dirty = true;
+}
+
+void Entry::setID(const std::string& id)
+{
+    m_ID = boost::lexical_cast<uint32_t>(id);
 
     m_dirty = true;
 }
 
 std::string Entry::getField(const std::string& key) const
 {
-    auto it = m_fields.find(key);
-
-    if (it != m_fields.end())
+    if (m_data)
     {
-        return it->second;
-    }
-    STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
+        auto it = m_data->m_fields->find(key);
 
+        if (it != m_data->m_fields->end())
+        {
+            return it->second;
+        }
+    }
+
+    STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
     return "";
 }
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-    auto it = m_fields.find(key);
+    checkRef();
 
-    if (it != m_fields.end())
+    if (key == ID_FIELD)
     {
-        // m_capacity -= (key.size() + it->second.size());
+        return;
+    }
+
+    if (key == STATUS)
+    {
+        setStatus(value);
+        return;
+    }
+
+    auto it = m_data->m_fields->find(key);
+
+    if (it != m_data->m_fields->end())
+    {
+        m_capacity -= (key.size() + it->second.size());
         it->second = value;
-        // m_capacity += (key.size() + value.size());
+        m_capacity += (key.size() + value.size());
     }
     else
     {
-        m_fields.insert(std::make_pair(key, value));
-        // m_capacity += (key.size() + value.size());
+        m_data->m_fields->insert(std::make_pair(key, value));
+        m_capacity += (key.size() + value.size());
     }
 
+    assert(m_capacity >= 0);
     m_dirty = true;
 }
 
@@ -122,64 +131,58 @@ void Entry::setTempIndex(size_t index)
 
 const std::map<std::string, std::string>* Entry::fields() const
 {
-    return &m_fields;
+    return m_data->m_fields.get();
 }
 
-uint32_t Entry::getStatus() const
+int Entry::getStatus() const
 {
-    // dev::ReadGuard l(x_fields);
-    auto it = m_fields.find(STATUS);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        return boost::lexical_cast<uint32_t>(it->second);
-    }
+    return m_status;
 }
 
 void Entry::setStatus(int status)
 {
-    // dev::WriteGuard l(x_fields);
-    auto it = m_fields.find(STATUS);
-    if (it == m_fields.end())
+    checkRef();
+
+    auto it = m_data->m_fields->find(STATUS);
+    if (it == m_data->m_fields->end())
     {
-        m_fields.insert(std::make_pair(STATUS, boost::lexical_cast<std::string>(status)));
+        m_data->m_fields->insert(std::make_pair(STATUS, boost::lexical_cast<std::string>(status)));
     }
     else
     {
         it->second = boost::lexical_cast<std::string>(status);
     }
 
+    m_status = status;
+    m_dirty = true;
+}
+
+void Entry::setStatus(const std::string& status)
+{
+    checkRef();
+
+    auto it = m_data->m_fields->find(STATUS);
+    if (it == m_data->m_fields->end())
+    {
+        m_data->m_fields->insert(std::make_pair(STATUS, status));
+    }
+    else
+    {
+        it->second = status;
+    }
+
+    m_status = boost::lexical_cast<int>(status);
     m_dirty = true;
 }
 
 uint32_t Entry::num() const
 {
-    auto it = m_fields.find(NUM_FIELD);
-    if (it == m_fields.end())
-    {
-        return 0;
-    }
-    else
-    {
-        return boost::lexical_cast<uint32_t>(it->second);
-    }
+    return m_num;
 }
 
 void Entry::setNum(uint32_t num)
 {
-    auto it = m_fields.find(NUM_FIELD);
-    if (it == m_fields.end())
-    {
-        m_fields.insert(std::make_pair(NUM_FIELD, boost::lexical_cast<std::string>(num)));
-    }
-    else
-    {
-        it->second = boost::lexical_cast<std::string>(num);
-    }
-
+    m_num = num;
     m_dirty = true;
 }
 
@@ -213,20 +216,49 @@ void Entry::setDeleted(bool deleted)
     m_deleted = deleted;
 }
 
-size_t Entry::capacity() const
+ssize_t Entry::capacity() const
 {
     return m_capacity;
 }
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
-    m_dirty = entry->m_dirty;
-    m_fields = entry->m_fields;
-    m_tempIndex = entry->m_tempIndex;
-    m_force = entry->m_force;
     m_ID = entry->m_ID;
+    m_status = entry->m_status;
+    m_tempIndex = entry->m_tempIndex;
+    m_num = entry->m_num;
+    m_dirty = entry->m_dirty;
+    m_force = entry->m_force;
     m_deleted = entry->m_deleted;
     m_capacity = entry->m_capacity;
+
+    tbb::mutex::scoped_lock lock(m_data->m_mutex);
+    m_data = entry->m_data;
+    *(m_data->m_refCount) += 1;
+}
+
+void Entry::checkRef()
+{
+    if (!m_data)
+    {
+        m_data = std::make_shared<EntryData>(
+            std::make_shared<size_t>(), std::make_shared<std::map<std::string, std::string> >());
+        *(m_data->m_refCount) = 0;
+        m_data->m_fields->insert(std::make_pair(ID_FIELD, "0"));
+        m_data->m_fields->insert(std::make_pair(STATUS, "0"));
+    }
+
+    tbb::mutex::scoped_lock lock(m_data->m_mutex);
+    if (m_data->m_refCount > 0)
+    {
+        auto m_oldData = m_data;
+        m_data = std::make_shared<EntryData>(
+            std::make_shared<size_t>(), std::make_shared<std::map<std::string, std::string> >());
+        *(m_data->m_refCount) = 0;
+        *(m_data->m_fields) = *(m_oldData->m_fields);
+
+        *(m_oldData->m_refCount) -= 1;
+    }
 }
 
 bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
@@ -251,8 +283,20 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
     }
 
     for (auto lIter = lFields->begin(), rIter = rFields->begin();
-         lIter != lFields->end() && rIter != rFields->end(); ++lIter, ++rIter)
+         lIter != lFields->end() && rIter != rFields->end();)
     {
+        if (lIter->first == NUM_FIELD)
+        {
+            ++lIter;
+            continue;
+        }
+
+        if (rIter->first == NUM_FIELD)
+        {
+            ++rIter;
+            continue;
+        }
+
         if (lIter->first != rIter->first)
         {
             return lIter->first < rIter->first;
@@ -262,14 +306,37 @@ bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
         {
             return lIter->second < rIter->second;
         }
+
+        ++lIter;
+        ++rIter;
     }
 
     return false;
 }
 
+Entries::Vector::iterator Entries::begin()
+{
+    return m_entries.begin();
+}
+
+Entries::Vector::iterator Entries::end()
+{
+    return m_entries.end();
+}
+
+Entries::Vector::reference Entries::operator[](Vector::size_type index)
+{
+    return m_entries[index];
+}
+
 size_t Entries::size() const
 {
     return m_entries.size();
+}
+
+void Entries::resize(size_t n)
+{
+    m_entries.resize(n);
 }
 
 Entry::ConstPtr Entries::get(size_t i) const
@@ -300,8 +367,7 @@ Entry::Ptr Entries::get(size_t i)
 
 size_t Entries::addEntry(Entry::Ptr entry)
 {
-    auto index = m_entries.size();
-    m_entries.push_back(entry);
+    size_t index = m_entries.push_back(entry) - m_entries.begin();
     m_dirty = true;
 
     return index;
@@ -326,15 +392,10 @@ void Entries::setDirty(bool dirty)
     m_dirty = dirty;
 }
 
-void Entries::copyFrom(Entries::Ptr entries)
+void Entries::shallowFrom(Entries::Ptr entries)
 {
     m_entries = entries->m_entries;
     m_dirty = entries->m_dirty;
-}
-
-tbb::concurrent_vector<Entry::Ptr, tbb::zero_allocator<Entry::Ptr> >* Entries::entries()
-{
-    return &m_entries;
 }
 
 size_t ConcurrentEntries::size() const
@@ -513,6 +574,83 @@ bool Condition::process(Entry::Ptr entry)
         {
             auto fields = entry->fields();
 
+            for (auto it : m_conditions)
+            {
+                auto fieldIt = fields->find(it.first);
+                if (fieldIt != fields->end())
+                {
+                    if (it.second.left.second == it.second.right.second && it.second.left.first &&
+                        it.second.right.first)
+                    {
+                        if (it.second.left.second == fieldIt->second)
+                        {
+                            // point hited
+                            continue;
+                        }
+                        else
+                        {
+                            // point missed
+                            return false;
+                        }
+                    }
+
+                    if (it.second.left.second != UNLIMITED)
+                    {
+                        auto lhs = boost::lexical_cast<int64_t>(it.second.left.second);
+                        auto rhs = (int64_t)0;
+                        if (!fieldIt->second.empty())
+                        {
+                            rhs = boost::lexical_cast<int64_t>(fieldIt->second);
+                        }
+
+                        if (it.second.left.first)
+                        {
+                            if (!(lhs <= rhs))
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            if (!(lhs < rhs))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+
+                    if (it.second.right.second != UNLIMITED)
+                    {
+                        auto lhs = boost::lexical_cast<int64_t>(it.second.right.second);
+                        auto rhs = (int64_t)0;
+                        if (!fieldIt->second.empty())
+                        {
+                            rhs = boost::lexical_cast<int64_t>(fieldIt->second);
+                        }
+
+                        if (it.second.right.first)
+                        {
+                            if (!(lhs >= rhs))
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            if (!(lhs > rhs))
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+#if 0
             for (auto it : *fields)
             {
                 auto condIt = m_conditions.find(it.first);
@@ -584,6 +722,7 @@ bool Condition::process(Entry::Ptr entry)
                     }
                 }
             }
+#endif
         }
     }
     catch (std::exception& e)

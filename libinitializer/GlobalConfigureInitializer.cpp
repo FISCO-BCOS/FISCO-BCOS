@@ -22,6 +22,9 @@
 
 
 #include "GlobalConfigureInitializer.h"
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 using namespace std;
 using namespace dev;
@@ -29,26 +32,56 @@ using namespace dev::initializer;
 
 DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 
-void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _pt)
+bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versionNumber)
+{
+    // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
+    vector<string> versions;
+    boost::split(versions, _version, boost::is_any_of("."));
+    if (versions.size() != 3)
+    {
+        return false;
+    }
+    try
+    {
+        for (size_t i = 0; i < versions.size(); ++i)
+        {
+            _versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
+            _versionNumber <<= 8;
+        }
+    }
+    catch (const boost::bad_lexical_cast& e)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
+        return false;
+    }
+    return true;
+}
+
+void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 {
     /// default version is RC1
     std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
+    uint32_t versionNumber = 0;
     if (dev::stringCmpIgnoreCase(version, "2.0.0-rc1") == 0)
     {
-        g_BCOSConfig.setVersion(RC1_VERSION);
-        g_BCOSConfig.setSupportedVersion("2.0.0-rc1");
+        g_BCOSConfig.setSupportedVersion(version, RC1_VERSION);
     }
     else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
     {
-        g_BCOSConfig.setVersion(RC2_VERSION);
-        g_BCOSConfig.setSupportedVersion("2.0.0-rc2");
+        g_BCOSConfig.setSupportedVersion(version, RC2_VERSION);
+    }
+    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc3") == 0)
+    {
+        g_BCOSConfig.setSupportedVersion(version, RC3_VERSION);
+    }
+    else if (getVersionNumber(version, versionNumber))
+    {
+        g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
     }
     else
     {
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion());
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(version));
     }
-
-    INITIALIZER_LOG(INFO) << LOG_KV("compatibility", version);
 
     std::string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
@@ -80,19 +113,19 @@ void GlobalConfigureInitializer::initConfig(const boost::property_tree::ptree& _
     if (chainId < 0)
     {
         BOOST_THROW_EXCEPTION(
-            ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive !"));
+            ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive!"));
     }
     g_BCOSConfig.setChainId(chainId);
 
 
-    INITIALIZER_LOG(DEBUG) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
-                           << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
-                           << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
-                           << LOG_KV("url.port",
-                                  std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                           << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
-                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
-                           << LOG_KV("version_str", version)
-                           << LOG_KV("version", g_BCOSConfig.version())
-                           << LOG_KV("chainId", g_BCOSConfig.chainId());
+    INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
+                          << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
+                          << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
+                          << LOG_KV("url.port",
+                                 std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
+                          << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
+                          << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
+                          << LOG_KV("compatibilityVersion", version)
+                          << LOG_KV("versionNumber", g_BCOSConfig.version())
+                          << LOG_KV("chainId", g_BCOSConfig.chainId());
 }

@@ -45,12 +45,33 @@ using namespace dev::blockchain;
 using namespace dev::consensus;
 using namespace dev::sync;
 using namespace dev::precompiled;
+using namespace std;
+
 namespace dev
 {
 namespace ledger
 {
-bool Ledger::initLedger()
+bool Ledger::initLedger(const std::string& _configFilePath)
 {
+#ifndef FISCO_EASYLOG
+    BOOST_LOG_SCOPED_THREAD_ATTR(
+        "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
+#endif
+    Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
+                     << LOG_KV("baseDir", m_param->baseDir());
+    /// The file group.X.genesis is required, otherwise the program terminates.
+    /// load genesis config of group
+    initGenesisConfig(_configFilePath);
+    GenesisBlockParam genesisParam;
+    initGenesisMark(genesisParam);
+    /// The file group.X.ini is available by default.
+    /// In this case, the configuration item uses the default value.
+    /// load ini config of group for TxPool/Sync modules
+    std::string iniConfigFileName = _configFilePath;
+    boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+
+    /// you should invoke initGenesisConfig first before invoke initIniConfig
+    initIniConfig(iniConfigFileName);
     if (!m_param)
         return false;
     /// init dbInitializer
@@ -61,12 +82,14 @@ bool Ledger::initLedger()
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
+    /// set group ID for storage
+    m_dbInitializer->storage()->setGroupID(m_groupId);
     /// init the DB
-    bool ret = initBlockChain();
+    bool ret = initBlockChain(genesisParam);
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    m_dbInitializer->initStateDB(genesisHash);
+    m_dbInitializer->initState(genesisHash);
     if (!m_dbInitializer->stateFactory())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
@@ -84,11 +107,11 @@ bool Ledger::initLedger()
  * @brief: init configuration related to the ledger with specified configuration file
  * @param configPath: the path of the config file
  */
-void Ledger::initConfig(std::string const& configPath)
+void Ledger::initGenesisConfig(std::string const& configPath)
 {
     try
     {
-        Ledger_LOG(INFO) << LOG_BADGE("initConfig")
+        Ledger_LOG(INFO) << LOG_BADGE("initGenesisConfig")
                          << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig")
                          << LOG_KV("configFile", configPath);
         ptree pt;
@@ -96,18 +119,24 @@ void Ledger::initConfig(std::string const& configPath)
         read_ini(configPath, pt);
         /// init params related to consensus
         initConsensusConfig(pt);
-        /// db params initialization
-        initDBConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
-        /// init params related to genesis: timestamp
-        initGenesisConfig(pt);
+        /// use UTCTime directly as timeStamp in case of the clock differences between machines
+        m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
+        Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+                          << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
+        /// set state db related param
+        m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+        // Compatibility with previous versions RC2/RC1
+        m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+        m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+        m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
     }
     catch (std::exception& e)
     {
         std::string error_info = "init genesis config failed for " + toString(m_groupId) +
                                  " failed, error_msg: " + boost::diagnostic_information(e);
-        Ledger_LOG(ERROR) << LOG_DESC("initConfig Failed")
+        Ledger_LOG(ERROR) << LOG_DESC("initGenesisConfig Failed")
                           << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
         exit(1);
@@ -120,31 +149,34 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
+    /// read the configuration file for a specified group
+    read_ini(iniConfigFileName, pt);
     if (boost::filesystem::exists(iniConfigFileName))
     {
         /// read the configuration file for a specified group
         read_ini(iniConfigFileName, pt);
     }
+    /// db params initialization
+    initDBConfig(pt);
     /// init params related to txpool
     initTxPoolConfig(pt);
     /// init params related to sync
     initSyncConfig(pt);
     initTxExecuteConfig(pt);
-
     /// init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
 }
 
 void Ledger::initTxExecuteConfig(ptree const& pt)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
     {
-        m_param->mutableTxParam().enableParallel = false;
+        m_param->mutableTxParam().enableParallel =
+            pt.get<bool>("tx_execute.enable_parallel", false);
     }
     else
     {
-        bool enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
-        m_param->mutableTxParam().enableParallel = enableParallel;
+        m_param->mutableTxParam().enableParallel = false;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
                       << LOG_KV("enableParallel", m_param->mutableTxParam().enableParallel);
@@ -308,20 +340,31 @@ void Ledger::initSyncConfig(ptree const& pt)
 /// dbpath: data to place all data of the group, default is "data"
 void Ledger::initDBConfig(ptree const& pt)
 {
-    /// init the basic config
-    /// set storage db related param
-    m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+        m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+        m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+// TODO: use below before release RC3
+#if 0
+        if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
+        {
+            m_param->mutableStorageParam().type = "RocksDB";
+            Ledger_LOG(WARNING) << "LevelDB is deprecated!! RocksDB is now recommended, because "
+                                   "RocksDB is better than LevelDB in performance.";
+        }
+#endif
+    }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
-    m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
-    m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
-    m_param->mutableStorageParam().maxStoreKey = pt.get<int>("storage.max_store_key", 10000);
-    if (m_param->mutableStorageParam().maxStoreKey < 0)
+    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
+
+    if (m_param->mutableStorageParam().maxCapacity < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                              << errinfo_comment("Please set storage.max_store_key to positive !"));
+                              << errinfo_comment("Please set storage.max_capacity to positive !"));
     }
 
-    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 100);
+    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 10);
     if (m_param->mutableStorageParam().maxForwardBlock < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
@@ -334,10 +377,31 @@ void Ledger::initDBConfig(ptree const& pt)
     }
     /// set state db related param
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
+
+    // read db config from config eg:mysqlip mysqlport and so on
+    m_param->mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
+    m_param->mutableStorageParam().dbIP = pt.get<std::string>("storage.db_ip", "127.0.0.1");
+    m_param->mutableStorageParam().dbPort = pt.get<int>("storage.db_port", 3306);
+    m_param->mutableStorageParam().dbUsername = pt.get<std::string>("storage.db_username", "");
+    m_param->mutableStorageParam().dbPasswd = pt.get<std::string>("storage.db_passwd", "");
+    m_param->mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
+    m_param->mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
+    m_param->mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
+    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 20);
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
-                      << LOG_KV("baseDir", m_param->baseDir());
+                      << LOG_KV("baseDir", m_param->baseDir())
+                      << LOG_KV("dbtype", m_param->mutableStorageParam().dbType)
+                      << LOG_KV("dbip", m_param->mutableStorageParam().dbIP)
+                      << LOG_KV("dbport", m_param->mutableStorageParam().dbPort)
+                      << LOG_KV("dbusername", m_param->mutableStorageParam().dbUsername)
+                      << LOG_KV("dbpasswd", m_param->mutableStorageParam().dbPasswd)
+                      << LOG_KV("dbname", m_param->mutableStorageParam().dbName)
+                      << LOG_KV("dbcharset", m_param->mutableStorageParam().dbCharset)
+                      << LOG_KV("initconnections", m_param->mutableStorageParam().initConnections)
+                      << LOG_KV("maxconnections", m_param->mutableStorageParam().maxConnections);
 }
 
 /// init tx related configurations
@@ -355,27 +419,26 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
 
-/// init genesis configuration
-void Ledger::initGenesisConfig(boost::property_tree::ptree const& pt)
-{
-    /// use UTCTime directly as timeStamp in case of the clock differences between machines
-    m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
-                      << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
-}
-
 /// init mark of this group
-void Ledger::initMark()
+void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
 {
     std::stringstream s;
     s << int(m_groupId) << "-";
     s << m_param->mutableGenesisParam().nodeListMark << "-";
     s << m_param->mutableConsensusParam().consensusType << "-";
-    s << m_param->mutableStorageParam().type << "-";
+    if (g_BCOSConfig.version() <= RC2_VERSION)
+    {
+        s << m_param->mutableStorageParam().type << "-";
+    }
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
     s << m_param->mutableTxParam().txGasLimit;
     m_param->mutableGenesisParam().genesisMark = s.str();
+    genesisParam = GenesisBlockParam{m_param->mutableGenesisParam().genesisMark,
+        m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
+        m_param->mutableConsensusParam().consensusType, m_param->mutableStorageParam().type,
+        m_param->mutableStateParam().type, m_param->mutableConsensusParam().maxTransactions,
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);
 }
@@ -424,7 +487,7 @@ bool Ledger::initBlockVerifier()
     return true;
 }
 
-bool Ledger::initBlockChain()
+bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
     if (!m_dbInitializer->storage())
@@ -437,22 +500,18 @@ bool Ledger::initBlockChain()
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
     m_blockChain = blockChain;
-    std::string consensusType = m_param->mutableConsensusParam().consensusType;
-    std::string storageType = m_param->mutableStorageParam().type;
-    std::string stateType = m_param->mutableStateParam().type;
-    GenesisBlockParam initParam = {m_param->mutableGenesisParam().genesisMark,
-        m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
-        consensusType, storageType, stateType, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
-    bool ret = m_blockChain->checkAndBuildGenesisBlock(initParam);
+    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)
     {
         /// It is a subsequent block without same extra data, so do reset.
         Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
                           << LOG_DESC("The configuration item will be reset");
-        m_param->mutableConsensusParam().consensusType = initParam.consensusType;
-        m_param->mutableStorageParam().type = initParam.storageType;
-        m_param->mutableStateParam().type = initParam.stateType;
+        m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
+        if (g_BCOSConfig.version() <= RC2_VERSION)
+        {
+            m_param->mutableStorageParam().type = _genesisParam.storageType;
+        }
+        m_param->mutableStateParam().type = _genesisParam.stateType;
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;

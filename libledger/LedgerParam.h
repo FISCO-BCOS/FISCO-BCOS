@@ -85,7 +85,19 @@ struct StorageParam
     std::string topic;
     size_t timeout;
     int maxRetry;
-    int maxStoreKey;
+    // MB
+    int maxCapacity;
+
+    // for zdb storage
+    std::string dbType;
+    std::string dbIP;
+    uint32_t dbPort;
+    std::string dbUsername;
+    std::string dbPasswd;
+    std::string dbName;
+    std::string dbCharset;
+    uint32_t initConnections;
+    uint32_t maxConnections;
     int maxForwardBlock;
 };
 struct StateParam
@@ -95,7 +107,7 @@ struct StateParam
 struct TxParam
 {
     int64_t txGasLimit;
-    bool enableParallel;
+    bool enableParallel = false;
 };
 class LedgerParam : public LedgerParamInterface
 {

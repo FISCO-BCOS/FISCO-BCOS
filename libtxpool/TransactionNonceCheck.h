@@ -30,14 +30,15 @@
 using namespace dev::eth;
 using namespace dev::blockchain;
 
-#define NONCECHECKER_LOG(LEVEL)                                                                \
-    LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][p:" << std::to_string(m_protocolId) \
-               << "][TXPOOL][TransactionNonceChecker]"
+#define NONCECHECKER_LOG(LEVEL)                                                        \
+    LOG(LEVEL) << "[p:" << std::to_string(m_protocolId) << "] " << LOG_BADGE("TXPOOL") \
+               << LOG_BADGE("TransactionNonceChecker")
 
 namespace dev
 {
 namespace txpool
 {
+using NonceVec = std::vector<dev::eth::NonceKeyType>;
 class TransactionNonceCheck : public CommonTransactionNonceCheck
 {
 public:
@@ -56,8 +57,18 @@ public:
 
     bool isBlockLimitOk(dev::eth::Transaction const& _trans);
 
+    void getNonceAndUpdateCache(
+        NonceVec& nonceVec, int64_t const& blockNumber, bool const& update = true);
+
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::vector<NonceVec> nonce_vec;
+    /// cache the block nonce to in case of accessing the DB to get nonces of given block frequently
+    /// key: block number
+    /// value: all the nonces of a given block
+    /// we cache at most m_maxBlockLimit entries(occuppy about 32KB)
+    std::map<int64_t, NonceVec> m_blockNonceCache;
+
     int64_t m_startblk;
     int64_t m_endblk;
     unsigned m_maxBlockLimit = 1000;

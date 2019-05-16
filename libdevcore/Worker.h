@@ -67,6 +67,7 @@ protected:
     virtual ~Worker() { terminate(); }
 
     /// Allows changing worker name if work is stopped.
+    /// m_name: ${module}-${groupID}
     void setName(std::string const& _n)
     {
         if (!isWorking())

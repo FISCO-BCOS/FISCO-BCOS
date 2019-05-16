@@ -35,9 +35,8 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
 {
-    (void)condition;
     try
     {
         std::string entryKey = tableInfo->name;
@@ -127,7 +126,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
                 value[fieldIt.first] = fieldIt.second;
             }
             value["_hash_"] = hash.hex();
-            value["_num_"] = num;
+            value[NUM_FIELD] = num;
             entry["values"].append(value);
         }
 

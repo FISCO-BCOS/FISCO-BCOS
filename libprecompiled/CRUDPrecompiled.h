@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "Common.h"
+#include "libstorage/Table.h"
 
 namespace dev
 {
@@ -30,6 +31,16 @@ class Table;
 
 namespace precompiled
 {
+#if 0
+contract CRUD
+{
+    function insert(string tableName, string key, string entry, string optional) public returns(int);
+    function update(string tableName, string key, string entry, string condition, string optional) public returns(int);
+    function remove(string tableName, string key, string condition, string optional) public returns(int);
+    function select(string tableName, string key, string condition, string optional) public constant returns(string);
+}
+#endif
+
 class CRUDPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
@@ -41,6 +52,10 @@ public:
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address());
+
+private:
+    int parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
+    int parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition);
 };
 
 }  // namespace precompiled

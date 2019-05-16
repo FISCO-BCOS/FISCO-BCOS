@@ -91,6 +91,7 @@ using bytesSec = secure_vector<byte>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
+
 // unsigned int64
 using u64 = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<64, 64,
     boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>;
@@ -132,6 +133,7 @@ using u256HashMap = std::unordered_map<u256, u256>;
 
 // String types.
 using strings = std::vector<std::string>;
+
 using string64 = std::array<char, 64>;
 // Fixed-length string types.
 using string32 = std::array<char, 32>;
@@ -393,5 +395,25 @@ public:
 private:
     std::unordered_set<T> m_set;
     std::queue<T> m_queue;
+};
+
+// do not use TIME_RECORD in tbb code block
+#define __TIME_RECORD(name, var, line) ::dev::TimeRecorder var##line(__FUNCTION__, name)
+#define _TIME_RECORD(name, line) __TIME_RECORD(name, _time_anonymous, line)
+#define TIME_RECORD(name) _TIME_RECORD(name, __LINE__)
+
+class TimeRecorder
+{
+public:
+    TimeRecorder(const std::string& function, const std::string& name);
+    ~TimeRecorder();
+
+private:
+    std::string m_function;
+    static thread_local std::string m_name;
+    static thread_local std::chrono::system_clock::time_point m_timePoint;
+    static thread_local size_t m_heapCount;
+    static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point>>
+        m_record;
 };
 }  // namespace dev

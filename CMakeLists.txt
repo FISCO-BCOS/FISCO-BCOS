@@ -25,7 +25,7 @@ list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
 project(FISCO-BCOS VERSION "2.0.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
-set(VERSION_SUFFIX "-rc2")
+set(VERSION_SUFFIX "-rc3")
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -55,6 +55,7 @@ include(EthDependencies)
 include(ProjectTBB)
 include(ProjectSnappy)
 include(ProjectLevelDB)
+include(ProjectRocksDB)
 include(ProjectMHD)
 include(ProjectCryptopp)
 include(ProjectSecp256k1)
@@ -62,6 +63,7 @@ include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
 include(ProjectTASSL)
 include(ProjectBoost)
+include(ProjectLibzdb)
 
 #Global include path for all libs.
 include_directories("${CMAKE_SOURCE_DIR}" "utils")

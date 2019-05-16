@@ -26,7 +26,10 @@ namespace dev
 namespace storage
 {
 #define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
-#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << "[STORAGE] [LEVELDB]"
+#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("LEVELDB")
+#define CACHED_STORAGE_LOG(LEVEL)                                                   \
+    LOG(LEVEL) << "[g:" << std::to_string(groupID()) << "]" << LOG_BADGE("STORAGE") \
+               << LOG_BADGE("CachedStorage")
 
 /// \brief Sign of the DB key is valid or not
 const char* const ID_FIELD = "_id_";
@@ -49,8 +52,8 @@ const char* const SYS_ACCESS_TABLE = "_sys_table_access_";
 const char* const USER_TABLE_PREFIX = "_user_";
 const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 
-const int CODE_NO_AUTHORIZED = 50000;
-const int CODE_TABLE_NAME_ALREADY_EXIST = 50001;
+const int CODE_NO_AUTHORIZED = -50000;
+const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
 
 }  // namespace storage
 }  // namespace dev
