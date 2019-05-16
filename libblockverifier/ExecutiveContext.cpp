@@ -142,10 +142,6 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         if (p->isParallelPrecompiled())
         {
             auto ret = make_shared<vector<string>>(p->getParallelTag(ref(_tx.data())));
-            for (string& critical : *ret)
-            {
-                critical += _tx.receiveAddress().hex();
-            }
             return ret;
         }
         else
@@ -201,6 +197,11 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 }
 
                 res->resize((size_t)config->criticalSize);
+
+                for (string& critical : *ret)
+                {
+                    critical += _tx.receiveAddress().hex();
+                }
 
                 return res;
             }
