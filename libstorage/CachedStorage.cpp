@@ -140,7 +140,7 @@ Entries::Ptr CachedStorage::select(
     TIME_RECORD("Check and clear");
     auto now = std::chrono::system_clock::now();
     std::chrono::seconds elapseds = now - m_lastClear;
-    if(elapseds > 10) {
+    if(elapseds.count() > 10) {
     	m_lastClear = now;
     	checkAndClear();
     }
