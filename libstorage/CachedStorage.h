@@ -145,7 +145,7 @@ private:
     size_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
 
-    tbb::atomic<std::chrono::system_clock::time_point> m_lastClear = 0;
+    std::chrono::system_clock::time_point m_lastClear;
     dev::ThreadPool::Ptr m_taskThreadPool;
 
     // stat
