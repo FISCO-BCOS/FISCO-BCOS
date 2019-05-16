@@ -33,6 +33,10 @@
 using namespace dev;
 using namespace dev::storage;
 
+Caches::Caches() {
+	m_entries = std::make_shared<Entries>();
+}
+
 std::string Caches::key()
 {
     return m_key;
@@ -137,10 +141,9 @@ Entries::Ptr CachedStorage::select(
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
 
-    TIME_RECORD("Check and clear");
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<double> elapseds = now - m_lastClear;
-    if(elapseds.count() > 10.0) {
+    if(elapseds.count() > 1.0) {
     	m_lastClear = now;
     	checkAndClear();
     }
@@ -522,9 +525,11 @@ size_t CachedStorage::ID()
 
 void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacity)
 {
-    tbb::mutex::scoped_lock lock(m_cachesMutex);
+    tbb::mutex::scoped_lock lock(m_mruMutex);
 
-    updateCapacity(capacity);
+    if(capacity != 0) {
+    	updateCapacity(capacity);
+    }
 
     auto r = m_mru.push_back(std::make_pair(table, key));
     if (!r.second)
@@ -562,7 +567,9 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 
 void CachedStorage::checkAndClear()
 {
+	TIME_RECORD("Check and clear");
 	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	tbb::mutex::scoped_lock lock2(m_mruMutex);
 
     bool needClear = false;
     size_t clearTimes = 0;
