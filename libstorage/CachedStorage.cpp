@@ -151,11 +151,9 @@ Entries::Ptr CachedStorage::select(
 
     auto out = std::make_shared<Entries>();
 
-    TIME_RECORD("Select no condition");
 	auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
-	TIME_RECORD("Process condition");
-	auto caches = std::get<0>(result);
+	Caches::Ptr caches = std::get<0>(result);
 	for (size_t i = 0; i < caches->entries()->size(); ++i)
 	{
 		auto entry = caches->entries()->get(i);
@@ -214,6 +212,8 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
+	tbb::mutex::scoped_lock lock(m_cachesMutex);
+
     CACHED_STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
     tbb::atomic<size_t> total = 0;
@@ -566,7 +566,6 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touch
 void CachedStorage::checkAndClear()
 {
 	tbb::mutex::scoped_lock lock(m_cachesMutex);
-	tbb::mutex::scoped_lock lock2(m_mruMutex);
 
 	TIME_RECORD("Check and clear");
 
