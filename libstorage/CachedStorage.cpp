@@ -550,7 +550,7 @@ size_t CachedStorage::ID()
 
 void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacity)
 {
-    tbb::recursive_mutex::scoped_lock lock(m_mruMutex);
+    tbb::spin_mutex::scoped_lock lock(m_mruMutex);
 
     if(capacity != 0) {
     	updateCapacity(capacity);
@@ -570,6 +570,8 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touch
 }
 
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touchCacheNoLock(TableInfo::Ptr tableInfo, std::string key, bool write) {
+	tbb::spin_mutex::scoped_lock lock(m_cachesSpinMutex);
+
 	auto tableIt = m_caches.find(tableInfo->name);
 	if (tableIt == m_caches.end())
 	{
