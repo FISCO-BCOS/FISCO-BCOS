@@ -642,17 +642,19 @@ void CachedStorage::checkAndClear()
                     }
                     else
                     {
+                    	CACHED_STORAGE_LOG(TRACE) << "Cache not found, erase mru" << it->first << "-" << it->second;
                         it = m_mru.erase(it);
                     }
+
+                    if (tableIt->second->caches()->empty())
+					{
+						m_caches.unsafe_erase(tableIt);
+					}
                 }
                 else
                 {
+                	CACHED_STORAGE_LOG(TRACE) << "Table not found, erase mru: " << it->first << "-" << it->second;
                     it = m_mru.erase(it);
-                }
-
-                if (tableIt->second->caches()->empty())
-                {
-                    m_caches.unsafe_erase(tableIt);
                 }
 
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
