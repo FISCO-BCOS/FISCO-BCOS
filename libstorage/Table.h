@@ -112,7 +112,6 @@ private:
             std::shared_ptr<std::map<std::string, std::string>> fields)
           : m_refCount(refCount), m_fields(fields){};
 
-        tbb::mutex m_mutex;
         std::shared_ptr<size_t> m_refCount;
         std::shared_ptr<std::map<std::string, std::string>> m_fields;
     };
