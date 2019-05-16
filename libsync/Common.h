@@ -66,9 +66,7 @@ using NodeIDs = std::vector<dev::p2p::NodeID>;
 using BlockPtr = std::shared_ptr<dev::eth::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
-#define PUBLIC_LOG                                                     \
-    "[p:" << std::to_string(m_protocolId) << "] " << LOG_BADGE("SYNC") \
-          << LOG_BADGE("id:" + m_nodeId.abridged())
+#define PUBLIC_LOG LOG_BADGE("SYNC") << "[id:" << m_nodeId.abridged() << "]"
 
 #define SYNC_LOG(_OBV) LOG(_OBV) << PUBLIC_LOG
 #define SYNC_ENGINE_LOG(_OBV) LOG(_OBV) << "[g:" << std::to_string(m_groupId) << "] " << PUBLIC_LOG
