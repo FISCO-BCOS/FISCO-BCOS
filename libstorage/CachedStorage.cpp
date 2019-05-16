@@ -153,12 +153,14 @@ Entries::Ptr CachedStorage::select(
 		auto outEntry = std::make_shared<Entry>();
 		outEntry->copyFrom(entry);
 		out->addEntry(outEntry);
-        }
+	}
+
+	touchMRU(tableInfo->name, key, std::get<2>(result));
 
     return out;
 }
 
-std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::selectNoCondition(
+std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssize_t> CachedStorage::selectNoCondition(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
@@ -167,6 +169,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<0>(result);
+    ssize_t change = 0;
 
     if(caches->empty()) {
     	if (m_backend)
@@ -187,16 +190,16 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 			CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
 									  << ", capacity: " << totalCapacity;
 
-			touchMRU(tableInfo->name, key, totalCapacity);
+			change = totalCapacity;
 		}
     }
     else {
     	++m_hitTimes;
 
-    	touchMRU(tableInfo->name, key, 0);
+    	change = 0;
     }
 
-    return result;
+    return std::make_tuple(caches, std::get<0>(result), change);
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
