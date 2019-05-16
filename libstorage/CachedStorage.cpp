@@ -178,6 +178,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
 	auto result = touchCache(tableInfo, key);
 	auto caches = std::get<0>(result);
+	caches->setNum(num);
 
     if(caches->empty()) {
     	if (m_backend)
@@ -186,7 +187,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 			conditionKey->EQ(tableInfo->key, key);
 			auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
 
-			CACHED_STORAGE_LOG(DEBUG) << tableInfo->name << "-" << key << " miss the cache";
+			CACHED_STORAGE_LOG(TRACE) << tableInfo->name << "-" << key << " miss the cache";
 
 			caches->setEntries(backendData);
 
@@ -256,8 +257,32 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             if (id != 0)
                             {
                                 auto result = touchCacheNoLock(requestData->info, key, true);
-
                                 auto caches = std::get<0>(result);
+                                if(caches->empty()) {
+									if (m_backend)
+									{
+										auto conditionKey = std::make_shared<Condition>();
+										conditionKey->EQ(requestData->info->key, key);
+										auto backendData = m_backend->select(hash, num, requestData->info, key, conditionKey);
+
+										CACHED_STORAGE_LOG(TRACE) << requestData->info->name << "-" << key << " miss the cache while commit";
+
+										caches->setEntries(backendData);
+
+										size_t totalCapacity = 0;
+										for (auto it : *backendData)
+										{
+											totalCapacity += it->capacity();
+										}
+										CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << requestData->info->name << "-" << key
+																  << ", capacity: " << totalCapacity;
+
+										touchMRU(requestData->info->name, key, totalCapacity);
+									}
+								}
+
+                                caches->setNum(num);
+
                                 auto entryIt = std::lower_bound(caches->entries()->begin(),
                                     caches->entries()->end(), entry,
                                     [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
