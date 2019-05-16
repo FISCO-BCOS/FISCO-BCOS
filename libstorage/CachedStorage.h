@@ -51,6 +51,7 @@ public:
     virtual std::string key();
     virtual void setKey(const std::string& key);
     virtual Entries::Ptr entries();
+    virtual Entries* entriesPtr();
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
