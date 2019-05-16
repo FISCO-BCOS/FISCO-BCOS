@@ -168,14 +168,6 @@ BOOST_AUTO_TEST_CASE(getParallelTag)
     param = abi.abiIn(userTransferFunc, from, to, amount);
     vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
-
-    // amount zero
-    from = "from";
-    to = "to";
-    amount = 0;
-    param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
-    BOOST_TEST(vTags.empty());
 }
 
 BOOST_AUTO_TEST_CASE(userAdd)
