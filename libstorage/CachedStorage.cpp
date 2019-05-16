@@ -568,8 +568,6 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 void CachedStorage::checkAndClear()
 {
 	TIME_RECORD("Check and clear");
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
-	tbb::mutex::scoped_lock lock2(m_mruMutex);
 
     bool needClear = false;
     size_t clearTimes = 0;
@@ -607,6 +605,9 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+        	tbb::mutex::scoped_lock lock(m_cachesMutex);
+			tbb::mutex::scoped_lock lock2(m_mruMutex);
+
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
                 ++clearThrough;
