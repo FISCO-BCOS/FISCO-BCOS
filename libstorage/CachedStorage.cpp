@@ -53,6 +53,10 @@ Entries::Ptr Caches::entries()
     return m_entries;
 }
 
+Entries* Caches::entriesPtr() {
+	return m_entries.get();
+}
+
 void Caches::setEntries(Entries::Ptr entries)
 {
     m_entries = entries;
@@ -154,8 +158,8 @@ Entries::Ptr CachedStorage::select(
 	auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
 	Caches::Ptr caches = std::get<0>(result);
-	auto entries = caches->entries();
-	for (size_t i = 0; i < entries; ++i)
+	auto entries = caches->entriesPtr();
+	for (size_t i = 0; i < entries->size(); ++i)
 	{
 		auto entry = entries->get(i);
 		if (condition && !condition->process(entry))
@@ -598,6 +602,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touch
 void CachedStorage::checkAndClear()
 {
 	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
+	tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
 
 	TIME_RECORD("Check and clear");
 
