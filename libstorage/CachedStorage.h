@@ -127,7 +127,7 @@ private:
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    std::unordered_map<std::string, TableCaches::Ptr> m_caches;
+    std::map<std::string, TableCaches::Ptr> m_caches;
     tbb::mutex m_cachesMutex;
 
     boost::multi_index_container<std::pair<std::string, std::string>,
@@ -136,7 +136,6 @@ private:
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > >
         m_mru;
     tbb::mutex m_mruMutex;
-
 
     // boost::multi_index
     Storage::Ptr m_backend;

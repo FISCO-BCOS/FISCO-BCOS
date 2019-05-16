@@ -35,6 +35,7 @@ using namespace dev::storage;
 
 Caches::Caches() {
 	m_entries = std::make_shared<Entries>();
+	m_num.store(0);
 }
 
 std::string Caches::key()
