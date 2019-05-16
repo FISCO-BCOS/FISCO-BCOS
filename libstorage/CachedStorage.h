@@ -26,6 +26,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
 #include <tbb/mutex.h>
+#include <tbb/recursive_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -48,7 +49,13 @@ public:
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
+    tbb::recursive_mutex* mutex();
+    bool empty();
+
 private:
+    tbb::recursive_mutex m_mutex;
+
+    bool m_empty = true;
     std::string m_key;
     Entries::Ptr m_entries;
     // int64_t m_num;
@@ -74,7 +81,6 @@ public:
 private:
     TableInfo::Ptr m_tableInfo;
     tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
-    tbb::mutex m_mutex;
 };
 
 class Task
@@ -97,7 +103,7 @@ public:
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
-    virtual Caches::Ptr selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
+    virtual std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr);
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
@@ -115,17 +121,19 @@ public:
 
 private:
     void touchMRU(std::string table, std::string key, ssize_t capacity);
-    Caches::Ptr touchCache(std::string table, std::string key);
+    std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > touchCache(TableInfo::Ptr tableInfo, std::string key);
     void checkAndClear();
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
+    std::unordered_map<std::string, TableCaches::Ptr> m_caches;
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > >
         m_mru;
+    tbb::mutex m_cachesMutex;
+
     // boost::multi_index
     Storage::Ptr m_backend;
     size_t m_ID = 1;
@@ -136,8 +144,6 @@ private:
 
     size_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
-
-    tbb::mutex m_mutex;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
 
