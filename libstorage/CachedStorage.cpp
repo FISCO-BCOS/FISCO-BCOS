@@ -136,36 +136,38 @@ Entries::Ptr CachedStorage::select(
 {
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
-    auto out = std::make_shared<Entries>();
-    ssize_t change = 0;
 
-    TIME_RECORD("Select no condition");
-    {
-		auto result = selectNoCondition(hash, num, tableInfo, key, condition);
-		change = std::get<2>(result);
-
-		TIME_RECORD("Process condition");
-		auto caches = std::get<0>(result);
-		for (size_t i = 0; i < caches->entries()->size(); ++i)
-		{
-			auto entry = caches->entries()->get(i);
-			if (condition && !condition->process(entry))
-			{
-				continue;
-			}
-			auto outEntry = std::make_shared<Entry>();
-			outEntry->copyFrom(entry);
-			out->addEntry(outEntry);
-		}
+    TIME_RECORD("Check and clear");
+    auto now = std::chrono::system_clock::now();
+    std::chrono::seconds elapseds = now - m_lastClear;
+    if(elapseds > 10) {
+    	m_lastClear = now;
+    	checkAndClear();
     }
 
-    TIME_RECORD("touchMRU");
-	touchMRU(tableInfo->name, key, change);
+    auto out = std::make_shared<Entries>();
+
+    TIME_RECORD("Select no condition");
+	auto result = selectNoCondition(hash, num, tableInfo, key, condition);
+
+	TIME_RECORD("Process condition");
+	auto caches = std::get<0>(result);
+	for (size_t i = 0; i < caches->entries()->size(); ++i)
+	{
+		auto entry = caches->entries()->get(i);
+		if (condition && !condition->process(entry))
+		{
+			continue;
+		}
+		auto outEntry = std::make_shared<Entry>();
+		outEntry->copyFrom(entry);
+		out->addEntry(outEntry);
+	}
 
     return out;
 }
 
-std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssize_t> CachedStorage::selectNoCondition(
+std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>> CachedStorage::selectNoCondition(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
@@ -174,7 +176,6 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssiz
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<0>(result);
-    ssize_t change = 0;
 
     if(caches->empty()) {
     	if (m_backend)
@@ -195,16 +196,16 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssiz
 			CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
 									  << ", capacity: " << totalCapacity;
 
-			change = totalCapacity;
+			touchMRU(tableInfo->name, key, totalCapacity);
 		}
     }
     else {
     	++m_hitTimes;
 
-    	change = 0;
+    	touchMRU(tableInfo->name, key, 0);
     }
 
-    return std::make_tuple(caches, std::get<1>(result), change);
+    return std::make_tuple(caches, std::get<1>(result));
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -531,7 +532,7 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
         m_mru.relocate(m_mru.end(), r.first);
     }
 
-    checkAndClear();
+    //checkAndClear();
 }
 
 std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key) {
@@ -561,6 +562,8 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 
 void CachedStorage::checkAndClear()
 {
+	tbb::mutex::scoped_lock lock(m_cachesMutex);
+
     bool needClear = false;
     size_t clearTimes = 0;
 
