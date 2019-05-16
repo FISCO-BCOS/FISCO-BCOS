@@ -212,7 +212,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
 
     CACHED_STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
@@ -525,7 +525,7 @@ size_t CachedStorage::ID()
 
 void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacity)
 {
-    tbb::mutex::scoped_lock lock(m_mruMutex);
+    tbb::recursive_mutex::scoped_lock lock(m_mruMutex);
 
     if(capacity != 0) {
     	updateCapacity(capacity);
@@ -539,7 +539,7 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
 }
 
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key, bool write) {
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
 
 	auto tableIt = m_caches.find(tableInfo->name);
 	if (tableIt == m_caches.end())
@@ -565,7 +565,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touch
 
 void CachedStorage::checkAndClear()
 {
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
 
 	TIME_RECORD("Check and clear");
 
