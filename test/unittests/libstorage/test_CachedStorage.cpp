@@ -523,8 +523,9 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 
     cachedStorage->commit(dev::h256(), 0, datas);
 
-    auto cache = cachedStorage->selectNoCondition(
+    auto result = cachedStorage->selectNoCondition(
         dev::h256(), 0, tableData->info, "node", std::make_shared<Condition>());
+    auto cache = std::get<0>(result);
 
     ssize_t currentID = -1;
     for (auto it : *cache->entries())
@@ -564,7 +565,8 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 	cachedStorage->commit(dev::h256(0), 99, datas);
 
 	for(size_t i=0; i < 100; ++i) {
-		Caches::Ptr caches = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+		auto result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+		Caches::Ptr caches = std::get<0>(result);
 		BOOST_TEST(caches->key() == "key");
 		BOOST_TEST(caches->num() == 99);
 

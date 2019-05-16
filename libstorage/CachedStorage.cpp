@@ -51,6 +51,7 @@ Entries::Ptr Caches::entries()
 void Caches::setEntries(Entries::Ptr entries)
 {
     m_entries = entries;
+    m_empty = false;
 }
 
 int64_t Caches::num() const
@@ -61,6 +62,14 @@ int64_t Caches::num() const
 void Caches::setNum(int64_t num)
 {
     m_num = num;
+}
+
+tbb::recursive_mutex* Caches::mutex() {
+	return &m_mutex;
+}
+
+bool Caches::empty() {
+	return m_empty;
 }
 
 TableInfo::Ptr TableCaches::tableInfo()
@@ -130,105 +139,64 @@ Entries::Ptr CachedStorage::select(
     auto out = std::make_shared<Entries>();
 
     TIME_RECORD("Select no condition");
-    auto entries = selectNoCondition(hash, num, tableInfo, key, condition)->entries();
+    auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
     TIME_RECORD("Process condition");
-    if (entries)
-    {
-        for (size_t i = 0; i < entries->size(); ++i)
-        {
-            auto entry = entries->get(i);
-            if (condition && !condition->process(entry))
-            {
-                continue;
-            }
-            auto outEntry = std::make_shared<Entry>();
-            outEntry->copyFrom(entry);
-            out->addEntry(outEntry);
+    auto caches = std::get<0>(result);
+	for (size_t i = 0; i < caches->entries()->size(); ++i)
+	{
+		auto entry = caches->entries()->get(i);
+		if (condition && !condition->process(entry))
+		{
+			continue;
+		}
+		auto outEntry = std::make_shared<Entry>();
+		outEntry->copyFrom(entry);
+		out->addEntry(outEntry);
         }
-    }
 
     return out;
 }
 
-Caches::Ptr CachedStorage::selectNoCondition(
+std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::selectNoCondition(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
 
     ++m_queryTimes;
-    auto tableIt = m_caches.find(tableInfo->name);
-    if (tableIt != m_caches.end())
-    {
-        auto tableCaches = tableIt->second;
-        auto caches = tableCaches->findCache(key);
-        if (caches)
-        {
-            ++m_hitTimes;
-            touchMRU(tableInfo->name, key, 0);
 
-            return caches;
-        }
+    auto result = touchCache(tableInfo, key);
+    auto caches = std::get<0>(result);
+
+    if(caches->empty()) {
+    	if (m_backend)
+		{
+			auto conditionKey = std::make_shared<Condition>();
+			conditionKey->EQ(tableInfo->key, key);
+			auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
+
+			CACHED_STORAGE_LOG(DEBUG) << tableInfo->name << "-" << key << " miss the cache";
+
+			caches->setEntries(backendData);
+
+			size_t totalCapacity = 0;
+			for (auto it : *backendData)
+			{
+				totalCapacity += it->capacity();
+			}
+			CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
+									  << ", capacity: " << totalCapacity;
+
+			touchMRU(tableInfo->name, key, totalCapacity);
+		}
+    }
+    else {
+    	++m_hitTimes;
+
+    	touchMRU(tableInfo->name, key, 0);
     }
 
-    if (m_backend)
-    {
-        auto conditionKey = std::make_shared<Condition>();
-        conditionKey->EQ(tableInfo->key, key);
-        auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
-
-        auto tableIt = m_caches.find(tableInfo->name);
-        if (tableIt == m_caches.end())
-        {
-            tableIt =
-                m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
-                    .first;
-
-            tableIt->second->setTableInfo(tableInfo);
-        }
-
-        CACHED_STORAGE_LOG(DEBUG) << tableInfo->name << "-" << key << " miss the cache";
-
-        auto caches = std::make_shared<Caches>();
-        caches->setKey(key);
-        caches->setEntries(backendData);
-
-        auto newIt = tableIt->second->addCache(key, caches);
-        auto cache = newIt.first->second;
-
-        size_t totalCapacity = 0;
-        for (auto it : *backendData)
-        {
-            totalCapacity += it->capacity();
-        }
-        CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
-                                  << ", capacity: " << totalCapacity;
-
-        //updateCapacity(0, totalCapacity);
-        touchMRU(tableInfo->name, key, totalCapacity);
-
-        return cache;
-    }
-
-    // no found in cache or backend
-    CACHED_STORAGE_LOG(WARNING) << "Key: " << key << " not found in cache or backend";
-    tableIt = m_caches.find(tableInfo->name);
-    if (tableIt == m_caches.end())
-    {
-        tableIt =
-            m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>())).first;
-
-        tableIt->second->setTableInfo(tableInfo);
-    }
-
-    auto caches = std::make_shared<Caches>();
-    caches->setKey(key);
-    caches->setEntries(std::make_shared<Entries>());
-    caches->setNum(num);
-
-    auto newIt = tableIt->second->addCache(key, caches).first;
-
-    return newIt->second;
+    return result;
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -274,8 +242,10 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             ssize_t change = 0;
                             if (id != 0)
                             {
-                                auto caches =
+                                auto result =
                                     selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+
+                                auto caches = std::get<0>(result);
                                 auto entryIt = std::lower_bound(caches->entries()->begin(),
                                     caches->entries()->end(), entry,
                                     [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
@@ -367,6 +337,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
             auto cacheEntry = std::make_shared<Entry>();
             cacheEntry->copyFrom(commitEntry);
+            cacheEntry->setNum(num);
 
             if (cacheEntry->force())
             {
@@ -391,12 +362,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
             else
             {
-                auto caches = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                auto result = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                auto caches = std::get<0>(result);
                 caches->entries()->addEntry(cacheEntry);
                 caches->setNum(num);
             }
 
-            cacheEntry->setNum(num);
             STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
                                << ", capacity: " << cacheEntry->capacity();
 
@@ -542,7 +513,7 @@ size_t CachedStorage::ID()
 
 void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacity)
 {
-    tbb::mutex::scoped_lock lock(m_mutex);
+    tbb::mutex::scoped_lock lock(m_cachesMutex);
 
     updateCapacity(capacity);
 
@@ -555,10 +526,29 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
     checkAndClear();
 }
 
-Caches::Ptr CachedStorage::touchCache(std::string table, std::string key) {
-	(void)table;
-	(void)key;
-	return Caches::Ptr();
+std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key) {
+	tbb::mutex::scoped_lock lock(m_cachesMutex);
+
+	auto tableIt = m_caches.find(tableInfo->name);
+	if (tableIt != m_caches.end())
+	{
+		tableIt =
+			m_caches.insert(std::make_pair(tableInfo->name, std::make_shared<TableCaches>()))
+				.first;
+
+		tableIt->second->setTableInfo(tableInfo);
+	}
+
+	auto tableCaches = tableIt->second;
+	auto caches = tableCaches->findCache(key);
+	if (!caches) {
+		auto newCache = std::make_shared<Caches>();
+		newCache->setKey(key);
+
+		caches = tableCaches->addCache(key, newCache).first->second;
+	}
+
+	return std::make_tuple(caches, std::make_shared<tbb::recursive_mutex::scoped_lock>(*(caches->mutex())));
 }
 
 void CachedStorage::checkAndClear()
@@ -574,9 +564,9 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
-        if (clearTimes > 1)
+        if (clearTimes > 5)
         {
-            size_t sleepTimes = clearTimes < 20 ? clearTimes * 100 : 20 * 100;
+            size_t sleepTimes = clearTimes < 100 ? clearTimes * 10 : 100 * 10;
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
         }
 
@@ -608,6 +598,8 @@ void CachedStorage::checkAndClear()
                     auto cache = tableIt->second->findCache(it->second);
                     if (cache)
                     {
+                    	tbb::recursive_mutex::scoped_lock lock(*(cache->mutex()));
+
                         if (m_syncNum > 0 && ((size_t)cache->num() <= m_syncNum))
                         {
                             CACHED_STORAGE_LOG(TRACE)
@@ -642,18 +634,18 @@ void CachedStorage::checkAndClear()
                     }
                     else
                     {
-                    	CACHED_STORAGE_LOG(TRACE) << "Cache not found, erase mru" << it->first << "-" << it->second;
+                    	CACHED_STORAGE_LOG(FATAL) << "Cache not found, erase mru" << it->first << "-" << it->second;
                         it = m_mru.erase(it);
                     }
 
                     if (tableIt->second->caches()->empty())
 					{
-						m_caches.unsafe_erase(tableIt);
+						m_caches.erase(tableIt);
 					}
                 }
                 else
                 {
-                	CACHED_STORAGE_LOG(TRACE) << "Table not found, erase mru: " << it->first << "-" << it->second;
+                	CACHED_STORAGE_LOG(FATAL) << "Table not found, erase mru: " << it->first << "-" << it->second;
                     it = m_mru.erase(it);
                 }
 
@@ -678,7 +670,6 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    // m_capacity += (newSize - oldSize);
     auto oldValue = m_capacity.fetch_and_add(capacity);
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity)
                               << " , from: " << oldValue << " to: " << m_capacity;
