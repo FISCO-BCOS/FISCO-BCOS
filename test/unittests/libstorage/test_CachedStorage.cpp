@@ -573,7 +573,7 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 		auto entries = caches->entries();
 		BOOST_TEST(entries->size() == i + 1);
 
-		for(int j=0; j<entries->size(); ++j) {
+		for(size_t j=0; j<entries->size(); ++j) {
 			auto cacheEntry = entries->get(j);
 			BOOST_TEST(cacheEntry != entry);
 
