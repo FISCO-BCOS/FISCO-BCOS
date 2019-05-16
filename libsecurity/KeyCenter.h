@@ -90,7 +90,7 @@ private:
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
 
-private:
+protected:
     dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 };
 
