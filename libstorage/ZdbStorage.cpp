@@ -37,14 +37,14 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
     Json::Value responseJson;
-    int iRet = m_sqlBasicAcc.Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
-    if (iRet < 0)
+    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
+    if (ret < 0)
     {
-        ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << iRet
+        ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
                               << " table:" << _tableInfo->name;
         auto e =
             StorageException(-1, "Remote select database return error: table:" + _tableInfo->name +
-                                     boost::lexical_cast<std::string>(iRet));
+                                     boost::lexical_cast<std::string>(ret));
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
@@ -89,22 +89,27 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
 
 void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
 {
-    m_sqlBasicAcc.setConnPool(_connPool);
+    m_sqlBasicAcc->setConnPool(_connPool);
     this->initSysTables();
+}
+
+void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
+{
+    m_sqlBasicAcc = _sqlBasicAcc;
 }
 
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    int32_t _rowCount = m_sqlBasicAcc.Commit(_hash, (int32_t)_num, _datas);
-    if (_rowCount < 0)
+    int32_t rowCount = m_sqlBasicAcc->Commit(_hash, (int32_t)_num, _datas);
+    if (rowCount < 0)
     {
-        ZdbStorage_LOG(ERROR) << "database commit  return error:" << _rowCount;
+        ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
         auto e = StorageException(-1, "Remote select database return error: table:" +
-                                          boost::lexical_cast<std::string>(_rowCount));
+                                          boost::lexical_cast<std::string>(rowCount));
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
-    return _rowCount;
+    return rowCount;
 }
 
 bool ZdbStorage::onlyDirty()
@@ -144,8 +149,8 @@ void ZdbStorage::createSysTables()
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << " UNIQUE KEY `table_name` (`table_name`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=62 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createSysConsensus()
 {
@@ -162,8 +167,8 @@ void ZdbStorage::createSysConsensus()
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `name` (`name`)\n";
     ss << ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createAccessTables()
 {
@@ -179,8 +184,8 @@ void ZdbStorage::createAccessTables()
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << "KEY `table_name` (`table_name`)\n";
     ss << ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createCurrentStateTables()
 {
@@ -195,8 +200,8 @@ void ZdbStorage::createCurrentStateTables()
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `key` (`key`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4;\n";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createNumber2HashTables()
 {
@@ -212,8 +217,8 @@ void ZdbStorage::createNumber2HashTables()
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << " KEY `number` (`number`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createTxHash2BlockTables()
 {
@@ -229,8 +234,8 @@ void ZdbStorage::createTxHash2BlockTables()
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `hash` (`hash`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createHash2BlockTables()
 {
@@ -245,8 +250,8 @@ void ZdbStorage::createHash2BlockTables()
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << "KEY `hash` (`hash`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createCnsTables()
 {
@@ -264,8 +269,8 @@ void ZdbStorage::createCnsTables()
     ss << "KEY `_num_` (`_num_`),\n";
     ss << "KEY `name` (`name`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createSysConfigTables()
 {
@@ -281,8 +286,8 @@ void ZdbStorage::createSysConfigTables()
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << "KEY `key` (`key`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::createSysBlock2NoncesTables()
 {
@@ -297,8 +302,8 @@ void ZdbStorage::createSysBlock2NoncesTables()
     ss << "PRIMARY KEY (`_id_`),";
     ss << "KEY `number` (`number`)";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }
 void ZdbStorage::insertSysTables()
 {
@@ -315,6 +320,6 @@ void ZdbStorage::insertSysTables()
     ss << "	('_sys_cns_', 'name','version,address,abi'),\n";
     ss << "	('_sys_config_', 'key','value,enable_num'),\n";
     ss << "	('_sys_block_2_nonces_', 'number','value');";
-    string _sql = ss.str();
-    m_sqlBasicAcc.ExecuteSql(_sql);
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
 }

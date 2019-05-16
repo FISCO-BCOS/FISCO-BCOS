@@ -82,7 +82,7 @@ if(NOT N EQUAL 0)
 endif()
 
 add_executable(test-fisco-bcos ${sources})
-target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE_DIR})
+target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE_DIR} ${LIBZDB_INCLUDE_DIR})
 target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_link_libraries(test-fisco-bcos Boost::UnitTestFramework)
