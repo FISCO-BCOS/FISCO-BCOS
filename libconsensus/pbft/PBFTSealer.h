@@ -57,7 +57,7 @@ public:
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
 
         /// set thread name for PBFTSealer
-        std::string threadName = "PBFTSealer-" + std::to_string(m_pbftEngine->groupId());
+        std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
         setName(threadName);
     }
 

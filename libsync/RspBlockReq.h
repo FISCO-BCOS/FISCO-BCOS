@@ -64,7 +64,6 @@ public:
 
 private:
     NodeID m_nodeId;
-    PROTOCOL_ID m_protocolId = 0;
     std::priority_queue<DownloadRequest, std::vector<DownloadRequest>, RequestQueueCmp> m_reqQueue;
     mutable std::mutex x_canPush;  // pop() wait for push(), push() drop when pop()
     mutable std::mutex x_push;     // To serialize push()
