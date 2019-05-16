@@ -103,7 +103,7 @@ public:
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
-    virtual std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
+    virtual std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssize_t> selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
         const std::string& key, Condition::Ptr condition = nullptr);
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
