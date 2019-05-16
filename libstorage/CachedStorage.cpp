@@ -137,25 +137,30 @@ Entries::Ptr CachedStorage::select(
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
     auto out = std::make_shared<Entries>();
+    ssize_t change = 0;
 
     TIME_RECORD("Select no condition");
-    auto result = selectNoCondition(hash, num, tableInfo, key, condition);
+    {
+		auto result = selectNoCondition(hash, num, tableInfo, key, condition);
+		change = std::get<2>(result);
 
-    TIME_RECORD("Process condition");
-    auto caches = std::get<0>(result);
-	for (size_t i = 0; i < caches->entries()->size(); ++i)
-	{
-		auto entry = caches->entries()->get(i);
-		if (condition && !condition->process(entry))
+		TIME_RECORD("Process condition");
+		auto caches = std::get<0>(result);
+		for (size_t i = 0; i < caches->entries()->size(); ++i)
 		{
-			continue;
+			auto entry = caches->entries()->get(i);
+			if (condition && !condition->process(entry))
+			{
+				continue;
+			}
+			auto outEntry = std::make_shared<Entry>();
+			outEntry->copyFrom(entry);
+			out->addEntry(outEntry);
 		}
-		auto outEntry = std::make_shared<Entry>();
-		outEntry->copyFrom(entry);
-		out->addEntry(outEntry);
-	}
+    }
 
-	touchMRU(tableInfo->name, key, std::get<2>(result));
+    TIME_RECORD("touchMRU");
+	touchMRU(tableInfo->name, key, change);
 
     return out;
 }
@@ -199,7 +204,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>, ssiz
     	change = 0;
     }
 
-    return std::make_tuple(caches, std::get<0>(result), change);
+    return std::make_tuple(caches, std::get<1>(result), change);
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
