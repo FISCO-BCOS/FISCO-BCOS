@@ -40,6 +40,7 @@ class Caches
 {
 public:
     typedef std::shared_ptr<Caches> Ptr;
+    Caches();
     virtual ~Caches(){};
 
     virtual std::string key();
@@ -127,12 +128,15 @@ private:
     std::string readableCapacity(size_t num);
 
     std::unordered_map<std::string, TableCaches::Ptr> m_caches;
+    tbb::mutex m_cachesMutex;
+
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > >
         m_mru;
-    tbb::mutex m_cachesMutex;
+    tbb::mutex m_mruMutex;
+
 
     // boost::multi_index
     Storage::Ptr m_backend;
