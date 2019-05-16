@@ -542,7 +542,7 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
 }
 
 std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key) {
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	//tbb::mutex::scoped_lock lock(m_cachesMutex);
 
 	auto tableIt = m_caches.find(tableInfo->name);
 	if (tableIt == m_caches.end())
@@ -609,6 +609,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
                 ++clearThrough;
