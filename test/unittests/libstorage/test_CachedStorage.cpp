@@ -592,7 +592,8 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 		cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
 	}
 
-	Caches::Ptr result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+	auto r = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+	Caches::Ptr result = std::get<0>(r);
 	BOOST_TEST(result->num() == 199);
 	auto resultEntries = result->entries();
 	BOOST_TEST(resultEntries->size() == 100);
