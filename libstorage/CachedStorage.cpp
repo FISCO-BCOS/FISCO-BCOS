@@ -154,9 +154,10 @@ Entries::Ptr CachedStorage::select(
 	auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
 	Caches::Ptr caches = std::get<0>(result);
-	for (size_t i = 0; i < caches->entries()->size(); ++i)
+	auto entries = caches->entries();
+	for (size_t i = 0; i < entries; ++i)
 	{
-		auto entry = caches->entries()->get(i);
+		auto entry = entries->get(i);
 		if (condition && !condition->process(entry))
 		{
 			continue;
