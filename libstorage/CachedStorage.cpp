@@ -69,7 +69,7 @@ void Caches::setNum(int64_t num)
     m_num = num;
 }
 
-tbb::recursive_mutex* Caches::mutex() {
+Caches::RWMutex* Caches::mutex() {
 	return &m_mutex;
 }
 
@@ -171,10 +171,9 @@ Entries::Ptr CachedStorage::select(
     return out;
 }
 
-std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>> CachedStorage::selectNoCondition(
+std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::selectNoCondition(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
-	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
     (void)condition;
 
     ++m_queryTimes;
@@ -256,8 +255,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             ssize_t change = 0;
                             if (id != 0)
                             {
-                                auto result =
-                                    selectNoCondition(h256(), 0, requestData->info, key, nullptr);
+                                auto result = touchCache(requestData->info, key, true);
 
                                 auto caches = std::get<0>(result);
                                 auto entryIt = std::lower_bound(caches->entries()->begin(),
@@ -538,12 +536,10 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
     {
         m_mru.relocate(m_mru.end(), r.first);
     }
-
-    //checkAndClear();
 }
 
-std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key) {
-	//tbb::mutex::scoped_lock lock(m_cachesMutex);
+std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > CachedStorage::touchCache(TableInfo::Ptr tableInfo, std::string key, bool write) {
+	tbb::mutex::scoped_lock lock(m_cachesMutex);
 
 	auto tableIt = m_caches.find(tableInfo->name);
 	if (tableIt == m_caches.end())
@@ -564,12 +560,12 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 		caches = tableCaches->addCache(key, newCache).first->second;
 	}
 
-	return std::make_tuple(caches, std::make_shared<tbb::recursive_mutex::scoped_lock>(*(caches->mutex())));
+	return std::make_tuple(caches, std::make_shared<Caches::RWScoped>(*(caches->mutex()), write));
 }
 
 void CachedStorage::checkAndClear()
 {
-	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
+	tbb::mutex::scoped_lock lock(m_cachesMutex);
 	tbb::mutex::scoped_lock lock2(m_mruMutex);
 
 	TIME_RECORD("Check and clear");
@@ -620,7 +616,7 @@ void CachedStorage::checkAndClear()
                     auto cache = tableIt->second->findCache(it->second);
                     if (cache)
                     {
-                    	tbb::recursive_mutex::scoped_lock lock(*(cache->mutex()));
+                    	Caches::RWScoped(*(cache->mutex()), false);
 
                         if (m_syncNum > 0 && ((size_t)cache->num() <= m_syncNum))
                         {
