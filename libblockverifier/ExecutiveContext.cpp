@@ -208,7 +208,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                     return nullptr;
                 }
 
-                for (string& critical : *ret)
+                for (string& critical : *res)
                 {
                     critical += _tx.receiveAddress().hex();
                 }
