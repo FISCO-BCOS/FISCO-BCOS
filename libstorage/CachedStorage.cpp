@@ -174,6 +174,7 @@ Entries::Ptr CachedStorage::select(
 std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock>> CachedStorage::selectNoCondition(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
+	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
     (void)condition;
 
     ++m_queryTimes;
@@ -568,7 +569,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<tbb::recursive_mutex::scoped_lock> > Cac
 
 void CachedStorage::checkAndClear()
 {
-	tbb::mutex::scoped_lock lock(m_cachesMutex);
+	tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
 	tbb::mutex::scoped_lock lock2(m_mruMutex);
 
 	TIME_RECORD("Check and clear");
