@@ -19,7 +19,6 @@
  *  @date 20190111
  */
 #include "HelloWorldPrecompiled.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>

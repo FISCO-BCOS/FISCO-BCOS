@@ -19,8 +19,7 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
-
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
@@ -126,7 +125,7 @@ bytes CNSPrecompiled::call(
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
 
-        json_spirit::Array CNSInfos;
+        Json::Value CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
         if (entries.get())
         {
@@ -135,19 +134,16 @@ bytes CNSPrecompiled::call(
                 auto entry = entries->get(i);
                 if (!entry)
                     continue;
-                json_spirit::Object CNSInfo;
-                CNSInfo.push_back(json_spirit::Pair(SYS_CNS_FIELD_NAME, contractName));
-                CNSInfo.push_back(json_spirit::Pair(
-                    SYS_CNS_FIELD_VERSION, entry->getField(SYS_CNS_FIELD_VERSION)));
-                CNSInfo.push_back(json_spirit::Pair(
-                    SYS_CNS_FIELD_ADDRESS, entry->getField(SYS_CNS_FIELD_ADDRESS)));
-                CNSInfo.push_back(
-                    json_spirit::Pair(SYS_CNS_FIELD_ABI, entry->getField(SYS_CNS_FIELD_ABI)));
-                CNSInfos.push_back(CNSInfo);
+                Json::Value CNSInfo;
+                CNSInfo[SYS_CNS_FIELD_NAME] = contractName;
+                CNSInfo[SYS_CNS_FIELD_VERSION] = entry->getField(SYS_CNS_FIELD_VERSION);
+                CNSInfo[SYS_CNS_FIELD_ADDRESS] = entry->getField(SYS_CNS_FIELD_ADDRESS);
+                CNSInfo[SYS_CNS_FIELD_ABI] = entry->getField(SYS_CNS_FIELD_ABI);
+                CNSInfos.append(CNSInfo);
             }
         }
-        json_spirit::Value value(CNSInfos);
-        std::string str = json_spirit::write_string(value, true);
+        Json::FastWriter fastWriter;
+        std::string str = fastWriter.write(CNSInfos);
         out = abi.abiIn("", str);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR2])
@@ -157,7 +153,7 @@ bytes CNSPrecompiled::call(
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
 
-        json_spirit::Array CNSInfos;
+        Json::Value CNSInfos;
         auto entries = table->select(contractName, table->newCondition());
         if (entries.get())
         {
@@ -166,22 +162,19 @@ bytes CNSPrecompiled::call(
                 auto entry = entries->get(i);
                 if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
                 {
-                    json_spirit::Object CNSInfo;
-                    CNSInfo.push_back(json_spirit::Pair(SYS_CNS_FIELD_NAME, contractName));
-                    CNSInfo.push_back(json_spirit::Pair(
-                        SYS_CNS_FIELD_VERSION, entry->getField(SYS_CNS_FIELD_VERSION)));
-                    CNSInfo.push_back(json_spirit::Pair(
-                        SYS_CNS_FIELD_ADDRESS, entry->getField(SYS_CNS_FIELD_ADDRESS)));
-                    CNSInfo.push_back(
-                        json_spirit::Pair(SYS_CNS_FIELD_ABI, entry->getField(SYS_CNS_FIELD_ABI)));
-                    CNSInfos.push_back(CNSInfo);
+                    Json::Value CNSInfo;
+                    CNSInfo[SYS_CNS_FIELD_NAME] = contractName;
+                    CNSInfo[SYS_CNS_FIELD_VERSION] = entry->getField(SYS_CNS_FIELD_VERSION);
+                    CNSInfo[SYS_CNS_FIELD_ADDRESS] = entry->getField(SYS_CNS_FIELD_ADDRESS);
+                    CNSInfo[SYS_CNS_FIELD_ABI] = entry->getField(SYS_CNS_FIELD_ABI);
+                    CNSInfos.append(CNSInfo);
                     // Only one
                     break;
                 }
             }
         }
-        json_spirit::Value value(CNSInfos);
-        std::string str = json_spirit::write_string(value, true);
+        Json::FastWriter fastWriter;
+        std::string str = fastWriter.write(CNSInfos);
         out = abi.abiIn("", str);
     }
     else

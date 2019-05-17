@@ -24,7 +24,6 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
