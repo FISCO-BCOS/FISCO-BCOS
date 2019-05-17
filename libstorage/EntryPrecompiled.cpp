@@ -33,10 +33,12 @@ const char* const ENTRY_GET_INT = "getInt(string)";
 const char* const ENTRY_GET_UINT = "getUInt(string)";
 const char* const ENTRY_SET_STR_INT = "set(string,int256)";
 const char* const ENTRY_SET_STR_UINT = "set(string,uint256)";
+const char* const ENTRY_SET_STR_ADDR = "set(string,address)";
 const char* const ENTRY_SET_STR_STR = "set(string,string)";
 const char* const ENTRY_GETA_STR = "getAddress(string)";
 const char* const ENTRY_GETB_STR = "getBytes64(string)";
 const char* const ENTRY_GETB_STR32 = "getBytes32(string)";
+const char* const ENTRY_GET_STR = "getString(string)";
 
 std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint)
 {
@@ -65,9 +67,11 @@ EntryPrecompiled::EntryPrecompiled()
     name2Selector[ENTRY_SET_STR_INT] = getFuncSelector(ENTRY_SET_STR_INT);
     name2Selector[ENTRY_SET_STR_UINT] = getFuncSelector(ENTRY_SET_STR_UINT);
     name2Selector[ENTRY_SET_STR_STR] = getFuncSelector(ENTRY_SET_STR_STR);
+    name2Selector[ENTRY_SET_STR_ADDR] = getFuncSelector(ENTRY_SET_STR_ADDR);
     name2Selector[ENTRY_GETA_STR] = getFuncSelector(ENTRY_GETA_STR);
     name2Selector[ENTRY_GETB_STR] = getFuncSelector(ENTRY_GETB_STR);
     name2Selector[ENTRY_GETB_STR32] = getFuncSelector(ENTRY_GETB_STR32);
+    name2Selector[ENTRY_GET_STR] = getFuncSelector(ENTRY_GET_STR);
 }
 
 std::string EntryPrecompiled::toString()
@@ -115,6 +119,14 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
 
         m_entry->setField(str, value);
     }
+    else if (func == name2Selector[ENTRY_SET_STR_ADDR])
+    {  // set(string,address)
+        std::string str;
+        Address value;
+        abi.abiOut(data, str, value);
+
+        m_entry->setField(str, toHex(value));
+    }
     else if (func == name2Selector[ENTRY_GETA_STR])
     {  // getAddress(string)
         std::string str;
@@ -143,13 +155,21 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
         out = abi.abiIn("", ret0, ret1);
     }
     else if (func == name2Selector[ENTRY_GETB_STR32])
-    {  //"getBytes32(string)"
+    {  // getBytes32(string)
         std::string str;
         abi.abiOut(data, str);
 
         std::string value = m_entry->getField(str);
         dev::string32 s32 = dev::eth::toString32(value);
         out = abi.abiIn("", s32);
+    }
+    else if (func == name2Selector[ENTRY_GET_STR])
+    {  // getString(string)
+        std::string str;
+        abi.abiOut(data, str);
+
+        std::string value = m_entry->getField(str);
+        out = abi.abiIn("", value);
     }
     else
     {
