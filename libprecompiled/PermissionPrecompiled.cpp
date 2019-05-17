@@ -20,7 +20,7 @@
  */
 #include "PermissionPrecompiled.h"
 #include "libstorage/Table.h"
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
@@ -142,23 +142,21 @@ bytes PermissionPrecompiled::call(
 
         auto condition = table->newCondition();
         auto entries = table->select(tableName, condition);
-        json_spirit::Array AuthorityInfos;
+        Json::Value AuthorityInfos;
         if (entries)
         {
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
-                json_spirit::Object AuthorityInfo;
-                AuthorityInfo.push_back(json_spirit::Pair(SYS_AC_TABLE_NAME, tableName));
-                AuthorityInfo.push_back(
-                    json_spirit::Pair(SYS_AC_ADDRESS, entry->getField(SYS_AC_ADDRESS)));
-                AuthorityInfo.push_back(
-                    json_spirit::Pair(SYS_AC_ENABLENUM, entry->getField(SYS_AC_ENABLENUM)));
-                AuthorityInfos.push_back(AuthorityInfo);
+                Json::Value AuthorityInfo;
+                AuthorityInfo[SYS_AC_TABLE_NAME] = tableName;
+                AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
+                AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
+                AuthorityInfos.append(AuthorityInfo);
             }
         }
-        json_spirit::Value value(AuthorityInfos);
-        std::string str = json_spirit::write_string(value, true);
+        Json::FastWriter fastWriter;
+        std::string str = fastWriter.write(AuthorityInfos);
 
         out = abi.abiIn("", str);
     }
