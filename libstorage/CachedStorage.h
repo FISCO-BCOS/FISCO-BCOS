@@ -27,8 +27,8 @@
 #include <libdevcore/ThreadPool.h>
 #include <tbb/mutex.h>
 #include <tbb/recursive_mutex.h>
-#include <tbb/spin_rw_mutex.h>
 #include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -112,8 +112,9 @@ public:
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
-    virtual std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr);
+    virtual std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > selectNoCondition(h256 hash,
+        int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr);
 
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
@@ -131,8 +132,10 @@ public:
 
 private:
     void touchMRU(std::string table, std::string key, ssize_t capacity);
-    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCache(TableInfo::Ptr tableInfo, std::string key, bool write = false);
-    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(TableInfo::Ptr tableInfo, std::string key, bool write = false);
+    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCache(
+        TableInfo::Ptr tableInfo, std::string key, bool write = false);
+    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(
+        TableInfo::Ptr tableInfo, std::string key, bool write = false);
     void checkAndClear();
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
