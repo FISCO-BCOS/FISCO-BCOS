@@ -42,7 +42,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
     {
         SQLBasicAccess_LOG(DEBUG) << "table:" << _table << "sql:" << sql
                                   << " get connection failed";
-        usleep(200 * 1000);
+        sleep(1);
         conn = m_connPool->GetConnection();
     }
 
@@ -257,7 +257,7 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
     int ret = CommitDo(hash, num, datas, errmsg);
     while (ret < 0 && ++retryCnt < retryMax)
     {
-        usleep(200 * 1000);
+        sleep(1);
         ret = CommitDo(hash, num, datas, errmsg);
     }
     if (ret < 0)

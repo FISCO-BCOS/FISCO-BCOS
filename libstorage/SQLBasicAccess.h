@@ -37,6 +37,7 @@ namespace storage
 class SQLBasicAccess
 {
 public:
+    virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
     virtual int Select(h256 hash, int num, const std::string& table, const std::string& key,
         Condition::Ptr condition, Json::Value& respJson);
