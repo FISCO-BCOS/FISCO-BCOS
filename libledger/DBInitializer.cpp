@@ -266,6 +266,9 @@ void DBInitializer::initZdbStorage()
     auto sqlconnpool = std::make_shared<SQLConnectionPool>();
     sqlconnpool->createDataBase(zdbConfig);
     sqlconnpool->InitConnectionPool(zdbConfig);
+
+    auto sqlAccess = std::make_shared<SQLBasicAccess>();
+    zdbStorage->SetSqlAccess(sqlAccess);
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {

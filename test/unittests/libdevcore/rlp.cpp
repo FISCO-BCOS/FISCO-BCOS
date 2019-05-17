@@ -35,13 +35,15 @@ void RlpTest::runRlpTest(std::string _name, fs::path const& _path)
     try
     {
         LOG(INFO) << "TEST " << _name << ":";
-        js::mValue v = js::mValue();
         std::string filePath = (testPath / fs::path(_name + ".json")).string();
         std::string const s = dev::asString(dev::contents(filePath));
         std::string empty_string =
             "Contents of " + (testPath / fs::path(_name + ".json")).string() + " is empty";
         BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_string);
-        json_spirit::read_string(s, v);
+
+        Json::Value v;
+        Json::Reader reader;
+        reader.parse(s, v);
         doRlpTests(v);
     }
     catch (Exception const& _e)
@@ -62,41 +64,50 @@ void RlpTest::runRlpTest(std::string _name, fs::path const& _path)
  *           "out" is the valid or invalid  rlp string
  * @ return:
  */
-void RlpTest::doRlpTests(js::mValue const& jsonObj)
+void RlpTest::doRlpTests(Json::Value const& jsonObj)
 {
-    for (auto& i : jsonObj.get_obj())
+    Json::Value::Members mem = jsonObj.getMemberNames();
+    Json::Reader reader;
+    for (auto it = mem.begin(); it != mem.end(); it++)
     {
         std::string testName;
-        LOG(INFO) << " " << i.first;
-        testName = "[" + i.first + "]";
-        // js::mObject const& obj = i.second.get_obj();
-        js::mObject obj = i.second.get_obj();
-        BOOST_REQUIRE_MESSAGE(obj.count("out") > 0, testName + " out has not been set !");
-        BOOST_REQUIRE_MESSAGE(!obj.at("out").is_null(), testName + " out has been set to null !");
-        BOOST_REQUIRE_MESSAGE(obj.count("in") > 0, testName + " in has not been set !");
-        RlpType rlpType = RlpType::Test;
-        if (obj.at("in").type() == js::str_type)
+        LOG(INFO) << " " << *it;
+        testName = "[" + *it + "]";
+        Json::Value o = jsonObj[*it];
+        if (jsonObj[*it].type() == Json::arrayValue)
         {
-            if (obj.at("in").get_str() == "INVALID")
-                rlpType = RlpType::Invalid;
-            else if (obj.at("in").get_str() == "VALID")
-                rlpType = RlpType::Valid;
+            /*BOOST_REQUIRE_MESSAGE(obj.count("out") > 0, testName + " out has not been set !");
+            BOOST_REQUIRE_MESSAGE(!obj.at("out").is_null(), testName + " out has been set to null
+            !"); BOOST_REQUIRE_MESSAGE(obj.count("in") > 0, testName + " in has not been set !");*/
+            Json::Value::Members o_mem = o.getMemberNames();
+            for (auto it = o_mem.begin(); it != o_mem.end(); it++)
+            {
+                Json::Value inObj = o[*it]["in"];
+                RlpType rlpType = RlpType::Test;
+                if (inObj.type() == Json::stringValue)
+                {
+                    if (inObj.asString() == "INVALID")
+                        rlpType = RlpType::Invalid;
+                    else if (inObj.asString() == "VALID")
+                        rlpType = RlpType::Valid;
+                }
+                if (rlpType == RlpType::Test)
+                {
+                    // check whether "in" transformed rlp string is equal to "out"
+                    checkEncode(testName, inObj);
+                }
+                // check decode
+                bool exception = false;
+                checkDecode(inObj, rlpType, exception);
+                // invalid rlp string && exceptioned
+                if (rlpType == RlpType::Invalid && exception)
+                    continue;
+                if (rlpType == RlpType::Invalid && !exception)
+                    BOOST_ERROR(testName + " Expect RLP Exception as rlp is invalid");
+                if (exception)  // rlp valid, but trigger exception
+                    BOOST_ERROR(testName + " Unexpected RLP Exception as rlp is valid");
+            }
         }
-        if (rlpType == RlpType::Test)
-        {
-            // check whether "in" transformed rlp string is equal to "out"
-            checkEncode(testName, obj);
-        }
-        // check decode
-        bool exception = false;
-        checkDecode(obj, rlpType, exception);
-        // invalid rlp string && exceptioned
-        if (rlpType == RlpType::Invalid && exception)
-            continue;
-        if (rlpType == RlpType::Invalid && !exception)
-            BOOST_ERROR(testName + " Expect RLP Exception as rlp is invalid");
-        if (exception)  // rlp valid, but trigger exception
-            BOOST_ERROR(testName + " Unexpected RLP Exception as rlp is valid");
     }
 }
 
@@ -106,23 +117,27 @@ void RlpTest::doRlpTests(js::mValue const& jsonObj)
  *          (2) retRlp: serialized rlp stream transformed from json object
  * @ return: retRlp: serialized rlp stream
  */
-void RlpTest::buildRLP(js::mValue const& jsonObj, dev::RLPStream& retRlp)
+void RlpTest::buildRLP(Json::Value const& jsonObj, dev::RLPStream& retRlp)
 {
     // array jason
-    if (jsonObj.type() == js::array_type)
+    if (jsonObj.type() == Json::arrayValue)
     {
         dev::RLPStream item_rlp;
-        for (auto& json_item : jsonObj.get_array())
-            buildRLP(json_item, item_rlp);
+        Json::Value::Members mem = jsonObj.getMemberNames();
+        for (auto it = mem.begin(); it != mem.end(); it++)
+        {
+            BOOST_CHECK(jsonObj[*it].type() == Json::objectValue);
+            buildRLP(jsonObj[*it], item_rlp);
+        }
         retRlp.appendList(item_rlp.out());
     }
-    else if (jsonObj.type() == js::int_type)
+    else if (jsonObj.type() == Json::uintValue)
     {
-        retRlp.append(jsonObj.get_uint64());
+        retRlp.append(jsonObj.asUInt64());
     }
-    else if (jsonObj.type() == js::str_type)
+    else if (jsonObj.type() == Json::stringValue)
     {
-        auto str = jsonObj.get_str();
+        auto str = jsonObj.asString();
         if (str.size() && str[0] == '#')
             retRlp.append(bigint(str.substr(1)));
         else
@@ -136,9 +151,9 @@ void RlpTest::buildRLP(js::mValue const& jsonObj, dev::RLPStream& retRlp)
  *          (2) rlp: rlp object transformed from json object
  * @ return:
  */
-void RlpTest::checkRlp(js::mValue const& jsonObj, dev::RLP const& rlp)
+void RlpTest::checkRlp(Json::Value const& jsonObj, dev::RLP const& rlp)
 {
-    if (jsonObj.type() == js::array_type)
+    if (jsonObj.type() == Json::arrayValue)
     {
         // ##check type
         // must be list
@@ -147,20 +162,25 @@ void RlpTest::checkRlp(js::mValue const& jsonObj, dev::RLP const& rlp)
         BOOST_CHECK(!rlp.isInt());
         BOOST_CHECK(!rlp.isData());
         // compare value
-        auto const& json_array = jsonObj.get_array();
-        for (unsigned i = 0; i < json_array.size(); i++)
-            checkRlp(json_array[i], rlp[i]);
+        Json::Value::Members mem = jsonObj.getMemberNames();
+        size_t i = 0;
+        for (auto it = mem.begin(); it != mem.end(); it++)
+        {
+            BOOST_CHECK(jsonObj[*it].type() == Json::objectValue);
+            checkRlp(jsonObj[*it], rlp[i]);
+            i++;
+        }
     }
-    else if (jsonObj.type() == js::int_type)
+    else if (jsonObj.type() == Json::intValue)
     {
         BOOST_CHECK(rlp.isInt());
         BOOST_CHECK(!rlp.isList());
         BOOST_CHECK(!rlp.isNull());
-        BOOST_CHECK(rlp == jsonObj.get_int());
+        BOOST_CHECK(rlp == jsonObj.asInt());
     }
-    else if (jsonObj.type() == js::str_type)
+    else if (jsonObj.type() == Json::stringValue)
     {
-        std::string str = jsonObj.get_str();
+        std::string str = jsonObj.asString();
         if (!str.empty() && str.front() == '#')
         {
             // Deal with bigint instead of a raw string
@@ -177,7 +197,7 @@ void RlpTest::checkRlp(js::mValue const& jsonObj, dev::RLP const& rlp)
             BOOST_CHECK(!rlp.isList());
             BOOST_CHECK(!rlp.isNull());
             BOOST_CHECK(rlp.isData());
-            BOOST_CHECK(rlp == jsonObj.get_str());
+            BOOST_CHECK(rlp == jsonObj.asString());
         }
     }
 }

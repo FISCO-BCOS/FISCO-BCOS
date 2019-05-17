@@ -22,7 +22,6 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
@@ -1541,46 +1540,46 @@ void PBFTEngine::handleFutureBlock()
 /// get the status of PBFT consensus
 const std::string PBFTEngine::consensusStatus()
 {
-    json_spirit::Array status;
-    json_spirit::Object statusObj;
+    Json::Value status;
+    Json::Value statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("connectedNodes", IDXTYPE(m_connectedNode)));
+    statusObj["connectedNodes"] = IDXTYPE(m_connectedNode);
     /// get the current view
-    statusObj.push_back(json_spirit::Pair("currentView", m_view));
+    statusObj["currentView"] = m_view;
     /// get toView
-    statusObj.push_back(json_spirit::Pair("toView", m_toView));
+    statusObj["toView"] = m_toView;
     /// get leader failed or not
-    statusObj.push_back(json_spirit::Pair("leaderFailed", bool(m_leaderFailed)));
-    status.push_back(statusObj);
-
+    statusObj["leaderFailed"] = bool(m_leaderFailed);
+    status.append(statusObj);
     /// get view of node id
     getAllNodesViewStatus(status);
 
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);
-    json_spirit::Value value(status);
-    std::string status_str = json_spirit::write_string(value, true);
+
+    Json::FastWriter fastWriter;
+    std::string status_str = fastWriter.write(status);
     return status_str;
 }
 
-void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
+void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
 {
     updateViewMap(nodeIdx(), m_view);
-    json_spirit::Array view_array;
+    Json::Value view_array;
     ReadGuard l(x_viewMap);
     for (auto it : m_viewMap)
     {
-        json_spirit::Object view_obj;
+        Json::Value view_obj;
         dev::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != dev::network::NodeID())
         {
-            view_obj.push_back(json_spirit::Pair("nodeId", dev::toHex(node_id)));
-            view_obj.push_back(json_spirit::Pair("view", it.second));
-            view_array.push_back(view_obj);
+            view_obj["nodeId"] = dev::toHex(node_id);
+            view_obj["view"] = it.second;
+            view_array.append(view_obj);
         }
     }
-    status.push_back(view_array);
+    status.append(view_array);
 }
 
 }  // namespace consensus
