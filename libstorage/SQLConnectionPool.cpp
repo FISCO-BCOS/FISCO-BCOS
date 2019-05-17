@@ -38,19 +38,19 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
            << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
            << "&charset=" << _dbConfig.dbCharset;
         auto connetionBuf = ss.str();
-        URL_T _url = URL_new(connetionBuf.c_str());
-        if (_url == NULL)
+        URL_T url = URL_new(connetionBuf.c_str());
+        if (url == NULL)
         {
-            stringstream _exitInfo;
-            _exitInfo << "parse url[" << connetionBuf << "] error please check";
+            stringstream exitInfo;
+            exitInfo << "parse url[" << connetionBuf << "] error please check";
             // TODO: chang errorExitOut to throw exception
-            errorExitOut(_exitInfo);
+            errorExitOut(exitInfo);
         }
         SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
 
         TRY
         {
-            m_connectionPool = ConnectionPool_new(_url);
+            m_connectionPool = ConnectionPool_new(url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
             ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
@@ -59,23 +59,23 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         }
         CATCH(SQLException)
         {
-            URL_free(&_url);
+            URL_free(&url);
             SQLConnectionPool_LOG(ERROR)
                 << "init connection pool failed url:" << connetionBuf << " please check";
-            stringstream _exitInfo;
-            _exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
-            errorExitOut(_exitInfo);
+            stringstream exitInfo;
+            exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
+            errorExitOut(exitInfo);
         }
         END_TRY;
 
-        URL_free(&_url);
+        URL_free(&url);
     }
     else
     {
-        stringstream _exitInfo;
-        _exitInfo << "not support db type:" << _dbConfig.dbType;
+        stringstream exitInfo;
+        exitInfo << "not support db type:" << _dbConfig.dbType;
         // TODO: chang errorExitOut to throw exception
-        errorExitOut(_exitInfo);
+        errorExitOut(exitInfo);
     }
     return true;
 }
@@ -155,8 +155,8 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
            << "/information_schema?user=" << _dbConfig.dbUsername
            << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset;
         auto connetionBuf = ss.str();
-        URL_T _url = URL_new(connetionBuf.c_str());
-        if (_url == NULL)
+        URL_T url = URL_new(connetionBuf.c_str());
+        if (url == NULL)
         {
             stringstream _exitInfo;
             _exitInfo << "parse url[" << connetionBuf << "] error please check";
@@ -170,7 +170,7 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
 
         TRY
         {
-            _connectionPool = ConnectionPool_new(_url);
+            _connectionPool = ConnectionPool_new(url);
             ConnectionPool_setInitialConnections(_connectionPool, 2);
             ConnectionPool_setMaxConnections(_connectionPool, 2);
             ConnectionPool_start(_connectionPool);
@@ -198,7 +198,7 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             }
             ConnectionPool_stop(_connectionPool);
             ConnectionPool_free(&_connectionPool);
-            URL_free(&_url);
+            URL_free(&url);
             SQLConnectionPool_LOG(ERROR)
                 << "init connection pool failed url:" << connetionBuf << " please check";
             stringstream _exitInfo;
@@ -211,13 +211,13 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
         ConnectionPool_returnConnection(_connectionPool, _connection);
         ConnectionPool_stop(_connectionPool);
         ConnectionPool_free(&_connectionPool);
-        URL_free(&_url);
+        URL_free(&url);
     }
     else
     {
-        stringstream _exitInfo;
-        _exitInfo << "not support db type:" << _dbConfig.dbType;
+        stringstream exitInfo;
+        exitInfo << "not support db type:" << _dbConfig.dbType;
         // TODO: chang errorExitOut to throw exception
-        errorExitOut(_exitInfo);
+        errorExitOut(exitInfo);
     }
 }
