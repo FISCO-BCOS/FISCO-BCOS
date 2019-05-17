@@ -396,24 +396,14 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
             if (cacheEntry->force())
             {
-                auto tableIt = m_caches.find(commitData->info->name);
-                if (tableIt == m_caches.end())
-                {
-                    tableIt = m_caches
-                                  .insert(std::make_pair(
-                                      commitData->info->name, std::make_shared<TableCaches>()))
-                                  .first;
-                    tableIt->second->tableInfo()->name = commitData->info->name;
-                }
+                auto result = touchCacheNoLock(commitData->info, key, true);
 
-                auto caches = std::make_shared<Caches>();
+                auto caches = std::get<0>(result);
                 auto newEntries = std::make_shared<Entries>();
                 caches->setEntries(newEntries);
                 caches->setNum(num);
 
-                auto newIt = tableIt->second->addCache(key, caches);
-
-                newIt.first->second->entries()->addEntry(cacheEntry);
+                caches->entries()->addEntry(cacheEntry);
             }
             else
             {
