@@ -75,14 +75,10 @@ Entries::Ptr LevelDBStorage2::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    if (valueIt->first == ID_FIELD)
-                    {
-                        entry->setID(valueIt->second);
-                        continue;
-                    }
                     entry->setField(valueIt->first, valueIt->second);
                 }
-
+                entry->setID(entry->getField(ID_FIELD));
+                entry->setNum(entry->getField(NUM_FIELD));
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);

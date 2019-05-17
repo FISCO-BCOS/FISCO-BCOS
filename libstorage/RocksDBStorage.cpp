@@ -57,7 +57,7 @@ Entries::Ptr RocksDBStorage::select(
         auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
         if (!s.ok() && !s.IsNotFound())
         {
-            STORAGE_LEVELDB_LOG(ERROR)
+            STORAGE_ROCKSDB_LOG(ERROR)
                 << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
@@ -77,16 +77,10 @@ Entries::Ptr RocksDBStorage::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    if (valueIt->first == ID_FIELD)
-                    {
-                        entry->setID(valueIt->second);
-                    }
-                    else
-                    {
-                        entry->setField(valueIt->first, valueIt->second);
-                    }
+                    entry->setField(valueIt->first, valueIt->second);
                 }
-
+                entry->setID(entry->getField(ID_FIELD));
+                entry->setNum(entry->getField(NUM_FIELD));
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
@@ -99,7 +93,7 @@ Entries::Ptr RocksDBStorage::select(
     }
     catch (exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
+        STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(e);
@@ -141,7 +135,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
         options.sync = false;
         m_db->Write(options, &batch);
         auto writeDB_time_cost = utcTime();
-        STORAGE_LEVELDB_LOG(DEBUG)
+        STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
             << LOG_KV("encodeTimeCost", encode_time_cost - start_time)
             << LOG_KV("writeDBTimeCost", writeDB_time_cost - encode_time_cost)
@@ -151,7 +145,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
     }
     catch (exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
+        STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -196,7 +190,7 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 // l.unlock();
                 if (!s.ok() && !s.IsNotFound())
                 {
-                    STORAGE_LEVELDB_LOG(ERROR)
+                    STORAGE_ROCKSDB_LOG(ERROR)
                         << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
 
                     BOOST_THROW_EXCEPTION(

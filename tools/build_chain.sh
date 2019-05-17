@@ -36,7 +36,7 @@ timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
 default_version="2.0.0-rc3"
-OS=
+macOS=""
 
 help() {
     echo $1
@@ -137,7 +137,6 @@ LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
@@ -164,9 +163,7 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
     if [ "$(uname)" == "Darwin" ];then
-        OS="macOS"
-    elif [ "$(uname -s)" == " Linux " ];then
-        OS="Linux"
+        macOS="macOS"
     fi
 
 }
@@ -940,7 +937,7 @@ fi
 
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
-    if [[ -z ${bin_path} && -z ${OS} ]];then
+    if [[ -z ${bin_path} && -z ${macOS} ]];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
@@ -949,7 +946,7 @@ if [ -z ${docker_mode} ];then
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
         chmod a+x ${bin_path}
-    elif [[ -z ${bin_path} && ! -z ${OS} ]];then
+    elif [[ -z ${bin_path} && ! -z ${macOS} ]];then
         echo "Please use docker mode to run fisco-bcos on macOS Or compile source code and use -e option to specific fisco-bcos binary path"
         exit 1
     else
