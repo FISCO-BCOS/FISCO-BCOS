@@ -178,35 +178,43 @@ void RocksDBStorage::processNewEntries(int64_t num,
         auto entry = entries->get(j);
         auto key = entry->getField(tableInfo->key);
 
-        auto it = key2value->find(key);
-        if (it == key2value->end())
+        auto it = map<string, vector<map<string, string>>>::iterator();
+        if (entry->force())
         {
-            string entryKey = tableInfo->name;
-            entryKey.append("_").append(key);
-
-            string value;
-            auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
-            // l.unlock();
-            if (!s.ok() && !s.IsNotFound())
+            it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
+        }
+        else
+        {
+            it = key2value->find(key);
+            if (it == key2value->end())
             {
-                STORAGE_LEVELDB_LOG(ERROR)
-                    << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                string entryKey = tableInfo->name;
+                entryKey.append("_").append(key);
 
-                BOOST_THROW_EXCEPTION(
-                    StorageException(-1, "Query leveldb exception:" + s.ToString()));
-            }
+                string value;
+                auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
+                // l.unlock();
+                if (!s.ok() && !s.IsNotFound())
+                {
+                    STORAGE_LEVELDB_LOG(ERROR)
+                        << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
 
-            if (s.IsNotFound())
-            {
-                it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
-            }
-            else
-            {
-                vector<map<string, string>> res;
-                stringstream ss(value);
-                boost::archive::binary_iarchive ia(ss);
-                ia >> res;
-                it = key2value->emplace(key, res).first;
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(-1, "Query leveldb exception:" + s.ToString()));
+                }
+
+                if (s.IsNotFound())
+                {
+                    it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
+                }
+                else
+                {
+                    vector<map<string, string>> res;
+                    stringstream ss(value);
+                    boost::archive::binary_iarchive ia(ss);
+                    ia >> res;
+                    it = key2value->emplace(key, res).first;
+                }
             }
         }
 
