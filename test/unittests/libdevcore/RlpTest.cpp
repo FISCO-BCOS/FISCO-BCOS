@@ -76,11 +76,12 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
         try
         {
             LOG(INFO) << "Testing ... " << path.filename();
-            js::mValue v;
             std::string s = dev::asString(dev::contents(path.string()));
             std::string empty_str = "Content of " + path.string() + " is empty";
             BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_str);
-            js::read_string(s, v);
+            Json::Value v;
+            Json::Reader reader;
+            reader.parse(s, v);
             dev::test::RlpTest::doRlpTests(v);
         }
         catch (std::exception const& _e)

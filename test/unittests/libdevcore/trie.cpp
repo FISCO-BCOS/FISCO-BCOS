@@ -16,7 +16,7 @@
 */
 
 #include "MemTrie.h"
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/MemoryDB.h>
 #include <libdevcore/TrieDB.h>
@@ -34,8 +34,6 @@ using namespace dev;
 using namespace dev::test;
 
 namespace fs = boost::filesystem;
-namespace js = json_spirit;
-
 static unsigned fac(unsigned _i)
 {
     return _i > 2 ? _i * fac(_i - 1) : _i;
@@ -76,7 +74,8 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
     // #endif
     LOG(INFO) << "Testing Secure Trie...";
-    js::mValue v;
+    Json::Value v;
+    Json::Reader reader;
 #ifdef FISCO_GM
     string const s = contentsString(testPath / fs::path("GMhex_encoded_securetrie_test.json"));
 #else
@@ -85,15 +84,19 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
     BOOST_REQUIRE_MESSAGE(s.length() > 0,
         "Contents of 'hex_encoded_securetrie_test.json' is empty. Have you cloned the 'tests' repo "
         "branch develop?");
-    js::read_string(s, v);
-    for (auto& i : v.get_obj())
+    reader.parse(s, v);
+    Json::Value::Members v_mem = v.getMemberNames();
+    for (auto it = v_mem.begin(); it != v_mem.end(); it++)
     {
-        LOG(INFO) << i.first;
-        js::mObject& o = i.second.get_obj();
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
+        /// Json::Value& o = v[i];
         vector<pair<string, string>> ss;
-        for (auto i : o["in"].get_obj())
+        Json::Value::Members mem = o.getMemberNames();
+        for (auto it = mem.begin(); it != mem.end(); it++)
         {
-            ss.push_back(make_pair(i.first, i.second.get_str()));
+            ss.push_back(make_pair(*it, o[*it].asString()));
             if (!ss.back().first.find("0x"))
                 ss.back().first = asString(fromHex(ss.back().first.substr(2)));
             if (!ss.back().second.find("0x"))
@@ -135,15 +138,15 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
                 }
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
-            BOOST_REQUIRE(!o["root"].is_null());
+            BOOST_REQUIRE(!o["root"].isNull());
             // #ifdef FISCO_GM
             //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
             //                 toHexPrefixed(ht.root().asArray()));
             //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
             //                 toHexPrefixed(ft.root().asArray()));
             // #else
-            BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ht.root().asArray()));
-            BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(ft.root().asArray()));
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ht.root().asArray()));
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ft.root().asArray()));
             // #endif
         }
     }
@@ -154,7 +157,6 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
     LOG(INFO) << "Testing Trie...";
-    js::mValue v;
 #ifdef FISCO_GM
     string const s = contentsString(testPath / fs::path("GMtrieanyorder.json"));
 #else
@@ -164,15 +166,20 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
         "Contents of 'trieanyorder.json' is empty. Have you cloned the 'tests' repo branch "
         "develop?");
 
-    js::read_string(s, v);
-    for (auto& i : v.get_obj())
+    Json::Value v;
+    Json::Reader reader;
+    reader.parse(s, v);
+    Json::Value::Members mem = v.getMemberNames();
+    for (auto it = mem.begin(); it != mem.end(); it++)
     {
-        LOG(INFO) << i.first;
-        js::mObject& o = i.second.get_obj();
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
+        Json::Value::Members o_mem = o.getMemberNames();
         vector<pair<string, string>> ss;
-        for (auto i : o["in"].get_obj())
+        for (auto it = o_mem.begin(); it != o_mem.end(); it++)
         {
-            ss.push_back(make_pair(i.first, i.second.get_str()));
+            ss.push_back(make_pair(*it, o[*it].asString()));
             if (!ss.back().first.find("0x"))
                 ss.back().first = asString(fromHex(ss.back().first.substr(2)));
             if (!ss.back().second.find("0x"))
@@ -214,14 +221,14 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
                 }
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
-            BOOST_REQUIRE(!o["root"].is_null());
+            BOOST_REQUIRE(!o["root"].isNull());
             // #ifdef FISCO_GM
             //             BOOST_CHECK_EQUAL("0xac0c2b00e9f978a86713cc6dddea3972925f0d29243a2b51a3b597afaf1c7451",
             //                 toHexPrefixed(t.root().asArray()));
             //             BOOST_CHECK_EQUAL(ht.root(), ft.root());
 
             // #else
-            BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
             BOOST_CHECK_EQUAL(ht.root(), ft.root());
             // #endif
         }
@@ -233,7 +240,6 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
     LOG(INFO) << "Testing Trie...";
-    js::mValue v;
 #ifdef FISCO_GM
     string const s = contentsString(testPath / fs::path("GMtrietest.json"));
 #else
@@ -242,22 +248,31 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
     BOOST_REQUIRE_MESSAGE(s.length() > 0,
         "Contents of 'trietest.json' is empty. Have you cloned the 'tests' repo branch develop?");
 
-    js::read_string(s, v);
-
-    for (auto& i : v.get_obj())
+    Json::Value v;
+    Json::Reader reader;
+    reader.parse(s, v);
+    Json::Value::Members mem = v.getMemberNames();
+    for (auto it = mem.begin(); it != mem.end(); it++)
     {
-        LOG(INFO) << i.first;
-        js::mObject& o = i.second.get_obj();
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
         vector<pair<string, string>> ss;
         vector<string> keysToBeDeleted;
-        for (auto& i : o["in"].get_array())
+
+        Json::Value::Members o_mem = o.getMemberNames();
+        for (auto it = o_mem.begin(); it != o_mem.end(); it++)
         {
             vector<string> values;
-            for (auto& s : i.get_array())
+            Json::Value s = o[*it];
+            Json::Value::Members s_mem = s.getMemberNames();
+            for (auto it = s_mem.begin(); it != s_mem.end(); it++)
             {
-                if (s.type() == json_spirit::str_type)
-                    values.push_back(s.get_str());
-                else if (s.type() == json_spirit::null_type)
+                if (s[*it].type() == Json::stringValue)
+                {
+                    values.push_back(s[*it].asString());
+                }
+                else if (s[*it].type() == Json::nullValue)
                 {
                     // mark entry for deletion
                     values.push_back("");
@@ -276,7 +291,6 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
             if (!ss.back().second.find("0x"))
                 ss.back().second = asString(fromHex(ss.back().second.substr(2)));
         }
-
         MemoryDB m;
         EnforceRefs r(m, true);
         GenericTrieDB<MemoryDB> t(&m);
@@ -316,11 +330,11 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
             BOOST_CHECK_EQUAL(ht.root(), ft.root());
         }
 
-        BOOST_REQUIRE(!o["root"].is_null());
+        BOOST_REQUIRE(!o["root"].isNull());
         // #ifdef FISCO_GM
         // BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
         // #else
-        BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
+        BOOST_CHECK_EQUAL(o["root"].asString(), toHexPrefixed(t.root().asArray()));
         // #endif
     }
 }

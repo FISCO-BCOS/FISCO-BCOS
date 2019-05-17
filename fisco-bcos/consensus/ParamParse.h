@@ -22,7 +22,6 @@
  */
 
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
@@ -36,7 +35,6 @@ INITIALIZE_EASYLOGGINGPP
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::eth;
-namespace js = json_spirit;
 class Params
 {
 public:
