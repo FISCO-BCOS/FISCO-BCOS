@@ -141,7 +141,7 @@ private:
     std::string readableCapacity(size_t num);
 
     std::map<std::string, TableCaches::Ptr> m_caches;
-    tbb::recursive_mutex m_cachesMutex;
+    tbb::spin_mutex m_cachesMutex;
     tbb::spin_mutex m_cachesSpinMutex;
 
     boost::multi_index_container<std::pair<std::string, std::string>,
