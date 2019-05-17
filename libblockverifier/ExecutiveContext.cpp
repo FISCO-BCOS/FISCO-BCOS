@@ -71,7 +71,8 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 
 Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
 {
-    Address address(++m_addressCount);
+    auto count = ++m_addressCount;
+    Address address(count);
 
     m_address2Precompiled.insert(std::make_pair(address, p));
 
