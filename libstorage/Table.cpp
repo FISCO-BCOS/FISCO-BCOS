@@ -186,6 +186,12 @@ void Entry::setNum(uint32_t num)
     m_dirty = true;
 }
 
+void Entry::setNum(const std::string& id)
+{
+    m_num = boost::lexical_cast<uint32_t>(id);
+    m_dirty = true;
+}
+
 bool Entry::dirty() const
 {
     return m_dirty;
