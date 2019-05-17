@@ -569,41 +569,9 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
         auto result = cachedStorage->selectNoCondition(
             dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
         Caches::Ptr caches = std::get<0>(result);
-        BOOST_TEST(caches->key() == "key");
-        BOOST_TEST(caches->num() == 100 + i - 1);
-
-        auto entries = caches->entries();
-        BOOST_TEST(entries->size() == i + 1);
-
-        for (size_t j = 0; j < entries->size(); ++j)
-        {
-            auto cacheEntry = entries->get(j);
-            BOOST_TEST(cacheEntry != entry);
-
-            BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
-            BOOST_TEST(cacheEntry->getField("value") == boost::lexical_cast<std::string>(200 + j));
-        }
-
-        auto newEntry = std::make_shared<Entry>();
-        newEntry->setField("key", "1");
-        newEntry->setField("value", boost::lexical_cast<std::string>(200 + i));
-
-        auto newData = std::make_shared<dev::storage::TableData>();
-        newData->newEntries->addEntry(newEntry);
-        newData->info = tableInfo;
-
-        std::vector<dev::storage::TableData::Ptr> newDatas;
-        newDatas.push_back(data);
-
-        cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
+        BOOST_TEST(caches->key() == "1");
+        BOOST_TEST(caches->num() == 0);
     }
-
-    auto r = cachedStorage->selectNoCondition(
-        dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
-    Caches::Ptr result = std::get<0>(r);
-    BOOST_TEST(result->num() == 199);
-    auto resultEntries = result->entries();
-    BOOST_TEST(resultEntries->size() == 100);
 }
 
 BOOST_AUTO_TEST_CASE(checkAndClear)

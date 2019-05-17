@@ -225,7 +225,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
+    tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
 
     CACHED_STORAGE_LOG(TRACE) << "CachedStorage commit: " << datas.size();
 
@@ -281,7 +281,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                                         CACHED_STORAGE_LOG(TRACE)
                                             << requestData->info->name << "-" << key
-                                            << " miss the cache while commit";
+                                            << " miss the cache while commit dirty entries";
 
                                         caches->setEntries(backendData);
 
@@ -417,8 +417,36 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             }
             else
             {
-                auto result = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+                auto result = touchCacheNoLock(commitData->info, key, true);
                 auto caches = std::get<0>(result);
+                if (caches->empty())
+                {
+                    if (m_backend)
+                    {
+                        auto conditionKey = std::make_shared<Condition>();
+                        conditionKey->EQ(commitData->info->key, key);
+                        auto backendData =
+                            m_backend->select(hash, num, commitData->info, key, conditionKey);
+
+                        CACHED_STORAGE_LOG(TRACE) << commitData->info->name << "-" << key
+                                                  << " miss the cache while commit new entries";
+
+                        caches->setEntries(backendData);
+
+                        size_t totalCapacity = 0;
+                        for (auto it : *backendData)
+                        {
+                            totalCapacity += it->capacity();
+                        }
+                        CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << commitData->info->name
+                                                  << "-" << key << ", capacity: " << totalCapacity;
+
+                        touchMRU(commitData->info->name, key, totalCapacity);
+                    }
+                }
+
+                // auto result = selectNoCondition(h256(), 0, commitData->info, key, nullptr);
+
                 caches->entries()->addEntry(cacheEntry);
                 caches->setNum(num);
             }
@@ -585,7 +613,7 @@ void CachedStorage::touchMRU(std::string table, std::string key, ssize_t capacit
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchCache(
     TableInfo::Ptr tableInfo, std::string key, bool write)
 {
-    tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
+    tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
 
     return touchCacheNoLock(tableInfo, key, write);
 }
@@ -619,7 +647,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchC
 
 void CachedStorage::checkAndClear()
 {
-    tbb::recursive_mutex::scoped_lock lock(m_cachesMutex);
+    tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
     tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
 
     TIME_RECORD("Check and clear");
@@ -707,7 +735,7 @@ void CachedStorage::checkAndClear()
                     else
                     {
                         CACHED_STORAGE_LOG(FATAL)
-                            << "Cache not found, erase mru" << it->first << "-" << it->second;
+                            << "Cache not found, erase mru: " << it->first << "-" << it->second;
                         it = m_mru.erase(it);
                     }
 
