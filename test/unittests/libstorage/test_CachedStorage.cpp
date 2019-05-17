@@ -546,6 +546,7 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 {
     cachedStorage->init();
+    cachedStorage->setBackend(Storage::Ptr());
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = "t_test";
