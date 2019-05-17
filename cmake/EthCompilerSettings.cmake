@@ -57,10 +57,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # build deps lib Release
     set(_only_release_configuration "-DCMAKE_BUILD_TYPE=Release")
 
-    if(STATIC_BUILD)
-    SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-    SET(BUILD_SHARED_LIBRARIES OFF)
-    SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+    if(BUILD_STATIC)
+        SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+        SET(BUILD_SHARED_LIBRARIES OFF)
+        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
     
     if(PROF)
