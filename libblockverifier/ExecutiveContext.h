@@ -32,6 +32,9 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/Table.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <atomic>
+#include <functional>
 #include <memory>
 
 namespace dev
@@ -53,7 +56,7 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
 
-    ExecutiveContext() {}
+    ExecutiveContext() : m_addressCount(0x10000) {}
 
     virtual ~ExecutiveContext()
     {
@@ -109,8 +112,9 @@ public:
     std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
 
 private:
-    std::unordered_map<Address, Precompiled::Ptr> m_address2Precompiled;
-    int m_addressCount = 0x10000;
+    tbb::concurrent_unordered_map<Address, Precompiled::Ptr, std::hash<Address>>
+        m_address2Precompiled;
+    std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;
     std::shared_ptr<dev::executive::StateFace> m_stateFace;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
