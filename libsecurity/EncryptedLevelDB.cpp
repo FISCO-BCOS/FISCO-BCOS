@@ -31,31 +31,32 @@ namespace dev
 {
 namespace db
 {
-/*
+#if 0
 char* ascii2hex(const char* _chs, int _len)
 {
-char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+    char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-char* ascii = (char*)calloc(_len * 3 + 1, sizeof(char));  // calloc ascii
+    char* ascii = (char*)calloc(_len * 3 + 1, sizeof(char));  // calloc ascii
 
-int i = 0;
-while (i < _len)
-{
-    int b = _chs[i] & 0x000000ff;
-    ascii[i * 2] = hex[b / 16];
-    ascii[i * 2 + 1] = hex[b % 16];
-    ++i;
-}
-return ascii;
+    int i = 0;
+    while (i < _len)
+    {
+        int b = _chs[i] & 0x000000ff;
+        ascii[i * 2] = hex[b / 16];
+        ascii[i * 2 + 1] = hex[b % 16];
+        ++i;
+    }
+    return ascii;
 }
 
 char* ascii2hex(const string& _str)
 {
-const char* chs = _str.c_str();
-int len = _str.length();
-return ascii2hex(chs, len);
+    const char* chs = _str.c_str();
+    int len = _str.length();
+    return ascii2hex(chs, len);
 }
-*/
+#endif
+
 std::string encryptValue(const bytes& _dataKey, leveldb::Slice _value)
 {
     bytesConstRef valueRef = bytesConstRef((const unsigned char*)_value.data(), _value.size());
