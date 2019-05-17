@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
                 }
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
-            BOOST_REQUIRE(!o["root"].isNull());
+            BOOST_REQUIRE(!root_obj["root"].isNull());
             // #ifdef FISCO_GM
             //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
             //                 toHexPrefixed(ht.root().asArray()));
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
                 }
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
-            BOOST_REQUIRE(!o["root"].isNull());
+            BOOST_REQUIRE(!root_obj["root"].isNull());
             // #ifdef FISCO_GM
             //             BOOST_CHECK_EQUAL("0xac0c2b00e9f978a86713cc6dddea3972925f0d29243a2b51a3b597afaf1c7451",
             //                 toHexPrefixed(t.root().asArray()));
@@ -260,30 +260,30 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
         vector<pair<string, string>> ss;
         vector<string> keysToBeDeleted;
 
-        Json::Value::Members o_mem = o.getMemberNames();
-        for (auto it = o_mem.begin(); it != o_mem.end(); it++)
+        for (int i = 0; i < (int)o.size(); i++)
         {
             vector<string> values;
-            Json::Value s = o[*it];
-            Json::Value::Members s_mem = s.getMemberNames();
-            for (auto it = s_mem.begin(); it != s_mem.end(); it++)
+            Json::Value s = o[i];
+            if (s.type() == Json::arrayValue)
             {
-                if (s[*it].type() == Json::stringValue)
+                for (int j = 0; j < (int)s.size(); j++)
                 {
-                    values.push_back(s[*it].asString());
+                    if (s[j].type() == Json::stringValue)
+                    {
+                        values.push_back(s[j].asString());
+                    }
+                    else if (s[j].type() == Json::nullValue)
+                    {
+                        // mark entry for deletion
+                        values.push_back("");
+                        if (!values[0].find("0x"))
+                            values[0] = asString(fromHex(values[0].substr(2)));
+                        keysToBeDeleted.push_back(values[0]);
+                    }
+                    else
+                        BOOST_FAIL("Bad type (expected string)");
                 }
-                else if (s[*it].type() == Json::nullValue)
-                {
-                    // mark entry for deletion
-                    values.push_back("");
-                    if (!values[0].find("0x"))
-                        values[0] = asString(fromHex(values[0].substr(2)));
-                    keysToBeDeleted.push_back(values[0]);
-                }
-                else
-                    BOOST_FAIL("Bad type (expected string)");
             }
-
             BOOST_REQUIRE(values.size() == 2);
             ss.push_back(make_pair(values[0], values[1]));
             if (!ss.back().first.find("0x"))
@@ -330,11 +330,11 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
             BOOST_CHECK_EQUAL(ht.root(), ft.root());
         }
 
-        BOOST_REQUIRE(!o["root"].isNull());
+        BOOST_REQUIRE(!root_obj["root"].isNull());
         // #ifdef FISCO_GM
         // BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
         // #else
-        BOOST_CHECK_EQUAL(o["root"].asString(), toHexPrefixed(t.root().asArray()));
+        BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
         // #endif
     }
 }
