@@ -226,6 +226,13 @@ bool SyncMaster::isSyncing() const
     return m_syncStatus->state != SyncState::Idle;
 }
 
+// is my number is far smaller than max block number of this block chain
+bool SyncMaster::isFarSyncing() const
+{
+    int64_t currentNumber = m_blockChain->number();
+    return m_syncStatus->knownHighestNumber - currentNumber > 10;
+}
+
 void SyncMaster::maintainTransactions()
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
