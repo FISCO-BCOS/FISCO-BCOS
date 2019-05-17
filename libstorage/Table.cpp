@@ -233,6 +233,7 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_capacity = entry->m_capacity;
 
     m_data = entry->m_data;
+
     *(m_data->m_refCount) += 1;
 }
 
