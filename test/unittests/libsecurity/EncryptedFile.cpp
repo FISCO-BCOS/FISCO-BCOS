@@ -97,7 +97,7 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(EncryptedFileTest, EncryptedFileFixture)
-
+/*
 BOOST_AUTO_TEST_CASE(decryptContentsTest)
 {
     saveStringFile(".test_cipher_file.txt", cipherText);
@@ -109,6 +109,7 @@ BOOST_AUTO_TEST_CASE(decryptContentsTest)
     LOG(DEBUG) << toHex(res);
     BOOST_CHECK(plainText == toHex(res));
 }
+*/
 
 BOOST_AUTO_TEST_SUITE_END()
 
