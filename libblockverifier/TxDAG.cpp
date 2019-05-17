@@ -29,9 +29,14 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 
+#define DAG_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("DAG")
+
 // Generate DAG according with given transactions
-void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
+void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _blockHeight)
 {
+    DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("blockHeight", _blockHeight)
+                   << LOG_KV("transactionNum", _txs.size());
+
     m_txs = make_shared<Transactions const>(_txs);
     m_dag.init(_txs.size());
 
@@ -54,8 +59,9 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
                 ID pId = latestCriticals.get(c);
                 if (pId != INVALID_ID)
                 {
+                    DAG_LOG(TRACE)
+                        << LOG_DESC("Add edge") << LOG_KV("from", pId) << LOG_KV("to", id);
                     m_dag.addEdge(pId, id);  // add DAG edge
-                    // LOG(DEBUG) << "Edge: " << pId << " <-> " << id;
                 }
             }
 
@@ -83,6 +89,8 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs)
     m_dag.generate();
 
     m_totalParaTxs = _txs.size();
+
+    DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG") << LOG_KV("blockHeight", _blockHeight);
 }
 
 // Set transaction execution function

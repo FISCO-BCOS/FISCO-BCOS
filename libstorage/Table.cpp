@@ -232,8 +232,8 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_deleted = entry->m_deleted;
     m_capacity = entry->m_capacity;
 
-    tbb::mutex::scoped_lock lock(m_data->m_mutex);
     m_data = entry->m_data;
+
     *(m_data->m_refCount) += 1;
 }
 
@@ -248,7 +248,6 @@ void Entry::checkRef()
         m_data->m_fields->insert(std::make_pair(STATUS, "0"));
     }
 
-    tbb::mutex::scoped_lock lock(m_data->m_mutex);
     if (m_data->m_refCount > 0)
     {
         auto m_oldData = m_data;
