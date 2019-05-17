@@ -96,7 +96,7 @@ public:
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // is my number is far smaller than max block number of this block chain
-    virtual bool isFarSyncing() const override;
+    bool isFarSyncing() const override;
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
