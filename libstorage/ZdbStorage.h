@@ -53,13 +53,15 @@ public:
 
 public:
     void setConnPool(SQLConnectionPool::Ptr& _connPool);
-
-private:
-    SQLBasicAccess m_sqlBasicAcc;
-    std::function<void(std::exception&)> m_fatalHandler;
-
-private:
+    void SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc);
     void initSysTables();
+
+private:
+    std::function<void(std::exception&)> m_fatalHandler;
+    SQLBasicAccess::Ptr m_sqlBasicAcc;
+
+
+private:
     void createSysTables();
     void createSysConsensus();
     void createAccessTables();

@@ -37,9 +37,11 @@ namespace storage
 class SQLBasicAccess
 {
 public:
-    int Select(h256 hash, int num, const std::string& table, const std::string& key,
+    virtual ~SQLBasicAccess() {}
+    typedef std::shared_ptr<SQLBasicAccess> Ptr;
+    virtual int Select(h256 hash, int num, const std::string& table, const std::string& key,
         Condition::Ptr condition, Json::Value& respJson);
-    int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
+    virtual int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
 
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
@@ -60,7 +62,7 @@ private:
     int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
 
 public:
-    void ExecuteSql(const std::string& _sql);
+    virtual void ExecuteSql(const std::string& _sql);
     void setConnPool(SQLConnectionPool::Ptr& _connPool);
 
 private:
