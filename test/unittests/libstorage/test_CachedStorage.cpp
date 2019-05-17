@@ -545,74 +545,78 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 
 BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 {
-	cachedStorage->init();
+    cachedStorage->init();
 
-	auto tableInfo = std::make_shared<TableInfo>();
-	tableInfo->name = "t_test";
-	tableInfo->key = "key";
-	tableInfo->fields.push_back("value");
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = "t_test";
+    tableInfo->key = "key";
+    tableInfo->fields.push_back("value");
 
-	auto entry = std::make_shared<Entry>();
-	entry->setField("key", "1");
-	entry->setField("value", "200");
+    auto entry = std::make_shared<Entry>();
+    entry->setField("key", "1");
+    entry->setField("value", "200");
 
-	auto data = std::make_shared<dev::storage::TableData>();
-	data->newEntries->addEntry(entry);
-	data->info = tableInfo;
+    auto data = std::make_shared<dev::storage::TableData>();
+    data->newEntries->addEntry(entry);
+    data->info = tableInfo;
 
-	std::vector<dev::storage::TableData::Ptr> datas;
-	datas.push_back(data);
-	cachedStorage->commit(dev::h256(0), 99, datas);
+    std::vector<dev::storage::TableData::Ptr> datas;
+    datas.push_back(data);
+    cachedStorage->commit(dev::h256(0), 99, datas);
 
-	for(size_t i=0; i < 100; ++i) {
-		auto result = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
-		Caches::Ptr caches = std::get<0>(result);
-		BOOST_TEST(caches->key() == "key");
-		BOOST_TEST(caches->num() == 100 + i - 1);
+    for (size_t i = 0; i < 100; ++i)
+    {
+        auto result = cachedStorage->selectNoCondition(
+            dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+        Caches::Ptr caches = std::get<0>(result);
+        BOOST_TEST(caches->key() == "key");
+        BOOST_TEST(caches->num() == 100 + i - 1);
 
-		auto entries = caches->entries();
-		BOOST_TEST(entries->size() == i + 1);
+        auto entries = caches->entries();
+        BOOST_TEST(entries->size() == i + 1);
 
-		for(size_t j=0; j<entries->size(); ++j) {
-			auto cacheEntry = entries->get(j);
-			BOOST_TEST(cacheEntry != entry);
+        for (size_t j = 0; j < entries->size(); ++j)
+        {
+            auto cacheEntry = entries->get(j);
+            BOOST_TEST(cacheEntry != entry);
 
-			BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
-			BOOST_TEST(cacheEntry->getField("value") == boost::lexical_cast<std::string>(200 + j));
-		}
+            BOOST_TEST(cacheEntry->getField("key") == entry->getField("key"));
+            BOOST_TEST(cacheEntry->getField("value") == boost::lexical_cast<std::string>(200 + j));
+        }
 
-		auto newEntry = std::make_shared<Entry>();
-		newEntry->setField("key", "1");
-		newEntry->setField("value", boost::lexical_cast<std::string>(200 + i));
+        auto newEntry = std::make_shared<Entry>();
+        newEntry->setField("key", "1");
+        newEntry->setField("value", boost::lexical_cast<std::string>(200 + i));
 
-		auto newData = std::make_shared<dev::storage::TableData>();
-		newData->newEntries->addEntry(newEntry);
-		newData->info = tableInfo;
+        auto newData = std::make_shared<dev::storage::TableData>();
+        newData->newEntries->addEntry(newEntry);
+        newData->info = tableInfo;
 
-		std::vector<dev::storage::TableData::Ptr> newDatas;
-		newDatas.push_back(data);
+        std::vector<dev::storage::TableData::Ptr> newDatas;
+        newDatas.push_back(data);
 
-		cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
-	}
+        cachedStorage->commit(dev::h256(0), 100 + i, newDatas);
+    }
 
-	auto r = cachedStorage->selectNoCondition(dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
-	Caches::Ptr result = std::get<0>(r);
-	BOOST_TEST(result->num() == 199);
-	auto resultEntries = result->entries();
-	BOOST_TEST(resultEntries->size() == 100);
+    auto r = cachedStorage->selectNoCondition(
+        dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+    Caches::Ptr result = std::get<0>(r);
+    BOOST_TEST(result->num() == 199);
+    auto resultEntries = result->entries();
+    BOOST_TEST(resultEntries->size() == 100);
 }
 
-BOOST_AUTO_TEST_CASE(checkAndClear) {
-	cachedStorage->setMaxCapacity(0);
-	cachedStorage->setMaxForwardBlock(0);
+BOOST_AUTO_TEST_CASE(checkAndClear)
+{
+    cachedStorage->setMaxCapacity(0);
+    cachedStorage->setMaxForwardBlock(0);
 
-	auto backend = std::make_shared<CachedStorage>();
-	cachedStorage->setBackend(backend);
+    auto backend = std::make_shared<CachedStorage>();
+    cachedStorage->setBackend(backend);
 
-	ordered_commit_invoker();
-	parllel_commit_invoker();
-	select_condition_invoker();
-
+    ordered_commit_invoker();
+    parllel_commit_invoker();
+    select_condition_invoker();
 }
 
 BOOST_AUTO_TEST_CASE(exception)
