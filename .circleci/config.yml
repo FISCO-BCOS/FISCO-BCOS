@@ -21,7 +21,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake -DSTATIC_BUILD=ON -DTESTS=ON -DCOVERAGE=ON ..
+            cmake -DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -96,7 +96,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON ..
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -135,7 +135,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON ..
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DBUILD_GM=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -170,7 +170,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DCMAKE_BUILD_TYPE=Release ..
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release ..
             make -j2
       - run:
           name: Strip
@@ -199,7 +199,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DSTATIC_BUILD=ON -DBUILD_GM=ON  -DCMAKE_BUILD_TYPE=Release ..
+            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DBUILD_GM=ON  -DCMAKE_BUILD_TYPE=Release ..
             make -j2
       - run:
           name: Strip

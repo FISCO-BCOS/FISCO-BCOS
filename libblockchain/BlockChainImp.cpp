@@ -348,6 +348,11 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             std::string strCount = entry->getField(SYS_VALUE);
             count = lexical_cast<int64_t>(strCount);
             number = entry->num();
+            if (g_BCOSConfig.version() <= RC2_VERSION)
+            {
+                std::string strNumber = entry->getField(NUM_FIELD);
+                number = lexical_cast<int64_t>(strNumber);
+            }
         }
     }
     return std::make_pair(count, number);

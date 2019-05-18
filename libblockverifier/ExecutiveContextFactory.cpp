@@ -106,14 +106,14 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
             m_stateStorage->select(blockInfo.hash, blockInfo.number, tableInfo, key, condition);
         if (!values || values->size() != 1)
         {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#setTxGasLimitToContext]Select error");
+            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Select error");
             return;
         }
 
         auto value = values->get(0);
         if (!value)
         {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#setTxGasLimitToContext]Null pointer");
+            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Null pointer");
             return;
         }
 
@@ -125,18 +125,17 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         if (ret != "")
         {
             context->setTxGasLimit(boost::lexical_cast<uint64_t>(ret));
-            EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#setTxGasLimitToContext]")
+            EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[setTxGasLimitToContext]")
                                         << LOG_KV("txGasLimit", context->txGasLimit());
         }
         else
         {
-            EXECUTIVECONTEXT_LOG(ERROR)
-                << LOG_DESC("[#setTxGasLimitToContext]Tx gas limit is null");
+            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Tx gas limit is null");
         }
     }
     catch (std::exception& e)
     {
-        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#setTxGasLimitToContext]Failed")
+        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Failed")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
     }
 }

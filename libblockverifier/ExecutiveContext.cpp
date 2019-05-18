@@ -38,13 +38,6 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 {
     try
     {
-        /*
-        EXECUTIVECONTEXT_LOG(TRACE) << LOG_DESC("[#call]PrecompiledEngine call")
-                                    << LOG_KV("blockHash", m_blockInfo.hash.abridged())
-                                    << LOG_KV("number", m_blockInfo.number)
-                                    << LOG_KV("address", address) << LOG_KV("param", toHex(param));
-                                    */
-
         auto p = getPrecompiled(address);
 
         if (p)
@@ -55,12 +48,12 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
         else
         {
             EXECUTIVECONTEXT_LOG(DEBUG)
-                << LOG_DESC("[#call]Can't find address") << LOG_KV("address", address);
+                << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
         }
     }
     catch (std::exception& e)
     {
-        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[#call]Precompiled call error")
+        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[call]Precompiled call error")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         throw dev::eth::PrecompiledError();
@@ -178,7 +171,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 if (!isOk)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG)
-                        << LOG_DESC("[#getTxCriticals] parser function signature failed, ")
+                        << LOG_DESC("[getTxCriticals] parser function signature failed, ")
                         << LOG_KV("func signature", config->functionName);
 
                     return nullptr;
@@ -188,7 +181,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 if (paramTypes.size() < (size_t)config->criticalSize)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG)
-                        << LOG_DESC("[#getTxCriticals] params type less than  criticalSize")
+                        << LOG_DESC("[getTxCriticals] params type less than  criticalSize")
                         << LOG_KV("func signature", config->functionName)
                         << LOG_KV("func criticalSize", config->criticalSize)
                         << LOG_KV("input data", toHex(_tx.data()));
@@ -202,7 +195,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 isOk = abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), paramTypes, *res);
                 if (!isOk)
                 {
-                    EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[#getTxCriticals] abiout failed, ")
+                    EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[getTxCriticals] abiout failed, ")
                                                 << LOG_KV("func signature", config->functionName)
                                                 << LOG_KV("input data", toHex(_tx.data()));
 
