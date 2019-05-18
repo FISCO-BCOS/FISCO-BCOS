@@ -47,9 +47,7 @@ macro(configure_project)
     eth_default_option(BUILD_SHARED_LIBS OFF)
    
     eth_default_option(BUILD_STATIC OFF)
-    if(STATIC_BUILD)
-        set(BUILD_STATIC ON)
-    endif()
+
     #ARCH TYPE
     eth_default_option(ARCH_NATIVE OFF)
     set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
