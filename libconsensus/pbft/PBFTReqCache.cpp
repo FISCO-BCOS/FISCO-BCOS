@@ -207,7 +207,7 @@ void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highest
 }
 
 /// get the consensus status
-void PBFTReqCache::getCacheConsensusStatus(json_spirit::Array& status_array) const
+void PBFTReqCache::getCacheConsensusStatus(Json::Value& status_array) const
 {
     /// prepare cache
     getCacheStatus(status_array, "prepareCache", m_prepareCache);
