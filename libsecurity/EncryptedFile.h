@@ -32,7 +32,8 @@ namespace dev
 class EncryptedFile
 {
 public:
-    static bytes decryptContents(const std::string& _filePath);
+    static bytes decryptContents(
+        const std::string& _filePath, std::shared_ptr<KeyCenter> _keyCenter = nullptr);
     // static bytes encrypt(const bytes& _fileBytes, std::shared_ptr<KeyCenter> _keyCenter);
 };
 
