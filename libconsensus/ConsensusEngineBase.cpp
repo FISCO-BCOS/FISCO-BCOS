@@ -35,10 +35,10 @@ void ConsensusEngineBase::start()
 {
     if (m_startConsensusEngine)
     {
-        ENGINE_LOG(WARNING) << "[#ConsensusEngineBase has already been started]";
+        ENGINE_LOG(WARNING) << "[ConsensusEngineBase has already been started]";
         return;
     }
-    ENGINE_LOG(INFO) << "[#Start ConsensusEngineBase]";
+    ENGINE_LOG(INFO) << "[Start ConsensusEngineBase]";
     /// start  a thread to execute doWork()&&workLoop()
     startWorking();
     m_startConsensusEngine = true;
@@ -50,7 +50,7 @@ void ConsensusEngineBase::stop()
     {
         return;
     }
-    ENGINE_LOG(INFO) << "[#Stop ConsensusEngineBase]";
+    ENGINE_LOG(INFO) << "[Stop ConsensusEngineBase]";
     m_startConsensusEngine = false;
     doneWorking();
     if (isWorking())
@@ -130,7 +130,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
     try
     {
         std::stringstream s2;
-        s2 << "[#updateConsensusNodeList] Sealers:";
+        s2 << "[updateConsensusNodeList] Sealers:";
         {
             WriteGuard l(m_sealerListMutex);
             m_sealerList = m_blockChain->sealerList();
@@ -147,7 +147,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
 
         if (m_lastNodeList != s2.str())
         {
-            ENGINE_LOG(TRACE) << "[#updateConsensusNodeList] update P2P List done.";
+            ENGINE_LOG(TRACE) << "[updateConsensusNodeList] update P2P List done.";
             updateNodeListInP2P();
             m_lastNodeList = s2.str();
         }
@@ -155,7 +155,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
     catch (std::exception& e)
     {
         ENGINE_LOG(ERROR)
-            << "[#updateConsensusNodeList] update consensus node list failed [EINFO]:  "
+            << "[updateConsensusNodeList] update consensus node list failed [EINFO]:  "
             << boost::diagnostic_information(e);
     }
 }

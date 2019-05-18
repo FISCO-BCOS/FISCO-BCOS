@@ -220,7 +220,7 @@ protected:
         }
         catch (std::exception& e)
         {
-            ENGINE_LOG(DEBUG) << "[#decodeToRequests] Invalid network-received packet";
+            ENGINE_LOG(DEBUG) << "[decodeToRequests] Invalid network-received packet";
             return false;
         }
     }

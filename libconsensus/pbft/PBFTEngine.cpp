@@ -47,7 +47,7 @@ void PBFTEngine::start()
 {
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[#Start PBFTEngine...]";
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -59,7 +59,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
-    PBFTENGINE_LOG(INFO) << "[#PBFT init env successfully]";
+    PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
 }
 
 bool PBFTEngine::shouldSeal()
