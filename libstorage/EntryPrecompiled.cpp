@@ -40,7 +40,7 @@ const char* const ENTRY_GETB_STR = "getBytes64(string)";
 const char* const ENTRY_GETB_STR32 = "getBytes32(string)";
 const char* const ENTRY_GET_STR = "getString(string)";
 
-std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint)
+std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint = false)
 {
     dev::eth::ContractABI abi;
     std::string value;
@@ -92,23 +92,29 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
     bytes out;
 
     if (func == name2Selector[ENTRY_GET_INT])
-    {  // getInt(string) getUInt(string)
+    {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
         s256 num = boost::lexical_cast<s256>(m_entry->getField(str));
         out = abi.abiIn("", num);
     }
     else if (func == name2Selector[ENTRY_GET_UINT])
-    {
+    {  // getUInt(string)
         std::string str;
         abi.abiOut(data, str);
         u256 num = boost::lexical_cast<u256>(m_entry->getField(str));
         out = abi.abiIn("", num);
     }
-    else if (func == name2Selector[ENTRY_SET_STR_INT] || func == name2Selector[ENTRY_SET_STR_UINT])
+    else if (func == name2Selector[ENTRY_SET_STR_INT])
     {  // set(string,int256) set(string,uint256)
         std::string key;
-        std::string value(setInt(data, key, func == name2Selector[ENTRY_SET_STR_UINT]));
+        std::string value(setInt(data, key));
+        m_entry->setField(key, value);
+    }
+    else if (func == name2Selector[ENTRY_SET_STR_UINT])
+    {  // set(string,uint256)
+        std::string key;
+        std::string value(setInt(data, key, true));
         m_entry->setField(key, value);
     }
     else if (func == name2Selector[ENTRY_SET_STR_STR])
