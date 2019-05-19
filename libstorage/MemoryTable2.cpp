@@ -319,7 +319,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 }
             });
 
-        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLess(m_tableInfo));
+        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
         bytes allData;
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {

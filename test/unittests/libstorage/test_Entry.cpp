@@ -23,6 +23,7 @@
 #include <libdevcrypto/Common.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
+#include <tbb/parallel_for.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -47,6 +48,8 @@ BOOST_AUTO_TEST_CASE(copyFrom)
 
     entry1->setField("key", "value");
     entry2->copyFrom(entry1);
+    BOOST_TEST(entry1->refCount() == 2);
+    BOOST_TEST(entry2->refCount() == 2);
 
     BOOST_TEST(entry2->getField("key") == "value");
 
@@ -54,6 +57,51 @@ BOOST_AUTO_TEST_CASE(copyFrom)
 
     BOOST_TEST(entry2->getField("key") == "value2");
     BOOST_TEST(entry1->getField("key") == "value");
+    BOOST_TEST(entry1->refCount() == 1);
+    BOOST_TEST(entry2->refCount() == 1);
+}
+
+BOOST_AUTO_TEST_CASE(parallel_copyFrom) {
+	auto entry1 = std::make_shared<Entry>();
+
+	entry1->setField("key", "100");
+	entry1->setField("value", "0");
+
+	size_t total = 100000;
+
+	std::vector<Entry::Ptr> storedEntry;
+	storedEntry.resize(total);
+
+	tbb::parallel_for(tbb::blocked_range<size_t>(0, total),
+			[&](const tbb::blocked_range<size_t>& range) {
+				for(auto i=range.begin(); i<range.end(); ++i) {
+					auto entry2 = std::make_shared<Entry>();
+					entry2->copyFrom(entry1);
+
+					BOOST_TEST(entry2->getField("vaue") == "0");
+					entry2->setField("value", boost::lexical_cast<std::string>(i));
+					BOOST_TEST(entry2->getField("vaue") == boost::lexical_cast<std::string>(i));
+					BOOST_TEST(entry2->refCount() == 1);
+
+					BOOST_TEST(entry1->getField("vaue") == "0");
+
+					auto entry3 = std::make_shared<Entry>();
+					entry3->copyFrom(entry2);
+					BOOST_TEST(entry2->refCount() == 2);
+					BOOST_TEST(entry3->refCount() == 2);
+
+					entry3->copyFrom(entry1);
+					BOOST_TEST(entry1->refCount() > 1);
+					BOOST_TEST(entry3->refCount() > 1);
+
+					storedEntry[i] = entry3;
+				}
+			});
+
+	BOOST_TEST(entry1->refCount() == total + 1);
+	for(auto it: storedEntry) {
+		BOOST_TEST(it->refCount() == total + 1);
+	}
 }
 
 BOOST_AUTO_TEST_SUITE_END()

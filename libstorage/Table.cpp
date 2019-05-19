@@ -31,6 +31,7 @@
 #include "Table.h"
 #include <libdevcore/easylog.h>
 #include <tbb/pipeline.h>
+#include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev::storage;
@@ -44,6 +45,7 @@ Entry::~Entry()
 {
     if (m_data)
     {
+    	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
         if ((*m_data->m_refCount) > 0)
         {
             --(*m_data->m_refCount);
@@ -58,6 +60,8 @@ uint32_t Entry::getID() const
 
 void Entry::setID(uint32_t id)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_ID = id;
 
     m_dirty = true;
@@ -65,6 +69,8 @@ void Entry::setID(uint32_t id)
 
 void Entry::setID(const std::string& id)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_ID = boost::lexical_cast<uint32_t>(id);
 
     m_dirty = true;
@@ -88,7 +94,7 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-    checkRef();
+    auto lock = checkRef();
 
     if (key == ID_FIELD)
     {
@@ -141,7 +147,7 @@ int Entry::getStatus() const
 
 void Entry::setStatus(int status)
 {
-    checkRef();
+    auto lock = checkRef();
 
     auto it = m_data->m_fields->find(STATUS);
     if (it == m_data->m_fields->end())
@@ -182,6 +188,8 @@ uint32_t Entry::num() const
 
 void Entry::setNum(uint32_t num)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_num = num;
     m_dirty = true;
 }
@@ -193,6 +201,8 @@ bool Entry::dirty() const
 
 void Entry::setDirty(bool dirty)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_dirty = dirty;
 }
 
@@ -203,6 +213,8 @@ bool Entry::force() const
 
 void Entry::setForce(bool force)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_force = force;
 }
 
@@ -213,6 +225,8 @@ bool Entry::deleted() const
 
 void Entry::setDeleted(bool deleted)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
     m_deleted = deleted;
 }
 
@@ -223,6 +237,24 @@ ssize_t Entry::capacity() const
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
+	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+
+	tbb::spin_mutex::scoped_lock lock2;
+	while(true) {
+		auto locked = lock2.try_acquire(entry->m_data->m_mutex);
+		if(!locked) {
+			if(m_data == entry->m_data) {
+				return;
+			}
+			else {
+				tbb::this_tbb_thread::yield();
+			}
+		}
+		else {
+			break;
+		}
+	}
+
     m_ID = entry->m_ID;
     m_status = entry->m_status;
     m_tempIndex = entry->m_tempIndex;
@@ -232,35 +264,54 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_deleted = entry->m_deleted;
     m_capacity = entry->m_capacity;
 
+    auto oldData = m_data;
+    *(m_data->m_refCount) -= 1;
+
     m_data = entry->m_data;
 
     *(m_data->m_refCount) += 1;
 }
 
-void Entry::checkRef()
+ssize_t Entry::refCount() {
+	if(m_data) {
+		return *(m_data->m_refCount);
+	}
+	else {
+		return 0;
+	}
+}
+
+std::shared_ptr<tbb::spin_mutex::scoped_lock> Entry::checkRef()
 {
     if (!m_data)
     {
         m_data = std::make_shared<EntryData>(
-            std::make_shared<size_t>(), std::make_shared<std::map<std::string, std::string> >());
-        *(m_data->m_refCount) = 0;
+            std::make_shared<ssize_t>(), std::make_shared<std::map<std::string, std::string> >());
+        *(m_data->m_refCount) = 1;
         m_data->m_fields->insert(std::make_pair(ID_FIELD, "0"));
         m_data->m_fields->insert(std::make_pair(STATUS, "0"));
     }
 
-    if (m_data->m_refCount > 0)
+    auto lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
+    if (m_data->m_refCount > 1)
     {
         auto m_oldData = m_data;
         m_data = std::make_shared<EntryData>(
-            std::make_shared<size_t>(), std::make_shared<std::map<std::string, std::string> >());
-        *(m_data->m_refCount) = 0;
+            std::make_shared<ssize_t>(), std::make_shared<std::map<std::string, std::string> >());
+
+        *(m_data->m_refCount) = 1;
         *(m_data->m_fields) = *(m_oldData->m_fields);
 
         *(m_oldData->m_refCount) -= 1;
+
+        assert(*(m_oldData->m_refCount) >= 0);
+        lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
     }
+
+    return lock;
 }
 
-bool EntryLess::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
+bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const
 {
     if (lhs->getID() != rhs->getID())
     {

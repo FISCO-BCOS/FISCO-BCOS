@@ -150,13 +150,7 @@ Entries::Ptr CachedStorage::select(
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
 
-    auto now = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapseds = now - m_lastClear;
-    if (elapseds.count() > 1.0)
-    {
-        m_lastClear = now;
-        checkAndClear();
-    }
+	checkAndClear();
 
     auto out = std::make_shared<Entries>();
 
@@ -365,11 +359,11 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     });
 
                 tbb::parallel_sort(commitData->dirtyEntries->begin(),
-                    commitData->dirtyEntries->end(), EntryLess(requestData->info));
+                    commitData->dirtyEntries->end(), EntryLessNoLock(requestData->info));
 
                 commitData->newEntries->shallowFrom(requestData->newEntries);
                 tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
-                    EntryLess(requestData->info));
+                    EntryLessNoLock(requestData->info));
 
                 (*commitDatas)[idx] = commitData;
             }
@@ -637,7 +631,21 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchC
 
 void CachedStorage::checkAndClear()
 {
-    tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
+	{
+		tbb::spin_mutex::scoped_lock lock(m_clearMutex);
+
+		auto now = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapseds = now - m_lastClear;
+		if (elapseds.count() > 1.0)
+		{
+			m_lastClear = now;
+		}
+		else {
+			return;
+		}
+	}
+
+	tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
     tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
 
     TIME_RECORD("Check and clear");

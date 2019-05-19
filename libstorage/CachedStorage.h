@@ -136,7 +136,10 @@ private:
         TableInfo::Ptr tableInfo, std::string key, bool write = false);
     std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(
         TableInfo::Ptr tableInfo, std::string key, bool write = false);
+
+    tbb::spin_mutex m_clearMutex;
     void checkAndClear();
+
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
