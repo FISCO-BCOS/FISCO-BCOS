@@ -54,7 +54,7 @@ Entries::Ptr RocksDBStorage::select(
         entryKey.append("_").append(key);
 
         string value;
-        auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
+        auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_ROCKSDB_LOG(ERROR)
@@ -110,25 +110,31 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
         auto hex = hash.hex();
         WriteBatch batch;
-        for (size_t i = 0; i < datas.size(); ++i)
-        {
-            shared_ptr<map<string, vector<map<string, string>>>> key2value =
-                make_shared<map<string, vector<map<string, string>>>>();
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i)
+                {
+                    shared_ptr<map<string, vector<map<string, string>>>> key2value =
+                        make_shared<map<string, vector<map<string, string>>>>();
 
-            auto tableInfo = datas[i]->info;
+                    auto tableInfo = datas[i]->info;
 
-            processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
+                    processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
+                    processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
 
-            for (auto it : *key2value)
-            {
-                string entryKey = tableInfo->name + "_" + it.first;
-                stringstream ss;
-                boost::archive::binary_oarchive oa(ss);
-                oa << it.second;
-                batch.Put(Slice(entryKey), Slice(ss.str()));
-            }
-        }
+                    for (auto it : *key2value)
+                    {
+                        string entryKey = tableInfo->name + "_" + it.first;
+                        stringstream ss;
+                        boost::archive::binary_oarchive oa(ss);
+                        oa << it.second;
+                        {
+                            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                            batch.Put(Slice(std::move(entryKey)), Slice(ss.str()));
+                        }
+                    }
+                }
+            });
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
@@ -186,8 +192,7 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 entryKey.append("_").append(key);
 
                 string value;
-                auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
-                // l.unlock();
+                auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
                 if (!s.ok() && !s.IsNotFound())
                 {
                     STORAGE_ROCKSDB_LOG(ERROR)
