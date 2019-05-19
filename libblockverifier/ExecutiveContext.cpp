@@ -137,10 +137,6 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
         if (p->isParallelPrecompiled())
         {
             auto ret = make_shared<vector<string>>(p->getParallelTag(ref(_tx.data())));
-            for (string& critical : *ret)
-            {
-                critical += _tx.receiveAddress().hex();
-            }
             return ret;
         }
         else
@@ -204,6 +200,11 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                                                 << LOG_KV("input data", toHex(_tx.data()));
 
                     return nullptr;
+                }
+
+                for (string& critical : *res)
+                {
+                    critical += _tx.receiveAddress().hex();
                 }
 
                 return res;
