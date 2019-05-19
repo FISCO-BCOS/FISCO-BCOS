@@ -24,6 +24,7 @@
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+#include <tbb/spin_mutex.h>
 #include <map>
 
 namespace rocksdb
@@ -60,6 +61,7 @@ private:
         TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
     std::shared_ptr<rocksdb::DB> m_db;
+    tbb::spin_mutex m_writeBatchMutex;
 };
 
 }  // namespace storage

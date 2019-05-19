@@ -35,6 +35,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
+#include <csignal>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1121,21 +1122,20 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                               << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
                               << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
                               << LOG_KV("totalTimeCost", utcTime() - start_time);
-
-        return CommitResult::OK;
     }
     catch (OpenSysTableFailed const& e)
     {
         BLOCKCHAIN_LOG(FATAL)
-            << LOG_DESC("[#commitBlock]System meets error when try to write block to storage")
+            << LOG_DESC("[commitBlock]System meets error when try to write block to storage")
             << LOG_KV("EINFO", boost::diagnostic_information(e));
-        throw;
+        raise(SIGTERM);
     }
     /// leveldb caused exception: database corruption or the disk has no space left
     catch (StorageException& e)
     {
         BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
-        exit(1);
+        raise(SIGTERM);
     }
+    return CommitResult::OK;
 }
