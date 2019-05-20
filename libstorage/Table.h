@@ -88,6 +88,7 @@ public:
 
     virtual uint32_t num() const;
     virtual void setNum(uint32_t num);
+    virtual void setNum(const std::string& id);
 
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);

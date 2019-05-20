@@ -86,4 +86,4 @@ target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE
 target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_link_libraries(test-fisco-bcos Boost::UnitTestFramework)
-target_link_libraries(test-fisco-bcos initializer)
+target_link_libraries(test-fisco-bcos initializer zdb)

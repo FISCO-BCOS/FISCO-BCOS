@@ -20,7 +20,6 @@
  */
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -165,14 +164,6 @@ BOOST_AUTO_TEST_CASE(getParallelTag)
     from = "from";
     to = "";
     amount = 1111111;
-    param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
-    BOOST_TEST(vTags.empty());
-
-    // amount zero
-    from = "from";
-    to = "to";
-    amount = 0;
     param = abi.abiIn(userTransferFunc, from, to, amount);
     vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());

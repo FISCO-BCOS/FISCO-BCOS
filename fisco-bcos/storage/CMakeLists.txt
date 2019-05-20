@@ -22,6 +22,6 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-add_executable(mini-storage ${SRC_LIST} ${HEADERS})
+add_executable(leveldb-storage ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(mini-storage PUBLIC initializer)
+target_link_libraries(leveldb-storage PUBLIC initializer)

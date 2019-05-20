@@ -221,7 +221,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     }
     catch (std::exception& e)
     {
-        TXPOOL_LOG(ERROR) << "[#Verify] invalid signature, tx = " << tx_hash.abridged();
+        TXPOOL_LOG(ERROR) << "[Verify] invalid signature, tx = " << tx_hash.abridged();
         return ImportResult::Malformed;
     }
     /// nonce related to txpool must be checked at the last, since this will insert nonce of the
