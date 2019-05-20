@@ -125,7 +125,7 @@ bytes CNSPrecompiled::call(
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
 
-        Json::Value CNSInfos;
+        Json::Value CNSInfos(Json::arrayValue);
         auto entries = table->select(contractName, table->newCondition());
         if (entries.get())
         {
@@ -153,7 +153,7 @@ bytes CNSPrecompiled::call(
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
 
-        Json::Value CNSInfos;
+        Json::Value CNSInfos(Json::arrayValue);
         auto entries = table->select(contractName, table->newCondition());
         if (entries.get())
         {
