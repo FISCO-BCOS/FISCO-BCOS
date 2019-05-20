@@ -588,6 +588,46 @@ BOOST_AUTO_TEST_CASE(checkAndClear)
     select_condition_invoker();
 }
 
+BOOST_AUTO_TEST_CASE(dirtyAndNew) {
+	cachedStorage->setMaxCapacity(0);
+	cachedStorage->setMaxForwardBlock(0);
+
+	auto backend = std::make_shared<CachedStorage>();
+	cachedStorage->setBackend(backend);
+
+	TableData::Ptr newUserData = std::make_shared<TableData>();
+	TableData::Ptr newTXData = std::make_shared<TableData>();
+	Entries::Ptr newUser = std::make_shared<Entries>();
+	Entries::Ptr newTX = std::make_shared<Entries>();
+	for(auto i=0; i<10000; ++i) {
+		Entry::Ptr entry = std::make_shared<Entry>();
+		entry->setField("key", boost::lexical_cast<std::string>(i));
+		entry->setField("value", "0");
+		newUser->addEntry(entry);
+
+		Entry::Ptr entry2 = std::make_shared<Entry>();
+		entry2->setField("txhash", boost::lexical_cast<std::string>(i));
+		entry2->setField("number", "0");
+		newTX->addEntry(entry2);
+	}
+
+	newUserData->newEntries = newUser;
+	newTXData->newEntries = newTX;
+
+	std::vector<TableData::Ptr> datas = {newUserData, newTXData};
+
+	auto c = cachedStorage->commit(dev::h256(0), 1, datas);
+
+	BOOST_TEST(c == 200);
+
+	std::map<int, int> totalCount;
+	for(auto i=0; i<1000; ++i) {
+		for(auto j=0; j<1000; ++j) {
+
+		}
+	}
+}
+
 BOOST_AUTO_TEST_CASE(exception)
 {
 #if 0

@@ -85,6 +85,10 @@ bool Caches::empty()
     return m_empty;
 }
 
+void Caches::setEmptry(bool empty) {
+	m_empty = empty;
+}
+
 TableInfo::Ptr TableCaches::tableInfo()
 {
     return m_tableInfo;
@@ -352,6 +356,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                                 boost::lexical_cast<std::string>(entry->getID())));
                                 }
                             }
+                            else {
+                            	CACHED_STORAGE_LOG(FATAL) << "Dirty entry id equal to 0, id: " << id << " key: " << key;
+                            	BOOST_THROW_EXCEPTION(StorageException(
+                            	                                        -1, "Dirty entry id equal to 0, id: " +
+                            	                                                boost::lexical_cast<std::string>(entry->getID())));
+                            }
 
                             touchMRU(requestData->info->name, key, change);
                         }
@@ -392,11 +402,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 auto result = touchCacheNoLock(commitData->info, key, true);
 
                 auto caches = std::get<0>(result);
-                auto newEntries = std::make_shared<Entries>();
-                caches->setEntries(newEntries);
                 caches->setNum(num);
-
                 caches->entries()->addEntry(cacheEntry);
+                caches->setEmptry(false);
             }
             else
             {

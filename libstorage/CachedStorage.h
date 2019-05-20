@@ -56,8 +56,9 @@ public:
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
-    RWMutex* mutex();
-    bool empty();
+    virtual RWMutex* mutex();
+    virtual bool empty();
+    virtual void setEmptry(bool empty);
 
 private:
     RWMutex m_mutex;
