@@ -40,6 +40,7 @@ using namespace dev::precompiled;
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
+	tbb::spin_mutex::scoped_lock lock(m_mutex);
     return selectNoLock(key, condition);
 }
 
@@ -91,6 +92,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 }
             }
         }
+
         auto it = m_newEntries.find(key);
         if (it != m_newEntries.end())
         {
@@ -123,6 +125,8 @@ int MemoryTable2::update(
 {
     try
     {
+    	tbb::spin_mutex::scoped_lock lock(m_mutex);
+
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
@@ -180,6 +184,8 @@ int MemoryTable2::insert(
 {
     try
     {
+    	tbb::spin_mutex::scoped_lock lock(m_mutex);
+
         (void)needSelect;
 
         if (options->check && !checkAuthority(options->origin))
@@ -226,6 +232,8 @@ int MemoryTable2::remove(
 {
     try
     {
+    	tbb::spin_mutex::scoped_lock lock(m_mutex);
+
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
