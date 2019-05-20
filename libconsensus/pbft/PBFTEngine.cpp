@@ -1542,7 +1542,7 @@ void PBFTEngine::handleFutureBlock()
 /// get the status of PBFT consensus
 const std::string PBFTEngine::consensusStatus()
 {
-    Json::Value status;
+    Json::Value status(Json::arrayValue);
     Json::Value statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
@@ -1568,7 +1568,7 @@ const std::string PBFTEngine::consensusStatus()
 void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
 {
     updateViewMap(nodeIdx(), m_view);
-    Json::Value view_array;
+    Json::Value view_array(Json::arrayValue);
     ReadGuard l(x_viewMap);
     for (auto it : m_viewMap)
     {

@@ -84,7 +84,7 @@ string const SyncMaster::syncInfo() const
     syncInfo["knownLatestHash"] = toHex(m_syncStatus->knownLatestHash);
     syncInfo["txPoolSize"] = std::to_string(m_txPool->pendingSize());
 
-    Json::Value peersInfo;
+    Json::Value peersInfo(Json::arrayValue);
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         Json::Value info;
         info["nodeId"] = toHex(_p->nodeId);
