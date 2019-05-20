@@ -145,7 +145,8 @@ private:
 
     std::map<std::string, TableCaches::Ptr> m_caches;
     tbb::spin_mutex m_cachesMutex;
-    tbb::spin_mutex m_cachesSpinMutex;
+
+    tbb::spin_mutex m_touchMutex;
 
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
