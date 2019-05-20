@@ -78,12 +78,12 @@ BOOST_AUTO_TEST_CASE(parallel_copyFrom) {
 					auto entry2 = std::make_shared<Entry>();
 					entry2->copyFrom(entry1);
 
-					BOOST_TEST(entry2->getField("vaue") == "0");
+					BOOST_TEST(entry2->getField("value") == "0");
 					entry2->setField("value", boost::lexical_cast<std::string>(i));
-					BOOST_TEST(entry2->getField("vaue") == boost::lexical_cast<std::string>(i));
+					BOOST_TEST(entry2->getField("value") == boost::lexical_cast<std::string>(i));
 					BOOST_TEST(entry2->refCount() == 1);
 
-					BOOST_TEST(entry1->getField("vaue") == "0");
+					BOOST_TEST(entry1->getField("value") == "0");
 
 					auto entry3 = std::make_shared<Entry>();
 					entry3->copyFrom(entry2);

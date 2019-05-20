@@ -113,12 +113,10 @@ private:
     {
         typedef std::shared_ptr<EntryData> Ptr;
 
-        EntryData(std::shared_ptr<ssize_t> refCount,
-            std::shared_ptr<std::map<std::string, std::string> > fields)
-          : m_refCount(refCount), m_fields(fields){};
+        EntryData(){};
 
-        std::shared_ptr<ssize_t> m_refCount;
-        std::shared_ptr<std::map<std::string, std::string> > m_fields;
+        ssize_t m_refCount = 0;
+        std::map<std::string, std::string> m_fields;
         tbb::spin_mutex m_mutex;
     };
 

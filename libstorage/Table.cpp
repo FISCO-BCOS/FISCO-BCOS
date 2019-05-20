@@ -46,9 +46,9 @@ Entry::~Entry()
     if (m_data)
     {
     	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
-        if ((*m_data->m_refCount) > 0)
+        if (m_data->m_refCount > 0)
         {
-            --(*m_data->m_refCount);
+            --m_data->m_refCount;
         }
     }
 }
@@ -80,9 +80,9 @@ std::string Entry::getField(const std::string& key) const
 {
     if (m_data)
     {
-        auto it = m_data->m_fields->find(key);
+        auto it = m_data->m_fields.find(key);
 
-        if (it != m_data->m_fields->end())
+        if (it != m_data->m_fields.end())
         {
             return it->second;
         }
@@ -94,8 +94,6 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-    auto lock = checkRef();
-
     if (key == ID_FIELD)
     {
         return;
@@ -107,9 +105,11 @@ void Entry::setField(const std::string& key, const std::string& value)
         return;
     }
 
-    auto it = m_data->m_fields->find(key);
+    auto lock = checkRef();
 
-    if (it != m_data->m_fields->end())
+    auto it = m_data->m_fields.find(key);
+
+    if (it != m_data->m_fields.end())
     {
         m_capacity -= (key.size() + it->second.size());
         it->second = value;
@@ -117,7 +117,7 @@ void Entry::setField(const std::string& key, const std::string& value)
     }
     else
     {
-        m_data->m_fields->insert(std::make_pair(key, value));
+        m_data->m_fields.insert(std::make_pair(key, value));
         m_capacity += (key.size() + value.size());
     }
 
@@ -137,7 +137,7 @@ void Entry::setTempIndex(size_t index)
 
 const std::map<std::string, std::string>* Entry::fields() const
 {
-    return m_data->m_fields.get();
+    return &m_data->m_fields;
 }
 
 int Entry::getStatus() const
@@ -149,10 +149,10 @@ void Entry::setStatus(int status)
 {
     auto lock = checkRef();
 
-    auto it = m_data->m_fields->find(STATUS);
-    if (it == m_data->m_fields->end())
+    auto it = m_data->m_fields.find(STATUS);
+    if (it == m_data->m_fields.end())
     {
-        m_data->m_fields->insert(std::make_pair(STATUS, boost::lexical_cast<std::string>(status)));
+        m_data->m_fields.insert(std::make_pair(STATUS, boost::lexical_cast<std::string>(status)));
     }
     else
     {
@@ -165,12 +165,12 @@ void Entry::setStatus(int status)
 
 void Entry::setStatus(const std::string& status)
 {
-    checkRef();
+    auto lock = checkRef();
 
-    auto it = m_data->m_fields->find(STATUS);
-    if (it == m_data->m_fields->end())
+    auto it = m_data->m_fields.find(STATUS);
+    if (it == m_data->m_fields.end())
     {
-        m_data->m_fields->insert(std::make_pair(STATUS, status));
+        m_data->m_fields.insert(std::make_pair(STATUS, status));
     }
     else
     {
@@ -271,16 +271,16 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_capacity = entry->m_capacity;
 
     auto oldData = m_data;
-    *(m_data->m_refCount) -= 1;
+    m_data->m_refCount -= 1;
 
     m_data = entry->m_data;
 
-    *(m_data->m_refCount) += 1;
+    m_data->m_refCount += 1;
 }
 
 ssize_t Entry::refCount() {
 	if(m_data) {
-		return *(m_data->m_refCount);
+		return m_data->m_refCount;
 	}
 	else {
 		return 0;
@@ -291,26 +291,23 @@ std::shared_ptr<tbb::spin_mutex::scoped_lock> Entry::checkRef()
 {
     if (!m_data)
     {
-        m_data = std::make_shared<EntryData>(
-            std::make_shared<ssize_t>(), std::make_shared<std::map<std::string, std::string> >());
-        *(m_data->m_refCount) = 1;
-        m_data->m_fields->insert(std::make_pair(ID_FIELD, "0"));
-        m_data->m_fields->insert(std::make_pair(STATUS, "0"));
+        m_data = std::make_shared<EntryData>();
+        m_data->m_refCount = 1;
+        m_data->m_fields.insert(std::make_pair(STATUS, "0"));
     }
 
     auto lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
     if (m_data->m_refCount > 1)
     {
         auto m_oldData = m_data;
-        m_data = std::make_shared<EntryData>(
-            std::make_shared<ssize_t>(), std::make_shared<std::map<std::string, std::string> >());
+        m_data = std::make_shared<EntryData>();
 
-        *(m_data->m_refCount) = 1;
-        *(m_data->m_fields) = *(m_oldData->m_fields);
+        m_data->m_refCount = 1;
+        m_data->m_fields = m_oldData->m_fields;
 
-        *(m_oldData->m_refCount) -= 1;
+        m_oldData->m_refCount -= 1;
 
-        assert(*(m_oldData->m_refCount) >= 0);
+        assert(m_oldData->m_refCount >= 0);
         lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
     }
 
