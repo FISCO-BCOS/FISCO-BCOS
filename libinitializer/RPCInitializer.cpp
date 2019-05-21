@@ -115,7 +115,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_channelRPCServer->setCallbackSetter(
             std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
 
-        for (auto it : m_ledgerManager->getGrouplList())
+        for (auto it : m_ledgerManager->getGroupList())
         {
             auto groupID = it;
             auto blockChain = m_ledgerManager->blockChain(it);
