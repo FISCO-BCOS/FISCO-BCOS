@@ -62,7 +62,8 @@ void ConsensusEngineBase::stop()
 }
 
 /// update m_sealing and receiptRoot
-dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
+dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(
+    std::shared_ptr<Block> block)
 {
     auto parentBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
     BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),

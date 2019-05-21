@@ -69,20 +69,10 @@ public:
     }
 
     virtual ~BlockVerifier() {}
-
-    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
-    ExecutiveContext::Ptr serialExecuteBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
-    ExecutiveContext::Ptr parallelExecuteBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
-
+    ExecutiveContext::Ptr executeBlock(
+        dev::eth::Block::Ptr block, BlockInfo const& parentBlockInfo);
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
-
-    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> execute(
-        dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
-        dev::eth::OnOpFunc const& _onOp,
-        dev::blockverifier::ExecutiveContext::Ptr executiveContext);
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {
@@ -93,6 +83,17 @@ public:
     {
         m_pNumberHash = _pNumberHash;
     }
+
+protected:
+    ExecutiveContext::Ptr serialExecuteBlock(
+        dev::eth::Block::Ptr block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr parallelExecuteBlock(
+        dev::eth::Block::Ptr block, BlockInfo const& parentBlockInfo);
+
+    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> execute(
+        dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
+        dev::eth::OnOpFunc const& _onOp,
+        dev::blockverifier::ExecutiveContext::Ptr executiveContext);
 
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;

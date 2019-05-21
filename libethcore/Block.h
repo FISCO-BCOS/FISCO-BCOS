@@ -37,6 +37,8 @@ namespace eth
 class Block
 {
 public:
+    typedef std::shared_ptr<Block> Ptr;
+
     ///-----constructors of Block
     Block() = default;
     explicit Block(bytesConstRef _data,

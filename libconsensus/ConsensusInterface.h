@@ -57,6 +57,8 @@ public:
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const& block) = 0;
     virtual uint64_t maxBlockTransactions() { return 1000; }
+
+    virtual void setBlockFactory(std::shared_ptr<dev::eth::BlockFactory>) {}
 };
 }  // namespace consensus
 }  // namespace dev

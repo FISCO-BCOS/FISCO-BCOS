@@ -153,6 +153,12 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
+    MockBlockChainImp() : BlockChainImp()
+    {
+        std::shared_ptr<dev::eth::BlockFactory> blockFactory =
+            std::make_shared<dev::eth::BlockFactory>();
+        setBlockFactory(blockFactory);
+    }
     std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t) override
     {
         return m_memoryTableFactory;
@@ -310,16 +316,19 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 {
     auto fakeBlock2 = std::make_shared<FakeBlock>(10);
     fakeBlock2->getBlock().header().setNumber(m_blockChainImp->number());
-    auto commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
+    auto commitResult = m_blockChainImp->commitBlock(
+        std::make_shared<dev::eth::Block>(fakeBlock2->getBlock()), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::ERROR_NUMBER);
 
     fakeBlock2->getBlock().header().setNumber(m_blockChainImp->number() + 1);
-    commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
+    commitResult = m_blockChainImp->commitBlock(
+        std::make_shared<dev::eth::Block>(fakeBlock2->getBlock()), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::ERROR_PARENT_HASH);
 
     fakeBlock2->getBlock().header().setParentHash(
         m_blockChainImp->numberHash(m_blockChainImp->number()));
-    commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
+    commitResult = m_blockChainImp->commitBlock(
+        std::make_shared<dev::eth::Block>(fakeBlock2->getBlock()), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 1);
     BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().first, 15);
@@ -329,7 +338,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     fakeBlock3->getBlock().header().setNumber(m_blockChainImp->number() + 1);
     fakeBlock3->getBlock().header().setParentHash(
         m_blockChainImp->numberHash(m_blockChainImp->number()));
-    commitResult = m_blockChainImp->commitBlock(fakeBlock3->getBlock(), m_executiveContext);
+    commitResult = m_blockChainImp->commitBlock(
+        std::make_shared<dev::eth::Block>(fakeBlock3->getBlock()), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);
     BOOST_CHECK_EQUAL(m_blockChainImp->number(), 2);
     BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().first, 30);

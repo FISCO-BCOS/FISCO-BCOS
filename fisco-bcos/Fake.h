@@ -134,16 +134,16 @@ public:
     }
 
     CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        if (block.blockHeader().number() == number() + 1)
+        if (block->blockHeader().number() == number() + 1)
         {
             WriteGuard l(x_blockChain);
             {
-                m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
-                m_blockChain.push_back(std::make_shared<Block>(block));
-                m_blockNumber = block.blockHeader().number() + 1;
-                m_totalTransactionCount += block.transactions().size();
+                m_blockHash[block->blockHeader().hash()] = block->blockHeader().number();
+                m_blockChain.push_back(block);
+                m_blockNumber = block->blockHeader().number() + 1;
+                m_totalTransactionCount += block->transactions().size();
             }
             m_onReady(m_blockNumber);
         }
@@ -208,7 +208,7 @@ public:
     };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const&) override
+        dev::eth::Block::Ptr block, BlockInfo const&) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));
@@ -216,17 +216,17 @@ public:
         return m_executiveContext;
     };
     /// fake the transaction receipt of the whole block
-    void fakeExecuteResult(dev::eth::Block& block)
+    void fakeExecuteResult(dev::eth::Block::Ptr block)
     {
         TransactionReceipts receipts;
-        for (unsigned index = 0; index < block.getTransactionSize(); index++)
+        for (unsigned index = 0; index < block->getTransactionSize(); index++)
         {
             TransactionReceipt receipt(u256(0), u256(100), LogEntries(),
                 executive::TransactionException::None, bytes(),
-                block.transactions()[index].receiveAddress());
+                block->transactions()[index].receiveAddress());
             receipts.push_back(receipt);
         }
-        block.setTransactionReceipts(receipts);
+        block->setTransactionReceipts(receipts);
     }
 
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(

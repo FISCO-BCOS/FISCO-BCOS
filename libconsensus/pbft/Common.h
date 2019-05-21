@@ -323,18 +323,18 @@ struct PrepareReq : public PBFTMsg
      * @param sealing : object contains both block and block-execution-result
      * @param keyPair : keypair used to sign for the PrepareReq
      */
-    PrepareReq(PrepareReq const& req, Sealing const& sealing, KeyPair const& keyPair)
+    PrepareReq(PrepareReq const& req, std::shared_ptr<Sealing> sealing, KeyPair const& keyPair)
     {
         height = req.height;
         view = req.view;
         idx = req.idx;
-        p_execContext = sealing.p_execContext;
+        p_execContext = sealing->p_execContext;
         /// sealing.block.encode(block);
         timestamp = u256(utcTime());
-        block_hash = sealing.block.blockHeader().hash();
+        block_hash = sealing->block->blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
+        pBlock = std::make_shared<dev::eth::Block>(std::move(*sealing->block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp << " , block_hash: " << block_hash.abridged();
     }

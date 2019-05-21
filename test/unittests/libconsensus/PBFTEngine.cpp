@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
     BOOST_CHECK(fake_pbft.consensus()->fValue() == (fake_pbft.consensus()->nodeNum() - 1) / 3);
 
     /// check reloadMsg: empty committedPrepareCache
-    checkPBFTMsg(fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    checkPBFTMsg(*fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check m_timeManager
     BOOST_CHECK(fake_pbft.consensus()->timeManager().m_viewTimeout ==
                 fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
 {
     KeyPair key_pair;
     /// fake prepare_req
-    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    std::shared_ptr<PrepareReq> prepare_req = FakePrepareReq(key_pair);
     /// fake FakePBFTEngine
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     NodeIPEndpoint endpoint;
@@ -84,14 +84,16 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     /// check onreceive prepare request
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
     /// check onreceive sign request
-    SignReq sign_req(prepare_req, key_pair, prepare_req.idx + 100);
+    std::shared_ptr<SignReq> sign_req =
+        std::make_shared<SignReq>(*prepare_req, key_pair, prepare_req->idx + 100);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, sign_req, SignReqPacket, false);
     /// check onReceive commit request
-    CommitReq commit_req(prepare_req, key_pair, prepare_req.idx + 10);
+    std::shared_ptr<CommitReq> commit_req =
+        std::make_shared<CommitReq>(*prepare_req, key_pair, prepare_req->idx + 10);
     CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, commit_req, CommitReqPacket, false);
     /// test viewchange case
-    ViewChangeReq viewChange_req(
-        key_pair, prepare_req.height, prepare_req.view, prepare_req.idx, prepare_req.block_hash);
+    std::shared_ptr<ViewChangeReq> viewChange_req = std::make_shared<ViewChangeReq>(key_pair,
+        prepare_req->height, prepare_req->view, prepare_req->idx, prepare_req->block_hash);
     CheckOnRecvPBFTMessage(
         fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
 
@@ -120,15 +122,15 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     appendSessionInfo(fake_pbft, peer2_keyPair.pub());
     KeyPair key_pair;
     /// fake prepare_req
-    PrepareReq prepare_req = FakePrepareReq(key_pair);
+    std::shared_ptr<PrepareReq> prepare_req = FakePrepareReq(key_pair);
     bytes data;
-    prepare_req.encode(data);
+    prepare_req->encode(data);
     /// case1: all peer is not the sealer, stop broadcasting
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == false);
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == false);
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -136,12 +138,12 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == false);
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -149,12 +151,12 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer2_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer2_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
+                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
+                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 1);
 
@@ -168,10 +170,10 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     std::unordered_set<h512> filter;
     filter.insert(peer3_keyPair.pub());
     fake_pbft.consensus()->broadcastMsg(
-        PrepareReqPacket, prepare_req.uniqueKey(), ref(data), filter);
+        PrepareReqPacket, prepare_req->uniqueKey(), ref(data), filter);
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer3_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
+                    peer3_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
 }
 
@@ -278,8 +280,9 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
     VIEWTYPE oriview = fake_pbft.consensus()->view();
     for (size_t i = 1; i < fake_pbft.m_sealerList.size(); i++)
     {
-        ViewChangeReq viewChange_req(KeyPair(fake_pbft.m_secrets[i]), highest.number(),
-            fake_pbft.consensus()->toView(), i, highest.hash());
+        std::shared_ptr<ViewChangeReq> viewChange_req =
+            std::make_shared<ViewChangeReq>(KeyPair(fake_pbft.m_secrets[i]), highest.number(),
+                fake_pbft.consensus()->toView(), i, highest.hash());
         fake_pbft.consensus()->reqCache()->addViewChangeReq(viewChange_req);
         IDXTYPE size =
             fake_pbft.consensus()->reqCache()->getViewChangeSize(fake_pbft.consensus()->toView());
@@ -308,18 +311,20 @@ BOOST_AUTO_TEST_CASE(testCheckAndSave)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
-    PrepareReq prepare_req;
+
     FakeValidNodeNum(fake_pbft, valid);
+    std::shared_ptr<PrepareReq> prepare_req = FakePrepareFromHighest(fake_pbft);
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash, valid, 2);
+    BOOST_CHECK(prepare_req != nullptr);
     /// exception case: invalid view
-    fake_pbft.consensus()->setView(prepare_req.view + 1);
+    fake_pbft.consensus()->setView(prepare_req->view + 1);
     CheckBlockChain(fake_pbft, false);
     /// exception case2: invalid height
-    fake_pbft.consensus()->setView(prepare_req.view);
-    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req.height);
+    fake_pbft.consensus()->setView(prepare_req->view);
+    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req->height);
     CheckBlockChain(fake_pbft, false);
     /// normal case: test checkAndSave(import success)
-    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req.height - 1);
+    fake_pbft.consensus()->mutableHighest().setNumber(prepare_req->height - 1);
     CheckBlockChain(fake_pbft, true);
 }
 /// test checkAndCommit
@@ -334,25 +339,25 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
     int64_t block_number = obtainBlockNumber(fake_pbft);
-    PrepareReq prepare_req;
 
     KeyPair peer_keyPair = KeyPair::create();
     fake_pbft.m_sealerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer_keyPair.pub());
 
     FakeValidNodeNum(fake_pbft, valid);
+    std::shared_ptr<PrepareReq> prepare_req = FakePrepareFromHighest(fake_pbft);
     FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash,
         fake_pbft.consensus()->minValidNodes(), 0);
 
     /// case1: invalid view, return directly(import failed)
-    fake_pbft.consensus()->setView(prepare_req.view + 1);
+    fake_pbft.consensus()->setView(prepare_req->view + 1);
     fake_pbft.consensus()->checkAndCommit();
     /// check submit failed
     CheckBlockChain(fake_pbft, block_number);
     /// check update commitedPrepareCache failed
 
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
-                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
+                *fake_pbft.consensus()->reqCache()->committedPrepareCache());
 
     /// check backupMsg failed
     bytes data = bytes();
@@ -360,31 +365,34 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
 
     //// check no broadcasft
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), CommitReqPacket, prepare_req.uniqueKey()) == false);
+                    peer_keyPair.pub(), CommitReqPacket, prepare_req->uniqueKey()) == false);
 
     /// case2: valid view
-    fake_pbft.consensus()->setView(prepare_req.view);
+    fake_pbft.consensus()->setView(prepare_req->view);
     fake_pbft.consensus()->checkAndCommit();
+
     /// check backupMsg succ
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
-                fake_pbft.consensus()->reqCache()->committedPrepareCache());
-    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
+                *fake_pbft.consensus()->reqCache()->committedPrepareCache());
+
+    fake_pbft.consensus()->reqCache()->committedPrepareCache()->encode(data);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number);
 
     /// case3: enough commitReq && SignReq
     fake_pbft.consensus()->reqCache()->clearAll();
-    FakeSignAndCommitCache(fake_pbft, prepare_req, highest, invalid_height, invalid_hash,
+    std::shared_ptr<PrepareReq> prepare_req2 = FakePrepareFromHighest(fake_pbft);
+    FakeSignAndCommitCache(fake_pbft, prepare_req2, highest, invalid_height, invalid_hash,
         fake_pbft.consensus()->minValidNodes(), 2);
     fake_pbft.consensus()->checkAndCommit();
     /// check backupMsg succ
-    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    fake_pbft.consensus()->reqCache()->committedPrepareCache()->encode(data);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// check submit block scc
     CheckBlockChain(fake_pbft, block_number + 1);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
-                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
+                *fake_pbft.consensus()->reqCache()->committedPrepareCache());
     /// check reportBlock
     /// checkReportBlock(fake_pbft, highest, false);
     /// BOOST_CHECK(fake_pbft.consensus()->timeManager().m_lastSignTime <= utcTime());
@@ -393,7 +401,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
 BOOST_AUTO_TEST_CASE(testIsValidPrepare)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
-    PrepareReq req;
+    std::shared_ptr<PrepareReq> req = fakeValidPrepare(fake_pbft);
     TestIsValidPrepare(fake_pbft, req, true);
     TestIsValidPrepare(fake_pbft, req, false);
 }
@@ -403,8 +411,10 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     fake_pbft.consensus()->initPBFTEnv(
         3 * (fake_pbft.consensus()->timeManager().m_emptyBlockGenTime));
-    PrepareReq req;
+
+    std::shared_ptr<PrepareReq> req = fakeValidPrepare(fake_pbft);
     TestIsValidPrepare(fake_pbft, req, true);
+
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
@@ -413,29 +423,30 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     fake_pbft.consensus()->reqCache()->clearAll();
     fake_pbft.consensus()->setOmitEmpty(false);
     fake_pbft.consensus()->handlePrepareMsg(req);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->prepareCache().block_hash == req.block_hash);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->prepareCache()->block_hash == req->block_hash);
     /// check broadcastSign
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
         compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 1);
     }
     /// check checkAndCommit(without enough sign and commit requests)
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
-                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->rawPrepareCache() !=
+                *fake_pbft.consensus()->reqCache()->committedPrepareCache());
 
     /// case2: with enough sign and commit: submit block
     fake_pbft.consensus()->reqCache()->clearAll();
+    req = fakeValidPrepare(fake_pbft);
     BlockHeader highest;
     FakeSignAndCommitCache(
-        fake_pbft, req, highest, 0, 0, fake_pbft.consensus()->minValidNodes() - 1, 2, false, false);
+        fake_pbft, req, highest, 2, 2, fake_pbft.consensus()->minValidNodes() - 1, 2, false);
     int64_t block_number = obtainBlockNumber(fake_pbft);
     fake_pbft.consensus()->handlePrepareMsg(req);
 
     /// BOOST_CHECK(fake_pbft.consensus()->reqCache()->prepareCache().block_hash == h256());
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
-                fake_pbft.consensus()->reqCache()->committedPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->rawPrepareCache() ==
+                *fake_pbft.consensus()->reqCache()->committedPrepareCache());
     bytes data;
-    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    fake_pbft.consensus()->reqCache()->committedPrepareCache()->encode(data);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);
@@ -445,10 +456,14 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
-    SignReq signReq;
-    PrepareReq prepareReq;
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
     KeyPair peer_keyPair = KeyPair::create();
-    TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, false);
+    std::shared_ptr<SignReq> signReq =
+        FakeValidSignorCommitReq<SignReq>(fake_pbft, pbftMsg, prepareReq, peer_keyPair);
+
+    TestIsValidSignReq(fake_pbft, signReq, prepareReq, false);
+    BOOST_CHECK(signReq != nullptr);
+    BOOST_CHECK(prepareReq != nullptr);
 }
 
 /// test handleSignMsg
@@ -460,47 +475,47 @@ BOOST_AUTO_TEST_CASE(testHandleSignMsg)
         fake_pbft.consensus()->timeManager().m_emptyBlockGenTime * 3);
 
     PBFTMsgPacket pbftMsg;
-    SignReq signReq;
-    PrepareReq prepareReq;
     KeyPair peer_keyPair = KeyPair::create();
-    TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, true);
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
+    std::shared_ptr<SignReq> signReq =
+        FakeValidSignorCommitReq<SignReq>(fake_pbft, pbftMsg, prepareReq, peer_keyPair);
+
+    TestIsValidSignReq(fake_pbft, signReq, prepareReq, true);
     /// test handleSignMsg
     /// case1: without enough signReq and commitReq, only addSign to the cache
-    SignReq signReq2;
+    std::shared_ptr<SignReq> signReq2 = std::make_shared<SignReq>();
     int64_t block_number = obtainBlockNumber(fake_pbft);
     fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
-    BOOST_CHECK(signReq2 == signReq);
+    BOOST_CHECK(signReq2 != nullptr && *signReq2 == *signReq);
     /// check the signReq has been added to the cache
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(signReq2));
     CheckBlockChain(fake_pbft, block_number);
 
     /// case2： with enough SignReq
     fake_pbft.consensus()->reqCache()->clearAll();
-    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     BlockHeader highest;
-    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
-        fake_pbft.consensus()->minValidNodes() - 1, 0, false, false);
+    FakeSignAndCommitCache(
+        fake_pbft, prepareReq, highest, 0, 0, fake_pbft.consensus()->minValidNodes() - 1, 0);
     fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
 
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
-                fake_pbft.consensus()->reqCache()->rawPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
+                *fake_pbft.consensus()->reqCache()->rawPrepareCache());
     /// check backupMsg
     bytes data;
-    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    fake_pbft.consensus()->reqCache()->committedPrepareCache()->encode(data);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     CheckBlockChain(fake_pbft, block_number);
 
     /// case3: with enough SignReq and CommitReq
     fake_pbft.consensus()->reqCache()->clearAll();
-    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
-    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
-        fake_pbft.consensus()->minValidNodes() - 1, 2, false, false);
+    FakeSignAndCommitCache(
+        fake_pbft, prepareReq, highest, 0, 0, fake_pbft.consensus()->minValidNodes() - 1, 2);
     fake_pbft.consensus()->handleSignMsg(signReq2, pbftMsg);
 
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
-                fake_pbft.consensus()->reqCache()->rawPrepareCache());
+    BOOST_CHECK(*fake_pbft.consensus()->reqCache()->committedPrepareCache() ==
+                *fake_pbft.consensus()->reqCache()->rawPrepareCache());
     /// check backupMsg
-    fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    fake_pbft.consensus()->reqCache()->committedPrepareCache()->encode(data);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     CheckBlockChain(fake_pbft, block_number + 1);
 }
@@ -509,10 +524,15 @@ BOOST_AUTO_TEST_CASE(testIsCommitReqValid)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
-    CommitReq commitReq;
-    PrepareReq prepareReq;
+
     KeyPair peer_keyPair = KeyPair::create();
-    TestIsValidCommitReq(fake_pbft, pbftMsg, commitReq, prepareReq, peer_keyPair, false);
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
+    std::shared_ptr<CommitReq> commitReq =
+        FakeValidSignorCommitReq<CommitReq>(fake_pbft, pbftMsg, prepareReq, peer_keyPair);
+
+    TestIsValidCommitReq(fake_pbft, commitReq, prepareReq, false);
+    BOOST_CHECK(commitReq != nullptr);
+    BOOST_CHECK(prepareReq != nullptr);
 }
 
 /// test handleCommitMsg
@@ -520,33 +540,36 @@ BOOST_AUTO_TEST_CASE(testHandleCommitMsg)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     PBFTMsgPacket pbftMsg;
-    CommitReq commitReq;
-    PrepareReq prepareReq;
     KeyPair peer_keyPair = KeyPair::create();
-    TestIsValidCommitReq(fake_pbft, pbftMsg, commitReq, prepareReq, peer_keyPair, true);
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
+    std::shared_ptr<CommitReq> commitReq =
+        FakeValidSignorCommitReq<CommitReq>(fake_pbft, pbftMsg, prepareReq, peer_keyPair);
+
+    TestIsValidCommitReq(fake_pbft, commitReq, prepareReq, true);
+    BOOST_CHECK(commitReq != nullptr);
+    BOOST_CHECK(prepareReq != nullptr);
+
     /// case1: without enough signReq and commitReq
-    CommitReq commitReq2;
+    std::shared_ptr<CommitReq> commitReq2 = std::make_shared<CommitReq>();
     int64_t block_number = obtainBlockNumber(fake_pbft);
     fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
-    BOOST_CHECK(commitReq2 == commitReq);
+    BOOST_CHECK(*commitReq2 == *commitReq);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commitReq2));
     CheckBlockChain(fake_pbft, block_number);
 
     /// case2: with enough signReq but not commitReq
     fake_pbft.consensus()->reqCache()->clearAll();
-    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     BlockHeader highest;
-    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
-        fake_pbft.consensus()->minValidNodes(), 0, false, false);
+    FakeSignAndCommitCache(
+        fake_pbft, prepareReq, highest, 0, 0, fake_pbft.consensus()->minValidNodes(), 0);
     fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
     BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistCommit(commitReq2));
     CheckBlockChain(fake_pbft, block_number);
 
     /// case3 : with enough signReq and commitReq
     fake_pbft.consensus()->reqCache()->clearAll();
-    fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
-    FakeSignAndCommitCache(fake_pbft, prepareReq, highest, 0, 0,
-        fake_pbft.consensus()->minValidNodes(), 2, false, false);
+    FakeSignAndCommitCache(
+        fake_pbft, prepareReq, highest, 0, 0, fake_pbft.consensus()->minValidNodes(), 2);
     fake_pbft.consensus()->handleCommitMsg(commitReq2, pbftMsg);
     CheckBlockChain(fake_pbft, block_number + 1);
 }
@@ -563,19 +586,20 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == false);
 
     /// case 3: normal case
-    PrepareReq prepareReq;
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
     TestIsValidPrepare(fake_pbft, prepareReq, true);
+    BOOST_CHECK(prepareReq != nullptr);
 
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
     BOOST_CHECK(fake_pbft.consensus()->shouldSeal() == true);
     /// update the committedPrepareCache, callback reHandleCommitPrepareCache
-    fake_pbft.consensus()->setConsensusBlockNumber(prepareReq.height);
+    fake_pbft.consensus()->setConsensusBlockNumber(prepareReq->height);
 
     fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
     fake_pbft.consensus()->reqCache()->updateCommittedPrepare();
     /// update the rawPrepareReq
-    PrepareReq new_req;
-    new_req.height = fake_pbft.consensus()->consensusBlockNumber() + 1;
+    std::shared_ptr<PrepareReq> new_req = std::make_shared<PrepareReq>();
+    new_req->height = fake_pbft.consensus()->consensusBlockNumber() + 1;
     fake_pbft.consensus()->reqCache()->addRawPrepare(new_req);
 
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
@@ -591,12 +615,15 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     /// the leader calls notifySealing
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
-    fake_pbft.consensus()->notifySealing(block.m_block);
+
+    std::shared_ptr<Block> pBlock = std::make_shared<Block>(block.m_block);
+    fake_pbft.consensus()->notifySealing(pBlock);
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
 
     /// the nextLeader calls notifySealing
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getNextLeader());
-    fake_pbft.consensus()->notifySealing(block.m_block);
+    fake_pbft.consensus()->notifySealing(pBlock);
+
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == true);
     ///====== test notifySealing end ======
 
@@ -613,16 +640,17 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     BlockHeader highest;
-    PrepareReq prepareReq;
+    std::shared_ptr<PrepareReq> prepareReq = FakePrepareFromHighest(fake_pbft);
     FakeSignAndCommitCache(
-        fake_pbft, prepareReq, highest, 0, 0, fake_pbft.consensus()->minValidNodes(), 2);
+        fake_pbft, prepareReq, highest, 3, 2, fake_pbft.consensus()->minValidNodes(), 2);
+
     fake_pbft.consensus()->mutableTimeManager().m_lastGarbageCollection =
         std::chrono::system_clock::now();
     /// can't trigger collectGarbage
     fake_pbft.consensus()->collectGarbage();
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq.block_hash) ==
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq->block_hash) ==
                 fake_pbft.consensus()->minValidNodes());
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq.block_hash) ==
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq->block_hash) ==
                 fake_pbft.consensus()->minValidNodes());
 
     /// can trigger collectGarbage
@@ -637,18 +665,19 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
 BOOST_AUTO_TEST_CASE(testHandleFutureBlock)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
-    PrepareReq prepareReq;
+    std::shared_ptr<PrepareReq> prepareReq = fakeValidPrepare(fake_pbft);
     TestIsValidPrepare(fake_pbft, prepareReq, true);
-    prepareReq.height = fake_pbft.consensus()->consensusBlockNumber();
-    prepareReq.view = fake_pbft.consensus()->view();
+
+    prepareReq->height = fake_pbft.consensus()->consensusBlockNumber();
+    prepareReq->view = fake_pbft.consensus()->view();
     fake_pbft.consensus()->reqCache()->addFuturePrepareCache(prepareReq);
     BOOST_CHECK(
-        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height)->block_hash !=
+        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq->height)->block_hash !=
         h256());
     fake_pbft.consensus()->handleFutureBlock();
     /// check the functurePrepareCache has been cleared
     BOOST_CHECK(
-        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq.height) == nullptr);
+        fake_pbft.consensus()->reqCache()->futurePrepareCache(prepareReq->height) == nullptr);
 }
 
 /// test handleViewChangeMsg
@@ -660,29 +689,33 @@ BOOST_AUTO_TEST_CASE(testHandleViewchangeMsg)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
     }
-    ViewChangeReq viewchange_req;
+
+    std::shared_ptr<ViewChangeReq> viewchange_req = fakeValidViewchange(fake_pbft);
+
     PBFTMsgPacket viewchange_packet;
     /// construct viewchange triggered by the 0th sealer
     TestIsValidViewChange(fake_pbft, viewchange_req);
+    BOOST_CHECK(viewchange_req != nullptr);
+
     IDXTYPE nodeIdxSource = 2;
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
 
     /// test handleViewChangeReq
-    ViewChangeReq viewchange_req_decoded;
+    std::shared_ptr<ViewChangeReq> viewchange_req_decoded = std::make_shared<ViewChangeReq>();
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
-    BOOST_CHECK(viewchange_req_decoded == viewchange_req);
+    BOOST_CHECK(*viewchange_req_decoded == *viewchange_req);
     /// viewchange no consensused
-    BOOST_CHECK(fake_pbft.consensus()->view() != viewchange_req_decoded.view);
+    BOOST_CHECK(fake_pbft.consensus()->view() != viewchange_req_decoded->view);
 
     /// fake viewchange req generated by the 1st sealer
-    fakeValidViewchange(fake_pbft, viewchange_req, 1);
+    viewchange_req = fakeValidViewchange(fake_pbft, 1);
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
-    BOOST_CHECK(viewchange_req_decoded == viewchange_req);
+    BOOST_CHECK(*viewchange_req_decoded == *viewchange_req);
     /// viewchange no consensused
-    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req_decoded.view);
+    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req_decoded->view);
 }
 
 BOOST_AUTO_TEST_CASE(testFastViewChange)
@@ -694,27 +727,30 @@ BOOST_AUTO_TEST_CASE(testFastViewChange)
     {
         appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
     }
-    ViewChangeReq viewchange_req;
+    std::shared_ptr<ViewChangeReq> viewchange_req = fakeValidViewchange(fake_pbft, 0, true);
+    ;
     PBFTMsgPacket viewchange_packet;
     IDXTYPE nodeIdxSource = 1;
     /// handle the viewchange request received from 2nd sealer
-    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    BOOST_CHECK(viewchange_req != nullptr);
+
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
-    BOOST_CHECK(fake_pbft.consensus()->toView() != viewchange_req.view - 1);
+    BOOST_CHECK(fake_pbft.consensus()->toView() != viewchange_req->view - 1);
 
     nodeIdxSource = 2;
     /// handle the viewchange request received from 1st sealer
-    fakeValidViewchange(fake_pbft, viewchange_req, 1, true);
+    viewchange_req = fakeValidViewchange(fake_pbft, 1, true);
+
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
-    BOOST_CHECK(fake_pbft.consensus()->toView() == viewchange_req.view - 1);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == viewchange_req->view - 1);
 
     /// the node trigger fast viewchange, broadcast ViewChangeReq and changeView
     fake_pbft.consensus()->checkTimeout();
-    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req.view);
+    BOOST_CHECK(fake_pbft.consensus()->view() == viewchange_req->view);
 }
 
 /// test checkBlock
@@ -756,13 +792,13 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
         appendSessionInfo(fake_pbft, fake_pbft.m_sealerList[i]);
     }
     /// handleViewChangeMsg
-    ViewChangeReq viewchange_req;
     PBFTMsgPacket viewchange_packet;
     IDXTYPE nodeIdxSource = 1;
     /// handle the viewchange request received from 2nd sealer
-    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    std::shared_ptr<ViewChangeReq> viewchange_req = fakeValidViewchange(fake_pbft, 0, true);
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
+    BOOST_CHECK(viewchange_req != nullptr);
 
     viewchange_packet.ttl = 1;
     /// no broadcast for ttl
@@ -781,13 +817,13 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
     }
 
     /// broadcast
-    fakeValidViewchange(fake_pbft, viewchange_req, 2, true);
+    viewchange_req = fakeValidViewchange(fake_pbft, 2, true);
     FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleMsg(viewchange_packet);
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
-        if (fake_pbft.m_sealerList[i] != viewchange_packet.node_id && i != viewchange_req.idx)
+        if (fake_pbft.m_sealerList[i] != viewchange_packet.node_id && i != viewchange_req->idx)
         {
             compareAsyncSendTime(fake_pbft, fake_pbft.m_sealerList[i], 1);
         }

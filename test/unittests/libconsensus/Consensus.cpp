@@ -174,7 +174,7 @@ BOOST_AUTO_TEST_CASE(testReportNewBlock)
     fake_pbft->reportNewBlock();
     fake_pbft->engine()->setNodeIdx(0);
 
-    BOOST_CHECK(fake_pbft->sealing().block.isSealed() == true);
+    BOOST_CHECK(fake_pbft->sealing()->block->isSealed() == true);
     /// 2. note new block
     fake_pbft->onBlockChanged();
     BOOST_CHECK(fake_pbft->syncBlock() == true);
@@ -183,8 +183,8 @@ BOOST_AUTO_TEST_CASE(testReportNewBlock)
     fake_pbft->engine()->setNodeIdx(0);
     BOOST_CHECK(fake_pbft->syncBlock() == false);
     /// expected: the block has been reseted for it has been sealed
-    BOOST_CHECK(fake_pbft->sealing().block.isSealed() == false);
-    BOOST_CHECK(fake_pbft->sealing().block.transactions().size() == 0);
+    BOOST_CHECK(fake_pbft->sealing()->block->isSealed() == false);
+    BOOST_CHECK(fake_pbft->sealing()->block->transactions().size() == 0);
 
     /// test resetBlock for the next leader
     /// 1. sealing for the next leader
@@ -197,8 +197,8 @@ BOOST_AUTO_TEST_CASE(testReportNewBlock)
     fake_pbft->reportNewBlock();
     fake_pbft->engine()->setNodeIdx(0);
     /// expected: should not reset the sealing for the next leader
-    BOOST_CHECK(fake_pbft->sealing().block.isSealed() == false);
-    BOOST_CHECK(fake_pbft->sealing().block.transactions().size() == 5);
+    BOOST_CHECK(fake_pbft->sealing()->block->isSealed() == false);
+    BOOST_CHECK(fake_pbft->sealing()->block->transactions().size() == 5);
 }
 /// test reachBlockIntervalTime
 BOOST_AUTO_TEST_CASE(testReachBlockIntervalTime)
@@ -239,18 +239,18 @@ BOOST_AUTO_TEST_CASE(testDoWork)
     /// check txpool status
     BOOST_CHECK(sealerFixture.m_txpoolCreator->m_txPool->pendingSize() == 10);
     /// check m_sealing is sealed
-    BOOST_CHECK(fake_pbft->sealing().block.isSealed() == true);
+    BOOST_CHECK(fake_pbft->sealing()->block->isSealed() == true);
     /// check the blockNumber of the sealed block
-    BOOST_CHECK(fake_pbft->sealing().block.blockHeader().number() ==
+    BOOST_CHECK(fake_pbft->sealing()->block->blockHeader().number() ==
                 (sealerFixture.m_txpoolCreator->m_blockChain->number() + 1));
     /// check the sealer
     BOOST_CHECK(
-        fake_pbft->sealing().block.blockHeader().sealer() == fake_pbft->engine()->nodeIdx());
+        fake_pbft->sealing()->block->blockHeader().sealer() == fake_pbft->engine()->nodeIdx());
     /// check transaction size
-    BOOST_CHECK(fake_pbft->sealing().block.transactions().size() == 10);
+    BOOST_CHECK(fake_pbft->sealing()->block->transactions().size() == 10);
     /// check parent hash
     uint64_t blockNumber = sealerFixture.m_txpoolCreator->m_blockChain->number();
-    BOOST_CHECK(fake_pbft->sealing().block.blockHeader().parentHash() ==
+    BOOST_CHECK(fake_pbft->sealing()->block->blockHeader().parentHash() ==
                 (sealerFixture.m_txpoolCreator->m_blockChain->numberHash(blockNumber)));
 }
 

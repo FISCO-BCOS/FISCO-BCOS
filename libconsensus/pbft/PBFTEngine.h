@@ -147,10 +147,10 @@ public:
         }
         return true;
     }
-    void rehandleCommitedPrepareCache(PrepareReq const& req);
+    void rehandleCommitedPrepareCache(std::shared_ptr<PrepareReq> req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block const& block);
+    bool generatePrepare(std::shared_ptr<dev::eth::Block> const& block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -174,9 +174,9 @@ public:
         m_onCommitBlock = _f;
     }
 
-    bool inline shouldReset(dev::eth::Block const& block)
+    bool inline shouldReset(std::shared_ptr<dev::eth::Block> const& block)
     {
-        return block.getTransactionSize() == 0 && m_omitEmptyBlock;
+        return block->getTransactionSize() == 0 && m_omitEmptyBlock;
     }
     const std::string consensusStatus() override;
     void setOmitEmptyBlock(bool setter) { m_omitEmptyBlock = setter; }
@@ -208,7 +208,7 @@ protected:
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
-    bool needOmit(Sealing const& sealing);
+    bool needOmit(std::shared_ptr<Sealing> sealing);
 
     void getAllNodesViewStatus(Json::Value& status);
 
@@ -223,7 +223,7 @@ protected:
         std::string const& key, bytesConstRef data, unsigned const& ttl = 1);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
-    bool broadcastSignReq(PrepareReq const& req);
+    bool broadcastSignReq(std::shared_ptr<PrepareReq> req);
 
     /// broadcast commit message
     bool broadcastCommitReq(PrepareReq const& req);
@@ -233,18 +233,20 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
+    bool handlePrepareMsg(
+        std::shared_ptr<PrepareReq> prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
-    bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool handlePrepareMsg(std::shared_ptr<PrepareReq> prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
-    bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
-    bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
-    bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+    bool handleSignMsg(std::shared_ptr<SignReq> signReq, PBFTMsgPacket const& pbftMsg);
+    bool handleCommitMsg(std::shared_ptr<CommitReq> commitReq, PBFTMsgPacket const& pbftMsg);
+    bool handleViewChangeMsg(
+        std::shared_ptr<ViewChangeReq>& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
-    void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
+    void catchupView(std::shared_ptr<ViewChangeReq> req, std::ostringstream& oss);
     void checkAndCommit();
 
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
@@ -256,11 +258,11 @@ protected:
     /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
     void resetConfig() override;
     virtual void initBackupDB();
-    void reloadMsg(std::string const& _key, PBFTMsg* _msg);
-    void backupMsg(std::string const& _key, PBFTMsg const& _msg);
+    void reloadMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _msg);
+    void backupMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _msg);
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
-    bool checkSign(PBFTMsg const& req) const;
+    bool checkSign(std::shared_ptr<PBFTMsg> req) const;
     inline bool broadcastFilter(
         dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
@@ -378,7 +380,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    CheckResult isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss) const;
 
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -396,24 +398,24 @@ protected:
      *  3. CheckResult::VALID: the request is valid
      */
     template <class T>
-    inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
+    inline CheckResult checkReq(std::shared_ptr<T> req, std::ostringstream& oss) const
     {
         if (isSyncingHigherBlock(req))
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Is Syncing higher number")
-                                  << LOG_KV("ReqNumber", req.height)
+                                  << LOG_KV("ReqNumber", req->height)
                                   << LOG_KV(
                                          "syncingNumber", m_blockSync->status().knownHighestNumber)
                                   << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
 
-        if (m_reqCache->prepareCache().block_hash != req.block_hash)
+        if (m_reqCache->prepareCache()->block_hash != req->block_hash)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: sign or commit Not exist in prepare cache")
                                   << LOG_KV("prepHash",
-                                         m_reqCache->prepareCache().block_hash.abridged())
-                                  << LOG_KV("hash", req.block_hash.abridged())
+                                         m_reqCache->prepareCache()->block_hash.abridged())
+                                  << LOG_KV("hash", req->block_hash.abridged())
                                   << LOG_KV("INFO", oss.str());
             /// is future ?
             bool is_future = isFutureBlock(req);
@@ -421,25 +423,25 @@ protected:
             {
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("checkReq: Recv future request")
-                    << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
+                    << LOG_KV("prepHash", m_reqCache->prepareCache()->block_hash.abridged())
                     << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;
             }
             return CheckResult::INVALID;
         }
         /// check the sealer of this request
-        if (req.idx == nodeIdx())
+        if (req->idx == nodeIdx())
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv own req")
                                   << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         /// check view
-        if (m_reqCache->prepareCache().view != req.view)
+        if (m_reqCache->prepareCache()->view != req->view)
         {
             PBFTENGINE_LOG(TRACE) << LOG_DESC("checkReq: Recv req with unconsistent view")
-                                  << LOG_KV("prepView", m_reqCache->prepareCache().view)
-                                  << LOG_KV("view", req.view) << LOG_KV("INFO", oss.str());
+                                  << LOG_KV("prepView", m_reqCache->prepareCache()->view)
+                                  << LOG_KV("view", req->view) << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
         if (!checkSign(req))
@@ -451,16 +453,16 @@ protected:
         return CheckResult::VALID;
     }
 
-    CheckResult isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
-    CheckResult isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidSignReq(std::shared_ptr<SignReq> req, std::ostringstream& oss) const;
+    CheckResult isValidCommitReq(std::shared_ptr<CommitReq> req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
-        ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
+        std::shared_ptr<ViewChangeReq> req, IDXTYPE const& source, std::ostringstream& oss);
 
     template <class T>
-    inline bool hasConsensused(T const& req) const
+    inline bool hasConsensused(std::shared_ptr<T> req) const
     {
-        if (req.height < m_consensusBlockNumber ||
-            (req.height == m_consensusBlockNumber && req.view < m_view))
+        if (req->height < m_consensusBlockNumber ||
+            (req->height == m_consensusBlockNumber && req->view < m_view))
         {
             return true;
         }
@@ -469,9 +471,9 @@ protected:
 
     /// in case of con-current execution of block
     template <class T>
-    inline bool isSyncingHigherBlock(T const& req) const
+    inline bool isSyncingHigherBlock(std::shared_ptr<T> req) const
     {
-        if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
+        if (m_blockSync->isSyncing() && req->height <= m_blockSync->status().knownHighestNumber)
         {
             return true;
         }
@@ -483,10 +485,10 @@ protected:
      *          2. or the view is no smaller than the current consensused block number
      */
     template <typename T>
-    inline bool isFutureBlock(T const& req) const
+    inline bool isFutureBlock(std::shared_ptr<T> req) const
     {
         /// to ensure that the signReq can reach to consensus even if the view has been changed
-        if (req.height >= m_consensusBlockNumber || req.view > m_view)
+        if (req->height >= m_consensusBlockNumber || req->view > m_view)
         {
             return true;
         }
@@ -494,38 +496,38 @@ protected:
     }
 
     template <typename T>
-    inline bool isFuturePrepare(T const& req) const
+    inline bool isFuturePrepare(std::shared_ptr<T> req) const
     {
-        if (req.height > m_consensusBlockNumber ||
-            (req.height == m_consensusBlockNumber && req.view > m_view))
+        if (req->height > m_consensusBlockNumber ||
+            (req->height == m_consensusBlockNumber && req->view > m_view))
         {
             return true;
         }
         return false;
     }
 
-    inline bool isHashSavedAfterCommit(PrepareReq const& req) const
+    inline bool isHashSavedAfterCommit(std::shared_ptr<PrepareReq> const& req) const
     {
-        if (req.height == m_reqCache->committedPrepareCache().height &&
-            req.block_hash != m_reqCache->committedPrepareCache().block_hash)
+        if (req->height == m_reqCache->committedPrepareCache()->height &&
+            req->block_hash != m_reqCache->committedPrepareCache()->block_hash)
         {
             /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
-                << LOG_KV("height", req.height)
-                << LOG_KV("cacheHeight", m_reqCache->committedPrepareCache().height)
-                << LOG_KV("hash", req.block_hash.abridged())
-                << LOG_KV("cacheHash", m_reqCache->committedPrepareCache().block_hash.abridged());
+                << LOG_KV("height", req->height)
+                << LOG_KV("cacheHeight", m_reqCache->committedPrepareCache()->height)
+                << LOG_KV("hash", req->block_hash.abridged())
+                << LOG_KV("cacheHash", m_reqCache->committedPrepareCache()->block_hash.abridged());
             return false;
         }
         return true;
     }
 
-    inline bool isValidLeader(PrepareReq const& req) const
+    inline bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
     {
         auto leader = getLeader();
         /// get leader failed or this prepareReq is not broadcasted from leader
-        if (!leader.first || req.idx != leader.second)
+        if (!leader.first || req->idx != leader.second)
         {
             return false;
         }
@@ -536,14 +538,15 @@ protected:
     void checkSealerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
-    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
+    void execBlock(
+        std::shared_ptr<Sealing> sealing, std::shared_ptr<PrepareReq> req, std::ostringstream& oss);
     void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
         m_fastViewChange = true;
         m_signalled.notify_all();
     }
-    void notifySealing(dev::eth::Block const& block);
+    void notifySealing(std::shared_ptr<dev::eth::Block> block);
     /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {

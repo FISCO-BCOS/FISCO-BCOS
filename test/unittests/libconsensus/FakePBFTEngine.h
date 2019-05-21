@@ -62,6 +62,9 @@ public:
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
         setMaxBlockTransactions(300000000);
+        std::shared_ptr<dev::eth::BlockFactory> blockFactory =
+            std::make_shared<dev::eth::BlockFactory>();
+        setBlockFactory(blockFactory);
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -144,7 +147,10 @@ public:
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
-    bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
+    bool broadcastSignReq(std::shared_ptr<PrepareReq> req)
+    {
+        return PBFTEngine::broadcastSignReq(req);
+    }
     VIEWTYPE view() { return m_view; }
     void setView(VIEWTYPE const& _view) { m_view = _view; }
     void checkAndSave() { return PBFTEngine::checkAndSave(); }
@@ -189,13 +195,13 @@ public:
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
-    CheckResult isValidPrepare(PrepareReq const& req) const
+    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);
     }
 
-    bool isValidViewChangeReq(ViewChangeReq const& req, IDXTYPE const& source)
+    bool isValidViewChangeReq(std::shared_ptr<ViewChangeReq> req, IDXTYPE const& source)
     {
         std::ostringstream oss;
         return PBFTEngine::isValidViewChangeReq(req, source, oss);
@@ -205,37 +211,41 @@ public:
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
 
     void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
-    void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
-    bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
+    void notifySealing(std::shared_ptr<dev::eth::Block> const& block)
+    {
+        return PBFTEngine::notifySealing(block);
+    }
+    bool handlePrepareMsg(std::shared_ptr<PrepareReq> prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
 
     /// handle sign
-    bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+    bool handleSignMsg(std::shared_ptr<SignReq> sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
 
     /// handle viewchange
-    bool handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    bool handleViewChangeMsg(
+        std::shared_ptr<ViewChangeReq> viewChange_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleViewChangeMsg(viewChange_req, pbftMsg);
     }
 
-    CheckResult isValidSignReq(SignReq const& req) const
+    CheckResult isValidSignReq(std::shared_ptr<SignReq> req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidSignReq(req, oss);
     }
-    CheckResult isValidCommitReq(CommitReq const& req) const
+    CheckResult isValidCommitReq(std::shared_ptr<CommitReq> req) const
     {
         std::ostringstream oss;
         return PBFTEngine::isValidCommitReq(req, oss);
     }
 
-    bool handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    bool handleCommitMsg(std::shared_ptr<CommitReq> commit_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleCommitMsg(commit_req, pbftMsg);
     }
@@ -323,6 +333,11 @@ public:
         m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+        std::shared_ptr<dev::eth::BlockFactory> blockFactory =
+            std::make_shared<dev::eth::BlockFactory>();
+        setBlockFactory(blockFactory);
+        m_pbftEngine->setBlockFactory(blockFactory);
+        m_sealing = std::make_shared<Sealing>(blockFactory);
     }
 
     void loadTransactions(uint64_t const& transToFetch)
@@ -347,8 +362,8 @@ public:
     bool getStartConsensus() { return m_startConsensus; }
 
     bool syncBlock() { return m_syncBlock; }
-    uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
-    Sealing const& sealing() const { return m_sealing; }
+    uint64_t getSealingBlockNumber() { return m_sealing->block->blockHeader().number(); }
+    std::shared_ptr<Sealing> sealing() { return m_sealing; }
     void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
     bool shouldSeal() override { return Sealer::shouldSeal(); }
     bool canHandleBlockForNextLeader() override
@@ -362,7 +377,7 @@ public:
     {
         return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
     }
-    void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
+    void resetBlock(std::shared_ptr<dev::eth::Block> block, bool resetNextLeader = false)
     {
         return PBFTSealer::resetBlock(block, resetNextLeader);
     }

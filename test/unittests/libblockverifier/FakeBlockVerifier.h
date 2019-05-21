@@ -34,7 +34,7 @@ namespace test
 class FakeBlockverifier : public BlockVerifierInterface
 {
 public:
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block&, BlockInfo const&) override
+    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block::Ptr, BlockInfo const&) override
     {
         return std::make_shared<ExecutiveContext>();
     }
