@@ -591,6 +591,7 @@ BOOST_AUTO_TEST_CASE(checkAndClear)
 
 BOOST_AUTO_TEST_CASE(dirtyAndNew)
 {
+#if 0
     cachedStorage->setMaxCapacity(0);
     cachedStorage->setMaxForwardBlock(0);
 
@@ -671,6 +672,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 
         cachedStorage->commit(dev::h256(0), i + 2, blockDatas);
     }
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(exception)
