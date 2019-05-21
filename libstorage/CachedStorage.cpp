@@ -85,7 +85,7 @@ bool Caches::empty()
     return m_empty;
 }
 
-void Caches::setEmptry(bool empty)
+void Caches::setEmpty(bool empty)
 {
     m_empty = empty;
 }
@@ -413,7 +413,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 auto caches = std::get<0>(result);
                 caches->setNum(num);
                 caches->entries()->addEntry(cacheEntry);
-                caches->setEmptry(false);
+                caches->setEmpty(false);
             }
             else
             {

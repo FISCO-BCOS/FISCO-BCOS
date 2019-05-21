@@ -58,7 +58,7 @@ public:
 
     virtual RWMutex* mutex();
     virtual bool empty();
-    virtual void setEmptry(bool empty);
+    virtual void setEmpty(bool empty);
 
 private:
     RWMutex m_mutex;
