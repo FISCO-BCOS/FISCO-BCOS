@@ -1027,9 +1027,9 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    checkIP=$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
-    if [ -z "${checkIP}" ];then
+    if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
         LOG_WARN "Please check IP address: ${ip}"
+        exit 1
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
