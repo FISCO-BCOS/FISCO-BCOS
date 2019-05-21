@@ -56,8 +56,9 @@ public:
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
-    RWMutex* mutex();
-    bool empty();
+    virtual RWMutex* mutex();
+    virtual bool empty();
+    virtual void setEmpty(bool empty);
 
 private:
     RWMutex m_mutex;
@@ -136,13 +137,17 @@ private:
         TableInfo::Ptr tableInfo, std::string key, bool write = false);
     std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(
         TableInfo::Ptr tableInfo, std::string key, bool write = false);
+
+    tbb::spin_mutex m_clearMutex;
     void checkAndClear();
+
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
     std::map<std::string, TableCaches::Ptr> m_caches;
     tbb::spin_mutex m_cachesMutex;
-    tbb::spin_mutex m_cachesSpinMutex;
+
+    tbb::spin_mutex m_touchMutex;
 
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
