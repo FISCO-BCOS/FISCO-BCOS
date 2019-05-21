@@ -448,7 +448,7 @@ Json::Value Rpc::getGroupList()
 
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto groupList = ledgerManager()->getGrouplList();
+        auto groupList = ledgerManager()->getGroupListForRpc();
         for (dev::GROUP_ID id : groupList)
             response.append(id);
 
