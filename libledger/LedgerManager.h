@@ -64,6 +64,7 @@ public:
             WriteGuard l(x_groupListCache);
             m_groupListCache.insert(_groupId);
         }
+
         return ret.second;
     }
 
@@ -161,16 +162,19 @@ public:
         return m_ledgerMap[groupId]->getParam();
     }
 
-    std::set<dev::GROUP_ID> const& getGrouplList() const
+    std::set<dev::GROUP_ID> getGroupListForRpc() const;
+    std::set<dev::GROUP_ID> const& getGroupList() const
     {
         ReadGuard l(x_groupListCache);
         return m_groupListCache;
     }
 
+
 private:
     mutable SharedMutex x_groupListCache;
     /// cache for the group List
     std::set<dev::GROUP_ID> m_groupListCache;
+
     /// map used to store the mappings between groupId and created ledger objects
     std::map<dev::GROUP_ID, std::shared_ptr<LedgerInterface>> m_ledgerMap;
 };

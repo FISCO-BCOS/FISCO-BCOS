@@ -477,8 +477,9 @@ private:
 class FakeLedger : public LedgerInterface
 {
 public:
-    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface>, dev::GROUP_ID const&, dev::KeyPair const&,
-        std::string const&, std::string const&)
+    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface>, dev::GROUP_ID const&,
+        dev::KeyPair const& keyPair, std::string const&, std::string const&)
+      : LedgerInterface(keyPair)
     {
         /// init blockChain
         initBlockChain();
