@@ -23,6 +23,7 @@
  */
 #include "Common.h"
 #include <libdevcore/Assertions.h>
+#include <libethcore/BlockFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 using namespace dev::consensus;
@@ -144,10 +145,12 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     BOOST_CHECK(tmp_block.equalAll(fake_block.m_block));
 
     /// test updatePrepareReq
-    Sealing sealing;
-    sealing.block = fake_block.m_block;
+    std::shared_ptr<dev::eth::BlockFactory> blockFactory =
+        std::make_shared<dev::eth::BlockFactory>();
+    std::shared_ptr<Sealing> sealing = std::make_shared<Sealing>(blockFactory);
+    sealing->block = std::make_shared<Block>(fake_block.m_block);
     block_populated_prepare.block = bytes();
-    sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
+    sealing->p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,

@@ -24,6 +24,7 @@
  * @date 2018-10-24
  */
 #include <fisco-bcos/Fake.h>
+#include <libethcore/BlockFactory.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
@@ -249,8 +250,9 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     /// check BlockChain
     std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(groupId);
     std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
-    Block populateBlock;
-    populateBlock.resetCurrentBlock(block->header());
+    std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+    Block::Ptr populateBlock = blockFactory->newBlock();
+    populateBlock->resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
 }

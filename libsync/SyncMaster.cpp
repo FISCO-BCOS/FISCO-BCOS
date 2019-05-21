@@ -487,11 +487,11 @@ bool SyncMaster::maintainDownloadingQueue()
                 record_time = utcTime();
 
                 ExecutiveContext::Ptr exeCtx =
-                    m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                    m_blockVerifier->executeBlock(topBlock, parentBlockInfo);
                 auto executeBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                CommitResult ret = m_blockChain->commitBlock(topBlock, exeCtx);
                 auto commitBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
                 if (ret == CommitResult::OK)
