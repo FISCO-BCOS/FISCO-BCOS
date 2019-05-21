@@ -51,7 +51,7 @@ using namespace dev::precompiled;
 
 using boost::lexical_cast;
 
-std::shared_ptr<Block> BlockCache::add(Block const& _block)
+std::shared_ptr<Block> BlockCache::add(Block::Ptr _block)
 {
     {
         WriteGuard guard(m_sharedMutex);
@@ -70,13 +70,11 @@ std::shared_ptr<Block> BlockCache::add(Block const& _block)
             }
         }
 
-        auto blockHash = _block.blockHeader().hash();
-        auto block = std::make_shared<Block>(std::move(_block));
-        m_blockCache.insert(std::make_pair(blockHash, block));
+        auto blockHash = _block->blockHeader().hash();
+        m_blockCache.insert(std::make_pair(blockHash, _block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
-
-        return block;
+        return _block;
     }
 }
 
@@ -179,7 +177,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
                 auto getField_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                std::shared_ptr<Block> block =
+                    m_blockFactory->newBlock(fromHex(strBlock.c_str()), CheckTransaction::None);
                 auto constructBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -452,7 +451,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr)
     {
-        block = std::make_shared<Block>();
+        block = m_blockFactory->newBlock();
         /// modification 2019.3.20: set timestamp to block header
         block->setEmptyBlock(initParam.timeStamp);
         block->header().appendExtraDataArray(asBytes(initParam.groupMark));
@@ -891,14 +890,15 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
         TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
 }
 
-void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveContext> context)
+void BlockChainImp::writeNumber(
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE, false);
     if (tb)
     {
         auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         auto entry = tb->newEntry();
-        entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+        entry->setField(SYS_VALUE, lexical_cast<std::string>(block->blockHeader().number()));
         if (entries->size() > 0)
         {
             tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
@@ -915,7 +915,7 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
 }
 
 void BlockChainImp::writeTotalTransactionCount(
-    const Block& block, std::shared_ptr<ExecutiveContext> context)
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE, false);
     if (tb)
@@ -925,7 +925,7 @@ void BlockChainImp::writeTotalTransactionCount(
         {
             auto entry = entries->get(0);
             auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
-            currentCount += block.transactions().size();
+            currentCount += block->transactions().size();
 
             auto updateEntry = tb->newEntry();
             updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
@@ -934,7 +934,7 @@ void BlockChainImp::writeTotalTransactionCount(
         else
         {
             auto entry = tb->newEntry();
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(block->transactions().size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
         }
         const TransactionReceipts& receipts = block.transactionReceipts();
@@ -969,7 +969,8 @@ void BlockChainImp::writeTotalTransactionCount(
     }
 }
 
-void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<ExecutiveContext> context)
+void BlockChainImp::writeTxToBlock(
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -980,7 +981,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
     if (tb && tb_nonces)
     {
-        const std::vector<Transaction>& txs = block.transactions();
+        const std::vector<Transaction>& txs = block->transactions();
         std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -991,7 +992,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                 {
                     Entry::Ptr entry = std::make_shared<Entry>();
                     entry->setField(
-                        SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
+                        SYS_VALUE, lexical_cast<std::string>(block->blockHeader().number()));
                     entry->setField("index", lexical_cast<std::string>(i));
                     entry->setForce(true);
 
@@ -1012,7 +1013,8 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
         entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
         entry_tb2nonces->setForce(true);
-        tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
+        tb_nonces->insert(
+            lexical_cast<std::string>(block->blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
                               << LOG_DESC("Write tx to block time record")
@@ -1029,15 +1031,16 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
     }
 }
 
-void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<ExecutiveContext> context)
+void BlockChainImp::writeNumber2Hash(
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH, false);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        entry->setField(SYS_VALUE, block.blockHeader().hash().hex());
+        entry->setField(SYS_VALUE, block->blockHeader().hash().hex());
         entry->setForce(true);
-        tb->insert(lexical_cast<std::string>(block.blockHeader().number()), entry);
+        tb->insert(lexical_cast<std::string>(block->blockHeader().number()), entry);
     }
     else
     {
@@ -1045,17 +1048,18 @@ void BlockChainImp::writeNumber2Hash(const Block& block, std::shared_ptr<Executi
     }
 }
 
-void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveContext> context)
+void BlockChainImp::writeHash2Block(
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK, false);
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         bytes out;
-        block.encode(out);
+        block->encode(out);
         entry->setField(SYS_VALUE, toHexPrefixed(out));
         entry->setForce(true);
-        tb->insert(block.blockHeader().hash().hex(), entry);
+        tb->insert(block->blockHeader().hash().hex(), entry);
     }
     else
     {
@@ -1063,7 +1067,7 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
     }
 }
 
-void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContext> context)
+void BlockChainImp::writeBlockInfo(Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     writeHash2Block(block, context);
     writeNumber2Hash(block, context);
@@ -1082,22 +1086,23 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
     return true;
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(
+    dev::eth::Block::Ptr block, std::shared_ptr<ExecutiveContext> context)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    if (!isBlockShouldCommit(block.blockHeader().number()))
+    if (!isBlockShouldCommit(block->blockHeader().number()))
     {
         return CommitResult::ERROR_NUMBER;
     }
 
     h256 parentHash = numberHash(number());
-    if (block.blockHeader().parentHash() != numberHash(number()))
+    if (block->blockHeader().parentHash() != numberHash(number()))
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect parent hash")
                                 << LOG_KV("needParentHash", parentHash)
-                                << LOG_KV("committedParentHash", block.blockHeader().parentHash());
+                                << LOG_KV("committedParentHash", block->blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
 
@@ -1107,7 +1112,7 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
-            if (!isBlockShouldCommit(block.blockHeader().number()))
+            if (!isBlockShouldCommit(block->blockHeader().number()))
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
@@ -1134,20 +1139,20 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             write_record_time = utcTime();
             try
             {
-                context->dbCommit(block);
+                context->dbCommit(*block);
             }
             catch (std::exception& e)
             {
                 BLOCKCHAIN_LOG(ERROR)
                     << LOG_DESC("Commit Block failed")
-                    << LOG_KV("number", block.blockHeader().number()) << LOG_KV("what", e.what());
+                    << LOG_KV("number", block->blockHeader().number()) << LOG_KV("what", e.what());
                 return CommitResult::ERROR_COMMITTING;
             }
             auto dbCommit_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             {
                 WriteGuard ll(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
+                m_blockNumber = block->blockHeader().number();
             }
             auto updateBlockNumber_time_cost = utcTime() - write_record_time;
 

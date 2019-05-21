@@ -284,12 +284,12 @@ public:
     }
 
     CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
-        m_blockChain.push_back(std::make_shared<Block>(block));
-        m_blockNumber = block.blockHeader().number() + 1;
-        m_totalTransactionCount += block.transactions().size();
+        m_blockHash[block->blockHeader().hash()] = block->blockHeader().number();
+        m_blockChain.push_back(block);
+        m_blockNumber = block->blockHeader().number() + 1;
+        m_totalTransactionCount += block->transactions().size();
         m_onReady(m_blockNumber);
         return CommitResult::OK;
     }
@@ -320,9 +320,9 @@ public:
     };
     virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const&) override
+        dev::eth::Block::Ptr block, BlockInfo const&) override
     {
-        usleep(1000 * (block.getTransactionSize()));
+        usleep(1000 * (block->getTransactionSize()));
         return m_executiveContext;
     };
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(

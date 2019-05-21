@@ -53,6 +53,9 @@ namespace ledger
 {
 bool Ledger::initLedger(const std::string& _configFilePath)
 {
+    /// init blockFactory
+    m_blockFactory = std::make_shared<BlockFactory>();
+
 #ifndef FISCO_EASYLOG
     BOOST_LOG_SCOPED_THREAD_ATTR(
         "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
@@ -491,6 +494,8 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+    /// set block factory
+    blockChain->setBlockFactory(m_blockFactory);
     m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)
@@ -596,6 +601,8 @@ bool Ledger::consensusInitFactory()
 
     /// create PBFTSealer
     m_sealer = createPBFTSealer();
+    assert(m_blockFactory);
+    m_sealer->setBlockFactory(m_blockFactory);
     if (!m_sealer)
     {
         return false;

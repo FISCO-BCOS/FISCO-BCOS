@@ -23,7 +23,7 @@
 #pragma once
 
 #include <libdevcore/FixedHash.h>
-#include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
@@ -75,7 +75,7 @@ public:
     virtual std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) = 0;
     virtual CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual std::pair<int64_t, int64_t> totalFailedTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;

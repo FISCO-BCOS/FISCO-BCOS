@@ -236,7 +236,7 @@ bool RaftEngine::getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const
 void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException, dev::p2p::P2PSession::Ptr _session,
     dev::p2p::P2PMessage::Ptr _message)
 {
-    RaftMsgPacket raftMsg;
+    std::shared_ptr<RaftMsgPacket> raftMsg = std::make_shared<RaftMsgPacket>();
 
     bool valid = decodeToRequests(raftMsg, _message, _session);
     if (!valid)
@@ -245,15 +245,15 @@ void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException, dev::p2p::P2PSess
         return;
     }
 
-    if (raftMsg.packetType < RaftPacketType::RaftPacketCount)
+    if (raftMsg->packetType < RaftPacketType::RaftPacketCount)
     {
-        m_msgQueue.push(raftMsg);
+        m_msgQueue.push(*raftMsg);
     }
     else
     {
         RAFTENGINE_LOG(WARNING) << LOG_DESC("[#onRecvRaftMessage]Illegal message type")
-                                << LOG_KV("msgType", raftMsg.packetType)
-                                << LOG_KV("fromIP", raftMsg.endpoint);
+                                << LOG_KV("msgType", raftMsg->packetType)
+                                << LOG_KV("fromIP", raftMsg->endpoint);
     }
 }
 
@@ -1471,7 +1471,7 @@ bool RaftEngine::commit(Block const& _block)
 
 bool RaftEngine::checkAndExecute(Block const& _block)
 {
-    Sealing workingSealing;
+    Sealing workingSealing(m_blockFactory);
     try
     {
         execBlock(workingSealing, _block);
@@ -1489,13 +1489,13 @@ bool RaftEngine::checkAndExecute(Block const& _block)
 
 void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
 {
-    Block working_block(_block);
+    Block::Ptr working_block = m_blockFactory->newBlock(_block);
     RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#execBlock]")
-                          << LOG_KV("number", working_block.header().number())
-                          << LOG_KV("hash", working_block.header().hash().abridged());
+                          << LOG_KV("number", working_block->header().number())
+                          << LOG_KV("hash", working_block->header().hash().abridged());
 
-    checkBlockValid(working_block);
-    m_blockSync->noteSealingBlockNumber(working_block.header().number());
+    checkBlockValid(*working_block);
+    m_blockSync->noteSealingBlockNumber(working_block->header().number());
     _sealing.p_execContext = executeBlock(working_block);
     _sealing.block = working_block;
 }
@@ -1536,18 +1536,18 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
     {
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#checkAndSave]Commit block succ");
         // drop handled transactions
-        dropHandledTransactions(_sealing.block);
+        dropHandledTransactions(*_sealing.block);
     }
     else
     {
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkAndSave]Commit block failed")
                               << LOG_KV("highestNum", m_highestBlock.number())
-                              << LOG_KV("sealingNum", _sealing.block.blockHeader().number())
-                              << LOG_KV(
-                                     "sealingHash", _sealing.block.blockHeader().hash().abridged());
+                              << LOG_KV("sealingNum", _sealing.block->blockHeader().number())
+                              << LOG_KV("sealingHash",
+                                     _sealing.block->blockHeader().hash().abridged());
         /// note blocksync to sync
         // m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-        m_txPool->handleBadBlock(_sealing.block);
+        m_txPool->handleBadBlock(*_sealing.block);
     }
 }
 

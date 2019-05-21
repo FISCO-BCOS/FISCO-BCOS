@@ -99,13 +99,13 @@ public:
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
         dev::blockverifier::BlockInfo parentBlockInfo;
         dev::blockverifier::ExecutiveContext::Ptr exeCtx =
-            m_blockVerifier->executeBlock(*block, parentBlockInfo);
+            m_blockVerifier->executeBlock(block, parentBlockInfo);
 
         // consensus process waiting time simulation
         std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
 
         // commit
-        m_blockChain->commitBlock(*block, exeCtx);
+        m_blockChain->commitBlock(block, exeCtx);
         m_txPool->dropBlockTrans(*block);
         m_totalTxCommit += txs.size();
 

@@ -497,7 +497,7 @@ bool SyncMaster::maintainDownloadingQueue()
                                << LOG_KV("txs", topBlock->transactions().size())
                                << LOG_KV("hash", topBlock->headerHash().abridged());
                 ExecutiveContext::Ptr exeCtx =
-                    m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+                    m_blockVerifier->executeBlock(topBlock, parentBlockInfo);
 
                 if (exeCtx == nullptr)
                 {
@@ -509,7 +509,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 auto executeBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                CommitResult ret = m_blockChain->commitBlock(*topBlock, exeCtx);
+                CommitResult ret = m_blockChain->commitBlock(topBlock, exeCtx);
                 auto commitBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
                 if (ret == CommitResult::OK)

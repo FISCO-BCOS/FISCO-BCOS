@@ -28,7 +28,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
-#include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
@@ -151,6 +151,11 @@ public:
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
 
+    void setBlockFactory(std::shared_ptr<dev::eth::BlockFactory> blockFactory) override
+    {
+        m_blockFactory = blockFactory;
+    }
+
 protected:
     virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
@@ -182,7 +187,8 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(T& req, std::shared_ptr<dev::p2p::P2PMessage> message,
+    inline bool decodeToRequests(std::shared_ptr<T> req,
+        std::shared_ptr<dev::p2p::P2PMessage> message,
         std::shared_ptr<dev::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
@@ -191,7 +197,7 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(
+                req->setOtherField(
                     peer_index, session->nodeID(), session->session()->nodeIPEndpoint().name());
         }
         return valid;
@@ -206,11 +212,12 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(T& req, bytesConstRef data)
+    inline bool decodeToRequests(std::shared_ptr<T> req, bytesConstRef data)
     {
         try
         {
-            req.decode(data);
+            assert(req);
+            req->decode(data);
             return true;
         }
         catch (std::exception& e)
@@ -220,7 +227,7 @@ protected:
         }
     }
 
-    dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
+    dev::blockverifier::ExecutiveContext::Ptr executeBlock(std::shared_ptr<dev::eth::Block> block);
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
@@ -291,6 +298,8 @@ protected:
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
     std::atomic_bool m_cfgErr = {false};
+
+    std::shared_ptr<dev::eth::BlockFactory> m_blockFactory = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

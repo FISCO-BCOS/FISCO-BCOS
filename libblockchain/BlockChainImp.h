@@ -25,7 +25,7 @@
 #include "BlockChainInterface.h"
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
-#include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
@@ -63,7 +63,7 @@ class BlockCache
 {
 public:
     BlockCache(){};
-    std::shared_ptr<dev::eth::Block> add(dev::eth::Block const& _block);
+    std::shared_ptr<dev::eth::Block> add(dev::eth::Block::Ptr _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
 
 private:
@@ -90,7 +90,7 @@ public:
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
-    CommitResult commitBlock(dev::eth::Block& block,
+    CommitResult commitBlock(dev::eth::Block::Ptr block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
@@ -112,24 +112,29 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+    void setBlockFactory(std::shared_ptr<dev::eth::BlockFactory> blockFactory)
+    {
+        m_blockFactory = blockFactory;
+    }
+
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash);
     int64_t obtainNumber();
-    void writeNumber(const dev::eth::Block& block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    void writeTotalTransactionCount(const dev::eth::Block& block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    void writeTxToBlock(const dev::eth::Block& block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeNumber(
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeTotalTransactionCount(
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeTxToBlock(
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeBlockInfo(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    void writeNumber2Hash(const dev::eth::Block& block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeNumber2Hash(
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
@@ -162,6 +167,7 @@ private:
     int64_t m_blockNumber = -1;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+    std::shared_ptr<dev::eth::BlockFactory> m_blockFactory = nullptr;
 };
 }  // namespace blockchain
 }  // namespace dev

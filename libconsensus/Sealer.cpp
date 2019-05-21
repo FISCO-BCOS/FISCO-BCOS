@@ -39,6 +39,9 @@ using namespace dev::consensus;
 /// start the Sealer module
 void Sealer::start()
 {
+    assert(m_blockFactory);
+    m_sealing = std::make_shared<Sealing>(m_blockFactory);
+
     if (m_startConsensus)
     {
         SEAL_LOG(WARNING) << "[Sealer module has already been started]";
@@ -59,7 +62,7 @@ bool Sealer::shouldSeal()
     bool sealed = false;
     {
         ReadGuard l(x_sealing);
-        sealed = m_sealing.block.isSealed();
+        sealed = m_sealing->block->isSealed();
     }
     return (!sealed && m_startConsensus &&
             m_consensusEngine->accountType() == NodeAccountType::SealerAccount &&
@@ -85,7 +88,7 @@ void Sealer::reportNewBlock()
             {
                 SEAL_LOG(DEBUG) << "[reportNewBlock] Reset sealing: [number]:  "
                                 << m_blockChain->number()
-                                << ", sealing number:" << m_sealing.block.blockHeader().number();
+                                << ", sealing number:" << m_sealing->block->blockHeader().number();
                 resetSealingBlock();
             }
         }
@@ -105,7 +108,7 @@ void Sealer::doWork(bool wait)
         WriteGuard l(x_sealing);
         {
             /// get current transaction num
-            uint64_t tx_num = m_sealing.block.getTransactionSize();
+            uint64_t tx_num = m_sealing->block->getTransactionSize();
 
             /// add this to in case of unlimited-loop
             if (m_txPool->status().current == 0)
@@ -146,8 +149,8 @@ void Sealer::doWork(bool wait)
 void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
-    m_sealing.block.appendTransactions(
-        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+    m_sealing->block->appendTransactions(
+        m_txPool->topTransactions(transToFetch, m_sealing->m_transactionSet, true));
 }
 
 /// check whether the blocksync module is syncing
@@ -168,11 +171,12 @@ bool Sealer::isBlockSyncing()
  * header should be reset to the current block number add 2 false: reset sealing for the current
  * leader; the sealing header should be populated from the current block
  */
-void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool resetNextLeader)
+void Sealer::resetSealingBlock(
+    std::shared_ptr<Sealing> sealing, h256Hash const& filter, bool resetNextLeader)
 {
-    resetBlock(sealing.block, resetNextLeader);
-    sealing.m_transactionSet = filter;
-    sealing.p_execContext = nullptr;
+    resetBlock(sealing->block, resetNextLeader);
+    sealing->m_transactionSet = filter;
+    sealing->p_execContext = nullptr;
 }
 
 /**
@@ -184,15 +188,15 @@ void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool re
  * header should be reset to the current block number add 2 false: reset block for the current
  * leader; the block header should be populated from the current block
  */
-void Sealer::resetBlock(Block& block, bool resetNextLeader)
+void Sealer::resetBlock(std::shared_ptr<Block> block, bool resetNextLeader)
 {
     /// reset block for the next leader:
     /// 1. clear the block; 2. set the block number to current block number add 2
     if (resetNextLeader)
     {
         SEAL_LOG(DEBUG) << "reset nextleader number to:" << (m_blockChain->number() + 2);
-        block.resetCurrentBlock();
-        block.header().setNumber(m_blockChain->number() + 2);
+        block->resetCurrentBlock();
+        block->header().setNumber(m_blockChain->number() + 2);
     }
     /// reset block for current leader:
     /// 1. clear the block; 2. populate header from the highest block
@@ -204,7 +208,7 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
             SEAL_LOG(FATAL) << LOG_DESC("exit because can't get highest block")
                             << LOG_KV("number", m_blockChain->number());
         }
-        block.resetCurrentBlock(highestBlock->blockHeader());
+        block->resetCurrentBlock(highestBlock->blockHeader());
     }
 }
 

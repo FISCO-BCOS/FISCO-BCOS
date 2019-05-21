@@ -204,15 +204,14 @@ public:
     }
 
     CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+        dev::eth::Block::Ptr block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
-        block.header().setNumber(m_blockNumber);
-        std::shared_ptr<Block> p_block = std::make_shared<Block>(block);
-        m_blockChain.push_back(p_block);
-        m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
+        block->header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        block->header().setNumber(m_blockNumber);
+        m_blockChain.push_back(block);
+        m_blockHash[block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
-        m_totalTransactionCount += block.transactions().size();
+        m_totalTransactionCount += block->transactions().size();
         return CommitResult::OK;
     }
 
