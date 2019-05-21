@@ -142,12 +142,14 @@ bytes PermissionPrecompiled::call(
 
         auto condition = table->newCondition();
         auto entries = table->select(tableName, condition);
-        Json::Value AuthorityInfos;
+        Json::Value AuthorityInfos(Json::arrayValue);
         if (entries)
         {
             for (size_t i = 0; i < entries->size(); i++)
             {
                 auto entry = entries->get(i);
+                if (!entry)
+                    continue;
                 Json::Value AuthorityInfo;
                 AuthorityInfo[SYS_AC_TABLE_NAME] = tableName;
                 AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
