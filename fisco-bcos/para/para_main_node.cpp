@@ -70,7 +70,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             Transaction tx(value, gasPrice, gas, dest, data, nonce);
             Signature sig = sign(sec, tx.sha3(WithoutSignature));
 
-            for (auto group : ledgerManager->getGrouplList())
+            for (auto group : ledgerManager->getGroupList())
             {
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + 250);
                 tx.updateSignature(SignatureStruct(sig));
@@ -98,7 +98,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
     while (true)
     {
-        for (auto group : ledgerManager->getGrouplList())
+        for (auto group : ledgerManager->getGroupList())
         {
             auto hasGenerated = false;
             while (ledgerManager->blockChain(group)->number() <= 0)
