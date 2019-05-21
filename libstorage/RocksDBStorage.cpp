@@ -77,9 +77,10 @@ Entries::Ptr RocksDBStorage::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                	if(valueIt->first == ID_FIELD) {
-                		entry->setID(valueIt->second);
-                	}
+                    if (valueIt->first == ID_FIELD)
+                    {
+                        entry->setID(valueIt->second);
+                    }
                     entry->setField(valueIt->first, valueIt->second);
                 }
                 entry->setNum(entry->getField(NUM_FIELD));

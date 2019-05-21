@@ -45,7 +45,7 @@ Entry::~Entry()
 {
     if (m_data)
     {
-    	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+        tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
         if (m_data->m_refCount > 0)
         {
             --m_data->m_refCount;
@@ -60,7 +60,7 @@ uint32_t Entry::getID() const
 
 void Entry::setID(uint32_t id)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_ID = id;
 
@@ -69,7 +69,7 @@ void Entry::setID(uint32_t id)
 
 void Entry::setID(const std::string& id)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_ID = boost::lexical_cast<uint32_t>(id);
 
@@ -188,7 +188,7 @@ uint32_t Entry::num() const
 
 void Entry::setNum(uint32_t num)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_num = num;
     m_dirty = true;
@@ -207,7 +207,7 @@ bool Entry::dirty() const
 
 void Entry::setDirty(bool dirty)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_dirty = dirty;
 }
@@ -219,7 +219,7 @@ bool Entry::force() const
 
 void Entry::setForce(bool force)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_force = force;
 }
@@ -231,7 +231,7 @@ bool Entry::deleted() const
 
 void Entry::setDeleted(bool deleted)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
     m_deleted = deleted;
 }
@@ -243,23 +243,28 @@ ssize_t Entry::capacity() const
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
-	tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
 
-	tbb::spin_mutex::scoped_lock lock2;
-	while(true) {
-		auto locked = lock2.try_acquire(entry->m_data->m_mutex);
-		if(!locked) {
-			if(m_data == entry->m_data) {
-				return;
-			}
-			else {
-				tbb::this_tbb_thread::yield();
-			}
-		}
-		else {
-			break;
-		}
-	}
+    tbb::spin_mutex::scoped_lock lock2;
+    while (true)
+    {
+        auto locked = lock2.try_acquire(entry->m_data->m_mutex);
+        if (!locked)
+        {
+            if (m_data == entry->m_data)
+            {
+                return;
+            }
+            else
+            {
+                tbb::this_tbb_thread::yield();
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
 
     m_ID = entry->m_ID;
     m_status = entry->m_status;
@@ -278,13 +283,16 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_data->m_refCount += 1;
 }
 
-ssize_t Entry::refCount() {
-	if(m_data) {
-		return m_data->m_refCount;
-	}
-	else {
-		return 0;
-	}
+ssize_t Entry::refCount()
+{
+    if (m_data)
+    {
+        return m_data->m_refCount;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 std::shared_ptr<tbb::spin_mutex::scoped_lock> Entry::checkRef()

@@ -25,9 +25,9 @@
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <tbb/parallel_for.h>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
-#include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -589,86 +589,88 @@ BOOST_AUTO_TEST_CASE(checkAndClear)
     select_condition_invoker();
 }
 
-BOOST_AUTO_TEST_CASE(dirtyAndNew) {
-	cachedStorage->setMaxCapacity(0);
-	cachedStorage->setMaxForwardBlock(0);
+BOOST_AUTO_TEST_CASE(dirtyAndNew)
+{
+    cachedStorage->setMaxCapacity(0);
+    cachedStorage->setMaxForwardBlock(0);
 
-	auto backend = std::make_shared<CachedStorage>();
-	backend->setMaxCapacity(2000);
-	cachedStorage->setBackend(backend);
+    auto backend = std::make_shared<CachedStorage>();
+    backend->setMaxCapacity(2000);
+    cachedStorage->setBackend(backend);
 
-	auto userTable = std::make_shared<TableInfo>();
-	userTable->key = "key";
-	userTable->fields.push_back("value");
-	userTable->name = "_dag_transfer_";
+    auto userTable = std::make_shared<TableInfo>();
+    userTable->key = "key";
+    userTable->fields.push_back("value");
+    userTable->name = "_dag_transfer_";
 
-	auto txTable = std::make_shared<TableInfo>();
-	txTable->key = "txhash";
-	txTable->fields.push_back("number");
-	txTable->name = "_sys_txhash_2_block_";
+    auto txTable = std::make_shared<TableInfo>();
+    txTable->key = "txhash";
+    txTable->fields.push_back("number");
+    txTable->name = "_sys_txhash_2_block_";
 
-	TableData::Ptr newUserData = std::make_shared<TableData>();
-	TableData::Ptr newTXData = std::make_shared<TableData>();
-	Entries::Ptr newUser = std::make_shared<Entries>();
-	Entries::Ptr newTX = std::make_shared<Entries>();
-	for(auto i=0; i<10000; ++i) {
-		Entry::Ptr entry = std::make_shared<Entry>();
-		entry->setField("key", boost::lexical_cast<std::string>(i));
-		entry->setField("value", "0");
-		newUser->addEntry(entry);
+    TableData::Ptr newUserData = std::make_shared<TableData>();
+    TableData::Ptr newTXData = std::make_shared<TableData>();
+    Entries::Ptr newUser = std::make_shared<Entries>();
+    Entries::Ptr newTX = std::make_shared<Entries>();
+    for (auto i = 0; i < 10000; ++i)
+    {
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("key", boost::lexical_cast<std::string>(i));
+        entry->setField("value", "0");
+        newUser->addEntry(entry);
 
-		Entry::Ptr entry2 = std::make_shared<Entry>();
-		entry2->setField("txhash", boost::lexical_cast<std::string>(i));
-		entry2->setField("number", "0");
-		newTX->addEntry(entry2);
-	}
+        Entry::Ptr entry2 = std::make_shared<Entry>();
+        entry2->setField("txhash", boost::lexical_cast<std::string>(i));
+        entry2->setField("number", "0");
+        newTX->addEntry(entry2);
+    }
 
-	newUserData->newEntries = newUser;
-	newTXData->newEntries = newTX;
+    newUserData->newEntries = newUser;
+    newTXData->newEntries = newTX;
 
-	std::vector<TableData::Ptr> datas = {newUserData, newTXData};
+    std::vector<TableData::Ptr> datas = {newUserData, newTXData};
 
-	auto c = cachedStorage->commit(dev::h256(0), 1, datas);
+    auto c = cachedStorage->commit(dev::h256(0), 1, datas);
 
-	BOOST_TEST(c == 20000);
+    BOOST_TEST(c == 20000);
 
-	std::map<int, int> totalCount;
-	for(auto i=0; i<1000; ++i) {
-		TableData::Ptr updateUserData = std::make_shared<TableData>();
-		updateUserData->info = userTable;
+    std::map<int, int> totalCount;
+    for (auto i = 0; i < 1000; ++i)
+    {
+        TableData::Ptr updateUserData = std::make_shared<TableData>();
+        updateUserData->info = userTable;
 
-		TableData::Ptr newTxData = std::make_shared<TableData>();
-		newTxData->info = txTable;
+        TableData::Ptr newTxData = std::make_shared<TableData>();
+        newTxData->info = txTable;
 
-		tbb::parallel_for(
-			tbb::blocked_range<size_t>(0, 10000), [&](const tbb::blocked_range<size_t>& range) {
-				for (size_t j = range.begin(); j < range.end(); ++j)
-				{
-					auto data = cachedStorage->select(dev::h256(0), i + 2, userTable, boost::lexical_cast<std::string>(j), std::make_shared<Condition>());
-					BOOST_TEST(data->size() == 1);
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, 10000), [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t j = range.begin(); j < range.end(); ++j)
+                {
+                    auto data = cachedStorage->select(dev::h256(0), i + 2, userTable,
+                        boost::lexical_cast<std::string>(j), std::make_shared<Condition>());
+                    BOOST_TEST(data->size() == 1);
 
-					auto entry = data->get(0);
-					auto value = boost::lexical_cast<int>(entry->getField("value"));
-					entry->setField("value", boost::lexical_cast<std::string>(value + 1));
+                    auto entry = data->get(0);
+                    auto value = boost::lexical_cast<int>(entry->getField("value"));
+                    entry->setField("value", boost::lexical_cast<std::string>(value + 1));
 
-					updateUserData->dirtyEntries->addEntry(entry);
+                    updateUserData->dirtyEntries->addEntry(entry);
 
-					auto txEntry = std::make_shared<Entry>();
-					txEntry->setField("txhash", boost::lexical_cast<std::string>(100000 + i));
-					txEntry->setField("number", "0");
+                    auto txEntry = std::make_shared<Entry>();
+                    txEntry->setField("txhash", boost::lexical_cast<std::string>(100000 + i));
+                    txEntry->setField("number", "0");
 
-					newTxData->newEntries->addEntry(txEntry);
-				}
-		});
+                    newTxData->newEntries->addEntry(txEntry);
+                }
+            });
 
-		auto blockDatas = std::vector<TableData::Ptr>();
-		blockDatas.push_back(updateUserData);
-		blockDatas.push_back(newTxData);
+        auto blockDatas = std::vector<TableData::Ptr>();
+        blockDatas.push_back(updateUserData);
+        blockDatas.push_back(newTxData);
 
-		cachedStorage->commit(dev::h256(0), i + 2, blockDatas);
-	}
-
-
+        cachedStorage->commit(dev::h256(0), i + 2, blockDatas);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(exception)
