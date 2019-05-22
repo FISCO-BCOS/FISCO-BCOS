@@ -115,6 +115,7 @@ private:
         m_currentTransactionCallback;
 
     void checkRequest(int _groupID);
+    void checkTxReceive(int _groupID);
 };
 
 }  // namespace rpc

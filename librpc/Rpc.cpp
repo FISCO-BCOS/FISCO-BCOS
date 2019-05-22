@@ -85,6 +85,17 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
+void Rpc::checkTxReceive(int _groupID)
+{
+    // Refuse transaction if far syncing
+    auto sync = ledgerManager()->sync(_groupID);
+    if (sync->isFarSyncing())
+    {
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));
+    }
+}
+
 std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
 {
     try
@@ -437,7 +448,7 @@ Json::Value Rpc::getGroupList()
 
         Json::Value response = Json::Value(Json::arrayValue);
 
-        auto groupList = ledgerManager()->getGrouplList();
+        auto groupList = ledgerManager()->getGroupListForRpc();
         for (dev::GROUP_ID id : groupList)
             response.append(id);
 
@@ -981,6 +992,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 
         checkRequest(_groupID);
+        checkTxReceive(_groupID);
+
         auto txPool = ledgerManager()->txPool(_groupID);
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);

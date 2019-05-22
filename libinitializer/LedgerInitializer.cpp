@@ -93,12 +93,12 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(e);
     }
     /// stop the node if there is no group
-    if (m_ledgerManager->getGrouplList().size() == 0)
+    if (m_ledgerManager->getGroupList().size() == 0)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
                                << LOG_DESC("Should init at least one group");
         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
-                              << errinfo_comment("[#LedgerInitializer]: Should init at least one "
+                              << errinfo_comment("[LedgerInitializer]: Should init at least one "
                                                  "group! Please check configuration!"));
     }
 }

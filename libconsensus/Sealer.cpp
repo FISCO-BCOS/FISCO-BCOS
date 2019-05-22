@@ -40,10 +40,10 @@ void Sealer::start()
 {
     if (m_startConsensus)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been started]";
+        SEAL_LOG(WARNING) << "[Sealer module has already been started]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Start sealer module]";
+    SEAL_LOG(INFO) << "[Start sealer module]";
     resetSealingBlock();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
@@ -74,7 +74,7 @@ void Sealer::reportNewBlock()
             m_blockChain->getBlockByNumber(m_blockChain->number());
         if (!p_block)
         {
-            LOG(ERROR) << "[#reportNewBlock] empty block";
+            LOG(ERROR) << "[reportNewBlock] empty block";
             return;
         }
         m_consensusEngine->reportBlock(*p_block);
@@ -82,7 +82,7 @@ void Sealer::reportNewBlock()
         {
             if (shouldResetSealing())
             {
-                SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
+                SEAL_LOG(DEBUG) << "[reportNewBlock] Reset sealing: [number]:  "
                                 << m_blockChain->number()
                                 << ", sealing number:" << m_sealing.block.blockHeader().number();
                 resetSealingBlock();
@@ -197,8 +197,14 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
     /// 1. clear the block; 2. populate header from the highest block
     else
     {
-        block.resetCurrentBlock(
-            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+        auto highestBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
+        if (!highestBlock)
+        {  // impossible so exit
+            SEAL_LOG(FATAL) << LOG_DESC("exit because can't get highest block")
+                            << LOG_KV("number", m_blockChain->number());
+            raise(SIGTERM);
+        }
+        block.resetCurrentBlock(highestBlock->blockHeader());
     }
 }
 
@@ -230,7 +236,7 @@ void Sealer::stop()
     {
         return;
     }
-    SEAL_LOG(INFO) << "[#Stop sealer module...]";
+    SEAL_LOG(INFO) << "Stop sealer module...";
     m_startConsensus = false;
     doneWorking();
     if (isWorking())

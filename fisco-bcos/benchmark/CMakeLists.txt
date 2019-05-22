@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for FISCO-BCOS.
+# Link libraries into main.cpp to generate executable binrary fisco-bcos
 # ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
@@ -19,17 +19,9 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-# generate executable binary fisco-bcos
-add_subdirectory(main)
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
 
-if (DEMO)
-    add_subdirectory(para)
-    add_subdirectory(p2p)
-    add_subdirectory(consensus)
-    add_subdirectory(blockverifier)
-    add_subdirectory(sync)
-    add_subdirectory(evm)
-    add_subdirectory(rpc)
-    add_subdirectory(storage)
-    add_subdirectory(benchmark)
-endif()
+add_executable(storage_benmark ${SRC_LIST} ${HEADERS})
+
+target_link_libraries(storage_benmark PUBLIC initializer)

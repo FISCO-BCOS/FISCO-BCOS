@@ -82,6 +82,14 @@ BOOST_AUTO_TEST_CASE(testGetAddress)
     Address address;
     abi.abiOut(bytesConstRef(&out), address);
     BOOST_TEST_TRUE(address == Address("1000"));
+    Address address2("0x123456789");
+    bytes data = abi.abiIn("set(string,address)", std::string("keyAddress"), address2);
+    entryPrecompiled->call(precompiledContext, bytesConstRef(&data));
+    data = abi.abiIn("getAddress(string)", std::string("keyAddress"));
+    out = entryPrecompiled->call(precompiledContext, bytesConstRef(&data));
+    Address address3;
+    abi.abiOut(bytesConstRef(&out), address3);
+    BOOST_TEST_TRUE(address3 == address2);
 }
 
 BOOST_AUTO_TEST_CASE(testSetInt)
@@ -90,14 +98,30 @@ BOOST_AUTO_TEST_CASE(testSetInt)
     bytes sstr = abi.abiIn("set(string,int256)", std::string("keyInt"), u256(200));
     entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
     BOOST_TEST_TRUE(entry->getField("keyInt") == boost::lexical_cast<std::string>(200));
+    sstr = abi.abiIn("set(string,int256)", std::string("keyInt"), s256(-1));
+    entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
+    bytes bint = abi.abiIn("getInt(string)", std::string("keyInt"));
+    bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    s256 num;
+    abi.abiOut(bytesConstRef(&out), num);
+    BOOST_TEST_TRUE(num == -1);
 }
 
 BOOST_AUTO_TEST_CASE(testSetString)
 {
     ContractABI abi;
-    bytes sstr = abi.abiIn("set(string,string)", std::string("keyString"), std::string("you"));
-    entryPrecompiled->call(precompiledContext, bytesConstRef(&sstr));
+    bytes data = abi.abiIn("set(string,string)", std::string("keyString"), std::string("you"));
+    entryPrecompiled->call(precompiledContext, bytesConstRef(&data));
     BOOST_TEST_TRUE(entry->getField("keyString") == "you");
+    std::string longStr("123456789,123456789,123456789,123456789,123456789");
+    data = abi.abiIn("set(string,string)", std::string("keyString"), longStr);
+    entryPrecompiled->call(precompiledContext, bytesConstRef(&data));
+    BOOST_TEST_TRUE(entry->getField("keyString") == longStr);
+    data = abi.abiIn("getString(string)", std::string("keyString"));
+    bytes out = entryPrecompiled->call(precompiledContext, bytesConstRef(&data));
+    std::string ret;
+    abi.abiOut(bytesConstRef(&out), ret);
+    BOOST_TEST_TRUE(ret == longStr);
 }
 
 BOOST_AUTO_TEST_CASE(testGetBytes64_0)

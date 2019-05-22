@@ -21,18 +21,15 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <json/json.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 
-#define SEAL_LOG(LEVEL)                                                            \
-    LOG(LEVEL) << "[p:" << std::to_string(m_consensusEngine->protocolId()) << "] " \
-               << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
-#define ENGINE_LOG(LEVEL)                                                                 \
-    LOG(LEVEL) << "[p:" << std::to_string(m_protocolId) << "] " << LOG_BADGE("CONSENSUS") \
-               << LOG_BADGE("ConsensusEngine")
+#define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
+#define ENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ConsensusEngine")
 namespace dev
 {
 namespace consensus

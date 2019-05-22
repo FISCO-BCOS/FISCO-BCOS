@@ -23,7 +23,6 @@
  * @date: 2018-09-30
  */
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libconsensus/pbft/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/easylog.h>
@@ -35,7 +34,7 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    PBFTReqCache(dev::PROTOCOL_ID const& protocol) : m_protocolId(protocol) {}
+    PBFTReqCache() {}
 
     virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
     /// specified prepareRequest exists in raw-prepare-cache or not?
@@ -263,7 +262,7 @@ public:
     {
         return m_recvViewChangeReq;
     }
-    void getCacheConsensusStatus(json_spirit::Array& statusArray) const;
+    void getCacheConsensusStatus(Json::Value& statusArray) const;
 
 private:
     /// remove invalid requests cached in cache according to current block
@@ -319,36 +318,34 @@ private:
     /// get the status of specified cache into the json object
     /// (maily for prepareCache, m_committedPrepareCache, m_futurePrepareCache and rawPrepareCache)
     template <typename T>
-    void getCacheStatus(json_spirit::Array& jsonArray, std::string const& key, T const& cache) const
+    void getCacheStatus(Json::Value& jsonArray, std::string const& key, T const& cache) const
     {
-        json_spirit::Object cacheStatus;
-        cacheStatus.push_back(
-            json_spirit::Pair(key + "_blockHash", "0x" + toHex(cache.block_hash)));
-        cacheStatus.push_back(json_spirit::Pair(key + "_height", cache.height));
-        cacheStatus.push_back(json_spirit::Pair(key + "_idx", toString(cache.idx)));
-        cacheStatus.push_back(json_spirit::Pair(key + "_view", toString(cache.view)));
-        jsonArray.push_back(cacheStatus);
+        Json::Value cacheStatus;
+        cacheStatus[key + "_blockHash"] = "0x" + toHex(cache.block_hash);
+        cacheStatus[key + "_height"] = cache.height;
+        cacheStatus[key + "_idx"] = toString(cache.idx);
+        cacheStatus[key + "_view"] = toString(cache.view);
+        jsonArray.append(cacheStatus);
     }
 
     template <typename T>
     void getCollectedCacheStatus(
-        json_spirit::Array& cacheJsonArray, std::string const& key, T const& cache) const
+        Json::Value& cacheJsonArray, std::string const& key, T const& cache) const
     {
-        json_spirit::Object tmp_obj;
-        tmp_obj.push_back(json_spirit::Pair(key + "_cachedSize", toString(cache.size())));
-        cacheJsonArray.push_back(tmp_obj);
+        Json::Value tmp_obj;
+        tmp_obj[key + "_cachedSize"] = toString(cache.size());
         for (auto i : cache)
         {
-            json_spirit::Object entry;
-            entry.push_back(json_spirit::Pair(key + "_key", dev::toJS(i.first)));
-            entry.push_back(
-                json_spirit::Pair(key + "_collectedSize", std::to_string(i.second.size())));
-            cacheJsonArray.push_back(entry);
+            Json::Value entry;
+            entry[key + "_key"] = toJS(i.first);
+            entry[key + "_collectedSize"] = std::to_string(i.second.size());
+            tmp_obj.append(entry);
+            cacheJsonArray.append(entry);
         }
+        cacheJsonArray.append(tmp_obj);
     }
 
 private:
-    dev::PROTOCOL_ID m_protocolId;
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request

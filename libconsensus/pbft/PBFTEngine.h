@@ -70,10 +70,10 @@ public:
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-        m_reqCache = std::make_shared<PBFTReqCache>(m_protocolId);
+        m_reqCache = std::make_shared<PBFTReqCache>();
 
         /// set thread name for PBFTEngine
-        std::string threadName = "PBFTEngine-" + std::to_string(m_groupId);
+        std::string threadName = "PBFT-" + std::to_string(m_groupId);
         setName(threadName);
 
         /// register checkSealerList to blockSync for check SealerList
@@ -210,7 +210,7 @@ protected:
     }
     bool needOmit(Sealing const& sealing);
 
-    void getAllNodesViewStatus(json_spirit::Array& status);
+    void getAllNodesViewStatus(Json::Value& status);
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,

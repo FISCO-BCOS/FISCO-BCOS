@@ -53,7 +53,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
 ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
-    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
+    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("executeBlock]Executing block")
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("hash", block.header().hash().abridged())
@@ -75,7 +75,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[#executeBlock] Error during initExecutiveContext")
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during initExecutiveContext")
                                  << LOG_KV("blkNum", block.blockHeader().number())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
@@ -170,7 +170,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 
 {
-    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[#executeBlock]Executing block")
+    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[executeBlock]Executing block")
                             << LOG_KV("txNum", block.transactions().size())
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
@@ -187,7 +187,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[#executeBlock] Error during initExecutiveContext")
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during initExecutiveContext")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
@@ -206,7 +206,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
-    txDag->init(executiveContext, block.transactions());
+    txDag->init(executiveContext, block.transactions(), block.blockHeader().number());
 
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
@@ -329,7 +329,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR)
-            << LOG_DESC("[#executeTransaction] Error during execute initExecutiveContext")
+            << LOG_DESC("[executeTransaction] Error during execute initExecutiveContext")
             << LOG_KV("errorMsg", boost::diagnostic_information(e));
     }
 

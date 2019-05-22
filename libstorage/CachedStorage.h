@@ -26,6 +26,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
 #include <tbb/mutex.h>
+#include <tbb/recursive_mutex.h>
+#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -39,16 +42,29 @@ class Caches
 {
 public:
     typedef std::shared_ptr<Caches> Ptr;
+    Caches();
     virtual ~Caches(){};
+
+    typedef tbb::spin_rw_mutex RWMutex;
+    typedef tbb::spin_rw_mutex::scoped_lock RWScoped;
 
     virtual std::string key();
     virtual void setKey(const std::string& key);
     virtual Entries::Ptr entries();
+    virtual Entries* entriesPtr();
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
 
+    virtual RWMutex* mutex();
+    virtual bool empty();
+    virtual void setEmpty(bool empty);
+
 private:
+    RWMutex m_mutex;
+
+
+    bool m_empty = true;
     std::string m_key;
     Entries::Ptr m_entries;
     // int64_t m_num;
@@ -74,7 +90,6 @@ public:
 private:
     TableInfo::Ptr m_tableInfo;
     tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
-    tbb::mutex m_mutex;
 };
 
 class Task
@@ -97,8 +112,11 @@ public:
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
-    virtual Caches::Ptr selectNoCondition(h256 hash, int num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr);
+
+    virtual std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > selectNoCondition(h256 hash,
+        int num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr);
+
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
 
@@ -114,17 +132,30 @@ public:
     size_t ID();
 
 private:
-    void touchMRU(std::string table, std::string key);
+    void touchMRU(std::string table, std::string key, ssize_t capacity);
+    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCache(
+        TableInfo::Ptr tableInfo, std::string key, bool write = false);
+    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(
+        TableInfo::Ptr tableInfo, std::string key, bool write = false);
+
+    tbb::spin_mutex m_clearMutex;
     void checkAndClear();
-    void updateCapacity(ssize_t oldSize, ssize_t newSize);
+
+    void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
+    std::map<std::string, TableCaches::Ptr> m_caches;
+    tbb::spin_mutex m_cachesMutex;
+
+    tbb::spin_mutex m_touchMutex;
+
     boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > >
         m_mru;
+    tbb::spin_mutex m_mruMutex;
+
     // boost::multi_index
     Storage::Ptr m_backend;
     size_t m_ID = 1;
@@ -136,8 +167,7 @@ private:
     size_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
 
-    tbb::mutex m_mutex;
-
+    std::chrono::system_clock::time_point m_lastClear;
     dev::ThreadPool::Ptr m_taskThreadPool;
 
     // stat

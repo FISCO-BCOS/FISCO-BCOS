@@ -45,6 +45,10 @@ download_artifact()
     # echo "build num : ${build_num}"
     local response="$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${build_num}/artifacts?circle-token= 2>/dev/null)"
     link=$(echo ${response}| grep -o 'https://[^"]*')
+    if [ -z ${link} ];then
+        echo "CircleCI build_num:${build_num} can't find artifacts."
+        exit 1
+    fi
 
     is_gm="$(echo "${response}"| grep -o 'gm')"
     if [ ! -z "${download_gm}" -a -z "${is_gm}" ] || [ -z "${download_gm}" -a ! -z "${is_gm}" ]

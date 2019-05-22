@@ -36,7 +36,7 @@ timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
 default_version="2.0.0-rc3"
-OS=
+macOS=""
 
 help() {
     echo $1
@@ -137,7 +137,6 @@ LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
@@ -164,9 +163,7 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
     if [ "$(uname)" == "Darwin" ];then
-        OS="macOS"
-    elif [ "$(uname -s)" == " Linux " ];then
-        OS="Linux"
+        macOS="macOS"
     fi
 
 }
@@ -870,9 +867,10 @@ generate_server_scripts()
     # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "${output_dir}/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
-for directory in \`ls \${SHELL_FOLDER}\`  
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for directory in \${dirs[*]} 
 do  
-    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
+    if [[ -f "\${SHELL_FOLDER}/\${directory}/config.ini" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
         echo "try to start \${directory}"
         bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
@@ -881,7 +879,8 @@ sleep 3.5
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
-for directory in \`ls \${SHELL_FOLDER}\`  
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for directory in \${dirs[*]}  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
         echo "try to stop \${directory}"
@@ -939,7 +938,7 @@ fi
 
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
-    if [[ -z ${bin_path} && -z ${OS} ]];then
+    if [[ -z ${bin_path} && -z ${macOS} ]];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
@@ -948,7 +947,7 @@ if [ -z ${docker_mode} ];then
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
         chmod a+x ${bin_path}
-    elif [[ -z ${bin_path} && ! -z ${OS} ]];then
+    elif [[ -z ${bin_path} && ! -z ${macOS} ]];then
         echo "Please use docker mode to run fisco-bcos on macOS Or compile source code and use -e option to specific fisco-bcos binary path"
         exit 1
     else
@@ -1028,9 +1027,9 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    checkIP=$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
-    if [ -z "${checkIP}" ];then
+    if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
         LOG_WARN "Please check IP address: ${ip}"
+        exit 1
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"

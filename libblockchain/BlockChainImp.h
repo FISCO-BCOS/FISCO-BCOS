@@ -92,9 +92,10 @@ public:
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
     CommitResult commitBlock(dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
+
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
-    virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory();
+    virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t num = 0);
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;

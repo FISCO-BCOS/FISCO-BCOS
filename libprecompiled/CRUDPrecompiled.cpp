@@ -24,7 +24,6 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -80,6 +79,7 @@ bytes CRUDPrecompiled::call(
                 out = abi.abiIn("", u256(parseEntryResult));
                 return out;
             }
+
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", u256(result));
         }
@@ -173,23 +173,23 @@ bytes CRUDPrecompiled::call(
                 return out;
             }
             auto entries = table->select(key, condition);
-            json_spirit::Array records;
+            Json::Value records = Json::Value(Json::arrayValue);
             if (entries)
             {
                 for (size_t i = 0; i < entries->size(); i++)
                 {
                     auto entry = entries->get(i);
                     auto fields = entry->fields();
-                    json_spirit::Object record;
+                    Json::Value record;
                     for (auto iter = fields->begin(); iter != fields->end(); iter++)
                     {
-                        record.push_back(json_spirit::Pair(iter->first, iter->second));
+                        record[iter->first] = iter->second;
                     }
-                    records.push_back(record);
+                    records.append(record);
                 }
             }
-            json_spirit::Value value(records);
-            std::string str = json_spirit::write_string(value, true);
+
+            auto str = records.toStyledString();
             out = abi.abiIn("", str);
         }
         else
@@ -283,6 +283,8 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
 
 int CRUDPrecompiled::parseEntry(const std::string& entryStr, Entry::Ptr& entry)
 {
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table records")
+                           << LOG_KV("entryStr", entryStr);
     Json::Value entryJson;
     Json::Reader reader;
     if (!reader.parse(entryStr, entryJson))
