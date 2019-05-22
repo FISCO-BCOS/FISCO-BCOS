@@ -98,7 +98,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     u256 count = u256(0);
     while (true)
     {
-        for (auto group : ledgerManager->getGrouplList())
+        for (auto group : ledgerManager->getGroupList())
         {
             /// set default RPC callback
             if (count % u256(50) == u256(0))

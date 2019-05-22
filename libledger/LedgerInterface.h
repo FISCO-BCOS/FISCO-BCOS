@@ -38,7 +38,8 @@ namespace ledger
 class LedgerInterface
 {
 public:
-    LedgerInterface() = default;
+    LedgerInterface(dev::KeyPair const& keyPair) : m_keyPair(keyPair) {}
+
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
     virtual bool initLedger(const std::string& _configFilePath = "config.ini") = 0;
@@ -53,11 +54,14 @@ public:
     virtual std::shared_ptr<LedgerParamInterface> getParam() const = 0;
     virtual void startAll() = 0;
     virtual void stopAll() = 0;
-
+    virtual dev::KeyPair const& keyPair() const { return m_keyPair; };
     virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
     {
         (void)channelRPCServer;
     };
+
+protected:
+    dev::KeyPair m_keyPair;
 };
 }  // namespace ledger
 }  // namespace dev

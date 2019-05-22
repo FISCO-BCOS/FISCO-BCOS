@@ -744,7 +744,8 @@ void PBFTEngine::onRecvPBFTMessage(
     if (nodeIdx() == MAXIDX)
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC(
-            "onRecvPBFTMessage: I'm an observer, drop the PBFT message packets directly");
+            "onRecvPBFTMessage: I'm an observer or not in the group, drop the PBFT message packets "
+            "directly");
         return;
     }
     std::shared_ptr<PBFTMsgPacket> pbft_msg = std::make_shared<PBFTMsgPacket>();
@@ -1513,13 +1514,7 @@ void PBFTEngine::workLoop()
                 std::unique_lock<std::mutex> l(x_signalled);
                 m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
-
-            if (nodeIdx() == MAXIDX)
-            {
-                PBFTENGINE_LOG(TRACE) << LOG_DESC(
-                    "workLoop: I'm an observer, stop checking timeout and handling future block");
-            }
-            else
+            if (nodeIdx() != MAXIDX)
             {
                 checkTimeout();
                 handleFutureBlock();
