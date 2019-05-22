@@ -92,7 +92,6 @@ public:
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    tbb::spin_mutex m_mutex;
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
 
