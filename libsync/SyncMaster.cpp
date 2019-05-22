@@ -95,7 +95,7 @@ string const SyncMaster::syncInfo() const
         return true;
     });
 
-    syncInfo["peers"].append(peersInfo);
+    syncInfo["peers"] = peersInfo;
     Json::FastWriter fastWriter;
     std::string statusStr = fastWriter.write(syncInfo);
     return statusStr;
