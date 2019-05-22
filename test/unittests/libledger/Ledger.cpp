@@ -48,6 +48,8 @@ public:
     /// init the ledger(called by initializer)
     bool initLedger(const std::string& _configPath) override
     {
+        /// init blockFactory
+        m_blockFactory = std::make_shared<BlockFactory>();
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
@@ -69,6 +71,8 @@ public:
     bool initRealLedger()
     {
         bool ret = false;
+        /// init blockFactory
+        m_blockFactory = std::make_shared<BlockFactory>();
         ret = Ledger::initBlockChain(FakeLedger::m_genesisParam);
         if (!ret)
         {
