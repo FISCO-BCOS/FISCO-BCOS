@@ -23,7 +23,7 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 #include <tbb/tbb_allocator.h>
 #include <atomic>
 #include <map>
@@ -67,6 +67,9 @@ public:
         DELETED
     };
 
+    typedef tbb::spin_rw_mutex RWMutex;
+	typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
     Entry();
     virtual ~Entry();
 
@@ -106,7 +109,7 @@ public:
 
     virtual ssize_t refCount();
 
-    std::shared_ptr<tbb::spin_mutex::scoped_lock> lock();
+    std::shared_ptr<RWMutexScoped> lock();
 
 private:
     struct EntryData
@@ -117,10 +120,10 @@ private:
 
         ssize_t m_refCount = 0;
         std::map<std::string, std::string> m_fields;
-        tbb::spin_mutex m_mutex;
+        RWMutex m_mutex;
     };
 
-    std::shared_ptr<tbb::spin_mutex::scoped_lock> checkRef();
+    std::shared_ptr<RWMutexScoped> checkRef();
 
     uint32_t m_ID = 0;
     int m_status = 0;
