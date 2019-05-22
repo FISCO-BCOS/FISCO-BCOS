@@ -220,7 +220,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    //tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
+    tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
 
     CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
                              << " num: " << num;
