@@ -40,6 +40,7 @@ ExternalProject_Add(libzdb
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libzdb.a
 )
+add_dependencies(libzdb MySQLClient)
 
 ExternalProject_Get_Property(libzdb SOURCE_DIR)
 
