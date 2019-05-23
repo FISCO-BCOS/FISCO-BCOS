@@ -801,7 +801,7 @@ BOOST_AUTO_TEST_CASE(commitCheck) {
 
 	cachedStorage->commit(dev::h256(0), 1, datas);
 
-	for (size_t idx = 0; idx < 1000; ++idx)
+	for (size_t idx = 0; idx < 10; ++idx)
 	{
 		TableData::Ptr newUserData = std::make_shared<TableData>();
 		TableData::Ptr newTXData = std::make_shared<TableData>();
