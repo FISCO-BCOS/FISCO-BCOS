@@ -236,9 +236,9 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
 }
 
-KeyCenter& KeyCenter::instance()
+shared_ptr<KeyCenter> KeyCenter::instance()
 {
-    static KeyCenter ins;
+    static shared_ptr<KeyCenter> ins = make_shared<KeyCenter>();
     return ins;
 }
 
