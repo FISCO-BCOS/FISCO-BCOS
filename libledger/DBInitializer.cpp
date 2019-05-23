@@ -29,6 +29,7 @@
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libsecurity/EncryptedStorage.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
@@ -136,6 +137,13 @@ void DBInitializer::initLevelDBStorage()
 
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        auto encryptedStorage = std::make_shared<EncryptedStorage>();
+        encryptedStorage->setBackend(_backend);
+        _backend = std::dynamic_pointer_cast<Storage>(encryptedStorage);
+    }
+
     auto cachedStorage = std::make_shared<CachedStorage>();
     cachedStorage->setBackend(_backend);
     cachedStorage->setMaxCapacity(
@@ -241,12 +249,14 @@ void DBInitializer::initZdbStorage()
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext()
 {
+    /*
     if (!m_storage || !m_stateFactory)
     {
         DBInitializer_LOG(ERROR) << LOG_DESC(
             "createExecutiveContext Failed for storage has not been initialized");
         return;
     }
+    */
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
     m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
