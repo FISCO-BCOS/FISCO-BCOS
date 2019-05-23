@@ -229,6 +229,10 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
         Json::Value OPJson;
         for (auto iter = members.begin(); iter != members.end(); iter++)
         {
+            if (!isHashField(*iter))
+            {
+                continue;
+            }
             OPJson = conditionJson[*iter];
             auto op = OPJson.getMemberNames();
             for (auto it = op.begin(); it != op.end(); it++)
