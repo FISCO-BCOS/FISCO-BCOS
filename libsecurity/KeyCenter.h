@@ -73,7 +73,7 @@ public:
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
 
-    static KeyCenter& instance();
+    static std::shared_ptr<KeyCenter> instance();
 
     void clearCache()
     {
