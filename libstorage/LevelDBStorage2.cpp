@@ -75,10 +75,10 @@ Entries::Ptr LevelDBStorage2::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    entry->setField(valueIt->first, valueIt->second);
+                        entry->setField(valueIt->first, valueIt->second);
                 }
-                entry->setID(entry->getField(ID_FIELD));
-                entry->setNum(entry->getField(NUM_FIELD));
+                entry->setID(it->at(ID_FIELD));
+                entry->setNum(it->at(NUM_FIELD));
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
@@ -202,7 +202,7 @@ void LevelDBStorage2::processNewEntries(h256, int64_t num,
             value[fieldIt.first] = fieldIt.second;
         }
         value[NUM_FIELD] = boost::lexical_cast<std::string>(num);
-        value["_id_"] = boost::lexical_cast<std::string>(entry->getID());
+        value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
 
         it->second.push_back(value);
     }

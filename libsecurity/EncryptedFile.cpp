@@ -43,7 +43,7 @@ bytes EncryptedFile::decryptContents(
         bytes dataKey;
         if (nullptr == _keyCenter)
         {
-            dataKey = g_keyCenter.getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+            dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
         }
         else
         {

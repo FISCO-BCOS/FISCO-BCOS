@@ -61,13 +61,14 @@ public:
      */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
         dev::KeyPair const& _keyPair, std::string const& _baseDir)
-      : m_service(service), m_groupId(_groupId), m_keyPair(_keyPair)
+      : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
     {
         m_param = std::make_shared<LedgerParam>();
         std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
         if (_baseDir == "")
             prefix = "./group" + std::to_string(_groupId);
         m_param->setBaseDir(prefix);
+        // m_keyPair = _keyPair;
         assert(m_service);
     }
 
@@ -164,7 +165,6 @@ protected:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::GROUP_ID m_groupId;
-    dev::KeyPair m_keyPair;
     std::string m_postfixGenesis = ".genesis";
     std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;

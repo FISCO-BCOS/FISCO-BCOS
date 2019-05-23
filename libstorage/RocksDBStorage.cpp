@@ -79,8 +79,8 @@ Entries::Ptr RocksDBStorage::select(
                 {
                     entry->setField(valueIt->first, valueIt->second);
                 }
-                entry->setID(entry->getField(ID_FIELD));
-                entry->setNum(entry->getField(NUM_FIELD));
+                entry->setID(it->at(ID_FIELD));
+                entry->setNum(it->at(NUM_FIELD));
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
