@@ -637,6 +637,10 @@ bool Condition::process(Entry::Ptr entry)
 
             for (auto it : m_conditions)
             {
+                if (!isHashField(it.first))
+                {
+                    continue;
+                }
                 auto fieldIt = fields->find(it.first);
                 if (fieldIt != fields->end())
                 {
