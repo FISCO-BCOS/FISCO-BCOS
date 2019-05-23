@@ -713,7 +713,7 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(i.second->nodeInfo(),
-                    i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                    i.second->session()->nodeIPEndpoint(), i.second->topics()));
             }
         }
     }
