@@ -287,6 +287,7 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_data->m_refCount -= 1;
 
     m_data = entry->m_data;
+    lock.release();
 
     m_data->m_refCount += 1;
 }
