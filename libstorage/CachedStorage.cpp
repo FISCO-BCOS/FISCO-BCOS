@@ -113,7 +113,7 @@ Caches::Ptr TableCaches::findCache(const std::string& key)
     }
 }
 
-std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
+std::pair<std::unordered_map<std::string, Caches::Ptr>::iterator, bool>
 TableCaches::addCache(const std::string& key, Caches::Ptr cache)
 {
     auto it = m_caches.insert(std::make_pair(key, cache));
@@ -125,11 +125,11 @@ void TableCaches::removeCache(const std::string& key)
     auto it = m_caches.find(key);
     if (it != m_caches.end())
     {
-        m_caches.unsafe_erase(it);
+        m_caches.erase(it);
     }
 }
 
-tbb::concurrent_unordered_map<std::string, Caches::Ptr>* TableCaches::caches()
+std::unordered_map<std::string, Caches::Ptr>* TableCaches::caches()
 {
     return &m_caches;
 }

@@ -81,15 +81,15 @@ public:
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
     virtual Caches::Ptr findCache(const std::string& key);
-    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
+    virtual std::pair<std::unordered_map<std::string, Caches::Ptr>::iterator, bool>
     addCache(const std::string& key, Caches::Ptr cache);
     virtual void removeCache(const std::string& key);
 
-    virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
+    virtual std::unordered_map<std::string, Caches::Ptr>* caches();
 
 private:
     TableInfo::Ptr m_tableInfo;
-    tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
+    std::unordered_map<std::string, Caches::Ptr> m_caches;
 };
 
 class Task
@@ -144,7 +144,7 @@ private:
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    std::map<std::string, TableCaches::Ptr> m_caches;
+    std::unordered_map<std::string, TableCaches::Ptr> m_caches;
     tbb::spin_mutex m_cachesMutex;
 
     tbb::spin_mutex m_touchMutex;
