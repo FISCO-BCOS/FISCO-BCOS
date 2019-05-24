@@ -20,6 +20,7 @@
  */
 
 #include "SQLConnectionPool.h"
+#include "StorageException.h"
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -43,7 +44,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         {
             stringstream exitInfo;
             exitInfo << "parse url[" << connetionBuf << "] error please check";
-            // TODO: chang errorExitOut to throw exception
             errorExitOut(exitInfo);
         }
         SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
@@ -74,7 +74,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
     {
         stringstream exitInfo;
         exitInfo << "not support db type:" << _dbConfig.dbType;
-        // TODO: chang errorExitOut to throw exception
         errorExitOut(exitInfo);
     }
     return true;
@@ -118,12 +117,11 @@ int SQLConnectionPool::RollBack(const Connection_T& _connection)
     return 0;
 }
 
-// TODO: chang errorExitOut to throw exception
 inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 {
     SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
-    std::cerr << _exitInfo.str();
     raise(SIGTERM);
+    BOOST_THROW_EXCEPTION(StorageException(-1, _exitInfo.str()));
 }
 
 SQLConnectionPool::~SQLConnectionPool()
@@ -160,7 +158,6 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
         {
             stringstream _exitInfo;
             _exitInfo << "parse url[" << connetionBuf << "] error please check";
-            // TODO: chang errorExitOut to throw exception
             errorExitOut(_exitInfo);
         }
         SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
@@ -217,7 +214,6 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
     {
         stringstream exitInfo;
         exitInfo << "not support db type:" << _dbConfig.dbType;
-        // TODO: chang errorExitOut to throw exception
         errorExitOut(exitInfo);
     }
 }
