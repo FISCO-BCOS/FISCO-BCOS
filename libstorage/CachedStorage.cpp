@@ -705,7 +705,7 @@ void CachedStorage::checkAndClear()
                     {
                         Caches::RWScoped(*(cache->mutex()), false);
 
-                        if (m_syncNum > 0 && ((size_t)cache->num() <= m_syncNum))
+                        if (m_syncNum > 0 && (cache->num() <= m_syncNum))
                         {
                             CACHED_STORAGE_LOG(TRACE)
                                 << "Clear last recent record: "
