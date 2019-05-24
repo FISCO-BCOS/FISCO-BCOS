@@ -35,6 +35,8 @@ macro(eth_default_option O DEF)
     endif()
 endmacro()
 
+set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
 
@@ -50,7 +52,7 @@ macro(configure_project)
 
     #ARCH TYPE
     eth_default_option(ARCH_NATIVE OFF)
-    set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+    
     if(ARCH_NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
