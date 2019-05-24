@@ -647,8 +647,8 @@ void CachedStorage::checkAndClear()
 
         tbb::spin_mutex::scoped_lock lock(m_clearMutex);
 
-        auto now = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapseds = now - m_lastClear;
+        now = std::chrono::system_clock::now();
+        elapseds = now - m_lastClear;
         if (elapseds.count() > 1.0)
         {
             m_lastClear = now;
@@ -659,8 +659,10 @@ void CachedStorage::checkAndClear()
         }
     }
 
+#if 0
     tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
     tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
+#endif
 
     TIME_RECORD("Check and clear");
 
@@ -701,8 +703,16 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+        	tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
+			tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
+
             for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
             {
+                if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
+                {
+                    break;
+                }
+
                 ++clearThrough;
                 auto tableIt = m_caches.find(it->first);
                 if (tableIt != m_caches.end())
@@ -710,7 +720,11 @@ void CachedStorage::checkAndClear()
                     auto cache = tableIt->second->findCache(it->second);
                     if (cache)
                     {
-                        Caches::RWScoped(*(cache->mutex()), false);
+                        //Caches::RWScoped(*(cache->mutex()), false);
+                        Caches::RWScoped lock;
+                        if(!lock.try_acquire(*(cache->mutex()), false)) {
+                        	continue;
+                        }
 
                         if (m_syncNum > 0 && (cache->num() <= m_syncNum))
                         {
@@ -758,10 +772,12 @@ void CachedStorage::checkAndClear()
                     it = m_mru.erase(it);
                 }
 
+#if 0
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
                 {
                     break;
                 }
+#endif
             }
             ++clearTimes;
         }
