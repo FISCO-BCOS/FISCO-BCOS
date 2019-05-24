@@ -106,7 +106,7 @@ bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef pa
         out = abi.abiIn("", num);
     }
     else if (func == name2Selector[ENTRY_SET_STR_INT])
-    {  // set(string,int256) set(string,uint256)
+    {  // set(string,int256)
         std::string key;
         std::string value(setInt(data, key));
         m_entry->setField(key, value);

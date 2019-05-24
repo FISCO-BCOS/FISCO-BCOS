@@ -127,6 +127,10 @@ Entries::Ptr SQLStorage::select(
                 {
                     entry->setID(fieldValue);
                 }
+                else if (columns[j] == NUM_FIELD)
+                {
+                    entry->setNum(fieldValue);
+                }
                 else
                 {
                     entry->setField(columns[j], fieldValue);

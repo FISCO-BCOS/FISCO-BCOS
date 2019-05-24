@@ -142,16 +142,6 @@ private:
         return indexes;
     }
 
-    bool isHashField(const std::string& _key)
-    {
-        if (!_key.empty())
-        {
-            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                    (_key == STATUS));
-        }
-        return false;
-    }
-
     void checkField(Entry::Ptr entry)
     {
         for (auto& it : *(entry->fields()))
