@@ -37,7 +37,7 @@ public:
         Condition::Ptr condition = nullptr) override;
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
 
-    bool onlyDirty() override { return m_backend->onlyDirty(); };
+    bool onlyDirty() override { return false; };
 
     void setGroupID(dev::GROUP_ID const& groupID) { m_backend->setGroupID(groupID); }
     dev::GROUP_ID groupID() const { return m_backend->groupID(); }
