@@ -455,7 +455,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID().abridged());
+                              << LOG_KV("toNode", session.nodeID().abridged());
         nodeIdList.push_back(session.nodeID());
         broadcastMark(session.nodeID(), packetType, key);
     }
