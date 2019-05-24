@@ -354,14 +354,11 @@ bool TxPool::dropTransactions(Block const& block, bool)
         return true;
     WriteGuard l(m_lock);
     bool succ = true;
+    assert(block.transactions().size() == block.transactionReceipts().size());
     for (size_t i = 0; i < block.transactions().size(); i++)
     {
-        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-        if (block.transactionReceipts().size() > i)
-        {
-            pReceipt = constructTransactionReceipt(
+        LocalisedTransactionReceipt::Ptr pReceipt = constructTransactionReceipt(
                 block.transactions()[i], block.transactionReceipts()[i], block, i);
-        }
         if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
             succ = false;
     }

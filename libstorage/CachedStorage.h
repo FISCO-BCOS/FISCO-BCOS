@@ -114,7 +114,7 @@ public:
         Condition::Ptr condition = nullptr) override;
 
     virtual std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > selectNoCondition(h256 hash,
-        int num, TableInfo::Ptr tableInfo, const std::string& key,
+        int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr);
 
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
@@ -160,8 +160,8 @@ private:
     Storage::Ptr m_backend;
     size_t m_ID = 1;
 
-    boost::atomic_size_t m_syncNum;
-    boost::atomic_size_t m_commitNum;
+    boost::atomic_int64_t m_syncNum;
+    boost::atomic_int64_t m_commitNum;
     tbb::atomic<int64_t> m_capacity;
 
     size_t m_maxForwardBlock = 10;

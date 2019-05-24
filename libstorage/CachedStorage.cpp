@@ -179,13 +179,16 @@ Entries::Ptr CachedStorage::select(
 }
 
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::selectNoCondition(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<0>(result);
-    caches->setNum(num);
+    if(caches->num() < num) {
+    	caches->setNum(num);
+    }
+
 
     if (caches->empty())
     {

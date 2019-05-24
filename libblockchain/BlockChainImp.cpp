@@ -137,6 +137,9 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
             return getBlock(blockHash);
         }
+        else {
+        	//BLOCKCHAIN_LOG(ERROR) << "Can't find blocknumber" << LOG_KV()
+        }
     }
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find block") << LOG_KV("height", _i);
