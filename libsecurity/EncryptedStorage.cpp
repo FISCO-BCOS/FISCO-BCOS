@@ -24,6 +24,7 @@
 #include "Common.h"
 #include "KeyCenter.h"
 #include <libdevcrypto/AES.h>
+#include <libstorage/Common.h>
 
 using namespace dev;
 using namespace dev::storage;
@@ -43,10 +44,24 @@ std::string decryptValue(const bytes& dataKey, const std::string& value)
     return asString(deData);
 }
 
-
 Entries::Ptr EncryptedStorage::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
+    // Ignore system field
+    if (isHashField(key))
+    {
+        return m_backend->select(hash, num, tableInfo, key, condition);
+    }
+
+    /*
+        Notice:
+        If config.ini [storage security] enable=true, the selection condition is not avaliable!
+        The condition selection is only depended on upper class(MemoryTable2's processEntry()).
+        Thus, force onlyDiry() to return false;
+    */
+
+    // Overwrite condition to empty
+    condition = std::make_shared<Condition>();
     Entries::Ptr encEntries = m_backend->select(hash, num, tableInfo, key, condition);
     return decryptEntries(encEntries);
 }
@@ -71,40 +86,38 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
 {
     checkDataKey();
 
-    Entries::Ptr entries = make_shared<Entries>();
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        Entry::Ptr entry = make_shared<Entry>();
         for (auto const& inKV : *inEntry->fields())
         {
-            string k = encryptValue(m_dataKey, inKV.first);
-            string v = encryptValue(m_dataKey, inKV.second);
-            entry->setField(k, v);
+            if (!isHashField(inKV.first))
+            {
+                string v = encryptValue(m_dataKey, inKV.second);
+                inEntry->setField(inKV.first, v);
+            }
         }
-        entries->addEntry(entry);
     }
-    return entries;
+    return inEntries;
 }
 
 Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
 {
     checkDataKey();
 
-    Entries::Ptr entries = make_shared<Entries>();
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        Entry::Ptr entry = make_shared<Entry>();
         for (auto const& inKV : *inEntry->fields())
         {
-            string k = decryptValue(m_dataKey, inKV.first);
-            string v = decryptValue(m_dataKey, inKV.second);
-            entry->setField(k, v);
+            if (!isHashField(inKV.first))
+            {
+                string v = decryptValue(m_dataKey, inKV.second);
+                inEntry->setField(inKV.first, v);
+            }
         }
-        entries->addEntry(entry);
     }
-    return entries;
+    return inEntries;
 }
 
 void EncryptedStorage::checkDataKey()
