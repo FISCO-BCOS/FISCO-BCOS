@@ -185,9 +185,11 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<0>(result);
+#if 0
     if(caches->num() < num) {
     	caches->setNum(num);
     }
+#endif
 
 
     if (caches->empty())
