@@ -185,12 +185,6 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::select
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<0>(result);
-#if 0
-    if(caches->num() < num) {
-    	caches->setNum(num);
-    }
-#endif
-
 
     if (caches->empty())
     {
@@ -370,10 +364,13 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         }
                     });
 
+		//TODO: check if necessery
         tbb::parallel_sort(commitData->dirtyEntries->begin(), commitData->dirtyEntries->end(),
             EntryLessNoLock(requestData->info));
 
         commitData->newEntries->shallowFrom(requestData->newEntries);
+
+        TIME_RECORD("Sort new entries");
         tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
             EntryLessNoLock(requestData->info));
 
@@ -603,7 +600,7 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchC
 std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchCacheNoLock(
     TableInfo::Ptr tableInfo, std::string key, bool write)
 {
-    tbb::spin_mutex::scoped_lock lock(m_touchMutex);
+    tbb::spin_mutex::scoped_lock lock(m_touchMutex); //DO NOT DELETE UNLESS NO TBB
     bool hit = true;
 
     ++m_queryTimes;
@@ -640,6 +637,14 @@ std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped>> CachedStorage::touchC
 void CachedStorage::checkAndClear()
 {
     {
+    	//TODO reduce lock during
+    	auto now = std::chrono::system_clock::now();
+		std::chrono::duration<double> elapseds = now - m_lastClear;
+		if (elapseds.count() < 1.0)
+		{
+			return;
+		}
+
         tbb::spin_mutex::scoped_lock lock(m_clearMutex);
 
         auto now = std::chrono::system_clock::now();
