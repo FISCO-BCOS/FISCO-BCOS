@@ -23,7 +23,7 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/mutex.h>
+#include <tbb/spin_mutex.h>
 #include <tbb/tbb_allocator.h>
 #include <atomic>
 #include <map>
@@ -88,6 +88,7 @@ public:
 
     virtual uint32_t num() const;
     virtual void setNum(uint32_t num);
+    virtual void setNum(const std::string& id);
 
     virtual bool dirty() const;
     virtual void setDirty(bool dirty);
@@ -103,20 +104,23 @@ public:
 
     virtual void copyFrom(Entry::Ptr entry);
 
+    virtual ssize_t refCount();
+
+    std::shared_ptr<tbb::spin_mutex::scoped_lock> lock();
+
 private:
     struct EntryData
     {
         typedef std::shared_ptr<EntryData> Ptr;
 
-        EntryData(std::shared_ptr<size_t> refCount,
-            std::shared_ptr<std::map<std::string, std::string>> fields)
-          : m_refCount(refCount), m_fields(fields){};
+        EntryData(){};
 
-        std::shared_ptr<size_t> m_refCount;
-        std::shared_ptr<std::map<std::string, std::string>> m_fields;
+        ssize_t m_refCount = 0;
+        std::map<std::string, std::string> m_fields;
+        tbb::spin_mutex m_mutex;
     };
 
-    void checkRef();
+    std::shared_ptr<tbb::spin_mutex::scoped_lock> checkRef();
 
     uint32_t m_ID = 0;
     int m_status = 0;
@@ -130,11 +134,11 @@ private:
     EntryData::Ptr m_data;
 };
 
-class EntryLess
+class EntryLessNoLock
 {
 public:
-    EntryLess(TableInfo::Ptr tableInfo) : m_tableInfo(tableInfo){};
-    virtual ~EntryLess(){};
+    EntryLessNoLock(TableInfo::Ptr tableInfo) : m_tableInfo(tableInfo){};
+    virtual ~EntryLessNoLock(){};
 
     virtual bool operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) const;
 

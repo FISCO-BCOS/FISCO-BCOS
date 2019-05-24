@@ -37,10 +37,10 @@ using namespace dev::ledger;
 using namespace dev::initializer;
 using namespace dev::txpool;
 
-#define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[#CONSENSUS_MAIN] "
+#define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[CONSENSUS_MAIN] "
 static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
 {
-    CONSENSUS_MAIN_LOG(TRACE) << "[#rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
+    CONSENSUS_MAIN_LOG(TRACE) << "[rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
                               << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
                               << receiptPtr->blockHash();
 }
@@ -98,7 +98,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     u256 count = u256(0);
     while (true)
     {
-        for (auto group : ledgerManager->getGrouplList())
+        for (auto group : ledgerManager->getGroupList())
         {
             /// set default RPC callback
             if (count % u256(50) == u256(0))
@@ -116,7 +116,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             }
             catch (std::exception& e)
             {
-                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }

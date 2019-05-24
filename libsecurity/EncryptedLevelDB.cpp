@@ -31,6 +31,7 @@ namespace dev
 {
 namespace db
 {
+#if 0
 char* ascii2hex(const char* _chs, int _len)
 {
     char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
@@ -54,6 +55,7 @@ char* ascii2hex(const string& _str)
     int len = _str.length();
     return ascii2hex(chs, len);
 }
+#endif
 
 std::string encryptValue(const bytes& _dataKey, leveldb::Slice _value)
 {
@@ -103,7 +105,9 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     m_name = _name;
 
     if (!m_keyCenter)
-        m_keyCenter.reset(&(g_keyCenter));
+    {
+        m_keyCenter = g_keyCenter;
+    }
 
     // Encrypted leveldb initralization
 

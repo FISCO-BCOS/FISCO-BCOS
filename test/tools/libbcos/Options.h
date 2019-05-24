@@ -23,7 +23,6 @@
  */
 
 #pragma once
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/Exceptions.h>
 #include <libevm/VMFactory.h>
 namespace dev

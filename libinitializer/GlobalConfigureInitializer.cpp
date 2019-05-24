@@ -117,13 +117,16 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
     g_BCOSConfig.setChainId(chainId);
 
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
+                              << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
+                              << LOG_KV("url.port",
+                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
+                              << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey);
+    }
 
-    INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManagerConfig") << LOG_DESC("load configuration")
-                          << LOG_KV("enable", g_BCOSConfig.diskEncryption.enable)
-                          << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
-                          << LOG_KV("url.port",
-                                 std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                          << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey)
+    INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
                           << LOG_KV("compatibilityVersion", version)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())

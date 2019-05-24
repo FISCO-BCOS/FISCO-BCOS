@@ -24,7 +24,6 @@
 #pragma once
 #include "Common.h"
 #include "ConsensusInterface.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -91,40 +90,38 @@ public:
 
     const std::string consensusStatus() override
     {
-        json_spirit::Object status_obj;
+        Json::Value status_obj;
         getBasicConsensusStatus(status_obj);
-        json_spirit::Value value(status_obj);
-        std::string status_str = json_spirit::write_string(value, true);
+        Json::FastWriter fastWriter;
+        std::string status_str = fastWriter.write(status_obj);
         return status_str;
     }
     /// get status of consensus
-    void getBasicConsensusStatus(json_spirit::Object& status_obj) const
+    void getBasicConsensusStatus(Json::Value& status_obj) const
     {
-        status_obj.push_back(json_spirit::Pair("nodeNum", IDXTYPE(m_nodeNum)));
-        status_obj.push_back(json_spirit::Pair("node index", IDXTYPE(m_idx)));
-        status_obj.push_back(json_spirit::Pair("max_faulty_leader", IDXTYPE(m_f)));
-        status_obj.push_back(
-            json_spirit::Pair("consensusedBlockNumber", int64_t(m_consensusBlockNumber)));
-        status_obj.push_back(json_spirit::Pair("highestblockNumber", m_highestBlock.number()));
-        status_obj.push_back(
-            json_spirit::Pair("highestblockHash", "0x" + toHex(m_highestBlock.hash())));
-        status_obj.push_back(json_spirit::Pair("groupId", m_groupId));
-        status_obj.push_back(json_spirit::Pair("protocolId", m_protocolId));
-        status_obj.push_back(json_spirit::Pair("accountType", NodeAccountType(m_accountType)));
-        status_obj.push_back(json_spirit::Pair("cfgErr", bool(m_cfgErr)));
-        status_obj.push_back(json_spirit::Pair("omitEmptyBlock", m_omitEmptyBlock));
-        status_obj.push_back(json_spirit::Pair("nodeId", toHex(m_keyPair.pub())));
+        status_obj["nodeNum"] = IDXTYPE(m_nodeNum);
+        status_obj["node_index"] = IDXTYPE(m_idx);
+        status_obj["max_faulty_leader"] = IDXTYPE(m_f);
+        status_obj["consensusedBlockNumber"] = int64_t(m_consensusBlockNumber);
+        status_obj["highestblockNumber"] = m_highestBlock.number();
+        status_obj["highestblockHash"] = "0x" + toHex(m_highestBlock.hash());
+        status_obj["groupId"] = m_groupId;
+        status_obj["protocolId"] = m_protocolId;
+        status_obj["accountType"] = NodeAccountType(m_accountType);
+        status_obj["cfgErr"] = bool(m_cfgErr);
+        status_obj["omitEmptyBlock"] = m_omitEmptyBlock;
+        status_obj["nodeId"] = toHex(m_keyPair.pub());
         int i = 0;
         std::string sealer_list = "";
         {
             ReadGuard l(m_sealerListMutex);
             for (auto sealer : m_sealerList)
             {
-                status_obj.push_back(json_spirit::Pair("sealer." + toString(i), toHex(sealer)));
+                status_obj["sealer." + toString(i)] = toHex(sealer);
                 i++;
             }
         }
-        status_obj.push_back(json_spirit::Pair("allowFutureBlocks", m_allowFutureBlocks));
+        status_obj["allowFutureBlocks"] = m_allowFutureBlocks;
     }
 
     /// protocol id used when register handler to p2p module
@@ -223,7 +220,7 @@ protected:
         }
         catch (std::exception& e)
         {
-            ENGINE_LOG(DEBUG) << "[#decodeToRequests] Invalid network-received packet";
+            ENGINE_LOG(DEBUG) << "[decodeToRequests] Invalid network-received packet";
             return false;
         }
     }
