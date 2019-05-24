@@ -281,7 +281,7 @@ dev::h256 MemoryTable2::hash()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-	TIME_RECORD("Start dump");
+    TIME_RECORD("Start dump");
     if (m_isDirty)
     {
         m_tableData = std::make_shared<dev::storage::TableData>();

@@ -25,11 +25,11 @@
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <tbb/mutex.h>
 #include <tbb/recursive_mutex.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/spin_rw_mutex.h>
-#include <tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -82,8 +82,8 @@ public:
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
     virtual Caches::Ptr findCache(const std::string& key);
-    virtual std::pair<std::unordered_map<std::string, Caches::Ptr>::iterator, bool>
-    addCache(const std::string& key, Caches::Ptr cache);
+    virtual std::pair<std::unordered_map<std::string, Caches::Ptr>::iterator, bool> addCache(
+        const std::string& key, Caches::Ptr cache);
     virtual void removeCache(const std::string& key);
 
     virtual std::unordered_map<std::string, Caches::Ptr>* caches();
@@ -146,7 +146,7 @@ private:
     std::string readableCapacity(size_t num);
 
     std::unordered_map<std::string, TableCaches::Ptr> m_caches;
-    //tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
+    // tbb::concurrent_unordered_map<std::string, TableCaches::Ptr> m_caches;
     tbb::spin_mutex m_cachesMutex;
 
     tbb::spin_mutex m_touchMutex;

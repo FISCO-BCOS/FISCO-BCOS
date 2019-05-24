@@ -38,30 +38,30 @@ using namespace dev::storage;
 
 Entry::Entry()
 {
-	m_data = std::make_shared<EntryData>();
-	m_data->m_refCount = 1;
-	m_data->m_fields.insert(std::make_pair(STATUS, "0"));
+    m_data = std::make_shared<EntryData>();
+    m_data->m_refCount = 1;
+    m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
 
 Entry::~Entry()
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
-	if (m_data->m_refCount > 0)
-	{
-		--m_data->m_refCount;
-	}
+    RWMutexScoped lock(m_data->m_mutex, true);
+    if (m_data->m_refCount > 0)
+    {
+        --m_data->m_refCount;
+    }
 }
 
 uint32_t Entry::getID() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
 
     return m_ID;
 }
 
 void Entry::setID(uint32_t id)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_ID = id;
 
@@ -70,7 +70,7 @@ void Entry::setID(uint32_t id)
 
 void Entry::setID(const std::string& id)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_ID = boost::lexical_cast<uint32_t>(id);
 
@@ -79,14 +79,14 @@ void Entry::setID(const std::string& id)
 
 std::string Entry::getField(const std::string& key) const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
 
-	auto it = m_data->m_fields.find(key);
+    auto it = m_data->m_fields.find(key);
 
-	if (it != m_data->m_fields.end())
-	{
-		return it->second;
-	}
+    if (it != m_data->m_fields.end())
+    {
+        return it->second;
+    }
 
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
     return "";
@@ -127,7 +127,7 @@ void Entry::setField(const std::string& key, const std::string& value)
 
 size_t Entry::getTempIndex() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_tempIndex;
 }
 
@@ -143,7 +143,7 @@ const std::map<std::string, std::string>* Entry::fields() const
 
 int Entry::getStatus() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
 
     return m_status;
 }
@@ -186,13 +186,13 @@ void Entry::setStatus(const std::string& status)
 
 uint32_t Entry::num() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_num;
 }
 
 void Entry::setNum(uint32_t num)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_num = num;
     m_dirty = true;
@@ -206,54 +206,54 @@ void Entry::setNum(const std::string& id)
 
 bool Entry::dirty() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_dirty;
 }
 
 void Entry::setDirty(bool dirty)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_dirty = dirty;
 }
 
 bool Entry::force() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_force;
 }
 
 void Entry::setForce(bool force)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_force = force;
 }
 
 bool Entry::deleted() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_deleted;
 }
 
 void Entry::setDeleted(bool deleted)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_deleted = deleted;
 }
 
 ssize_t Entry::capacity() const
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_capacity;
 }
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
-	RWMutexScoped lock2;
+    RWMutexScoped lock2;
     while (true)
     {
         auto locked = lock2.try_acquire(entry->m_data->m_mutex, true);
@@ -294,8 +294,8 @@ void Entry::copyFrom(Entry::Ptr entry)
 
 ssize_t Entry::refCount()
 {
-	RWMutexScoped lock(m_data->m_mutex, false);
-	return m_data->m_refCount;
+    RWMutexScoped lock(m_data->m_mutex, false);
+    return m_data->m_refCount;
 }
 
 std::shared_ptr<tbb::spin_rw_mutex::scoped_lock> Entry::checkRef()

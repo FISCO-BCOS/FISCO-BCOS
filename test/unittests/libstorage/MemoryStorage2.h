@@ -58,7 +58,6 @@ public:
     {
         for (auto it : datas)
         {
-
         }
         return datas.size();
     }

@@ -68,7 +68,7 @@ public:
     };
 
     typedef tbb::spin_rw_mutex RWMutex;
-	typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
 
     Entry();
     virtual ~Entry();
