@@ -117,7 +117,8 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     F) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
-    d) docker_mode="yes";;
+    d) docker_mode="yes"
+    [ ! -z "${macOS}" ] && LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;;
     h) help;;
     esac
 done
@@ -938,18 +939,20 @@ fi
 
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
-    if [[ -z ${bin_path} && -z ${macOS} ]];then
+    if [[ -z ${bin_path} ]];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
+        [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+        if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
+            echo "We don't provide binary of GuoMi of macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+            exit 1
+        fi
         Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
         LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
         chmod a+x ${bin_path}
-    elif [[ -z ${bin_path} && ! -z ${macOS} ]];then
-        echo "Please use docker mode to run fisco-bcos on macOS Or compile source code and use -e option to specific fisco-bcos binary path"
-        exit 1
     else
         echo "Checking fisco-bcos binary..."
         bin_version=$(${bin_path} -v)
