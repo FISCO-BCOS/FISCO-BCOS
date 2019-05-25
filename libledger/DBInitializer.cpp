@@ -68,11 +68,13 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
-    // TODO: delete this before release RC3
+// LevelDB is deprecated from RC3
+#if 0
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();
     }
+#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
