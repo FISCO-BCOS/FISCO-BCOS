@@ -69,6 +69,10 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
             {
                 entry->setID(line.get(j, "").asString());
             }
+            else if (columns[j] == NUM_FIELD)
+            {
+                entry->setNum(line.get(j, "").asString());
+            }
             else
             {
                 std::string fieldValue = line.get(j, "").asString();

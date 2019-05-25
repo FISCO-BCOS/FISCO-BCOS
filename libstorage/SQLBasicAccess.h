@@ -28,12 +28,22 @@
 #include <json/json.h>
 
 
+const static uint32_t maxPlaceHolderCnt = 60000;
+
 #define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
 
 namespace dev
 {
 namespace storage
 {
+struct SQLPlaceHoldItem
+{
+    std::string sql;
+    uint32_t placeHolerCnt;
+
+    SQLPlaceHoldItem() : placeHolerCnt(0) {}
+};
+
 class SQLBasicAccess
 {
 public:
@@ -48,7 +58,7 @@ private:
     std::string GenerateConditionSql(const std::string& strPrefix,
         std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition);
 
-    std::string BuildCommitSql(const std::string& _table,
+    std::vector<SQLPlaceHoldItem> BuildCommitSql(const std::string& _table,
         const std::vector<std::string>& _fieldName, const std::vector<std::string>& _fieldValue);
 
     std::string BuildCreateTableSql(
