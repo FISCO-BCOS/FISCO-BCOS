@@ -356,11 +356,12 @@ bool TxPool::dropTransactions(Block const& block, bool)
     bool succ = true;
     for (size_t i = 0; i < block.transactions().size(); i++)
     {
-    	LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-    	if(block.transactionReceipts().size() > i) {
-    		pReceipt = constructTransactionReceipt(
-			block.transactions()[i], block.transactionReceipts()[i], block, i);
-    	}
+        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+        if (block.transactionReceipts().size() > i)
+        {
+            pReceipt = constructTransactionReceipt(
+                block.transactions()[i], block.transactionReceipts()[i], block, i);
+        }
         if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
             succ = false;
     }

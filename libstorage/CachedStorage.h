@@ -25,12 +25,12 @@
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
+#include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/mutex.h>
 #include <tbb/recursive_mutex.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/spin_rw_mutex.h>
-#include <tbb/concurrent_queue.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -58,7 +58,7 @@ public:
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
     virtual TableInfo::Ptr tableInfo();
-	virtual void setTableInfo(TableInfo::Ptr tableInfo);
+    virtual void setTableInfo(TableInfo::Ptr tableInfo);
 
     virtual RWMutex* mutex();
     virtual bool empty();
@@ -118,12 +118,12 @@ public:
     void startClearThread();
 
 private:
-    void touchMRU(const std::string &table, const std::string &key, ssize_t capacity);
-    void updateMRU(const std::string &table, const std::string &key, ssize_t capacity);
-    std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool > touchCache(
-    		TableInfo::Ptr table, const std::string &key, bool write = false);
+    void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
+    void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
+    std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
+        TableInfo::Ptr table, const std::string& key, bool write = false);
 
-    void removeCache(const std::string &table, const std::string &key);
+    void removeCache(const std::string& table, const std::string& key);
     tbb::spin_mutex m_removeMutex;
 
     void checkAndClear();
@@ -138,7 +138,8 @@ private:
             boost::multi_index::hashed_unique<
                 boost::multi_index::identity<std::pair<std::string, std::string> > > > > >
         m_mru;
-    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t> > > m_mruQueue;
+    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t> > >
+        m_mruQueue;
 
     tbb::mutex m_commitMutex;
 
