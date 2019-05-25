@@ -104,6 +104,27 @@ CachedStorage::CachedStorage()
 {
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
+
+    std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
+    m_clearThread = std::make_shared<std::thread>([self]() {
+    	while(true) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			auto storage = self.lock();
+			if(storage) {
+				storage->checkAndClear();
+			}
+			else {
+				return;
+			}
+    	}
+    });
+
+    m_mruQueue = std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
+    m_mru = std::make_shared<boost::multi_index_container<std::pair<std::string, std::string>,
+            boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
+                boost::multi_index::hashed_unique<
+                    boost::multi_index::identity<std::pair<std::string, std::string> > > > > >();
     m_syncNum.store(0);
     m_commitNum.store(0);
     m_capacity.store(0);
@@ -120,8 +141,6 @@ Entries::Ptr CachedStorage::select(
 {
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
-
-    checkAndClear();
 
     auto out = std::make_shared<Entries>();
 
@@ -548,18 +567,20 @@ size_t CachedStorage::ID()
 
 void CachedStorage::touchMRU(const std::string &table, const std::string &key, ssize_t capacity)
 {
-    tbb::spin_mutex::scoped_lock lock(m_mruMutex);
+    m_mruQueue->push(std::make_tuple(table, key, capacity));
+}
 
-    if (capacity != 0)
-    {
-        updateCapacity(capacity);
-    }
+void CachedStorage::updateMRU(const std::string &table, const std::string &key, ssize_t capacity) {
+	if (capacity != 0)
+	{
+		updateCapacity(capacity);
+	}
 
-    auto r = m_mru.push_back(std::make_pair(table, key));
-    if (!r.second)
-    {
-        m_mru.relocate(m_mru.end(), r.first);
-    }
+	auto r = m_mru->push_back(std::make_pair(table, key));
+	if (!r.second)
+	{
+		m_mru->relocate(m_mru->end(), r.first);
+	}
 }
 
 std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::touchCache(
@@ -601,27 +622,18 @@ void CachedStorage::removeCache(const std::string &table, const std::string &key
 
 void CachedStorage::checkAndClear()
 {
-    {
-        auto now = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapseds = now - m_lastClear;
-        if (elapseds.count() < 1.0)
-        {
-            return;
-        }
-
-        tbb::spin_mutex::scoped_lock lock(m_clearMutex);
-
-        now = std::chrono::system_clock::now();
-        elapseds = now - m_lastClear;
-        if (elapseds.count() > 1.0)
-        {
-            m_lastClear = now;
-        }
-        else
-        {
-            return;
-        }
+    uint64_t count = 0;
+    while(count < m_maxPopMRU) {
+		std::tuple<std::string, std::string, ssize_t> mru;
+		auto result = m_mruQueue->try_pop(mru);
+		if(!result) {
+			break;
+		}
+		updateMRU(std::get<0>(mru), std::get<1>(mru), std::get<2>(mru));
+		++count;
     }
+
+    CACHED_STORAGE_LOG(DEBUG) << "CheckAndClear pop: " << " elements";
 
     TIME_RECORD("Check and clear");
 
@@ -636,12 +648,6 @@ void CachedStorage::checkAndClear()
     {
         needClear = false;
 
-        if (clearTimes > 5)
-        {
-            size_t sleepTimes = clearTimes < 100 ? clearTimes * 10 : 100 * 10;
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleepTimes));
-        }
-
         if (m_syncNum > 0)
         {
             if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
@@ -651,7 +657,7 @@ void CachedStorage::checkAndClear()
                     << " greater than syncd block number: " << m_syncNum << ", waiting...";
                 needClear = true;
             }
-            else if (m_capacity > (int64_t)m_maxCapacity && !m_mru.empty())
+            else if (m_capacity > (int64_t)m_maxCapacity && !m_mru->empty())
             {
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity
@@ -662,11 +668,9 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-            tbb::spin_mutex::scoped_lock lockMRU(m_mruMutex);
-
-            for (auto it = m_mru.begin(); it != m_mru.end(); ++it)
+            for (auto it = m_mru->begin(); it != m_mru->end(); ++it)
             {
-                if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
+                if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
                     break;
                 }
@@ -700,11 +704,11 @@ void CachedStorage::checkAndClear()
 						CACHED_STORAGE_LOG(TRACE)
 							<< "remove capacity: " << it->first << "-"
 							<< it->second << ", capacity: " << totalCapacity
-							<< ", current cache size: " << m_mru.size();
+							<< ", current cache size: " << m_mru->size();
 						updateCapacity(0 - (ssize_t)totalCapacity);
 
 						removeCache(it->first, it->second);
-						it = m_mru.erase(it);
+						it = m_mru->erase(it);
 					}
 				}
 				else
@@ -712,7 +716,7 @@ void CachedStorage::checkAndClear()
 					continue;
 				}
 
-                if (m_capacity <= (int64_t)m_maxCapacity || m_mru.empty())
+                if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
                     break;
                 }
@@ -726,7 +730,7 @@ void CachedStorage::checkAndClear()
         CACHED_STORAGE_LOG(INFO) << "Clear finished, total: " << clearCount << " entries, "
                                  << "through: " << clearThrough << " entries, "
                                  << readableCapacity(currentCapacity - m_capacity)
-                                 << "Current total cached entries: " << m_mru.size()
+                                 << "Current total cached entries: " << m_mru->size()
                                  << ", total capacaity: " << readableCapacity(m_capacity);
 
         CACHED_STORAGE_LOG(DEBUG) << "Cache Status: \n\n"
@@ -738,7 +742,7 @@ void CachedStorage::checkAndClear()
                                   << ((double)m_hitTimes / m_queryTimes) * 100 << "%"
                                   << "\n\n"
                                   << "Cache capacity: " << readableCapacity(m_capacity) << "\n"
-                                  << "Cache size: " << m_mru.size();
+                                  << "Cache size: " << m_mru->size();
     }
 }
 
