@@ -772,7 +772,7 @@ EOF
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
-try_times=5
+try_times=10
 i=0
 if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
@@ -876,7 +876,7 @@ do
         bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
 done  
-sleep 3.5
+wait
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
@@ -888,7 +888,7 @@ do
         bash \${SHELL_FOLDER}/\${directory}/stop.sh &
     fi  
 done  
-sleep 3
+wait
 EOF
 }
 

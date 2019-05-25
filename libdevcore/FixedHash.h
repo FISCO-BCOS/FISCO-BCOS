@@ -270,8 +270,9 @@ public:
     template <class Engine>
     void randomize(Engine& _eng)
     {
+        std::uniform_int_distribution<uint8_t> dis(0, 255);
         for (auto& i : m_data)
-            i = (uint8_t)std::uniform_int_distribution<uint16_t>(0, 255)(_eng);
+            i = dis(_eng);
     }
 
     /// @returns a random valued object.
