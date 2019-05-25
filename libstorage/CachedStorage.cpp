@@ -105,11 +105,12 @@ CachedStorage::CachedStorage()
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
 
-    m_mruQueue = std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
+    m_mruQueue =
+        std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
     m_mru = std::make_shared<boost::multi_index_container<std::pair<std::string, std::string>,
-            boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
-                boost::multi_index::hashed_unique<
-                    boost::multi_index::identity<std::pair<std::string, std::string> > > > > >();
+        boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
+            boost::multi_index::hashed_unique<
+                boost::multi_index::identity<std::pair<std::string, std::string>>>>>>();
     m_syncNum.store(0);
     m_commitNum.store(0);
     m_capacity.store(0);
@@ -123,8 +124,9 @@ CachedStorage::~CachedStorage()
     m_taskThreadPool->stop();
 
     m_running->store(false);
-    if(m_clearThread) {
-    	m_clearThread->join();
+    if (m_clearThread)
+    {
+        m_clearThread->join();
     }
 }
 
@@ -155,9 +157,8 @@ Entries::Ptr CachedStorage::select(
     return out;
 }
 
-std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNoCondition(
-    h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
-    Condition::Ptr condition)
+std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNoCondition(h256 hash,
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
 
@@ -197,7 +198,7 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNo
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    //tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
+    // tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
 
     CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
                              << " num: " << num;
@@ -559,93 +560,102 @@ size_t CachedStorage::ID()
     return m_ID;
 }
 
-void CachedStorage::startClearThread() {
-	std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
-	auto running = m_running;
-	m_clearThread = std::make_shared<std::thread>([running, self]() {
-		while(*running) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+void CachedStorage::startClearThread()
+{
+    std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
+    auto running = m_running;
+    m_clearThread = std::make_shared<std::thread>([running, self]() {
+        while (*running)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-			auto storage = self.lock();
-			if(storage) {
-				storage->checkAndClear();
-			}
-			else {
-				return;
-			}
-		}
-	});
+            auto storage = self.lock();
+            if (storage)
+            {
+                storage->checkAndClear();
+            }
+            else
+            {
+                return;
+            }
+        }
+    });
 }
 
-void CachedStorage::touchMRU(const std::string &table, const std::string &key, ssize_t capacity)
+void CachedStorage::touchMRU(const std::string& table, const std::string& key, ssize_t capacity)
 {
     m_mruQueue->push(std::make_tuple(table, key, capacity));
 }
 
-void CachedStorage::updateMRU(const std::string &table, const std::string &key, ssize_t capacity) {
-	if (capacity != 0)
-	{
-		updateCapacity(capacity);
-	}
+void CachedStorage::updateMRU(const std::string& table, const std::string& key, ssize_t capacity)
+{
+    if (capacity != 0)
+    {
+        updateCapacity(capacity);
+    }
 
-	auto r = m_mru->push_back(std::make_pair(table, key));
-	if (!r.second)
-	{
-		m_mru->relocate(m_mru->end(), r.first);
-	}
+    auto r = m_mru->push_back(std::make_pair(table, key));
+    if (!r.second)
+    {
+        m_mru->relocate(m_mru->end(), r.first);
+    }
 }
 
 std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::touchCache(
-    TableInfo::Ptr tableInfo, const std::string &key, bool write)
+    TableInfo::Ptr tableInfo, const std::string& key, bool write)
 {
-	bool hit = true;
+    bool hit = true;
 
-	++m_queryTimes;
+    ++m_queryTimes;
 
-	auto cache = std::make_shared<Cache>();
-	auto cacheKey = tableInfo->name + "_" + key;
-	auto result = m_caches.insert(std::make_pair(cacheKey, cache));
+    auto cache = std::make_shared<Cache>();
+    auto cacheKey = tableInfo->name + "_" + key;
+    auto result = m_caches.insert(std::make_pair(cacheKey, cache));
 
-	cache = result.first->second;
+    cache = result.first->second;
 
-	auto cacheLock = std::make_shared<Cache::RWScoped>();
-	auto locked = cacheLock->try_acquire(*(cache->mutex()), write);
-	if(result.second && locked) {
-		hit = false;
+    auto cacheLock = std::make_shared<Cache::RWScoped>();
+    auto locked = cacheLock->try_acquire(*(cache->mutex()), write);
+    if (result.second && locked)
+    {
+        hit = false;
 
-		cache->setKey(key);
-		cache->setTableInfo(tableInfo);
-	}
+        cache->setKey(key);
+        cache->setTableInfo(tableInfo);
+    }
 
-	if (hit)
-	{
-	   ++m_hitTimes;
-	}
+    if (hit)
+    {
+        ++m_hitTimes;
+    }
 
-	return std::make_tuple(cache, cacheLock, locked);
+    return std::make_tuple(cache, cacheLock, locked);
 }
 
-void CachedStorage::removeCache(const std::string &table, const std::string &key) {
-	tbb::spin_mutex::scoped_lock lock(m_removeMutex);
+void CachedStorage::removeCache(const std::string& table, const std::string& key)
+{
+    tbb::spin_mutex::scoped_lock lock(m_removeMutex);
 
-	auto cacheKey = table + "_" + key;
-	m_caches.unsafe_erase(cacheKey);
+    auto cacheKey = table + "_" + key;
+    m_caches.unsafe_erase(cacheKey);
 }
 
 void CachedStorage::checkAndClear()
 {
     uint64_t count = 0;
-    while(count < m_maxPopMRU) {
-		std::tuple<std::string, std::string, ssize_t> mru;
-		auto result = m_mruQueue->try_pop(mru);
-		if(!result) {
-			break;
-		}
-		updateMRU(std::get<0>(mru), std::get<1>(mru), std::get<2>(mru));
-		++count;
+    while (count < m_maxPopMRU)
+    {
+        std::tuple<std::string, std::string, ssize_t> mru;
+        auto result = m_mruQueue->try_pop(mru);
+        if (!result)
+        {
+            break;
+        }
+        updateMRU(std::get<0>(mru), std::get<1>(mru), std::get<2>(mru));
+        ++count;
     }
 
-    CACHED_STORAGE_LOG(DEBUG) << "CheckAndClear pop: " << " elements";
+    CACHED_STORAGE_LOG(DEBUG) << "CheckAndClear pop: " << count << " elements";
 
     TIME_RECORD("Check and clear");
 
@@ -689,44 +699,41 @@ void CachedStorage::checkAndClear()
 
                 ++clearThrough;
 
-				auto tableInfo = std::make_shared<TableInfo>();
-				tableInfo->name = it->first;
+                auto tableInfo = std::make_shared<TableInfo>();
+                tableInfo->name = it->first;
 
-				auto result = touchCache(tableInfo, it->second);
-				auto cache = std::get<0>(result);
-				if (std::get<2>(result))
-				{
-					if (m_syncNum > 0 && (cache->num() <= m_syncNum))
-					{
-						CACHED_STORAGE_LOG(TRACE)
-							<< "Clear last recent record: "
-							<< it->first << "-" << it->second;
+                auto result = touchCache(tableInfo, it->second);
+                auto cache = std::get<0>(result);
+                if (std::get<2>(result))
+                {
+                    if (m_syncNum > 0 && (cache->num() <= m_syncNum))
+                    {
+                        CACHED_STORAGE_LOG(TRACE)
+                            << "Clear last recent record: " << it->first << "-" << it->second;
 
-						size_t totalCapacity = 0;
-						for (auto entryIt : *(cache->entries()))
-						{
-							CACHED_STORAGE_LOG(TRACE)
-								<< "entry remove capacity: "
-								<< it->first << "-" << it->second
-								<< ", capacity: " << entryIt->capacity();
-							totalCapacity += entryIt->capacity();
-						}
+                        size_t totalCapacity = 0;
+                        for (auto entryIt : *(cache->entries()))
+                        {
+                            CACHED_STORAGE_LOG(TRACE)
+                                << "entry remove capacity: " << it->first << "-" << it->second
+                                << ", capacity: " << entryIt->capacity();
+                            totalCapacity += entryIt->capacity();
+                        }
 
-						++clearCount;
-						CACHED_STORAGE_LOG(TRACE)
-							<< "remove capacity: " << it->first << "-"
-							<< it->second << ", capacity: " << totalCapacity
-							<< ", current cache size: " << m_mru->size();
-						updateCapacity(0 - (ssize_t)totalCapacity);
+                        ++clearCount;
+                        CACHED_STORAGE_LOG(TRACE) << "remove capacity: " << it->first << "-"
+                                                  << it->second << ", capacity: " << totalCapacity
+                                                  << ", current cache size: " << m_mru->size();
+                        updateCapacity(0 - (ssize_t)totalCapacity);
 
-						removeCache(it->first, it->second);
-						it = m_mru->erase(it);
-					}
-				}
-				else
-				{
-					continue;
-				}
+                        removeCache(it->first, it->second);
+                        it = m_mru->erase(it);
+                    }
+                }
+                else
+                {
+                    continue;
+                }
 
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
