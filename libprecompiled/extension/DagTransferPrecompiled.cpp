@@ -20,7 +20,6 @@
  *  @date 20190111
  */
 #include "DagTransferPrecompiled.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libstorage/EntriesPrecompiled.h>
@@ -98,7 +97,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
 
         abi.abiOut(data, user, amount);
         // if params is invalid , parallel process can be done
-        if (!invalidUserName(user) && (amount > 0))
+        if (!invalidUserName(user))
         {
             results.push_back(user);
         }
@@ -110,7 +109,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
 
         abi.abiOut(data, user, amount);
         // if params is invalid , parallel process can be done
-        if (!invalidUserName(user) && (amount > 0))
+        if (!invalidUserName(user))
         {
             results.push_back(user);
         }
@@ -122,7 +121,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
 
         abi.abiOut(data, fromUser, toUser, amount);
         // if params is invalid , parallel process can be done
-        if (!invalidUserName(fromUser) && !invalidUserName(toUser) && (amount > 0))
+        if (!invalidUserName(fromUser) && !invalidUserName(toUser))
         {
             results.push_back(fromUser);
             results.push_back(toUser);

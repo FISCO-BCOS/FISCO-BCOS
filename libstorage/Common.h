@@ -26,7 +26,8 @@ namespace dev
 namespace storage
 {
 #define STORAGE_LOG(LEVEL) LOG(LEVEL) << "[STORAGE]"
-#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("LEVELDB")
+#define STORAGE_LEVELDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("LevelDB")
+#define STORAGE_ROCKSDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("STORAGE") << LOG_BADGE("RocksDB")
 #define CACHED_STORAGE_LOG(LEVEL)                                                   \
     LOG(LEVEL) << "[g:" << std::to_string(groupID()) << "]" << LOG_BADGE("STORAGE") \
                << LOG_BADGE("CachedStorage")
@@ -54,6 +55,17 @@ const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
+
+
+inline bool isHashField(const std::string& _key)
+{
+    if (!_key.empty())
+    {
+        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
+                (_key == STATUS));
+    }
+    return false;
+}
 
 }  // namespace storage
 }  // namespace dev

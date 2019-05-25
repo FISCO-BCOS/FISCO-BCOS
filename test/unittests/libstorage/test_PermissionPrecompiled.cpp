@@ -23,7 +23,7 @@
 
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
@@ -144,18 +144,20 @@ BOOST_AUTO_TEST_CASE(queryByName)
     in = abi.abiIn("queryByName(string)", tableName);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     std::string retStr;
-    json_spirit::mValue retJson;
     abi.abiOut(&out, retStr);
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 1);
+
+    Json::Value retJson;
+    Json::Reader reader;
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 1);
 
     std::string keyName = "test";
     // queryByName by a no existing key
     in = abi.abiIn("queryByName(string)", keyName);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 0);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(error_func)

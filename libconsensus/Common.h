@@ -21,6 +21,7 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <json/json.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>

@@ -117,7 +117,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             }
             catch (std::exception& e)
             {
-                LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e) << std::endl;
             }
         }

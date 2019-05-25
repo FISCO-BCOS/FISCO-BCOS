@@ -24,7 +24,6 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -230,6 +229,10 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
         Json::Value OPJson;
         for (auto iter = members.begin(); iter != members.end(); iter++)
         {
+            if (!isHashField(*iter))
+            {
+                continue;
+            }
             OPJson = conditionJson[*iter];
             auto op = OPJson.getMemberNames();
             for (auto it = op.begin(); it != op.end(); it++)

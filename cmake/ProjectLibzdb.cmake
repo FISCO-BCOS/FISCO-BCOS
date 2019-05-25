@@ -25,7 +25,7 @@ ExternalProject_Get_Property(MySQLClient SOURCE_DIR)
 set(MYSQL_CLIENT_LIB ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a)
 set(configure_command ./configure --with-mysql=${SOURCE_DIR}/bin/mysql_config --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
 
-ExternalProject_Add(libzdb
+ExternalProject_Add(libzdb DEPENDS MySQLClient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME libzdb-3.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
@@ -40,6 +40,7 @@ ExternalProject_Add(libzdb
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libzdb.a
 )
+add_dependencies(libzdb MySQLClient)
 
 ExternalProject_Get_Property(libzdb SOURCE_DIR)
 

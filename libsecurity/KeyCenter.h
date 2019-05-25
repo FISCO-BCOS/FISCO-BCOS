@@ -73,7 +73,7 @@ public:
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
 
-    static KeyCenter& instance();
+    static std::shared_ptr<KeyCenter> instance();
 
     void clearCache()
     {
@@ -90,7 +90,7 @@ private:
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
 
-private:
+protected:
     dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 };
 
