@@ -346,6 +346,16 @@ int SQLBasicAccess::CommitDo(
                     Connection_prepareStatement(oConn, "%s", itSql->sql.c_str());
 
                 uint32_t index = 0;
+
+                /*
+                    if not set string firstly
+                    need to move itValue to next
+                */
+                if (itValue != _fieldValue.begin() && itValue != _fieldValue.end())
+                {
+                    ++itValue;
+                }
+
                 for (; itValue != _fieldValue.end(); ++itValue)
                 {
                     PreparedStatement_setString(preSatement, ++index, itValue->c_str());
