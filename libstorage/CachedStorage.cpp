@@ -142,7 +142,7 @@ Entries::Ptr CachedStorage::select(
 
     Cache::Ptr caches = std::get<0>(result);
     auto entries = caches->entriesPtr();
-    for (auto it: *entries)
+    for (auto it : *entries)
     {
         auto entry = it;
         if (condition && !condition->process(entry))
