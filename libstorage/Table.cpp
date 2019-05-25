@@ -36,9 +36,8 @@
 
 using namespace dev::storage;
 
-Entry::Entry()
+Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
-    m_data = std::make_shared<EntryData>();
     m_data->m_refCount = 1;
     m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
