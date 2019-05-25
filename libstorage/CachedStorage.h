@@ -115,6 +115,8 @@ public:
 
     size_t ID();
 
+    void startClearThread();
+
 private:
     void touchMRU(const std::string &table, const std::string &key, ssize_t capacity);
     void updateMRU(const std::string &table, const std::string &key, ssize_t capacity);
@@ -150,13 +152,15 @@ private:
 
     uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
-    uint64_t m_maxPopMRU = 10000;
+    uint64_t m_maxPopMRU = 100000;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
     tbb::atomic<uint64_t> m_hitTimes = 0;
     tbb::atomic<uint64_t> m_queryTimes = 0;
+
+    std::shared_ptr<tbb::atomic<bool> > m_running;
 };
 
 }  // namespace storage

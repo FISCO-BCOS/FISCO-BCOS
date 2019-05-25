@@ -105,21 +105,6 @@ CachedStorage::CachedStorage()
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
 
-    std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
-    m_clearThread = std::make_shared<std::thread>([self]() {
-    	while(true) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			auto storage = self.lock();
-			if(storage) {
-				storage->checkAndClear();
-			}
-			else {
-				return;
-			}
-    	}
-    });
-
     m_mruQueue = std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
     m_mru = std::make_shared<boost::multi_index_container<std::pair<std::string, std::string>,
             boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
@@ -128,12 +113,19 @@ CachedStorage::CachedStorage()
     m_syncNum.store(0);
     m_commitNum.store(0);
     m_capacity.store(0);
+    m_running = std::make_shared<tbb::atomic<bool>>();
+    m_running->store(true);
 }
 
 CachedStorage::~CachedStorage()
 {
     STORAGE_LOG(INFO) << "Stoping flushStorage thread";
     m_taskThreadPool->stop();
+
+    m_running->store(false);
+    if(m_clearThread) {
+    	m_clearThread->join();
+    }
 }
 
 Entries::Ptr CachedStorage::select(
@@ -538,6 +530,8 @@ void CachedStorage::init()
         auto numStr = entry->getField(SYS_VALUE);
         m_ID = boost::lexical_cast<size_t>(numStr);
     }
+
+    startClearThread();
 }
 
 int64_t CachedStorage::syncNum()
@@ -563,6 +557,24 @@ void CachedStorage::setMaxForwardBlock(size_t maxForwardBlock)
 size_t CachedStorage::ID()
 {
     return m_ID;
+}
+
+void CachedStorage::startClearThread() {
+	std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
+	auto running = m_running;
+	m_clearThread = std::make_shared<std::thread>([running, self]() {
+		while(*running) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			auto storage = self.lock();
+			if(storage) {
+				storage->checkAndClear();
+			}
+			else {
+				return;
+			}
+		}
+	});
 }
 
 void CachedStorage::touchMRU(const std::string &table, const std::string &key, ssize_t capacity)
