@@ -139,7 +139,7 @@ public:
             tx.sender();
     }
 
-    h256 const& executeVerifier(
+    h256 executeVerifier(
         int _totalUser, int _totalTxs, const string& _storageType, bool _enablePara)
     {
         boost::property_tree::ptree pt;
