@@ -25,6 +25,8 @@
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/ThreadPool.h>
+#include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <tbb/mutex.h>
 #include <tbb/recursive_mutex.h>
 #include <tbb/spin_mutex.h>
@@ -38,12 +40,12 @@ namespace dev
 {
 namespace storage
 {
-class Caches
+class Cache
 {
 public:
-    typedef std::shared_ptr<Caches> Ptr;
-    Caches();
-    virtual ~Caches(){};
+    typedef std::shared_ptr<Cache> Ptr;
+    Cache();
+    virtual ~Cache(){};
 
     typedef tbb::spin_rw_mutex RWMutex;
     typedef tbb::spin_rw_mutex::scoped_lock RWScoped;
@@ -55,6 +57,8 @@ public:
     virtual void setEntries(Entries::Ptr entries);
     virtual int64_t num() const;
     virtual void setNum(int64_t num);
+    virtual TableInfo::Ptr tableInfo();
+    virtual void setTableInfo(TableInfo::Ptr tableInfo);
 
     virtual RWMutex* mutex();
     virtual bool empty();
@@ -63,33 +67,13 @@ public:
 private:
     RWMutex m_mutex;
 
+    TableInfo::Ptr m_tableInfo;
 
     bool m_empty = true;
     std::string m_key;
     Entries::Ptr m_entries;
     // int64_t m_num;
     tbb::atomic<int64_t> m_num;
-};
-
-class TableCaches
-{
-public:
-    typedef std::shared_ptr<TableCaches> Ptr;
-    TableCaches() { m_tableInfo = std::make_shared<TableInfo>(); }
-    virtual ~TableCaches(){};
-
-    virtual TableInfo::Ptr tableInfo();
-    virtual void setTableInfo(TableInfo::Ptr tableInfo);
-    virtual Caches::Ptr findCache(const std::string& key);
-    virtual std::pair<tbb::concurrent_unordered_map<std::string, Caches::Ptr>::iterator, bool>
-    addCache(const std::string& key, Caches::Ptr cache);
-    virtual void removeCache(const std::string& key);
-
-    virtual tbb::concurrent_unordered_map<std::string, Caches::Ptr>* caches();
-
-private:
-    TableInfo::Ptr m_tableInfo;
-    tbb::concurrent_unordered_map<std::string, Caches::Ptr> m_caches;
 };
 
 class Task
@@ -113,8 +97,8 @@ public:
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
-    virtual std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > selectNoCondition(h256 hash,
-        int num, TableInfo::Ptr tableInfo, const std::string& key,
+    virtual std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped> > selectNoCondition(h256 hash,
+        int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr);
 
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
@@ -131,48 +115,51 @@ public:
 
     size_t ID();
 
-private:
-    void touchMRU(std::string table, std::string key, ssize_t capacity);
-    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCache(
-        TableInfo::Ptr tableInfo, std::string key, bool write = false);
-    std::tuple<Caches::Ptr, std::shared_ptr<Caches::RWScoped> > touchCacheNoLock(
-        TableInfo::Ptr tableInfo, std::string key, bool write = false);
+    void startClearThread();
 
-    tbb::spin_mutex m_clearMutex;
+private:
+    void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
+    void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
+    std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
+        TableInfo::Ptr table, const std::string& key, bool write = false);
+
+    void removeCache(const std::string& table, const std::string& key);
+    tbb::spin_mutex m_removeMutex;
+
     void checkAndClear();
 
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    std::map<std::string, TableCaches::Ptr> m_caches;
-    tbb::spin_mutex m_cachesMutex;
+    tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
 
-    tbb::spin_mutex m_touchMutex;
-
-    boost::multi_index_container<std::pair<std::string, std::string>,
+    std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
-                boost::multi_index::identity<std::pair<std::string, std::string> > > > >
+                boost::multi_index::identity<std::pair<std::string, std::string> > > > > >
         m_mru;
-    tbb::spin_mutex m_mruMutex;
+    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t> > >
+        m_mruQueue;
 
     // boost::multi_index
     Storage::Ptr m_backend;
-    size_t m_ID = 1;
+    uint64_t m_ID = 1;
 
-    boost::atomic_size_t m_syncNum;
-    boost::atomic_size_t m_commitNum;
+    boost::atomic_int64_t m_syncNum;
+    boost::atomic_int64_t m_commitNum;
     tbb::atomic<int64_t> m_capacity;
 
-    size_t m_maxForwardBlock = 10;
+    uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
+    uint64_t m_maxPopMRU = 100000;
 
-    std::chrono::system_clock::time_point m_lastClear;
     dev::ThreadPool::Ptr m_taskThreadPool;
+    std::shared_ptr<std::thread> m_clearThread;
 
-    // stat
     tbb::atomic<uint64_t> m_hitTimes = 0;
     tbb::atomic<uint64_t> m_queryTimes = 0;
+
+    std::shared_ptr<tbb::atomic<bool> > m_running;
 };
 
 }  // namespace storage
