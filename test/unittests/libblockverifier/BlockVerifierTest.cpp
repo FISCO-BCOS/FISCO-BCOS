@@ -23,16 +23,32 @@
 #include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
+#include <libdevcore/easylog.h>
+#include <libethcore/ABI.h>
 #include <libethcore/PrecompiledContract.h>
+#include <libethcore/Protocol.h>
+#include <libinitializer/Initializer.h>
+#include <libinitializer/LedgerInitializer.h>
+#include <libledger/DBInitializer.h>
+#include <libledger/LedgerManager.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
+#include <unistd.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <ctime>
+
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
-using namespace dev::storage;
+using namespace dev::ledger;
+using namespace dev::initializer;
+using namespace dev::txpool;
 using namespace dev::blockverifier;
+using namespace dev::blockchain;
+using namespace dev::storage;
 using namespace dev::mptstate;
 using namespace dev::executive;
 
@@ -40,109 +56,167 @@ namespace dev
 {
 namespace test
 {
-class FakeBlockchain
+class FakeVerifierWithDagTransfer
 {
 public:
-    FakeBlockchain() {}
-    dev::h256 getHash(int64_t) { return h256(0); }
-};
-
-struct BlockVerifierFixture
-{
-    BlockVerifierFixture()
+    void genTxUserAddBlock(Block& _block, size_t _userNum)
     {
-        m_blockVerifier = std::make_shared<BlockVerifier>();
-
-        auto storagePath = std::string("test_storage/");
-        boost::filesystem::create_directories(storagePath);
-        leveldb::Options option;
-        option.create_if_missing = true;
-        option.max_open_files = 100;
-
-        dev::db::BasicLevelDB* dbPtr = NULL;
-        leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
-        if (!s.ok())
+        Transactions txs;
+        // Generate user + receiver = _userNum
+        for (size_t i = 0; i < _userNum; i++)
         {
-            LOG(ERROR) << "Open storage leveldb error: " << s.ToString();
+            u256 value = 0;
+            u256 gasPrice = 0;
+            u256 gas = 10000000;
+            Address dest = Address(0x5002);
+            string usr = to_string(i);
+            u256 money = 1000000000;
+            dev::eth::ContractABI abi;
+            bytes data =
+                abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
+            u256 nonce = u256(i);
+            Transaction tx(value, gasPrice, gas, dest, data, nonce);
+            tx.setBlockLimit(250);
+            tx.forceSender(Address(0x2333));
+            txs.push_back(tx);
         }
 
-        m_db = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
-
-        m_levelDBStorage = std::make_shared<LevelDBStorage>();
-        m_levelDBStorage->setDB(m_db);
-
-        m_stateFactory =
-            std::make_shared<MPTStateFactory>(u256(0), "test_state", h256(0), WithExisting::Trust);
-
-        m_precompiledContract.insert(std::make_pair(
-            Address(1), PrecompiledContract(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
-        m_precompiledContract.insert(std::make_pair(
-            Address(2), PrecompiledContract(60, 12, PrecompiledRegistrar::executor("sha256"))));
-        m_precompiledContract.insert(std::make_pair(Address(3),
-            PrecompiledContract(600, 120, PrecompiledRegistrar::executor("ripemd160"))));
-        m_precompiledContract.insert(std::make_pair(
-            Address(4), PrecompiledContract(15, 3, PrecompiledRegistrar::executor("identity"))));
-
-        m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
-        m_executiveContextFactory->setStateStorage(m_levelDBStorage);
-        m_executiveContextFactory->setStateFactory(m_stateFactory);
-
-        m_blockVerifier->setExecutiveContextFactory(m_executiveContextFactory);
-
-        m_blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
-        m_blockChain->setStateStorage(m_levelDBStorage);
-
-        m_blockVerifier->setNumberHash([this](int64_t num) {
-            return this->m_blockChain->getBlockByNumber(num)->headerHash();
-        });
-        m_fakeBlock = std::make_shared<FakeBlock>(5);
+        _block.setTransactions(txs);
+        for (auto& tx : _block.transactions())
+            tx.sender();
     }
 
-    std::shared_ptr<dev::blockchain::BlockChainImp> m_blockChain;
-    std::shared_ptr<BlockVerifier> m_blockVerifier;
-    std::shared_ptr<ExecutiveContextFactory> m_executiveContextFactory;
-    std::shared_ptr<FakeBlock> m_fakeBlock;
-    dev::storage::LevelDBStorage::Ptr m_levelDBStorage;
-    std::shared_ptr<dev::db::BasicLevelDB> m_db;
-    std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
-    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
+    void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
+    {
+        Block userAddReqBlock;
+        userAddReqBlock.header().setNumber(_parentBlockInfo.number + 1);
+        userAddReqBlock.header().setParentHash(_parentBlockInfo.hash);
+
+        genTxUserAddBlock(userAddReqBlock, _userNum);
+        auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
+        _blockChain->commitBlock(userAddReqBlock, exeCtx);
+    }
+
+    void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
+    {
+        Transactions txs;
+        for (size_t i = 0; i < _txNum; i++)
+        {
+            u256 value = 0;
+            u256 gasPrice = 0;
+            u256 gas = 10000000;
+            Address dest = Address(0x5002);
+            string userFrom;
+            string userTo;
+
+            if (i > _userNum / 2)
+            {
+                userFrom = to_string(i % _userNum);
+                userTo = to_string((i + 2) % _userNum);
+            }
+            else
+            {
+                userFrom = to_string(i % (_userNum / 2));
+                userTo = to_string((_userNum / 2 + i) % (_userNum));
+            }
+
+            LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
+            u256 money = 1;
+            dev::eth::ContractABI abi;
+            bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
+                money);  // add 1000000000 to user i
+            u256 nonce = u256(i);
+            Transaction tx(value, gasPrice, gas, dest, data, nonce);
+            tx.setBlockLimit(250);
+            tx.forceSender(Address(0x2333));
+            txs.push_back(tx);
+        }
+
+        _block.setTransactions(txs);
+        for (auto& tx : _block.transactions())
+            tx.sender();
+    }
+
+    h256 executeVerifier(
+        int _totalUser, int _totalTxs, const string& _storageType, bool _enablePara)
+    {
+        boost::property_tree::ptree pt;
+
+        std::shared_ptr<LedgerParamInterface> params = std::make_shared<LedgerParam>();
+
+        /// init the basic config
+        /// set storage db related param
+        params->mutableStorageParam().type = _storageType;
+        params->mutableStorageParam().path = _storageType + "_fakestate_" + to_string(utcTime());
+        /// set state db related param
+        params->mutableStateParam().type = "storage";
+
+        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
+        dbInitializer->initStorageDB();
+        std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+        blockChain->setStateStorage(dbInitializer->storage());
+        blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
+
+        GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType",
+            "storageType", "stateType", 5000, 300000000, 0};
+        bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
+        BOOST_CHECK(ret);
+
+        dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
+        dbInitializer->initState(genesisHash);
+
+        std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(_enablePara);
+        /// set params for blockverifier
+        blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
+        std::shared_ptr<BlockChainImp> _blockChain =
+            std::dynamic_pointer_cast<BlockChainImp>(blockChain);
+
+        blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
+
+        auto number = blockChain->number();
+        auto parentBlock = blockChain->getBlockByNumber(number);
+        BlockInfo parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
+            parentBlock->header().stateRoot()};
+
+        std::cout << "Creating user..." << std::endl;
+        initUser(_totalUser, parentBlockInfo, blockVerifier, blockChain);
+
+        parentBlock = blockChain->getBlockByNumber(number + 1);
+        parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
+            parentBlock->header().stateRoot()};
+
+        Block block;
+        genTxUserTransfer(block, _totalUser, _totalTxs);
+        block.calTransactionRoot();
+        blockVerifier->executeBlock(block, parentBlockInfo);
+
+        return block.header().stateRoot();
+    }
+};
+
+class BlockVerifierFixture : public TestOutputHelperFixture
+{
+public:
+    BlockVerifierFixture() : TestOutputHelperFixture() {}
 };
 
 BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture)
 
 
-BOOST_AUTO_TEST_CASE(executeBlock)
+BOOST_AUTO_TEST_CASE(executeBlockTest)
 {
-    /* for (int i = 0; i < 100; ++i)
-     {
-         auto max = m_blockChain->number();
+    FakeVerifierWithDagTransfer serialExe;
+    auto serialState = serialExe.executeVerifier(4, 20, "LevelDB", false);
+    cout << "Serial exec root: " << serialState << endl;
 
-         auto parentBlock = m_blockChain->getBlockByNumber(max);
 
-         dev::eth::BlockHeader header;
-         header.setNumber(i);
-         header.setParentHash(parentBlock->headerHash());
-         header.setGasLimit(dev::u256(1024 * 1024 * 1024));
-         header.setRoots(parentBlock->header().transactionsRoot(),
-             parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
+    FakeVerifierWithDagTransfer paraExe;
+    auto paraState = paraExe.executeVerifier(4, 20, "LevelDB", true);
+    cout << "Para exec root: " << paraExe.executeVerifier(4, 20, "LevelDB", true) << endl;
 
-         dev::eth::Block block;
-         block.setBlockHeader(header);
-
-         dev::bytes rlpBytes = dev::fromHex(
-             "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a10000000"
-             "0000"
-             "000000000000003ca576d469d7aa0244071d27eb33c5629753593e00000000000000000000000000000000"
-             "0000"
-             "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62"
-             "657c"
-             "4da01ea01d4c2af5ce505f574a320563ea9ea55003903ca5d22140155b3c2c968df0509464");
-         dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
-         block.appendTransaction(tx);
-
-         auto context = m_blockVerifier->executeBlock(block);
-         m_blockChain->commitBlock(block, context);
-     }*/
+    BOOST_CHECK_EQUAL(serialState, paraState);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
