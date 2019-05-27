@@ -75,7 +75,7 @@ Entries::Ptr LevelDBStorage2::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                        entry->setField(valueIt->first, valueIt->second);
+                    entry->setField(valueIt->first, valueIt->second);
                 }
                 entry->setID(it->at(ID_FIELD));
                 entry->setNum(it->at(NUM_FIELD));
