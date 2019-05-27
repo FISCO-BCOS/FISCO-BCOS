@@ -142,9 +142,8 @@ Entries::Ptr CachedStorage::select(
 
     Cache::Ptr caches = std::get<0>(result);
     auto entries = caches->entriesPtr();
-    for (auto it : *entries)
+    for (auto entry : *entries)
     {
-        auto entry = it;
         if (condition && !condition->process(entry))
         {
             continue;
@@ -198,8 +197,6 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNo
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    // tbb::spin_mutex::scoped_lock lock(m_cachesMutex);
-
     CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
                              << " num: " << num;
 
@@ -468,7 +465,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         auto self = std::weak_ptr<CachedStorage>(
             std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
 
-
         m_commitNum.store(num);
         m_taskThreadPool->enqueue([backend, task, self]() {
             auto now = std::chrono::system_clock::now();
@@ -679,7 +675,7 @@ void CachedStorage::checkAndClear()
                     << " greater than syncd block number: " << m_syncNum << ", waiting...";
                 needClear = true;
             }
-            else if (m_capacity > (int64_t)m_maxCapacity && !m_mru->empty())
+            else if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity
@@ -711,7 +707,7 @@ void CachedStorage::checkAndClear()
                         CACHED_STORAGE_LOG(TRACE)
                             << "Clear last recent record: " << it->first << "-" << it->second;
 
-                        size_t totalCapacity = 0;
+                        int64_t totalCapacity = 0;
                         for (auto entryIt : *(cache->entries()))
                         {
                             CACHED_STORAGE_LOG(TRACE)
@@ -724,7 +720,7 @@ void CachedStorage::checkAndClear()
                         CACHED_STORAGE_LOG(TRACE) << "remove capacity: " << it->first << "-"
                                                   << it->second << ", capacity: " << totalCapacity
                                                   << ", current cache size: " << m_mru->size();
-                        updateCapacity(0 - (ssize_t)totalCapacity);
+                        updateCapacity(0 - totalCapacity);
 
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
@@ -735,7 +731,7 @@ void CachedStorage::checkAndClear()
                     continue;
                 }
 
-                if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
+                if (m_capacity <= m_maxCapacity || m_mru->empty())
                 {
                     break;
                 }

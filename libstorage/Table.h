@@ -73,8 +73,8 @@ public:
     Entry();
     virtual ~Entry();
 
-    virtual uint32_t getID() const;
-    virtual void setID(uint32_t id);
+    virtual uint64_t getID() const;
+    virtual void setID(uint64_t id);
     virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
@@ -125,10 +125,10 @@ private:
 
     std::shared_ptr<RWMutexScoped> checkRef();
 
-    uint32_t m_ID = 0;
+    uint64_t m_ID = 0;
     int m_status = 0;
     size_t m_tempIndex = 0;
-    uint32_t m_num = 0;
+    uint64_t m_num = 0;
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;

@@ -51,14 +51,14 @@ Entry::~Entry()
     }
 }
 
-uint32_t Entry::getID() const
+uint64_t Entry::getID() const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
 
     return m_ID;
 }
 
-void Entry::setID(uint32_t id)
+void Entry::setID(uint64_t id)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
 
@@ -71,7 +71,7 @@ void Entry::setID(const std::string& id)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
 
-    m_ID = boost::lexical_cast<uint32_t>(id);
+    m_ID = boost::lexical_cast<uint64_t>(id);
 
     m_dirty = true;
 }

@@ -141,8 +141,6 @@ private:
     std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t> > >
         m_mruQueue;
 
-    tbb::mutex m_commitMutex;
-
     // boost::multi_index
     Storage::Ptr m_backend;
     uint64_t m_ID = 1;
