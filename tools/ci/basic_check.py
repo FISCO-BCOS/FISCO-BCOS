@@ -26,8 +26,8 @@ def check_diff(status , key, max_diff, stopped_node=65535):
     status_value.sort()
     for single_status in status_value:
         if (abs(single_status - status_value[0]) > max_diff):
-            return False, status_value
-    return True, status_value
+            return (False, status_value)
+    return (True, status_value)
 
 class BasicCheck(object):
     """
@@ -51,7 +51,7 @@ class BasicCheck(object):
         (status, result) = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("=== start node:")
-        command = "nohup bash nodes/" + self.rpc_ip + "/start_all.sh > result.log"
+        command = "nohup bash nodes/" + self.rpc_ip + "/start_all.sh >/dev/null 2>&1 &"
         (status, result) = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("========= build_localdb_blockchain succ")
@@ -80,7 +80,7 @@ class BasicCheck(object):
         start the specified node
         """
         LOG_INFO("========= start node" + str(node_id))
-        command = "nohup bash nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh > result.log"
+        command = "nohup bash ./nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh >/dev/null 2>&1"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
         time.sleep(1)
@@ -100,7 +100,7 @@ class BasicCheck(object):
         send transaction
         """
         LOG_INFO("========== send " + str(trans_num) + " transactions:")
-        command = "bash nodes/" + self.rpc_ip + "/.transTest.sh " + str(trans_num) + " | grep \"jsonrpc\" | grep \"result\" | wc -l"
+        command = "bash nodes/" + self.rpc_ip + "/.transTest.sh " + str(trans_num) + " " +  str(self.group_id) + " | grep \"jsonrpc\" | grep \"result\" | wc -l"
         (status, result) = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("========== send " + str(trans_num) + " ok")
@@ -128,7 +128,8 @@ class BasicCheck(object):
                 json_object = json.loads(response.text)
                 if("result" in json_object):
                     view_status = json_object["result"][1]
-                    (ret, view_status) = check_diff(view_status, "view", 2*self.node_num + 1, stopped_node)
+                    max_diff = 2*self.node_num + 1
+                    (ret, view_status) = check_diff(view_status, "view", max_diff, stopped_node)
                     if(ret is False):
                         LOG_ERROR("check consensus failed, current views:" + str(view_status))
                     LOG_INFO("check consensus succ")

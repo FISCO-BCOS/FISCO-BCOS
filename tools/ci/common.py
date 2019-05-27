@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import subprocess
 import sys
+import os
 
 def LOG_ERROR(msg):
     """
@@ -20,10 +21,21 @@ def execute_command(command):
     """
     execute command
     """
-    child = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = subprocess.PIPE
+    flag = 0
+    # for background execution
+    if("nohup" in command) or ("\&" in command):
+        output = open('result.log', 'w')
+        flag = 1
+    child = subprocess.Popen(command.split(), shell=False, stdout=output, stderr=output, preexec_fn=os.setpgrp)
     ret = child.communicate()
-    result = ret[0]
-    err = ret[1]
+    err = ""
+    if (flag == 0):
+        result = ret[0]
+        err = ret[1]
+    else:
+        status, result = execute_command("cat result.log")
+        
     status = child.returncode
     if(status != 0):
         LOG_ERROR("=== execute " + command + " failed, information = " + result + " error information:" + err.decode('utf-8'))
