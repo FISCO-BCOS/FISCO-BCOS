@@ -103,11 +103,11 @@ class BasicCheck(object):
         check diff 
         """
         status_value = []
-        for i in range(len(status)):
-            status_value.append(status[i][key])
+        for single_status in status:
+            status_value.append(single_status[key])
         status_value.sort()
-        for i in range(len(status_value)):
-            if (abs(status_value[i] - status_value[0]) > max_diff):
+        for single_status in status_value:
+            if (abs(single_status - status_value[0]) > max_diff):
                 return False, status_value
         return True, status_value
 
@@ -119,17 +119,17 @@ class BasicCheck(object):
         LOG_INFO("========== check consensus status for node" + str(node_id))
         param = [self.group_id]
         method = "getConsensusStatus"
-        id = 1
-        request_data = constructRequestData(method, param, id)
-        url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
+        rpc_id = 1
         try:
+            request_data = constructRequestData(method, param, rpc_id)
+            url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
             response = requests.post(url, data = request_data)
             if (response.status_code == requests.codes.ok):
                 json_object = json.loads(response.text)
                 if("result" in json_object):
                     view_status = json_object["result"][1]
                     (ret, view_status) = self.check_diff(view_status, "view", self.node_num + 1)
-                    if(ret == False):
+                    if(ret is False):
                         LOG_ERROR("check consensus failed, current views:" + str(view_status))
                     LOG_INFO("check consensus succ") 
                 else:
@@ -145,10 +145,11 @@ class BasicCheck(object):
         """
         param = [self.group_id]
         method = "getTotalTransactionCount"
-        id = 1
-        request_data = constructRequestData(method, param, id)
-        url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
+        rpc_id = 1
         try:
+            request_data = constructRequestData(method, param, rpc_id)
+            url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
+        
             response = requests.post(url, data = request_data)
             if(response.status_code == requests.codes.ok):
                 json_object = json.loads(response.text)
@@ -192,9 +193,9 @@ class BasicCheck(object):
         LOG_INFO("========== check sync status")
         param = [self.group_id]
         method = "getSyncStatus"
-        id = 1
+        rpc_id = 1
         try:
-            request_data = constructRequestData(method, param, id)
+            request_data = constructRequestData(method, param, rpc_id)
             url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
             response = requests.post(url, data = request_data)
             if (response.status_code == requests.codes.ok):
@@ -202,7 +203,7 @@ class BasicCheck(object):
                 if("result" in json_object):
                     peers = json_object["result"]["peers"]
                     (ret, block_number_status) = self.check_diff(peers, "blockNumber", 0)
-                    if(ret == False):
+                    if(ret is False):
                         LOG_ERROR("check sync failed, blockNumber status:".join(block_number_status))
                     LOG_INFO("check sync succ") 
                 else:
