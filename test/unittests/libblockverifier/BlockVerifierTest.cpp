@@ -69,11 +69,11 @@ public:
             u256 gasPrice = 0;
             u256 gas = 10000000;
             Address dest = Address(0x5002);
-            string user = to_string(i);
+            string usr = to_string(i);
             u256 money = 1000000000;
             dev::eth::ContractABI abi;
             bytes data =
-                abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
+                abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction tx(value, gasPrice, gas, dest, data, nonce);
             tx.setBlockLimit(250);
@@ -90,13 +90,13 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
     {
-        Block userAddBlock;
-        userAddBlock.header().setNumber(_parentBlockInfo.number + 1);
-        userAddBlock.header().setParentHash(_parentBlockInfo.hash);
+        Block userAddReqBlock;
+        userAddReqBlock.header().setNumber(_parentBlockInfo.number + 1);
+        userAddReqBlock.header().setParentHash(_parentBlockInfo.hash);
 
-        genTxUserAddBlock(userAddBlock, _userNum);
-        auto exeCtx = _blockVerifier->executeBlock(userAddBlock, _parentBlockInfo);
-        _blockChain->commitBlock(userAddBlock, exeCtx);
+        genTxUserAddBlock(userAddReqBlock, _userNum);
+        auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
+        _blockChain->commitBlock(userAddReqBlock, exeCtx);
     }
 
     void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
@@ -175,15 +175,15 @@ public:
 
         blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
 
-        auto height = blockChain->number();
-        auto parentBlock = blockChain->getBlockByNumber(height);
+        auto number = blockChain->number();
+        auto parentBlock = blockChain->getBlockByNumber(number);
         BlockInfo parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
             parentBlock->header().stateRoot()};
 
         std::cout << "Creating user..." << std::endl;
         initUser(_totalUser, parentBlockInfo, blockVerifier, blockChain);
 
-        parentBlock = blockChain->getBlockByNumber(height + 1);
+        parentBlock = blockChain->getBlockByNumber(number + 1);
         parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
             parentBlock->header().stateRoot()};
 
