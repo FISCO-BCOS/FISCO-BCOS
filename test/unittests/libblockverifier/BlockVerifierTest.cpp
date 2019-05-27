@@ -102,7 +102,6 @@ public:
     void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
     {
         Transactions txs;
-        srand(utcTime());
         for (size_t i = 0; i < _txNum; i++)
         {
             u256 value = 0;
@@ -143,8 +142,6 @@ public:
     h256 const& executeVerifier(
         int _totalUser, int _totalTxs, const string& _storageType, bool _enablePara)
     {
-        srand(utcTime());
-
         boost::property_tree::ptree pt;
 
         std::shared_ptr<LedgerParamInterface> params = std::make_shared<LedgerParam>();
@@ -152,7 +149,7 @@ public:
         /// init the basic config
         /// set storage db related param
         params->mutableStorageParam().type = _storageType;
-        params->mutableStorageParam().path = _storageType + "_fakestate_" + to_string(rand());
+        params->mutableStorageParam().path = _storageType + "_fakestate_" + to_string(utcTime());
         /// set state db related param
         params->mutableStateParam().type = "storage";
 
