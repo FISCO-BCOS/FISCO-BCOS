@@ -40,7 +40,6 @@ using namespace dev::precompiled;
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
-    tbb::spin_mutex::scoped_lock lock(m_mutex);
     return selectNoLock(key, condition);
 }
 
@@ -125,8 +124,6 @@ int MemoryTable2::update(
 {
     try
     {
-        tbb::spin_mutex::scoped_lock lock(m_mutex);
-
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
@@ -184,8 +181,6 @@ int MemoryTable2::insert(
 {
     try
     {
-        tbb::spin_mutex::scoped_lock lock(m_mutex);
-
         (void)needSelect;
 
         if (options->check && !checkAuthority(options->origin))
@@ -232,8 +227,6 @@ int MemoryTable2::remove(
 {
     try
     {
-        tbb::spin_mutex::scoped_lock lock(m_mutex);
-
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
@@ -288,6 +281,7 @@ dev::h256 MemoryTable2::hash()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
+    TIME_RECORD("Start dump");
     if (m_isDirty)
     {
         m_tableData = std::make_shared<dev::storage::TableData>();
@@ -327,7 +321,9 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 }
             });
 
+        TIME_RECORD("Sort data");
         tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
+        TIME_RECORD("Submmit data");
         bytes allData;
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {

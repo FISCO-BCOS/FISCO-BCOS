@@ -177,7 +177,7 @@ std::string SQLBasicAccess::BuildCreateTableSql(
     ss << " `_hash_` varchar(128) not null,\n";
     ss << " `_num_` int not null,\n";
     ss << " `_status_` int not null,\n";
-    ss << "`" << keyfield << "` varchar(128) default '',\n";
+    ss << "`" << keyfield << "` varchar(255) default '',\n";
 
     SQLBasicAccess_LOG(DEBUG) << "valuefield:" << valuefield;
     std::vector<std::string> vecSplit;
