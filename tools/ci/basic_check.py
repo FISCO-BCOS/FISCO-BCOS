@@ -6,12 +6,28 @@ import requests
 import time
 import json
 
-def constructRequestData(method, params, id):
+def constructRequestData(method, params, rpc_id):
     """
     construct data according to given param
     """
-    data =json.dumps({"jsonrpc":"2.0","method":method, "params":params, "id":id})
+    data =json.dumps({"jsonrpc":"2.0","method":method, "params":params, "id":rpc_id})
     return data
+
+def check_diff(status , key, max_diff, stopped_node=65535):
+    """
+    check diff
+    """
+    status_value = []
+    i = 0
+    for single_status in status:
+        if(stopped_node != i):
+            status_value.append(single_status[key])
+        i += 1
+    status_value.sort()
+    for single_status in status_value:
+        if (abs(single_status - status_value[0]) > max_diff):
+            return False, status_value
+    return True, status_value
 
 class BasicCheck(object):
     """
@@ -29,15 +45,15 @@ class BasicCheck(object):
     def build_localdb_blockchain(self):
         """
         build local db blockchain
-        """ 
+        """
         LOG_INFO("========== build_localdb_blockchain")
         command = "bash build_chain.sh -l "+ self.rpc_ip + ":" + str(self.node_num) + " -e ../build/bin/fisco-bcos -p " + str(self.p2p_port) + "," + str(self.channel_port) + "," + str(self.rpc_port) + " -v " + self.version
         (status, result) = execute_command(command)
-        LOG_INFO(result)
+        LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("=== start node:")
         command = "nohup bash nodes/" + self.rpc_ip + "/start_all.sh > result.log"
         (status, result) = execute_command(command)
-        LOG_INFO(result)
+        LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("========= build_localdb_blockchain succ")
     
     def stop_all_nodes(self):
@@ -46,7 +62,7 @@ class BasicCheck(object):
         """
         command = "bash nodes/" + self.rpc_ip + "/stop_all.sh"
         status, ret = execute_command(command)
-        LOG_INFO(ret)
+        LOG_INFO("status = " + str(status) + ", result = " + ret)
         time.sleep(1)
     
     def stop_a_node(self, node_id):
@@ -56,7 +72,7 @@ class BasicCheck(object):
         LOG_INFO("========= stop node" + str(node_id))
         command = "bash nodes/" + self.rpc_ip + "/node" + str(node_id) + "/stop.sh"
         status, ret = execute_command(command)
-        LOG_INFO(ret)
+        LOG_INFO("status = " + str(status) + ", result = " + ret)
         time.sleep(1)
     
     def start_a_node(self, node_id):
@@ -66,7 +82,7 @@ class BasicCheck(object):
         LOG_INFO("========= start node" + str(node_id))
         command = "nohup bash nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh > result.log"
         status, ret = execute_command(command)
-        LOG_INFO(ret)
+        LOG_INFO("status = " + str(status) + ", result = " + ret)
         time.sleep(1)
 
     def stop_and_delete_data(self, node_id):
@@ -79,7 +95,6 @@ class BasicCheck(object):
         execute_command(command)
         time.sleep(1)
 
-
     def send_transaction(self, trans_num):
         """
         send transaction
@@ -87,32 +102,17 @@ class BasicCheck(object):
         LOG_INFO("========== send " + str(trans_num) + " transactions:")
         command = "bash nodes/" + self.rpc_ip + "/.transTest.sh " + str(trans_num) + " | grep \"jsonrpc\" | grep \"result\" | wc -l"
         (status, result) = execute_command(command)
-        LOG_INFO("result = " + result)
+        LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("========== send " + str(trans_num) + " ok")
-    
 
-    def check_all(self, node_id = 0):
+    def check_all(self, node_id = 0, stopped_node = 65535):
         """
         check consensus and sync
         """
-        self.check_consensus(node_id)
-        self.check_sync(node_id)
+        self.check_consensus(node_id, stopped_node)
+        self.check_sync(node_id, stopped_node)
 
-    def check_diff(self, status , key, max_diff):
-        """
-        check diff 
-        """
-        status_value = []
-        for single_status in status:
-            status_value.append(single_status[key])
-        status_value.sort()
-        for single_status in status_value:
-            if (abs(single_status - status_value[0]) > max_diff):
-                return False, status_value
-        return True, status_value
-
-
-    def check_consensus(self, node_id = 0):
+    def check_consensus(self, node_id = 0, stopped_node = 65535):
         """
         callback getConsensusStatus to check status
         """
@@ -128,10 +128,10 @@ class BasicCheck(object):
                 json_object = json.loads(response.text)
                 if("result" in json_object):
                     view_status = json_object["result"][1]
-                    (ret, view_status) = self.check_diff(view_status, "view", self.node_num + 1)
+                    (ret, view_status) = check_diff(view_status, "view", 2*self.node_num + 1, stopped_node)
                     if(ret is False):
                         LOG_ERROR("check consensus failed, current views:" + str(view_status))
-                    LOG_INFO("check consensus succ") 
+                    LOG_INFO("check consensus succ")
                 else:
                     LOG_ERROR("unexpected return value of getConsensusStatus:" + response.text)
             else:
@@ -149,7 +149,6 @@ class BasicCheck(object):
         try:
             request_data = constructRequestData(method, param, rpc_id)
             url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
-        
             response = requests.post(url, data = request_data)
             if(response.status_code == requests.codes.ok):
                 json_object = json.loads(response.text)
@@ -186,7 +185,7 @@ class BasicCheck(object):
             LOG_INFO("check sendTransactions from node" + str(node_id) + " succ!")
 
 
-    def check_sync(self, node_id = 0):
+    def check_sync(self, node_id = 0, stopped_node=65535):
         """
         callback getSyncStatus to check status
         """
@@ -202,10 +201,10 @@ class BasicCheck(object):
                 json_object = json.loads(response.text)
                 if("result" in json_object):
                     peers = json_object["result"]["peers"]
-                    (ret, block_number_status) = self.check_diff(peers, "blockNumber", 0)
+                    (ret, block_number_status) = check_diff(peers, "blockNumber", 0, stopped_node)
                     if(ret is False):
                         LOG_ERROR("check sync failed, blockNumber status:".join(block_number_status))
-                    LOG_INFO("check sync succ") 
+                    LOG_INFO("check sync succ")
                 else:
                     LOG_ERROR("unmatch return value of getSyncStatus")
             else:

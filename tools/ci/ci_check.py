@@ -3,7 +3,6 @@
 import sys
 import time
 import basic_check
-import getopt
 
 class Usage(Exception):
     def __init__(self, msg):
@@ -15,6 +14,7 @@ def check_basic_status(basic_check_object):
     """
     for i in range(basic_check_object.node_num):
         basic_check_object.check_sendTransaction(i, 10)
+        time.sleep(2)
         basic_check_object.check_all(i)
 
 def check_status_except(basic_check_object, node_id):
@@ -24,7 +24,8 @@ def check_status_except(basic_check_object, node_id):
     for i in range(basic_check_object.node_num):
         if(i == node_id):
             continue
-        basic_check_object.check_all(i)
+        basic_check_object.check_all(i, node_id)
+        break
 
 def check_sync(basic_check_object, wait_time):
     """
@@ -35,19 +36,19 @@ def check_sync(basic_check_object, wait_time):
         check_status_except(basic_check_object, i)
         time.sleep(wait_time)
         basic_check_object.start_a_node(i)
-        time.sleep(10)
-        basic_check_object.check_all(i)
-
+        time.sleep(30)
+        basic_check_object.check_sync(i)
+        time.sleep(30)
+        basic_check_object.check_consensus(i)
 
 def main(argv=None):
     """
     check basic
     """
     basic_check_object = basic_check.BasicCheck()
-    #basic_check_object.build_localdb_blockchain()    
     check_basic_status(basic_check_object)
+    time.sleep(10)
     check_sync(basic_check_object, 1)
-    #basic_check_object.stop_all_nodes()
 
 if __name__ == "__main__":
     main(sys.argv)
