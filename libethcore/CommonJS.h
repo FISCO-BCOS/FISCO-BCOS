@@ -51,11 +51,6 @@ inline Address jsToAddress(std::string const& _s)
     return eth::toAddress(_s);
 }
 
-}  // namespace dev
-
-// ethcore
-namespace dev
-{
 namespace eth
 {
 /// Convert to a block number, a bit like jsToInt, except that it correctly recognises "pending" and
