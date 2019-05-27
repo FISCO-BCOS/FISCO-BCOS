@@ -21,7 +21,7 @@
 
 #include "CommonIO.h"
 #include "Exceptions.h"
-#include <libdevcore/FileSystem.h>
+#include "FileSystem.h"
 #include <stdio.h>
 #include <termios.h>
 #include <boost/filesystem.hpp>

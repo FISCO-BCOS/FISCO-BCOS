@@ -20,6 +20,7 @@
  */
 
 #include "TransactionReceipt.h"
+#include "Exceptions.h"
 
 using namespace std;
 using namespace dev;
