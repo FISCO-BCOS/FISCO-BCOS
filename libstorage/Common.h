@@ -55,6 +55,8 @@ const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 
 const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
+const int CODE_TABLE_NAME_LENGTH_OVERFLOW = -50002;
+const int CODE_TABLE_FILED_LENGTH_OVERFLOW = -50003;
 
 
 inline bool isHashField(const std::string& _key)

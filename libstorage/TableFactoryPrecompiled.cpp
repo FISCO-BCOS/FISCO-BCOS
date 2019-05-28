@@ -31,6 +31,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/throw_exception.hpp>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -49,6 +50,26 @@ TableFactoryPrecompiled::TableFactoryPrecompiled()
 std::string TableFactoryPrecompiled::toString()
 {
     return "TableFactory";
+}
+
+// same as libprecompiled/Common.cpp getErrorCodeOut
+void getErrorCodeOut(bytes& out, int const& result)
+{
+    dev::eth::ContractABI abi;
+    if (result > 0 && result < 128)
+    {
+        out = abi.abiIn("", u256(result));
+        return;
+    }
+    out = abi.abiIn("", s256(result));
+    if (g_BCOSConfig.version() < RC2_VERSION)
+    {
+        out = abi.abiIn("", -result);
+    }
+    else if (g_BCOSConfig.version() == RC2_VERSION)
+    {
+        out = abi.abiIn("", u256(-result));
+    }
 }
 
 bytes TableFactoryPrecompiled::call(
@@ -95,10 +116,21 @@ bytes TableFactoryPrecompiled::call(
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
         for (auto& str : fieldNameList)
+        {
             boost::trim(str);
+            if (str.size() > 64)
+            {  // mysql TableName and fieldName length limit is 64
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_FILED_LENGTH_OVERFLOW, "table field name length overflow 64"));
+            }
+        }
         valueFiled = boost::join(fieldNameList, ",");
         tableName = storage::USER_TABLE_PREFIX + tableName;
-
+        if (tableName.size() > 64)
+        {  // mysql TableName and fieldName length limit is 64
+            BOOST_THROW_EXCEPTION(
+                StorageException(CODE_TABLE_NAME_LENGTH_OVERFLOW, "tableName length overflow 64"));
+        }
         int result = 0;
 
         if (g_BCOSConfig.version() < RC2_VERSION)
@@ -124,23 +156,7 @@ bytes TableFactoryPrecompiled::call(
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
         }
-
-        if (result == 1)
-        {  // RC1 success result is 1
-            out = abi.abiIn("", s256(result));
-        }
-        else if (g_BCOSConfig.version() < RC2_VERSION)
-        {
-            out = abi.abiIn("", -result);
-        }
-        else if (g_BCOSConfig.version() == RC2_VERSION)
-        {
-            out = abi.abiIn("", s256(-result));
-        }
-        else
-        {
-            out = abi.abiIn("", s256(result));
-        }
+        getErrorCodeOut(out, result);
     }
     else
     {
