@@ -244,12 +244,14 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _ms
                               << LOG_DESC("store backupMsg to leveldb failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
     catch (std::exception const& e)
     {
         PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
 }
 
@@ -457,7 +459,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID().abridged());
+                              << LOG_KV("toNode", session.nodeID().abridged());
         nodeIdList.push_back(session.nodeID());
         broadcastMark(session.nodeID(), packetType, key);
     }

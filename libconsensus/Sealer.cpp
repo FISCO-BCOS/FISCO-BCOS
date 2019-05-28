@@ -29,6 +29,7 @@
 #include "Sealer.h"
 #include <libethcore/LogEntry.h>
 #include <libsync/SyncStatus.h>
+using namespace std;
 using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::eth;
@@ -73,7 +74,7 @@ void Sealer::reportNewBlock()
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
     {
-        std::shared_ptr<dev::eth::Block> p_block =
+        shared_ptr<dev::eth::Block> p_block =
             m_blockChain->getBlockByNumber(m_blockChain->number());
         if (!p_block)
         {
@@ -126,8 +127,8 @@ void Sealer::doWork(bool wait)
             if (!checkTxsEnough(maxTxsPerBlock))
             {
                 ///< 10 milliseconds to next loop
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                unique_lock<mutex> l(x_signalled);
+                m_signalled.wait_for(l, chrono::milliseconds(1));
                 return;
             }
             if (shouldHandleBlock())
@@ -136,8 +137,8 @@ void Sealer::doWork(bool wait)
     }
     if (shouldWait(wait))
     {
-        std::unique_lock<std::mutex> l(x_blocksignalled);
-        m_blockSignalled.wait_for(l, std::chrono::milliseconds(10));
+        unique_lock<mutex> l(x_blocksignalled);
+        m_blockSignalled.wait_for(l, chrono::milliseconds(10));
     }
 }
 
@@ -207,6 +208,7 @@ void Sealer::resetBlock(std::shared_ptr<Block> block, bool resetNextLeader)
             SEAL_LOG(FATAL) << LOG_DESC("exit because can't get highest block")
                             << LOG_KV("number", m_blockChain->number());
             raise(SIGTERM);
+            BOOST_THROW_EXCEPTION(invalid_argument("sealer can't get highest block."));
         }
         block->resetCurrentBlock(highestBlock->blockHeader());
     }

@@ -92,7 +92,6 @@ public:
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    tbb::spin_mutex m_mutex;
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
 
@@ -140,16 +139,6 @@ private:
         }
 
         return indexes;
-    }
-
-    bool isHashField(const std::string& _key)
-    {
-        if (!_key.empty())
-        {
-            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                    (_key == STATUS));
-        }
-        return false;
     }
 
     void checkField(Entry::Ptr entry)
