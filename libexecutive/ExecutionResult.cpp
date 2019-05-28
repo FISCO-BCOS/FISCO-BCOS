@@ -55,6 +55,9 @@ TransactionException dev::executive::toTransactionException(Exception const& _e)
         return TransactionException::BlockGasLimitReached;
     if (!!dynamic_cast<AddressAlreadyUsed const*>(&_e))
         return TransactionException::AddressAlreadyUsed;
+    if (!!dynamic_cast<PrecompiledError const*>(&_e))
+        return TransactionException::PrecompiledError;
+
     // VM execution exceptions
     if (!!dynamic_cast<BadInstruction const*>(&_e))
         return TransactionException::BadInstruction;
@@ -66,6 +69,7 @@ TransactionException dev::executive::toTransactionException(Exception const& _e)
         return TransactionException::OutOfStack;
     if (!!dynamic_cast<StackUnderflow const*>(&_e))
         return TransactionException::StackUnderflow;
+
     return TransactionException::Unknown;
 }
 
