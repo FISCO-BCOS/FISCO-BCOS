@@ -226,7 +226,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         catch (std::exception& e)
         {
             revert();
-            m_excepted = TransactionException::Unknown;
+            m_excepted = TransactionException::PrecompiledError;
         }
     }
     else if (m_s->addressHasCode(_p.codeAddress))
