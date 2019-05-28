@@ -23,6 +23,7 @@
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/StorageException.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -214,6 +215,13 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
             size_t outputSize = result.size();
             m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+        }
+        catch (dev::storage::StorageException& e)
+        {
+            revert();
+            LOG(ERROR) << "Precompiled contract StorageException"
+                       << LOG_KV("address", _p.codeAddress) << LOG_KV("errorCode", e.errorCode());
+            m_excepted = TransactionException::PrecompiledError;
         }
         catch (dev::Exception& e)
         {
