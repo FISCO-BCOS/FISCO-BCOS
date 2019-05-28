@@ -243,12 +243,14 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
                               << LOG_DESC("store backupMsg to leveldb failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
     catch (std::exception const& e)
     {
         PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
 }
 
