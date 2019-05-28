@@ -153,6 +153,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     dbInitializer->initStorageDB();
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(dbInitializer->storage());
+    blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
         "stateType", 5000, 300000000, 0};

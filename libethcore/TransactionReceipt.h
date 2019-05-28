@@ -27,7 +27,6 @@
 #include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
 #include <libethcore/LogEntry.h>
-#include <libevm/ExtVMFace.h>
 #include <array>
 
 namespace dev
