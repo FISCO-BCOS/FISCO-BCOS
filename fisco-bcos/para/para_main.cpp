@@ -22,9 +22,9 @@
  */
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/BlockFactory.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
@@ -49,7 +49,7 @@ static shared_ptr<Secret> sec;
 class FakeBlockVerifierForPara : public BlockVerifier
 {
 public:
-    FakeBlockVerfierForPara(bool _enableParallel = false) : BlockVerfier(_enableParallel) {}
+    FakeBlockVerifierForPara(bool _enableParallel = false) : BlockVerifier(_enableParallel) {}
 
     ExecutiveContext::Ptr serialExecuteBlock(
         dev::eth::Block::Ptr block, BlockInfo const& parentBlockInfo)
@@ -97,8 +97,8 @@ void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
     std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
 {
-    BlockFactory blockFactory = std::make_shared<BlockFactory>();
-    Block::Ptr userAddBlock = blockFactory.newBlock();
+    std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+    Block::Ptr userAddBlock = blockFactory->newBlock();
     userAddBlock->header().setNumber(_parentBlockInfo.number + 1);
     userAddBlock->header().setParentHash(_parentBlockInfo.hash);
 
@@ -183,7 +183,8 @@ static void startExecute(int _totalUser, int _totalTxs)
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initState(genesisHash);
 
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<FakeBlockVerifierForPara>(true);
+    std::shared_ptr<FakeBlockVerifierForPara> blockVerifier =
+        std::make_shared<FakeBlockVerifierForPara>(true);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> _blockChain =
@@ -202,17 +203,18 @@ static void startExecute(int _totalUser, int _totalTxs)
     parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
         parentBlock->header().stateRoot()};
 
-    Block block;
-    genTxUserTransfer(block, _totalUser, _totalTxs);
+    std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+    Block::Ptr pblock = blockFactory->newBlock();
+    genTxUserTransfer(*pblock, _totalUser, _totalTxs);
     // while (true)
     // getchar();
     for (int i = 0; i < 10; i++)
     {
-        blockVerifier->serialExecuteBlock(block, parentBlockInfo);
+        blockVerifier->serialExecuteBlock(pblock, parentBlockInfo);
     }
     for (int i = 0; i < 10; i++)
     {
-        blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
+        blockVerifier->parallelExecuteBlock(pblock, parentBlockInfo);
     }
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);

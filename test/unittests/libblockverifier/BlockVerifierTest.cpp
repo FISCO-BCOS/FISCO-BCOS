@@ -90,11 +90,13 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
     {
-        Block userAddReqBlock;
-        userAddReqBlock.header().setNumber(_parentBlockInfo.number + 1);
-        userAddReqBlock.header().setParentHash(_parentBlockInfo.hash);
+        std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+        Block::Ptr userAddReqBlock = blockFactory->newBlock();
 
-        genTxUserAddBlock(userAddReqBlock, _userNum);
+        userAddReqBlock->header().setNumber(_parentBlockInfo.number + 1);
+        userAddReqBlock->header().setParentHash(_parentBlockInfo.hash);
+
+        genTxUserAddBlock(*userAddReqBlock, _userNum);
         auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
         _blockChain->commitBlock(userAddReqBlock, exeCtx);
     }
@@ -156,6 +158,9 @@ public:
         auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
         dbInitializer->initStorageDB();
         std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+        std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+        blockChain->setBlockFactory(blockFactory);
+
         blockChain->setStateStorage(dbInitializer->storage());
         blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
@@ -172,6 +177,7 @@ public:
         blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
         std::shared_ptr<BlockChainImp> _blockChain =
             std::dynamic_pointer_cast<BlockChainImp>(blockChain);
+        blockChain->setBlockFactory(blockFactory);
 
         blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
 
@@ -187,12 +193,12 @@ public:
         parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
             parentBlock->header().stateRoot()};
 
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        block.calTransactionRoot();
-        blockVerifier->executeBlock(block, parentBlockInfo);
+        Block::Ptr pblock = blockFactory->newBlock();
+        genTxUserTransfer(*pblock, _totalUser, _totalTxs);
+        pblock->calTransactionRoot();
+        blockVerifier->executeBlock(pblock, parentBlockInfo);
 
-        return block.header().stateRoot();
+        return pblock->header().stateRoot();
     }
 };
 
