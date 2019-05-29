@@ -211,7 +211,6 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     else if (m_envInfo.precompiledEngine() &&
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
     {
-        // LOG(DEBUG) << "Execute Precompiled: " << _p.codeAddress;
         try
         {
             auto result = m_envInfo.precompiledEngine()->call(_origin, _p.codeAddress, _p.data);
@@ -276,7 +275,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     auto table = memeryTableFactory->openTable(SYS_TABLES);
     if (!table->checkAuthority(_origin))
     {
-        LOG(WARNING) << "deploy contract checkAuthority of " << _origin.hex() << " failed!";
+        LOG(WARNING) << "Executive deploy contract checkAuthority of " << _origin.hex()
+                     << " failed!";
         m_gas = 0;
         m_excepted = TransactionException::PermissionDenied;
         revert();
@@ -299,7 +299,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         (m_s->addressHasCode(m_newAddress) || m_s->getNonce(m_newAddress) > 0);
     if (accountAlreadyExist)
     {
-        LOG(TRACE) << "Address already used: " << m_newAddress;
+        LOG(TRACE) << "Executive Address already used: " << m_newAddress;
         m_gas = 0;
         m_excepted = TransactionException::AddressAlreadyUsed;
         revert();

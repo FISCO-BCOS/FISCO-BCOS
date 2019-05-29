@@ -25,6 +25,7 @@
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 
 using namespace dev::executive;
@@ -50,6 +51,12 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
         }
+    }
+    catch (dev::storage::StorageException& e)
+    {
+        EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)
+                                    << LOG_KV("errorCode", e.errorCode());
+        throw dev::eth::PrecompiledError();
     }
     catch (std::exception& e)
     {
