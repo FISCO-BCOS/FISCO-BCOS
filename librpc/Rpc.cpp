@@ -997,9 +997,10 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         auto txPool = ledgerManager()->txPool(_groupID);
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
-        if (m_currentTransactionCallback.get())
+        auto currentTransactionCallback = m_currentTransactionCallback;
+        if (currentTransactionCallback)
         {
-            auto transactionCallback = *m_currentTransactionCallback;
+            auto transactionCallback = *currentTransactionCallback;
             tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
                 Json::Value response;
 

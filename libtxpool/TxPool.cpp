@@ -128,9 +128,9 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
-        if (_tx.rpcCallback())
+        auto callback = _tx.rpcCallback();
+        if (callback)
         {
-            auto callback = _tx.rpcCallback();
             dev::eth::LocalisedTransactionReceipt::Ptr receipt =
                 std::make_shared<dev::eth::LocalisedTransactionReceipt>(
                     ImportResult::TransactionPoolIsFull);
