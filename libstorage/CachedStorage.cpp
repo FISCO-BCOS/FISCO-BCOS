@@ -688,7 +688,7 @@ void CachedStorage::checkAndClear()
 
         if (m_syncNum > 0)
         {
-           if (m_capacity > m_maxCapacity && !m_mru->empty())
+            if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity
