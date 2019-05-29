@@ -21,6 +21,7 @@
  * @date: 2019-05-29
  */
 
+#include <libsync/Common.h>
 #include <libsync/RspBlockReq.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
@@ -53,14 +54,12 @@ BOOST_AUTO_TEST_CASE(PushAndTopTest)
     DownloadRequestQueue queue(NodeID(100));
     BOOST_CHECK(queue.empty());
 
-    queue.disablePush();
     queue.push(1, 3);
     queue.push(1, 4);
     queue.push(2, 1);
     queue.push(2, 4);
     queue.push(6, 2);
     queue.push(10, 2);
-    queue.enablePush();
 
     DownloadRequest top = queue.topAndPop();
     BOOST_CHECK_EQUAL(top.fromNumber, 1);
@@ -73,6 +72,37 @@ BOOST_AUTO_TEST_CASE(PushAndTopTest)
     BOOST_CHECK_EQUAL(top.size, 2);
 
     BOOST_CHECK(queue.empty());
+}
+
+BOOST_AUTO_TEST_CASE(disableTest)
+{
+    DownloadRequestQueue queue(NodeID(100));
+    BOOST_CHECK(queue.empty());
+
+    queue.disablePush();
+    queue.push(1, 3);
+    BOOST_CHECK(queue.empty());
+
+    queue.enablePush();
+    queue.push(1, 3);
+    BOOST_CHECK(!queue.empty());
+}
+
+BOOST_AUTO_TEST_CASE(fullTest)
+{
+    DownloadRequestQueue queue(NodeID(100));
+    BOOST_CHECK(queue.empty());
+
+    for (size_t i = 0; i < c_maxReceivedDownloadRequestPerPeer; i++)
+    {
+        queue.push(1, 3);
+    }
+    BOOST_CHECK(!queue.empty());
+
+    queue.push(100, 3);  // must not success
+    BOOST_CHECK(!queue.empty());
+    queue.topAndPop();
+    BOOST_CHECK(queue.empty());  // Only has (1, 3), no (100, 3)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
