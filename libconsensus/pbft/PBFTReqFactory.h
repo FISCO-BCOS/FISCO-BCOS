@@ -33,13 +33,18 @@ namespace consensus
 class PBFTReqFactoryInterface
 {
 public:
+    virtual ~PBFTReqFactoryInterface(){};
+    // create PBFTReqCache
     virtual std::shared_ptr<PBFTReqCache> buildPBFTReqCache() = 0;
+    // create PBFT cache for broadcasting
     virtual std::shared_ptr<PBFTBroadcastCache> buildPBFTBroadcastCache() = 0;
 };
 
+/// this is used for PBFT consensus algorithem
 class PBFTReqFactory : public PBFTReqFactoryInterface
 {
 public:
+    virtual ~PBFTReqFactory(){};
     std::shared_ptr<PBFTReqCache> buildPBFTReqCache() override
     {
         std::shared_ptr<PBFTReqCache> reqCache = std::make_shared<PBFTReqCache>();

@@ -144,7 +144,7 @@ public:
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
 
-    IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
+    virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const&) override {}
 
