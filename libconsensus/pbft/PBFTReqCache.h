@@ -362,7 +362,7 @@ private:
         cacheJsonArray.append(tmp_obj);
     }
 
-private:
+protected:
     /// cache for prepare request
     std::shared_ptr<PrepareReq> m_prepareCache = nullptr;
     /// cache for raw prepare request

@@ -25,6 +25,7 @@
 #include "Common.h"
 #include "PBFTMsgCache.h"
 #include "PBFTReqCache.h"
+#include "PBFTReqFactory.h"
 #include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libdevcore/FileSystem.h>
@@ -69,8 +70,6 @@ public:
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
-        m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-        m_reqCache = std::make_shared<PBFTReqCache>();
 
         /// set thread name for PBFTEngine
         std::string threadName = "PBFT-" + std::to_string(m_groupId);
@@ -78,6 +77,12 @@ public:
 
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
+        m_broadcastFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
+    }
+
+    void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
+    {
+        m_pbftReqFactory = pbftReqFactory;
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -148,9 +153,10 @@ public:
         return true;
     }
     void rehandleCommitedPrepareCache(std::shared_ptr<PrepareReq> req);
-    bool shouldSeal();
+    virtual bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(std::shared_ptr<dev::eth::Block> const& block);
+    virtual bool generatePrepare(std::shared_ptr<dev::eth::Block> const& block);
+
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -183,9 +189,9 @@ public:
 
     void setMaxTTL(uint8_t const& ttl) { maxTTL = ttl; }
 
-    inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
+    virtual IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
 
-    inline std::pair<bool, IDXTYPE> getLeader() const
+    virtual std::pair<bool, IDXTYPE> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256 || m_nodeNum == 0)
         {
@@ -214,9 +220,16 @@ protected:
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
     bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+        std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
+        std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction);
+
+    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<dev::network::NodeID> const& filter =
             std::unordered_set<dev::network::NodeID>(),
-        unsigned const& ttl = 0);
+        unsigned const& ttl = 0)
+    {
+        return broadcastMsg(packetType, key, data, filter, ttl, m_broadcastFilter);
+    }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
@@ -233,8 +246,12 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    bool handlePrepareMsg(
+
+    // handle prepare
+    virtual bool handlePrepareMsg(
         std::shared_ptr<PrepareReq> prepare_req, std::string const& endpoint = "self");
+
+
     /// handler prepare messages
     bool handlePrepareMsg(std::shared_ptr<PrepareReq> prepareReq, PBFTMsgPacket const& pbftMsg);
     /// 1. decode the network-received PBFTMsgPacket to signReq
@@ -242,12 +259,15 @@ protected:
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
     bool handleSignMsg(std::shared_ptr<SignReq> signReq, PBFTMsgPacket const& pbftMsg);
+
     bool handleCommitMsg(std::shared_ptr<CommitReq> commitReq, PBFTMsgPacket const& pbftMsg);
     bool handleViewChangeMsg(
         std::shared_ptr<ViewChangeReq>& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
+    std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
+
     void catchupView(std::shared_ptr<ViewChangeReq> req, std::ostringstream& oss);
-    void checkAndCommit();
+    virtual void checkAndCommit();
 
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
@@ -291,7 +311,7 @@ protected:
     /// @param nodeId: the node id of the sealer
     /// @return : 1. >0: the index of the sealer
     ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
+    virtual ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
         ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
@@ -576,7 +596,10 @@ protected:
     static const unsigned c_PopWaitSeconds = 5;
 
     std::shared_ptr<PBFTBroadcastCache> m_broadCastCache;
-    std::shared_ptr<PBFTReqCache> m_reqCache;
+    std::shared_ptr<PBFTReqCache> m_reqCache = nullptr;
+
+    std::shared_ptr<PBFTReqFactory> m_pbftReqFactory = nullptr;
+
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
     mutable Mutex m_mutex;
@@ -591,6 +614,8 @@ protected:
     std::function<void(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
         m_onCommitBlock = nullptr;
+
+    std::function<ssize_t(dev::network::NodeID const&)> m_broadcastFilter = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

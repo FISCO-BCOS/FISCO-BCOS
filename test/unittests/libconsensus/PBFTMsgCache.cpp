@@ -50,30 +50,33 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
     std::string key = dev::sign(key_pair.secret(), sha3("test")).hex();
     /// test insertKey && keyExist
     /// test PrepareReqPacket
-    checkKeyExist(broadCast_cache, PrepareReqPacket, key_pair, "test1");
-    checkKeyExist(broadCast_cache, PrepareReqPacket, key_pair, "test2");
-    checkKeyExist(broadCast_cache, PrepareReqPacket, key_pair, "test3");
+    checkKeyExist(broadCast_cache, PBFTPacketType::PrepareReqPacket, key_pair, "test1");
+    checkKeyExist(broadCast_cache, PBFTPacketType::PrepareReqPacket, key_pair, "test2");
+    checkKeyExist(broadCast_cache, PBFTPacketType::PrepareReqPacket, key_pair, "test3");
     /// test SignReqPacket
-    checkKeyExist(broadCast_cache, SignReqPacket, key_pair, "test1");
-    checkKeyExist(broadCast_cache, SignReqPacket, key_pair, "test2");
-    checkKeyExist(broadCast_cache, SignReqPacket, key_pair, "test3");
+    checkKeyExist(broadCast_cache, PBFTPacketType::SignReqPacket, key_pair, "test1");
+    checkKeyExist(broadCast_cache, PBFTPacketType::SignReqPacket, key_pair, "test2");
+    checkKeyExist(broadCast_cache, PBFTPacketType::SignReqPacket, key_pair, "test3");
     /// test CommitReqPacket
-    checkKeyExist(broadCast_cache, CommitReqPacket, key_pair, "test1");
-    checkKeyExist(broadCast_cache, CommitReqPacket, key_pair, "test2");
-    checkKeyExist(broadCast_cache, CommitReqPacket, key_pair, "test3");
+    checkKeyExist(broadCast_cache, PBFTPacketType::CommitReqPacket, key_pair, "test1");
+    checkKeyExist(broadCast_cache, PBFTPacketType::CommitReqPacket, key_pair, "test2");
+    checkKeyExist(broadCast_cache, PBFTPacketType::CommitReqPacket, key_pair, "test3");
     /// test ViewChangeReqPacket
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test1");
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2");
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3");
+    checkKeyExist(broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test1");
+    checkKeyExist(broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test2");
+    checkKeyExist(broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test3");
     /// test other packet
     checkKeyExist(broadCast_cache, 100, key_pair, "test1", true, false);
     checkKeyExist(broadCast_cache, 100, key_pair, "test2", true, false);
     checkKeyExist(broadCast_cache, 1000, key_pair, "test3", true, false);
     /// clearAll
     broadCast_cache.clearAll();
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test1", false, false);
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2", false, false);
-    checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3", false, false);
+    checkKeyExist(
+        broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test1", false, false);
+    checkKeyExist(
+        broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test2", false, false);
+    checkKeyExist(
+        broadCast_cache, PBFTPacketType::ViewChangeReqPacket, key_pair, "test3", false, false);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -193,7 +193,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
     bytes prepare_data;
     prepare_req.encode(prepare_data);
     PBFTMsgPacket packet;
-    packet.packet_id = PrepareReqPacket;
+    packet.packet_id = PBFTPacketType::PrepareReqPacket;
     packet.ttl = 10;
     packet.data = prepare_data;
     /// test encode and decode

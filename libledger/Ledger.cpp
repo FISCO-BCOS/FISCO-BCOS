@@ -543,6 +543,8 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
+    std::shared_ptr<PBFTReqFactory> pbftReqFactory = std::make_shared<PBFTReqFactory>();
+    pbftEngine->setPBFTReqFactory(pbftReqFactory);
     return pbftSealer;
 }
 

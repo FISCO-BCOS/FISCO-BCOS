@@ -43,6 +43,9 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 
 void PBFTEngine::start()
 {
+    assert(m_pbftReqFactory);
+    m_broadCastCache = m_pbftReqFactory->buildPBFTBroadcastCache();
+    m_reqCache = m_pbftReqFactory->buildPBFTReqCache();
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
@@ -109,7 +112,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(std::shared_ptr<PrepareReq> req)
     bytes prepare_data;
     prepare_req->encode(prepare_data);
     /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
+    broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
     handlePrepareMsg(prepare_req);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
@@ -272,7 +275,8 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
     prepare_req->encode(prepare_data);
 
     /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
+    bool succ =
+        broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
     if (succ)
     {
         if (prepare_req->pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
@@ -303,7 +307,8 @@ bool PBFTEngine::broadcastSignReq(std::shared_ptr<PrepareReq> req)
     std::shared_ptr<SignReq> sign_req = std::make_shared<SignReq>(*req, m_keyPair, nodeIdx());
     bytes sign_req_data;
     sign_req->encode(sign_req_data);
-    bool succ = broadcastMsg(SignReqPacket, sign_req->uniqueKey(), ref(sign_req_data));
+    bool succ =
+        broadcastMsg(PBFTPacketType::SignReqPacket, sign_req->uniqueKey(), ref(sign_req_data));
     m_reqCache->addSignReq(sign_req);
     return succ;
 }
@@ -342,7 +347,8 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     std::shared_ptr<CommitReq> commit_req = std::make_shared<CommitReq>(req, m_keyPair, nodeIdx());
     bytes commit_req_data;
     commit_req->encode(commit_req_data);
-    bool succ = broadcastMsg(CommitReqPacket, commit_req->uniqueKey(), ref(commit_req_data));
+    bool succ = broadcastMsg(
+        PBFTPacketType::CommitReqPacket, commit_req->uniqueKey(), ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -364,7 +370,7 @@ void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 
     bytes view_change_data;
     req.encode(view_change_data);
-    sendMsg(nodeId, ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+    sendMsg(nodeId, PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
 bool PBFTEngine::broadcastViewChangeReq()
@@ -389,7 +395,8 @@ bool PBFTEngine::broadcastViewChangeReq()
 
     bytes view_change_data;
     req.encode(view_change_data);
-    return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+    return broadcastMsg(
+        PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
 }
 
 /// set default ttl to 1 to in case of forward-broadcast
@@ -440,8 +447,10 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
  * @param data: the encoded data of to be broadcasted(RLP encoder now)
  * @param filter: the list that shouldn't be broadcasted to
  */
+/*std::function<std::string ()> const &f*/
 bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
-    bytesConstRef data, std::unordered_set<h512> const& filter, unsigned const& ttl)
+    bytesConstRef data, std::unordered_set<h512> const& filter, unsigned const& ttl,
+    std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -449,7 +458,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
-        if (getIndexBySealer(session.nodeID()) < 0)
+        if (filterFunction(session.nodeID()) < 0)
             continue;
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID()))
@@ -767,7 +776,7 @@ void PBFTEngine::onRecvPBFTMessage(
     {
         return;
     }
-    if (pbft_msg->packet_id <= ViewChangeReqPacket)
+    if (pbft_msg->packet_id <= PBFTPacketType::ViewChangeReqPacket)
     {
         m_msgQueue.push(*pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
@@ -1435,44 +1444,42 @@ void PBFTEngine::checkTimeout()
         m_onViewChange();
 }
 
-void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
+std::shared_ptr<PBFTMsg> PBFTEngine::handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg)
 {
-    Guard l(m_mutex);
-    std::shared_ptr<PBFTMsg> pbft_msg = nullptr;
-    std::string key;
+    std::shared_ptr<PBFTMsg> pbft_packet = std::make_shared<PBFTMsg>();
     bool succ = false;
     switch (pbftMsg.packet_id)
     {
-    case PrepareReqPacket:
+    case PBFTPacketType::PrepareReqPacket:
     {
         std::shared_ptr<PrepareReq> prepare_req = std::make_shared<PrepareReq>();
         succ = handlePrepareMsg(prepare_req, pbftMsg);
         key = prepare_req->uniqueKey();
-        pbft_msg = prepare_req;
+        pbft_packet = prepare_req;
         break;
     }
-    case SignReqPacket:
+    case PBFTPacketType::SignReqPacket:
     {
         std::shared_ptr<SignReq> req = std::make_shared<SignReq>();
         succ = handleSignMsg(req, pbftMsg);
         key = req->uniqueKey();
-        pbft_msg = req;
+        pbft_packet = req;
         break;
     }
-    case CommitReqPacket:
+    case PBFTPacketType::CommitReqPacket:
     {
         std::shared_ptr<CommitReq> req = std::make_shared<CommitReq>();
         succ = handleCommitMsg(req, pbftMsg);
         key = req->uniqueKey();
-        pbft_msg = req;
+        pbft_packet = req;
         break;
     }
-    case ViewChangeReqPacket:
+    case PBFTPacketType::ViewChangeReqPacket:
     {
         std::shared_ptr<ViewChangeReq> req = std::make_shared<ViewChangeReq>();
         succ = handleViewChangeMsg(req, pbftMsg);
         key = req->uniqueKey();
-        pbft_msg = req;
+        pbft_packet = req;
         break;
     }
     default:
@@ -1480,21 +1487,32 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleMsg:  Err pbft message")
                               << LOG_KV("from", pbftMsg.node_idx) << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
-        return;
+        return nullptr;
     }
     }
-    if (!pbft_msg)
+    if (!succ)
+    {
+        return nullptr;
+    }
+    return pbft_packet;
+}
+
+void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
+{
+    Guard l(m_mutex);
+    std::string key = "";
+    std::shared_ptr<PBFTMsg> pbft_msg = handleMsg(key, pbftMsg);
+    if (pbft_msg == nullptr)
     {
         return;
     }
-
-    if (pbftMsg.ttl == 1)
+    if (pbftMsg.ttl <= 1)
     {
         return;
     }
     bool height_flag = (pbft_msg->height > m_highestBlock.number()) ||
                        (m_highestBlock.number() - pbft_msg->height < 10);
-    if (succ && key.size() > 0 && height_flag)
+    if (key.size() > 0 && height_flag)
     {
         std::unordered_set<h512> filter;
         filter.insert(pbftMsg.node_id);

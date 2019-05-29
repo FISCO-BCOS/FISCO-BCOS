@@ -82,33 +82,40 @@ BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
     std::shared_ptr<FakeSession> session = FakeSessionFunc(key_pair.pub());
     ///------ test invalid case(recv message from own-node)
     /// check onreceive prepare request
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, prepare_req, PrepareReqPacket, false);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session, prepare_req, PBFTPacketType::PrepareReqPacket, false);
     /// check onreceive sign request
     std::shared_ptr<SignReq> sign_req =
         std::make_shared<SignReq>(*prepare_req, key_pair, prepare_req->idx + 100);
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, sign_req, SignReqPacket, false);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session, sign_req, PBFTPacketType::SignReqPacket, false);
     /// check onReceive commit request
     std::shared_ptr<CommitReq> commit_req =
         std::make_shared<CommitReq>(*prepare_req, key_pair, prepare_req->idx + 10);
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session, commit_req, CommitReqPacket, false);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session, commit_req, PBFTPacketType::CommitReqPacket, false);
     /// test viewchange case
     std::shared_ptr<ViewChangeReq> viewChange_req = std::make_shared<ViewChangeReq>(key_pair,
         prepare_req->height, prepare_req->view, prepare_req->idx, prepare_req->block_hash);
     CheckOnRecvPBFTMessage(
-        fake_pbft.consensus(), session, viewChange_req, ViewChangeReqPacket, false);
+        fake_pbft.consensus(), session, viewChange_req, PBFTPacketType::ViewChangeReqPacket, false);
 
     KeyPair key_pair2 = KeyPair::create();
     std::shared_ptr<FakeSession> session2 = FakeSessionFunc(fake_pbft.m_sealerList[0]);
     /// test invalid case: this node is not sealer
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, false);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, prepare_req, PBFTPacketType::PrepareReqPacket, false);
     ///----- test valid case
     /// test recv packet from other nodes
     FakePBFTSealer(fake_pbft);  // set this node to be sealer
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, prepare_req, PrepareReqPacket, true);
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, sign_req, SignReqPacket, true);
-    CheckOnRecvPBFTMessage(fake_pbft.consensus(), session2, commit_req, CommitReqPacket, true);
     CheckOnRecvPBFTMessage(
-        fake_pbft.consensus(), session2, viewChange_req, ViewChangeReqPacket, true);
+        fake_pbft.consensus(), session2, prepare_req, PBFTPacketType::PrepareReqPacket, true);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, sign_req, PBFTPacketType::SignReqPacket, true);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, commit_req, PBFTPacketType::CommitReqPacket, true);
+    CheckOnRecvPBFTMessage(
+        fake_pbft.consensus(), session2, viewChange_req, PBFTPacketType::ViewChangeReqPacket, true);
 }
 /// test broadcastMsg
 BOOST_AUTO_TEST_CASE(testBroadcastMsg)
@@ -126,11 +133,12 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     bytes data;
     prepare_req->encode(data);
     /// case1: all peer is not the sealer, stop broadcasting
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
+    fake_pbft.consensus()->broadcastMsg(
+        PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == false);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer2_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -138,12 +146,13 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsg(
+        PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
 
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == false);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer2_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 0);
 
@@ -151,12 +160,13 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer2_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer2_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsg(PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsg(
+        PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(data));
 
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer2_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer2_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
     compareAsyncSendTime(fake_pbft, peer2_keyPair.pub(), 1);
 
@@ -170,10 +180,10 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     std::unordered_set<h512> filter;
     filter.insert(peer3_keyPair.pub());
     fake_pbft.consensus()->broadcastMsg(
-        PrepareReqPacket, prepare_req->uniqueKey(), ref(data), filter);
+        PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(data), filter);
 
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer3_keyPair.pub(), PrepareReqPacket, prepare_req->uniqueKey()) == true);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer3_keyPair.pub(),
+                    PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer3_keyPair.pub(), 0);
 }
 
@@ -183,10 +193,10 @@ BOOST_AUTO_TEST_CASE(testBroadcastSignAndCommitReq)
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     /// check broadcastSignReq
     SignReq sign_req;
-    checkBroadcastSpecifiedMsg(fake_pbft, sign_req, SignReqPacket);
+    checkBroadcastSpecifiedMsg(fake_pbft, sign_req, PBFTPacketType::SignReqPacket);
     /// check broadcastCommitReq
     CommitReq commit_req;
-    checkBroadcastSpecifiedMsg(fake_pbft, commit_req, CommitReqPacket);
+    checkBroadcastSpecifiedMsg(fake_pbft, commit_req, PBFTPacketType::CommitReqPacket);
 }
 
 /// test broadcastViewChangeReq
@@ -211,7 +221,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
     /// case1: the peer node is not sealer
     fake_pbft.consensus()->broadcastViewChangeReq();
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), ViewChangeReqPacket, key) == false);
+                    peer_keyPair.pub(), PBFTPacketType::ViewChangeReqPacket, key) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
 
     /// case2: the the peer node is a sealer
@@ -220,7 +230,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastViewChangeReq)
     FakePBFTSealer(fake_pbft);
     fake_pbft.consensus()->broadcastViewChangeReq();
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), ViewChangeReqPacket, key) == false);
+                    peer_keyPair.pub(), PBFTPacketType::ViewChangeReqPacket, key) == false);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 
@@ -364,8 +374,8 @@ BOOST_AUTO_TEST_CASE(testCheckAndCommit)
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
 
     //// check no broadcasft
-    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                    peer_keyPair.pub(), CommitReqPacket, prepare_req->uniqueKey()) == false);
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(),
+                    PBFTPacketType::CommitReqPacket, prepare_req->uniqueKey()) == false);
 
     /// case2: valid view
     fake_pbft.consensus()->setView(prepare_req->view);
@@ -698,8 +708,8 @@ BOOST_AUTO_TEST_CASE(testHandleViewchangeMsg)
     BOOST_CHECK(viewchange_req != nullptr);
 
     IDXTYPE nodeIdxSource = 2;
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
 
     /// test handleViewChangeReq
     std::shared_ptr<ViewChangeReq> viewchange_req_decoded = std::make_shared<ViewChangeReq>();
@@ -710,8 +720,8 @@ BOOST_AUTO_TEST_CASE(testHandleViewchangeMsg)
 
     /// fake viewchange req generated by the 1st sealer
     viewchange_req = fakeValidViewchange(fake_pbft, 1);
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
     BOOST_CHECK(*viewchange_req_decoded == *viewchange_req);
     /// viewchange no consensused
@@ -734,8 +744,8 @@ BOOST_AUTO_TEST_CASE(testFastViewChange)
     /// handle the viewchange request received from 2nd sealer
     BOOST_CHECK(viewchange_req != nullptr);
 
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
     BOOST_CHECK(fake_pbft.consensus()->toView() != viewchange_req->view - 1);
 
@@ -743,8 +753,8 @@ BOOST_AUTO_TEST_CASE(testFastViewChange)
     /// handle the viewchange request received from 1st sealer
     viewchange_req = fakeValidViewchange(fake_pbft, 1, true);
 
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req, viewchange_packet);
     BOOST_CHECK(fake_pbft.consensus()->toView() == viewchange_req->view - 1);
 
@@ -796,8 +806,8 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
     IDXTYPE nodeIdxSource = 1;
     /// handle the viewchange request received from 2nd sealer
     std::shared_ptr<ViewChangeReq> viewchange_req = fakeValidViewchange(fake_pbft, 0, true);
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
     BOOST_CHECK(viewchange_req != nullptr);
 
     viewchange_packet.ttl = 1;
@@ -818,8 +828,8 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
 
     /// broadcast
     viewchange_req = fakeValidViewchange(fake_pbft, 2, true);
-    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
-        fake_pbft.m_sealerList[nodeIdxSource]);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, PBFTPacketType::ViewChangeReqPacket,
+        nodeIdxSource, fake_pbft.m_sealerList[nodeIdxSource]);
     fake_pbft.consensus()->handleMsg(viewchange_packet);
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
