@@ -44,14 +44,26 @@ namespace dev
     LOG(_OBV) << "[g:null]" \
               << "[p:null][KeyManager]"
 
-class KeyCenterHttpClient
+class KeyCenterHttpClientInterface
 {
 public:
+    using Ptr = std::shared_ptr<KeyCenterHttpClientInterface>;
+
+    virtual void connect() = 0;
+    virtual void close() = 0;
+    virtual Json::Value callMethod(const std::string& _method, Json::Value _params) = 0;
+};
+
+class KeyCenterHttpClient : public KeyCenterHttpClientInterface
+{
+public:
+    using Ptr = std::shared_ptr<KeyCenterHttpClient>;
+
     KeyCenterHttpClient(const std::string& _ip, int _port);
     ~KeyCenterHttpClient();
-    void connect();
-    void close();
-    Json::Value callMethod(const std::string& _method, Json::Value _params);
+    void connect() override;
+    void close() override;
+    Json::Value callMethod(const std::string& _method, Json::Value _params) override;
 
 private:
     std::string m_ip;
@@ -69,9 +81,9 @@ public:
     KeyCenter(){};
     virtual ~KeyCenter(){};
     virtual const dev::bytes getDataKey(const std::string& _cipherDataKey);
-    virtual const std::string generateCipherDataKey();
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
+    void setKcClient(KeyCenterHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
 
     static std::shared_ptr<KeyCenter> instance();
 
@@ -86,11 +98,13 @@ private:
     int m_port;
     std::string m_url;
 
+    KeyCenterHttpClientInterface::Ptr m_kcclient = nullptr;
+
     // Query cache
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
 
-protected:
+public:
     dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 };
 
