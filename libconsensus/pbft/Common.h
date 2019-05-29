@@ -251,7 +251,7 @@ struct PBFTMsg
         return dev::sign(keyPair.secret(), hash);
     }
 
-    std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
+    virtual std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
 };
 
 /// definition of the prepare requests

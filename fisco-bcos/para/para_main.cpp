@@ -49,7 +49,8 @@ static shared_ptr<Secret> sec;
 class FakeBlockVerifierForPara : public BlockVerifier
 {
 public:
-    FakeBlockVerifierForPara(bool _enableParallel = false) : BlockVerifier(_enableParallel) {}
+    explicit FakeBlockVerifierForPara(bool _enableParallel = false) : BlockVerifier(_enableParallel)
+    {}
 
     ExecutiveContext::Ptr serialExecuteBlock(
         dev::eth::Block::Ptr block, BlockInfo const& parentBlockInfo)
