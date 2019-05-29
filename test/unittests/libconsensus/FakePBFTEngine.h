@@ -65,7 +65,9 @@ public:
         std::shared_ptr<dev::eth::BlockFactory> blockFactory =
             std::make_shared<dev::eth::BlockFactory>();
         setBlockFactory(blockFactory);
-
+        m_pbftReqFactory = std::make_shared<PBFTReqFactory>();
+        m_broadCastCache = m_pbftReqFactory->buildPBFTBroadcastCache();
+        m_reqCache = m_pbftReqFactory->buildPBFTReqCache();
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }

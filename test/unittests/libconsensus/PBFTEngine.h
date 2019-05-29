@@ -290,18 +290,18 @@ static void checkBroadcastSpecifiedMsg(
     /// append session info
     appendSessionInfo(fake_pbft, peer_keyPair.pub());
     /// case1: the peer node is not sealer
-    if (packetType == SignReqPacket)
+    if (packetType == PBFTPacketType::SignReqPacket)
     {
         fake_pbft.consensus()->broadcastSignReq(prepare_req);
         /// check broadcast cache
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), SignReqPacket, key) == false);
+                        peer_keyPair.pub(), PBFTPacketType::SignReqPacket, key) == false);
     }
-    if (packetType == CommitReqPacket)
+    if (packetType == PBFTPacketType::CommitReqPacket)
     {
         fake_pbft.consensus()->broadcastCommitReq(*prepare_req);
         BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        peer_keyPair.pub(), CommitReqPacket, key) == false);
+                        peer_keyPair.pub(), PBFTPacketType::CommitReqPacket, key) == false);
     }
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 0);
 
@@ -314,9 +314,9 @@ static void checkBroadcastSpecifiedMsg(
     key = req.uniqueKey();
     bytes data;
     req.encode(data);
-    fake_pbft.consensus()->broadcastMsg(SignReqPacket, key, ref(data));
-    BOOST_CHECK(
-        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
+    fake_pbft.consensus()->broadcastMsg(PBFTPacketType::SignReqPacket, key, ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), PBFTPacketType::SignReqPacket, key) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 
@@ -478,8 +478,8 @@ std::shared_ptr<T> FakeValidSignorCommitReq(FakeConsensus<FakePBFTEngine>& fake_
     /// reset current consensusNumber and View
     fake_pbft.consensus()->setConsensusBlockNumber(prepareReq->height);
     fake_pbft.consensus()->setView(prepareReq->view);
-    FakePBFTMsgPacket(
-        packet, req, SignReqPacket, fake_pbft.m_sealerList.size() - 1, peer_keyPair.pub());
+    FakePBFTMsgPacket(packet, req, PBFTPacketType::SignReqPacket, fake_pbft.m_sealerList.size() - 1,
+        peer_keyPair.pub());
     return req;
 }
 
@@ -571,8 +571,8 @@ static void testReHandleCommitPrepareCache(
     /// check callback broadcastMsg
     for (size_t i = 0; i < fake_pbft.m_sealerList.size(); i++)
     {
-        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
-                        fake_pbft.m_sealerList[i], PrepareReqPacket, req->uniqueKey()) == false);
+        BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(fake_pbft.m_sealerList[i],
+                        PBFTPacketType::PrepareReqPacket, req->uniqueKey()) == false);
     }
 }
 

@@ -36,13 +36,12 @@ namespace dev
 namespace consensus
 {
 // for pbft
-enum PBFTPacketType : byte
+struct PBFTPacketType
 {
-    PrepareReqPacket = 0x00,
-    SignReqPacket = 0x01,
-    CommitReqPacket = 0x02,
-    ViewChangeReqPacket = 0x03,
-    PBFTPacketCount
+    static const int PrepareReqPacket = 0x00;
+    static const int SignReqPacket = 0x01;
+    static const int CommitReqPacket = 0x02;
+    static const int ViewChangeReqPacket = 0x03;
 };
 
 /// PBFT message
