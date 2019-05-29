@@ -181,14 +181,24 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     string dataKeyBytesStr;
     try
     {
+        // Create
+        KeyCenterHttpClientInterface::Ptr kcclient;
+        if (m_kcclient == nullptr)
+        {
+            kcclient = make_shared<KeyCenterHttpClient>(m_ip, m_port);
+        }
+        else
+        {
+            kcclient = m_kcclient;
+        }
+
         // connect
-        KeyCenterHttpClient kcclient(m_ip, m_port);
-        kcclient.connect();
+        kcclient->connect();
 
         // send and receive
         Json::Value params(Json::arrayValue);
         params.append(_cipherDataKey);
-        Json::Value rsp = kcclient.callMethod("decDataKey", params);
+        Json::Value rsp = kcclient->callMethod("decDataKey", params);
 
         // parse respond
         int error = rsp["error"].asInt();
@@ -206,7 +216,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         m_lastRcvDataKey = uniformDataKey(readableDataKey);
 
         // close
-        kcclient.close();
+        kcclient->close();
     }
     catch (exception& e)
     {
@@ -216,16 +226,6 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     }
 
     return m_lastRcvDataKey;
-}
-
-const std::string KeyCenter::generateCipherDataKey()
-{
-    std::string ret;
-    for (size_t i = 0; i < 32; i++)
-    {
-        ret += std::to_string(utcTime() % 10);
-    }
-    return ret;
 }
 
 void KeyCenter::setIpPort(const std::string& _ip, int _port)
