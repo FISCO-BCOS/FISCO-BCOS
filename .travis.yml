@@ -66,6 +66,8 @@ addons:
     - clang-format
     - clang-omp
     - ccache
+    - python
+    - pip
 install: |
     if [ $TRAVIS_OS_NAME == linux ]; then bash tools/ci/check-commit.sh; fi
 script: |
