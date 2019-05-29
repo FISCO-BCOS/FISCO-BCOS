@@ -688,14 +688,7 @@ void CachedStorage::checkAndClear()
 
         if (m_syncNum > 0)
         {
-            if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
-            {
-                CACHED_STORAGE_LOG(DEBUG)
-                    << "Current block number: " << m_commitNum
-                    << " greater than syncd block number: " << m_syncNum << ", clearing...";
-                needClear = true;
-            }
-            else if (m_capacity > m_maxCapacity && !m_mru->empty())
+           if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity

@@ -126,13 +126,17 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     _tx.setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     /// check the txpool size
-    if (m_txsQueue.size() >= m_limit) {
-    	if(_tx.rpcCallback()) {
-    		auto callback = _tx.rpcCallback();
-    		dev::eth::LocalisedTransactionReceipt::Ptr receipt = std::make_shared<dev::eth::LocalisedTransactionReceipt>(ImportResult::TransactionPoolIsFull);
+    if (m_txsQueue.size() >= m_limit)
+    {
+        if (_tx.rpcCallback())
+        {
+            auto callback = _tx.rpcCallback();
+            dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+                std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                    ImportResult::TransactionPoolIsFull);
 
-    		m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
-    	}
+            m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
+        }
 
         return ImportResult::TransactionPoolIsFull;
     }

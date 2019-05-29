@@ -112,8 +112,9 @@ public:
                 entries[i], m_blockHash, m_blockNumber, m_hash, m_transactionIndex, i));
     }
 
-    LocalisedTransactionReceipt(u256 status): m_blockNumber(0) {
-    	TransactionReceipt::m_status = status;
+    LocalisedTransactionReceipt(u256 status) : m_blockNumber(0)
+    {
+        TransactionReceipt::m_status = status;
     };
 
     h256 const& hash() const { return m_hash; }
