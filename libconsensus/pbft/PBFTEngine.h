@@ -270,7 +270,7 @@ protected:
     virtual void checkAndCommit();
 
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
-    void checkAndSave();
+    virtual void checkAndSave();
     void checkAndChangeView();
 
 protected:
