@@ -997,7 +997,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         auto txPool = ledgerManager()->txPool(_groupID);
 
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
-        auto currentTransactionCallback = m_currentTransactionCallback;
+        auto currentTransactionCallback = m_currentTransactionCallback.get();
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
