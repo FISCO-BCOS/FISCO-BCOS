@@ -127,7 +127,19 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
+    {
+        auto callback = _tx.rpcCallback();
+        if (callback)
+        {
+            dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+                std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                    ImportResult::TransactionPoolIsFull);
+
+            m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
+        }
+
         return ImportResult::TransactionPoolIsFull;
+    }
     /// check the verify result(nonce && signature check)
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
