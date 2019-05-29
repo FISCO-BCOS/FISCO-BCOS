@@ -189,6 +189,9 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             Connection_execute(_connection, "%s", _sql.c_str());
             _sql = "set global max_allowed_packet = 1073741824";
             Connection_execute(_connection, "%s", _sql.c_str());
+
+            _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
+            Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)
         {
