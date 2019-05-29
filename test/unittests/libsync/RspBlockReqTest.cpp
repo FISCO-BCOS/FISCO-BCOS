@@ -53,12 +53,14 @@ BOOST_AUTO_TEST_CASE(PushAndTopTest)
     DownloadRequestQueue queue(NodeID(100));
     BOOST_CHECK(queue.empty());
 
+    queue.disablePush();
     queue.push(1, 3);
     queue.push(1, 4);
     queue.push(2, 1);
     queue.push(2, 4);
     queue.push(6, 2);
     queue.push(10, 2);
+    queue.enablePush();
 
     DownloadRequest top = queue.topAndPop();
     BOOST_CHECK_EQUAL(top.fromNumber, 1);
