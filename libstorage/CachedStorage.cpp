@@ -491,6 +491,26 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
         STORAGE_LOG(INFO) << "Submited block task: " << num
                           << ", current syncd block: " << m_syncNum;
+
+        uint64_t waitCount = 0;
+        while ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
+        {
+            CACHED_STORAGE_LOG(INFO)
+                << "Current block number: " << m_commitNum
+                << " greater than syncd block number: " << m_syncNum << ", waiting...";
+
+            if (waitCount < 5)
+            {
+                std::this_thread::yield();
+            }
+            else
+            {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds((waitCount < 100 ? waitCount : 100) * 50));
+            }
+
+            ++waitCount;
+        }
     }
     else
     {
@@ -668,18 +688,11 @@ void CachedStorage::checkAndClear()
 
         if (m_syncNum > 0)
         {
-            if ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
-            {
-                CACHED_STORAGE_LOG(INFO)
-                    << "Current block number: " << m_commitNum
-                    << " greater than syncd block number: " << m_syncNum << ", waiting...";
-                needClear = true;
-            }
-            else if (m_capacity > m_maxCapacity && !m_mru->empty())
+            if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity
-                    << " greater than max capacity: " << m_maxCapacity << ", waiting...";
+                    << " greater than max capacity: " << m_maxCapacity << ", clearing...";
                 needClear = true;
             }
         }
@@ -748,16 +761,18 @@ void CachedStorage::checkAndClear()
                                  << "Current total cached entries: " << m_mru->size()
                                  << ", total capacaity: " << readableCapacity(m_capacity);
 
-        CACHED_STORAGE_LOG(DEBUG) << "Cache Status: \n\n"
-                                  << "Total query: " << m_queryTimes << "\n"
-                                  << "Total cache hit: " << m_hitTimes << "\n"
-                                  << "Total cache miss: " << m_queryTimes - m_hitTimes << "\n"
-                                  << "Total hit ratio: " << std::setiosflags(std::ios::fixed)
-                                  << std::setprecision(4)
-                                  << ((double)m_hitTimes / m_queryTimes) * 100 << "%"
-                                  << "\n\n"
-                                  << "Cache capacity: " << readableCapacity(m_capacity) << "\n"
-                                  << "Cache size: " << m_mru->size();
+        CACHED_STORAGE_LOG(DEBUG)
+            << "Cache Status: \n\n"
+            << "\n---------------------------------------------------------------------\n"
+            << "Total query: " << m_queryTimes << "\n"
+            << "Total cache hit: " << m_hitTimes << "\n"
+            << "Total cache miss: " << m_queryTimes - m_hitTimes << "\n"
+            << "Total hit ratio: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+            << ((double)m_hitTimes / m_queryTimes) * 100 << "%"
+            << "\n\n"
+            << "Cache capacity: " << readableCapacity(m_capacity) << "\n"
+            << "Cache size: " << m_mru->size()
+            << "\n---------------------------------------------------------------------\n";
     }
 }
 
