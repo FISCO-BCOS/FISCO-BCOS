@@ -48,7 +48,7 @@ class KeyCenterHttpClientInterface
 {
 public:
     using Ptr = std::shared_ptr<KeyCenterHttpClientInterface>;
-
+    virtual ~KeyCenterHttpClientInterface(){};
     virtual void connect() = 0;
     virtual void close() = 0;
     virtual Json::Value callMethod(const std::string& _method, Json::Value _params) = 0;
