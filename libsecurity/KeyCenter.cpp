@@ -42,7 +42,7 @@ namespace net = boost::asio;     // from <boost/asio.hpp>
 using tcp = net::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
 
 KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
-  : m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
+  : KeyCenterHttpClientInterface(), m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
 {}
 
 KeyCenterHttpClient::~KeyCenterHttpClient()
