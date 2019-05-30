@@ -61,6 +61,68 @@ public:
     NetworkException fakeException;
 };
 
+class FakeServiceForDownloadBlocksContainer : public P2PInterface
+{
+public:
+    using Ptr = std::shared_ptr<FakeServiceForDownloadBlocksContainer>;
+    FakeServiceForDownloadBlocksContainer() : P2PInterface(), sentCnt(0) {}
+
+    ~FakeServiceForDownloadBlocksContainer(){};
+
+    void asyncSendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>, CallbackFuncWithSession,
+        dev::network::Options) override
+    {
+        sentCnt++;
+    };
+
+    size_t sentCnt = 0;
+
+public:
+    // not used
+    NodeID id() const override { return NodeID(); };
+
+    std::shared_ptr<P2PMessage> sendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>) override
+    {
+        return nullptr;
+    };
+
+    std::shared_ptr<P2PMessage> sendMessageByTopic(
+        std::string, std::shared_ptr<P2PMessage>) override
+    {
+        return nullptr;
+    };
+    void asyncSendMessageByTopic(std::string, std::shared_ptr<P2PMessage>, CallbackFuncWithSession,
+        dev::network::Options) override{};
+
+    void asyncMulticastMessageByTopic(std::string, std::shared_ptr<P2PMessage>) override{};
+
+    void asyncMulticastMessageByNodeIDList(NodeIDs, std::shared_ptr<P2PMessage>) override{};
+
+    void asyncBroadcastMessage(std::shared_ptr<P2PMessage>, dev::network::Options) override{};
+
+    void registerHandlerByProtoclID(PROTOCOL_ID, CallbackFuncWithSession) override{};
+
+    void registerHandlerByTopic(std::string, CallbackFuncWithSession) override{};
+
+    P2PSessionInfos sessionInfos() override { return P2PSessionInfos(); };
+    P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override
+    {
+        return P2PSessionInfos();
+    };
+
+    bool isConnected(NodeID const&) const override { return true; };
+
+    std::vector<std::string> topics() override { return std::vector<std::string>(); };
+
+    dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
+    void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
+    void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
+
+    void setTopics(std::shared_ptr<std::vector<std::string>>) override{};
+
+    std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return nullptr; };
+};
+
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
@@ -125,6 +187,52 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
     BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0)));
     BOOST_CHECK(!fakeStatusPtr->peerStatus(h512(0))->reqQueue.empty());
 }  // namespace test
+
+BOOST_AUTO_TEST_CASE(BatchSendTest)
+{
+    size_t maxPayloadSize =
+        dev::p2p::P2PMessage::MAX_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
+    size_t quarterPayloadSize = maxPayloadSize / 4;
+
+    FakeServiceForDownloadBlocksContainer::Ptr service =
+        make_shared<FakeServiceForDownloadBlocksContainer>();
+    shared_ptr<DownloadBlocksContainer> batchSender =
+        make_shared<DownloadBlocksContainer>(service, PROTOCOL_ID(0), NodeID(0));
+
+    shared_ptr<bytes> maxRlp = make_shared<bytes>(maxPayloadSize + 1);
+    shared_ptr<bytes> quarterRlp = make_shared<bytes>(quarterPayloadSize);
+
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 1/4
+    batchSender->batchAndSend(quarterRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 2/4
+    batchSender->batchAndSend(quarterRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 3/4
+    batchSender->batchAndSend(quarterRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 4/4
+    batchSender->batchAndSend(quarterRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 5/4 -> 1/4    cnt -> 1
+    batchSender->batchAndSend(quarterRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 1);
+
+    // size <= 1/4  big  cnt -> 2
+    batchSender->batchAndSend(maxRlp);
+    BOOST_CHECK_EQUAL(service->sentCnt, 2);
+
+    // de construct cnt -> 3
+    batchSender = nullptr;
+    BOOST_CHECK_EQUAL(service->sentCnt, 3);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
