@@ -78,6 +78,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 
     for (size_t i = 0; i < round; ++i)
     {
+    	auto roundStart = std::chrono::system_clock::now();
         auto factory = factoryFactory->newTableFactory(dev::h256(0), i + 2);
 
         tbb::parallel_for(
@@ -114,6 +115,11 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
             });
 
         factory->commitDB(dev::h256(0), i + 2);
+
+        auto roundEnd = std::chrono::system_clock::now();
+        std::chrono::duration<double> roundElapsed = roundEnd - roundStart;
+        std::cout << "Round " << i << " elapsed: " << roundElapsed.count() << std::endl;
+
     }
 
     auto end = std::chrono::system_clock::now();
