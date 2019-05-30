@@ -147,7 +147,7 @@ private:
 
     boost::atomic_int64_t m_syncNum;
     boost::atomic_int64_t m_commitNum;
-    tbb::atomic<int64_t> m_capacity;
+    boost::atomic_int64_t m_capacity;
 
     uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
@@ -156,10 +156,10 @@ private:
     dev::ThreadPool::Ptr m_taskThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
-    tbb::atomic<uint64_t> m_hitTimes = 0;
-    tbb::atomic<uint64_t> m_queryTimes = 0;
+    boost::atomic_uint64_t m_hitTimes;
+    boost::atomic_uint64_t m_queryTimes;
 
-    std::shared_ptr<tbb::atomic<bool> > m_running;
+    std::shared_ptr<boost::atomic_bool > m_running;
 };
 
 }  // namespace storage

@@ -114,7 +114,11 @@ CachedStorage::CachedStorage()
     m_syncNum.store(0);
     m_commitNum.store(0);
     m_capacity.store(0);
-    m_running = std::make_shared<tbb::atomic<bool>>();
+
+    m_hitTimes.store(0);
+    m_queryTimes.store(0);
+
+    m_running = std::make_shared<boost::atomic_bool>();
     m_running->store(true);
 }
 
@@ -680,7 +684,7 @@ void CachedStorage::checkAndClear()
     bool needClear = false;
     size_t clearTimes = 0;
 
-    auto currentCapacity = m_capacity;
+    auto currentCapacity = m_capacity.load();
 
     size_t clearCount = 0;
     size_t clearThrough = 0;
@@ -780,7 +784,8 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    auto oldValue = m_capacity.fetch_and_add(capacity);
+    //auto oldValue = m_capacity.fetch_and_add(capacity);
+    auto oldValue = m_capacity.fetch_add(capacity);
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity) << " , from: " << oldValue
                               << " to: " << m_capacity;
 }
