@@ -515,6 +515,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     else
     {
         STORAGE_LOG(INFO) << "No backend storage, skip commit...";
+
+        setSyncNum(num);
     }
     return total;
 }
