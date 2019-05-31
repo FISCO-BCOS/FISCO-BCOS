@@ -126,7 +126,7 @@ private:
 
     void checkField(Entry::Ptr entry)
     {
-        for (auto& it : *(entry->fields()))
+        for (auto& it : *(entry))
         {
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))

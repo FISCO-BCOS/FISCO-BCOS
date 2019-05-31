@@ -188,7 +188,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
 
                 Json::Value value;
 
-                for (auto fieldIt : *entry->fields())
+                for (auto fieldIt : *entry)
                 {
                     value[fieldIt.first] = fieldIt.second;
                 }
@@ -204,7 +204,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
 
                 Json::Value value;
 
-                for (auto fieldIt : *entry->fields())
+                for (auto fieldIt : *entry)
                 {
                     value[fieldIt.first] = fieldIt.second;
                 }

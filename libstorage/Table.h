@@ -83,7 +83,12 @@ public:
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
 
-    virtual const std::map<std::string, std::string>* fields() const;
+    virtual std::map<std::string, std::string>::const_iterator find(const std::string &key) const;
+
+    virtual std::map<std::string, std::string>::const_iterator begin() const;
+    virtual std::map<std::string, std::string>::const_iterator end() const;
+
+    virtual size_t size() const;
 
     virtual int getStatus() const;
     virtual void setStatus(int status);
@@ -159,8 +164,11 @@ public:
     typedef std::shared_ptr<const Entries> ConstPtr;
     virtual ~Entries(){};
 
+    virtual Vector::const_iterator begin() const;
+    virtual Vector::const_iterator end() const;
+
     virtual Vector::iterator begin();
-    virtual Vector::iterator end();
+	virtual Vector::iterator end();
 
     virtual Vector::reference operator[](Vector::size_type index);
 
@@ -230,8 +238,8 @@ public:
     virtual int getOffset();
     virtual int getCount();
 
-    virtual std::map<std::string, Range>::iterator begin();
-    virtual std::map<std::string, Range>::iterator end();
+    virtual std::map<std::string, Range>::const_iterator begin() const;
+    virtual std::map<std::string, Range>::const_iterator end() const;
     virtual bool empty();
 
 private:

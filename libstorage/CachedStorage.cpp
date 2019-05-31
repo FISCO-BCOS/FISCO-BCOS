@@ -288,7 +288,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 {
                                     auto oldSize = (*entryIt)->capacity();
 
-                                    for (auto fieldIt : *entry->fields())
+                                    for (auto fieldIt : *entry)
                                     {
                                         (*entryIt)->setField(fieldIt.first, fieldIt.second);
                                     }
@@ -633,13 +633,19 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::to
 
     auto cache = std::make_shared<Cache>();
     auto cacheKey = tableInfo->name + "_" + key;
-    auto result = m_caches.insert(std::make_pair(cacheKey, cache));
 
-    cache = result.first->second;
+    bool inserted = false;
+    {
+		RWMutexScoped lockCache(m_cachesMutex, false);
+		auto result = m_caches.insert(std::make_pair(cacheKey, cache));
+		cache = result.first->second;
+
+		inserted = result.second;
+    }
 
     auto cacheLock = std::make_shared<Cache::RWScoped>();
     auto locked = cacheLock->try_acquire(*(cache->mutex()), write);
-    if (result.second && locked)
+    if (inserted && locked)
     {
         hit = false;
 
@@ -657,7 +663,7 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::to
 
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
-    tbb::spin_mutex::scoped_lock lock(m_removeMutex);
+	RWMutexScoped lockCache(m_cachesMutex, true);
 
     auto cacheKey = table + "_" + key;
     m_caches.unsafe_erase(cacheKey);

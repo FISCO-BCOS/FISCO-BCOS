@@ -218,7 +218,7 @@ void RocksDBStorage::processNewEntries(int64_t num,
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
@@ -244,7 +244,7 @@ void RocksDBStorage::processDirtyEntries(int64_t num,
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }

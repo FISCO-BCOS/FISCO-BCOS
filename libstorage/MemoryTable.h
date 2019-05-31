@@ -105,7 +105,7 @@ public:
             for (auto& i : indexes)
             {
                 Entry::Ptr updateEntry = entries->get(i);
-                for (auto& it : *(entry->fields()))
+                for (auto& it : *(entry))
                 {
                     records.emplace_back(i, it.first, updateEntry->getField(it.first));
                     updateEntry->setField(it.first, it.second);
@@ -222,7 +222,7 @@ public:
                 {
                     if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
-                        for (auto& fieldIt : *(it.second->get(i)->fields()))
+                        for (auto& fieldIt : *(it.second->get(i)))
                         {
                             if (isHashField(fieldIt.first))
                             {
@@ -428,7 +428,7 @@ private:
 
     void checkField(Entry::Ptr entry)
     {
-        for (auto& it : *(entry->fields()))
+        for (auto& it : *(entry))
         {
             if (it.first == ID_FIELD)
             {

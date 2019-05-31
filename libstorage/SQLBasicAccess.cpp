@@ -108,9 +108,8 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
     if (condition)
     {
         uint32_t index = 0;
-        auto conditionmap = *(condition);
-        auto it = conditionmap.begin();
-        for (; it != conditionmap.end(); ++it)
+        auto it = condition->begin();
+        for (; it != condition->end(); ++it)
         {
             if (index == 0)
             {
@@ -126,7 +125,7 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
     return sql;
 }
 std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
-    std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition)
+    std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition)
 {
     string strConditionSql = strPrefix;
     if (it->second.left.second == it->second.right.second && it->second.left.first &&
@@ -200,10 +199,9 @@ std::string SQLBasicAccess::BuildCreateTableSql(
 
 std::string SQLBasicAccess::GetCreateTableSql(const Entry::Ptr& entry)
 {
-    auto fields = *entry->fields();
-    string table_name(fields["table_name"]);
-    string key_field(fields["key_field"]);
-    string value_field(fields["value_field"]);
+    string table_name(entry->getField("table_name"));
+    string key_field(entry->getField("key_field"));
+    string value_field(entry->getField("value_field"));
     /*generate create table sql*/
     string sql = BuildCreateTableSql(table_name, key_field, value_field);
     SQLBasicAccess_LOG(DEBUG) << "create table:" << table_name << " keyfield:" << key_field
@@ -220,7 +218,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
     {
         Entry::Ptr entry = data->get(i);
         /*different fields*/
-        for (auto fieldIt : *entry->fields())
+        for (auto fieldIt : *entry)
         {
             if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
             {

@@ -140,9 +140,20 @@ void Entry::setTempIndex(size_t index)
     m_tempIndex = index;
 }
 
-const std::map<std::string, std::string>* Entry::fields() const
-{
-    return &m_data->m_fields;
+std::map<std::string, std::string>::const_iterator Entry::find(const std::string &key) const {
+	return m_data->m_fields.find(key);
+}
+
+std::map<std::string, std::string>::const_iterator Entry::begin() const {
+	return m_data->m_fields.begin();
+}
+
+std::map<std::string, std::string>::const_iterator Entry::end() const {
+	return m_data->m_fields.end();
+}
+
+size_t Entry::size() const {
+	return m_data->m_fields.size();
 }
 
 int Entry::getStatus() const
@@ -342,15 +353,15 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
         return lhsStr < rhsStr;
     }
 
-    auto lFields = lhs->fields();
-    auto rFields = rhs->fields();
-    if (lFields->size() != rFields->size())
+    auto lSize = lhs->size();
+    auto rSize = rhs->size();
+    if (lSize != rSize)
     {
-        return lFields->size() < rFields->size();
+        return lSize < rSize;
     }
 
-    for (auto lIter = lFields->begin(), rIter = rFields->begin();
-         lIter != lFields->end() && rIter != rFields->end();)
+    for (auto lIter = lhs->begin(), rIter = rhs->begin();
+         lIter != lhs->end() && rIter != rhs->end();)
     {
         if (lIter->first != rIter->first)
         {
@@ -369,14 +380,22 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
     return false;
 }
 
-Entries::Vector::iterator Entries::begin()
+Entries::Vector::const_iterator Entries::begin() const
 {
     return m_entries.begin();
 }
 
-Entries::Vector::iterator Entries::end()
+Entries::Vector::const_iterator Entries::end() const
 {
     return m_entries.end();
+}
+
+Entries::Vector::iterator Entries::begin() {
+	return m_entries.begin();
+}
+
+Entries::Vector::iterator Entries::end() {
+	return m_entries.end();
 }
 
 Entries::Vector::reference Entries::operator[](Vector::size_type index)
@@ -613,11 +632,11 @@ int Condition::getCount()
     return m_count;
 }
 
-std::map<std::string, Condition::Range>::iterator Condition::begin() {
+std::map<std::string, Condition::Range>::const_iterator Condition::begin() const {
 	return m_conditions.begin();
 }
 
-std::map<std::string, Condition::Range>::iterator Condition::end() {
+std::map<std::string, Condition::Range>::const_iterator Condition::end() const {
 	return m_conditions.end();
 }
 
@@ -636,16 +655,14 @@ bool Condition::process(Entry::Ptr entry)
 
         if (!m_conditions.empty())
         {
-            auto fields = entry->fields();
-
             for (auto it : m_conditions)
             {
                 if (!isHashField(it.first))
                 {
                     continue;
                 }
-                auto fieldIt = fields->find(it.first);
-                if (fieldIt != fields->end())
+                auto fieldIt = entry->find(it.first);
+                if (fieldIt != entry->end())
                 {
                     if (it.second.left.second == it.second.right.second && it.second.left.first &&
                         it.second.right.first)

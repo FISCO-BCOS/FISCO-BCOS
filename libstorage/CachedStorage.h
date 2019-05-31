@@ -92,6 +92,9 @@ public:
     typedef std::shared_ptr<CachedStorage> Ptr;
     CachedStorage();
 
+    typedef tbb::spin_rw_mutex RWMutex;
+	typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
     virtual ~CachedStorage();
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
@@ -124,7 +127,6 @@ private:
         TableInfo::Ptr table, const std::string& key, bool write = false);
 
     void removeCache(const std::string& table, const std::string& key);
-    tbb::spin_mutex m_removeMutex;
 
     void checkAndClear();
 
@@ -132,6 +134,7 @@ private:
     std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
+    RWMutex m_cachesMutex;
 
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
