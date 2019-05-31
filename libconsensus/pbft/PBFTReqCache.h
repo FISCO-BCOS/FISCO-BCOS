@@ -279,7 +279,16 @@ public:
     }
     void getCacheConsensusStatus(Json::Value& statusArray) const;
 
-private:
+    template <typename T, typename U, typename S>
+    inline bool cacheExists(T const& cache, U const& mainKey, S const& key)
+    {
+        auto it = cache.find(mainKey);
+        if (it == cache.end())
+            return false;
+        return (it->second.find(key)) != (it->second.end());
+    }
+
+protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
@@ -321,14 +330,6 @@ private:
     /// remove commit cache according to block hash and view
     void removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE const& view);
 
-    template <typename T, typename U, typename S>
-    inline bool cacheExists(T const& cache, U const& mainKey, S const& key)
-    {
-        auto it = cache.find(mainKey);
-        if (it == cache.end())
-            return false;
-        return (it->second.find(key)) != (it->second.end());
-    }
 
     /// get the status of specified cache into the json object
     /// (maily for prepareCache, m_committedPrepareCache, m_futurePrepareCache and rawPrepareCache)

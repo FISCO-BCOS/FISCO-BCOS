@@ -402,23 +402,9 @@ protected:
     /// check the specified prepareReq is valid or not
     CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss) const;
 
-    /**
-     * @brief: common check process when handle SignReq and CommitReq
-     *         1. the request should be existed in prepare cache,
-     *            if the request is the future request, should add it to the prepare cache
-     *         2. the sealer of the request shouldn't be the node-self
-     *         3. the view of the request must be equal to the view of the prepare cache
-     *         4. the signature of the request must be valid
-     * @tparam T: the type of the request
-     * @param req: the request should be checked
-     * @param oss: information to debug
-     * @return CheckResult:
-     *  1. CheckResult::FUTURE: the request is the future req;
-     *  2. CheckResult::INVALID: the request is invalid
-     *  3. CheckResult::VALID: the request is valid
-     */
     template <class T>
-    inline CheckResult checkReq(std::shared_ptr<T> req, std::ostringstream& oss) const
+    inline CheckResult checkBasic(
+        std::shared_ptr<T> req, std::ostringstream& oss, bool needCheckSign) const
     {
         if (isSyncingHigherBlock(req))
         {
@@ -439,7 +425,12 @@ protected:
                                   << LOG_KV("INFO", oss.str());
             /// is future ?
             bool is_future = isFutureBlock(req);
-            if (is_future && checkSign(req))
+            bool signValid = true;
+            if (needCheckSign)
+            {
+                signValid = checkSign(req);
+            }
+            if (is_future && signValid)
             {
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("checkReq: Recv future request")
@@ -447,6 +438,31 @@ protected:
                     << LOG_KV("INFO", oss.str());
                 return CheckResult::FUTURE;
             }
+            return CheckResult::INVALID;
+        }
+    }
+    /**
+     * @brief: common check process when handle SignReq and CommitReq
+     *         1. the request should be existed in prepare cache,
+     *            if the request is the future request, should add it to the prepare cache
+     *         2. the sealer of the request shouldn't be the node-self
+     *         3. the view of the request must be equal to the view of the prepare cache
+     *         4. the signature of the request must be valid
+     * @tparam T: the type of the request
+     * @param req: the request should be checked
+     * @param oss: information to debug
+     * @return CheckResult:
+     *  1. CheckResult::FUTURE: the request is the future req;
+     *  2. CheckResult::INVALID: the request is invalid
+     *  3. CheckResult::VALID: the request is valid
+     */
+    template <class T>
+    inline CheckResult checkReq(
+        std::shared_ptr<T> req, std::ostringstream& oss, bool needCheckSign = true) const
+    {
+        CheckResult result = checkBasic(req, oss, needCheckSign);
+        if (result == CheckResult::INVALID)
+        {
             return CheckResult::INVALID;
         }
         /// check the sealer of this request
@@ -472,6 +488,7 @@ protected:
         }
         return CheckResult::VALID;
     }
+
 
     CheckResult isValidSignReq(std::shared_ptr<SignReq> req, std::ostringstream& oss) const;
     CheckResult isValidCommitReq(std::shared_ptr<CommitReq> req, std::ostringstream& oss) const;
