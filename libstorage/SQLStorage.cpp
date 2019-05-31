@@ -131,6 +131,10 @@ Entries::Ptr SQLStorage::select(
                 {
                     entry->setNum(fieldValue);
                 }
+                else if(columns[j] == STATUS)
+                {
+                	entry->setStatus(fieldValue);
+                }
                 else
                 {
                     entry->setField(columns[j], fieldValue);
@@ -194,6 +198,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                 }
 
                 value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+                value[STATUS] = boost::lexical_cast<std::string>(entry->getStatus());
 
                 tableData["entries"].append(value);
             }
@@ -210,6 +215,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
                 }
 
                 value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+                value[STATUS] = boost::lexical_cast<std::string>(entry->getStatus());
 
                 tableData["entries"].append(value);
             }

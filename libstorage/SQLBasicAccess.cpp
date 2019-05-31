@@ -220,7 +220,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         /*different fields*/
         for (auto fieldIt : *entry)
         {
-            if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" || fieldIt.first == "_id_")
+            if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" || fieldIt.first == "_id_" || fieldIt.first == "_status_")
             {
                 continue;
             }
@@ -235,6 +235,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         _fieldValue.push_back(hash.hex());
         _fieldValue.push_back(_num);
         _fieldValue.push_back(boost::lexical_cast<std::string>(entry->getID()));
+        _fieldValue.push_back(boost::lexical_cast<std::string>(entry->getStatus()));
     }
 
     if (_fieldName.size() > 0 && !_hasGetField)
@@ -242,6 +243,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         _fieldName.push_back("_hash_");
         _fieldName.push_back(NUM_FIELD);
         _fieldName.push_back(ID_FIELD);
+        _fieldName.push_back(STATUS);
         _hasGetField = true;
     }
 }
