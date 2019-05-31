@@ -643,8 +643,8 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::to
 		inserted = result.second;
     }
 
-    auto cacheLock = std::make_shared<Cache::RWScoped>();
-    auto locked = cacheLock->try_acquire(*(cache->mutex()), write);
+    auto cacheLock = std::make_shared<Cache::RWScoped>(*(cache->mutex()), write);
+    auto locked = true;
     if (inserted && locked)
     {
         hit = false;
