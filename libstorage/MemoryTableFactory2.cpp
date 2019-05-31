@@ -59,6 +59,8 @@ MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 Table::Ptr MemoryTableFactory2::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
 {
+	(void)isPara;
+
     RecursiveGuard l(x_name2Table);
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -90,15 +92,7 @@ Table::Ptr MemoryTableFactory2::openTable(
     tableInfo->fields.emplace_back(NUM_FIELD);
     tableInfo->fields.emplace_back(ID_FIELD);
 
-    Table::Ptr memoryTable = nullptr;
-    if (isPara)
-    {
-        memoryTable = std::make_shared<MemoryTable2>();
-    }
-    else
-    {
-        memoryTable = std::make_shared<MemoryTable2>();
-    }
+    Table::Ptr memoryTable = std::make_shared<MemoryTable2>();
 
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);

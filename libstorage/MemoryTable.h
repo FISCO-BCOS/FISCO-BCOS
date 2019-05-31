@@ -40,6 +40,10 @@ namespace dev
 {
 namespace storage
 {
+
+using Parallel = std::true_type;
+using Serial = std::false_type;
+
 template <typename Mode = Serial>
 class MemoryTable : public Table
 {

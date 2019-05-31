@@ -39,7 +39,7 @@ using namespace dev::storage;
 Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
     m_data->m_refCount = 1;
-    m_data->m_fields.insert(std::make_pair(STATUS, "0"));
+    //m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
 
 Entry::~Entry()
@@ -93,6 +93,7 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
+#if 0
     if (key == ID_FIELD)
     {
         return;
@@ -103,6 +104,7 @@ void Entry::setField(const std::string& key, const std::string& value)
         setStatus(value);
         return;
     }
+#endif
 
     auto lock = checkRef();
 
@@ -127,11 +129,14 @@ void Entry::setField(const std::string& key, const std::string& value)
 size_t Entry::getTempIndex() const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
+
     return m_tempIndex;
 }
 
 void Entry::setTempIndex(size_t index)
 {
+	RWMutexScoped lock(m_data->m_mutex, true);
+
     m_tempIndex = index;
 }
 
@@ -151,6 +156,7 @@ void Entry::setStatus(int status)
 {
     auto lock = checkRef();
 
+#if 0
     auto it = m_data->m_fields.find(STATUS);
     if (it == m_data->m_fields.end())
     {
@@ -160,6 +166,7 @@ void Entry::setStatus(int status)
     {
         it->second = boost::lexical_cast<std::string>(status);
     }
+#endif
 
     m_status = status;
     m_dirty = true;
@@ -169,6 +176,7 @@ void Entry::setStatus(const std::string& status)
 {
     auto lock = checkRef();
 
+#if 0
     auto it = m_data->m_fields.find(STATUS);
     if (it == m_data->m_fields.end())
     {
@@ -178,6 +186,7 @@ void Entry::setStatus(const std::string& status)
     {
         it->second = status;
     }
+#endif
 
     m_status = boost::lexical_cast<int>(status);
     m_dirty = true;
@@ -199,6 +208,8 @@ void Entry::setNum(uint32_t num)
 
 void Entry::setNum(const std::string& id)
 {
+	RWMutexScoped lock(m_data->m_mutex, true);
+
     m_num = boost::lexical_cast<uint32_t>(id);
     m_dirty = true;
 }
@@ -341,18 +352,6 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
     for (auto lIter = lFields->begin(), rIter = rFields->begin();
          lIter != lFields->end() && rIter != rFields->end();)
     {
-        if (lIter->first == NUM_FIELD)
-        {
-            ++lIter;
-            continue;
-        }
-
-        if (rIter->first == NUM_FIELD)
-        {
-            ++rIter;
-            continue;
-        }
-
         if (lIter->first != rIter->first)
         {
             return lIter->first < rIter->first;
@@ -454,6 +453,7 @@ void Entries::shallowFrom(Entries::Ptr entries)
     m_dirty = entries->m_dirty;
 }
 
+#if 0
 size_t ConcurrentEntries::size() const
 {
     return m_entries.size();
@@ -489,6 +489,7 @@ void ConcurrentEntries::setDirty(bool dirty)
 {
     m_dirty = dirty;
 }
+#endif
 
 void Condition::EQ(const std::string& key, const std::string& value)
 {
@@ -612,9 +613,16 @@ int Condition::getCount()
     return m_count;
 }
 
-std::map<std::string, Condition::Range>* Condition::getConditions()
-{
-    return &m_conditions;
+std::map<std::string, Condition::Range>::iterator Condition::begin() {
+	return m_conditions.begin();
+}
+
+std::map<std::string, Condition::Range>::iterator Condition::end() {
+	return m_conditions.end();
+}
+
+bool Condition::empty() {
+	return m_conditions.empty();
 }
 
 bool Condition::process(Entry::Ptr entry)
@@ -709,80 +717,6 @@ bool Condition::process(Entry::Ptr entry)
                     return false;
                 }
             }
-
-#if 0
-            for (auto it : *fields)
-            {
-                auto condIt = m_conditions.find(it.first);
-                if (condIt != m_conditions.end())
-                {
-                    if (condIt->second.left.second == condIt->second.right.second &&
-                        condIt->second.left.first && condIt->second.right.first)
-                    {
-                        if (condIt->second.left.second == it.second)
-                        {
-                            // point hited
-                            continue;
-                        }
-                        else
-                        {
-                            // point missed
-                            return false;
-                        }
-                    }
-
-                    if (condIt->second.left.second != UNLIMITED)
-                    {
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.left.second);
-                        auto rhs = (int64_t)0;
-                        if (!it.second.empty())
-                        {
-                            rhs = boost::lexical_cast<int64_t>(it.second);
-                        }
-
-                        if (condIt->second.left.first)
-                        {
-                            if (!(lhs <= rhs))
-                            {
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            if (!(lhs < rhs))
-                            {
-                                return false;
-                            }
-                        }
-                    }
-
-                    if (condIt->second.right.second != UNLIMITED)
-                    {
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.right.second);
-                        auto rhs = (int64_t)0;
-                        if (!it.second.empty())
-                        {
-                            rhs = boost::lexical_cast<int64_t>(it.second);
-                        }
-
-                        if (condIt->second.right.first)
-                        {
-                            if (!(lhs >= rhs))
-                            {
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            if (!(lhs > rhs))
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-#endif
         }
     }
     catch (std::exception& e)
@@ -798,90 +732,6 @@ bool Condition::process(Entry::Ptr entry)
 bool Condition::graterThan(Condition::Ptr condition)
 {
     (void)condition;
-    /*
-        try {
-            for(auto it: *(condition->getConditions())) {
-                auto condIt = m_conditions.find(it.first);
-                if(condIt != m_conditions.end()) {
-                    //equal condition
-                    if(condIt->second.left.second == condIt->second.right.second) {
-                        if(it.second.left.second != it.second.right.second) {
-                            // eq vs range
-                            return false;
-                        }
-
-                        // value equal?
-                        if(!(condIt->second.left.second == it.second.left.second)) {
-                            return false;
-                        }
-
-                        // close range or open range?
-                        if(!condIt->second.left.first && it.second.left.first) {
-                            return false;
-                        }
-
-                        if(!condIt->second.right.first && it.second.right.first) {
-                            return false;
-                        }
-                    }
-
-                    if(condIt->second.left.second != UNLIMITED) {
-                        if(it.second.left.second == UNLIMITED) {
-                            return false;
-                        }
-
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.left.second);
-                        auto rhs = boost::lexical_cast<int64_t>(it.second.left.second);
-                        if(condIt->second.left.first && !(lhs <= rhs)) {
-                            return false;
-                        }
-
-                        if(!condIt->second.left.first) {
-                            if(it.second.left.first) {
-                                if(!(lhs < rhs)) {
-                                    return false;
-                                }
-                            }
-                            else {
-                                if(!(lhs <= rhs)) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-
-                    if(condIt->second.right.second != UNLIMITED) {
-                        if(it.second.right.second == UNLIMITED) {
-                            return false;
-                        }
-
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.right.second);
-                        auto rhs = boost::lexical_cast<int64_t>(it.second.right.second);
-                        if(condIt->second.right.first && !(lhs >= rhs)) {
-                            return false;
-                        }
-
-                        if(!condIt->second.right.first) {
-                            if(it.second.right.first) {
-                                if(!(lhs > rhs)) {
-                                    return false;
-                                }
-                            }
-                            else {
-                                if(!(lhs >= rhs)) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch(std::exception &e) {
-            STORAGE_LOG(WARNING) << "Error while graterThan condition: " <<
-       boost::diagnostic_information(e); return false;
-        }
-    */
 
     return true;
 }
@@ -889,57 +739,6 @@ bool Condition::graterThan(Condition::Ptr condition)
 bool Condition::related(Condition::Ptr condition)
 {
     (void)condition;
-    /*
-        try {
-            for(auto condIt: m_conditions) {
-                auto it = condition->getConditions()->find(condIt.first);
-                if(it == condition->getConditions()->end()) {
-                    return true;
-                }
-                else {
-                    if(it->second.left.first && condIt.second.left.first && it->second.left.second
-       == condIt.second.left.second) { return true;
-                    }
-
-                    if(it->second.right.first && condIt.second.right.first &&
-       it->second.right.second == condIt.second.right.second) { return true;
-                    }
-
-                    if(condIt.second.left.second == UNLIMITED || it->second.left.second ==
-       UNLIMITED) { return true;
-                    }
-
-                    if(condIt.second.right.second == UNLIMITED || it->second.right.second ==
-       UNLIMITED) { return true;
-                    }
-
-                    auto leftLHS = boost::lexical_cast<int64_t>(condIt.second.left.second);
-                    auto leftRHS = boost::lexical_cast<int64_t>(it->second.left.second);
-                    auto rightLHS = boost::lexical_cast<int64_t>(condIt.second.right.second);
-                    auto rightRHS = boost::lexical_cast<int64_t>(it->second.right.second);
-
-                    if(leftLHS < rightLHS && leftRHS < rightLHS) {
-                        return false;
-                    }
-
-                    if(leftLHS > rightRHS && leftRHS > rightRHS) {
-                        return false;
-                    }
-
-                    return true;
-                }
-            }
-        }
-        catch(std::exception &e) {
-            STORAGE_LOG(WARNING) << "Error while related condition: " <<
-       boost::diagnostic_information(e); return false;
-        }
-    */
 
     return false;
-}
-
-Entries::Ptr Condition::processEntries(Entries::Ptr entries)
-{
-    return entries;
 }

@@ -59,7 +59,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
         if (condition)
         {
             uint32_t index = 0;
-            for (auto& it : *(condition->getConditions()))
+            for (auto& it : *(condition))
             {
                 PreparedStatement_setString(
                     _prepareStatement, ++index, it.second.right.second.c_str());
@@ -108,7 +108,7 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
     if (condition)
     {
         uint32_t index = 0;
-        auto conditionmap = *(condition->getConditions());
+        auto conditionmap = *(condition);
         auto it = conditionmap.begin();
         for (; it != conditionmap.end(); ++it)
         {

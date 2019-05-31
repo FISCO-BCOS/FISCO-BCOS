@@ -51,7 +51,7 @@ Entries::Ptr SQLStorage::select(
 
         if (condition)
         {
-            for (auto it : *(condition->getConditions()))
+            for (auto it : *(condition))
             {
                 Json::Value cond;
                 cond.append(it.first);

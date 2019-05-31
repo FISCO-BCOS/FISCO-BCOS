@@ -291,7 +291,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
         tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
                 for (auto it = range.begin(); it != range.end(); ++it)
                 {
                     if (!it->second->deleted())
