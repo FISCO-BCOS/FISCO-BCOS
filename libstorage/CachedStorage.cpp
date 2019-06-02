@@ -625,7 +625,7 @@ void CachedStorage::updateMRU(const std::string& table, const std::string& key, 
 }
 
 std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::touchCache(
-    TableInfo::Ptr tableInfo, const std::string& key, bool write, bool required)
+    TableInfo::Ptr tableInfo, const std::string& key, bool write)
 {
     bool hit = true;
 

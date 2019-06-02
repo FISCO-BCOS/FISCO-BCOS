@@ -124,7 +124,7 @@ private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
     void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
     std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
-        TableInfo::Ptr table, const std::string& key, bool write = false, bool required);
+        TableInfo::Ptr table, const std::string& key, bool write = false);
 
     void removeCache(const std::string& table, const std::string& key);
 
