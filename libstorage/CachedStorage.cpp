@@ -144,7 +144,7 @@ Entries::Ptr CachedStorage::select(
 
     auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
-    Cache::Ptr caches = std::get<0>(result);
+    Cache::Ptr caches = std::get<1>(result);
     auto entries = caches->entriesPtr();
     for (auto entry : *entries)
     {
@@ -160,13 +160,13 @@ Entries::Ptr CachedStorage::select(
     return out;
 }
 
-std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNoCondition(h256 hash,
+std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNoCondition(h256 hash,
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
 
     auto result = touchCache(tableInfo, key);
-    auto caches = std::get<0>(result);
+    auto caches = std::get<1>(result);
 
     if (caches->empty())
     {
@@ -196,7 +196,7 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>> CachedStorage::selectNo
         touchMRU(tableInfo->name, key, 0);
     }
 
-    return std::make_tuple(caches, std::get<1>(result));
+    return std::make_tuple(std::get<0>(result), caches);
 }
 
 size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -246,7 +246,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             if (id != 0)
                             {
                                 auto result = touchCache(requestData->info, key, true);
-                                auto caches = std::get<0>(result);
+                                auto caches = std::get<1>(result);
                                 if (caches->empty())
                                 {
                                     if (m_backend)
@@ -388,7 +388,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             {
                 auto result = touchCache(commitData->info, key, true);
 
-                auto caches = std::get<0>(result);
+                auto caches = std::get<1>(result);
                 caches->setNum(num);
                 caches->entries()->addEntry(cacheEntry);
                 caches->setEmpty(false);
@@ -396,7 +396,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             else
             {
                 auto result = touchCache(commitData->info, key, true);
-                auto caches = std::get<0>(result);
+                auto caches = std::get<1>(result);
                 if (caches->empty())
                 {
                     if (m_backend)
@@ -624,7 +624,7 @@ void CachedStorage::updateMRU(const std::string& table, const std::string& key, 
     }
 }
 
-std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::touchCache(
+std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::touchCache(
     TableInfo::Ptr tableInfo, const std::string& key, bool write)
 {
     bool hit = true;
@@ -658,7 +658,7 @@ std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::to
         ++m_hitTimes;
     }
 
-    return std::make_tuple(cache, cacheLock, locked);
+    return std::make_tuple(cacheLock, cache, locked);
 }
 
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
@@ -726,7 +726,7 @@ void CachedStorage::checkAndClear()
                 tableInfo->name = it->first;
 
                 auto result = touchCache(tableInfo, it->second);
-                auto cache = std::get<0>(result);
+                auto cache = std::get<1>(result);
                 if (std::get<2>(result))
                 {
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))

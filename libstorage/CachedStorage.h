@@ -100,7 +100,7 @@ public:
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
-    virtual std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped> > selectNoCondition(h256 hash,
+    virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(h256 hash,
         int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr);
 
@@ -123,7 +123,7 @@ public:
 private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
     void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
-    std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
+    std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> touchCache(
         TableInfo::Ptr table, const std::string& key, bool write = false);
 
     void removeCache(const std::string& table, const std::string& key);
