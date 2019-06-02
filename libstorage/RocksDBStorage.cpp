@@ -81,7 +81,12 @@ Entries::Ptr RocksDBStorage::select(
                 }
                 entry->setID(it->at(ID_FIELD));
                 entry->setNum(it->at(NUM_FIELD));
-                entry->setStatus(it->at(STATUS));
+
+                auto statusIt = it->find(STATUS);
+                if(statusIt != it->end()) {
+                	entry->setStatus(statusIt->second);
+                }
+
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
