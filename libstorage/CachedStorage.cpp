@@ -625,7 +625,7 @@ void CachedStorage::updateMRU(const std::string& table, const std::string& key, 
 }
 
 std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> CachedStorage::touchCache(
-    TableInfo::Ptr tableInfo, const std::string& key, bool write)
+    TableInfo::Ptr tableInfo, const std::string& key, bool write, bool required)
 {
     bool hit = true;
 
@@ -667,6 +667,7 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
 
     auto cacheKey = table + "_" + key;
     m_caches.unsafe_erase(cacheKey);
+    //m_caches.erase(cacheKey);
 }
 
 void CachedStorage::checkAndClear()
@@ -712,7 +713,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-            for (auto it = m_mru->begin(); it != m_mru->end(); ++it)
+            for (auto it = m_mru->begin(); it != m_mru->end();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
@@ -754,7 +755,7 @@ void CachedStorage::checkAndClear()
                 }
                 else
                 {
-                    continue;
+                    ++it;
                 }
 
                 if (m_capacity <= m_maxCapacity || m_mru->empty())

@@ -124,7 +124,7 @@ private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
     void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
     std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
-        TableInfo::Ptr table, const std::string& key, bool write = false);
+        TableInfo::Ptr table, const std::string& key, bool write = false, bool required);
 
     void removeCache(const std::string& table, const std::string& key);
 
@@ -134,6 +134,7 @@ private:
     std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
+    //std::map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
 
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
