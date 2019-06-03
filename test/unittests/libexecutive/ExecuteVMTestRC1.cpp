@@ -16,9 +16,9 @@
  *
  * @brief
  *
- * @file ExecuteVMTest.cpp
+ * @file ExecuteVMTestRC1.cpp
  * @author: jimmyshi
- * @date 2018-09-21
+ * @date 2019-06-03
  */
 
 #include <libblockverifier/ExecutiveContext.h>
@@ -65,24 +65,16 @@ public:
       : TestOutputHelperFixture(),
         m_mptStates(std::make_shared<MPTState>(
             u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty))
-    {}
+    {
+        g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
+        BOOST_CHECK(g_BCOSConfig.version() == RC1_VERSION);
+    }
 
     EnvInfo initEnvInfo()
     {
         EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
         blockverifier::ExecutiveContext::Ptr executiveContext =
             make_shared<blockverifier::ExecutiveContext>();
-        executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
-        envInfo.setPrecompiledEngine(executiveContext);
-        return envInfo;
-    }
-
-    EnvInfo initEnvInfo(uint64_t _gasLimit)
-    {
-        EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
-        blockverifier::ExecutiveContext::Ptr executiveContext =
-            make_shared<blockverifier::ExecutiveContext>();
-        executiveContext->setTxGasLimit(_gasLimit);
         executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
         envInfo.setPrecompiledEngine(executiveContext);
         return envInfo;
@@ -133,7 +125,7 @@ private:
     }
 };
 
-BOOST_FIXTURE_TEST_SUITE(ExecuteVMTest, ExecuteVMTestFixture)
+BOOST_FIXTURE_TEST_SUITE(ExecuteVMTestRC1, ExecuteVMTestFixture)
 
 BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
 {
@@ -262,72 +254,6 @@ contract HelloWorld{
     e4.setResultRecipient(destroyExeRes);
     executeTransaction(e4, destroyTx);
     BOOST_CHECK(!m_mptStates->addressHasCode(newAddress));
-}
-
-BOOST_AUTO_TEST_CASE(OutOfGasIntrinsicTest)
-{
-    u256 value = 0;
-    u256 gasPrice = 0;
-    u256 gas = 10;  // not enough gas
-    Address caller = Address("1000000000000000000000000000000000000000");
-    bytes code(692, 1);  // 100000 =?= 53000 + non-zero * 68 + zero * 4
-
-    Executive e(m_mptStates, initEnvInfo(100000));  // set gas limit to little
-    Transaction tx(value, gasPrice, gas, code);     // Use contract creation constructor
-    tx.forceSender(caller);
-    BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasIntrinsic);  // Throw in rc2 and later
-
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasIntrinsic);
-}
-
-BOOST_AUTO_TEST_CASE(OutOfGasBaseTest)
-{
-    u256 value = 0;
-    u256 gasPrice = 0;
-    u256 gas = 10;  // given not enough gas
-    Address caller = Address("1000000000000000000000000000000000000000");
-    bytes code = fromHex(
-        string("608060405234801561001057600080fd5b50607b6000819055506101ea806100286000396000f300608"
-               "060405260043610610062576000357c0100000000000000000000000000000000000000000000000000"
-               "000000900463ffffffff16806360fe47b1146100675780636d4ce63c1461009457806383197ef014610"
-               "0bf578063b7379733146100d6575b600080fd5b34801561007357600080fd5b50610092600480360381"
-               "01908080359060200190929190505050610101565b005b3480156100a057600080fd5b506100a961010"
-               "b565b6040518082815260200191505060405180910390f35b3480156100cb57600080fd5b506100d461"
-               "0114565b005b3480156100e257600080fd5b506100eb610118565b60405180828152602001915050604"
-               "05180910390f35b8060008190555050565b60008054905090565b6000ff5b60003073ffffffffffffff"
-               "ffffffffffffffffffffffffff16636d4ce63c6040518163ffffffff167c01000000000000000000000"
-               "00000000000000000000000000000000000028152600401602060405180830381600087803b15801561"
-               "017e57600080fd5b505af1158015610192573d6000803e3d6000fd5b505050506040513d60208110156"
-               "101a857600080fd5b81019080805190602001909291905050509050905600a165627a7a723058207eb7"
-               "0dc4a752ca8296fc60a702b8fba26d66ed4ac38c8801fe7eff92664b671e0029") +
-        string(""));
-
-    Executive e(m_mptStates, initEnvInfo());
-    Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
-    tx.forceSender(caller);
-    BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);  // Throw in rc2 and later
-
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasBase);
-}
-
-BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
-{
-    // RC2+ only
-    u256 value = 0;
-    u256 gasPrice = 0;
-    u256 gas = 100000000;
-    Address caller = Address("1000000000000000000000000000000000000000");
-    Address addr = Address(0x4fff);  // non exist address
-    bytes inputs = fromHex("0x0");
-    Transaction setTx(value, gasPrice, gas, addr, inputs);
-    setTx.forceSender(caller);
-
-    Executive e(m_mptStates, initEnvInfo());
-    ExecutionResult res;
-    e.setResultRecipient(res);
-    executeTransaction(e, setTx);
-
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::CallAddressError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

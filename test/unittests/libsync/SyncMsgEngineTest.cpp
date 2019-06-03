@@ -201,7 +201,12 @@ BOOST_AUTO_TEST_CASE(BatchSendTest)
 
     shared_ptr<bytes> maxRlp = make_shared<bytes>(maxPayloadSize + 1);
     shared_ptr<bytes> quarterRlp = make_shared<bytes>(quarterPayloadSize);
+    shared_ptr<bytes> zeroRlp = make_shared<bytes>(0);
 
+    BOOST_CHECK_EQUAL(service->sentCnt, 0);
+
+    // size <= 1/4
+    batchSender->batchAndSend(zeroRlp);
     BOOST_CHECK_EQUAL(service->sentCnt, 0);
 
     // size <= 1/4
