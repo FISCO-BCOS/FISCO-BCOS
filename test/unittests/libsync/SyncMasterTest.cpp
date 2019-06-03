@@ -21,6 +21,7 @@
  * @date: 2018-10-15
  */
 
+#include <json/json.h>
 #include <libethcore/Transaction.h>
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
@@ -117,6 +118,16 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
+
+BOOST_AUTO_TEST_CASE(syncInfoFormatTest)
+{
+    std::shared_ptr<SyncMaster> sync = fakeSyncToolsSet(5, 5, NodeID(100)).sync;
+    std::string info = sync->syncInfo();
+
+    Json::Reader reader;
+    Json::Value syncInfo;
+    BOOST_CHECK(reader.parse(info, syncInfo));  // return string can parse to json obj
+}
 
 BOOST_AUTO_TEST_CASE(ConstructorTest)
 {
