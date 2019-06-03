@@ -404,7 +404,7 @@ protected:
 
     template <class T>
     inline CheckResult checkBasic(
-        std::shared_ptr<T> req, std::ostringstream& oss, bool needCheckSign) const
+        std::shared_ptr<T> req, std::ostringstream& oss, bool const& needCheckSign) const
     {
         if (isSyncingHigherBlock(req))
         {
@@ -439,6 +439,7 @@ protected:
             }
             return CheckResult::INVALID;
         }
+        return CheckResult::VALID;
     }
     /**
      * @brief: common check process when handle SignReq and CommitReq
@@ -457,9 +458,13 @@ protected:
      */
     template <class T>
     inline CheckResult checkReq(
-        std::shared_ptr<T> req, std::ostringstream& oss, bool needCheckSign = true) const
+        std::shared_ptr<T> req, std::ostringstream& oss, bool const& needCheckSign = true) const
     {
         CheckResult result = checkBasic(req, oss, needCheckSign);
+        if (result == CheckResult::FUTURE)
+        {
+            return CheckResult::FUTURE;
+        }
         if (result == CheckResult::INVALID)
         {
             return CheckResult::INVALID;
@@ -485,7 +490,7 @@ protected:
                                   << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
-        return CheckResult::VALID;
+        return result;
     }
 
 

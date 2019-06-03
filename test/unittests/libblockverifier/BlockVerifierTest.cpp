@@ -220,7 +220,7 @@ public:
         pblock->calTransactionRoot();
         blockVerifier->executeBlock(pblock, parentBlockInfo);
 
-        canCallUserBalance(blockVerifier, block, _totalUser);
+        canCallUserBalance(blockVerifier, *pblock, _totalUser);
         return pblock->header().stateRoot();
     }
 };
