@@ -141,6 +141,28 @@ public:
             tx.sender();
     }
 
+    void canCallUserBalance(
+        std::shared_ptr<BlockVerifier> _verifier, Block& _block, size_t _userNum)
+    {
+        // Just check no throw, no result checking
+
+        for (size_t i = 0; i < _userNum; i++)
+        {
+            u256 value = 0;
+            u256 gasPrice = 0;
+            u256 gas = 10000000;
+            Address dest = Address(0x5002);
+            string usr = to_string(i);
+            dev::eth::ContractABI abi;
+            bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
+            u256 nonce = u256(i);
+            Transaction tx(value, gasPrice, gas, dest, data, nonce);
+            tx.setBlockLimit(250);
+            tx.forceSender(Address(0x2333));
+            BOOST_CHECK_NO_THROW(_verifier->executeTransaction(_block.header(), tx));
+        }
+    }
+
     h256 executeVerifier(
         int _totalUser, int _totalTxs, const string& _storageType, bool _enablePara)
     {
@@ -198,6 +220,7 @@ public:
         pblock->calTransactionRoot();
         blockVerifier->executeBlock(pblock, parentBlockInfo);
 
+        canCallUserBalance(blockVerifier, block, _totalUser);
         return pblock->header().stateRoot();
     }
 };
@@ -224,6 +247,8 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
 
     BOOST_CHECK_EQUAL(serialState, paraState);
 }
+
+BOOST_AUTO_TEST_CASE(executeTransactionTest) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 

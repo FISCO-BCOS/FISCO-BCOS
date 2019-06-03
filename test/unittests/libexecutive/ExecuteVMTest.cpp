@@ -64,8 +64,7 @@ public:
     ExecuteVMTestFixture()
       : TestOutputHelperFixture(),
         m_mptStates(std::make_shared<MPTState>(
-            u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty)),
-        m_e(m_mptStates, initEnvInfo())
+            u256(0), MPTState::openDB("./", h256("0x2234")), BaseState::Empty))
     {}
 
     EnvInfo initEnvInfo()
@@ -78,22 +77,21 @@ public:
         return envInfo;
     }
 
-    void executeTransaction(Transaction const& _transaction)
+    void executeTransaction(Executive& _e, Transaction const& _transaction)
     {
         cout << "init" << endl;
-        m_e.initialize(_transaction);
+        _e.initialize(_transaction);
         cout << "execute" << endl;
-        if (!m_e.execute())
+        if (!_e.execute())
         {
             cout << "go" << endl;
-            m_e.go();
+            _e.go();
         }
         cout << "finalize" << endl;
-        m_e.finalize();
+        _e.finalize();
     }
 
     std::shared_ptr<MPTState> m_mptStates;
-    Executive m_e;
 
 private:
     BlockHeader fakeBlockHeader()
@@ -129,19 +127,26 @@ BOOST_FIXTURE_TEST_SUITE(ExecuteVMTest, ExecuteVMTestFixture)
 BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
 {
     /*
-    pragma solidity ^0.4.2;
-    contract HelloWorld{
-        uint256 x;
-        function HelloWorld(){
-           x = 123;
-        }
-        function get()constant returns(uint256){
-            return x;
-        }
-        function set(uint256 n){
-            x = n;
-        }
+pragma solidity ^0.4.2;
+contract HelloWorld{
+    uint256 x;
+    function HelloWorld(){
+       x = 123;
     }
+    function get()constant returns(uint256){
+        return x;
+    }
+    function set(uint256 n){
+        x = n;
+    }
+    function getByCall()constant returns(uint256){
+        return HelloWorld(this).get();
+    }
+    function destroy()
+    {
+        selfdestruct(0x0);
+    }
+}
     */
 
     // Deploy a contract
@@ -150,31 +155,44 @@ BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
     u256 gas = 100000000;
     Address caller = Address("1000000000000000000000000000000000000000");
     bytes code = fromHex(
-        string("608060405234801561001057600080fd5b50607b60008190555060df806100276000396000f30060806"
-               "04052600436106049576000357c01000000000000000000000000000000000000000000000000000000"
-               "00900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b3480156059576"
-               "00080fd5b5060766004803603810190808035906020019092919050505060a0565b005b348015608357"
-               "600080fd5b50608a60aa565b6040518082815260200191505060405180910390f35b806000819055505"
-               "0565b600080549050905600a165627a7a7230582093ef3ef61e120625973ff74daef914bf89008283e9"
-               "c9937238f291c672adeb0d0029") +
+        string("608060405234801561001057600080fd5b50607b6000819055506101ea806100286000396000f300608"
+               "060405260043610610062576000357c0100000000000000000000000000000000000000000000000000"
+               "000000900463ffffffff16806360fe47b1146100675780636d4ce63c1461009457806383197ef014610"
+               "0bf578063b7379733146100d6575b600080fd5b34801561007357600080fd5b50610092600480360381"
+               "01908080359060200190929190505050610101565b005b3480156100a057600080fd5b506100a961010"
+               "b565b6040518082815260200191505060405180910390f35b3480156100cb57600080fd5b506100d461"
+               "0114565b005b3480156100e257600080fd5b506100eb610118565b60405180828152602001915050604"
+               "05180910390f35b8060008190555050565b60008054905090565b6000ff5b60003073ffffffffffffff"
+               "ffffffffffffffffffffffffff16636d4ce63c6040518163ffffffff167c01000000000000000000000"
+               "00000000000000000000000000000000000028152600401602060405180830381600087803b15801561"
+               "017e57600080fd5b505af1158015610192573d6000803e3d6000fd5b505050506040513d60208110156"
+               "101a857600080fd5b81019080805190602001909291905050509050905600a165627a7a723058207eb7"
+               "0dc4a752ca8296fc60a702b8fba26d66ed4ac38c8801fe7eff92664b671e0029") +
         string(""));
 
+    Executive e0(m_mptStates, initEnvInfo());
     Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
     tx.forceSender(caller);
-    executeTransaction(tx);
+    executeTransaction(e0, tx);
 
-    Address newAddress = m_e.newAddress();
+    Address newAddress = e0.newAddress();
     cout << "Contract created at: " << newAddress << endl;
 
     bytes createdCode = m_mptStates->code(newAddress);
     cout << "Created code: " << toHex(createdCode) << endl;
 
     bytes runtimeCode = fromHex(
-        "6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000"
-        "900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b348015605957600080fd5b"
-        "5060766004803603810190808035906020019092919050505060a0565b005b348015608357600080fd5b50608a"
-        "60aa565b6040518082815260200191505060405180910390f35b8060008190555050565b600080549050905600"
-        "a165627a7a7230582093ef3ef61e120625973ff74daef914bf89008283e9c9937238f291c672adeb0d0029");
+        "608060405260043610610062576000357c01000000000000000000000000000000000000000000000000000000"
+        "00900463ffffffff16806360fe47b1146100675780636d4ce63c1461009457806383197ef0146100bf578063b7"
+        "379733146100d6575b600080fd5b34801561007357600080fd5b50610092600480360381019080803590602001"
+        "90929190505050610101565b005b3480156100a057600080fd5b506100a961010b565b60405180828152602001"
+        "91505060405180910390f35b3480156100cb57600080fd5b506100d4610114565b005b3480156100e257600080"
+        "fd5b506100eb610118565b6040518082815260200191505060405180910390f35b8060008190555050565b6000"
+        "8054905090565b6000ff5b60003073ffffffffffffffffffffffffffffffffffffffff16636d4ce63c60405181"
+        "63ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401602060"
+        "405180830381600087803b15801561017e57600080fd5b505af1158015610192573d6000803e3d6000fd5b5050"
+        "50506040513d60208110156101a857600080fd5b81019080805190602001909291905050509050905600a16562"
+        "7a7a723058207eb70dc4a752ca8296fc60a702b8fba26d66ed4ac38c8801fe7eff92664b671e0029");
 
     BOOST_CHECK(runtimeCode == createdCode);
 
@@ -182,29 +200,57 @@ BOOST_AUTO_TEST_CASE(DeployGetSetContractTest)
     bytes callDataToSet =
         fromHex(string("0x60fe47b1") +  // set(0xaa)
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
-    Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);  // Use message call
-                                                                         // constructor
+    Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);
     setTx.forceSender(caller);
 
+    Executive e1(m_mptStates, initEnvInfo());
     ExecutionResult setExeRes;
-    m_e.setResultRecipient(setExeRes);
-    executeTransaction(setTx);
+    e1.setResultRecipient(setExeRes);
+    executeTransaction(e1, setTx);
 
     // get()
     bytes callDataToGet = fromHex(string("6d4ce63c") +  // get()
                                   string(""));
 
-    Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);  // Use message call
-                                                                         // constructor
+    Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);
     getTx.forceSender(caller);
 
+    Executive e2(m_mptStates, initEnvInfo());
     ExecutionResult getExeRes;
-    m_e.setResultRecipient(getExeRes);
-    executeTransaction(getTx);
+    e2.setResultRecipient(getExeRes);
+    executeTransaction(e2, getTx);
 
     bytes compareName = fromHex("00000000000000000000000000000000000000000000000000000000000000aa");
     cout << "get() result: " << toHex(getExeRes.output) << endl;
     BOOST_CHECK(getExeRes.output == compareName);
+
+    // getByCall()
+    bytes callDataToGetByCall = fromHex(string("b7379733") +  // getByCall()
+                                        string(""));
+
+    Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    getByCallTx.forceSender(caller);
+
+    Executive e3(m_mptStates, initEnvInfo());
+    ExecutionResult getExeResByCall;
+    e3.setResultRecipient(getExeResByCall);
+    executeTransaction(e3, getByCallTx);
+
+    cout << "getByCall() result: " << toHex(getExeResByCall.output) << endl;
+    BOOST_CHECK(getExeResByCall.output == compareName);
+
+    // destroy
+    bytes callDestroy = fromHex(string("83197ef0") +  // destroy()
+                                string(""));
+
+    Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
+    destroyTx.forceSender(caller);
+
+    Executive e4(m_mptStates, initEnvInfo());
+    ExecutionResult destroyExeRes;
+    e4.setResultRecipient(destroyExeRes);
+    executeTransaction(e4, destroyTx);
+    BOOST_CHECK(!m_mptStates->addressHasCode(newAddress));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
