@@ -801,7 +801,7 @@ void CachedStorage::checkAndClear()
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
     // auto oldValue = m_capacity.fetch_and_add(capacity);
-    // auto oldValue = m_capacity.fetch_add(capacity);
+    m_capacity.fetch_add(capacity);
 
 #if 0
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity) << " , from: " << oldValue
