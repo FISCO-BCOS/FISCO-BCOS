@@ -122,6 +122,11 @@ BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
 BOOST_AUTO_TEST_CASE(syncInfoFormatTest)
 {
     std::shared_ptr<SyncMaster> sync = fakeSyncToolsSet(5, 5, NodeID(100)).sync;
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash});
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
+
     std::string info = sync->syncInfo();
 
     Json::Reader reader;
