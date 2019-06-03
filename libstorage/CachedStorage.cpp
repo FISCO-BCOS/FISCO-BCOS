@@ -636,11 +636,11 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
     bool inserted = false;
     {
-		RWMutexScoped lockCache(m_cachesMutex, false);
-		auto result = m_caches.insert(std::make_pair(cacheKey, cache));
-		cache = result.first->second;
+        RWMutexScoped lockCache(m_cachesMutex, false);
+        auto result = m_caches.insert(std::make_pair(cacheKey, cache));
+        cache = result.first->second;
 
-		inserted = result.second;
+        inserted = result.second;
     }
 
     auto cacheLock = std::make_shared<Cache::RWScoped>(*(cache->mutex()), write);
@@ -663,11 +663,11 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
-	RWMutexScoped lockCache(m_cachesMutex, true);
+    RWMutexScoped lockCache(m_cachesMutex, true);
 
     auto cacheKey = table + "_" + key;
     m_caches.unsafe_erase(cacheKey);
-    //m_caches.erase(cacheKey);
+    // m_caches.erase(cacheKey);
 }
 
 void CachedStorage::checkAndClear()
@@ -792,7 +792,7 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    //auto oldValue = m_capacity.fetch_and_add(capacity);
+    // auto oldValue = m_capacity.fetch_and_add(capacity);
     auto oldValue = m_capacity.fetch_add(capacity);
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity) << " , from: " << oldValue
                               << " to: " << m_capacity;

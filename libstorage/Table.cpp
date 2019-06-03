@@ -39,7 +39,7 @@ using namespace dev::storage;
 Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
     m_data->m_refCount = 1;
-    //m_data->m_fields.insert(std::make_pair(STATUS, "0"));
+    // m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
 
 Entry::~Entry()
@@ -135,25 +135,29 @@ size_t Entry::getTempIndex() const
 
 void Entry::setTempIndex(size_t index)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_tempIndex = index;
 }
 
-std::map<std::string, std::string>::const_iterator Entry::find(const std::string &key) const {
-	return m_data->m_fields.find(key);
+std::map<std::string, std::string>::const_iterator Entry::find(const std::string& key) const
+{
+    return m_data->m_fields.find(key);
 }
 
-std::map<std::string, std::string>::const_iterator Entry::begin() const {
-	return m_data->m_fields.begin();
+std::map<std::string, std::string>::const_iterator Entry::begin() const
+{
+    return m_data->m_fields.begin();
 }
 
-std::map<std::string, std::string>::const_iterator Entry::end() const {
-	return m_data->m_fields.end();
+std::map<std::string, std::string>::const_iterator Entry::end() const
+{
+    return m_data->m_fields.end();
 }
 
-size_t Entry::size() const {
-	return m_data->m_fields.size();
+size_t Entry::size() const
+{
+    return m_data->m_fields.size();
 }
 
 int Entry::getStatus() const
@@ -219,7 +223,7 @@ void Entry::setNum(uint32_t num)
 
 void Entry::setNum(const std::string& id)
 {
-	RWMutexScoped lock(m_data->m_mutex, true);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_num = boost::lexical_cast<uint32_t>(id);
     m_dirty = true;
@@ -390,12 +394,14 @@ Entries::Vector::const_iterator Entries::end() const
     return m_entries.end();
 }
 
-Entries::Vector::iterator Entries::begin() {
-	return m_entries.begin();
+Entries::Vector::iterator Entries::begin()
+{
+    return m_entries.begin();
 }
 
-Entries::Vector::iterator Entries::end() {
-	return m_entries.end();
+Entries::Vector::iterator Entries::end()
+{
+    return m_entries.end();
 }
 
 Entries::Vector::reference Entries::operator[](Vector::size_type index)
@@ -632,16 +638,19 @@ int Condition::getCount()
     return m_count;
 }
 
-std::map<std::string, Condition::Range>::const_iterator Condition::begin() const {
-	return m_conditions.begin();
+std::map<std::string, Condition::Range>::const_iterator Condition::begin() const
+{
+    return m_conditions.begin();
 }
 
-std::map<std::string, Condition::Range>::const_iterator Condition::end() const {
-	return m_conditions.end();
+std::map<std::string, Condition::Range>::const_iterator Condition::end() const
+{
+    return m_conditions.end();
 }
 
-bool Condition::empty() {
-	return m_conditions.empty();
+bool Condition::empty()
+{
+    return m_conditions.empty();
 }
 
 bool Condition::process(Entry::Ptr entry)

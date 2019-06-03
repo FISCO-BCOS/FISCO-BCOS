@@ -93,7 +93,7 @@ public:
     CachedStorage();
 
     typedef tbb::spin_rw_mutex RWMutex;
-	typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
 
     virtual ~CachedStorage();
 
@@ -134,7 +134,7 @@ private:
     std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
-    //std::map<std::string, Cache::Ptr> m_caches;
+    // std::map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
 
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
@@ -163,7 +163,7 @@ private:
     boost::atomic_uint64_t m_hitTimes;
     boost::atomic_uint64_t m_queryTimes;
 
-    std::shared_ptr<boost::atomic_bool > m_running;
+    std::shared_ptr<boost::atomic_bool> m_running;
 };
 
 }  // namespace storage

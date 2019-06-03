@@ -131,9 +131,9 @@ Entries::Ptr SQLStorage::select(
                 {
                     entry->setNum(fieldValue);
                 }
-                else if(columns[j] == STATUS)
+                else if (columns[j] == STATUS)
                 {
-                	entry->setStatus(fieldValue);
+                    entry->setStatus(fieldValue);
                 }
                 else
                 {
