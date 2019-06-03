@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(CommonTransactionNonceCheckTest, TestOutputHelperFixture)
 
 /// fake single transaction
-Transaction fakeTransaction()
+Transaction fakeTransaction(size_t _idx = 0)
 {
     u256 value = u256(100);
     u256 gas = u256(100000000);
@@ -44,7 +44,7 @@ Transaction fakeTransaction()
     std::string str =
         "test transaction for CommonTransactionNonceCheck" + std::to_string(utcTime());
     bytes data(str.begin(), str.end());
-    u256 const& nonce = u256(utcTime());
+    u256 const& nonce = u256(utcTime() + _idx);
     Transaction fakeTx(value, gasPrice, gas, dst, data, nonce);
 
     Secret sec = KeyPair::create().secret();
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     Transactions txs;
     for (size_t i = 0; i < 2; i++)
     {
-        txs.emplace_back(fakeTransaction());
+        txs.emplace_back(fakeTransaction(i));
     }
 
     CommonTransactionNonceCheck cache;
