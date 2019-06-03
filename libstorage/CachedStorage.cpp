@@ -132,6 +132,8 @@ CachedStorage::~CachedStorage()
 Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
     const std::string& key, Condition::Ptr condition)
 {
+    // CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
+    //                          << " key: " << key;
     auto out = std::make_shared<Entries>();
 
     auto result = selectNoCondition(hash, num, tableInfo, key, condition);
