@@ -40,7 +40,6 @@ namespace dev
 {
 namespace storage
 {
-
 using Parallel = std::true_type;
 using Serial = std::false_type;
 

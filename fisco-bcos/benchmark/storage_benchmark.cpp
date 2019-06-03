@@ -31,8 +31,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/format.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/format.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/from_stream.hpp>
@@ -78,7 +78,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 
     for (size_t i = 0; i < round; ++i)
     {
-    	auto roundStart = std::chrono::system_clock::now();
+        auto roundStart = std::chrono::system_clock::now();
         auto factory = factoryFactory->newTableFactory(dev::h256(0), i + 2);
 
         tbb::parallel_for(
@@ -119,36 +119,37 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
         auto roundEnd = std::chrono::system_clock::now();
         std::chrono::duration<double> roundElapsed = roundEnd - roundStart;
         std::cout << "Round " << i << " elapsed: " << roundElapsed.count() << std::endl;
-
     }
 
     auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
-    std::cout << "Execute time elapsed " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-              << elapsed.count() << std::endl;
+    std::cout << "Execute time elapsed " << std::setiosflags(std::ios::fixed)
+              << std::setprecision(4) << elapsed.count() << std::endl;
 
-    if(verify) {
-		auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
-		tbb::parallel_for(
-			tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
-				for (size_t j = range.begin(); j < range.end(); ++j)
-				{
-						auto dataTable = factory->openTable("test_data");
-						auto txTable = factory->openTable("tx_hash_2_block");
+    if (verify)
+    {
+        auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t j = range.begin(); j < range.end(); ++j)
+                {
+                    auto dataTable = factory->openTable("test_data");
+                    auto txTable = factory->openTable("tx_hash_2_block");
 
-						auto key = (boost::format("[%08d]") % j).str();
-						auto condition = dataTable->newCondition();
-						auto dataEntries = dataTable->select(key, condition);
+                    auto key = (boost::format("[%08d]") % j).str();
+                    auto condition = dataTable->newCondition();
+                    auto dataEntries = dataTable->select(key, condition);
 
-						auto dataEntry = dataEntries->get(0);
+                    auto dataEntry = dataEntries->get(0);
 
-						size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
-						if(value != 1000 * round) {
-							std::cout << "Verify failed, value: " << value << " != " << round * 1000;
-						}
-				}
-		});
+                    size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
+                    if (value != 1000 * round)
+                    {
+                        std::cout << "Verify failed, value: " << value << " != " << round * 1000;
+                    }
+                }
+            });
     }
 }
 
@@ -162,17 +163,18 @@ int main(int argc, char* argv[])
 
     boost::property_tree::ptree pt;
 
-	boost::property_tree::read_ini("config.ini", pt);
+    boost::property_tree::read_ini("config.ini", pt);
 
-	/// init log
-	auto logInitializer = std::make_shared<LogInitializer>();
-	logInitializer->initLog(pt);
+    /// init log
+    auto logInitializer = std::make_shared<LogInitializer>();
+    logInitializer->initLog(pt);
 
     size_t round = boost::lexical_cast<size_t>(argv[1]);
     size_t count = boost::lexical_cast<size_t>(argv[2]);
     bool verify = false;
-    if(argc > 3) {
-    	verify = boost::lexical_cast<bool>(argv[3]);
+    if (argc > 3)
+    {
+        verify = boost::lexical_cast<bool>(argv[3]);
     }
 
     testMemoryTable2(round, count, verify);

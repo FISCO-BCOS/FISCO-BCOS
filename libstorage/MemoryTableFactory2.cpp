@@ -59,7 +59,7 @@ MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 Table::Ptr MemoryTableFactory2::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
 {
-	(void)isPara;
+    (void)isPara;
 
     RecursiveGuard l(x_name2Table);
     auto it = m_name2Table.find(tableName);

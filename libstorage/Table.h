@@ -83,7 +83,7 @@ public:
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
 
-    virtual std::map<std::string, std::string>::const_iterator find(const std::string &key) const;
+    virtual std::map<std::string, std::string>::const_iterator find(const std::string& key) const;
 
     virtual std::map<std::string, std::string>::const_iterator begin() const;
     virtual std::map<std::string, std::string>::const_iterator end() const;
@@ -168,7 +168,7 @@ public:
     virtual Vector::const_iterator end() const;
 
     virtual Vector::iterator begin();
-	virtual Vector::iterator end();
+    virtual Vector::iterator end();
 
     virtual Vector::reference operator[](Vector::size_type index);
 

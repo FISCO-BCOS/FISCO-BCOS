@@ -103,7 +103,7 @@ private:
         {
             for (size_t i = 0; i < entries->size(); ++i)
             {
-				indexes.emplace_back(i);
+                indexes.emplace_back(i);
             }
             return indexes;
         }
