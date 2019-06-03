@@ -636,7 +636,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
     bool inserted = false;
     {
-        RWMutexScoped lockCache(m_cachesMutex, false);
+        //RWMutexScoped lockCache(m_cachesMutex, false);
         auto result = m_caches.insert(std::make_pair(cacheKey, cache));
         cache = result.first->second;
 
