@@ -104,6 +104,34 @@ void PBFTSealer::stop()
     m_pbftEngine->stop();
 }
 
+void PBFTSealer::attempIncreaseTimeoutTx()
+{
+    if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
+    {
+        return;
+    }
+    if (m_maxNoTimeoutTx == m_pbftEngine->maxBlockTransactions())
+    {
+        m_lastTimeoutTx = m_maxNoTimeoutTx;
+        return;
+    }
+    /// attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
+    if (m_maxNoTimeoutTx * 0.1 > 1)
+    {
+        m_lastTimeoutTx = m_maxNoTimeoutTx * (1 + 0.1);
+    }
+    else
+    {
+        m_lastTimeoutTx *= 2;
+    }
+    if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
+    {
+        m_lastTimeoutTx = m_pbftEngine->maxBlockTransactions();
+    }
+    PBFTSEALER_LOG(INFO) << LOG_DESC("attempIncreaseTimeoutTx")
+                         << LOG_KV("updatedTimeoutTx", m_lastTimeoutTx);
+}
+
 /// decrease maxBlockCanSeal to half when timeout
 void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
 {
@@ -122,14 +150,7 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
     else
     {
         /// attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
-        if (m_maxNoTimeoutTx * 0.1 > 1)
-        {
-            m_lastTimeoutTx = m_maxNoTimeoutTx * (1 + 0.1);
-        }
-        else
-        {
-            m_lastTimeoutTx *= 2;
-        }
+        attempIncreaseTimeoutTx();
     }
     /// update the maxBlockCanSeal
     {
@@ -204,9 +225,18 @@ void PBFTSealer::increaseMaxTxsCanSeal()
     {
         m_maxBlockCanSeal += 1;
     }
+    // if m_lastTimeoutTx is no large than to m_maxNoTimeoutTx, try to increase m_TimeoutTx
+    if (m_lastTimeoutTx <= m_maxNoTimeoutTx)
+    {
+        attempIncreaseTimeoutTx();
+    }
     if (m_lastTimeoutTx > 0 && m_maxBlockCanSeal > m_lastTimeoutTx)
     {
         m_maxBlockCanSeal = m_lastTimeoutTx;
+    }
+    if (m_maxNoTimeoutTx > 0 && m_maxBlockCanSeal < m_maxNoTimeoutTx)
+    {
+        m_maxBlockCanSeal = m_maxNoTimeoutTx;
     }
     if (m_maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
     {
