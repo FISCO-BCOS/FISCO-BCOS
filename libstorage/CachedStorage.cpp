@@ -137,8 +137,10 @@ CachedStorage::~CachedStorage()
 Entries::Ptr CachedStorage::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
+#if 0
     CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
                               << " key: " << key;
+#endif
 
     auto out = std::make_shared<Entries>();
 
@@ -731,22 +733,28 @@ void CachedStorage::checkAndClear()
                 {
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))
                     {
+#if 0
                         CACHED_STORAGE_LOG(TRACE)
                             << "Clear last recent record: " << it->first << "-" << it->second;
+#endif
 
                         int64_t totalCapacity = 0;
                         for (auto entryIt : *(cache->entries()))
                         {
+#if 0
                             CACHED_STORAGE_LOG(TRACE)
                                 << "entry remove capacity: " << it->first << "-" << it->second
                                 << ", capacity: " << entryIt->capacity();
+#endif
                             totalCapacity += entryIt->capacity();
                         }
 
                         ++clearCount;
+#if 0
                         CACHED_STORAGE_LOG(TRACE) << "remove capacity: " << it->first << "-"
                                                   << it->second << ", capacity: " << totalCapacity
                                                   << ", current cache size: " << m_mru->size();
+#endif
                         updateCapacity(0 - totalCapacity);
 
                         removeCache(it->first, it->second);
@@ -794,8 +802,11 @@ void CachedStorage::updateCapacity(ssize_t capacity)
 {
     // auto oldValue = m_capacity.fetch_and_add(capacity);
     auto oldValue = m_capacity.fetch_add(capacity);
+
+#if 0
     CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity) << " , from: " << oldValue
                               << " to: " << m_capacity;
+#endif
 }
 
 std::string CachedStorage::readableCapacity(size_t num)
