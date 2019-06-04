@@ -35,9 +35,11 @@ namespace dev
 namespace consensus
 {
 /// cache object of given ndoe
-struct PBFTMsgCache
+class PBFTMsgCache
 {
 public:
+    PBFTMsgCache() {}
+    virtual ~PBFTMsgCache() { clearAll(); }
     /**
      * @brief: insert given key into the given-type-cache of the given node id
      *
@@ -46,7 +48,7 @@ public:
      * @return true : insert succeed
      * @return false : insert failed
      */
-    inline bool insertByPacketType(unsigned const& type, std::string const& key)
+    virtual bool insertByPacketType(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -76,7 +78,7 @@ public:
      * @return true: the given key exists
      * @return false: the given key doesn't exist
      */
-    inline bool exists(unsigned const& type, std::string const& key)
+    virtual bool exists(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -111,7 +113,7 @@ public:
         queue.push(key);
     }
     /// clear all the cache
-    inline void clearAll()
+    virtual void clearAll()
     {
         {
             WriteGuard l(x_knownPrepare);
@@ -162,6 +164,13 @@ private:
 class PBFTBroadcastCache
 {
 public:
+    PBFTBroadcastCache() {}
+    virtual ~PBFTBroadcastCache() {}
+
+    void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
+    {
+        m_pbftReqFactory = pbftReqFactory;
+    }
     /**
      * @brief : insert key into the queue according to node id and packet type
      *
@@ -174,7 +183,7 @@ public:
     inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
         if (!m_broadCastKeyCache.count(nodeId))
-            m_broadCastKeyCache[nodeId] = std::make_shared<PBFTMsgCache>();
+            m_broadCastKeyCache[nodeId] = m_pbftReqFactory->buildPBFTMsgCache();
         return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
     }
 
@@ -204,6 +213,7 @@ public:
 private:
     /// maps between node id and its broadcast cache
     std::unordered_map<h512, std::shared_ptr<PBFTMsgCache>> m_broadCastKeyCache;
+    std::shared_ptr<PBFTReqFactory> m_pbftReqFactory = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

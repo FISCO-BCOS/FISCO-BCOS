@@ -46,7 +46,8 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 void PBFTEngine::start()
 {
     assert(m_pbftReqFactory);
-    m_broadCastCache = m_pbftReqFactory->buildPBFTBroadcastCache();
+    m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
+    m_broadCastCache->setPBFTReqFactory(m_pbftReqFactory);
     m_reqCache = m_pbftReqFactory->buildPBFTReqCache();
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
@@ -919,95 +920,102 @@ void PBFTEngine::checkAndCommit()
     }
 }
 
-/// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
-/// check whether view and height is valid, if valid, then commit the block and clear the context
-void PBFTEngine::checkAndSave()
-{
-    auto start_commit_time = utcTime();
-    auto record_time = utcTime();
-    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache()->block_hash);
-    size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache()->block_hash);
-    if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
-    {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave: CommitReq enough")
-                             << LOG_KV("prepareHeight", m_reqCache->prepareCache()->height)
-                             << LOG_KV("commitSize", commit_size)
-                             << LOG_KV("hash", m_reqCache->prepareCache()->block_hash.abridged())
-                             << LOG_KV("nodeIdx", nodeIdx())
-                             << LOG_KV("myNode", m_keyPair.pub().abridged());
-        if (m_reqCache->prepareCache()->view != m_view)
-        {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndSave: InvalidView")
-                                  << LOG_KV("prepView", m_reqCache->prepareCache()->view)
-                                  << LOG_KV("view", m_view)
-                                  << LOG_KV("prepHeight", m_reqCache->prepareCache()->height)
-                                  << LOG_KV(
-                                         "hash", m_reqCache->prepareCache()->block_hash.abridged())
-                                  << LOG_KV("nodeIdx", nodeIdx())
-                                  << LOG_KV("myNode", m_keyPair.pub().abridged());
-            return;
-        }
-        /// add sign-list into the block header
-        if (m_reqCache->prepareCache()->height > m_highestBlock.number())
-        {
-            /// Block block(m_reqCache->prepareCache().block);
-            std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache()->pBlock;
-            m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
-            auto genSig_time_cost = utcTime() - record_time;
-            record_time = utcTime();
-            /// callback block chain to commit block
-            CommitResult ret = m_blockChain->commitBlock(p_block,
-                std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache()->p_execContext));
-            auto commitBlock_time_cost = utcTime() - record_time;
-            record_time = utcTime();
 
-            /// drop handled transactions
-            if (ret == CommitResult::OK)
-            {
-                dropHandledTransactions(*p_block);
-                auto dropTxs_time_cost = utcTime() - record_time;
-                record_time = utcTime();
-                m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache()->height);
-                auto noteSealing_time_cost = utcTime() - record_time;
-                record_time = utcTime();
-                PBFTENGINE_LOG(INFO)
-                    << LOG_DESC("CommitBlock Succ")
-                    << LOG_KV("prepareHeight", m_reqCache->prepareCache()->height)
-                    << LOG_KV("reqIdx", m_reqCache->prepareCache()->idx)
-                    << LOG_KV("hash", m_reqCache->prepareCache()->block_hash.abridged())
-                    << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
-                    << LOG_KV("genSigTimeCost", genSig_time_cost)
-                    << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
-                    << LOG_KV("dropTxsTimeCost", dropTxs_time_cost)
-                    << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
-                    << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
-                m_reqCache->delCache(m_reqCache->prepareCache()->block_hash);
-                m_reqCache->removeInvalidFutureCache(m_highestBlock);
-            }
-            else
-            {
-                PBFTENGINE_LOG(WARNING)
-                    << LOG_DESC("CommitBlock Failed")
-                    << LOG_KV("reqNum", p_block->blockHeader().number())
-                    << LOG_KV("curNum", m_highestBlock.number())
-                    << LOG_KV("reqIdx", m_reqCache->prepareCache()->idx)
-                    << LOG_KV("hash", p_block->blockHeader().hash().abridged())
-                    << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
-                /// note blocksync to sync
-                m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-                m_txPool->handleBadBlock(*p_block);
-            }
+void PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
+{
+    auto record_time = utcTime();
+    auto start_commit_time = utcTime();
+    PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave: CommitReq enough")
+                         << LOG_KV("prepareHeight", m_reqCache->prepareCache()->height)
+                         << LOG_KV("commitSize", commitSize)
+                         << LOG_KV("hash", m_reqCache->prepareCache()->block_hash.abridged())
+                         << LOG_KV("nodeIdx", nodeIdx())
+                         << LOG_KV("myNode", m_keyPair.pub().abridged());
+    if (m_reqCache->prepareCache()->view != m_view)
+    {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndSave: InvalidView")
+                              << LOG_KV("prepView", m_reqCache->prepareCache()->view)
+                              << LOG_KV("view", m_view)
+                              << LOG_KV("prepHeight", m_reqCache->prepareCache()->height)
+                              << LOG_KV("hash", m_reqCache->prepareCache()->block_hash.abridged())
+                              << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("myNode", m_keyPair.pub().abridged());
+        return;
+    }
+    /// add sign-list into the block header
+    if (m_reqCache->prepareCache()->height > m_highestBlock.number())
+    {
+        /// Block block(m_reqCache->prepareCache().block);
+        std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache()->pBlock;
+        m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
+        auto genSig_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+        /// callback block chain to commit block
+        CommitResult ret = m_blockChain->commitBlock(
+            p_block, std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache()->p_execContext));
+        auto commitBlock_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+
+        /// drop handled transactions
+        if (ret == CommitResult::OK)
+        {
+            dropHandledTransactions(*p_block);
+            auto dropTxs_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+            m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache()->height);
+            auto noteSealing_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+            PBFTENGINE_LOG(INFO) << LOG_DESC("CommitBlock Succ")
+                                 << LOG_KV("prepareHeight", m_reqCache->prepareCache()->height)
+                                 << LOG_KV("reqIdx", m_reqCache->prepareCache()->idx)
+                                 << LOG_KV(
+                                        "hash", m_reqCache->prepareCache()->block_hash.abridged())
+                                 << LOG_KV("nodeIdx", nodeIdx())
+                                 << LOG_KV("myNode", m_keyPair.pub().abridged())
+                                 << LOG_KV("genSigTimeCost", genSig_time_cost)
+                                 << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                                 << LOG_KV("dropTxsTimeCost", dropTxs_time_cost)
+                                 << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
+                                 << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
+            m_reqCache->delCache(m_reqCache->prepareCache()->block_hash);
+            m_reqCache->removeInvalidFutureCache(m_highestBlock);
         }
         else
         {
             PBFTENGINE_LOG(WARNING)
-                << LOG_DESC("checkAndSave: Consensus Failed, Block already exists")
-                << LOG_KV("reqNum", m_reqCache->prepareCache()->height)
+                << LOG_DESC("CommitBlock Failed")
+                << LOG_KV("reqNum", p_block->blockHeader().number())
                 << LOG_KV("curNum", m_highestBlock.number())
-                << LOG_KV("blkHash", m_reqCache->prepareCache()->block_hash.abridged())
-                << LOG_KV("highHash", m_highestBlock.hash().abridged())
+                << LOG_KV("reqIdx", m_reqCache->prepareCache()->idx)
+                << LOG_KV("hash", p_block->blockHeader().hash().abridged())
                 << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
+            /// note blocksync to sync
+            m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+            m_txPool->handleBadBlock(*p_block);
         }
+    }
+    else
+    {
+        PBFTENGINE_LOG(WARNING) << LOG_DESC("checkAndSave: Consensus Failed, Block already exists")
+                                << LOG_KV("reqNum", m_reqCache->prepareCache()->height)
+                                << LOG_KV("curNum", m_highestBlock.number())
+                                << LOG_KV(
+                                       "blkHash", m_reqCache->prepareCache()->block_hash.abridged())
+                                << LOG_KV("highHash", m_highestBlock.hash().abridged())
+                                << LOG_KV("nodeIdx", nodeIdx())
+                                << LOG_KV("myNode", m_keyPair.pub().abridged());
+    }
+}
+
+/// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
+/// check whether view and height is valid, if valid, then commit the block and clear the context
+void PBFTEngine::checkAndSave()
+{
+    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache()->block_hash);
+    size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache()->block_hash);
+    if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
+    {
+        checkAndCommitBlock(commit_size);
     }
 }
 
@@ -1430,7 +1438,7 @@ void PBFTEngine::checkTimeout()
 
 std::shared_ptr<PBFTMsg> PBFTEngine::handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg)
 {
-    std::shared_ptr<PBFTMsg> pbft_packet = std::make_shared<PBFTMsg>();
+    std::shared_ptr<PBFTMsg> pbft_packet = nullptr;
     bool succ = false;
     switch (pbftMsg.packet_id)
     {

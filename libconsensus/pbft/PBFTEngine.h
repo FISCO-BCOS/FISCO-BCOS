@@ -264,7 +264,7 @@ protected:
     bool handleViewChangeMsg(
         std::shared_ptr<ViewChangeReq>& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
-    std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
+    virtual std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
 
     void catchupView(std::shared_ptr<ViewChangeReq> req, std::ostringstream& oss);
     virtual void checkAndCommit();
@@ -272,6 +272,7 @@ protected:
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     virtual void checkAndSave();
     void checkAndChangeView();
+    virtual void checkAndCommitBlock(size_t const& commitSize);
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
