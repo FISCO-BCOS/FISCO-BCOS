@@ -622,7 +622,7 @@ void State::rollback(size_t _savepoint)
         m_changeLog.pop_back();
     }
 }
-
+#if 0
 std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
 {
     _out << "--- " << _s.rootHash() << std::endl;
@@ -737,6 +737,8 @@ std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
     }
     return _out;
 }
+
+#endif
 
 template <class DB>
 AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state)
