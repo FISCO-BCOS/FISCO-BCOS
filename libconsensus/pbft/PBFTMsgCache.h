@@ -50,16 +50,16 @@ public:
     {
         switch (type)
         {
-        case PrepareReqPacket:
+        case PBFTPacketType::PrepareReqPacket:
             insertMessage(x_knownPrepare, m_knownPrepare, c_knownPrepare, key);
             return true;
-        case SignReqPacket:
+        case PBFTPacketType::SignReqPacket:
             insertMessage(x_knownSign, m_knownSign, c_knownSign, key);
             return true;
-        case CommitReqPacket:
+        case PBFTPacketType::CommitReqPacket:
             insertMessage(x_knownCommit, m_knownCommit, c_knownCommit, key);
             return true;
-        case ViewChangeReqPacket:
+        case PBFTPacketType::ViewChangeReqPacket:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
             return true;
         default:
@@ -80,13 +80,13 @@ public:
     {
         switch (type)
         {
-        case PrepareReqPacket:
+        case PBFTPacketType::PrepareReqPacket:
             return exists(x_knownPrepare, m_knownPrepare, key);
-        case SignReqPacket:
+        case PBFTPacketType::SignReqPacket:
             return exists(x_knownSign, m_knownSign, key);
-        case CommitReqPacket:
+        case PBFTPacketType::CommitReqPacket:
             return exists(x_knownCommit, m_knownCommit, key);
-        case ViewChangeReqPacket:
+        case PBFTPacketType::ViewChangeReqPacket:
             return exists(x_knownViewChange, m_knownViewChange, key);
         default:
             LOG(DEBUG) << "Invalid packet type:" << type;

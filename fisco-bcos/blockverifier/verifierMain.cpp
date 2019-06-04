@@ -28,13 +28,12 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
-#include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
 INITIALIZE_EASYLOGGINGPP
@@ -77,6 +76,9 @@ int main(int argc, char* argv[])
     blockVerifier->setNumberHash(
         [blockChain](int64_t num) { return blockChain->getBlockByNumber(num)->headerHash(); });
 
+    std::shared_ptr<dev::eth::BlockFactory> blockFactory =
+        std::make_shared<dev::eth::BlockFactory>();
+
     if (argc > 1 && std::string("insert") == argv[1])
     {
         for (int i = 0; i < 2; ++i)
@@ -89,8 +91,9 @@ int main(int argc, char* argv[])
             header.setGasLimit(dev::u256(1024 * 1024 * 1024));
             header.setRoots(parentBlock->header().transactionsRoot(),
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
-            dev::eth::Block block;
-            block.setBlockHeader(header);
+
+            dev::eth::Block::Ptr block = blockFactory->newBlock();
+            block->setBlockHeader(header);
             LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
                       << header;
 
@@ -318,9 +321,9 @@ int main(int argc, char* argv[])
             LOG(INFO) << "Tx " << tx;
 
             dev::eth::Transaction tx2(ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
-            block.appendTransaction(tx);
+            block->appendTransaction(tx);
 
-            block.appendTransaction(tx2);
+            block->appendTransaction(tx2);
             LOG(INFO) << "Tx2 " << tx2;
             dev::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
                 parentBlock->header().number(), parentBlock->header().stateRoot()};

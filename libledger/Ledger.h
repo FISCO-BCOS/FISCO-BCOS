@@ -29,6 +29,7 @@
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
@@ -175,6 +176,7 @@ protected:
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;
+    std::shared_ptr<dev::eth::BlockFactory> m_blockFactory;
 };
 }  // namespace ledger
 }  // namespace dev

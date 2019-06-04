@@ -53,6 +53,9 @@ namespace ledger
 {
 bool Ledger::initLedger(const std::string& _configFilePath)
 {
+    /// init blockFactory
+    m_blockFactory = std::make_shared<BlockFactory>();
+
 #ifndef FISCO_EASYLOG
     BOOST_LOG_SCOPED_THREAD_ATTR(
         "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
@@ -491,6 +494,8 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+    /// set block factory
+    blockChain->setBlockFactory(m_blockFactory);
     m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
     if (!ret)
@@ -543,6 +548,8 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
+    std::shared_ptr<PBFTReqFactory> pbftReqFactory = std::make_shared<PBFTReqFactory>();
+    pbftEngine->setPBFTReqFactory(pbftReqFactory);
     return pbftSealer;
 }
 
@@ -578,31 +585,36 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
 bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
+    // create raft
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
         /// create RaftSealer
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create raft");
         m_sealer = createRaftSealer();
-        if (!m_sealer)
-        {
-            return false;
-        }
-        return true;
     }
-
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+    // create pbft
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
+        /// create PBFTSealer
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create pbft!");
+        m_sealer = createPBFTSealer();
+    }
+    else
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
                           << LOG_KV("UnsupportConsensusType",
-                                 m_param->mutableConsensusParam().consensusType)
-                          << " use PBFT as default";
+                                 m_param->mutableConsensusParam().consensusType);
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed() << errinfo_comment(
+                "UnsupportConsensusType " + m_param->mutableConsensusParam().consensusType));
     }
-
-    /// create PBFTSealer
-    m_sealer = createPBFTSealer();
     if (!m_sealer)
     {
-        return false;
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed() << errinfo_comment("init consensus failed"));
     }
+    assert(m_blockFactory);
+    m_sealer->setBlockFactory(m_blockFactory);
     return true;
 }
 

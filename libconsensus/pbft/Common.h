@@ -36,13 +36,12 @@ namespace dev
 namespace consensus
 {
 // for pbft
-enum PBFTPacketType : byte
+struct PBFTPacketType
 {
-    PrepareReqPacket = 0x00,
-    SignReqPacket = 0x01,
-    CommitReqPacket = 0x02,
-    ViewChangeReqPacket = 0x03,
-    PBFTPacketCount
+    static const int PrepareReqPacket = 0x00;
+    static const int SignReqPacket = 0x01;
+    static const int CommitReqPacket = 0x02;
+    static const int ViewChangeReqPacket = 0x03;
 };
 
 /// PBFT message
@@ -252,7 +251,7 @@ struct PBFTMsg
         return dev::sign(keyPair.secret(), hash);
     }
 
-    std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
+    virtual std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
 };
 
 /// definition of the prepare requests
@@ -323,18 +322,18 @@ struct PrepareReq : public PBFTMsg
      * @param sealing : object contains both block and block-execution-result
      * @param keyPair : keypair used to sign for the PrepareReq
      */
-    PrepareReq(PrepareReq const& req, Sealing const& sealing, KeyPair const& keyPair)
+    PrepareReq(PrepareReq const& req, std::shared_ptr<Sealing> sealing, KeyPair const& keyPair)
     {
         height = req.height;
         view = req.view;
         idx = req.idx;
-        p_execContext = sealing.p_execContext;
+        p_execContext = sealing->p_execContext;
         /// sealing.block.encode(block);
         timestamp = u256(utcTime());
-        block_hash = sealing.block.blockHeader().hash();
+        block_hash = sealing->block->blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
+        pBlock = std::make_shared<dev::eth::Block>(std::move(*sealing->block));
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp << " , block_hash: " << block_hash.abridged();
     }

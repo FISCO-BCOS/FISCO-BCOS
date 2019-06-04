@@ -90,11 +90,13 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
     {
-        Block userAddReqBlock;
-        userAddReqBlock.header().setNumber(_parentBlockInfo.number + 1);
-        userAddReqBlock.header().setParentHash(_parentBlockInfo.hash);
+        std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+        Block::Ptr userAddReqBlock = blockFactory->newBlock();
 
-        genTxUserAddBlock(userAddReqBlock, _userNum);
+        userAddReqBlock->header().setNumber(_parentBlockInfo.number + 1);
+        userAddReqBlock->header().setParentHash(_parentBlockInfo.hash);
+
+        genTxUserAddBlock(*userAddReqBlock, _userNum);
         auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
         _blockChain->commitBlock(userAddReqBlock, exeCtx);
     }
@@ -139,6 +141,28 @@ public:
             tx.sender();
     }
 
+    void canCallUserBalance(
+        std::shared_ptr<BlockVerifier> _verifier, Block& _block, size_t _userNum)
+    {
+        // Just check no throw, no result checking
+
+        for (size_t i = 0; i < _userNum; i++)
+        {
+            u256 value = 0;
+            u256 gasPrice = 0;
+            u256 gas = 10000000;
+            Address dest = Address(0x5002);
+            string usr = to_string(i);
+            dev::eth::ContractABI abi;
+            bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
+            u256 nonce = u256(i);
+            Transaction tx(value, gasPrice, gas, dest, data, nonce);
+            tx.setBlockLimit(250);
+            tx.forceSender(Address(0x2333));
+            BOOST_CHECK_NO_THROW(_verifier->executeTransaction(_block.header(), tx));
+        }
+    }
+
     h256 executeVerifier(
         int _totalUser, int _totalTxs, const string& _storageType, bool _enablePara)
     {
@@ -156,6 +180,9 @@ public:
         auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
         dbInitializer->initStorageDB();
         std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+        std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+        blockChain->setBlockFactory(blockFactory);
+
         blockChain->setStateStorage(dbInitializer->storage());
         blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
@@ -172,6 +199,7 @@ public:
         blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
         std::shared_ptr<BlockChainImp> _blockChain =
             std::dynamic_pointer_cast<BlockChainImp>(blockChain);
+        blockChain->setBlockFactory(blockFactory);
 
         blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
 
@@ -187,12 +215,13 @@ public:
         parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
             parentBlock->header().stateRoot()};
 
-        Block block;
-        genTxUserTransfer(block, _totalUser, _totalTxs);
-        block.calTransactionRoot();
-        blockVerifier->executeBlock(block, parentBlockInfo);
+        Block::Ptr pblock = blockFactory->newBlock();
+        genTxUserTransfer(*pblock, _totalUser, _totalTxs);
+        pblock->calTransactionRoot();
+        blockVerifier->executeBlock(pblock, parentBlockInfo);
 
-        return block.header().stateRoot();
+        canCallUserBalance(blockVerifier, *pblock, _totalUser);
+        return pblock->header().stateRoot();
     }
 };
 
@@ -218,6 +247,8 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
 
     BOOST_CHECK_EQUAL(serialState, paraState);
 }
+
+BOOST_AUTO_TEST_CASE(executeTransactionTest) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 
