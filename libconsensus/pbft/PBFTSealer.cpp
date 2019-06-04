@@ -104,8 +104,11 @@ void PBFTSealer::stop()
     m_pbftEngine->stop();
 }
 
+/// attempt to increase m_lastTimeoutTx when m_lastTimeoutTx is no large than m_maxNoTimeoutTx
 void PBFTSealer::attempIncreaseTimeoutTx()
 {
+    // boundary processing:
+    // 1. m_lastTimeoutTx or m_maxNoTimeoutTx is large enough, return directly
     if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
     {
         return;
@@ -115,11 +118,14 @@ void PBFTSealer::attempIncreaseTimeoutTx()
         m_lastTimeoutTx = m_maxNoTimeoutTx;
         return;
     }
-    /// attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
+    // attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
+    // if m_maxNoTimeoutTx * 0.1 is large than 1, reset m_lastTimeoutTx to 110% of m_maxNoTimeoutTx
     if (m_maxNoTimeoutTx * 0.1 > 1)
     {
         m_lastTimeoutTx = m_maxNoTimeoutTx * (1 + 0.1);
     }
+    // if m_maxNoTimoutTx*0.1 is little than 1(m_lastTimeoutTx is little than 10), double
+    // m_lastTimeoutTx(doubled m_lastTimeoutTx is little than 20)
     else
     {
         m_lastTimeoutTx *= 2;
@@ -230,10 +236,14 @@ void PBFTSealer::increaseMaxTxsCanSeal()
     {
         attempIncreaseTimeoutTx();
     }
+    // increased m_maxBlockCanSeal is large than m_lastTimeoutTx, reset m_maxBlockCanSeal to
+    // m_lastTimeoutTx
     if (m_lastTimeoutTx > 0 && m_maxBlockCanSeal > m_lastTimeoutTx)
     {
         m_maxBlockCanSeal = m_lastTimeoutTx;
     }
+    // increased m_maxBlockCanSeal is little than m_maxNoTimeoutTx, reset m_maxBlockCanSeal to
+    // m_maxNoTimeoutTx
     if (m_maxNoTimeoutTx > 0 && m_maxBlockCanSeal < m_maxNoTimeoutTx)
     {
         m_maxBlockCanSeal = m_maxNoTimeoutTx;
