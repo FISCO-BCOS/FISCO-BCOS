@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
         std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
     BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
-
+#if 0
 BOOST_AUTO_TEST_CASE(testInitStorageMySQL)
 {
     TxPoolFixture txpool_creator;
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageExternal)
         std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
     BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
-
+#endif
 BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
 {
     TxPoolFixture txpool_creator;
