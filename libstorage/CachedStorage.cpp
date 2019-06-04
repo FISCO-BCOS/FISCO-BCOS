@@ -187,8 +187,11 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
             {
                 totalCapacity += it->capacity();
             }
+
+#if 0
             CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
                                       << ", capacity: " << totalCapacity;
+#endif
 
             touchMRU(tableInfo->name, key, totalCapacity);
         }
@@ -269,9 +272,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         {
                                             totalCapacity += it->capacity();
                                         }
+
+#if 0
                                         CACHED_STORAGE_LOG(TRACE)
                                             << "backend capacity: " << requestData->info->name
                                             << "-" << key << ", capacity: " << totalCapacity;
+#endif
 
                                         touchMRU(requestData->info->name, key, totalCapacity);
                                     }
@@ -296,10 +302,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                     }
                                     (*entryIt)->setStatus(entry->getStatus());
 
+#if 0
                                     CACHED_STORAGE_LOG(TRACE)
                                         << "update capacity: " << commitData->info->name << "-"
                                         << key << ", from capacity: " << oldSize
                                         << " to capacity: " << (*entryIt)->capacity();
+#endif
 
                                     change = (ssize_t)(
                                         (ssize_t)(*entryIt)->capacity() - (ssize_t)oldSize);
@@ -377,7 +385,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             commitEntry->setID(++m_ID);
             commitEntry->setNum(num);
 
+#if 0
             STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
+#endif
 
             ++total;
 
@@ -418,8 +428,11 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                         {
                             totalCapacity += it->capacity();
                         }
+
+#if 0
                         CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << commitData->info->name
                                                   << "-" << key << ", capacity: " << totalCapacity;
+#endif
 
                         touchMRU(commitData->info->name, key, totalCapacity);
                     }
@@ -429,8 +442,10 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 caches->setNum(num);
             }
 
+#if 0
             STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
                                << ", capacity: " << cacheEntry->capacity();
+#endif
 
             touchMRU(commitData->info->name, key, cacheEntry->capacity());
         }
@@ -706,9 +721,11 @@ void CachedStorage::checkAndClear()
         {
             if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
+#if 0
                 CACHED_STORAGE_LOG(TRACE)
                     << "Current capacity: " << m_capacity
                     << " greater than max capacity: " << m_maxCapacity << ", clearing...";
+#endif
                 needClear = true;
             }
         }
