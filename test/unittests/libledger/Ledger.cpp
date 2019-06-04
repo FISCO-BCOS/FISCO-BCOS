@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  *
  */
 
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
     BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
 
-BOOST_AUTO_TEST_CASE(testInitStorageMySQLDB)
+BOOST_AUTO_TEST_CASE(testInitStorageMySQL)
 {
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageMySQLDB)
     BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
 
-BOOST_AUTO_TEST_CASE(testInitStorageExternalDB)
+BOOST_AUTO_TEST_CASE(testInitStorageExternal)
 {
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
