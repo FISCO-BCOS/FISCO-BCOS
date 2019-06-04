@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 
 /**
@@ -27,6 +27,8 @@
 #include "LedgerParam.h"
 #include "LedgerParamInterface.h"
 #include <libconsensus/Sealer.h>
+#include <libconsensus/pbft/PBFTEngineFactory.h>
+#include <libconsensus/pbft/PBFTReqFactory.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockFactory.h>
@@ -144,6 +146,9 @@ protected:
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
 
+    std::shared_ptr<dev::consensus::PBFTEngineFactory> createPBFTEngineFactory();
+    std::shared_ptr<dev::consensus::PBFTReqFactory> createPBFTReqFactory();
+
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
@@ -160,6 +165,7 @@ private:
     void initSyncConfig(boost::property_tree::ptree const& pt);
 
     void initTxConfig(boost::property_tree::ptree const& pt);
+
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

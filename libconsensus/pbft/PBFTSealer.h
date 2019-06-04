@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 
 /**
@@ -28,7 +28,7 @@
  * @modifications: rename PBFTConsensus.h to PBFTSealer.h
  */
 #pragma once
-#include "PBFTEngine.h"
+#include "PBFTEngineFactory.h"
 #include <libconsensus/Sealer.h>
 #include <sstream>
 namespace dev
@@ -38,18 +38,30 @@ namespace consensus
 class PBFTSealer : public Sealer
 {
 public:
-    PBFTSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
+    PBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
+      : Sealer(_txPool, _blockChain, _blockSync)
+    {}
+
+    void setPBFTEngineFactory(std::shared_ptr<PBFTEngineFactory> pbftEngineFactory)
+    {
+        m_pbftEngineFactory = pbftEngineFactory;
+    }
+
+    // create PBFTEngine by
+    virtual std::shared_ptr<PBFTEngine> createPBFTEngine(
+        std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
+        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
-      : Sealer(_txPool, _blockChain, _blockSync)
     {
-        m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _baseDir, _key_pair, _sealerList);
-        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+        m_pbftEngine = m_pbftEngineFactory->createPBFTEngine(_service, _txPool, _blockChain,
+            _blockSync, _blockVerifier, _protocolId, _baseDir, _keyPair, _sealerList);
+        m_consensusEngine = m_pbftEngine;
         /// called by viewchange procedure to reset block when timeout
         m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
         /// called by the next leader to reset block when it receives the prepare block
@@ -59,6 +71,8 @@ public:
         /// set thread name for PBFTSealer
         std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
         setName(threadName);
+
+        return m_pbftEngine;
     }
 
     void start() override;
@@ -157,7 +171,8 @@ private:
     }
 
 protected:
-    std::shared_ptr<PBFTEngine> m_pbftEngine;
+    std::shared_ptr<PBFTEngine> m_pbftEngine = nullptr;
+    std::shared_ptr<PBFTEngineFactory> m_pbftEngineFactory = nullptr;
     /// the minimum number of transactions that caused timeout
     uint64_t m_lastTimeoutTx = 0;
     /// the maximum number of transactions that has been consensused without timeout

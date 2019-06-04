@@ -12,48 +12,40 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 
 /**
- * @brief : Factory used to create PBFTReq objects
+ * @brief : Factory class to create PBFTReq objects
  * @file: PBFTReqFactory.h
  * @author: yujiechen
  * @date: 2018-09-28
  */
 #pragma once
-#include "Common.h"
-#include "PBFTMsgCache.h"
-#include "PBFTReqCache.h"
-
+#include "GroupPBFTMsgCache.h"
+#include "GroupPBFTReqCache.h"
+#include <libconsensus/pbft/PBFTReqFactory.h>
 namespace dev
 {
 namespace consensus
 {
-class PBFTReqFactoryInterface
+class GroupPBFTReqFactory : public PBFTReqFactory
 {
 public:
-    virtual ~PBFTReqFactoryInterface(){};
-    // create PBFTReqCache
-    virtual std::shared_ptr<PBFTReqCache> buildPBFTReqCache() = 0;
-    // create PBFTMsgCache for broadcast
-    virtual std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() = 0;
-};
+    virtual ~GroupPBFTReqFactory() {}
 
-/// this is used for PBFT consensus algorithem
-class PBFTReqFactory : public PBFTReqFactoryInterface
-{
-public:
-    virtual ~PBFTReqFactory(){};
+    // create PBFTReqCache for group-pbft
     std::shared_ptr<PBFTReqCache> buildPBFTReqCache() override
     {
-        std::shared_ptr<PBFTReqCache> reqCache = std::make_shared<PBFTReqCache>();
+        std::shared_ptr<PBFTReqCache> reqCache = std::make_shared<GroupPBFTReqCache>();
         return reqCache;
     }
-    std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() override
+
+    // create PBFTMsgCache for broadcast
+    virtual std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() override
     {
-        std::shared_ptr<PBFTMsgCache> pbftMsgCache = std::make_shared<PBFTMsgCache>();
-        return pbftMsgCache;
+        std::shared_ptr<PBFTMsgCache> groupPBFTMsgCache = std::make_shared<GroupPBFTMsgCache>();
+        return groupPBFTMsgCache;
     }
 };
 }  // namespace consensus

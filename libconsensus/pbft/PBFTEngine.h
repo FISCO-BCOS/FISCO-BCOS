@@ -23,7 +23,7 @@
  */
 #pragma once
 #include "Common.h"
-#include "PBFTMsgCache.h"
+#include "PBFTBroadcastCache.h"
 #include "PBFTReqCache.h"
 #include "PBFTReqFactory.h"
 #include "TimeManager.h"

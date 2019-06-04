@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <libconsensus/Sealer.h>
+#include <libconsensus/pbft/PBFTBroadcastCache.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
@@ -64,7 +65,8 @@ public:
             std::make_shared<dev::eth::BlockFactory>();
         setBlockFactory(blockFactory);
         m_pbftReqFactory = std::make_shared<PBFTReqFactory>();
-        m_broadCastCache = m_pbftReqFactory->buildPBFTBroadcastCache();
+        m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
+        m_broadCastCache->setPBFTReqFactory(m_pbftReqFactory);
         m_reqCache = m_pbftReqFactory->buildPBFTReqCache();
     }
     void updateConsensusNodeList() override {}
@@ -317,8 +319,7 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
         KeyPair const& _key_pair = KeyPair::create(), h512s const& _sealerList = h512s())
-      : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _sealerList)
+      : PBFTSealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);

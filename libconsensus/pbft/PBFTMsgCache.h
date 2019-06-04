@@ -29,7 +29,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
-#include <unordered_map>
 namespace dev
 {
 namespace consensus
@@ -159,61 +158,6 @@ private:
     static const unsigned c_knownCommit = 1024;
     /// the limit size for viewchange packet cache
     static const unsigned c_knownViewChange = 1024;
-};
-
-class PBFTBroadcastCache
-{
-public:
-    PBFTBroadcastCache() {}
-    virtual ~PBFTBroadcastCache() {}
-
-    void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
-    {
-        m_pbftReqFactory = pbftReqFactory;
-    }
-    /**
-     * @brief : insert key into the queue according to node id and packet type
-     *
-     * @param nodeId : node id
-     * @param type: packet type
-     * @param key: key (mainly the signature of specified broadcast packet)
-     * @return true: insert success
-     * @return false: insert failed
-     */
-    inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
-    {
-        if (!m_broadCastKeyCache.count(nodeId))
-            m_broadCastKeyCache[nodeId] = m_pbftReqFactory->buildPBFTMsgCache();
-        return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
-    }
-
-    /**
-     * @brief: determine whether the key of given packet type existed in the cache of given node id
-     *
-     * @param nodeId : node id
-     * @param type: packet type
-     * @param key: mainly the signature of specified broadcast packe
-     * @return true : the key exists in the cache
-     * @return false: the key doesn't exist in the cache
-     */
-    inline bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
-    {
-        if (!m_broadCastKeyCache.count(nodeId))
-            return false;
-        return m_broadCastKeyCache[nodeId]->exists(type, key);
-    }
-
-    /// clear all caches
-    inline void clearAll()
-    {
-        for (auto& item : m_broadCastKeyCache)
-            item.second->clearAll();
-    }
-
-private:
-    /// maps between node id and its broadcast cache
-    std::unordered_map<h512, std::shared_ptr<PBFTMsgCache>> m_broadCastKeyCache;
-    std::shared_ptr<PBFTReqFactory> m_pbftReqFactory = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

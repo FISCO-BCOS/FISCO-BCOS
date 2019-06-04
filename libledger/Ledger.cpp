@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 
 /**
@@ -514,6 +514,25 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
+
+std::shared_ptr<PBFTEngineFactory> Ledger::createPBFTEngineFactory()
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
+        return std::make_shared<PBFTEngineFactory>();
+    }
+    return nullptr;
+}
+
+std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
+        return std::make_shared<PBFTReqFactory>();
+    }
+    return nullptr;
+}
+
 /**
  * @brief: create PBFTEngine
  * @param param: Ledger related params
@@ -532,7 +551,18 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                       << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<PBFTSealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
+    std::shared_ptr<PBFTSealer> pbftSealer =
+        std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
+
+    std::shared_ptr<PBFTEngineFactory> pbftEngineFactory = createPBFTEngineFactory();
+    if (!pbftEngineFactory)
+    {
+        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+                                  "create PBFTEngineFactory failed, maybe unsupportConsensusType " +
+                                  m_param->mutableConsensusParam().consensusType));
+    }
+    pbftSealer->setPBFTEngineFactory(pbftEngineFactory);
+    std::shared_ptr<PBFTEngine> pbftEngine = pbftSealer->createPBFTEngine(m_service, m_txPool,
         m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
         m_param->mutableConsensusParam().sealerList);
 
@@ -540,15 +570,14 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
 
     /// set params for PBFTEngine
-    std::shared_ptr<PBFTEngine> pbftEngine =
-        std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
     /// set the range of block generation time
     pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
-    std::shared_ptr<PBFTReqFactory> pbftReqFactory = std::make_shared<PBFTReqFactory>();
+
+    std::shared_ptr<PBFTReqFactory> pbftReqFactory = createPBFTReqFactory();
     pbftEngine->setPBFTReqFactory(pbftReqFactory);
     return pbftSealer;
 }
