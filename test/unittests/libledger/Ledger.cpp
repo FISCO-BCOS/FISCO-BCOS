@@ -280,33 +280,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
         std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
     BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
-#if 0
-BOOST_AUTO_TEST_CASE(testInitStorageMySQL)
-{
-    TxPoolFixture txpool_creator;
-    KeyPair key_pair = KeyPair::create();
-    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 13;
-    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.13.genesis";
 
-    std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
-    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
-}
-
-BOOST_AUTO_TEST_CASE(testInitStorageExternal)
-{
-    TxPoolFixture txpool_creator;
-    KeyPair key_pair = KeyPair::create();
-    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 14;
-    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.14.genesis";
-
-    std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
-    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
-}
-#endif
 BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
 {
     TxPoolFixture txpool_creator;
