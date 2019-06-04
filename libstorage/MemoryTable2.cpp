@@ -148,7 +148,7 @@ int MemoryTable2::update(
                 m_dirty.insert(std::make_pair(updateEntry->getID(), updateEntry));
             }
 
-            for (auto& it : *(entry->fields()))
+            for (auto& it : *(entry))
             {
                 //_id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
@@ -291,7 +291,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
         tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
                 for (auto it = range.begin(); it != range.end(); ++it)
                 {
                     if (!it->second->deleted())
@@ -328,7 +328,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {
             auto entry = tempEntries[i];
-            for (auto fieldIt : *(entry->fields()))
+            for (auto fieldIt : *(entry))
             {
                 if (isHashField(fieldIt.first))
                 {
