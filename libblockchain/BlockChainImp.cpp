@@ -29,6 +29,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/ConsensusPrecompiled2.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>

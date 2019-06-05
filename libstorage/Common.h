@@ -19,7 +19,9 @@
  *  @date 20180921
  */
 #pragma once
+#include <libconfig/GlobalConfigure.h>
 #include <string>
+#include <vector>
 
 namespace dev
 {
@@ -89,6 +91,18 @@ inline bool isHashField(const std::string& _key)
                 (_key == STATUS));
     }
     return false;
+}
+
+inline std::vector<std::string> sysConsensusTableFields()
+{
+    if (g_BCOSConfig.version() >= RC4_VERSION)
+    {
+        return std::vector<std::string>{"type", "node_id", "enable_num", "disable_num"};
+    }
+    else
+    {
+        return std::vector<std::string>{"type", "node_id", "enable_num"};
+    }
 }
 
 }  // namespace storage

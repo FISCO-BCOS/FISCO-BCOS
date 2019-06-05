@@ -287,7 +287,7 @@ storage::TableInfo::Ptr MemoryTableFactory2::getSysTableInfo(const std::string& 
     if (tableName == SYS_CONSENSUS)
     {
         tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
+        tableInfo->fields = sysConsensusTableFields();
     }
     else if (tableName == SYS_TABLES)
     {

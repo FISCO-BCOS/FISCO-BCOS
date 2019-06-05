@@ -24,6 +24,7 @@
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/ConsensusPrecompiled2.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
@@ -58,8 +59,17 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     context->setAddress2Precompiled(
         Address(0x1002), std::make_shared<dev::precompiled::CRUDPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x1003), std::make_shared<dev::precompiled::ConsensusPrecompiled>());
+    if (g_BCOSConfig.version() >= RC4_VERSION)
+    {
+        context->setAddress2Precompiled(
+            Address(0x1003), std::make_shared<dev::precompiled::ConsensusPrecompiled2>());
+    }
+    else
+    {
+        context->setAddress2Precompiled(
+            Address(0x1003), std::make_shared<dev::precompiled::ConsensusPrecompiled>());
+    }
+
     context->setAddress2Precompiled(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
