@@ -121,7 +121,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
         for (size_t i = 0; i < dataIt->second->size(); ++i)
         {
             Json::Value value;
-            for (auto& fieldIt : *(dataIt->second->get(i)->fields()))
+            for (auto& fieldIt : *(dataIt->second->get(i)))
             {
                 value[fieldIt.first] = fieldIt.second;
             }

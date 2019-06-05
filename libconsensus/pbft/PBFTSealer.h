@@ -118,6 +118,7 @@ protected:
         return m_pbftEngine->canHandleBlockForNextLeader();
     }
     void setBlock();
+    void attempIncreaseTimeoutTx();
 
 private:
     void onTimeout(uint64_t const& sealingTxNumber);
