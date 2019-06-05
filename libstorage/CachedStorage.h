@@ -55,7 +55,7 @@ public:
     virtual Entries::Ptr entries();
     virtual Entries* entriesPtr();
     virtual void setEntries(Entries::Ptr entries);
-    virtual int64_t num() const;
+    virtual uint64_t num() const;
     virtual void setNum(int64_t num);
     virtual TableInfo::Ptr tableInfo();
     virtual void setTableInfo(TableInfo::Ptr tableInfo);
@@ -73,7 +73,7 @@ private:
     std::string m_key;
     Entries::Ptr m_entries;
     // int64_t m_num;
-    tbb::atomic<int64_t> m_num;
+    tbb::atomic<uint64_t> m_num;
 };
 
 class Task
@@ -149,9 +149,9 @@ private:
     Storage::Ptr m_backend;
     uint64_t m_ID = 1;
 
-    boost::atomic_int64_t m_syncNum;
-    boost::atomic_int64_t m_commitNum;
-    boost::atomic_int64_t m_capacity;
+    tbb::atomic<uint64_t> m_syncNum;
+    tbb::atomic<uint64_t> m_commitNum;
+    tbb::atomic<int64_t> m_capacity;
 
     uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
@@ -160,10 +160,10 @@ private:
     dev::ThreadPool::Ptr m_taskThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
-    boost::atomic_uint64_t m_hitTimes;
-    boost::atomic_uint64_t m_queryTimes;
+    tbb::atomic<uint64_t> m_hitTimes;
+    tbb::atomic<uint64_t> m_queryTimes;
 
-    std::shared_ptr<boost::atomic_bool> m_running;
+    std::shared_ptr<tbb::atomic<bool> > m_running;
 };
 
 }  // namespace storage

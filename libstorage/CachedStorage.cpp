@@ -65,7 +65,7 @@ void Cache::setEntries(Entries::Ptr entries)
     m_empty = false;
 }
 
-int64_t Cache::num() const
+uint64_t Cache::num() const
 {
     return m_num;
 }
@@ -118,7 +118,7 @@ CachedStorage::CachedStorage()
     m_hitTimes.store(0);
     m_queryTimes.store(0);
 
-    m_running = std::make_shared<boost::atomic_bool>();
+    m_running = std::make_shared<tbb::atomic<bool> >();
     m_running->store(true);
 }
 
@@ -712,11 +712,6 @@ void CachedStorage::checkAndClear()
         {
             if (m_capacity > m_maxCapacity && !m_mru->empty())
             {
-#if 0
-                CACHED_STORAGE_LOG(TRACE)
-                    << "Current capacity: " << m_capacity
-                    << " greater than max capacity: " << m_maxCapacity << ", clearing...";
-#endif
                 needClear = true;
             }
         }
@@ -793,12 +788,8 @@ void CachedStorage::checkAndClear()
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
     // auto oldValue = m_capacity.fetch_and_add(capacity);
-    m_capacity.fetch_add(capacity);
-
-#if 0
-    CACHED_STORAGE_LOG(TRACE) << "Capacity change by: " << (capacity) << " , from: " << oldValue
-                              << " to: " << m_capacity;
-#endif
+    //m_capacity.fetch_add(capacity);
+    m_capacity.fetch_and_add(capacity);
 }
 
 std::string CachedStorage::readableCapacity(size_t num)
