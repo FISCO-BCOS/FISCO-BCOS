@@ -325,7 +325,7 @@ ssize_t Entry::refCount()
 
 std::shared_ptr<Entry::RWMutexScoped> Entry::lock(bool write)
 {
-    RWMutexScoped lock(m_data->m_mutex, write);
+    auto lock = std::make_shared<RWMutexScoped>(m_data->m_mutex, write);
 
     return lock;
 }
