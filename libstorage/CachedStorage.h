@@ -92,12 +92,15 @@ public:
     typedef std::shared_ptr<CachedStorage> Ptr;
     CachedStorage();
 
+    typedef tbb::spin_rw_mutex RWMutex;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
     virtual ~CachedStorage();
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
-    virtual std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped> > selectNoCondition(h256 hash,
+    virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(h256 hash,
         int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr);
 
@@ -120,11 +123,10 @@ public:
 private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
     void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
-    std::tuple<Cache::Ptr, std::shared_ptr<Cache::RWScoped>, bool> touchCache(
+    std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> touchCache(
         TableInfo::Ptr table, const std::string& key, bool write = false);
 
     void removeCache(const std::string& table, const std::string& key);
-    tbb::spin_mutex m_removeMutex;
 
     void checkAndClear();
 
@@ -132,6 +134,7 @@ private:
     std::string readableCapacity(size_t num);
 
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
+    RWMutex m_cachesMutex;
 
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
@@ -147,7 +150,7 @@ private:
 
     boost::atomic_int64_t m_syncNum;
     boost::atomic_int64_t m_commitNum;
-    tbb::atomic<int64_t> m_capacity;
+    boost::atomic_int64_t m_capacity;
 
     uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
@@ -156,10 +159,10 @@ private:
     dev::ThreadPool::Ptr m_taskThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
-    tbb::atomic<uint64_t> m_hitTimes = 0;
-    tbb::atomic<uint64_t> m_queryTimes = 0;
+    boost::atomic_uint64_t m_hitTimes;
+    boost::atomic_uint64_t m_queryTimes;
 
-    std::shared_ptr<tbb::atomic<bool> > m_running;
+    std::shared_ptr<boost::atomic_bool> m_running;
 };
 
 }  // namespace storage

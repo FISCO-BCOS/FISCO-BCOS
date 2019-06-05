@@ -21,6 +21,7 @@
  * @date: 2018-10-15
  */
 
+#include <json/json.h>
 #include <libethcore/Transaction.h>
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
@@ -117,6 +118,21 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
+
+BOOST_AUTO_TEST_CASE(syncInfoFormatTest)
+{
+    std::shared_ptr<SyncMaster> sync = fakeSyncToolsSet(5, 5, NodeID(100)).sync;
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash});
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
+
+    std::string info = sync->syncInfo();
+
+    Json::Reader reader;
+    Json::Value syncInfo;
+    BOOST_CHECK(reader.parse(info, syncInfo));  // return string can parse to json obj
+}
 
 BOOST_AUTO_TEST_CASE(ConstructorTest)
 {
@@ -351,6 +367,56 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
         cout << "Expected hash: " << expectedHash << endl;
         BOOST_CHECK_EQUAL(downloadHash, expectedHash);
     }
+}
+
+inline void maintainAllBlockRequest(std::shared_ptr<SyncMaster> _sync)
+{
+    for (size_t i = 0; i < 20; i++)  // Repeat 20 times is enough to reach all peers.
+    {
+        _sync->maintainBlockRequest();  // random select one peer to maintain
+    }
+}
+
+BOOST_AUTO_TEST_CASE(maintainBlockRequestTest)
+{
+    int64_t currentBlockNumber = 4;
+    FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
+    std::shared_ptr<SyncMaster> sync = syncTools.sync;
+    std::shared_ptr<FakeService> service = syncTools.service;
+
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(101), 0, m_genesisHash, m_genesisHash});
+    sync->syncStatus()->newSyncPeerStatus(
+        SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
+
+    maintainAllBlockRequest(sync);
+    // No request, msg is 0
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 0);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
+
+    // current number 4, node 101 req: 1,2,3,4  ok
+    sync->syncStatus()->peerStatus(NodeID(101))->reqQueue.push(1, 4);
+    maintainAllBlockRequest(sync);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 1);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
+
+    // current number 4, node 102 req: 5  not ok
+    sync->syncStatus()->peerStatus(NodeID(102))->reqQueue.push(5, 1);
+    maintainAllBlockRequest(sync);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 1);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 0);
+
+    // current number 4, node 102 req: 2,3,4,5  ok:2,3,4  not ok 5
+    sync->syncStatus()->peerStatus(NodeID(102))->reqQueue.push(2, 4);
+    maintainAllBlockRequest(sync);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 1);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 1);
+
+    // current number 4, node 102 req: 3,4  ok
+    sync->syncStatus()->peerStatus(NodeID(102))->reqQueue.push(3, 2);
+    maintainAllBlockRequest(sync);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 1);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 }
 
 BOOST_AUTO_TEST_CASE(DoWorkTest)

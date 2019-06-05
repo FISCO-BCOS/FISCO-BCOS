@@ -31,7 +31,12 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/utility/setup/from_stream.hpp>
+
 INITIALIZE_EASYLOGGINGPP
 
 using namespace std;
@@ -40,9 +45,10 @@ using namespace boost;
 using namespace dev::storage;
 using namespace dev::initializer;
 
-void testMemoryTable2(size_t round, size_t count)
+void testMemoryTable2(size_t round, size_t count, bool verify)
 {
     CachedStorage::Ptr cachedStorage = std::make_shared<CachedStorage>();
+    cachedStorage->startClearThread();
 
     auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
     factoryFactory->setStorage(cachedStorage);
@@ -61,14 +67,18 @@ void testMemoryTable2(size_t round, size_t count)
         auto key = (boost::format("[%08d]") % i).str();
         entry->setField("key", key);
         entry->setField("value", "0");
+        entry->setForce(true);
 
         dataTable->insert(key, entry);
     }
 
-    auto start = std::chrono::system_clock::time_point();
+    createFactory->commitDB(dev::h256(0), 1);
+
+    auto start = std::chrono::system_clock::now();
 
     for (size_t i = 0; i < round; ++i)
     {
+        auto roundStart = std::chrono::system_clock::now();
         auto factory = factoryFactory->newTableFactory(dev::h256(0), i + 2);
 
         tbb::parallel_for(
@@ -93,10 +103,11 @@ void testMemoryTable2(size_t round, size_t count)
 
                         dataTable->update(key, newDataEntry, condition);
 
-                        std::string txKey = (boost::format("[%32d]") % j).str();
+                        std::string txKey = (boost::format("[%32d]-[%32d]") % j % k).str();
                         auto txEntry = txTable->newEntry();
                         txEntry->setField("tx_hash", txKey);
                         txEntry->setField("block_hash", txKey);
+                        txEntry->setForce(true);
 
                         txTable->insert(txKey, txEntry);
                     }
@@ -104,31 +115,69 @@ void testMemoryTable2(size_t round, size_t count)
             });
 
         factory->commitDB(dev::h256(0), i + 2);
+
+        auto roundEnd = std::chrono::system_clock::now();
+        std::chrono::duration<double> roundElapsed = roundEnd - roundStart;
+        std::cout << "Round " << i << " elapsed: " << roundElapsed.count() << std::endl;
     }
 
-    auto end = std::chrono::system_clock::time_point();
+    auto end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
-    std::cout << "Time elapsed " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-              << elapsed.count();
+    std::cout << "Execute time elapsed " << std::setiosflags(std::ios::fixed)
+              << std::setprecision(4) << elapsed.count() << std::endl;
+
+    if (verify)
+    {
+        auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t j = range.begin(); j < range.end(); ++j)
+                {
+                    auto dataTable = factory->openTable("test_data");
+                    auto txTable = factory->openTable("tx_hash_2_block");
+
+                    auto key = (boost::format("[%08d]") % j).str();
+                    auto condition = dataTable->newCondition();
+                    auto dataEntries = dataTable->select(key, condition);
+
+                    auto dataEntry = dataEntries->get(0);
+
+                    size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
+                    if (value != 1000 * round)
+                    {
+                        std::cout << "Verify failed, value: " << value << " != " << round * 1000;
+                    }
+                }
+            });
+    }
 }
 
 int main(int argc, char* argv[])
 {
-    auto logInitializer = std::make_shared<LogInitializer>();
-    logInitializer->stopLogging();
-
     if (argc < 3)
     {
-        std::cout << "Usage: " << argv[0] << " [round] [count]";
+        std::cout << "Usage: " << argv[0] << " [round] [count] [verify]" << std::endl;
         return 1;
     }
 
+    boost::property_tree::ptree pt;
+
+    boost::property_tree::read_ini("config.ini", pt);
+
+    /// init log
+    auto logInitializer = std::make_shared<LogInitializer>();
+    logInitializer->initLog(pt);
+
     size_t round = boost::lexical_cast<size_t>(argv[1]);
     size_t count = boost::lexical_cast<size_t>(argv[2]);
+    bool verify = false;
+    if (argc > 3)
+    {
+        verify = boost::lexical_cast<bool>(argv[3]);
+    }
 
-    TIME_RECORD("testMemoryTable2");
-    testMemoryTable2(round, count);
+    testMemoryTable2(round, count, verify);
 
     return 0;
 }
