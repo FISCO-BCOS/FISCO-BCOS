@@ -624,12 +624,10 @@ void CachedStorage::updateMRU(const std::string& table, const std::string& key, 
         updateCapacity(capacity);
     }
 
-    //auto r = m_mru->push_back(std::make_pair(table, key));
-    auto r = m_mru->push_front(std::make_pair(table, key));
+    auto r = m_mru->push_back(std::make_pair(table, key));
     if (!r.second)
     {
-        //m_mru->relocate(m_mru->end(), r.first);
-    	m_mru->relocate(m_mru->begin(), r.first);
+        m_mru->relocate(m_mru->end(), r.first);
     }
 }
 
@@ -725,8 +723,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-            //for (auto it = m_mru->begin(); it != m_mru->end();)
-            while(true)
+            for (auto it = m_mru->begin(); it != m_mru->end();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
@@ -734,11 +731,6 @@ void CachedStorage::checkAndClear()
                 }
 
                 ++clearThrough;
-
-                auto it = m_mru->rbegin();
-                if(it == m_mru->rend()) {
-                	break;
-                }
 
                 auto tableInfo = std::make_shared<TableInfo>();
                 tableInfo->name = it->first;
@@ -759,8 +751,7 @@ void CachedStorage::checkAndClear()
                         updateCapacity(0 - totalCapacity);
 
                         removeCache(it->first, it->second);
-                        //it = m_mru->erase(it);
-                        m_mru->pop_back();
+                        it = m_mru->erase(it);
                     }
                     else {
                     	break;
