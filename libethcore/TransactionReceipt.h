@@ -75,7 +75,11 @@ private:
     u256 m_gasUsed;
     Address m_contractAddress;
     LogBloom m_bloom;
+
+protected:
     u256 m_status;
+
+private:
     bytes m_outputBytes;
     LogEntries m_log;
 };
@@ -107,6 +111,11 @@ public:
             m_localisedLogs.push_back(LocalisedLogEntry(
                 entries[i], m_blockHash, m_blockNumber, m_hash, m_transactionIndex, i));
     }
+
+    LocalisedTransactionReceipt(u256 status) : m_blockNumber(0)
+    {
+        TransactionReceipt::m_status = status;
+    };
 
     h256 const& hash() const { return m_hash; }
     h256 const& blockHash() const { return m_blockHash; }

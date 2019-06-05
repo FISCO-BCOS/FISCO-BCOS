@@ -38,8 +38,8 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort << "/" << _dbConfig.dbName
            << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
            << "&charset=" << _dbConfig.dbCharset;
-        URL_T url = URL_new(ss.str().c_str());
-        if (url == NULL)
+        m_url = URL_new(ss.str().c_str());
+        if (m_url == NULL)
         {
             stringstream exitInfo;
             exitInfo << "parse IP[" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
@@ -51,7 +51,7 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
 
         TRY
         {
-            m_connectionPool = ConnectionPool_new(url);
+            m_connectionPool = ConnectionPool_new(m_url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
             ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
@@ -60,7 +60,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         }
         CATCH(SQLException)
         {
-            URL_free(&url);
             SQLConnectionPool_LOG(ERROR) << "init connection pool failed IP:" << _dbConfig.dbIP
                                          << ":" << _dbConfig.dbPort << " please check";
             stringstream exitInfo;
@@ -69,8 +68,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
             errorExitOut(exitInfo);
         }
         END_TRY;
-
-        URL_free(&url);
     }
     else
     {
@@ -130,6 +127,7 @@ SQLConnectionPool::~SQLConnectionPool()
 {
     ConnectionPool_stop(m_connectionPool);
     ConnectionPool_free(&m_connectionPool);
+    URL_free(&m_url);
 }
 
 int SQLConnectionPool::GetActiveConnections()
@@ -188,6 +186,9 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             _sql.append(_dbName);
             Connection_execute(_connection, "%s", _sql.c_str());
             _sql = "set global max_allowed_packet = 1073741824";
+            Connection_execute(_connection, "%s", _sql.c_str());
+
+            _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
             Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)

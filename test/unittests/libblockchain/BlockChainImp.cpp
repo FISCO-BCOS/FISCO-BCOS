@@ -270,6 +270,15 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByHash)
     BOOST_CHECK(bptr->rlp() == *bRLPptr);
 }
 
+BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
+{
+    std::shared_ptr<bytes> bRLPptr = m_blockChainImp->getBlockRLPByNumber(0);
+
+    std::shared_ptr<dev::eth::Block> bptr =
+        m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK(bptr->rlp() == *bRLPptr);
+}
+
 BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
 {
     Transaction tx = m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));

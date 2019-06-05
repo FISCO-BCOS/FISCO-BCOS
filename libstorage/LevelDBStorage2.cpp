@@ -197,7 +197,7 @@ void LevelDBStorage2::processNewEntries(h256, int64_t num,
         }
 
         std::map<std::string, std::string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
@@ -225,7 +225,7 @@ void LevelDBStorage2::processDirtyEntries(h256, int64_t num,
         }
 
         std::map<std::string, std::string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
