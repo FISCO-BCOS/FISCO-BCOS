@@ -105,7 +105,9 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     m_name = _name;
 
     if (!m_keyCenter)
-        m_keyCenter.reset(&(g_keyCenter));
+    {
+        m_keyCenter = g_keyCenter;
+    }
 
     // Encrypted leveldb initralization
 

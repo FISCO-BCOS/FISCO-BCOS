@@ -77,16 +77,15 @@ void Service::stop()
         }
         m_host->stop();
         /// disconnect sessions
+
+        RecursiveGuard l(x_sessions);
+        for (auto session : m_sessions)
         {
-            DEV_RECURSIVE_GUARDED(x_sessions)
-            for (auto session : m_sessions)
-            {
-                session.second->stop(dev::network::ClientQuit);
-            }
+            session.second->stop(dev::network::ClientQuit);
         }
 
+
         /// clear sessions
-        RecursiveGuard l(x_sessions);
         m_sessions.clear();
     }
 }
@@ -713,7 +712,7 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(i.second->nodeInfo(),
-                    i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                    i.second->session()->nodeIPEndpoint(), i.second->topics()));
             }
         }
     }

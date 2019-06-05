@@ -137,6 +137,10 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
             return getBlock(blockHash);
         }
+        else
+        {
+            // BLOCKCHAIN_LOG(ERROR) << "Can't find blocknumber" << LOG_KV()
+        }
     }
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find block") << LOG_KV("height", _i);
@@ -1129,13 +1133,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             << LOG_DESC("[commitBlock]System meets error when try to write block to storage")
             << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
     /// leveldb caused exception: database corruption or the disk has no space left
     catch (StorageException& e)
     {
-        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: storage exception")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
     return CommitResult::OK;
 }

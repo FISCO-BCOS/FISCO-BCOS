@@ -36,31 +36,31 @@
 
 using namespace dev::storage;
 
-Entry::Entry()
+Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
-    checkRef();
+    m_data->m_refCount = 1;
+    // m_data->m_fields.insert(std::make_pair(STATUS, "0"));
 }
 
 Entry::~Entry()
 {
-    if (m_data)
+    RWMutexScoped lock(m_data->m_mutex, true);
+    if (m_data->m_refCount > 0)
     {
-        tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
-        if (m_data->m_refCount > 0)
-        {
-            --m_data->m_refCount;
-        }
+        --m_data->m_refCount;
     }
 }
 
-uint32_t Entry::getID() const
+uint64_t Entry::getID() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
+
     return m_ID;
 }
 
-void Entry::setID(uint32_t id)
+void Entry::setID(uint64_t id)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_ID = id;
 
@@ -69,23 +69,22 @@ void Entry::setID(uint32_t id)
 
 void Entry::setID(const std::string& id)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
-    m_ID = boost::lexical_cast<uint32_t>(id);
+    m_ID = boost::lexical_cast<uint64_t>(id);
 
     m_dirty = true;
 }
 
 std::string Entry::getField(const std::string& key) const
 {
-    if (m_data)
-    {
-        auto it = m_data->m_fields.find(key);
+    RWMutexScoped lock(m_data->m_mutex, false);
 
-        if (it != m_data->m_fields.end())
-        {
-            return it->second;
-        }
+    auto it = m_data->m_fields.find(key);
+
+    if (it != m_data->m_fields.end())
+    {
+        return it->second;
     }
 
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
@@ -94,6 +93,7 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
+#if 0
     if (key == ID_FIELD)
     {
         return;
@@ -104,6 +104,7 @@ void Entry::setField(const std::string& key, const std::string& value)
         setStatus(value);
         return;
     }
+#endif
 
     auto lock = checkRef();
 
@@ -127,21 +128,42 @@ void Entry::setField(const std::string& key, const std::string& value)
 
 size_t Entry::getTempIndex() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
+
     return m_tempIndex;
 }
 
 void Entry::setTempIndex(size_t index)
 {
+    RWMutexScoped lock(m_data->m_mutex, true);
+
     m_tempIndex = index;
 }
 
-const std::map<std::string, std::string>* Entry::fields() const
+std::map<std::string, std::string>::const_iterator Entry::find(const std::string& key) const
 {
-    return &m_data->m_fields;
+    return m_data->m_fields.find(key);
+}
+
+std::map<std::string, std::string>::const_iterator Entry::begin() const
+{
+    return m_data->m_fields.begin();
+}
+
+std::map<std::string, std::string>::const_iterator Entry::end() const
+{
+    return m_data->m_fields.end();
+}
+
+size_t Entry::size() const
+{
+    return m_data->m_fields.size();
 }
 
 int Entry::getStatus() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
+
     return m_status;
 }
 
@@ -149,6 +171,7 @@ void Entry::setStatus(int status)
 {
     auto lock = checkRef();
 
+#if 0
     auto it = m_data->m_fields.find(STATUS);
     if (it == m_data->m_fields.end())
     {
@@ -158,6 +181,7 @@ void Entry::setStatus(int status)
     {
         it->second = boost::lexical_cast<std::string>(status);
     }
+#endif
 
     m_status = status;
     m_dirty = true;
@@ -167,6 +191,7 @@ void Entry::setStatus(const std::string& status)
 {
     auto lock = checkRef();
 
+#if 0
     auto it = m_data->m_fields.find(STATUS);
     if (it == m_data->m_fields.end())
     {
@@ -176,6 +201,7 @@ void Entry::setStatus(const std::string& status)
     {
         it->second = status;
     }
+#endif
 
     m_status = boost::lexical_cast<int>(status);
     m_dirty = true;
@@ -183,12 +209,13 @@ void Entry::setStatus(const std::string& status)
 
 uint32_t Entry::num() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_num;
 }
 
 void Entry::setNum(uint32_t num)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_num = num;
     m_dirty = true;
@@ -196,59 +223,65 @@ void Entry::setNum(uint32_t num)
 
 void Entry::setNum(const std::string& id)
 {
+    RWMutexScoped lock(m_data->m_mutex, true);
+
     m_num = boost::lexical_cast<uint32_t>(id);
     m_dirty = true;
 }
 
 bool Entry::dirty() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_dirty;
 }
 
 void Entry::setDirty(bool dirty)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_dirty = dirty;
 }
 
 bool Entry::force() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_force;
 }
 
 void Entry::setForce(bool force)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_force = force;
 }
 
 bool Entry::deleted() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_deleted;
 }
 
 void Entry::setDeleted(bool deleted)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
     m_deleted = deleted;
 }
 
 ssize_t Entry::capacity() const
 {
+    RWMutexScoped lock(m_data->m_mutex, false);
     return m_capacity;
 }
 
 void Entry::copyFrom(Entry::Ptr entry)
 {
-    tbb::spin_mutex::scoped_lock lock(m_data->m_mutex);
+    RWMutexScoped lock(m_data->m_mutex, true);
 
-    tbb::spin_mutex::scoped_lock lock2;
+    RWMutexScoped lock2;
     while (true)
     {
-        auto locked = lock2.try_acquire(entry->m_data->m_mutex);
+        auto locked = lock2.try_acquire(entry->m_data->m_mutex, true);
         if (!locked)
         {
             if (m_data == entry->m_data)
@@ -279,32 +312,20 @@ void Entry::copyFrom(Entry::Ptr entry)
     m_data->m_refCount -= 1;
 
     m_data = entry->m_data;
+    lock.release();
 
     m_data->m_refCount += 1;
 }
 
 ssize_t Entry::refCount()
 {
-    if (m_data)
-    {
-        return m_data->m_refCount;
-    }
-    else
-    {
-        return 0;
-    }
+    RWMutexScoped lock(m_data->m_mutex, false);
+    return m_data->m_refCount;
 }
 
-std::shared_ptr<tbb::spin_mutex::scoped_lock> Entry::checkRef()
+std::shared_ptr<tbb::spin_rw_mutex::scoped_lock> Entry::checkRef()
 {
-    if (!m_data)
-    {
-        m_data = std::make_shared<EntryData>();
-        m_data->m_refCount = 1;
-        m_data->m_fields.insert(std::make_pair(STATUS, "0"));
-    }
-
-    auto lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
+    auto lock = std::make_shared<RWMutexScoped>(m_data->m_mutex, true);
     if (m_data->m_refCount > 1)
     {
         auto m_oldData = m_data;
@@ -316,7 +337,7 @@ std::shared_ptr<tbb::spin_mutex::scoped_lock> Entry::checkRef()
         m_oldData->m_refCount -= 1;
 
         assert(m_oldData->m_refCount >= 0);
-        lock = std::make_shared<tbb::spin_mutex::scoped_lock>(m_data->m_mutex);
+        lock = std::make_shared<tbb::spin_rw_mutex::scoped_lock>(m_data->m_mutex, true);
     }
 
     return lock;
@@ -336,28 +357,16 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
         return lhsStr < rhsStr;
     }
 
-    auto lFields = lhs->fields();
-    auto rFields = rhs->fields();
-    if (lFields->size() != rFields->size())
+    auto lSize = lhs->size();
+    auto rSize = rhs->size();
+    if (lSize != rSize)
     {
-        return lFields->size() < rFields->size();
+        return lSize < rSize;
     }
 
-    for (auto lIter = lFields->begin(), rIter = rFields->begin();
-         lIter != lFields->end() && rIter != rFields->end();)
+    for (auto lIter = lhs->begin(), rIter = rhs->begin();
+         lIter != lhs->end() && rIter != rhs->end();)
     {
-        if (lIter->first == NUM_FIELD)
-        {
-            ++lIter;
-            continue;
-        }
-
-        if (rIter->first == NUM_FIELD)
-        {
-            ++rIter;
-            continue;
-        }
-
         if (lIter->first != rIter->first)
         {
             return lIter->first < rIter->first;
@@ -373,6 +382,16 @@ bool EntryLessNoLock::operator()(const Entry::Ptr& lhs, const Entry::Ptr& rhs) c
     }
 
     return false;
+}
+
+Entries::Vector::const_iterator Entries::begin() const
+{
+    return m_entries.begin();
+}
+
+Entries::Vector::const_iterator Entries::end() const
+{
+    return m_entries.end();
 }
 
 Entries::Vector::iterator Entries::begin()
@@ -459,6 +478,7 @@ void Entries::shallowFrom(Entries::Ptr entries)
     m_dirty = entries->m_dirty;
 }
 
+#if 0
 size_t ConcurrentEntries::size() const
 {
     return m_entries.size();
@@ -494,6 +514,7 @@ void ConcurrentEntries::setDirty(bool dirty)
 {
     m_dirty = dirty;
 }
+#endif
 
 void Condition::EQ(const std::string& key, const std::string& value)
 {
@@ -617,9 +638,19 @@ int Condition::getCount()
     return m_count;
 }
 
-std::map<std::string, Condition::Range>* Condition::getConditions()
+std::map<std::string, Condition::Range>::const_iterator Condition::begin() const
 {
-    return &m_conditions;
+    return m_conditions.begin();
+}
+
+std::map<std::string, Condition::Range>::const_iterator Condition::end() const
+{
+    return m_conditions.end();
+}
+
+bool Condition::empty()
+{
+    return m_conditions.empty();
 }
 
 bool Condition::process(Entry::Ptr entry)
@@ -633,12 +664,14 @@ bool Condition::process(Entry::Ptr entry)
 
         if (!m_conditions.empty())
         {
-            auto fields = entry->fields();
-
             for (auto it : m_conditions)
             {
-                auto fieldIt = fields->find(it.first);
-                if (fieldIt != fields->end())
+                if (!isHashField(it.first))
+                {
+                    continue;
+                }
+                auto fieldIt = entry->find(it.first);
+                if (fieldIt != entry->end())
                 {
                     if (it.second.left.second == it.second.right.second && it.second.left.first &&
                         it.second.right.first)
@@ -710,80 +743,6 @@ bool Condition::process(Entry::Ptr entry)
                     return false;
                 }
             }
-
-#if 0
-            for (auto it : *fields)
-            {
-                auto condIt = m_conditions.find(it.first);
-                if (condIt != m_conditions.end())
-                {
-                    if (condIt->second.left.second == condIt->second.right.second &&
-                        condIt->second.left.first && condIt->second.right.first)
-                    {
-                        if (condIt->second.left.second == it.second)
-                        {
-                            // point hited
-                            continue;
-                        }
-                        else
-                        {
-                            // point missed
-                            return false;
-                        }
-                    }
-
-                    if (condIt->second.left.second != UNLIMITED)
-                    {
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.left.second);
-                        auto rhs = (int64_t)0;
-                        if (!it.second.empty())
-                        {
-                            rhs = boost::lexical_cast<int64_t>(it.second);
-                        }
-
-                        if (condIt->second.left.first)
-                        {
-                            if (!(lhs <= rhs))
-                            {
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            if (!(lhs < rhs))
-                            {
-                                return false;
-                            }
-                        }
-                    }
-
-                    if (condIt->second.right.second != UNLIMITED)
-                    {
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.right.second);
-                        auto rhs = (int64_t)0;
-                        if (!it.second.empty())
-                        {
-                            rhs = boost::lexical_cast<int64_t>(it.second);
-                        }
-
-                        if (condIt->second.right.first)
-                        {
-                            if (!(lhs >= rhs))
-                            {
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            if (!(lhs > rhs))
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-#endif
         }
     }
     catch (std::exception& e)
@@ -799,90 +758,6 @@ bool Condition::process(Entry::Ptr entry)
 bool Condition::graterThan(Condition::Ptr condition)
 {
     (void)condition;
-    /*
-        try {
-            for(auto it: *(condition->getConditions())) {
-                auto condIt = m_conditions.find(it.first);
-                if(condIt != m_conditions.end()) {
-                    //equal condition
-                    if(condIt->second.left.second == condIt->second.right.second) {
-                        if(it.second.left.second != it.second.right.second) {
-                            // eq vs range
-                            return false;
-                        }
-
-                        // value equal?
-                        if(!(condIt->second.left.second == it.second.left.second)) {
-                            return false;
-                        }
-
-                        // close range or open range?
-                        if(!condIt->second.left.first && it.second.left.first) {
-                            return false;
-                        }
-
-                        if(!condIt->second.right.first && it.second.right.first) {
-                            return false;
-                        }
-                    }
-
-                    if(condIt->second.left.second != UNLIMITED) {
-                        if(it.second.left.second == UNLIMITED) {
-                            return false;
-                        }
-
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.left.second);
-                        auto rhs = boost::lexical_cast<int64_t>(it.second.left.second);
-                        if(condIt->second.left.first && !(lhs <= rhs)) {
-                            return false;
-                        }
-
-                        if(!condIt->second.left.first) {
-                            if(it.second.left.first) {
-                                if(!(lhs < rhs)) {
-                                    return false;
-                                }
-                            }
-                            else {
-                                if(!(lhs <= rhs)) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-
-                    if(condIt->second.right.second != UNLIMITED) {
-                        if(it.second.right.second == UNLIMITED) {
-                            return false;
-                        }
-
-                        auto lhs = boost::lexical_cast<int64_t>(condIt->second.right.second);
-                        auto rhs = boost::lexical_cast<int64_t>(it.second.right.second);
-                        if(condIt->second.right.first && !(lhs >= rhs)) {
-                            return false;
-                        }
-
-                        if(!condIt->second.right.first) {
-                            if(it.second.right.first) {
-                                if(!(lhs > rhs)) {
-                                    return false;
-                                }
-                            }
-                            else {
-                                if(!(lhs >= rhs)) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch(std::exception &e) {
-            STORAGE_LOG(WARNING) << "Error while graterThan condition: " <<
-       boost::diagnostic_information(e); return false;
-        }
-    */
 
     return true;
 }
@@ -890,57 +765,6 @@ bool Condition::graterThan(Condition::Ptr condition)
 bool Condition::related(Condition::Ptr condition)
 {
     (void)condition;
-    /*
-        try {
-            for(auto condIt: m_conditions) {
-                auto it = condition->getConditions()->find(condIt.first);
-                if(it == condition->getConditions()->end()) {
-                    return true;
-                }
-                else {
-                    if(it->second.left.first && condIt.second.left.first && it->second.left.second
-       == condIt.second.left.second) { return true;
-                    }
-
-                    if(it->second.right.first && condIt.second.right.first &&
-       it->second.right.second == condIt.second.right.second) { return true;
-                    }
-
-                    if(condIt.second.left.second == UNLIMITED || it->second.left.second ==
-       UNLIMITED) { return true;
-                    }
-
-                    if(condIt.second.right.second == UNLIMITED || it->second.right.second ==
-       UNLIMITED) { return true;
-                    }
-
-                    auto leftLHS = boost::lexical_cast<int64_t>(condIt.second.left.second);
-                    auto leftRHS = boost::lexical_cast<int64_t>(it->second.left.second);
-                    auto rightLHS = boost::lexical_cast<int64_t>(condIt.second.right.second);
-                    auto rightRHS = boost::lexical_cast<int64_t>(it->second.right.second);
-
-                    if(leftLHS < rightLHS && leftRHS < rightLHS) {
-                        return false;
-                    }
-
-                    if(leftLHS > rightRHS && leftRHS > rightRHS) {
-                        return false;
-                    }
-
-                    return true;
-                }
-            }
-        }
-        catch(std::exception &e) {
-            STORAGE_LOG(WARNING) << "Error while related condition: " <<
-       boost::diagnostic_information(e); return false;
-        }
-    */
 
     return false;
-}
-
-Entries::Ptr Condition::processEntries(Entries::Ptr entries)
-{
-    return entries;
 }

@@ -75,13 +75,10 @@ Entries::Ptr LevelDBStorage2::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    if (valueIt->first == ID_FIELD)
-                    {
-                        entry->setID(valueIt->second);
-                    }
                     entry->setField(valueIt->first, valueIt->second);
                 }
-                entry->setNum(entry->getField(NUM_FIELD));
+                entry->setID(it->at(ID_FIELD));
+                entry->setNum(it->at(NUM_FIELD));
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
@@ -200,7 +197,7 @@ void LevelDBStorage2::processNewEntries(h256, int64_t num,
         }
 
         std::map<std::string, std::string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
@@ -228,7 +225,7 @@ void LevelDBStorage2::processDirtyEntries(h256, int64_t num,
         }
 
         std::map<std::string, std::string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }

@@ -69,6 +69,14 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
             {
                 entry->setID(line.get(j, "").asString());
             }
+            else if (columns[j] == NUM_FIELD)
+            {
+                entry->setNum(line.get(j, "").asString());
+            }
+            else if (columns[j] == STATUS)
+            {
+                entry->setStatus(line.get(j, "").asString());
+            }
             else
             {
                 std::string fieldValue = line.get(j, "").asString();
@@ -163,7 +171,7 @@ void ZdbStorage::createSysConsensus()
     ss << "`name` varchar(128) DEFAULT NULL,\n";
     ss << "`version` varchar(128) DEFAULT NULL,\n";
     ss << "`address` varchar(256) DEFAULT NULL,\n";
-    ss << "`abi` mediumtext,\n";
+    ss << "`abi` longtext,\n";
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `name` (`name`)\n";
     ss << ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n";
@@ -196,7 +204,7 @@ void ZdbStorage::createCurrentStateTables()
     ss << "`_num_` int(11) DEFAULT NULL,\n";
     ss << "`_status_` int(11) DEFAULT NULL,\n";
     ss << "`key` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` mediumtext,\n";
+    ss << "`value` longtext,\n";
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `key` (`key`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4;\n";
@@ -213,7 +221,7 @@ void ZdbStorage::createNumber2HashTables()
     ss << " `_num_` int(11) DEFAULT NULL,\n";
     ss << " `_status_` int(11) DEFAULT NULL,\n";
     ss << " `number` varchar(128) DEFAULT NULL,\n";
-    ss << " `value` mediumtext,\n";
+    ss << " `value` longtext,\n";
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << " KEY `number` (`number`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4;";
@@ -229,7 +237,7 @@ void ZdbStorage::createTxHash2BlockTables()
     ss << "`_num_` int(11) DEFAULT NULL,\n";
     ss << "`_status_` int(11) DEFAULT NULL,\n";
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` mediumtext,\n";
+    ss << "`value` longtext,\n";
     ss << "`index` varchar(256) DEFAULT NULL,\n";
     ss << "PRIMARY KEY (`_id_`),\n";
     ss << "KEY `hash` (`hash`)\n";
@@ -246,7 +254,7 @@ void ZdbStorage::createHash2BlockTables()
     ss << " `_num_` int(11) DEFAULT NULL,\n";
     ss << " `_status_` int(11) DEFAULT NULL,\n";
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` mediumtext,\n";
+    ss << "`value` longtext,\n";
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << "KEY `hash` (`hash`)\n";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
@@ -281,7 +289,7 @@ void ZdbStorage::createSysConfigTables()
     ss << "`_num_` int(11) DEFAULT NULL,\n";
     ss << "`_status_` int(11) DEFAULT NULL,\n";
     ss << "`key` varchar(128) DEFAULT NULL,\n";
-    ss << "`value` mediumtext,\n";
+    ss << "`value` longtext,\n";
     ss << "`enable_num` varchar(256) DEFAULT NULL,\n";
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << "KEY `key` (`key`)\n";
@@ -298,7 +306,7 @@ void ZdbStorage::createSysBlock2NoncesTables()
     ss << "`_num_` int(11) DEFAULT NULL,\n";
     ss << "`_status_` int(11) DEFAULT NULL,\n";
     ss << "`number` varchar(128) DEFAULT NULL,\n";
-    ss << " `value` mediumtext,\n";
+    ss << " `value` longtext,\n";
     ss << "PRIMARY KEY (`_id_`),";
     ss << "KEY `number` (`number`)";
     ss << ") ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;";

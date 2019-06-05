@@ -77,13 +77,17 @@ Entries::Ptr RocksDBStorage::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    if (valueIt->first == ID_FIELD)
-                    {
-                        entry->setID(valueIt->second);
-                    }
                     entry->setField(valueIt->first, valueIt->second);
                 }
-                entry->setNum(entry->getField(NUM_FIELD));
+                entry->setID(it->at(ID_FIELD));
+                entry->setNum(it->at(NUM_FIELD));
+
+                auto statusIt = it->find(STATUS);
+                if (statusIt != it->end())
+                {
+                    entry->setStatus(statusIt->second);
+                }
+
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
                     entry->setDirty(false);
@@ -221,12 +225,13 @@ void RocksDBStorage::processNewEntries(int64_t num,
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
         value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
+        value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
         it->second.push_back(value);
     }
 }
@@ -247,12 +252,13 @@ void RocksDBStorage::processDirtyEntries(int64_t num,
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
         value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
+        value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
         it->second.push_back(value);
     }
 }

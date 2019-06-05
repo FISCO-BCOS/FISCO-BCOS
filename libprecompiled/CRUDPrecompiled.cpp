@@ -179,9 +179,8 @@ bytes CRUDPrecompiled::call(
                 for (size_t i = 0; i < entries->size(); i++)
                 {
                     auto entry = entries->get(i);
-                    auto fields = entry->fields();
                     Json::Value record;
-                    for (auto iter = fields->begin(); iter != fields->end(); iter++)
+                    for (auto iter = entry->begin(); iter != entry->end(); iter++)
                     {
                         record[iter->first] = iter->second;
                     }
@@ -229,6 +228,10 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
         Json::Value OPJson;
         for (auto iter = members.begin(); iter != members.end(); iter++)
         {
+            if (!isHashField(*iter))
+            {
+                continue;
+            }
             OPJson = conditionJson[*iter];
             auto op = OPJson.getMemberNames();
             for (auto it = op.begin(); it != op.end(); it++)

@@ -37,13 +37,17 @@ bytes EncryptedFile::decryptContents(
     bytes decFileBytes;
     try
     {
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Trying to read enc file")
+                   << LOG_KV("file", _filePath);
         string encContextsStr = contentsString(_filePath);
         encFileBytes = fromHex(encContextsStr);
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
+                   << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
         bytes dataKey;
         if (nullptr == _keyCenter)
         {
-            dataKey = g_keyCenter.getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+            dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
         }
         else
         {
@@ -58,6 +62,8 @@ bytes EncryptedFile::decryptContents(
     }
     catch (exception& e)
     {
+        LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+                   << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
     LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"

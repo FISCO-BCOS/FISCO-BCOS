@@ -23,7 +23,7 @@
 #include <libdevcore/Guards.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
-#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 #include <tbb/tbb_allocator.h>
 #include <atomic>
 #include <map>
@@ -67,11 +67,14 @@ public:
         DELETED
     };
 
+    typedef tbb::spin_rw_mutex RWMutex;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
     Entry();
     virtual ~Entry();
 
-    virtual uint32_t getID() const;
-    virtual void setID(uint32_t id);
+    virtual uint64_t getID() const;
+    virtual void setID(uint64_t id);
     virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
@@ -80,7 +83,12 @@ public:
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
 
-    virtual const std::map<std::string, std::string>* fields() const;
+    virtual std::map<std::string, std::string>::const_iterator find(const std::string& key) const;
+
+    virtual std::map<std::string, std::string>::const_iterator begin() const;
+    virtual std::map<std::string, std::string>::const_iterator end() const;
+
+    virtual size_t size() const;
 
     virtual int getStatus() const;
     virtual void setStatus(int status);
@@ -106,7 +114,7 @@ public:
 
     virtual ssize_t refCount();
 
-    std::shared_ptr<tbb::spin_mutex::scoped_lock> lock();
+    std::shared_ptr<RWMutexScoped> lock();
 
 private:
     struct EntryData
@@ -117,15 +125,15 @@ private:
 
         ssize_t m_refCount = 0;
         std::map<std::string, std::string> m_fields;
-        tbb::spin_mutex m_mutex;
+        RWMutex m_mutex;
     };
 
-    std::shared_ptr<tbb::spin_mutex::scoped_lock> checkRef();
+    std::shared_ptr<RWMutexScoped> checkRef();
 
-    uint32_t m_ID = 0;
+    uint64_t m_ID = 0;
     int m_status = 0;
     size_t m_tempIndex = 0;
-    uint32_t m_num = 0;
+    uint64_t m_num = 0;
     bool m_dirty = false;
     bool m_force = false;
     bool m_deleted = false;
@@ -156,6 +164,9 @@ public:
     typedef std::shared_ptr<const Entries> ConstPtr;
     virtual ~Entries(){};
 
+    virtual Vector::const_iterator begin() const;
+    virtual Vector::const_iterator end() const;
+
     virtual Vector::iterator begin();
     virtual Vector::iterator end();
 
@@ -175,46 +186,6 @@ public:
 private:
     Vector m_entries;
     bool m_dirty = false;
-};
-
-class ConcurrentEntries : public std::enable_shared_from_this<ConcurrentEntries>
-{
-public:
-    using Ptr = std::shared_ptr<ConcurrentEntries>;
-
-    /*
-    tbb::concurrent_vector class DOES NOT support a thread traverse across a tbb::concurrent_vector
-    instance safely in parallel to growth operations of other threads, nether using simple C-style
-    for-loop with "i < v.size()" or "iter != v.end()" nor C++-11-style for-loop "for(auto i: v)",
-    please visit:
-    https://software.intel.com/en-us/blogs/2009/04/09/delusion-of-tbbconcurrent_vectors-size-or-3-ways-to-traverse-in-parallel-correctly
-    to get an insight about this problem and the solution.
-    */
-    using EntriesContainer =
-        tbb::concurrent_vector<typename Entry::Ptr, tbb::zero_allocator<typename Entry::Ptr>>;
-    using EntriesIter = typename EntriesContainer::iterator;
-
-    typename Entry::Ptr get(size_t i);
-    size_t size() const;
-    EntriesIter addEntry(Entry::Ptr entry);
-    bool dirty() const;
-    void setDirty(bool dirty);
-
-    /*
-    To support grow in parallel, tbb::concurrent_vector DOES NOT represent a contiguous array/memory
-    region for storing its elements. In Reference Manual for developers, it says:
-
-    Unlike a std::vector, a concurrent_vector never moves existing elements when it grows.
-    The container allocates a series of contiguous arrays. ...
-
-    So the iterator begin() method returns will never change.
-    */
-    EntriesIter begin() { return m_entries.begin(); }
-    EntriesIter end() { return m_entries.end(); }
-
-private:
-    EntriesContainer m_entries;
-    std::atomic_bool m_dirty;
 };
 
 class Condition : public std::enable_shared_from_this<Condition>
@@ -257,19 +228,19 @@ public:
 
     virtual void limit(int64_t count);
     virtual void limit(int64_t offset, int64_t count);
-    virtual std::map<std::string, Range>* getConditions();
 
     virtual bool process(Entry::Ptr entry);
     virtual bool graterThan(Condition::Ptr condition);
     virtual bool related(Condition::Ptr condition);
-
-    virtual Entries::Ptr processEntries(Entries::Ptr entries);
 
     virtual std::string unlimitedField() { return UNLIMITED; }
 
     virtual int getOffset();
     virtual int getCount();
 
+    virtual std::map<std::string, Range>::const_iterator begin() const;
+    virtual std::map<std::string, Range>::const_iterator end() const;
+    virtual bool empty();
 
 private:
     int64_t m_offset = -1;
@@ -277,9 +248,6 @@ private:
     std::map<std::string, Range> m_conditions;
     const std::string UNLIMITED = "_VALUE_UNLIMITED_";
 };
-
-using Parallel = std::true_type;
-using Serial = std::false_type;
 
 class Table;
 
