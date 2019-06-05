@@ -780,7 +780,7 @@ BOOST_AUTO_TEST_CASE(commitCheck)
     TableData::Ptr newTXData = std::make_shared<TableData>();
     Entries::Ptr newUser = std::make_shared<Entries>();
     Entries::Ptr newTX = std::make_shared<Entries>();
-    for (auto i = 0; i < 10000; ++i)
+    for (auto i = 0; i < 100; ++i)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("key", boost::lexical_cast<std::string>(i));
@@ -810,7 +810,7 @@ BOOST_AUTO_TEST_CASE(commitCheck)
         TableData::Ptr newTXData = std::make_shared<TableData>();
         Entries::Ptr newUser = std::make_shared<Entries>();
         Entries::Ptr newTX = std::make_shared<Entries>();
-        for (auto i = 0; i < 10000; ++i)
+        for (auto i = 0; i < 100; ++i)
         {
             auto entries = cachedStorage->select(dev::h256(0), idx + 1, userTable,
                 boost::lexical_cast<std::string>(i), std::make_shared<Condition>());
