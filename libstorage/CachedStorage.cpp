@@ -648,8 +648,8 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
         RWMutexScoped lockCache(m_cachesMutex, true);
 
         auto result = m_caches.insert(std::make_pair(cacheKey, cache));
-        cache = result.first->second;
 
+        cache = result.first->second;
         inserted = result.second;
     }
 
@@ -673,9 +673,9 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
+	auto cacheKey = table + "_" + key;
     RWMutexScoped lockCache(m_cachesMutex, true);
 
-    auto cacheKey = table + "_" + key;
     // m_caches.unsafe_erase(cacheKey);
     m_caches.erase(cacheKey);
 }
@@ -780,7 +780,8 @@ void CachedStorage::checkAndClear()
         CACHED_STORAGE_LOG(INFO) << "Clear finished, total: " << clearCount << " entries, "
                                  << "through: " << clearThrough << " entries, "
                                  << readableCapacity(currentCapacity - m_capacity)
-                                 << "Current total cached entries: " << m_mru->size()
+								 << ", Current total entries: " << m_caches.size()
+                                 << ", Current total mru entries: " << m_mru->size()
                                  << ", total capacaity: " << readableCapacity(m_capacity);
 
         CACHED_STORAGE_LOG(DEBUG)
