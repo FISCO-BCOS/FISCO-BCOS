@@ -21,6 +21,8 @@
  */
 
 #include "VM.h"
+#include <libdevcore/Log.h>
+#include <libdevcore/easylog.h>
 
 namespace dev
 {
@@ -102,6 +104,8 @@ int64_t VM::verifyJumpDest(u256 const& _dest, bool _throw)
             return pc;
     }
     if (_throw)
+        LOG(ERROR) << LOG_BADGE("EVM") << LOG_DESC("Bad jump destination exception")
+                     << LOG_KV("PC", m_PC) << LOG_KV("dest", _dest) << LOG_KV("code", toHex(m_code));
         throwBadJumpDestination();
     return -1;
 }
