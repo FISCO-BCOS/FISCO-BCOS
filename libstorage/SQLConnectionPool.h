@@ -70,6 +70,7 @@ public:
 
 private:
     ConnectionPool_T m_connectionPool;
+    URL_T m_url;
 };
 
 inline void errorExitOut(std::stringstream& _exitInfo);
