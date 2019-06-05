@@ -148,7 +148,7 @@ int MemoryTable2::update(
                 m_dirty.insert(std::make_pair(updateEntry->getID(), updateEntry));
             }
 
-            for (auto& it : *(entry->fields()))
+            for (auto& it : *(entry))
             {
                 //_id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
@@ -291,7 +291,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
         tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint32_t, Entry::Ptr>::range_type& range) {
+            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
                 for (auto it = range.begin(); it != range.end(); ++it)
                 {
                     if (!it->second->deleted())
@@ -328,7 +328,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {
             auto entry = tempEntries[i];
-            for (auto fieldIt : *(entry->fields()))
+            for (auto fieldIt : *(entry))
             {
                 if (isHashField(fieldIt.first))
                 {
@@ -354,13 +354,16 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
 void MemoryTable2::rollback(const Change& _change)
 {
+#if 0
     LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries.size();
-
+#endif
     switch (_change.kind)
     {
     case Change::Insert:
     {
+#if 0
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
+#endif
 
         auto it = m_newEntries.find(_change.key);
         if (it != m_newEntries.end())
@@ -374,8 +377,11 @@ void MemoryTable2::rollback(const Change& _change)
     {
         for (auto& record : _change.value)
         {
+#if 0
             LOG(TRACE) << "Rollback update record id: " << record.id
                        << " newIndex: " << record.index;
+#endif
+
             if (record.id)
             {
                 auto it = m_dirty.find(record.id);
@@ -400,8 +406,10 @@ void MemoryTable2::rollback(const Change& _change)
     {
         for (auto& record : _change.value)
         {
+#if 0
             LOG(TRACE) << "Rollback remove record id: " << record.id
                        << " newIndex: " << record.index;
+#endif
             if (record.id)
             {
                 auto it = m_dirty.find(record.id);

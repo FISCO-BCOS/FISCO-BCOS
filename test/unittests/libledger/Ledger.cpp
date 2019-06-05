@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  *
  */
 
@@ -259,6 +259,45 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     populateBlock->resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
+}
+
+BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
+{
+    TxPoolFixture txpool_creator;
+    KeyPair key_pair = KeyPair::create();
+    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
+    dev::GROUP_ID groupId = 11;
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.11.genesis";
+
+    std::shared_ptr<LedgerInterface> ledger =
+        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
+    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
+}
+
+BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
+{
+    TxPoolFixture txpool_creator;
+    KeyPair key_pair = KeyPair::create();
+    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
+    dev::GROUP_ID groupId = 12;
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.12.genesis";
+
+    std::shared_ptr<LedgerInterface> ledger =
+        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
+    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
+}
+
+BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
+{
+    TxPoolFixture txpool_creator;
+    KeyPair key_pair = KeyPair::create();
+    std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
+    dev::GROUP_ID groupId = 15;
+    std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.15.genesis";
+
+    std::shared_ptr<LedgerInterface> ledger =
+        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
+    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

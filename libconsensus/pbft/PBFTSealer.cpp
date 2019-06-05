@@ -104,6 +104,40 @@ void PBFTSealer::stop()
     m_pbftEngine->stop();
 }
 
+/// attempt to increase m_lastTimeoutTx when m_lastTimeoutTx is no large than m_maxNoTimeoutTx
+void PBFTSealer::attempIncreaseTimeoutTx()
+{
+    // boundary processing:
+    // 1. m_lastTimeoutTx or m_maxNoTimeoutTx is large enough, return directly
+    if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
+    {
+        return;
+    }
+    if (m_maxNoTimeoutTx == m_pbftEngine->maxBlockTransactions())
+    {
+        m_lastTimeoutTx = m_maxNoTimeoutTx;
+        return;
+    }
+    // attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
+    // if m_maxNoTimeoutTx * 0.1 is large than 1, reset m_lastTimeoutTx to 110% of m_maxNoTimeoutTx
+    if (m_maxNoTimeoutTx * 0.1 > 1)
+    {
+        m_lastTimeoutTx = m_maxNoTimeoutTx * (1 + 0.1);
+    }
+    // if m_maxNoTimoutTx*0.1 is little than 1(m_lastTimeoutTx is little than 10), double
+    // m_lastTimeoutTx(doubled m_lastTimeoutTx is little than 20)
+    else
+    {
+        m_lastTimeoutTx *= 2;
+    }
+    if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
+    {
+        m_lastTimeoutTx = m_pbftEngine->maxBlockTransactions();
+    }
+    PBFTSEALER_LOG(INFO) << LOG_DESC("attempIncreaseTimeoutTx")
+                         << LOG_KV("updatedTimeoutTx", m_lastTimeoutTx);
+}
+
 /// decrease maxBlockCanSeal to half when timeout
 void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
 {
@@ -122,14 +156,7 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
     else
     {
         /// attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
-        if (m_maxNoTimeoutTx * 0.1 > 1)
-        {
-            m_lastTimeoutTx = m_maxNoTimeoutTx * (1 + 0.1);
-        }
-        else
-        {
-            m_lastTimeoutTx *= 2;
-        }
+        attempIncreaseTimeoutTx();
     }
     /// update the maxBlockCanSeal
     {
@@ -204,9 +231,22 @@ void PBFTSealer::increaseMaxTxsCanSeal()
     {
         m_maxBlockCanSeal += 1;
     }
+    // if m_lastTimeoutTx is no large than to m_maxNoTimeoutTx, try to increase m_TimeoutTx
+    if (m_lastTimeoutTx <= m_maxNoTimeoutTx)
+    {
+        attempIncreaseTimeoutTx();
+    }
+    // increased m_maxBlockCanSeal is large than m_lastTimeoutTx, reset m_maxBlockCanSeal to
+    // m_lastTimeoutTx
     if (m_lastTimeoutTx > 0 && m_maxBlockCanSeal > m_lastTimeoutTx)
     {
         m_maxBlockCanSeal = m_lastTimeoutTx;
+    }
+    // increased m_maxBlockCanSeal is little than m_maxNoTimeoutTx, reset m_maxBlockCanSeal to
+    // m_maxNoTimeoutTx
+    if (m_maxNoTimeoutTx > 0 && m_maxBlockCanSeal < m_maxNoTimeoutTx)
+    {
+        m_maxBlockCanSeal = m_maxNoTimeoutTx;
     }
     if (m_maxBlockCanSeal > m_pbftEngine->maxBlockTransactions())
     {

@@ -56,7 +56,7 @@ public:
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
     std::string GenerateConditionSql(const std::string& strPrefix,
-        std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition);
+        std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition);
 
     std::vector<SQLPlaceHoldItem> BuildCommitSql(const std::string& _table,
         const std::vector<std::string>& _fieldName, const std::vector<std::string>& _fieldValue);
