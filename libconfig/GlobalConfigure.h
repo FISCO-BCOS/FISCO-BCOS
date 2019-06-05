@@ -30,7 +30,8 @@ enum VERSION : uint32_t
 {
     RC1_VERSION = 1,
     RC2_VERSION = 2,
-    RC3_VERSION = 3
+    RC3_VERSION = 3,
+    RC4_VERSION = 4
 };
 class GlobalConfigure
 {
@@ -75,7 +76,7 @@ public:
     const uint64_t c_compressThreshold = 1024;
 
 private:
-    VERSION m_version = RC3_VERSION;
+    VERSION m_version = RC4_VERSION;
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;

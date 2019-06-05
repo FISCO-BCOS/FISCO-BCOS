@@ -74,6 +74,10 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     {
         g_BCOSConfig.setSupportedVersion(version, RC3_VERSION);
     }
+    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc4") == 0)
+    {
+        g_BCOSConfig.setSupportedVersion(version, RC4_VERSION);
+    }
     else if (getVersionNumber(version, versionNumber))
     {
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
