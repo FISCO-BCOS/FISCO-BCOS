@@ -645,7 +645,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
     bool inserted = false;
     {
-        RWMutexScoped lockCache(m_cachesMutex, false);
+        RWMutexScoped lockCache(m_cachesMutex, true);
 
         auto result = m_caches.insert(std::make_pair(cacheKey, cache));
         cache = result.first->second;
@@ -676,8 +676,8 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     RWMutexScoped lockCache(m_cachesMutex, true);
 
     auto cacheKey = table + "_" + key;
-    m_caches.unsafe_erase(cacheKey);
-    // m_caches.erase(cacheKey);
+    // m_caches.unsafe_erase(cacheKey);
+    m_caches.erase(cacheKey);
 }
 
 void CachedStorage::checkAndClear()
