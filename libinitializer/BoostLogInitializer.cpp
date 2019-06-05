@@ -22,6 +22,7 @@
  */
 #include "BoostLogInitializer.h"
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 namespace logging = boost::log;
@@ -69,7 +70,6 @@ void LogInitializer::initLog(
     /// set rotation size MB
     uint64_t rotation_size = pt.get<uint64_t>("log.max_log_file_size", 200) * 1048576;
     sink->locked_backend()->set_rotation_size(rotation_size);
-
     /// set auto-flush according to log configuration
     bool need_flush = pt.get<bool>("log.flush", true);
     sink->locked_backend()->auto_flush(need_flush);
@@ -88,9 +88,12 @@ void LogInitializer::initLog(
     unsigned log_level = getLogLevel(pt.get<std::string>("log.level", "info"));
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                      boost::log::trivial::severity >= log_level);
-    boost::log::core::get()->add_sink(sink);
 
+
+    boost::log::core::get()->add_sink(sink);
     m_sinks.push_back(sink);
+    bool enable_log = pt.get<bool>("log.enable", true);
+    boost::log::core::get()->set_logging_enabled(enable_log);
     // add attributes
     boost::log::add_common_attributes();
 }
@@ -112,7 +115,7 @@ unsigned LogInitializer::getLogLevel(std::string const& levelStr)
     if (dev::stringCmpIgnoreCase(levelStr, "error") == 0)
         return boost::log::trivial::severity_level::error;
     if (dev::stringCmpIgnoreCase(levelStr, "fatal") == 0)
-        return boost::log::trivial::severity_level::error;
+        return boost::log::trivial::severity_level::fatal;
     /// default log level is info
     return boost::log::trivial::severity_level::info;
 }

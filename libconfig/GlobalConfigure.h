@@ -75,7 +75,7 @@ public:
     const uint64_t c_compressThreshold = 1024;
 
 private:
-    VERSION m_version = RC2_VERSION;
+    VERSION m_version = RC3_VERSION;
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;

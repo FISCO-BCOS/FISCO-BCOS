@@ -477,6 +477,7 @@ cipher_data_key=
     ; supported_version should nerver be changed
     supported_version=${compatibility_version}
 [log]
+    enable=true
     log_path=./log
     ; info debug trace 
     level=${log_level}
