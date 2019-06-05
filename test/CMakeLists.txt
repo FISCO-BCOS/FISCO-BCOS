@@ -74,13 +74,6 @@ foreach(file ${sources})
     endforeach(test_raw)
 endforeach(file)
 
-include(ProcessorCount)
-ProcessorCount(N)
-if(NOT N EQUAL 0)
-  set(CTEST_BUILD_FLAGS -j${N})
-  set(ctest_test_args ${ctest_test_args} PARALLEL_LEVEL ${N})
-endif()
-
 add_executable(test-fisco-bcos ${sources})
 target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE_DIR})
 target_include_directories(test-fisco-bcos PRIVATE ..)
