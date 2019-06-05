@@ -354,13 +354,16 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
 void MemoryTable2::rollback(const Change& _change)
 {
+#if 0
     LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries.size();
-
+#endif
     switch (_change.kind)
     {
     case Change::Insert:
     {
+#if 0
         LOG(TRACE) << "Rollback insert record newIndex: " << _change.value[0].index;
+#endif
 
         auto it = m_newEntries.find(_change.key);
         if (it != m_newEntries.end())
@@ -374,8 +377,11 @@ void MemoryTable2::rollback(const Change& _change)
     {
         for (auto& record : _change.value)
         {
+#if 0
             LOG(TRACE) << "Rollback update record id: " << record.id
                        << " newIndex: " << record.index;
+#endif
+
             if (record.id)
             {
                 auto it = m_dirty.find(record.id);
@@ -400,8 +406,10 @@ void MemoryTable2::rollback(const Change& _change)
     {
         for (auto& record : _change.value)
         {
+#if 0
             LOG(TRACE) << "Rollback remove record id: " << record.id
                        << " newIndex: " << record.index;
+#endif
             if (record.id)
             {
                 auto it = m_dirty.find(record.id);
