@@ -224,8 +224,8 @@ void DBInitializer::initRocksDBStorage()
     {
         m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
-        //options.IncreaseParallelism();
-        //options.OptimizeLevelStyleCompaction();
+        options.IncreaseParallelism();
+        options.OptimizeLevelStyleCompaction();
         options.create_if_missing = true;
         options.max_open_files = 1000;
         options.compression = rocksdb::kSnappyCompression;

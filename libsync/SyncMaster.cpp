@@ -498,7 +498,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 {
                     m_txPool->dropBlockTrans(*topBlock);
                     auto dropBlockTrans_time_cost = utcTime() - record_time;
-                    SYNC_LOG(DEBUG)
+                    SYNC_LOG(INFO)
                         << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                         << LOG_DESC("Download block commit")
                         << LOG_KV("number", topBlock->header().number())
