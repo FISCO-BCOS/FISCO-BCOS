@@ -102,38 +102,17 @@ int SQLConnectionPool::ReturnConnection(const Connection_T& _connection)
 
 int SQLConnectionPool::BeginTransaction(const Connection_T& _connection)
 {
-    TRY { Connection_beginTransaction(_connection); }
-    CATCH(SQLException)
-    {
-        string errmsg = Exception_frame.message;
-        SQLBasicAccess_LOG(ERROR) << "begin transaction exception:" << errmsg;
-        return -1;
-    }
-    END_TRY;
+    Connection_beginTransaction(_connection);
     return 0;
 }
 int SQLConnectionPool::Commit(const Connection_T& _connection)
 {
-    TRY { Connection_commit(_connection); }
-    CATCH(SQLException)
-    {
-        string errmsg = Exception_frame.message;
-        SQLBasicAccess_LOG(ERROR) << "commit exception:" << errmsg;
-        return -1;
-    }
-    END_TRY;
+    Connection_commit(_connection);
     return 0;
 }
 int SQLConnectionPool::RollBack(const Connection_T& _connection)
 {
-    TRY { Connection_rollback(_connection); }
-    CATCH(SQLException)
-    {
-        string errmsg = Exception_frame.message;
-        SQLBasicAccess_LOG(ERROR) << "rollback  exception:" << errmsg;
-        return -1;
-    }
-    END_TRY;
+    Connection_rollback(_connection);
     return 0;
 }
 
