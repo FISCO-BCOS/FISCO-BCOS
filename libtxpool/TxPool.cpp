@@ -133,7 +133,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
         {
             dev::eth::LocalisedTransactionReceipt::Ptr receipt =
                 std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                    ImportResult::TransactionPoolIsFull);
+                    executive::TransactionException::TxPoolIsFull);
 
             m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
         }

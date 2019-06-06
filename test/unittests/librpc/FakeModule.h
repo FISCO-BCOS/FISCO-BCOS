@@ -270,7 +270,8 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        return TransactionReceipt(h256(0x3), u256(8), entries,
+            executive::TransactionException::None, bytes(), Address(0x1000));
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
