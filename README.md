@@ -9,7 +9,6 @@ English / [中文](docs/README_CN.md)
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)  [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
 
 
-
 ## Documentation
 
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)
