@@ -62,7 +62,6 @@ Entries* Cache::entriesPtr()
 void Cache::setEntries(Entries::Ptr entries)
 {
     m_entries = entries;
-    m_empty = false;
 }
 
 uint64_t Cache::num() const
@@ -166,7 +165,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
-    RWMutexScoped commitLock(m_commitMutex, false);
+    //RWMutexScoped commitLock(m_commitMutex, false);
 
     auto result = touchCache(tableInfo, key);
     auto caches = std::get<1>(result);
@@ -182,6 +181,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
             CACHED_STORAGE_LOG(DEBUG) << tableInfo->name << ": " << key << " miss the cache";
 
             caches->setEntries(backendData);
+            caches->setEmpty(false);
 
             size_t totalCapacity = 0;
             for (auto it : *backendData)
@@ -210,7 +210,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
                              << " num: " << num;
 
-    RWMutexScoped commitLock(m_commitMutex, true);
+    //RWMutexScoped commitLock(m_commitMutex, true);
     tbb::atomic<size_t> total = 0;
 
     TIME_RECORD("Process dirty entries");
@@ -284,6 +284,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
 
                                 caches->setNum(num);
+                                caches->setEmpty(false);
 
                                 auto entryIt = std::lower_bound(caches->entries()->begin(),
                                     caches->entries()->end(), entry,
@@ -437,6 +438,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                 caches->entries()->addEntry(cacheEntry);
                 caches->setNum(num);
+                caches->setEmpty(false);
             }
 #if 0
             STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
@@ -700,7 +702,15 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     RWMutexScoped lockCache(m_cachesMutex, true);
 
     // m_caches.unsafe_erase(cacheKey);
-    m_caches.erase(cacheKey);
+    auto c = m_caches.erase(cacheKey);
+
+    if(c != 1) {
+    	CACHED_STORAGE_LOG(FATAL) << "Can not remove cache: " << table << "-" << key;
+
+    	// impossible
+		BOOST_THROW_EXCEPTION(StorageException(
+			-1, "Can not remove cache: " + table + "-" + key));
+    }
 }
 
 void CachedStorage::checkAndClear()
@@ -743,7 +753,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-        	RWMutexScoped commitLock(m_commitMutex, false);
+        	//RWMutexScoped commitLock(m_commitMutex, false);
 
             for (auto it = m_mru->begin(); it != m_mru->end();)
             {
@@ -764,7 +774,10 @@ void CachedStorage::checkAndClear()
                 {
                     CACHED_STORAGE_LOG(FATAL)
                         << "Unable to find cache: " << tableInfo->name << "-" << it->second;
-                    continue;
+
+                    // impossible
+					BOOST_THROW_EXCEPTION(StorageException(
+						-1, "Unable to find cache: " + tableInfo->name + "-" + it->second));
                 }
 
                 if (std::get<2>(result))
