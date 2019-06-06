@@ -759,7 +759,10 @@ void CachedStorage::checkAndClear()
 
         		}
         		else {
-        			uniquePtr.insert(std::make_pair(it.first + "_" + it.second, cIt->second));
+        			auto inserted = uniquePtr.insert(std::make_pair(it.first + "_" + it.second, cIt->second));
+        			if(!inserted.second) {
+        				CACHED_STORAGE_LOG(FATAL) << "Key: " << (it.first + "_" + it.second) << " already exists";
+        			}
         		}
         	}
 
@@ -768,7 +771,7 @@ void CachedStorage::checkAndClear()
         		CACHED_STORAGE_LOG(FATAL) << "Unique set: " << uniquePtr.size() << " mru: "<< m_mru->size();
 
         		for (auto& it: *m_mru) {
-        			CACHED_STORAGE_LOG(INFO) << it.first << it.second << uniquePtr[it.first + "_" + it.second];
+        			CACHED_STORAGE_LOG(INFO) << it.first << it.second << " " << uniquePtr[it.first + "_" + it.second];
         		}
 
         		BOOST_THROW_EXCEPTION(StorageException(-1, "unique"));
