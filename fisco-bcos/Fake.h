@@ -214,7 +214,8 @@ public:
         TransactionReceipts receipts;
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
         {
-            TransactionReceipt receipt(u256(0), u256(100), LogEntries(), u256(0), bytes(),
+            TransactionReceipt receipt(u256(0), u256(100), LogEntries(),
+                executive::TransactionException::None, bytes(),
                 block.transactions()[index].receiveAddress());
             receipts.push_back(receipt);
         }

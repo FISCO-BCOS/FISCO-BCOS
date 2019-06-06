@@ -33,14 +33,15 @@ TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
     m_gasUsed = (u256)r[1];
     m_contractAddress = (Address)r[2];
     m_bloom = (LogBloom)r[3];
-    m_status = (u256)r[4];
+    m_status = static_cast<executive::TransactionException>((uint8_t)r[4]);
     m_outputBytes = (bytes)r[5];
     for (auto const& i : r[6])
         m_log.emplace_back(i);
 }
 
 TransactionReceipt::TransactionReceipt(h256 const& _root, u256 const& _gasUsed,
-    LogEntries const& _log, u256 _status, bytes _bytes, Address const& _contractAddress)
+    LogEntries const& _log, executive::TransactionException _status, bytes _bytes,
+    Address const& _contractAddress)
 {
     m_stateRoot = (_root);
     m_gasUsed = (_gasUsed);
@@ -63,8 +64,8 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
 {
-    _s.appendList(7) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom << m_status
-                     << m_outputBytes;
+    _s.appendList(7) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom
+                     << static_cast<u256>(m_status) << m_outputBytes;
     _s.appendList(m_log.size());
     for (LogEntry const& l : m_log)
         l.streamRLP(_s);
@@ -87,7 +88,7 @@ void TransactionReceipt::decode(RLP const& r)
         m_gasUsed = (u256)r[1];
         m_contractAddress = (Address)r[2];
         m_bloom = (LogBloom)r[3];
-        m_status = (u256)r[4];
+        m_status = static_cast<executive::TransactionException>((uint8_t)r[4]);
         if (r[5].isData())
         {
             m_outputBytes = r[5].toBytes();
