@@ -317,7 +317,11 @@ int SQLBasicAccess::CommitDo(
     END_TRY;
 
     volatile int32_t rowCount = 0;
-    m_connPool->BeginTransaction(oConn);
+    int ret = m_connPool->BeginTransaction(oConn);
+    if (ret < 0)
+    {
+        return ret;
+    }
     TRY
     {
         for (auto it : datas)
@@ -375,19 +379,29 @@ int SQLBasicAccess::CommitDo(
     {
         errmsg = Exception_frame.message;
         SQLBasicAccess_LOG(ERROR) << "insert data exception:" << errmsg;
-        SQLBasicAccess_LOG(DEBUG) << "active connections:" << m_connPool->GetActiveConnections()
-                                  << " max connetions:" << m_connPool->GetMaxConnections()
-                                  << " now connections:" << m_connPool->GetTotalConnections();
-        m_connPool->RollBack(oConn);
+        SQLBasicAccess_LOG(INFO) << "active connections:" << m_connPool->GetActiveConnections()
+                                 << " max connetions:" << m_connPool->GetMaxConnections()
+                                 << " now connections:" << m_connPool->GetTotalConnections();
+
+
+        ret = m_connPool->RollBack(oConn);
+        if (ret)
+        {
+            return ret;
+        }
         m_connPool->ReturnConnection(oConn);
-        return -1;
     }
     END_TRY;
 
     SQLBasicAccess_LOG(INFO) << "commit now active connections:"
                              << m_connPool->GetActiveConnections()
                              << " max connections:" << m_connPool->GetMaxConnections();
-    m_connPool->Commit(oConn);
+    ret = m_connPool->Commit(oConn);
+    if (ret)
+    {
+        return ret;
+    }
+
     m_connPool->ReturnConnection(oConn);
     return rowCount;
 }
