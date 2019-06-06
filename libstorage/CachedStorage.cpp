@@ -479,23 +479,34 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         m_taskThreadPool->enqueue([backend, task, self]() {
             auto now = std::chrono::system_clock::now();
             STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
-            backend->commit(task->hash, task->num, *(task->datas));
 
-            auto storage = self.lock();
-            if (storage)
+            try
             {
-                storage->setSyncNum(task->num);
+                backend->commit(task->hash, task->num, *(task->datas));
 
-                std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-                STORAGE_LOG(INFO)
-                    << "[g:" << std::to_string(storage->groupID()) << "]"
-                    << "\n---------------------------------------------------------------------\n"
-                    << "Commit block: " << task->num
-                    << " to backend storage finished, current cached block: "
-                    << storage->m_commitNum << "\n"
-                    << "Flush elapsed time: " << std::setiosflags(std::ios::fixed)
-                    << std::setprecision(4) << elapsed.count() << "s"
-                    << "\n---------------------------------------------------------------------\n";
+                auto storage = self.lock();
+                if (storage)
+                {
+                    storage->setSyncNum(task->num);
+
+                    std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+                    STORAGE_LOG(INFO) << "[g:" << std::to_string(storage->groupID()) << "]"
+                                      << "\n-------------------------------------------------------"
+                                         "--------------\n"
+                                      << "Commit block: " << task->num
+                                      << " to backend storage finished, current cached block: "
+                                      << storage->m_commitNum << "\n"
+                                      << "Flush elapsed time: " << std::setiosflags(std::ios::fixed)
+                                      << std::setprecision(4) << elapsed.count() << "s"
+                                      << "\n-------------------------------------------------------"
+                                         "--------------\n";
+                }
+            }
+            catch (std::exception& e)
+            {
+                LOG(FATAL) << "access storage failed exit errmsg:" << e.what();
+                raise(SIGTERM);
+                std::this_thread::sleep_for(std::chrono::milliseconds(5000));
             }
         });
 
