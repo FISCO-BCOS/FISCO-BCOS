@@ -27,6 +27,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
@@ -1112,6 +1113,13 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());
+
+        if (req.height == m_consensusBlockNumber &&
+            req.block_hash != m_reqCache->prepareCache().block_hash)
+        {
+            std::dynamic_pointer_cast<dev::storage::MemoryTableFactory2>(
+                m_reqCache->prepareCache().p_execContext->getMemoryTableFactory());
+        }
     }
     return result;
 }

@@ -21,8 +21,6 @@
  */
 
 #include "VM.h"
-#include <libdevcore/Log.h>
-#include <libdevcore/easylog.h>
 
 namespace dev
 {

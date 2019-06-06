@@ -20,6 +20,8 @@
  */
 #include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
@@ -27,6 +29,7 @@
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/RocksDBStorage.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -47,8 +50,35 @@ using namespace dev::initializer;
 
 void testMemoryTable2(size_t round, size_t count, bool verify)
 {
+    boost::filesystem::create_directories("./RocksDB");
+    rocksdb::Options options;
+    rocksdb::DB* db = nullptr;
+    options.IncreaseParallelism();
+    options.OptimizeLevelStyleCompaction();
+    options.create_if_missing = true;
+    options.max_open_files = 1000;
+    options.compression = rocksdb::kSnappyCompression;
+    rocksdb::Status status;
+
+    status = rocksdb::DB::Open(options, "./RocksDB", &db);
+
+    if (!status.ok())
+    {
+        throw std::runtime_error("open RocksDB failed");
+    }
+    std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
+    std::shared_ptr<rocksdb::DB> rocksDB;
+    rocksDB.reset(db);
+
+    rocksdbStorage->setDB(rocksDB);
+
+
     CachedStorage::Ptr cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->startClearThread();
+    cachedStorage->setBackend(rocksdbStorage);
+    // cachedStorage->startClearThread();
+    cachedStorage->init();
+    cachedStorage->setMaxCapacity(32 * 1024 * 1024);
+    cachedStorage->setMaxForwardBlock(5);
 
     auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
     factoryFactory->setStorage(cachedStorage);
@@ -85,7 +115,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
             tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t j = range.begin(); j < range.end(); ++j)
                 {
-                    for (int k = 0; k < 1000; ++k)
+                    for (int k = 0; k < 50; ++k)
                     {
                         auto dataTable = factory->openTable("test_data");
                         auto txTable = factory->openTable("tx_hash_2_block");
@@ -144,7 +174,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
                     auto dataEntry = dataEntries->get(0);
 
                     size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
-                    if (value != 1000 * round)
+                    if (value != 50 * round)
                     {
                         std::cout << "Verify failed, value: " << value << " != " << round * 1000;
                     }
@@ -161,6 +191,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+#if 1
     boost::property_tree::ptree pt;
 
     boost::property_tree::read_ini("config.ini", pt);
@@ -168,6 +199,7 @@ int main(int argc, char* argv[])
     /// init log
     auto logInitializer = std::make_shared<LogInitializer>();
     logInitializer->initLog(pt);
+#endif
 
     size_t round = boost::lexical_cast<size_t>(argv[1]);
     size_t count = boost::lexical_cast<size_t>(argv[2]);

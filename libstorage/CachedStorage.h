@@ -117,6 +117,7 @@ public:
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     size_t ID();
+    void dump();
 
     void startClearThread();
 
@@ -133,7 +134,7 @@ private:
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
-    //tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
+    // tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     std::unordered_map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
 
