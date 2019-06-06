@@ -87,7 +87,7 @@ void printEntries(Entries::ConstPtr entries)
     for (size_t i = 0; i < entries->size(); ++i)
     {
         cout << "***************" << i << "***************" << endl;
-        auto data = entries->get(i)->fields();
+        auto data = entries->get(i);
         for (auto& it : *data)
         {
             cout << "[ " << it.first << " ]:[ " << it.second << " ]" << endl;

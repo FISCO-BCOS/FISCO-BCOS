@@ -58,6 +58,8 @@ bytes EncryptedFile::decryptContents(
     }
     catch (exception& e)
     {
+        LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+                   << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
     LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"

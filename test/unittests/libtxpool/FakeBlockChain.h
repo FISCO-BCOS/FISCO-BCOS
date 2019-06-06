@@ -148,7 +148,14 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
 
-    dev::h256 numberHash(int64_t _i) override { return m_blockChain[_i]->headerHash(); }
+    dev::h256 numberHash(int64_t _i) override
+    {
+        if ((size_t)_i >= m_blockChain.size())
+        {
+            return h256();
+        }
+        return m_blockChain[_i]->headerHash();
+    }
 
     std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
     {
@@ -164,7 +171,9 @@ public:
 
     std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
     {
-        return getBlockByHash(_blockHash)->rlpP();
+        if (m_blockHash.count(_blockHash))
+            return m_blockChain[m_blockHash[_blockHash]]->rlpP();
+        return nullptr;
     }
 
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override

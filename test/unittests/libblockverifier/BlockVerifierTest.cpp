@@ -171,7 +171,8 @@ public:
         /// init the basic config
         /// set storage db related param
         params->mutableStorageParam().type = _storageType;
-        params->mutableStorageParam().path = _storageType + "_fakestate_" + to_string(utcTime());
+        params->mutableStorageParam().path =
+            "fakeBlockVerifier/" + _storageType + "_fakestate_" + to_string(utcTime());
         /// set state db related param
         params->mutableStateParam().type = "storage";
 
