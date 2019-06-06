@@ -149,6 +149,35 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
         auto roundEnd = std::chrono::system_clock::now();
         std::chrono::duration<double> roundElapsed = roundEnd - roundStart;
         std::cout << "Round " << i << " elapsed: " << roundElapsed.count() << std::endl;
+
+        if (verify)
+		{
+        	std::cout << "Checking round " << i << " ...";
+
+			auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
+			tbb::parallel_for(
+				tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
+					for (size_t j = range.begin(); j < range.end(); ++j)
+					{
+						auto dataTable = factory->openTable("test_data");
+						auto txTable = factory->openTable("tx_hash_2_block");
+
+						auto key = (boost::format("[%08d]") % j).str();
+						auto condition = dataTable->newCondition();
+						auto dataEntries = dataTable->select(key, condition);
+
+						auto dataEntry = dataEntries->get(0);
+
+						size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
+						if (value != 50 * (i + 1))
+						{
+							std::cout << "Verify failed, value: " << value << " != " << (i + 1) * 50;
+						}
+					}
+				});
+
+			std::cout << "Check round " << i << " finshed";
+		}
     }
 
     auto end = std::chrono::system_clock::now();
@@ -156,31 +185,6 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 
     std::cout << "Execute time elapsed " << std::setiosflags(std::ios::fixed)
               << std::setprecision(4) << elapsed.count() << std::endl;
-
-    if (verify)
-    {
-        auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t j = range.begin(); j < range.end(); ++j)
-                {
-                    auto dataTable = factory->openTable("test_data");
-                    auto txTable = factory->openTable("tx_hash_2_block");
-
-                    auto key = (boost::format("[%08d]") % j).str();
-                    auto condition = dataTable->newCondition();
-                    auto dataEntries = dataTable->select(key, condition);
-
-                    auto dataEntry = dataEntries->get(0);
-
-                    size_t value = boost::lexical_cast<size_t>(dataEntry->getField("value"));
-                    if (value != 50 * round)
-                    {
-                        std::cout << "Verify failed, value: " << value << " != " << round * 1000;
-                    }
-                }
-            });
-    }
 }
 
 int main(int argc, char* argv[])

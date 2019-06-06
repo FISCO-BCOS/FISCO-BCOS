@@ -134,6 +134,8 @@ private:
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
 
+    RWMutex m_commitMutex;
+
     // tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     std::unordered_map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
