@@ -752,14 +752,14 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-        	std::set<Cache::Ptr> uniquePtr;
+        	std::map<std::string, Cache::Ptr> uniquePtr;
         	for (auto& it: *m_mru) {
         		auto cIt = m_caches.find(it.first + "_" + it.second);
         		if(cIt == m_caches.end()) {
 
         		}
         		else {
-        			uniquePtr.insert(cIt->second);
+        			uniquePtr.insert(std::make_pair(it.first + "_" + it.second, cIt->second));
         		}
         	}
 
