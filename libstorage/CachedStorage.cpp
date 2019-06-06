@@ -753,6 +753,7 @@ void CachedStorage::checkAndClear()
         if (needClear)
         {
         	std::map<std::string, Cache::Ptr> uniquePtr;
+        	std::set<Cache::Ptr> uniquePtr2;
         	for (auto& it: *m_mru) {
         		auto cIt = m_caches.find(it.first + "_" + it.second);
         		if(cIt == m_caches.end()) {
@@ -763,11 +764,13 @@ void CachedStorage::checkAndClear()
         			if(!inserted.second) {
         				CACHED_STORAGE_LOG(FATAL) << "Key: " << (it.first + "_" + it.second) << " already exists";
         			}
+
+        			uniquePtr2.insert(cIt->second);
         		}
         	}
 
 
-        	if(uniquePtr.size() != m_mru->size()) {
+        	if(uniquePtr2.size() != uniquePtr.size()) {
         		CACHED_STORAGE_LOG(FATAL) << "Unique set: " << uniquePtr.size() << " mru: "<< m_mru->size();
 
         		for (auto& it: *m_mru) {
