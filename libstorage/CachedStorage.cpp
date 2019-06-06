@@ -167,7 +167,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     (void)condition;
     //RWMutexScoped commitLock(m_commitMutex, false);
 
-    auto result = touchCache(tableInfo, key);
+    auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
 
     if (caches->empty())
