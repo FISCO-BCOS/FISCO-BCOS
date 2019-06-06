@@ -605,18 +605,6 @@ size_t CachedStorage::ID()
     return m_ID;
 }
 
-void CachedStorage::dump()
-{
-    RWMutexScoped lockCache(m_cachesMutex, true);
-
-    // std::unordered_map<std::string, Cache::Ptr> m_caches;
-#if 0
-	for(auto &it: m_caches) {
-		it.first
-	}
-#endif
-}
-
 void CachedStorage::startClearThread()
 {
     std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
@@ -752,6 +740,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+#if 0
         	std::map<std::string, Cache::Ptr> uniquePtr;
         	std::set<Cache::Ptr> uniquePtr2;
         	for (auto& it: *m_mru) {
@@ -779,6 +768,7 @@ void CachedStorage::checkAndClear()
 
         		BOOST_THROW_EXCEPTION(StorageException(-1, "unique"));
         	}
+#endif
 
         	//RWMutexScoped commitLock(m_commitMutex, false);
 
@@ -797,6 +787,7 @@ void CachedStorage::checkAndClear()
                 auto result = touchCache(tableInfo, it->second, true);
                 auto cache = std::get<1>(result);
 
+#if 0
                 if (cache->empty())
                 {
                     CACHED_STORAGE_LOG(FATAL)
@@ -806,6 +797,7 @@ void CachedStorage::checkAndClear()
 					BOOST_THROW_EXCEPTION(StorageException(
 						-1, "Unable to find cache: " + tableInfo->name + "-" + it->second + boost::lexical_cast<std::string>((intptr_t)cache.get())));
                 }
+#endif
 
                 if (std::get<2>(result))
                 {
@@ -821,7 +813,7 @@ void CachedStorage::checkAndClear()
                         updateCapacity(0 - totalCapacity);
 
                         //LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
-                        cache->setEmpty(true);
+                        // cache->setEmpty(true);
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
                     }

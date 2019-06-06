@@ -117,7 +117,6 @@ public:
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     size_t ID();
-    void dump();
 
     void startClearThread();
 
