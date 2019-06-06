@@ -356,7 +356,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             BOOST_THROW_EXCEPTION(e);
         }
 
-        sleep(1);
+        this_thread::sleep_for(chrono::milliseconds(1000));
     }
 }
 

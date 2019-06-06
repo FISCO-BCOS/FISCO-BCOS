@@ -25,6 +25,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <chrono>
+#include <thread>
 
 using namespace dev::storage;
 using namespace std;
@@ -42,7 +44,7 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
     {
         SQLBasicAccess_LOG(DEBUG) << "table:" << _table << "sql:" << sql
                                   << " get connection failed";
-        sleep(1);
+        this_thread::sleep_for(chrono::milliseconds(1000));
         conn = m_connPool->GetConnection();
     }
 
@@ -258,7 +260,7 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
     int ret = CommitDo(hash, num, datas, errmsg);
     while (ret < 0 && ++retryCnt < retryMax)
     {
-        sleep(1);
+        this_thread::sleep_for(chrono::milliseconds(1000));
         ret = CommitDo(hash, num, datas, errmsg);
     }
     if (ret < 0)
