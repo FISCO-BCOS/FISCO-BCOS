@@ -14,18 +14,6 @@ English / [中文](docs/README_CN.md)
 
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)
 
-## Compatibility
-
-Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
-
-## Developing & Contributing
-
-- Star our project.
-- Submit pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-- [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
-- Join the discussion in [WeChat](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
-- Highly welcomed to [report security issues](https://security.webank.com)!
-
 ## Features
 
 **Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
@@ -35,6 +23,10 @@ Version 2.0 introduces new internal block data formats and network protocols for
 **Reliability**: Verified by multiple running cross-organization financial applications.
 
 **Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
+
+## Compatibility
+
+Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
 
 ## Featured Cases
 
@@ -49,6 +41,15 @@ By 2019, Financial Blockchain Shenzhen Consortium (FISCO) has been well recogniz
 - Read news by [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
 
 - Mail us at [![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
+
+## Developing & Contributing
+
+- Star our project.
+- Submit pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
+- [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
+- Join the discussion in [WeChat](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
+- Highly welcomed to [report security issues](https://security.webank.com)!
+
 
 ## License
 

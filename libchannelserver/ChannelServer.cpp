@@ -30,6 +30,7 @@
 #include <iostream>
 
 
+using namespace std;
 using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()

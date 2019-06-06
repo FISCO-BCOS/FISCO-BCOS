@@ -31,6 +31,7 @@
 #include <libdevcore/FixedHash.h>
 
 using namespace dev;
+using namespace std;
 using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}

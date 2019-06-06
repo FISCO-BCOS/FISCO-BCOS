@@ -21,7 +21,7 @@
 
 - **安全**：全方位安全保障、准入机制、CA认证、密钥管理等。
 - **隐私**：权限管理、国密、同态加密、零知识证明、环签名、群签名等。
-- **性能**：群组可扩展架构，分布式存储，预编译合约，DAG可并行合约，高效并行PBFT等。
+- **性能**：群组可扩展架构、分布式存储、预编译合约、DAG可并行合约、高效并行PBFT等。
 - **易用**：更便利地学习上手、开发、调试、部署、运营、监控、审计。
 - **可靠**：经过外部多家机构、多个应用，长时间生产环境运行的实践检验。
 
@@ -46,8 +46,6 @@ FISCO BCOS已落地应用达数十个，场景覆盖政务、金融、公益、�
 
 目前社区活跃着数千名开发者和关注者，来自全国、乃至全世界的几百家企业，各行业的研发及业务团队，大学、研究所等科研机构，共同面向社区提供形式多样的支持，包括在线社群、线下活动、教学培训、项目技术支持、开发者大赛以及产业孵化等。
 
-![](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/QR_image.png)
-
 ## 贡献代码
 
 要参与进来，很简单，你可以：
@@ -58,6 +56,10 @@ FISCO BCOS已落地应用达数十个，场景覆盖政务、金融、公益、�
 - 也可以[提问](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)和[提交BUG](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
 - 加入[微信群](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg)反馈和交流。
 - 欢迎反馈代码存在的安全漏洞，如果发现，请在[这里](https://security.webank.com)上报。
+
+## 加入我们
+
+![](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/QR_image.png)
 
 ## License
 
