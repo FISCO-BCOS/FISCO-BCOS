@@ -121,12 +121,10 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
         }
         return rowCount;
     }
-
     ELSE
     {
-        string errmsg = Exception_frame.message;
-        ZdbStorage_LOG(ERROR) << "database commit  error msg:" << errmsg;
-        auto e = StorageException(-1, "Remote commit database return error: table:" + errmsg);
+        ZdbStorage_LOG(ERROR) << "database commit error";
+        auto e = StorageException(-1, "Remote commit database return error");
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
