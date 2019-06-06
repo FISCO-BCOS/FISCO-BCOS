@@ -16,7 +16,7 @@
  */
 
 /**
- * @brief : implementation of Grouped-PBFT consensus engine
+ * @brief : implementation of Grouped PBFT Message
  * @file: GroupPBFTMsg.h
  * @author: yujiechen
  * @date: 2019-5-28

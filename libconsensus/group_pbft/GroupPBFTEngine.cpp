@@ -17,7 +17,7 @@
 
 /**
  * @brief : implementation of Grouped-PBFT consensus engine
- * @file: PBFTEngine.cpp
+ * @file: GroupPBFTEngine.cpp
  * @author: yujiechen
  * @date: 2019-5-28
  */
@@ -362,12 +362,12 @@ bool GroupPBFTEngine::handleSuperCommitReq(
     {
         return true;
     }
-    checkAndCommitBlock();
+    checkSuperReqAndCommitBlock();
     GPBFTENGINE_LOG(INFO) << LOG_DESC("handleSuperCommitMsg succ") << LOG_KV("INFO", oss.str());
     return true;
 }
 
-void GroupPBFTEngine::checkAndCommitBlock()
+void GroupPBFTEngine::checkSuperReqAndCommitBlock()
 {
     if (!collectEnoughSuperCommitReq())
     {

@@ -16,10 +16,10 @@
  */
 
 /**
- * @brief : Factory class to create PBFTReq objects
- * @file: PBFTReqFactory.h
+ * @brief : Factory class to create GroupPBFTReq objects
+ * @file: GroupPBFTReqFactory.h
  * @author: yujiechen
- * @date: 2018-09-28
+ * @date: 2019-06-06
  */
 #pragma once
 #include "GroupPBFTMsgCache.h"
@@ -42,7 +42,7 @@ public:
     }
 
     // create PBFTMsgCache for broadcast
-    virtual std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() override
+    std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() override
     {
         std::shared_ptr<PBFTMsgCache> groupPBFTMsgCache = std::make_shared<GroupPBFTMsgCache>();
         return groupPBFTMsgCache;

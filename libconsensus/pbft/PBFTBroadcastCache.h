@@ -15,7 +15,7 @@
  * (c) 2016-2019 fisco-dev contributors.
  */
 /**
- * @brief : define classes to manager pbft back keys
+ * @brief : classes to manager pbft back keys
  * @file: PBFTBroadcastCache.h
  * @author: yujiechen
  *

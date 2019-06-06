@@ -146,12 +146,12 @@ protected:
     {
         auto cacheSize = m_groupPBFTReqCache->getSizeFromCache(
             m_groupPBFTReqCache->prepareCache()->block_hash, cache);
-        if (equalCondition && (cacheSize == minSize - 1))
+        if (equalCondition && (cacheSize == (size_t)(minSize - 1)))
         {
             commonLogWhenCollectReq(cacheSize, desc);
             return true;
         }
-        else if (!equalCondition && (cacheSize >= minSize - 1))
+        else if (!equalCondition && (cacheSize >= (size_t)(minSize - 1)))
         {
             commonLogWhenCollectReq(cacheSize, desc);
             return true;
@@ -211,7 +211,7 @@ protected:
             m_groupPBFTReqCache->superCommitCache(), superCommitReq, zoneId, oss);
     }
 
-    void checkAndCommitBlock();
+    void checkSuperReqAndCommitBlock();
     virtual void printWhenCollectEnoughSuperReq(std::string const& desc, size_t superReqSize);
 
     virtual bool broadcastSuperCommitMsg()
@@ -233,7 +233,7 @@ protected:
 
     void checkAndCommit() override;
     void checkAndSave() override;
-    std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
+    std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg) override;
 
 private:
     template <class T, class S>

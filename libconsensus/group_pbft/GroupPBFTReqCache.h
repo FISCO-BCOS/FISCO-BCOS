@@ -16,7 +16,7 @@
  */
 
 /**
- * @brief : implementation of Grouped-PBFT consensus engine
+ * @brief : cache for group pbft
  * @file: GroupPBFTReqCache.h
  * @author: yujiechen
  * @date: 2019-5-28
