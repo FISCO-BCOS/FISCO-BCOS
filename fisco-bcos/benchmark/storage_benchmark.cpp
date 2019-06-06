@@ -189,6 +189,25 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 
 int main(int argc, char* argv[])
 {
+	(void)argc;
+	(void)argv;
+
+	boost::multi_index_container<std::pair<std::string, std::string>,
+	        boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
+	            boost::multi_index::hashed_unique<
+	                boost::multi_index::identity<std::pair<std::string, std::string> > > > >
+	        m_mru;
+	m_mru.push_back(std::make_pair("a", "b"));
+	m_mru.push_back(std::make_pair("b", "c"));
+	m_mru.push_back(std::make_pair("a", "b"));
+
+	for(auto it = m_mru.begin(); it != m_mru.end();) {
+		std::cout << "item: " << it->first << ", " << it->second;
+
+		it = m_mru.erase(it);
+	}
+
+#if 0
     if (argc < 3)
     {
         std::cout << "Usage: " << argv[0] << " [round] [count] [verify]" << std::endl;
@@ -214,6 +233,7 @@ int main(int argc, char* argv[])
     }
 
     testMemoryTable2(round, count, verify);
+#endif
 
     return 0;
 }

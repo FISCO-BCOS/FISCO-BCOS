@@ -772,7 +772,7 @@ void CachedStorage::checkAndClear()
                 if (cache->empty())
                 {
                     CACHED_STORAGE_LOG(FATAL)
-                        << "Unable to find cache: " << tableInfo->name << "-" << it->second;
+                        << "Unable to find cache: " << tableInfo->name << "-" << it->second << (intptr_t)cache.get();
 
                     // impossible
 					BOOST_THROW_EXCEPTION(StorageException(
@@ -792,6 +792,7 @@ void CachedStorage::checkAndClear()
                         ++clearCount;
                         updateCapacity(0 - totalCapacity);
 
+                        LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
                         cache->setEmpty(true);
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
