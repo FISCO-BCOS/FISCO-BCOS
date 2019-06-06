@@ -752,6 +752,24 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+        	std::set<Cache::Ptr> uniquePtr;
+        	for (auto& it: *m_mru) {
+        		auto cIt = m_caches.find(it.first + "_" + it.second);
+        		if(cIt == m_caches.end()) {
+
+        		}
+        		else {
+        			uniquePtr.insert(cIt->second);
+        		}
+        	}
+
+
+        	if(uniquePtr.size() != m_mru->size()) {
+        		CACHED_STORAGE_LOG(FATAL) << "Unique set: " << uniquePtr.size() << " mru: "<< m_mru->size();
+
+        		BOOST_THROW_EXCEPTION(StorageException(-1, "unique"));
+        	}
+
         	//RWMutexScoped commitLock(m_commitMutex, false);
 
             for (auto it = m_mru->begin(); it != m_mru->end();)
@@ -792,7 +810,7 @@ void CachedStorage::checkAndClear()
                         ++clearCount;
                         updateCapacity(0 - totalCapacity);
 
-                        LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
+                        //LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
                         cache->setEmpty(true);
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
