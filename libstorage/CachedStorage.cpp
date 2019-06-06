@@ -752,6 +752,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
+#if 0
         	std::set<Cache::Ptr> uniquePtr;
         	for (auto& it: *m_mru) {
         		auto cIt = m_caches.find(it.first + "_" + it.second);
@@ -769,6 +770,7 @@ void CachedStorage::checkAndClear()
 
         		BOOST_THROW_EXCEPTION(StorageException(-1, "unique"));
         	}
+#endif
 
         	//RWMutexScoped commitLock(m_commitMutex, false);
 
@@ -794,7 +796,7 @@ void CachedStorage::checkAndClear()
 
                     // impossible
 					BOOST_THROW_EXCEPTION(StorageException(
-						-1, "Unable to find cache: " + tableInfo->name + "-" + it->second));
+						-1, "Unable to find cache: " + tableInfo->name + "-" + it->second + boost::lexical_cast<std::string>((intptr_t)cache.get())));
                 }
 
                 if (std::get<2>(result))
