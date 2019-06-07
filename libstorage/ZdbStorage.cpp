@@ -107,29 +107,15 @@ void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
 
 size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    volatile int32_t rowCount = 0;
-    TRY
+    int32_t rowCount = m_sqlBasicAcc->Commit(_hash, (int32_t)_num, _datas);
+    if (rowCount < 0)
     {
-        rowCount = m_sqlBasicAcc->Commit(_hash, (int32_t)_num, _datas);
-        if (rowCount < 0)
-        {
-            ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
-            auto e = StorageException(-1, "Remote commit database return error: table:" +
-                                              boost::lexical_cast<std::string>(rowCount));
-            m_fatalHandler(e);
-            BOOST_THROW_EXCEPTION(e);
-        }
-        return rowCount;
-    }
-    ELSE
-    {
-        ZdbStorage_LOG(ERROR) << "database commit error";
-        auto e = StorageException(-1, "Remote commit database return error");
+        ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
+        auto e = StorageException(-1, "Remote select database return error: table:" +
+                                          boost::lexical_cast<std::string>(rowCount));
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
-
-    END_TRY;
     return rowCount;
 }
 
@@ -329,7 +315,8 @@ void ZdbStorage::createSysBlock2NoncesTables()
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
-    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, `value_field`)values "
+    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, "
+          "`value_field`)values "
           "\n";
     ss << "	('_sys_tables_', 'table_name','key_field,value_field'),\n";
     ss << "	('_sys_consensus_', 'name','type,node_id,enable_num'),\n";

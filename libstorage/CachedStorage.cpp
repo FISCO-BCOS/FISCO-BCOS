@@ -147,8 +147,8 @@ Entries::Ptr CachedStorage::select(
     auto result = selectNoCondition(hash, num, tableInfo, key, condition);
 
     Cache::Ptr caches = std::get<1>(result);
-    auto entries = caches->entriesPtr();
-    for (auto entry : *entries)
+    // auto entries = caches->entriesPtr();
+    for (auto entry : *(caches->entries()))
     {
         if (condition && !condition->process(entry))
         {
@@ -167,7 +167,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 {
     (void)condition;
 
-    auto result = touchCache(tableInfo, key);
+    auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
 
     if (caches->empty())
