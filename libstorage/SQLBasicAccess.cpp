@@ -255,17 +255,27 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
     string errmsg;
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
-    int ret = CommitDo(hash, num, datas, errmsg);
-    while (ret < 0 && ++retryCnt < retryMax)
+    volatile int ret = 0;
+    TRY
     {
-        sleep(1);
         ret = CommitDo(hash, num, datas, errmsg);
+        while (ret < 0 && ++retryCnt < retryMax)
+        {
+            sleep(1);
+            ret = CommitDo(hash, num, datas, errmsg);
+        }
+        if (ret < 0)
+        {
+            SQLBasicAccess_LOG(ERROR) << "commit failed errmsg:" << errmsg;
+            return -1;
+        }
     }
-    if (ret < 0)
+    ELSE
     {
-        SQLBasicAccess_LOG(ERROR) << "commit failed errmsg:" << errmsg;
+        SQLBasicAccess_LOG(ERROR) << "commit failed just return";
         return -1;
     }
+    END_TRY;
     return ret;
 }
 
