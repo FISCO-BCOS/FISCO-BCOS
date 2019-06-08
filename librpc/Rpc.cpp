@@ -778,15 +778,17 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
         checkRequest(_groupID);
-        Json::Value response;
-
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         h256 hash = jsToFixed<32>(_transactionHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto tx = blockchain->getLocalisedTxByHash(hash);
+        if (tx.blockNumber() == INVALIDNUMBER)
+            return Json::nullValue;
         auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
         if (txReceipt.blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
+        Json::Value response;
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(txReceipt.transactionIndex());
         response["blockNumber"] = toJS(txReceipt.blockNumber());
@@ -808,6 +810,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         }
         response["logsBloom"] = toJS(txReceipt.bloom());
         response["status"] = toJS(txReceipt.status());
+        response["input"] = toJS(tx.data());
         response["output"] = toJS(txReceipt.outputBytes());
 
         return response;
