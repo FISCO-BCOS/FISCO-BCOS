@@ -62,7 +62,11 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         SET(BUILD_SHARED_LIBRARIES OFF)
         SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
-    
+
+    if(TESTS)
+        add_compile_options(-DBOOST_TEST_THREAD_SAFE)
+    endif ()
+
     if(PROF)
     	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
 		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")

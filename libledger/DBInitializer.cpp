@@ -274,8 +274,7 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {
-        (void)e;
-        LOG(FATAL) << "access mysql failed exit";
+        LOG(FATAL) << "access mysql failed exit:" << e.what();
         raise(SIGTERM);
     });
 

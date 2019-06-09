@@ -125,6 +125,12 @@ bytes TableFactoryPrecompiled::call(
             }
         }
         valueFiled = boost::join(fieldNameList, ",");
+        if (valueFiled.size() > 1024)
+        {
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW,
+                "total table field name length overflow 64"));
+        }
+
         tableName = storage::USER_TABLE_PREFIX + tableName;
         if (tableName.size() > 64)
         {  // mysql TableName and fieldName length limit is 64
