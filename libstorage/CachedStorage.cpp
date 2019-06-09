@@ -209,7 +209,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
                              << " num: " << num;
 
-    //RWMutexScoped commitLock(m_commitMutex, true);
     tbb::atomic<size_t> total = 0;
 
     TIME_RECORD("Process dirty entries");
@@ -280,6 +279,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 #endif
                                         touchMRU(requestData->info->name, key, totalCapacity);
                                     }
+
+                                    restoreCache(requestData->info, key, caches);
                                 }
 
                                 caches->setNum(num);
@@ -433,6 +434,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 #endif
                         touchMRU(commitData->info->name, key, totalCapacity);
                     }
+
+                    restoreCache(commitData->info, key, caches);
                 }
 
                 caches->entries()->addEntry(cacheEntry);
@@ -683,6 +686,16 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
     return std::make_tuple(cacheLock, cache, true);
 }
 
+void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache) {
+	RWMutexScoped lockCache(m_cachesMutex, true);
+
+	auto cacheKey = table->name + "_" + key;
+	auto inserted = m_caches.insert(std::make_pair(cacheKey, cache));
+	if(!inserted) {
+		CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache exists: " << cacheKey;
+	}
+}
+
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
     auto cacheKey = table + "_" + key;
@@ -813,7 +826,7 @@ void CachedStorage::checkAndClear()
                         updateCapacity(0 - totalCapacity);
 
                         //LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
-                        // cache->setEmpty(true);
+                        cache->setEmpty(true);
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
                     }

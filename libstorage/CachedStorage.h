@@ -95,6 +95,9 @@ public:
     typedef tbb::spin_rw_mutex RWMutex;
     typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
 
+    typedef tbb::mutex Mutex;
+    typedef tbb::mutex::scoped_lock MutexScoped;
+
     virtual ~CachedStorage();
 
     Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
@@ -125,6 +128,7 @@ private:
     void updateMRU(const std::string& table, const std::string& key, ssize_t capacity);
     std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> touchCache(
         TableInfo::Ptr table, const std::string& key, bool write = false);
+    void restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache);
 
     void removeCache(const std::string& table, const std::string& key);
 
@@ -132,8 +136,6 @@ private:
 
     void updateCapacity(ssize_t capacity);
     std::string readableCapacity(size_t num);
-
-    RWMutex m_commitMutex;
 
     // tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     std::unordered_map<std::string, Cache::Ptr> m_caches;
