@@ -690,7 +690,7 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
 	RWMutexScoped lockCache(m_cachesMutex, true);
 
 	auto cacheKey = table->name + "_" + key;
-	auto inserted = m_caches.insert(std::make_pair(cacheKey, cache));
+	auto inserted = m_caches.insert(std::make_pair(cacheKey, cache)).second;
 	if(!inserted) {
 		CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache exists: " << cacheKey;
 	}
