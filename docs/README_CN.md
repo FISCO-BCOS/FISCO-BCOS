@@ -2,11 +2,11 @@
 
 ![](./images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS**是国内企业主导研发、对外开源、安全可控的企业级金融联盟链底层平台，由金融区块链合作联盟（深圳）（简称：金链盟）成立的开源工作组协作打造，工作组成员包括博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、亦笔科技和越秀金科等。
+**FISCO BCOS**是首个由国内企业主导研发、对外开源、安全可控的企业级金融联盟链底层平台，由金融区块链合作联盟（深圳）（简称：金链盟）成立的开源工作组协作打造，于2017年12月正式对外开源，工作组成员包括博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、亦笔科技和越秀金科等。
 
-从业务适当性、性能、安全、技术可行性、运维与治理、成本等多个维度综合考虑后，**FISCO BCOS**选择联盟链技术方向，单链TPS过万。平台支持多种共识算法，如PBFT、Raft；提供易用的工具，开发者可在极短时间内完成联盟链部署；支持基于智能合约和多种业务模板开发应用；采用权限控制、隐私保护等策略保障业务安全和隐私。
+从业务适当性、性能、安全、技术可行性、运维与治理、成本等多个维度综合考虑后，**FISCO BCOS**选择联盟链技术方向，单链TPS可达万级。平台支持多种共识算法，如PBFT、Raft；提供易用的工具，开发者可在极短时间内完成联盟链部署；支持基于智能合约和多种业务模板开发应用；采用权限控制、隐私保护等策略保障业务安全和隐私。
 
-作为一个稳定、安全、高效、易用的联盟区块链底层技术平台，**FISCO BCOS**经过了外部多家机构、多个应用长时间生产环境运行的实践检验；落地应用已达数十个，覆盖多领域多场景。
+作为一个稳定、安全、高效、易用的联盟区块链底层技术平台，**FISCO BCOS**经过了外部多家机构、多个应用长时间生产环境运行的实践检验；目前已经有数百家机构、数千名社区技术爱好者在研究和使用FISCO BCOS，落地应用已达数十个，场景覆盖政务、金融、公益、医疗、教育、交通、版权、商品溯源、供应链、招聘、农业、社交、游戏等多个领域。
 
 
 [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS) 
@@ -15,13 +15,24 @@
 
 ## 文档
 
-- [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
+阅读[**文档**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)，详细了解如何使用FISCO BCOS。
+
+- [2.0版本新特性](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
+- [版本及兼容](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
+- [安装](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html)
+- [教程](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/tutorial/index.html#)
+- [使用手册](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/manual/index.html)
+- [企业级部署工具](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/enterprise_tools/index.html)
+- [系统设计](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/design/index.html)
+- [Web3SDK](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/sdk/sdk.html)
+- [JSON-RPC API](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/api.html)
+- [常见问答](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/faq.html)
 
 ## 关键特性
 
 - **安全**：全方位安全保障、准入机制、CA认证、密钥管理等。
 - **隐私**：权限管理、国密、同态加密、零知识证明、环签名、群签名等。
-- **性能**：群组可扩展架构、分布式存储、预编译合约、DAG可并行合约、高效并行PBFT等。
+- **性能**：群组可扩展架构、分布式存储、预编译合约、DAG可并行合约、高效并行PBFT等，单链TPS可达万级，支持并行多链的平行扩展能力。
 - **易用**：更便利地学习上手、开发、调试、部署、运营、监控、审计。
 - **可靠**：经过外部多家机构、多个应用，长时间生产环境运行的实践检验。
 
