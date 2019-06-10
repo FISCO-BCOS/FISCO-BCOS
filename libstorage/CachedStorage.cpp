@@ -727,7 +727,7 @@ void CachedStorage::commitBackend(Task::Ptr task)
 {
 	auto now = std::chrono::system_clock::now();
 
-	CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << num;
+	CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << task->num;
 	for(auto &it: *task->datas) {
 		CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
 		for(auto dirtyIt: *(it->dirtyEntries)) {
