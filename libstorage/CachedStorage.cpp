@@ -493,18 +493,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
         m_commitNum.store(num);
 
-        CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << num;
-        for(auto &it: *task->datas) {
-        	CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
-        	for(auto dirtyIt: *(it->dirtyEntries)) {
-        		CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << dirtyIt->getField(it->info->key);
-        	}
-
-        	for(auto newIt: *(it->newEntries)) {
-        		CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << newIt->getField(it->info->key);
-        	}
-        }
-
         if (!disabled())
         {
             m_taskThreadPool->enqueue([task, self]() {
@@ -737,7 +725,20 @@ bool CachedStorage::disabled()
 
 void CachedStorage::commitBackend(Task::Ptr task)
 {
-    auto now = std::chrono::system_clock::now();
+	auto now = std::chrono::system_clock::now();
+
+	CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << num;
+	for(auto &it: *task->datas) {
+		CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
+		for(auto dirtyIt: *(it->dirtyEntries)) {
+			CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << dirtyIt->getField(it->info->key);
+		}
+
+		for(auto newIt: *(it->newEntries)) {
+			CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << newIt->getField(it->info->key);
+		}
+	}
+
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
     {
