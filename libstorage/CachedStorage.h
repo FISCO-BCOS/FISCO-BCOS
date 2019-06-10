@@ -136,6 +136,8 @@ private:
 
     bool disabled();
 
+    void commitBackend(Task::Ptr task);
+
     void checkAndClear();
 
     void updateCapacity(ssize_t capacity);
@@ -144,7 +146,7 @@ private:
     tbb::concurrent_unordered_map<std::string, Cache::Ptr> m_caches;
     RWMutex m_cachesMutex;
 
-    RWMutex m_commitMutex;
+    Mutex m_commitMutex;
 
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,

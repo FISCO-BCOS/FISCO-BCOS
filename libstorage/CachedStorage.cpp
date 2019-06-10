@@ -136,11 +136,6 @@ CachedStorage::~CachedStorage()
 Entries::Ptr CachedStorage::select(
     h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
-#if 0
-    CACHED_STORAGE_LOG(TRACE) << "Query data from cachedStorage table: " << tableInfo->name
-                              << " key: " << key;
-#endif
-
     auto out = std::make_shared<Entries>();
 
     auto result = selectNoCondition(hash, num, tableInfo, key, condition);
@@ -488,66 +483,43 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
 
         m_commitNum.store(num);
-        m_taskThreadPool->enqueue([backend, task, self]() {
-            auto now = std::chrono::system_clock::now();
-            STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
-            try
-            {
-                backend->commit(task->hash, task->num, *(task->datas));
-            }
-            catch (std::exception& e)
-            {
-                LOG(FATAL) << "Fail while commit data: " << e.what();
 
-                raise(SIGTERM);
-            }
-
-            auto storage = self.lock();
-            if (storage)
-            {
-                storage->setSyncNum(task->num);
-
-                std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-                STORAGE_LOG(INFO)
-                    << "[g:" << std::to_string(storage->groupID()) << "]"
-                    << "\n---------------------------------------------------------------------\n"
-                    << "Commit block: " << task->num
-                    << " to backend storage finished, current cached block: "
-                    << storage->m_commitNum << "\n"
-                    << "Flush elapsed time: " << std::setiosflags(std::ios::fixed)
-                    << std::setprecision(4) << elapsed.count() << "s"
-                    << "\n---------------------------------------------------------------------\n";
-
-                if(storage->disabled()) {
-					storage->clear();
+        if(!disabled()) {
+			m_taskThreadPool->enqueue([task, self]() {
+				auto storage = self.lock();
+				if(storage) {
+					storage->commitBackend(task);
 				}
-            }
+			});
 
+			STORAGE_LOG(INFO) << "Submited block task: " << num
+							  << ", current syncd block: " << m_syncNum;
 
-        });
+			uint64_t waitCount = 0;
+			while ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
+			{
+				CACHED_STORAGE_LOG(INFO)
+					<< "Current block number: " << m_commitNum
+					<< " greater than syncd block number: " << m_syncNum << ", waiting...";
 
-        STORAGE_LOG(INFO) << "Submited block task: " << num
-                          << ", current syncd block: " << m_syncNum;
+				if (waitCount < 5)
+				{
+					std::this_thread::yield();
+				}
+				else
+				{
+					std::this_thread::sleep_for(
+						std::chrono::milliseconds((waitCount < 100 ? waitCount : 100) * 50));
+				}
 
-        uint64_t waitCount = 0;
-        while ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
-        {
-            CACHED_STORAGE_LOG(INFO)
-                << "Current block number: " << m_commitNum
-                << " greater than syncd block number: " << m_syncNum << ", waiting...";
-
-            if (waitCount < 5)
-            {
-                std::this_thread::yield();
-            }
-            else
-            {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds((waitCount < 100 ? waitCount : 100) * 50));
-            }
-
-            ++waitCount;
+				++waitCount;
+			}
         }
+        else {
+        	commitBackend(task);
+        }
+
+
     }
     else
     {
@@ -735,6 +707,38 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
 
 bool CachedStorage::disabled() {
 	return ((m_maxCapacity == 0) && (m_maxForwardBlock == 0));
+}
+
+void CachedStorage::commitBackend(Task::Ptr task) {
+	auto now = std::chrono::system_clock::now();
+	STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
+	try
+	{
+		m_backend->commit(task->hash, task->num, *(task->datas));
+	}
+	catch (std::exception& e)
+	{
+		LOG(FATAL) << "Fail while commit data: " << e.what();
+
+		raise(SIGTERM);
+	}
+
+	setSyncNum(task->num);
+
+	std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+	STORAGE_LOG(INFO)
+		<< "[g:" << std::to_string(groupID()) << "]"
+		<< "\n---------------------------------------------------------------------\n"
+		<< "Commit block: " << task->num
+		<< " to backend storage finished, current cached block: "
+		<< m_commitNum << "\n"
+		<< "Flush elapsed time: " << std::setiosflags(std::ios::fixed)
+		<< std::setprecision(4) << elapsed.count() << "s"
+		<< "\n---------------------------------------------------------------------\n";
+
+	if(disabled()) {
+		clear();
+	}
 }
 
 void CachedStorage::checkAndClear()
