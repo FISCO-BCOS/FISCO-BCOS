@@ -30,6 +30,7 @@
 #include <iostream>
 
 
+using namespace std;
 using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
@@ -64,7 +65,7 @@ void dev::channel::ChannelServer::run()
             }
 
 
-            sleep(1);
+            this_thread::sleep_for(chrono::milliseconds(1000));
 
             if (m_acceptor->is_open() && m_ioService->stopped())
             {
