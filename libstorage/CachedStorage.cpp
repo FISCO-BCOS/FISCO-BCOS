@@ -164,8 +164,6 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
-    // RWMutexScoped commitLock(m_commitMutex, false);
-    RWMutexScoped lockCommit(m_commitMutex, false);
 
     auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
@@ -220,7 +218,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     ssize_t currentStateIdx = -1;
 
-    RWMutexScoped lockCommit(m_commitMutex, true);
+    // RWMutexScoped lockCommit(m_commitMutex, true);
+
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
@@ -518,7 +517,13 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     << "Flush elapsed time: " << std::setiosflags(std::ios::fixed)
                     << std::setprecision(4) << elapsed.count() << "s"
                     << "\n---------------------------------------------------------------------\n";
+
+                if(disabled()) {
+					storage->clear();
+				}
             }
+
+
         });
 
         STORAGE_LOG(INFO) << "Submited block task: " << num
@@ -582,7 +587,15 @@ void CachedStorage::init()
         m_ID = boost::lexical_cast<size_t>(numStr);
     }
 
-    startClearThread();
+    if(!disabled()) {
+    	startClearThread();
+    }
+}
+
+void CachedStorage::clear() {
+	RWMutexScoped lockCache(m_cachesMutex, true);
+
+	m_caches.clear();
 }
 
 int64_t CachedStorage::syncNum()
@@ -634,6 +647,10 @@ void CachedStorage::startClearThread()
 
 void CachedStorage::touchMRU(const std::string& table, const std::string& key, ssize_t capacity)
 {
+	if(disabled()) {
+		return;
+	}
+
     m_mruQueue->push(std::make_tuple(table, key, capacity));
 }
 
@@ -716,6 +733,10 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     }
 }
 
+bool CachedStorage::disabled() {
+	return ((m_maxCapacity == 0) && (m_maxForwardBlock == 0));
+}
+
 void CachedStorage::checkAndClear()
 {
     uint64_t count = 0;
@@ -756,7 +777,8 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-        	RWMutexScoped lockCommit(m_commitMutex, true);
+        	// RWMutexScoped lockCommit(m_commitMutex, true);
+
             for (auto it = m_mru->begin(); it != m_mru->end();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())

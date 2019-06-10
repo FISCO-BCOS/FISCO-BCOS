@@ -113,6 +113,8 @@ public:
     void setBackend(Storage::Ptr backend);
     void init();
 
+    void clear();
+
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
 
@@ -131,6 +133,8 @@ private:
     void restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache);
 
     void removeCache(const std::string& table, const std::string& key);
+
+    bool disabled();
 
     void checkAndClear();
 
