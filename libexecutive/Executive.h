@@ -153,7 +153,7 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    u256 status() const { return u256(m_excepted); }
+    executive::TransactionException status() const { return m_excepted; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 

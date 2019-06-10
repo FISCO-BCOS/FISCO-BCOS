@@ -255,24 +255,34 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
     string errmsg;
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
-    int ret = CommitDo(hash, num, datas, errmsg);
-    while (ret < 0 && ++retryCnt < retryMax)
+    volatile int ret = 0;
+    TRY
     {
-        sleep(1);
         ret = CommitDo(hash, num, datas, errmsg);
+        while (ret < 0 && ++retryCnt < retryMax)
+        {
+            sleep(1);
+            ret = CommitDo(hash, num, datas, errmsg);
+        }
+        if (ret < 0)
+        {
+            SQLBasicAccess_LOG(ERROR) << "commit failed errmsg:" << errmsg;
+            return -1;
+        }
     }
-    if (ret < 0)
+    ELSE
     {
-        SQLBasicAccess_LOG(ERROR) << "commit failed errmsg:" << errmsg;
+        SQLBasicAccess_LOG(ERROR) << "commit failed just return";
         return -1;
     }
+    END_TRY;
     return ret;
 }
 
 int SQLBasicAccess::CommitDo(
     h256 hash, int num, const std::vector<TableData::Ptr>& datas, string& errmsg)
 {
-    SQLBasicAccess_LOG(DEBUG) << " commit hash:" << hash.hex() << " num:" << num;
+    SQLBasicAccess_LOG(INFO) << " commit hash:" << hash.hex() << " num:" << num;
     string strNum = to_string(num);
     if (datas.size() == 0)
     {
@@ -385,9 +395,9 @@ int SQLBasicAccess::CommitDo(
     }
     END_TRY;
 
-    SQLBasicAccess_LOG(DEBUG) << "commit now active connections:"
-                              << m_connPool->GetActiveConnections()
-                              << " max connections:" << m_connPool->GetMaxConnections();
+    SQLBasicAccess_LOG(INFO) << "commit now active connections:"
+                             << m_connPool->GetActiveConnections()
+                             << " max connections:" << m_connPool->GetMaxConnections();
     m_connPool->Commit(oConn);
     m_connPool->ReturnConnection(oConn);
     return rowCount;

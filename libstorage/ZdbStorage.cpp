@@ -94,7 +94,6 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     return entries;
 }
 
-
 void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
 {
     m_sqlBasicAcc->setConnPool(_connPool);
@@ -316,7 +315,8 @@ void ZdbStorage::createSysBlock2NoncesTables()
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
-    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, `value_field`)values "
+    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, "
+          "`value_field`)values "
           "\n";
     ss << "	('_sys_tables_', 'table_name','key_field,value_field'),\n";
     ss << "	('_sys_consensus_', 'name','type,node_id,enable_num'),\n";

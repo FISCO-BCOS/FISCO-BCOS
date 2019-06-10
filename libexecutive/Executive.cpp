@@ -23,6 +23,7 @@
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/StorageException.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
