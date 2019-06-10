@@ -165,7 +165,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 {
     (void)condition;
     // RWMutexScoped commitLock(m_commitMutex, false);
-    RWMutexScoped lockCommit(m_commitMutex, false);
+    RWMutexScoped lockCommit(m_commitMutex, true);
 
     auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
@@ -756,7 +756,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-        	RWMutexScoped lockCommit(m_commitMutex, false);
+        	RWMutexScoped lockCommit(m_commitMutex, true);
             for (auto it = m_mru->begin(); it != m_mru->end();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
