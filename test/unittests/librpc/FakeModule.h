@@ -160,6 +160,10 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
     }
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
+    }
     void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
     {
