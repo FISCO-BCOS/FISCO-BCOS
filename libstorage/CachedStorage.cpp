@@ -213,13 +213,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     ssize_t currentStateIdx = -1;
 
-#if 0
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
-#endif
-            auto datasSize = datas.size();
-            for(size_t idx = 0; idx < datasSize; ++idx)
             {
                 auto requestData = datas[idx];
                 auto commitData = std::make_shared<TableData>();
@@ -235,12 +231,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 std::set<std::string> addtionKey;
                 tbb::spin_mutex addtionKeyMutex;
 
-#if 0
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
                     [&](const tbb::blocked_range<size_t>& rangeEntries) {
                         for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
-#endif
-                        for(size_t i = 0; i < requestData->dirtyEntries->size(); ++i)
                         {
                             ++total;
 
@@ -359,9 +352,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                             touchMRU(requestData->info->name, key, change);
                         }
-#if 0
                     });
-#endif
 
                 // TODO: check if necessery
                 tbb::parallel_sort(commitData->dirtyEntries->begin(),
@@ -375,9 +366,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
                 (*commitDatas)[idx] = commitData;
             }
-#if 0
         });
-#endif
 
     TIME_RECORD("Process new entries");
     auto commitDatasSize = commitDatas->size();
