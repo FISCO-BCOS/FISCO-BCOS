@@ -493,6 +493,18 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
         m_commitNum.store(num);
 
+        CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << num;
+        for(auto &it: *task->datas) {
+        	CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
+        	for(auto dirtyIt: *(it->dirtyEntries)) {
+        		CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << dirtyIt->getField(it->info->key);
+        	}
+
+        	for(auto newIt: *(it->newEntries)) {
+        		CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << newIt->getField(it->info->key);
+        	}
+        }
+
         if (!disabled())
         {
             m_taskThreadPool->enqueue([task, self]() {
@@ -695,10 +707,10 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
     RWMutexScoped lockCache(m_cachesMutex, false);
 
     auto cacheKey = table->name + "_" + key;
-    auto inserted = m_caches.insert(std::make_pair(cacheKey, cache)).second;
-    if (!inserted && inserted)
+    auto result = m_caches.insert(std::make_pair(cacheKey, cache));
+    if (!result.second && result.first->second != cache)
     {
-        // CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache exists: " << cacheKey;
+        CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache not equal: " << cacheKey << " " << result.first->second << " " << cache;
     }
 }
 
