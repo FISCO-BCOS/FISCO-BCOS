@@ -42,6 +42,7 @@ static const std::string SYS_CURRENT_STATE = "_sys_current_state_";
 static const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
 static const std::string SYS_KEY_CURRENT_ID = "current_id";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
+static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_KEY = "key";
 static const std::string SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
