@@ -73,7 +73,7 @@ Entries::Ptr LevelDBStorage::select(
                 {
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
-
+                entry->setStatus(entry->getField(STATUS));
                 if (entry->getStatus() == Entry::Status::NORMAL)
                 {
                     entry->setDirty(false);
@@ -127,6 +127,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
             }
             value["_hash_"] = hash.hex();
             value[NUM_FIELD] = num;
+            value[STATUS] = dataIt->second->get(i)->getStatus();
             entry["values"].append(value);
         }
 
