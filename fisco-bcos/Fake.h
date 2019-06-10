@@ -82,6 +82,12 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockChain.size() - 1);
     }
 
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override
+    {
+        ReadGuard l(x_blockChain);
+        return std::make_pair(m_totalFailedTransactionCount, m_blockChain.size() - 1);
+    }
+
     dev::h256 numberHash(int64_t _i) override
     {
         ReadGuard l(x_blockChain);
@@ -162,6 +168,7 @@ private:
     std::vector<std::shared_ptr<Block>> m_blockChain;
     uint64_t m_blockNumber;
     uint64_t m_totalTransactionCount;
+    uint64_t m_totalFailedTransactionCount;
     mutable SharedMutex x_blockChain;
 };
 
