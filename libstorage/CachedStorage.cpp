@@ -731,11 +731,19 @@ void CachedStorage::commitBackend(Task::Ptr task)
 	for(auto &it: *task->datas) {
 		CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
 		for(auto dirtyIt: *(it->dirtyEntries)) {
-			CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << dirtyIt->getField(it->info->key);
+			std::stringstream fields;
+			for(auto fieldIt: *dirtyIt) {
+				fields << fieldIt.first << ":" << fieldIt.second << " ";
+			}
+			CACHED_STORAGE_LOG(DEBUG) << "[V]DKey:" << fields.str();
 		}
 
 		for(auto newIt: *(it->newEntries)) {
-			CACHED_STORAGE_LOG(DEBUG) << "[V]Key:" << newIt->getField(it->info->key);
+			std::stringstream fields;
+			for(auto fieldIt: *newIt) {
+				fields << fieldIt.first << ":" << fieldIt.second << " ";
+			}
+			CACHED_STORAGE_LOG(DEBUG) << "[V]NKey:" << fields.str();
 		}
 	}
 
