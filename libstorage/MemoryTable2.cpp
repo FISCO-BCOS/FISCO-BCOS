@@ -336,6 +336,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
             }
+            char status = (char)entry->getStatus();
+            allData.insert(allData.end(), &status, &status + sizeof(status));
         }
 
         if (allData.empty())
