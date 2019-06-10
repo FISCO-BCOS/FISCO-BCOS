@@ -729,15 +729,15 @@ public:
 
                         // BOOST_TEST(*(m_entry->fields()) == *(entry->fields()));
 
-                        BOOST_TEST(m_entry->getID() == entry->getID());
-                        BOOST_TEST(m_entry->getStatus() == entry->getStatus());
-                        BOOST_TEST(m_entry->getTempIndex() == entry->getTempIndex());
+                        // BOOST_TEST(m_entry->getID() == entry->getID());
+                        // BOOST_TEST(m_entry->getStatus() == entry->getStatus());
+                        // BOOST_TEST(m_entry->getTempIndex() == entry->getTempIndex());
                         // BOOST_TEST(m_entry->num() == entry->num());
-                        BOOST_TEST(m_entry->dirty() == entry->dirty());
-                        BOOST_TEST(m_entry->force() == entry->force());
+                        // BOOST_TEST(m_entry->dirty() == entry->dirty());
+                        // BOOST_TEST(m_entry->force() == entry->force());
                         // BOOST_TEST(m_entry->refCount() == entry->refCount());
-                        BOOST_TEST(m_entry->deleted() == entry->deleted());
-                        BOOST_TEST(m_entry->capacity() == entry->capacity());
+                        // BOOST_TEST(m_entry->deleted() == entry->deleted());
+                        // BOOST_TEST(m_entry->capacity() == entry->capacity());
                     }
                 }
             }
