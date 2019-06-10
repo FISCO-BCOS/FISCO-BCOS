@@ -727,6 +727,7 @@ void CachedStorage::commitBackend(Task::Ptr task)
 {
 	auto now = std::chrono::system_clock::now();
 
+#if 0
 	CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << task->num;
 	for(auto &it: *task->datas) {
 		CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
@@ -746,6 +747,7 @@ void CachedStorage::commitBackend(Task::Ptr task)
 			CACHED_STORAGE_LOG(DEBUG) << "[V]NKey:" << fields.str();
 		}
 	}
+#endif
 
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
