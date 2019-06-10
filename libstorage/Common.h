@@ -79,6 +79,7 @@ const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
 const int CODE_TABLE_NAME_LENGTH_OVERFLOW = -50002;
 const int CODE_TABLE_FILED_LENGTH_OVERFLOW = -50003;
+const int CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW = -50004;
 
 
 inline bool isHashField(const std::string& _key)
