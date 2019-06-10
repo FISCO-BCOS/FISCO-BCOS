@@ -35,17 +35,29 @@ void PBFTReqCache::delCache(h256 const& hash)
 {
     PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache") << LOG_KV("hash", hash.abridged());
     /// delete from sign cache
-    auto psign = m_signCache.find(hash);
-    if (psign != m_signCache.end())
-        m_signCache.erase(psign);
-    /// delete from commit cache
-    auto pcommit = m_commitCache.find(hash);
-    if (pcommit != m_commitCache.end())
-        m_commitCache.erase(pcommit);
-    /// delete from prepare cache
-    if (hash == m_prepareCache->block_hash)
     {
-        m_prepareCache->clear();
+        WriteGuard l(x_signCache);
+
+        auto psign = m_signCache.find(hash);
+        if (psign != m_signCache.end())
+            m_signCache.erase(psign);
+    }
+
+    /// delete from commit cache
+    {
+        WriteGuard l(x_commitCache);
+        auto pcommit = m_commitCache.find(hash);
+        if (pcommit != m_commitCache.end())
+            m_commitCache.erase(pcommit);
+    }
+
+    /// delete from prepare cache
+    {
+        WriteGuard l(x_prepareCache);
+        if (hash == m_prepareCache->block_hash)
+        {
+            m_prepareCache->clear();
+        }
     }
 }
 
@@ -144,6 +156,7 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
 void PBFTReqCache::removeInvalidViewChange(
     VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock)
 {
+    WriteGuard l(x_recvViewChangeReq);
     auto it = m_recvViewChangeReq.find(view);
     if (it == m_recvViewChangeReq.end())
     {
@@ -167,6 +180,7 @@ void PBFTReqCache::removeInvalidViewChange(
 /// remove sign cache according to block hash and view
 void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const& view)
 {
+    WriteGuard l(x_signCache);
     auto it = m_signCache.find(blockHash);
     if (it == m_signCache.end())
         return;
@@ -182,6 +196,7 @@ void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const&
 /// remove commit cache according to block hash and view
 void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE const& view)
 {
+    WriteGuard l(x_commitCache);
     auto it = m_commitCache.find(blockHash);
     if (it == m_commitCache.end())
         return;
@@ -197,6 +212,7 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 /// clear the cache of future block to solve the memory leak problems
 void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader)
 {
+    WriteGuard l(x_futurePrepareCache);
     for (auto pcache = m_futurePrepareCache.begin(); pcache != m_futurePrepareCache.end();)
     {
         if (pcache->first <= (uint64_t)(highestBlockHeader.number()))
@@ -214,19 +230,21 @@ void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highest
 void PBFTReqCache::getCacheConsensusStatus(Json::Value& status_array) const
 {
     /// prepare cache
-    getCacheStatus(status_array, "prepareCache", m_prepareCache);
+    getCacheStatus(status_array, "prepareCache", m_prepareCache, x_prepareCache);
 
     /// raw prepare cache
-    getCacheStatus(status_array, "rawPrepareCache", m_rawPrepareCache);
+    getCacheStatus(status_array, "rawPrepareCache", m_rawPrepareCache, x_rawPrepareCache);
 
     /// commited prepare cache
-    getCacheStatus(status_array, "committedPrepareCache", m_committedPrepareCache);
+    getCacheStatus(
+        status_array, "committedPrepareCache", m_committedPrepareCache, x_committedPrepareCache);
 
     /// future prepare cache
     /// signCache
-    getCollectedCacheStatus(status_array, "signCache", m_signCache);
-    getCollectedCacheStatus(status_array, "commitCache", m_commitCache);
-    getCollectedCacheStatus(status_array, "viewChangeCache", m_recvViewChangeReq);
+    getCollectedCacheStatus(status_array, "signCache", m_signCache, x_signCache);
+    getCollectedCacheStatus(status_array, "commitCache", m_commitCache, x_commitCache);
+    getCollectedCacheStatus(
+        status_array, "viewChangeCache", m_recvViewChangeReq, x_recvViewChangeReq);
 }
 
 }  // namespace consensus

@@ -113,12 +113,17 @@ public:
     /// reset the prepare-cache
     inline void addRawPrepare(std::shared_ptr<PrepareReq> req)
     {
-        m_rawPrepareCache = req;
+        {
+            WriteGuard l(x_rawPrepareCache);
+            m_rawPrepareCache = req;
+        }
         PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req->height)
                                 << LOG_KV("reqIdx", req->idx)
                                 << LOG_KV("hash", req->block_hash.abridged());
-
-        m_prepareCache->clear();
+        {
+            WriteGuard l(x_prepareCache);
+            m_prepareCache->clear();
+        }
     }
 
     /// add prepare request to prepare-cache
@@ -126,23 +131,29 @@ public:
     /// specified prepare-request from the sign-cache and commit-cache
     inline void addPrepareReq(std::shared_ptr<PrepareReq> req)
     {
-        m_prepareCache = req;
+        {
+            WriteGuard l(x_prepareCache);
+            m_prepareCache = req;
+        }
         removeInvalidSignCache(req->block_hash, req->view);
         removeInvalidCommitCache(req->block_hash, req->view);
     }
     /// add specified signReq to the sign-cache
     inline void addSignReq(std::shared_ptr<SignReq> req)
     {
+        WriteGuard l(x_signCache);
         m_signCache[req->block_hash][req->sig.hex()] = req;
     }
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(std::shared_ptr<CommitReq> req)
     {
+        WriteGuard l(x_commitCache);
         m_commitCache[req->block_hash][req->sig.hex()] = req;
     }
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(std::shared_ptr<ViewChangeReq> req)
     {
+        WriteGuard l(x_recvViewChangeReq);
         auto it = m_recvViewChangeReq.find(req->view);
         if (it != m_recvViewChangeReq.end())
         {
@@ -176,6 +187,7 @@ public:
     /// add future-prepare cache
     inline void addFuturePrepareCache(std::shared_ptr<PrepareReq> req)
     {
+        WriteGuard l(x_futurePrepareCache);
         /// at most 20 future prepare cache
         if (m_futurePrepareCache.size() >= 20)
         {
@@ -197,6 +209,7 @@ public:
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare()
     {
+        WriteGuard l(x_committedPrepareCache);
         m_committedPrepareCache = std::make_shared<PrepareReq>(*m_rawPrepareCache);
     }
 
@@ -210,11 +223,26 @@ public:
     /// trigger viewchange
     inline void triggerViewChange(VIEWTYPE const& curView)
     {
-        m_rawPrepareCache->clear();
-        m_prepareCache->clear();
-        m_signCache.clear();
-        m_commitCache.clear();
-        m_futurePrepareCache.clear();
+        {
+            WriteGuard l(x_rawPrepareCache);
+            m_rawPrepareCache->clear();
+        }
+        {
+            WriteGuard l(x_prepareCache);
+            m_prepareCache->clear();
+        }
+        {
+            WriteGuard l(x_signCache);
+            m_signCache.clear();
+        }
+        {
+            WriteGuard l(x_commitCache);
+            m_commitCache.clear();
+        }
+        {
+            WriteGuard l(x_futurePrepareCache);
+            m_futurePrepareCache.clear();
+        }
         removeInvalidViewChange(curView);
     }
     /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
@@ -224,8 +252,8 @@ public:
     void delCache(h256 const& hash);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
-        removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
-        removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+        removeInvalidEntryFromCache(highestBlockHeader, m_signCache, x_signCache);
+        removeInvalidEntryFromCache(highestBlockHeader, m_commitCache, x_commitCache);
         /// remove invalid future block cache from cache
         removeInvalidFutureCache(highestBlockHeader);
         /// delete invalid viewchange from cache
@@ -235,27 +263,43 @@ public:
     void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
     inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
-        removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
+        removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq, x_recvViewChangeReq);
     }
     inline void clearAllExceptCommitCache()
     {
-        m_prepareCache->clear();
-        m_signCache.clear();
-        m_recvViewChangeReq.clear();
+        {
+            WriteGuard l(x_prepareCache);
+            m_prepareCache->clear();
+        }
+        {
+            WriteGuard l(x_signCache);
+            m_signCache.clear();
+        }
+        {
+            WriteGuard l(x_recvViewChangeReq);
+            m_recvViewChangeReq.clear();
+        }
     }
 
     void removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader);
 
     inline void clearAll()
     {
-        m_futurePrepareCache.clear();
+        {
+            WriteGuard l(x_futurePrepareCache);
+            m_futurePrepareCache.clear();
+        }
         clearAllExceptCommitCache();
-        m_commitCache.clear();
+        {
+            WriteGuard l(x_commitCache);
+            m_commitCache.clear();
+        }
     }
 
     /// erase specified future request from the future prepare cache
     void eraseHandledFutureReq(uint64_t const& blockNumber)
     {
+        WriteGuard l(x_futurePrepareCache);
         if (m_futurePrepareCache.find(blockNumber) != m_futurePrepareCache.end())
         {
             m_futurePrepareCache.erase(blockNumber);
@@ -279,6 +323,7 @@ public:
     }
     void getCacheConsensusStatus(Json::Value& statusArray) const;
 
+    // no need to add lock since read and modifications are accessed in a thread
     template <typename T, typename U, typename S>
     inline bool cacheExists(T const& cache, U const& mainKey, S const& key)
     {
@@ -290,10 +335,11 @@ public:
 
 protected:
     /// remove invalid requests cached in cache according to current block
-    template <typename T, typename U, typename S>
+    template <typename T, typename U, typename S, typename L>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
-        std::unordered_map<T, std::unordered_map<U, S>>& cache)
+        std::unordered_map<T, std::unordered_map<U, S>>& cache, L& mutex)
     {
+        WriteGuard l(mutex);
         for (auto it = cache.begin(); it != cache.end();)
         {
             for (auto cache_entry = it->second.begin(); cache_entry != it->second.end();)
@@ -317,6 +363,7 @@ protected:
 
     inline void removeInvalidViewChange(VIEWTYPE const& curView)
     {
+        WriteGuard l(x_recvViewChangeReq);
         for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
         {
             if (it->first <= curView)
@@ -333,10 +380,11 @@ protected:
 
     /// get the status of specified cache into the json object
     /// (maily for prepareCache, m_committedPrepareCache, m_futurePrepareCache and rawPrepareCache)
-    template <typename T>
+    template <typename T, typename L>
     void getCacheStatus(
-        Json::Value& jsonArray, std::string const& key, std::shared_ptr<T> cache) const
+        Json::Value& jsonArray, std::string const& key, std::shared_ptr<T> cache, L& mutex) const
     {
+        ReadGuard l(mutex);
         Json::Value cacheStatus;
         cacheStatus[key + "_blockHash"] = "0x" + toHex(cache->block_hash);
         cacheStatus[key + "_height"] = cache->height;
@@ -345,11 +393,12 @@ protected:
         jsonArray.append(cacheStatus);
     }
 
-    template <typename T>
+    template <typename T, typename L>
     void getCollectedCacheStatus(
-        Json::Value& cacheJsonArray, std::string const& key, T const& cache) const
+        Json::Value& cacheJsonArray, std::string const& key, T const& cache, L& mutex) const
     {
         Json::Value tmp_obj;
+        ReadGuard l(mutex);
         tmp_obj[key + "_cachedSize"] = toString(cache.size());
         for (auto i : cache)
         {
@@ -365,21 +414,34 @@ protected:
 protected:
     /// cache for prepare request
     std::shared_ptr<PrepareReq> m_prepareCache = nullptr;
+    mutable SharedMutex x_prepareCache;
+
     /// cache for raw prepare request
     std::shared_ptr<PrepareReq> m_rawPrepareCache = nullptr;
+    mutable SharedMutex x_rawPrepareCache;
+
     /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, std::shared_ptr<SignReq>>> m_signCache;
+    mutable SharedMutex x_signCache;
+
     /// cache for received-viewChange requests(maps between view and view change requests)
     std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, std::shared_ptr<ViewChangeReq>>>
         m_recvViewChangeReq;
+    mutable SharedMutex x_recvViewChangeReq;
+
     /// cache for commited requests(maps between hash and commited requests)
     std::unordered_map<h256, std::unordered_map<std::string, std::shared_ptr<CommitReq>>>
         m_commitCache;
+    mutable SharedMutex x_commitCache;
+
     /// cache for prepare request need to be backup and saved
     std::shared_ptr<PrepareReq> m_committedPrepareCache = nullptr;
+    mutable SharedMutex x_committedPrepareCache;
+
     /// cache for the future prepare cache
     /// key: block hash, value: the cached future prepeare
     std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;
+    mutable SharedMutex x_futurePrepareCache;
 };
 }  // namespace consensus
 }  // namespace dev
