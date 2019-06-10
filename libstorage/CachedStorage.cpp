@@ -518,7 +518,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                     << std::setprecision(4) << elapsed.count() << "s"
                     << "\n---------------------------------------------------------------------\n";
 
-                if(disabled()) {
+                if(storage->disabled()) {
 					storage->clear();
 				}
             }
