@@ -164,7 +164,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
-    //RWMutexScoped commitLock(m_commitMutex, false);
+    // RWMutexScoped commitLock(m_commitMutex, false);
 
     auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
@@ -661,7 +661,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
     bool inserted = false;
     {
-        RWMutexScoped lockCache(m_cachesMutex, true);
+        RWMutexScoped lockCache(m_cachesMutex, false);
 
         auto result = m_caches.insert(std::make_pair(cacheKey, cache));
 
@@ -686,14 +686,16 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
     return std::make_tuple(cacheLock, cache, true);
 }
 
-void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache) {
-	RWMutexScoped lockCache(m_cachesMutex, true);
+void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache)
+{
+    RWMutexScoped lockCache(m_cachesMutex, false);
 
-	auto cacheKey = table->name + "_" + key;
-	auto inserted = m_caches.insert(std::make_pair(cacheKey, cache)).second;
-	if(!inserted) {
-		CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache exists: " << cacheKey;
-	}
+    auto cacheKey = table->name + "_" + key;
+    auto inserted = m_caches.insert(std::make_pair(cacheKey, cache)).second;
+    if (!inserted)
+    {
+        // CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache exists: " << cacheKey;
+    }
 }
 
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
@@ -701,15 +703,14 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     auto cacheKey = table + "_" + key;
     RWMutexScoped lockCache(m_cachesMutex, true);
 
-    // m_caches.unsafe_erase(cacheKey);
-    auto c = m_caches.erase(cacheKey);
+    auto c = m_caches.unsafe_erase(cacheKey);
 
-    if(c != 1) {
-    	CACHED_STORAGE_LOG(FATAL) << "Can not remove cache: " << table << "-" << key;
+    if (c != 1)
+    {
+        CACHED_STORAGE_LOG(FATAL) << "Can not remove cache: " << table << "-" << key;
 
-    	// impossible
-		BOOST_THROW_EXCEPTION(StorageException(
-			-1, "Can not remove cache: " + table + "-" + key));
+        // impossible
+        BOOST_THROW_EXCEPTION(StorageException(-1, "Can not remove cache: " + table + "-" + key));
     }
 }
 
@@ -753,38 +754,6 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-#if 0
-        	std::map<std::string, Cache::Ptr> uniquePtr;
-        	std::set<Cache::Ptr> uniquePtr2;
-        	for (auto& it: *m_mru) {
-        		auto cIt = m_caches.find(it.first + "_" + it.second);
-        		if(cIt == m_caches.end()) {
-
-        		}
-        		else {
-        			auto inserted = uniquePtr.insert(std::make_pair(it.first + "_" + it.second, cIt->second));
-        			if(!inserted.second) {
-        				CACHED_STORAGE_LOG(FATAL) << "Key: " << (it.first + "_" + it.second) << " already exists";
-        			}
-
-        			uniquePtr2.insert(cIt->second);
-        		}
-        	}
-
-
-        	if(uniquePtr2.size() != uniquePtr.size()) {
-        		CACHED_STORAGE_LOG(FATAL) << "Unique set: " << uniquePtr.size() << " mru: "<< m_mru->size();
-
-        		for (auto& it: *m_mru) {
-        			CACHED_STORAGE_LOG(INFO) << it.first << it.second << " " << uniquePtr[it.first + "_" + it.second];
-        		}
-
-        		BOOST_THROW_EXCEPTION(StorageException(-1, "unique"));
-        	}
-#endif
-
-        	//RWMutexScoped commitLock(m_commitMutex, false);
-
             for (auto it = m_mru->begin(); it != m_mru->end();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
@@ -800,18 +769,6 @@ void CachedStorage::checkAndClear()
                 auto result = touchCache(tableInfo, it->second, true);
                 auto cache = std::get<1>(result);
 
-#if 0
-                if (cache->empty())
-                {
-                    CACHED_STORAGE_LOG(FATAL)
-                        << "Unable to find cache: " << tableInfo->name << "-" << it->second << (intptr_t)cache.get();
-
-                    // impossible
-					BOOST_THROW_EXCEPTION(StorageException(
-						-1, "Unable to find cache: " + tableInfo->name + "-" + it->second + boost::lexical_cast<std::string>((intptr_t)cache.get())));
-                }
-#endif
-
                 if (std::get<2>(result))
                 {
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))
@@ -825,7 +782,6 @@ void CachedStorage::checkAndClear()
                         ++clearCount;
                         updateCapacity(0 - totalCapacity);
 
-                        //LOG(INFO) << "Remove cache: " << it->first << "-" << it->second << ", " << (intptr_t)cache.get();
                         cache->setEmpty(true);
                         removeCache(it->first, it->second);
                         it = m_mru->erase(it);
@@ -870,8 +826,6 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    // auto oldValue = m_capacity.fetch_and_add(capacity);
-    // m_capacity.fetch_add(capacity);
     m_capacity.fetch_and_add(capacity);
 }
 
