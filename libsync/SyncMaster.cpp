@@ -295,7 +295,7 @@ void SyncMaster::maintainDownloadingTransactions()
 
 void SyncMaster::maintainBlocks()
 {
-    if (!m_needMaintainBlocks)
+    if (!m_needSendStatus)
     {
         return;
     }
@@ -631,17 +631,20 @@ void SyncMaster::maintainPeersConnection()
             SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
             m_syncStatus->newSyncPeerStatus(newPeer);
 
-            // send my status to her
-            SyncStatusPacket packet;
-            packet.encode(currentNumber, m_genesisHash, currentHash);
-
-            m_service->asyncSendMessageByNodeID(
-                member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-            SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status to new peer")
-                            << LOG_KV("number", int(currentNumber))
-                            << LOG_KV("genesisHash", m_genesisHash.abridged())
-                            << LOG_KV("currentHash", currentHash.abridged())
-                            << LOG_KV("peer", member.abridged());
+            if (m_needSendStatus)
+            {
+                // send my status to her
+                SyncStatusPacket packet;
+                packet.encode(currentNumber, m_genesisHash, currentHash);
+                m_service->asyncSendMessageByNodeID(
+                    member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+                SYNC_LOG(DEBUG) << LOG_BADGE("Status")
+                                << LOG_DESC("Send current status to new peer")
+                                << LOG_KV("number", int(currentNumber))
+                                << LOG_KV("genesisHash", m_genesisHash.abridged())
+                                << LOG_KV("currentHash", currentHash.abridged())
+                                << LOG_KV("peer", member.abridged());
+            }
         }
     }
 
@@ -659,7 +662,7 @@ void SyncMaster::maintainPeersConnection()
     m_needMaintainTransactions = hasMyself;
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
-    m_needMaintainBlocks = hasMyself;
+    m_needSendStatus = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
