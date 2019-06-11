@@ -614,15 +614,18 @@ void CachedStorage::startClearThread()
     std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
     auto running = m_running;
     m_clearThread = std::make_shared<std::thread>([running, self]() {
-        auto storage = self.lock();
-        if (storage && storage->m_running)
+        while (true)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_clearInterval));
-            storage->checkAndClear();
-        }
-        else
-        {
-            return;
+            auto storage = self.lock();
+            if (storage && storage->m_running)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_clearInterval));
+                storage->checkAndClear();
+            }
+            else
+            {
+                return;
+            }
         }
     });
 }
