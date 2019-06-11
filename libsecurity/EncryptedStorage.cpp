@@ -89,7 +89,7 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        for (auto const& inKV : *inEntry->fields())
+        for (auto const& inKV : *inEntry)
         {
             if (!isHashField(inKV.first))
             {
@@ -108,7 +108,7 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        for (auto const& inKV : *inEntry->fields())
+        for (auto const& inKV : *inEntry)
         {
             if (!isHashField(inKV.first))
             {
