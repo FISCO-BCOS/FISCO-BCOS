@@ -30,7 +30,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-std::string encryptValue(const bytes& dataKey, const string value)
+std::string encryptValue(const bytes& dataKey, const string& value)
 {
     bytesConstRef valueRef{(const unsigned char*)value.c_str(), value.length()};
     bytes enData = aesCBCEncrypt(valueRef, ref(dataKey));
