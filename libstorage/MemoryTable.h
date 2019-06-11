@@ -227,7 +227,7 @@ public:
 
                         for (auto& fieldIt : *(it.second->get(i)))
                         {
-                            if (isHashField(fieldIt.first))
+                            if (isHashField(fieldIt.first) || fieldIt.first == STATUS)
                             {
                                 data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
                                 data.insert(
