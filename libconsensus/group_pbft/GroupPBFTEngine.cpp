@@ -74,9 +74,9 @@ void GroupPBFTEngine::resetConfig()
     // calculate current zone num
     m_zoneNum = m_nodeNum + (m_configuredGroupSize - 1) / m_configuredGroupSize;
     // get zone size
-    if (m_nodeNum - m_idx < m_configuredGroupSize)
+    if (m_nodeNum - m_zoneId * m_configuredGroupSize < m_configuredGroupSize)
     {
-        m_zoneSize = m_nodeNum - m_idx;
+        m_zoneSize = m_nodeNum - m_zoneId * m_configuredGroupSize;
     }
     else
     {
@@ -116,7 +116,7 @@ void GroupPBFTEngine::resetConfig()
                           << LOG_KV("groupIdx", m_groupIdx)
                           << LOG_KV("faultTolerance", m_FaultTolerance)
                           << LOG_KV("groupFaultTolerance", m_groupFaultTolerance)
-                          << LOG_KV("gIdx", m_groupIdx) << LOG_KV("idx", m_idx);
+                          << LOG_KV("idx", m_idx);
 }
 
 /// get consensus zone:
@@ -132,7 +132,8 @@ ZONETYPE GroupPBFTEngine::getConsensusZone(int64_t const& blockNumber) const
 }
 
 // determine the given node located in the consensus zone or not
-bool GroupPBFTEngine::locatedInConsensusZone(int64_t const& blockNumber) const
+bool GroupPBFTEngine::locatedInConsensusZone(
+    int64_t const& blockNumber, ZONETYPE const& zoneId) const
 {
     if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
     {
@@ -141,7 +142,7 @@ bool GroupPBFTEngine::locatedInConsensusZone(int64_t const& blockNumber) const
     // get the current consensus zone
     ZONETYPE consZone = getConsensusZone(blockNumber);
     // get consensus zone failed or the node is not in the consens zone
-    if (consZone == MAXIDX || consZone != m_zoneId)
+    if (consZone == MAXIDX || consZone != zoneId)
     {
         return false;
     }
@@ -152,7 +153,7 @@ bool GroupPBFTEngine::locatedInConsensusZone(int64_t const& blockNumber) const
 std::pair<bool, IDXTYPE> GroupPBFTEngine::getLeader() const
 {
     // the node is not in the consensus group
-    if (!locatedInConsensusZone(m_highestBlock.number()))
+    if (!locatedInConsensusZone(m_highestBlock.number(), m_zoneId))
     {
         return std::make_pair(false, MAXIDX);
     }
@@ -164,7 +165,7 @@ IDXTYPE GroupPBFTEngine::getNextLeader() const
 {
     auto expectedBlockNumber = m_highestBlock.number() + 1;
     /// the next leader is not located in this Zone
-    if (!locatedInConsensusZone(expectedBlockNumber))
+    if (!locatedInConsensusZone(expectedBlockNumber, m_zoneId))
     {
         return MAXIDX;
     }
@@ -220,7 +221,7 @@ bool GroupPBFTEngine::isLeader()
 
 bool GroupPBFTEngine::locatedInConsensusZone() const
 {
-    return locatedInConsensusZone(m_highestBlock.number());
+    return locatedInConsensusZone(m_highestBlock.number(), m_zoneId);
 }
 
 
@@ -247,7 +248,7 @@ bool GroupPBFTEngine::handlePrepareMsg(
     {
         return false;
     }
-    if (prepare_req->view == m_globalView)
+    if (prepare_req->view > m_globalView)
     {
         m_groupPBFTReqCache->addFuturePrepareCache(prepare_req);
         return true;

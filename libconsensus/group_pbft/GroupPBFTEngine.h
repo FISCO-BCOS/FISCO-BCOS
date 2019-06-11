@@ -63,9 +63,6 @@ public:
 
     void start() override;
 
-    /// get the node index if the node is a sealer
-    IDXTYPE nodeIdx() const override { return m_groupIdx; }
-
 protected:
     /// below for grouping nodes into groups
     // reset config after commit a new block
@@ -77,7 +74,21 @@ protected:
     // get leader if the current zone is the consensus zone
     std::pair<bool, IDXTYPE> getLeader() const override;
     bool isLeader();
-    virtual bool locatedInConsensusZone(int64_t const& blockNumber) const;
+
+    bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const override
+    {
+        if (!locatedInConsensusZone())
+        {
+            if (locatedInConsensusZone(m_highestBlock.number, req->idx / m_zoneSize))
+            {
+                return true;
+            }
+            return false;
+        }
+        return PBFTEngine::isValidLeader(req);
+    }
+
+    virtual bool locatedInConsensusZone(int64_t const& blockNumber, ZONETYPE const& zoneId) const;
     bool locatedInConsensusZone() const;
 
     // get node idx by nodeID
@@ -286,7 +297,7 @@ protected:
     // configured group size
     std::atomic<int64_t> m_configuredGroupSize = {0};
     /// group idx
-    std::atomic<int64_t> m_groupIdx = {0};
+    std::atomic<int64_t> m_groupIdx = {INT64_MAX};
     /// real zone Size
     std::atomic<int64_t> m_zoneSize = {0};
     /// group num

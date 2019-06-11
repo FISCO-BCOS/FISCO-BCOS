@@ -570,7 +570,7 @@ protected:
         return true;
     }
 
-    inline bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
+    virtual bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
     {
         auto leader = getLeader();
         /// get leader failed or this prepareReq is not broadcasted from leader
@@ -581,7 +581,6 @@ protected:
 
         return true;
     }
-
 
     void checkSealerList(dev::eth::Block const& block);
     /// check block
