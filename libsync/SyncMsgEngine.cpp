@@ -78,9 +78,6 @@ bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
     if (_session->nodeID() == m_nodeId)
         return false;
 
-    /// Drop packets comes from other groups
-    if (needCheckPacketInGroup && !m_syncStatus->hasPeer(_session->nodeID()))
-        return false;
     return true;
 }
 
@@ -157,12 +154,19 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
     if (status == nullptr)
     {
-        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from new peer")
+        int64_t currentNumber = m_blockChain->number();
+        if (currentNumber < info.number)
+        {
+            m_syncStatus->newSyncPeerStatus(info);
+        }
+        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Status")
+                               << LOG_DESC("Receive status from unknown peer")
+                               << LOG_KV("shouldAccept",
+                                      (currentNumber < info.number ? "true" : "false"))
                                << LOG_KV("peer", info.nodeId.abridged())
                                << LOG_KV("peerBlockNumber", info.number)
                                << LOG_KV("genesisHash", info.genesisHash.abridged())
                                << LOG_KV("latestHash", info.latestHash.abridged());
-        m_syncStatus->newSyncPeerStatus(info);
     }
     else
     {

@@ -184,7 +184,7 @@ private:
     bool m_newBlocks = false;
     uint64_t m_maintainBlocksTimeout = 0;
     bool m_needMaintainTransactions = false;
-
+    bool m_needMaintainBlocks = true;
 
     // settings
     dev::eth::Handler<> m_tqReady;
@@ -204,7 +204,7 @@ public:
     void maintainBlockRequest();
 
 private:
-    bool isNewBlock(BlockPtr _block);
+    bool isNextBlock(BlockPtr _block);
     void printSyncInfo();
 };
 
