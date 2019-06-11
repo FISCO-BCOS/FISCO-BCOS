@@ -351,7 +351,7 @@ void Ledger::initDBConfig(ptree const& pt)
         }
     }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
-    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 0);
+    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
 
     if (m_param->mutableStorageParam().maxCapacity < 0)
     {
@@ -359,7 +359,7 @@ void Ledger::initDBConfig(ptree const& pt)
                               << errinfo_comment("Please set storage.max_capacity to positive !"));
     }
 
-    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 0);
+    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 10);
     if (m_param->mutableStorageParam().maxForwardBlock < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(

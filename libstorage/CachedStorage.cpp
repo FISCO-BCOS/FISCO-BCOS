@@ -123,13 +123,9 @@ CachedStorage::CachedStorage()
 
 CachedStorage::~CachedStorage()
 {
-    STORAGE_LOG(INFO) << "Stoping flushStorage thread";
-    m_taskThreadPool->stop();
-
-    m_running->store(false);
-    if (m_clearThread)
+    if (m_running->load())
     {
-        m_clearThread->join();
+        stop();
     }
 }
 
@@ -564,6 +560,23 @@ void CachedStorage::init()
     }
 }
 
+void CachedStorage::stop()
+{
+    STORAGE_LOG(INFO) << "Stoping flushStorage thread";
+    m_running->store(false);
+
+    m_taskThreadPool->stop();
+
+    if (m_clearThread)
+    {
+        if (m_clearThread->get_id() != std::this_thread::get_id())
+        {
+            m_clearThread->join();
+            m_clearThread.reset();
+        }
+    }
+}
+
 void CachedStorage::clear()
 {
     RWMutexScoped lockCache(m_cachesMutex, true);
@@ -601,19 +614,15 @@ void CachedStorage::startClearThread()
     std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
     auto running = m_running;
     m_clearThread = std::make_shared<std::thread>([running, self]() {
-        while (*running)
+        auto storage = self.lock();
+        if (storage && storage->m_running)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-            auto storage = self.lock();
-            if (storage)
-            {
-                storage->checkAndClear();
-            }
-            else
-            {
-                return;
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_clearInterval));
+            storage->checkAndClear();
+        }
+        else
+        {
+            return;
         }
     });
 }
@@ -687,7 +696,8 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
     auto result = m_caches.insert(std::make_pair(cacheKey, cache));
     if (!result.second && result.first->second != cache)
     {
-        CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache not equal: " << cacheKey << " " << result.first->second << " " << cache;
+        CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache not equal: " << cacheKey << " "
+                                  << result.first->second << " " << cache;
     }
 }
 
@@ -714,29 +724,7 @@ bool CachedStorage::disabled()
 
 void CachedStorage::commitBackend(Task::Ptr task)
 {
-	auto now = std::chrono::system_clock::now();
-
-#if 0
-	CACHED_STORAGE_LOG(DEBUG) << "[V]Commit: " << task->num;
-	for(auto &it: *task->datas) {
-		CACHED_STORAGE_LOG(DEBUG) << "[V]Table: " << it->info->name;
-		for(auto dirtyIt: *(it->dirtyEntries)) {
-			std::stringstream fields;
-			for(auto fieldIt: *dirtyIt) {
-				fields << fieldIt.first << ":" << fieldIt.second << " ";
-			}
-			CACHED_STORAGE_LOG(DEBUG) << "[V]DKey:" << fields.str();
-		}
-
-		for(auto newIt: *(it->newEntries)) {
-			std::stringstream fields;
-			for(auto fieldIt: *newIt) {
-				fields << fieldIt.first << ":" << fieldIt.second << " ";
-			}
-			CACHED_STORAGE_LOG(DEBUG) << "[V]NKey:" << fields.str();
-		}
-	}
-#endif
+    auto now = std::chrono::system_clock::now();
 
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try

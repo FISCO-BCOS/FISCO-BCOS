@@ -224,6 +224,8 @@ struct CachedStorageFixture
         cachedStorage->setMaxForwardBlock(51);
     }
 
+    ~CachedStorageFixture() { cachedStorage->stop(); }
+
     Entries::Ptr getEntries()
     {
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -729,15 +731,15 @@ public:
 
                         // BOOST_TEST(*(m_entry->fields()) == *(entry->fields()));
 
-                        // BOOST_TEST(m_entry->getID() == entry->getID());
-                        // BOOST_TEST(m_entry->getStatus() == entry->getStatus());
-                        // BOOST_TEST(m_entry->getTempIndex() == entry->getTempIndex());
+                        BOOST_TEST(m_entry->getID() == entry->getID());
+                        BOOST_TEST(m_entry->getStatus() == entry->getStatus());
+                        BOOST_TEST(m_entry->getTempIndex() == entry->getTempIndex());
                         // BOOST_TEST(m_entry->num() == entry->num());
-                        // BOOST_TEST(m_entry->dirty() == entry->dirty());
-                        // BOOST_TEST(m_entry->force() == entry->force());
+                        BOOST_TEST(m_entry->dirty() == entry->dirty());
+                        BOOST_TEST(m_entry->force() == entry->force());
                         // BOOST_TEST(m_entry->refCount() == entry->refCount());
-                        // BOOST_TEST(m_entry->deleted() == entry->deleted());
-                        // BOOST_TEST(m_entry->capacity() == entry->capacity());
+                        BOOST_TEST(m_entry->deleted() == entry->deleted());
+                        BOOST_TEST(m_entry->capacity() == entry->capacity());
                     }
                 }
             }
@@ -761,8 +763,8 @@ public:
 BOOST_AUTO_TEST_CASE(commitCheck)
 {
     cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->setMaxCapacity(2000 * 1024 * 1024);
-    cachedStorage->setMaxForwardBlock(100000);
+    cachedStorage->setMaxCapacity(256 * 1024 * 1024);
+    cachedStorage->setMaxForwardBlock(100);
     auto backend = std::make_shared<CommitCheckMock>();
     cachedStorage->setBackend(backend);
 

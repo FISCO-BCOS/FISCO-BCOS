@@ -112,6 +112,7 @@ public:
 
     void setBackend(Storage::Ptr backend);
     void init();
+    void stop();
 
     void clear();
 
@@ -164,11 +165,11 @@ private:
     tbb::atomic<uint64_t> m_commitNum;
     tbb::atomic<int64_t> m_capacity;
 
-    // uint64_t m_maxForwardBlock = 10;
-    uint64_t m_maxForwardBlock = 0;
-    // int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
-    int64_t m_maxCapacity = 0;
+    // config
+    uint64_t m_maxForwardBlock = 10;
+    int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
     uint64_t m_maxPopMRU = 100000;
+    uint64_t m_clearInterval = 1000;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
     std::shared_ptr<std::thread> m_clearThread;

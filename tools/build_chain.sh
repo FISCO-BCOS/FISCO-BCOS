@@ -530,8 +530,8 @@ function generate_group_ini()
     ; storage db type, rocksdb / mysql / external, rocksdb is recommended
     type=${storage_type}
     ; max cache memeory, MB
-    max_capacity=0
-    max_forward_block=0
+    max_capacity=256
+    max_forward_block=10
     ; only for external
     max_retry=100
     topic=DB
