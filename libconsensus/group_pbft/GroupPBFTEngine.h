@@ -47,13 +47,13 @@ public:
         m_groupBroadcastFilter = boost::bind(&GroupPBFTEngine::filterGroupNodeByNodeID, this, _1);
     }
 
-    void setGroupSize(uint64_t const& groupSize)
+    void setGroupSize(int64_t const& groupSize)
     {
         m_configuredGroupSize = groupSize;
         GPBFTENGINE_LOG(INFO) << LOG_KV("configured groupSize", m_configuredGroupSize);
     }
 
-    void setConsensusZoneSwitchBlockNumber(uint64_t const& zoneSwitchBlocks)
+    void setConsensusZoneSwitchBlockNumber(int64_t const& zoneSwitchBlocks)
     {
         m_zoneSwitchBlocks = zoneSwitchBlocks;
     }

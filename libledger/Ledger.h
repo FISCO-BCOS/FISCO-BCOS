@@ -148,6 +148,8 @@ protected:
 
     std::shared_ptr<dev::consensus::PBFTEngineFactory> createPBFTEngineFactory();
     std::shared_ptr<dev::consensus::PBFTReqFactory> createPBFTReqFactory();
+    void initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
+    void initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
 
 private:
     /// create PBFTConsensus

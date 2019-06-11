@@ -53,6 +53,10 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+
+    /// param used for group_pbft
+    int64_t groupSize = 0;
+    int64_t switchBlockNum = 10;
 };
 
 struct AMDBParam

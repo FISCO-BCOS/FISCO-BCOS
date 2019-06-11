@@ -95,7 +95,7 @@ public:
         }
     }
 
-    inline bool exists(SharedMutex& lock, QueueSet<std::string>& queue, std::string const& key)
+    bool exists(SharedMutex& lock, QueueSet<std::string>& queue, std::string const& key)
     {
         /// lock succ
         ReadGuard l(lock);
