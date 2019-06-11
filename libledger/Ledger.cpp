@@ -382,7 +382,7 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
     m_param->mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     m_param->mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
-    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 20);
+    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
