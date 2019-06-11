@@ -174,7 +174,7 @@ IDXTYPE GroupPBFTEngine::getNextLeader() const
 /// get nodeIdx according to nodeID
 /// override the function to make sure the node only broadcast message to the nodes that belongs to
 /// m_zoneId
-ssize_t GroupPBFTEngine::getIndexBySealer(dev::network::NodeID const& nodeId)
+ssize_t GroupPBFTEngine::getGroupIndexBySealer(dev::network::NodeID const& nodeId)
 {
     ssize_t nodeIndex = PBFTEngine::getIndexBySealer(nodeId);
     /// observer or not in the zone

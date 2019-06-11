@@ -130,7 +130,7 @@ public:
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
-    virtual bool shouldPopMsg(byte const& packetType)
+    virtual bool shouldPushMsg(byte const& packetType)
     {
         return (packetType <= PBFTPacketType::ViewChangeReqPacket);
     }

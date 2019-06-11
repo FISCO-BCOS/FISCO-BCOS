@@ -44,7 +44,10 @@ public:
       : PBFTEngine(service, txPool, blockchain, sync, blockVerifier, protocolId, baseDir, keyPair,
             sealerList)
     {
+        // filter for broadcastMsgAmongGroup
         m_groupBroadcastFilter = boost::bind(&GroupPBFTEngine::filterGroupNodeByNodeID, this, _1);
+        // filter for broadcastMsg and sendMsg
+        m_broadcastFilter = boost::bind(&GroupPBFTEngine::getGroupIndexBySealer, this, _1);
     }
 
     void setGroupSize(int64_t const& groupSize)
@@ -78,10 +81,10 @@ protected:
     bool locatedInConsensusZone() const;
 
     // get node idx by nodeID
-    ssize_t getIndexBySealer(dev::network::NodeID const& nodeId) override;
+    virtual ssize_t getGroupIndexBySealer(dev::network::NodeID const& nodeId);
     IDXTYPE getNextLeader() const override;
 
-    bool shouldPopMsg(byte const& packetType) override
+    bool shouldPushMsg(byte const& packetType) override
     {
         return (packetType <= GroupPBFTPacketType::SuperCommitReqPacket);
     }
