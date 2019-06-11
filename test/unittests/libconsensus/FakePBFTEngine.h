@@ -60,6 +60,7 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
+        setMaxBlockTransactions(300000000);
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -92,6 +93,7 @@ public:
         header.setLogBloom(LogBloom());
         header.setGasUsed(u256(0));
     }
+
 
     void resetBlock(Block& block)
     {
@@ -127,7 +129,7 @@ public:
     void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
-
+    void updateMaxBlockTransactions() override {}
     bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
