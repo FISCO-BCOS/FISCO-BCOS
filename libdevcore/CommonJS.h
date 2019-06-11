@@ -26,10 +26,18 @@
 #include "CommonData.h"
 #include "CommonIO.h"
 #include "FixedHash.h"
+#include <libexecutive/ExecutionResult.h>
 #include <string>
 
 namespace dev
 {
+inline std::string toJS(executive::TransactionException const& _i)
+{
+    std::stringstream stream;
+    stream << "0x" << std::hex << static_cast<int>(_i);
+    return stream.str();
+}
+
 inline std::string toJS(byte _b)
 {
     return "0x" + std::to_string(_b);

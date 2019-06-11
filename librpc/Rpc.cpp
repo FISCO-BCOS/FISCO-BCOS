@@ -175,7 +175,7 @@ std::string Rpc::getPbftView(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::JsonParse, RPCMsg[RPCExceptionType::JsonParse]));
 
-        view = statusJson[0]["currentView"].asUInt();
+        view = statusJson[0]["currentView"].asUInt64();
         return toJS(view);
     }
     catch (JsonRpcException& e)
