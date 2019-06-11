@@ -767,7 +767,7 @@ void PBFTEngine::onRecvPBFTMessage(
     {
         return;
     }
-    if (pbft_msg->packet_id <= PBFTPacketType::ViewChangeReqPacket)
+    if (shouldPopMsg(pbft_msg->packet_id))
     {
         m_msgQueue.push(*pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue

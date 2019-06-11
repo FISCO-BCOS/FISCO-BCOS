@@ -232,6 +232,11 @@ bool GroupPBFTEngine::handlePrepareMsg(
     {
         bytes prepare_data;
         prepare_req->encode(prepare_data);
+        GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
+                               << LOG_KV("height", prepare_req->height)
+                               << LOG_KV("hash", prepare_req->block_hash.abridged())
+                               << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
+                               << LOG_KV("idx", m_idx);
         broadCastMsgAmongGroups(
             GroupPBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
     }

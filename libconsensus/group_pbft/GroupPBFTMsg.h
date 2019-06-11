@@ -30,8 +30,8 @@ namespace consensus
 {
 struct GroupPBFTPacketType : public PBFTPacketType
 {
-    static const int SuperSignReqPacket = 0x05;
-    static const int SuperCommitReqPacket = 0x06;
+    static const int SuperSignReqPacket = 0x04;
+    static const int SuperCommitReqPacket = 0x05;
 };
 
 struct SuperSignReq : public PBFTMsg

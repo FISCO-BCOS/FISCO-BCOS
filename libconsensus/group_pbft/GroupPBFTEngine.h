@@ -81,6 +81,11 @@ protected:
     ssize_t getIndexBySealer(dev::network::NodeID const& nodeId) override;
     IDXTYPE getNextLeader() const override;
 
+    bool shouldPopMsg(byte const& packetType) override
+    {
+        return (packetType <= GroupPBFTPacketType::SuperCommitReqPacket);
+    }
+
     bool handlePrepareMsg(
         std::shared_ptr<PrepareReq> prepare_req, std::string const& endpoint = "self") override;
 

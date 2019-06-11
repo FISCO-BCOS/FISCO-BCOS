@@ -130,6 +130,11 @@ public:
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
+    virtual bool shouldPopMsg(byte const& packetType)
+    {
+        return (packetType <= PBFTPacketType::ViewChangeReqPacket);
+    }
+
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
     /// when sealing for the next leader,  return true only if the last block has been consensused
@@ -576,6 +581,7 @@ protected:
 
         return true;
     }
+
 
     void checkSealerList(dev::eth::Block const& block);
     /// check block
