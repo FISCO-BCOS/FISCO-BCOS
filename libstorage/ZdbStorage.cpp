@@ -56,8 +56,7 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     for (; it != valueList.end(); ++it)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        int size = (int)it->size();
-        for (int j = 0; j < size; ++j)
+        for (size_t j = 0; j < it->size(); ++j)
         {
             if (columns[j] == ID_FIELD)
             {
