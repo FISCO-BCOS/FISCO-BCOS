@@ -231,6 +231,8 @@ bool GroupPBFTEngine::handlePrepareMsg(
     if (locatedInConsensusZone())
     {
         bytes prepare_data;
+        auto orignView = prepare_req->view;
+        prepare_req->view = m_globalView;
         prepare_req->encode(prepare_data);
         GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
                                << LOG_KV("height", prepare_req->height)
@@ -239,7 +241,19 @@ bool GroupPBFTEngine::handlePrepareMsg(
                                << LOG_KV("idx", m_idx);
         broadCastMsgAmongGroups(
             GroupPBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
+        prepare_req->view = orignView;
     }
+    if (prepare_req->view < m_globalView)
+    {
+        return false;
+    }
+    if (prepare_req->view == m_globalView)
+    {
+        m_groupPBFTReqCache->addFuturePrepareCache(prepare_req);
+        return true;
+    }
+    // modify the view
+    prepare_req->view = m_view;
     return PBFTEngine::handlePrepareMsg(prepare_req, endpoint);
 }
 
@@ -395,6 +409,7 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
         succ = handleSuperSignReq(superSignReq, pbftMsg);
         key = superSignReq->uniqueKey();
         pbftPacket = superSignReq;
+        break;
     }
     case GroupPBFTPacketType::SuperCommitReqPacket:
     {
@@ -402,6 +417,7 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
         succ = handleSuperCommitReq(superCommitReq, pbftMsg);
         key = superCommitReq->uniqueKey();
         pbftPacket = superCommitReq;
+        break;
     }
     default:
     {
