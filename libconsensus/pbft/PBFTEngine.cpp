@@ -548,6 +548,8 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
+    Guard l(m_mutex);
+    resetConfig();
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
