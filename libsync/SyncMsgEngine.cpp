@@ -91,6 +91,12 @@ bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
     return true;
 }
 
+bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
+{
+    bool hasPeer = m_syncStatus->hasPeer(_packet.nodeId);
+    return hasPeer;
+}
+
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
 {
     SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
@@ -181,6 +187,13 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
+    if (!checkGroupPacket(_packet))
+    {
+        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
+                               << LOG_KV("fromNodeId", _packet.nodeId.abridged());
+        return;
+    }
+
     if (m_syncStatus->state == SyncState::Downloading)
     {
         SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Tx")
@@ -208,6 +221,14 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 {
+    if (!checkGroupPacket(_packet))
+    {
+        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                               << LOG_DESC("Drop unknown peer blocks request")
+                               << LOG_KV("fromNodeId", _packet.nodeId.abridged());
+        return;
+    }
+
     RLP const& rlp = _packet.rlp();
 
     if (rlp.itemCount() != 2)
