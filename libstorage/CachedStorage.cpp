@@ -570,8 +570,9 @@ void CachedStorage::stop()
             m_clearThread->join();
             m_clearThread.reset();
         }
-        else {
-        	m_clearThread->detach();
+        else
+        {
+            m_clearThread->detach();
         }
     }
 }
@@ -689,9 +690,11 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
 void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache)
 {
-	/*
-	 If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the cache object which erased in m_caches, the data will lost, to avoid this, re-insert the data into the m_caches
-	 */
+    /*
+     If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the cache
+     object which erased in m_caches, the data will lost, to avoid this, re-insert the data into the
+     m_caches
+     */
 
     RWMutexScoped lockCache(m_cachesMutex, false);
 
