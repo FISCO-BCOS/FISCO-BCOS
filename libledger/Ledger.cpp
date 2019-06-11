@@ -134,7 +134,7 @@ void Ledger::initGenesisConfig(std::string const& configPath)
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
 
         // params for group_pbft
-        m_param->mutableConsensusParam().groupSize = pt.get<int64_t>("consensus.group_size", 0);
+        m_param->mutableConsensusParam().groupSize = pt.get<int64_t>("consensus.group_size", 1);
         if (m_param->mutableConsensusParam().groupSize < 0)
         {
             BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
@@ -582,10 +582,13 @@ void Ledger::initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngi
 
 void Ledger::initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "group_pbft") != 0)
     {
         return;
     }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initGroupPBFTEngine")
+                      << LOG_KV("configuredGroupSize", m_param->mutableConsensusParam().groupSize)
+                      << LOG_KV("switchBlockNum", m_param->mutableConsensusParam().switchBlockNum);
     std::shared_ptr<GroupPBFTEngine> groupPBFTEngine =
         std::dynamic_pointer_cast<GroupPBFTEngine>(pbftEngine);
     assert(groupPBFTEngine);
@@ -671,8 +674,11 @@ bool Ledger::consensusInitFactory()
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create raft");
         m_sealer = createRaftSealer();
     }
-    // create pbft
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    // creat pbft or group_pbft
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
+                 0 ||
+             dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         /// create PBFTSealer
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create pbft!");
