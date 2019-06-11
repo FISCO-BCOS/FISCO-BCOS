@@ -295,8 +295,15 @@ void SyncMaster::maintainDownloadingTransactions()
 
 void SyncMaster::maintainBlocks()
 {
-    if (!m_newBlocks && utcTime() <= m_maintainBlocksTimeout)
+    if (!m_needMaintainBlocks)
+    {
         return;
+    }
+
+    if (!m_newBlocks && utcTime() <= m_maintainBlocksTimeout)
+    {
+        return;
+    }
 
     m_newBlocks = false;
     m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
@@ -476,7 +483,7 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         try
         {
-            if (isNewBlock(topBlock))
+            if (isNextBlock(topBlock))
             {
                 auto record_time = utcTime();
                 auto parentBlock =
@@ -521,7 +528,7 @@ bool SyncMaster::maintainDownloadingQueue()
             else
             {
                 SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                << LOG_DESC("Block of queue top is not new block")
+                                << LOG_DESC("Block of queue top is not the next block")
                                 << LOG_KV("number", topBlock->header().number())
                                 << LOG_KV("txs", topBlock->transactions().size())
                                 << LOG_KV("hash", topBlock->headerHash().abridged());
@@ -595,26 +602,22 @@ void SyncMaster::maintainPeersConnection()
         hasMyself |= (member == m_nodeId);
     }
 
-    // Set flag to check packet from group peers if the node is sealer or observer and not a new
-    // start node
+    // Delete uncorrelated peers
     int64_t currentNumber = m_blockChain->number();
-    if (!isSyncing())
-    {
-        m_msgEngine->needCheckPacketInGroup = (hasMyself && (currentNumber != 0));
-    }
-
-
-    // Delete uncorrelated peers(only if the node need to check packet in group)
-    if (m_msgEngine->needCheckPacketInGroup)
-    {
-        NodeIDs nodeIds = m_syncStatus->peers();
-        for (NodeID const& id : nodeIds)
+    NodeIDs peersToDelete;
+    m_syncStatus->foreachPeer([&](std::shared_ptr<SyncPeerStatus> _p) {
+        NodeID id = _p->nodeId;
+        if (memberSet.find(id) == memberSet.end() && currentNumber >= _p->number)
         {
-            if (memberSet.find(id) == memberSet.end())
-            {
-                m_syncStatus->deletePeer(id);
-            }
+            // Only delete outsider whose number is smaller than myself
+            peersToDelete.emplace_back(id);
         }
+        return true;
+    });
+
+    for (NodeID const& id : peersToDelete)
+    {
+        m_syncStatus->deletePeer(id);
     }
 
 
@@ -654,6 +657,9 @@ void SyncMaster::maintainPeersConnection()
 
     // If myself is not in group, no need to maintain transactions(send transactions to peers)
     m_needMaintainTransactions = hasMyself;
+
+    // If myself is not in group, no need to maintain blocks(send sync status to peers)
+    m_needMaintainBlocks = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
@@ -730,7 +736,7 @@ void SyncMaster::maintainBlockRequest()
     });
 }
 
-bool SyncMaster::isNewBlock(BlockPtr _block)
+bool SyncMaster::isNextBlock(BlockPtr _block)
 {
     if (_block == nullptr)
         return false;
