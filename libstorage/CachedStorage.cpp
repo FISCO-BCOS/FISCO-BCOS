@@ -617,7 +617,7 @@ void CachedStorage::startClearThread()
         while (true)
         {
             auto storage = self.lock();
-            if (storage && storage->m_running)
+            if (storage && storage->m_running->load())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_clearInterval));
                 storage->checkAndClear();
