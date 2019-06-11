@@ -184,7 +184,7 @@ private:
     bool m_newBlocks = false;
     uint64_t m_maintainBlocksTimeout = 0;
     bool m_needMaintainTransactions = false;
-    bool m_needMaintainBlocks = true;
+    bool m_needSendStatus = true;
 
     // settings
     dev::eth::Handler<> m_tqReady;
