@@ -30,7 +30,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-std::string encryptValue(const bytes& dataKey, const string value)
+std::string encryptValue(const bytes& dataKey, const string& value)
 {
     bytesConstRef valueRef{(const unsigned char*)value.c_str(), value.length()};
     bytes enData = aesCBCEncrypt(valueRef, ref(dataKey));
@@ -89,7 +89,7 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        for (auto const& inKV : *inEntry->fields())
+        for (auto const& inKV : *inEntry)
         {
             if (!isHashField(inKV.first))
             {
@@ -108,7 +108,7 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
     for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
-        for (auto const& inKV : *inEntry->fields())
+        for (auto const& inKV : *inEntry)
         {
             if (!isHashField(inKV.first))
             {
