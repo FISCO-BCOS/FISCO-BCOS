@@ -331,19 +331,15 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
 
-                                    // impossible
-                                    BOOST_THROW_EXCEPTION(StorageException(
-                                        -1, "Can not find entry in cache, id: " +
-                                                boost::lexical_cast<std::string>(entry->getID())));
+                                    raise(SIGTERM);
                                 }
                             }
                             else
                             {
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
-                                BOOST_THROW_EXCEPTION(StorageException(
-                                    -1, "Dirty entry id equal to 0, id: " +
-                                            boost::lexical_cast<std::string>(entry->getID())));
+
+                                raise(SIGTERM);
                             }
 
                             touchMRU(requestData->info->name, key, change);
@@ -574,6 +570,9 @@ void CachedStorage::stop()
             m_clearThread->join();
             m_clearThread.reset();
         }
+        else {
+        	m_clearThread->detach();
+        }
     }
 }
 
@@ -690,6 +689,10 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 
 void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache)
 {
+	/*
+	 If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the cache object which erased in m_caches, the data will lost, to avoid this, re-insert the data into the m_caches
+	 */
+
     RWMutexScoped lockCache(m_cachesMutex, false);
 
     auto cacheKey = table->name + "_" + key;
@@ -698,6 +701,8 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
     {
         CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache not equal: " << cacheKey << " "
                                   << result.first->second << " " << cache;
+
+        raise(SIGTERM);
     }
 }
 
@@ -712,8 +717,7 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     {
         CACHED_STORAGE_LOG(FATAL) << "Can not remove cache: " << table << "-" << key;
 
-        // impossible
-        BOOST_THROW_EXCEPTION(StorageException(-1, "Can not remove cache: " + table + "-" + key));
+        raise(SIGTERM);
     }
 }
 
