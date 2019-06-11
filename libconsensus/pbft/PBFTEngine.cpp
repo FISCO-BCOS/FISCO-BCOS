@@ -123,6 +123,7 @@ void PBFTEngine::resetConfig()
 {
     updateMaxBlockTransactions();
     auto node_idx = MAXIDX;
+    m_accountType = NodeAccountType::ObserverAccount;
     updateConsensusNodeList();
     {
         ReadGuard l(m_sealerListMutex);

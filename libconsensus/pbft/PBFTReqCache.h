@@ -332,16 +332,17 @@ private:
     void getCollectedCacheStatus(
         Json::Value& cacheJsonArray, std::string const& key, T const& cache) const
     {
+        Json::Value tmp_array(Json::arrayValue);
         Json::Value tmp_obj;
-        tmp_obj[key + "_cachedSize"] = toString(cache.size());
         for (auto i : cache)
         {
             Json::Value entry;
             entry[key + "_key"] = toJS(i.first);
             entry[key + "_collectedSize"] = std::to_string(i.second.size());
-            tmp_obj.append(entry);
-            cacheJsonArray.append(entry);
+            tmp_array.append(entry);
         }
+        tmp_obj[key + "_cachedSize"] = toString(cache.size());
+        tmp_obj["info"] = tmp_array;
         cacheJsonArray.append(tmp_obj);
     }
 
