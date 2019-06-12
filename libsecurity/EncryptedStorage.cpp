@@ -55,9 +55,9 @@ Entries::Ptr EncryptedStorage::select(
 
     /*
         Notice:
-        If config.ini [storage security] enable=true, the selection condition is not avaliable!
+        If config.ini [storage security] enable=true, the selection condition is not available!
         The condition selection is only depended on upper class(MemoryTable2's processEntry()).
-        Thus, force onlyDiry() to return false;
+        Thus, force onlyDiry() to return false and overwrite condition to empty
     */
 
     // Overwrite condition to empty
@@ -86,7 +86,8 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
 {
     checkDataKey();
 
-    for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
+    auto entriesSize = inEntries->size();
+    for (size_t i = 0; i < entriesSize; i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
@@ -105,7 +106,8 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
 {
     checkDataKey();
 
-    for (size_t i = 0; i < inEntries->size(); i++)  // XX need parallel
+    auto entriesSize = inEntries->size();
+    for (size_t i = 0; i < entriesSize; i++)  // XX need parallel
     {
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
