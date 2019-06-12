@@ -95,7 +95,7 @@ public:
 
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
-    TransactionReceipts const& getTransactionReceipts() const { return m_transactionReceipts; }
+    TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
