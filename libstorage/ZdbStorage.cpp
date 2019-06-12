@@ -33,7 +33,7 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
-Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
+Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
     std::vector<std::string> columns;
