@@ -86,6 +86,11 @@ function check_PR_limit()
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
         exit 1
     fi
+    local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
+    if [ ${merges} -gt 2 ];then
+        LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
+        exit 1
+    fi
     LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines. Total ${commits} commits."
 }
 
