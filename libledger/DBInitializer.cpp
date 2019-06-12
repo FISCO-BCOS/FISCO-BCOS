@@ -170,6 +170,7 @@ void DBInitializer::initSQLStorage()
         (void)e;
         LOG(FATAL) << "Access amdb failed, exit";
 
+        // must use exit to avoid rasie failed
         exit(1);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
@@ -276,6 +277,8 @@ void DBInitializer::initZdbStorage()
 
     zdbStorage->setFatalHandler([](std::exception& e) {
         LOG(FATAL) << "access mysql failed exit:" << e.what();
+
+        // must use exit to avoid rasie failed
         exit(1);
     });
 

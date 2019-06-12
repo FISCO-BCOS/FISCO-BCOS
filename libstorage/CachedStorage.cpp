@@ -331,6 +331,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
 
+                                    // fatal log won't kill the program, manual exit here
                                     exit(1);
                                 }
                             }
@@ -339,6 +340,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
 
+                                // same as above
                                 exit(1);
                             }
 
