@@ -80,7 +80,6 @@ private:
     // below use MemoryTableFactory2
     void initSQLStorage();
     void initTableFactory2(dev::storage::Storage::Ptr _backend);
-    void initLevelDBStorage2();
     void initRocksDBStorage();
 
     void createStorageState();
