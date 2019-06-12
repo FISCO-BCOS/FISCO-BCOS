@@ -284,7 +284,9 @@ public:
     {
         auto it = cache.find(mainKey);
         if (it == cache.end())
+        {
             return false;
+        }
         return (it->second.find(key)) != (it->second.end());
     }
 
@@ -300,18 +302,28 @@ protected:
             {
                 /// delete expired cache
                 if (cache_entry->second->height < highestBlockHeader.number())
+                {
                     cache_entry = it->second.erase(cache_entry);
+                }
                 /// in case of faked block hash
                 else if (cache_entry->second->height == highestBlockHeader.number() &&
                          cache_entry->second->block_hash != highestBlockHeader.hash())
+                {
                     cache_entry = it->second.erase(cache_entry);
+                }
                 else
+                {
                     cache_entry++;
+                }
             }
             if (it->second.size() == 0)
+            {
                 it = cache.erase(it);
+            }
             else
+            {
                 it++;
+            }
         }
     }
 
@@ -320,9 +332,13 @@ protected:
         for (auto it = m_recvViewChangeReq.begin(); it != m_recvViewChangeReq.end();)
         {
             if (it->first <= curView)
+            {
                 it = m_recvViewChangeReq.erase(it);
+            }
             else
+            {
                 it++;
+            }
         }
     }
     /// remove sign cache according to block hash and view
