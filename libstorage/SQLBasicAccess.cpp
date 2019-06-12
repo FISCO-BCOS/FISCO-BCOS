@@ -253,7 +253,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
 int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas)
 {
     string errmsg;
-    uint32_t retryCnt = 0;
+    volatile uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
     volatile int ret = 0;
     TRY
