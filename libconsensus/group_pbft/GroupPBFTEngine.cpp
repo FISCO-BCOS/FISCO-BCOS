@@ -232,8 +232,6 @@ bool GroupPBFTEngine::handlePrepareMsg(
     if (locatedInConsensusZone())
     {
         bytes prepare_data;
-        auto orignView = prepare_req->view;
-        prepare_req->view = m_globalView;
         prepare_req->encode(prepare_data);
         GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
                                << LOG_KV("height", prepare_req->height)
@@ -242,19 +240,7 @@ bool GroupPBFTEngine::handlePrepareMsg(
                                << LOG_KV("idx", m_idx);
         broadCastMsgAmongGroups(
             GroupPBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
-        prepare_req->view = orignView;
     }
-    if (prepare_req->view < m_globalView)
-    {
-        return false;
-    }
-    if (prepare_req->view > m_globalView)
-    {
-        m_groupPBFTReqCache->addFuturePrepareCache(prepare_req);
-        return true;
-    }
-    // modify the view
-    prepare_req->view = m_view;
     return PBFTEngine::handlePrepareMsg(prepare_req, endpoint);
 }
 
@@ -311,26 +297,29 @@ void GroupPBFTEngine::printWhenCollectEnoughSuperReq(std::string const& desc, si
 /// collect superSignReq and broadcastCommitReq if collected enough superSignReq
 void GroupPBFTEngine::checkAndBackupForSuperSignEnough()
 {
+    // must collectEnough SignReq firstly
+    if (!collectEnoughSignReq() || !collectEnoughSignReq())
+    {
+        return;
+    }
+    // broadcast commit message
     auto superSignSize =
         m_groupPBFTReqCache->getSuperSignCacheSize(m_groupPBFTReqCache->prepareCache()->block_hash);
-    // broadcast commit message
-    if (superSignSize == (size_t)(minValidGroups() - 1))
-    {
-        printWhenCollectEnoughSuperReq(
-            "checkAndBackupForSuperSignEnough: collect enough superSignReq, backup prepare request "
-            "to PBFT backup DB",
-            superSignSize);
+    printWhenCollectEnoughSuperReq(
+        "checkAndBackupForSuperSignEnough: collect enough superSignReq, backup prepare request "
+        "to PBFT backup DB",
+        superSignSize);
 
-        // backup signReq
-        m_groupPBFTReqCache->updateCommittedPrepare();
-        backupMsg(c_backupKeyCommitted, m_groupPBFTReqCache->committedPrepareCache());
-        // broadcast commit message
-        if (!broadcastCommitReq(*(m_groupPBFTReqCache->prepareCache())))
-        {
-            GPBFTENGINE_LOG(WARNING)
-                << LOG_DESC("checkAndBackupForSuperSignEnough: broadcastCommitReq failed");
-        }
+    // backup signReq
+    m_groupPBFTReqCache->updateCommittedPrepare();
+    backupMsg(c_backupKeyCommitted, m_groupPBFTReqCache->committedPrepareCache());
+    // broadcast commit message
+    if (!broadcastCommitReq(*(m_groupPBFTReqCache->prepareCache())))
+    {
+        GPBFTENGINE_LOG(WARNING) << LOG_DESC(
+            "checkAndBackupForSuperSignEnough: broadcastCommitReq failed");
     }
+    checkAndSave();
 }
 
 /**
@@ -345,6 +334,7 @@ void GroupPBFTEngine::checkAndCommit()
         return;
     }
     broadcastSuperSignMsg();
+    checkAndBackupForSuperSignEnough();
 }
 
 /**
@@ -354,11 +344,12 @@ void GroupPBFTEngine::checkAndCommit()
  */
 void GroupPBFTEngine::checkAndSave()
 {
-    if (!collectEnoughCommitReq())
+    if (!collectEnoughSuperSignReq() || !collectEnoughCommitReq())
     {
         return;
     }
     broadcastSuperCommitMsg();
+    checkSuperReqAndCommitBlock();
 }
 
 bool GroupPBFTEngine::handleSuperCommitReq(

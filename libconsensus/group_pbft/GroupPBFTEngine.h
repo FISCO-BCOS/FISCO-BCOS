@@ -79,7 +79,8 @@ protected:
     {
         if (!locatedInConsensusZone())
         {
-            if (locatedInConsensusZone(m_highestBlock.number, req->idx / m_zoneSize))
+            ZONETYPE zoneId = req->idx / m_zoneSize;
+            if (locatedInConsensusZone(m_highestBlock.number(), zoneId))
             {
                 return true;
             }
@@ -192,7 +193,7 @@ protected:
     {
         // generate the superSignReq
         std::shared_ptr<SuperSignReq> req = std::make_shared<SuperSignReq>(
-            m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_globalView), IDXTYPE(m_idx));
+            m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_idx));
         // cache superSignReq
         m_groupPBFTReqCache->addSuperSignReq(req, m_zoneId);
         GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndCommit, broadcast and cache SuperSignReq")
