@@ -55,7 +55,6 @@ function check_codeFormat()
     sum=0
     for file in $(git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
-        LOG_INFO "=== file: ${file}"
         sum=$(expr ${sum} + $?)
     done
 
