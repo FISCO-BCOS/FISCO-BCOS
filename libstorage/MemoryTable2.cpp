@@ -281,7 +281,7 @@ dev::h256 MemoryTable2::hash()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-    TIME_RECORD("Start dump");
+    TIME_RECORD("MemoryTable2 Dump");
     if (m_isDirty)
     {
         m_tableData = std::make_shared<dev::storage::TableData>();
@@ -336,6 +336,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
             }
+            char status = (char)entry->getStatus();
+            allData.insert(allData.end(), &status, &status + sizeof(status));
         }
 
         if (allData.empty())

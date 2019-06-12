@@ -224,6 +224,8 @@ struct CachedStorageFixture
         cachedStorage->setMaxForwardBlock(51);
     }
 
+    ~CachedStorageFixture() { cachedStorage->stop(); }
+
     Entries::Ptr getEntries()
     {
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -761,8 +763,8 @@ public:
 BOOST_AUTO_TEST_CASE(commitCheck)
 {
     cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->setMaxCapacity(2000 * 1024 * 1024);
-    cachedStorage->setMaxForwardBlock(100000);
+    cachedStorage->setMaxCapacity(256 * 1024 * 1024);
+    cachedStorage->setMaxForwardBlock(100);
     auto backend = std::make_shared<CommitCheckMock>();
     cachedStorage->setBackend(backend);
 

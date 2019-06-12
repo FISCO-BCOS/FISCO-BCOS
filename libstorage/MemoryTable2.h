@@ -126,6 +126,8 @@ private:
 
     void checkField(Entry::Ptr entry)
     {
+        auto lock = entry->lock(false);
+
         for (auto& it : *(entry))
         {
             if (m_tableInfo->fields.end() ==

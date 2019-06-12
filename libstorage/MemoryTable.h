@@ -221,9 +221,13 @@ public:
                 {
                     if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
+                        auto entry = it.second->get(i);
+                        entry->setField(
+                            STATUS, boost::lexical_cast<std::string>(entry->getStatus()));
+
                         for (auto& fieldIt : *(it.second->get(i)))
                         {
-                            if (isHashField(fieldIt.first))
+                            if (isHashField(fieldIt.first) || fieldIt.first == STATUS)
                             {
                                 data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
                                 data.insert(

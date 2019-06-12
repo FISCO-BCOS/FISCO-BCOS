@@ -148,5 +148,6 @@ int main(int argc, const char* argv[])
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     std::cout << "[" << buffer << "] ";
     std::cout << "FISCO-BCOS program exit normally." << std::endl;
+
     return 0;
 }

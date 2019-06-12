@@ -498,16 +498,15 @@ bool SyncMaster::maintainDownloadingQueue()
                 {
                     m_txPool->dropBlockTrans(*topBlock);
                     auto dropBlockTrans_time_cost = utcTime() - record_time;
-                    SYNC_LOG(DEBUG)
-                        << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Download block commit")
-                        << LOG_KV("number", topBlock->header().number())
-                        << LOG_KV("txs", topBlock->transactions().size())
-                        << LOG_KV("hash", topBlock->headerHash().abridged())
-                        << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
-                        << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
-                        << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
-                        << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
+                    SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                   << LOG_DESC("Download block commit")
+                                   << LOG_KV("number", topBlock->header().number())
+                                   << LOG_KV("txs", topBlock->transactions().size())
+                                   << LOG_KV("hash", topBlock->headerHash().abridged())
+                                   << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
+                                   << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
+                                   << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                                   << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
                 }
                 else
                 {

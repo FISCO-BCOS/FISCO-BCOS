@@ -87,8 +87,7 @@ inline bool isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {
-        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                (_key == STATUS));
+        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_"));
     }
     return false;
 }
