@@ -249,14 +249,13 @@ void DBInitializer::initZdbStorage()
 /// create ExecutiveContextFactory
 void DBInitializer::createExecutiveContext()
 {
-    /*
     if (!m_storage || !m_stateFactory)
     {
         DBInitializer_LOG(ERROR) << LOG_DESC(
             "createExecutiveContext Failed for storage has not been initialized");
         return;
     }
-    */
+
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
     m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
