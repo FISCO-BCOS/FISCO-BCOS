@@ -55,7 +55,7 @@ Entries::Ptr EncryptedStorage::select(
 
     /*
         Notice:
-        If config.ini [storage security] enable=true, the selection condition is not avaliable!
+        If config.ini [storage security] enable=true, the selection condition is not available!
         The condition selection is only depended on upper class(MemoryTable2's processEntry()).
         Thus, force onlyDiry() to return false;
     */
