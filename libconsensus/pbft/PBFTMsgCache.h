@@ -108,7 +108,9 @@ public:
     {
         WriteGuard l(lock);
         if (queue.size() > maxCacheSize)
+        {
             queue.pop();
+        }
         queue.push(key);
     }
     /// clear all the cache

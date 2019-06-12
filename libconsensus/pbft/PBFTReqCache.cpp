@@ -37,11 +37,15 @@ void PBFTReqCache::delCache(h256 const& hash)
     /// delete from sign cache
     auto psign = m_signCache.find(hash);
     if (psign != m_signCache.end())
+    {
         m_signCache.erase(psign);
+    }
     /// delete from commit cache
     auto pcommit = m_commitCache.find(hash);
     if (pcommit != m_commitCache.end())
+    {
         m_commitCache.erase(pcommit);
+    }
     /// delete from prepare cache
     if (hash == m_prepareCache->block_hash)
     {
@@ -118,10 +122,14 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
                     // idx_view_map[viewChangeEntry.first] = viewChangeItem.first;
 
                     if (minView > viewChangeItem.first)
+                    {
                         minView = viewChangeItem.first;
+                    }
                     /// update to lower height
                     if (min_height > viewChangeEntry.second->height)
+                    {
                         min_height = viewChangeEntry.second->height;
+                    }
                 }
             }
         }
@@ -154,13 +162,20 @@ void PBFTReqCache::removeInvalidViewChange(
     {
         /// remove old received view-change
         if (pview->second->height < highestBlock.number())
+        {
             pview = it->second.erase(pview);
+        }
         /// remove invalid view-change request with invalid hash
         else if (pview->second->height == highestBlock.number() &&
                  pview->second->block_hash != highestBlock.hash())
+        {
             pview = it->second.erase(pview);
+        }
+
         else
+        {
             pview++;
+        }
     }
 }
 
@@ -169,14 +184,20 @@ void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const&
 {
     auto it = m_signCache.find(blockHash);
     if (it == m_signCache.end())
+    {
         return;
+    }
     for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
         /// erase invalid view
         if (pcache->second->view != view)
+        {
             pcache = it->second.erase(pcache);
+        }
         else
+        {
             pcache++;
+        }
     }
 }
 /// remove commit cache according to block hash and view
@@ -184,13 +205,19 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 {
     auto it = m_commitCache.find(blockHash);
     if (it == m_commitCache.end())
+    {
         return;
+    }
     for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
         if (pcache->second->view != view)
+        {
             pcache = it->second.erase(pcache);
+        }
         else
+        {
             pcache++;
+        }
     }
 }
 

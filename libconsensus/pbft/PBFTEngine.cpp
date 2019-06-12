@@ -599,11 +599,12 @@ bool PBFTEngine::checkBlock(Block const& block)
     }
     /// check sign num
     auto sig_list = block.sigList();
-    if (sig_list.size() < minValidNodes())
+    auto validNodes = minValidNodes();
+    if (sig_list.size() < validNodes)
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: insufficient signatures")
                               << LOG_KV("signNum", sig_list.size())
-                              << LOG_KV("minValidSign", minValidNodes());
+                              << LOG_KV("minValidSign", validNodes);
         return false;
     }
     /// check sign
@@ -1029,7 +1030,8 @@ void PBFTEngine::checkAndSave()
 {
     size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache()->block_hash);
     size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache()->block_hash);
-    if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
+    auto validNodes = minValidNodes();
+    if (sign_size >= validNodes && commit_size >= validNodes)
     {
         checkAndCommitBlock(commit_size);
     }
