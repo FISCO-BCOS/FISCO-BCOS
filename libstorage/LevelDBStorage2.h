@@ -37,7 +37,6 @@ class LevelDBStorage2 : public Storage
 {
 public:
     typedef std::shared_ptr<LevelDBStorage2> Ptr;
-
     virtual ~LevelDBStorage2(){};
 
     Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
