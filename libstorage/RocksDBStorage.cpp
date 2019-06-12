@@ -198,10 +198,10 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 if (!s.ok() && !s.IsNotFound())
                 {
                     STORAGE_ROCKSDB_LOG(ERROR)
-                        << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                        << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
                     BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Query leveldb exception:" + s.ToString()));
+                        StorageException(-1, "Query rocksdb exception:" + s.ToString()));
                 }
 
                 if (s.IsNotFound())
