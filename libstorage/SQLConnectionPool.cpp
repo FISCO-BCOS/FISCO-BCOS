@@ -119,6 +119,7 @@ int SQLConnectionPool::RollBack(const Connection_T& _connection)
 inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 {
     SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
+
     raise(SIGTERM);
     BOOST_THROW_EXCEPTION(StorageException(-1, _exitInfo.str()));
 }
