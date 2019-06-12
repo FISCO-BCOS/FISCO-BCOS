@@ -331,7 +331,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
 
-                                    raise(SIGTERM);
+                                    // fatal log won't kill the program, manual exit here
+                                    exit(1);
                                 }
                             }
                             else
@@ -339,7 +340,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
 
-                                raise(SIGTERM);
+                                // same as above
+                                exit(1);
                             }
 
                             touchMRU(requestData->info->name, key, change);
@@ -708,7 +710,7 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
         CACHED_STORAGE_LOG(FATAL) << "Restore cache fail! Cache not equal: " << cacheKey << " "
                                   << result.first->second << " " << cache;
 
-        raise(SIGTERM);
+        exit(1);
     }
 }
 
@@ -723,7 +725,7 @@ void CachedStorage::removeCache(const std::string& table, const std::string& key
     {
         CACHED_STORAGE_LOG(FATAL) << "Can not remove cache: " << table << "-" << key;
 
-        raise(SIGTERM);
+        exit(1);
     }
 }
 
@@ -745,7 +747,7 @@ void CachedStorage::commitBackend(Task::Ptr task)
     {
         LOG(FATAL) << "Fail while commit data: " << e.what();
 
-        raise(SIGTERM);
+        exit(1);
     }
 
     setSyncNum(task->num);
