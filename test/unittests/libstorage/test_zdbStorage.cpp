@@ -37,12 +37,13 @@ class MockSQLBasicAccess : public dev::storage::SQLBasicAccess
 {
 public:
     int Select(h256 hash, int num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, Json::Value& respJson) override
+        Condition::Ptr condition, std::vector<std::string>& columns,
+        std::vector<std::vector<std::string> >& valueList) override
     {
         printf("hash:%s num:%u key:%s\n", hash.hex().c_str(), num, key.c_str());
         if (key == "_empty_key_" || !condition)
         {
-            respJson["result"]["columns"].resize(0);
+            columns.resize(0);
             return 0;
         }
         else
@@ -53,12 +54,13 @@ public:
             }
             else
             {
-                respJson["result"]["columns"].append("id");
-                respJson["result"]["columns"].append("name");
-                Json::Value valueJson;
-                valueJson.append("1000000");
-                valueJson.append("darrenyin");
-                respJson["result"]["data"].append(valueJson);
+                columns.push_back("id");
+                columns.push_back("name");
+
+                std::vector<std::string> value;
+                value.push_back("1000000");
+                value.push_back("darrenyin");
+                valueList.push_back(value);
             }
         }
         return 0;
