@@ -35,7 +35,7 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
+    h256, int64_t, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
 {
     try
     {

@@ -40,7 +40,7 @@ namespace test_CachedStorage
 class MockStorage : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
@@ -150,7 +150,7 @@ public:
         }
     }
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
@@ -697,7 +697,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 class CommitCheckMock : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
