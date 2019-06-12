@@ -28,25 +28,38 @@
 #include <json/json.h>
 
 
+const static uint32_t maxPlaceHolderCnt = 60000;
+
 #define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
 
 namespace dev
 {
 namespace storage
 {
+struct SQLPlaceHoldItem
+{
+    std::string sql;
+    uint32_t placeHolerCnt;
+
+    SQLPlaceHoldItem() : placeHolerCnt(0) {}
+};
+
 class SQLBasicAccess
 {
 public:
-    int Select(h256 hash, int num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, Json::Value& respJson);
-    int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
+    virtual ~SQLBasicAccess() {}
+    typedef std::shared_ptr<SQLBasicAccess> Ptr;
+    virtual int Select(h256 hash, int num, const std::string& table, const std::string& key,
+        Condition::Ptr condition, std::vector<std::string>& vecFields,
+        std::vector<std::vector<std::string> >& vecValueList);
+    virtual int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
 
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
     std::string GenerateConditionSql(const std::string& strPrefix,
-        std::map<std::string, Condition::Range>::iterator& it, Condition::Ptr condition);
+        std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition);
 
-    std::string BuildCommitSql(const std::string& _table,
+    std::vector<SQLPlaceHoldItem> BuildCommitSql(const std::string& _table,
         const std::vector<std::string>& _fieldName, const std::vector<std::string>& _fieldValue);
 
     std::string BuildCreateTableSql(
@@ -60,7 +73,7 @@ private:
     int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
 
 public:
-    void ExecuteSql(const std::string& _sql);
+    virtual void ExecuteSql(const std::string& _sql);
     void setConnPool(SQLConnectionPool::Ptr& _connPool);
 
 private:

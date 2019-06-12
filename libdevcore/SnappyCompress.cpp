@@ -29,7 +29,7 @@ namespace compress
 size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
 {
     size_t compressLen;
-    auto start_t = utcTimeUs();
+    // auto start_t = utcTimeUs();
     compressedData.resize(snappy::MaxCompressedLength(inputData.size()));
     snappy::RawCompress(
         (const char*)inputData.data(), inputData.size(), (char*)&compressedData[0], &compressLen);

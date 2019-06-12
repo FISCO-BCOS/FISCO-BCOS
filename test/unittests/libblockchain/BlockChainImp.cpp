@@ -153,7 +153,7 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory() override
+    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t) override
     {
         return m_memoryTableFactory;
     }
@@ -259,6 +259,24 @@ BOOST_AUTO_TEST_CASE(getBlockByHash)
 
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock().getTransactionSize());
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), 5);
+}
+
+BOOST_AUTO_TEST_CASE(getBlockRLPByHash)
+{
+    std::shared_ptr<bytes> bRLPptr = m_blockChainImp->getBlockRLPByHash(h256(c_commonHashPrefix));
+
+    std::shared_ptr<dev::eth::Block> bptr =
+        m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK(bptr->rlp() == *bRLPptr);
+}
+
+BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
+{
+    std::shared_ptr<bytes> bRLPptr = m_blockChainImp->getBlockRLPByNumber(0);
+
+    std::shared_ptr<dev::eth::Block> bptr =
+        m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK(bptr->rlp() == *bRLPptr);
 }
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)

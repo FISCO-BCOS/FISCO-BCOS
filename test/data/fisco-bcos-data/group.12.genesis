@@ -1,0 +1,11 @@
+[consensus]
+consensus_type=raft
+max_trans_num=2000
+node.0=7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61
+node.1=46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1
+
+[state]
+type=storage
+
+[tx]
+gas_limit=300000000

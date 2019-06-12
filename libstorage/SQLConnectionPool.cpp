@@ -20,6 +20,7 @@
  */
 
 #include "SQLConnectionPool.h"
+#include "StorageException.h"
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -37,20 +38,20 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort << "/" << _dbConfig.dbName
            << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
            << "&charset=" << _dbConfig.dbCharset;
-        auto connetionBuf = ss.str();
-        URL_T _url = URL_new(connetionBuf.c_str());
-        if (_url == NULL)
+        m_url = URL_new(ss.str().c_str());
+        if (m_url == NULL)
         {
-            stringstream _exitInfo;
-            _exitInfo << "parse url[" << connetionBuf << "] error please check";
-            // TODO: chang errorExitOut to throw exception
-            errorExitOut(_exitInfo);
+            stringstream exitInfo;
+            exitInfo << "parse IP[" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                     << "] error please check";
+            errorExitOut(exitInfo);
         }
-        SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
+        SQLConnectionPool_LOG(DEBUG)
+            << "init connection pool IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort;
 
         TRY
         {
-            m_connectionPool = ConnectionPool_new(_url);
+            m_connectionPool = ConnectionPool_new(m_url);
             ConnectionPool_setInitialConnections(m_connectionPool, _dbConfig.initConnections);
             ConnectionPool_setMaxConnections(m_connectionPool, _dbConfig.maxConnections);
             ConnectionPool_setConnectionTimeout(m_connectionPool, 28800);
@@ -59,23 +60,20 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         }
         CATCH(SQLException)
         {
-            URL_free(&_url);
-            SQLConnectionPool_LOG(ERROR)
-                << "init connection pool failed url:" << connetionBuf << " please check";
-            stringstream _exitInfo;
-            _exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
-            errorExitOut(_exitInfo);
+            SQLConnectionPool_LOG(ERROR) << "init connection pool failed IP:" << _dbConfig.dbIP
+                                         << ":" << _dbConfig.dbPort << " please check";
+            stringstream exitInfo;
+            exitInfo << "init connection pool failed IP:" << _dbConfig.dbIP << ":"
+                     << _dbConfig.dbPort << " please check";
+            errorExitOut(exitInfo);
         }
         END_TRY;
-
-        URL_free(&_url);
     }
     else
     {
-        stringstream _exitInfo;
-        _exitInfo << "not support db type:" << _dbConfig.dbType;
-        // TODO: chang errorExitOut to throw exception
-        errorExitOut(_exitInfo);
+        stringstream exitInfo;
+        exitInfo << "not support db type:" << _dbConfig.dbType;
+        errorExitOut(exitInfo);
     }
     return true;
 }
@@ -118,18 +116,19 @@ int SQLConnectionPool::RollBack(const Connection_T& _connection)
     return 0;
 }
 
-// TODO: chang errorExitOut to throw exception
 inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 {
     SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
-    std::cerr << _exitInfo.str();
+
     raise(SIGTERM);
+    BOOST_THROW_EXCEPTION(StorageException(-1, _exitInfo.str()));
 }
 
 SQLConnectionPool::~SQLConnectionPool()
 {
     ConnectionPool_stop(m_connectionPool);
     ConnectionPool_free(&m_connectionPool);
+    URL_free(&m_url);
 }
 
 int SQLConnectionPool::GetActiveConnections()
@@ -154,23 +153,23 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
            << "/information_schema?user=" << _dbConfig.dbUsername
            << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset;
-        auto connetionBuf = ss.str();
-        URL_T _url = URL_new(connetionBuf.c_str());
-        if (_url == NULL)
+        URL_T url = URL_new(ss.str().c_str());
+        if (url == NULL)
         {
             stringstream _exitInfo;
-            _exitInfo << "parse url[" << connetionBuf << "] error please check";
-            // TODO: chang errorExitOut to throw exception
+            _exitInfo << "parse url[" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                      << "] error please check";
             errorExitOut(_exitInfo);
         }
-        SQLConnectionPool_LOG(DEBUG) << "init connection pool  url:" << connetionBuf;
+        SQLConnectionPool_LOG(DEBUG)
+            << "init connection pool  IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort;
 
         ConnectionPool_T _connectionPool = nullptr;
         volatile Connection_T _connection = nullptr;
 
         TRY
         {
-            _connectionPool = ConnectionPool_new(_url);
+            _connectionPool = ConnectionPool_new(url);
             ConnectionPool_setInitialConnections(_connectionPool, 2);
             ConnectionPool_setMaxConnections(_connectionPool, 2);
             ConnectionPool_start(_connectionPool);
@@ -189,6 +188,9 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             Connection_execute(_connection, "%s", _sql.c_str());
             _sql = "set global max_allowed_packet = 1073741824";
             Connection_execute(_connection, "%s", _sql.c_str());
+
+            _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
+            Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)
         {
@@ -198,11 +200,12 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             }
             ConnectionPool_stop(_connectionPool);
             ConnectionPool_free(&_connectionPool);
-            URL_free(&_url);
-            SQLConnectionPool_LOG(ERROR)
-                << "init connection pool failed url:" << connetionBuf << " please check";
+            URL_free(&url);
+            SQLConnectionPool_LOG(ERROR) << "init connection pool failed url:" << _dbConfig.dbIP
+                                         << ":" << _dbConfig.dbPort << " please check";
             stringstream _exitInfo;
-            _exitInfo << "init connection pool failed url:" << connetionBuf << " please check";
+            _exitInfo << "init connection pool failed url:" << _dbConfig.dbIP << ":"
+                      << _dbConfig.dbPort << " please check";
             errorExitOut(_exitInfo);
         }
 
@@ -211,13 +214,12 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
         ConnectionPool_returnConnection(_connectionPool, _connection);
         ConnectionPool_stop(_connectionPool);
         ConnectionPool_free(&_connectionPool);
-        URL_free(&_url);
+        URL_free(&url);
     }
     else
     {
-        stringstream _exitInfo;
-        _exitInfo << "not support db type:" << _dbConfig.dbType;
-        // TODO: chang errorExitOut to throw exception
-        errorExitOut(_exitInfo);
+        stringstream exitInfo;
+        exitInfo << "not support db type:" << _dbConfig.dbType;
+        errorExitOut(exitInfo);
     }
 }

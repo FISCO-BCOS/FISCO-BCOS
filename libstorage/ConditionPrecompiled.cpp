@@ -79,7 +79,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     {
         // EQ(string,int256)
         std::string str;
-        u256 num;
+        s256 num;
         abi.abiOut(data, str, num);
 
         m_condition->EQ(str, boost::lexical_cast<std::string>(num));
@@ -95,7 +95,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     else if (func == name2Selector[CONDITION_METHOD_GE_STR_INT])
     {  // GE(string,int256)
         std::string str;
-        u256 value;
+        s256 value;
         abi.abiOut(data, str, value);
 
         m_condition->GE(str, boost::lexical_cast<std::string>(value));
@@ -103,7 +103,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     else if (func == name2Selector[CONDITION_METHOD_GT_STR_INT])
     {  // GT(string,int256)
         std::string str;
-        u256 value;
+        s256 value;
         abi.abiOut(data, str, value);
 
         m_condition->GT(str, boost::lexical_cast<std::string>(value));
@@ -111,7 +111,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     else if (func == name2Selector[CONDITION_METHOD_LE_STR_INT])
     {  // LE(string,int256)
         std::string str;
-        u256 value;
+        s256 value;
         abi.abiOut(data, str, value);
 
         m_condition->LE(str, boost::lexical_cast<std::string>(value));
@@ -119,7 +119,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     else if (func == name2Selector[CONDITION_METHOD_LT_STR_INT])
     {  // LT(string,int256)
         std::string str;
-        u256 value;
+        s256 value;
         abi.abiOut(data, str, value);
 
         m_condition->LT(str, boost::lexical_cast<std::string>(value));
@@ -127,7 +127,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     else if (func == name2Selector[CONDITION_METHOD_NE_STR_INT])
     {  // NE(string,int256)
         std::string str;
-        u256 num;
+        s256 num;
         abi.abiOut(data, str, num);
 
         m_condition->NE(str, boost::lexical_cast<std::string>(num));
@@ -142,15 +142,15 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
     }
     else if (func == name2Selector[CONDITION_METHOD_LIMIT_INT])
     {  // limit(int256)
-        u256 num;
+        s256 num;
         abi.abiOut(data, num);
 
         m_condition->limit(num.convert_to<size_t>());
     }
     else if (func == name2Selector[CONDITION_METHOD_LIMIT_2INT])
     {  // limit(int256,int256)
-        u256 offset;
-        u256 size;
+        s256 offset;
+        s256 size;
         abi.abiOut(data, offset, size);
 
         m_condition->limit(offset.convert_to<size_t>(), size.convert_to<size_t>());

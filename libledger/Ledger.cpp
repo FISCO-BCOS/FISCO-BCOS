@@ -149,8 +149,6 @@ void Ledger::initIniConfig(std::string const& iniConfigFileName)
                      << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                      << LOG_KV("configFile", iniConfigFileName);
     ptree pt;
-    /// read the configuration file for a specified group
-    read_ini(iniConfigFileName, pt);
     if (boost::filesystem::exists(iniConfigFileName))
     {
         /// read the configuration file for a specified group
@@ -345,15 +343,12 @@ void Ledger::initDBConfig(ptree const& pt)
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
-// TODO: use below before release RC3
-#if 0
         if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
         {
             m_param->mutableStorageParam().type = "RocksDB";
             Ledger_LOG(WARNING) << "LevelDB is deprecated!! RocksDB is now recommended, because "
                                    "RocksDB is better than LevelDB in performance.";
         }
-#endif
     }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
@@ -387,7 +382,7 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
     m_param->mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     m_param->mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
-    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 20);
+    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
@@ -396,9 +391,6 @@ void Ledger::initDBConfig(ptree const& pt)
                       << LOG_KV("dbtype", m_param->mutableStorageParam().dbType)
                       << LOG_KV("dbip", m_param->mutableStorageParam().dbIP)
                       << LOG_KV("dbport", m_param->mutableStorageParam().dbPort)
-                      << LOG_KV("dbusername", m_param->mutableStorageParam().dbUsername)
-                      << LOG_KV("dbpasswd", m_param->mutableStorageParam().dbPasswd)
-                      << LOG_KV("dbname", m_param->mutableStorageParam().dbName)
                       << LOG_KV("dbcharset", m_param->mutableStorageParam().dbCharset)
                       << LOG_KV("initconnections", m_param->mutableStorageParam().initConnections)
                       << LOG_KV("maxconnections", m_param->mutableStorageParam().maxConnections);

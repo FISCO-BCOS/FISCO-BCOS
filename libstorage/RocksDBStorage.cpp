@@ -54,10 +54,10 @@ Entries::Ptr RocksDBStorage::select(
         entryKey.append("_").append(key);
 
         string value;
-        auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
+        auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
         if (!s.ok() && !s.IsNotFound())
         {
-            STORAGE_LEVELDB_LOG(ERROR)
+            STORAGE_ROCKSDB_LOG(ERROR)
                 << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
             BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
@@ -77,14 +77,15 @@ Entries::Ptr RocksDBStorage::select(
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
-                    if (valueIt->first == ID_FIELD)
-                    {
-                        entry->setID(valueIt->second);
-                    }
-                    else
-                    {
-                        entry->setField(valueIt->first, valueIt->second);
-                    }
+                    entry->setField(valueIt->first, valueIt->second);
+                }
+                entry->setID(it->at(ID_FIELD));
+                entry->setNum(it->at(NUM_FIELD));
+
+                auto statusIt = it->find(STATUS);
+                if (statusIt != it->end())
+                {
+                    entry->setStatus(statusIt->second);
                 }
 
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
@@ -99,7 +100,7 @@ Entries::Ptr RocksDBStorage::select(
     }
     catch (exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
+        STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
 
         BOOST_THROW_EXCEPTION(e);
@@ -116,32 +117,38 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
         auto hex = hash.hex();
         WriteBatch batch;
-        for (size_t i = 0; i < datas.size(); ++i)
-        {
-            shared_ptr<map<string, vector<map<string, string>>>> key2value =
-                make_shared<map<string, vector<map<string, string>>>>();
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i)
+                {
+                    shared_ptr<map<string, vector<map<string, string>>>> key2value =
+                        make_shared<map<string, vector<map<string, string>>>>();
 
-            auto tableInfo = datas[i]->info;
+                    auto tableInfo = datas[i]->info;
 
-            processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
-            processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
+                    processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
+                    processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
 
-            for (auto it : *key2value)
-            {
-                string entryKey = tableInfo->name + "_" + it.first;
-                stringstream ss;
-                boost::archive::binary_oarchive oa(ss);
-                oa << it.second;
-                batch.Put(Slice(entryKey), Slice(ss.str()));
-            }
-        }
+                    for (auto it : *key2value)
+                    {
+                        string entryKey = tableInfo->name + "_" + it.first;
+                        stringstream ss;
+                        boost::archive::binary_oarchive oa(ss);
+                        oa << it.second;
+                        {
+                            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
+                            batch.Put(Slice(std::move(entryKey)), Slice(ss.str()));
+                        }
+                    }
+                }
+            });
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
         options.sync = false;
         m_db->Write(options, &batch);
         auto writeDB_time_cost = utcTime();
-        STORAGE_LEVELDB_LOG(DEBUG)
+        STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
             << LOG_KV("encodeTimeCost", encode_time_cost - start_time)
             << LOG_KV("writeDBTimeCost", writeDB_time_cost - encode_time_cost)
@@ -151,7 +158,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
     }
     catch (exception& e)
     {
-        STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
+        STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
@@ -178,45 +185,53 @@ void RocksDBStorage::processNewEntries(int64_t num,
         auto entry = entries->get(j);
         auto key = entry->getField(tableInfo->key);
 
-        auto it = key2value->find(key);
-        if (it == key2value->end())
+        auto it = map<string, vector<map<string, string>>>::iterator();
+        if (entry->force())
         {
-            string entryKey = tableInfo->name;
-            entryKey.append("_").append(key);
-
-            string value;
-            auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
-            // l.unlock();
-            if (!s.ok() && !s.IsNotFound())
+            it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
+        }
+        else
+        {
+            it = key2value->find(key);
+            if (it == key2value->end())
             {
-                STORAGE_LEVELDB_LOG(ERROR)
-                    << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                string entryKey = tableInfo->name;
+                entryKey.append("_").append(key);
 
-                BOOST_THROW_EXCEPTION(
-                    StorageException(-1, "Query leveldb exception:" + s.ToString()));
-            }
+                string value;
+                auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
+                if (!s.ok() && !s.IsNotFound())
+                {
+                    STORAGE_ROCKSDB_LOG(ERROR)
+                        << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
 
-            if (s.IsNotFound())
-            {
-                it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
-            }
-            else
-            {
-                vector<map<string, string>> res;
-                stringstream ss(value);
-                boost::archive::binary_iarchive ia(ss);
-                ia >> res;
-                it = key2value->emplace(key, res).first;
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(-1, "Query leveldb exception:" + s.ToString()));
+                }
+
+                if (s.IsNotFound())
+                {
+                    it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
+                }
+                else
+                {
+                    vector<map<string, string>> res;
+                    stringstream ss(value);
+                    boost::archive::binary_iarchive ia(ss);
+                    ia >> res;
+                    it = key2value->emplace(key, res).first;
+                }
             }
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
         value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
+        value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
         it->second.push_back(value);
     }
 }
@@ -237,12 +252,13 @@ void RocksDBStorage::processDirtyEntries(int64_t num,
         }
 
         map<string, string> value;
-        for (auto& fieldIt : *(entry->fields()))
+        for (auto& fieldIt : *(entry))
         {
             value[fieldIt.first] = fieldIt.second;
         }
         value[NUM_FIELD] = boost::lexical_cast<string>(num);
         value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
+        value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
         it->second.push_back(value);
     }
 }

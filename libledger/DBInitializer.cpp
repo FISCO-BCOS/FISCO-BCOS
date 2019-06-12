@@ -68,11 +68,13 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
-    // TODO: delete this before release RC3
+// LevelDB is deprecated from RC3
+#if 0
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
     {
         initLevelDBStorage2();
     }
+#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
@@ -167,6 +169,8 @@ void DBInitializer::initSQLStorage()
     sqlStorage->setFatalHandler([](std::exception& e) {
         (void)e;
         LOG(FATAL) << "Access amdb failed, exit";
+
+        // must use exit to avoid rasie failed
         exit(1);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
@@ -266,11 +270,15 @@ void DBInitializer::initZdbStorage()
     auto sqlconnpool = std::make_shared<SQLConnectionPool>();
     sqlconnpool->createDataBase(zdbConfig);
     sqlconnpool->InitConnectionPool(zdbConfig);
+
+    auto sqlAccess = std::make_shared<SQLBasicAccess>();
+    zdbStorage->SetSqlAccess(sqlAccess);
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {
-        (void)e;
-        LOG(FATAL) << "access mysql failed exit";
+        LOG(FATAL) << "access mysql failed exit:" << e.what();
+
+        // must use exit to avoid rasie failed
         exit(1);
     });
 

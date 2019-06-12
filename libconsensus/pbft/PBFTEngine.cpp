@@ -22,12 +22,12 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
@@ -48,7 +48,7 @@ void PBFTEngine::start()
 {
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[#Start PBFTEngine...]";
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -60,7 +60,7 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_leaderFailed = false;
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
-    PBFTENGINE_LOG(INFO) << "[#PBFT init env successfully]";
+    PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
 }
 
 bool PBFTEngine::shouldSeal()
@@ -123,6 +123,7 @@ void PBFTEngine::resetConfig()
 {
     updateMaxBlockTransactions();
     auto node_idx = MAXIDX;
+    m_accountType = NodeAccountType::ObserverAccount;
     updateConsensusNodeList();
     {
         ReadGuard l(m_sealerListMutex);
@@ -240,14 +241,18 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (DatabaseError const& e)
     {
-        PBFTENGINE_LOG(FATAL) << LOG_DESC("store backupMsg to leveldb failed")
+        PBFTENGINE_LOG(FATAL) << LOG_BADGE("DatabaseError")
+                              << LOG_DESC("store backupMsg to leveldb failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
-        exit(1);
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
     catch (std::exception const& e)
     {
         PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
 }
 
@@ -454,7 +459,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
                               << LOG_KV("dstIp", session.nodeIPEndpoint.name())
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", session.nodeID().abridged());
+                              << LOG_KV("toNode", session.nodeID().abridged());
         nodeIdList.push_back(session.nodeID());
         broadcastMark(session.nodeID(), packetType, key);
     }
@@ -739,7 +744,8 @@ void PBFTEngine::onRecvPBFTMessage(
     if (nodeIdx() == MAXIDX)
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC(
-            "onRecvPBFTMessage: I'm an observer, drop the PBFT message packets directly");
+            "onRecvPBFTMessage: I'm an observer or not in the group, drop the PBFT message packets "
+            "directly");
         return;
     }
     PBFTMsgPacket pbft_msg;
@@ -1497,13 +1503,7 @@ void PBFTEngine::workLoop()
                 std::unique_lock<std::mutex> l(x_signalled);
                 m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
-
-            if (nodeIdx() == MAXIDX)
-            {
-                PBFTENGINE_LOG(TRACE) << LOG_DESC(
-                    "workLoop: I'm an observer, stop checking timeout and handling future block");
-            }
-            else
+            if (nodeIdx() != MAXIDX)
             {
                 checkTimeout();
                 handleFutureBlock();
@@ -1541,46 +1541,46 @@ void PBFTEngine::handleFutureBlock()
 /// get the status of PBFT consensus
 const std::string PBFTEngine::consensusStatus()
 {
-    json_spirit::Array status;
-    json_spirit::Object statusObj;
+    Json::Value status(Json::arrayValue);
+    Json::Value statusObj;
     getBasicConsensusStatus(statusObj);
     /// get other informations related to PBFT
-    statusObj.push_back(json_spirit::Pair("connectedNodes", IDXTYPE(m_connectedNode)));
+    statusObj["connectedNodes"] = IDXTYPE(m_connectedNode);
     /// get the current view
-    statusObj.push_back(json_spirit::Pair("currentView", m_view));
+    statusObj["currentView"] = m_view;
     /// get toView
-    statusObj.push_back(json_spirit::Pair("toView", m_toView));
+    statusObj["toView"] = m_toView;
     /// get leader failed or not
-    statusObj.push_back(json_spirit::Pair("leaderFailed", bool(m_leaderFailed)));
-    status.push_back(statusObj);
-
+    statusObj["leaderFailed"] = bool(m_leaderFailed);
+    status.append(statusObj);
     /// get view of node id
     getAllNodesViewStatus(status);
 
     /// get cache-related informations
     m_reqCache->getCacheConsensusStatus(status);
-    json_spirit::Value value(status);
-    std::string status_str = json_spirit::write_string(value, true);
+
+    Json::FastWriter fastWriter;
+    std::string status_str = fastWriter.write(status);
     return status_str;
 }
 
-void PBFTEngine::getAllNodesViewStatus(json_spirit::Array& status)
+void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
 {
     updateViewMap(nodeIdx(), m_view);
-    json_spirit::Array view_array;
+    Json::Value view_array(Json::arrayValue);
     ReadGuard l(x_viewMap);
     for (auto it : m_viewMap)
     {
-        json_spirit::Object view_obj;
+        Json::Value view_obj;
         dev::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != dev::network::NodeID())
         {
-            view_obj.push_back(json_spirit::Pair("nodeId", dev::toHex(node_id)));
-            view_obj.push_back(json_spirit::Pair("view", it.second));
-            view_array.push_back(view_obj);
+            view_obj["nodeId"] = dev::toHex(node_id);
+            view_obj["view"] = it.second;
+            view_array.append(view_obj);
         }
     }
-    status.push_back(view_array);
+    status.append(view_array);
 }
 
 }  // namespace consensus

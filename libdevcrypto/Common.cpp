@@ -363,12 +363,8 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
 
 KeyPair KeyPair::create()
 {
-    while (true)
-    {
-        KeyPair keyPair(Secret::random());
-        if (keyPair.address())
-            return keyPair;
-    }
+    KeyPair keyPair(Secret::random());
+    return keyPair;
 }
 
 

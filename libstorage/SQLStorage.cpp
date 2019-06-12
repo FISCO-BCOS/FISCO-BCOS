@@ -31,6 +31,7 @@
 #include <libdevcore/FixedHash.h>
 
 using namespace dev;
+using namespace std;
 using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
@@ -51,7 +52,7 @@ Entries::Ptr SQLStorage::select(
 
         if (condition)
         {
-            for (auto it : *(condition->getConditions()))
+            for (auto it : *(condition))
             {
                 Json::Value cond;
                 cond.append(it.first);
@@ -127,6 +128,14 @@ Entries::Ptr SQLStorage::select(
                 {
                     entry->setID(fieldValue);
                 }
+                else if (columns[j] == NUM_FIELD)
+                {
+                    entry->setNum(fieldValue);
+                }
+                else if (columns[j] == STATUS)
+                {
+                    entry->setStatus(fieldValue);
+                }
                 else
                 {
                     entry->setField(columns[j], fieldValue);
@@ -184,12 +193,13 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
 
                 Json::Value value;
 
-                for (auto fieldIt : *entry->fields())
+                for (auto fieldIt : *entry)
                 {
                     value[fieldIt.first] = fieldIt.second;
                 }
 
                 value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+                value[STATUS] = boost::lexical_cast<std::string>(entry->getStatus());
 
                 tableData["entries"].append(value);
             }
@@ -200,12 +210,13 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
 
                 Json::Value value;
 
-                for (auto fieldIt : *entry->fields())
+                for (auto fieldIt : *entry)
                 {
                     value[fieldIt.first] = fieldIt.second;
                 }
 
                 value[ID_FIELD] = boost::lexical_cast<std::string>(entry->getID());
+                value[STATUS] = boost::lexical_cast<std::string>(entry->getStatus());
 
                 tableData["entries"].append(value);
             }
@@ -346,7 +357,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             BOOST_THROW_EXCEPTION(e);
         }
 
-        sleep(1);
+        this_thread::sleep_for(chrono::milliseconds(1000));
     }
 }
 

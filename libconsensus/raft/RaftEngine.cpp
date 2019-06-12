@@ -1561,24 +1561,24 @@ bool RaftEngine::reachBlockIntervalTime()
 
 const std::string RaftEngine::consensusStatus()
 {
-    json_spirit::Array status;
-    json_spirit::Object statusObj;
+    Json::Value status;
+    Json::Value statusObj;
     getBasicConsensusStatus(statusObj);
     // get current leader ID
     h512 leaderId;
     auto isSucc = getNodeIdByIndex(leaderId, m_leader);
     if (isSucc)
     {
-        statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
-        statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
+        statusObj["leaderId"] = toString(leaderId);
+        statusObj["leaderIdx"] = m_leader;
     }
     else
     {
-        statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
-        statusObj.push_back(json_spirit::Pair("leaderIdx", "NULL"));
+        statusObj["leaderId"] = "get leader ID failed";
+        statusObj["leaderIdx"] = "NULL";
     }
-    status.push_back(statusObj);
-    json_spirit::Value value(status);
-    std::string status_str = json_spirit::write_string(value, true);
+    status.append(statusObj);
+    Json::FastWriter fastWriter;
+    std::string status_str = fastWriter.write(status);
     return status_str;
 }

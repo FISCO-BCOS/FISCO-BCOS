@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(entriesTest)
 BOOST_AUTO_TEST_CASE(conditionTest)
 {
     condition->limit(1);
-    BOOST_TEST_TRUE(condition->getConditions()->empty());
+    BOOST_TEST_TRUE(condition->empty());
 }
 
 BOOST_AUTO_TEST_CASE(StateExceptionTest)

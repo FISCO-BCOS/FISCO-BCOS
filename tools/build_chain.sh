@@ -36,7 +36,7 @@ timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
 default_version="2.0.0-rc3"
-OS=
+macOS=""
 
 help() {
     echo $1
@@ -48,7 +48,7 @@ Usage:
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -v <FISCO-BCOS binary version>      Default get version from FISCO-BCOS/blob/master/release_note.txt. eg. 2.0.0-rc2
+    -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
@@ -117,7 +117,8 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     F) auto_flush="false";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
-    d) docker_mode="yes";;
+    d) docker_mode="yes"
+    [ ! -z "${macOS}" ] && LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;;
     h) help;;
     esac
 done
@@ -137,7 +138,6 @@ LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
 LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
-[ ! -z ${pkcs12_passwd} ] && LOG_INFO "SDK PKCS12 Passwd : ${pkcs12_passwd}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
@@ -164,9 +164,7 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
     if [ "$(uname)" == "Darwin" ];then
-        OS="macOS"
-    elif [ "$(uname -s)" == " Linux " ];then
-        OS="Linux"
+        macOS="macOS"
     fi
 
 }
@@ -479,6 +477,7 @@ cipher_data_key=
     ; supported_version should nerver be changed
     supported_version=${compatibility_version}
 [log]
+    enable=true
     log_path=./log
     ; info debug trace 
     level=${log_level}
@@ -774,7 +773,7 @@ EOF
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
-try_times=5
+try_times=10
 i=0
 if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
@@ -870,25 +869,27 @@ generate_server_scripts()
     # echo "ip_array=(\$(ifconfig | grep inet | grep -v inet6 | awk '{print \$2}'))"  >> "$output/start_all.sh"
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "${output_dir}/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
-for directory in \`ls \${SHELL_FOLDER}\`  
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for directory in \${dirs[*]} 
 do  
-    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
+    if [[ -f "\${SHELL_FOLDER}/\${directory}/config.ini" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
         echo "try to start \${directory}"
         bash \${SHELL_FOLDER}/\${directory}/start.sh &
     fi  
 done  
-sleep 3.5
+wait
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
-for directory in \`ls \${SHELL_FOLDER}\`  
+dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
+for directory in \${dirs[*]}  
 do  
     if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
         echo "try to stop \${directory}"
         bash \${SHELL_FOLDER}/\${directory}/stop.sh &
     fi  
 done  
-sleep 3
+wait
 EOF
 }
 
@@ -939,18 +940,20 @@ fi
 
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
-    if [[ -z ${bin_path} && -z ${OS} ]];then
+    if [[ -z ${bin_path} ]];then
         bin_path=${output_dir}/${bcos_bin_name}
         package_name="fisco-bcos.tar.gz"
+        [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
         [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+        if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
+            echo "We don't provide binary of GuoMi of macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+            exit 1
+        fi
         Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
         LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
         curl -LO ${Download_Link}
         tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
         chmod a+x ${bin_path}
-    elif [[ -z ${bin_path} && ! -z ${OS} ]];then
-        echo "Please use docker mode to run fisco-bcos on macOS Or compile source code and use -e option to specific fisco-bcos binary path"
-        exit 1
     else
         echo "Checking fisco-bcos binary..."
         bin_version=$(${bin_path} -v)
@@ -1028,9 +1031,9 @@ groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
-    checkIP=$(echo $ip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$")
-    if [ -z "${checkIP}" ];then
+    if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
         LOG_WARN "Please check IP address: ${ip}"
+        exit 1
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
