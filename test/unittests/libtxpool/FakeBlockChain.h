@@ -148,6 +148,11 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
 
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
+    }
+
     dev::h256 numberHash(int64_t _i) override
     {
         if ((size_t)_i >= m_blockChain.size())

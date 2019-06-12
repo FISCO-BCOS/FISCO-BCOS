@@ -8,8 +8,9 @@
 # !/bin/bash
 SHELL_FOLDER=$(cd $(dirname $0);pwd)
 check_script=${SHELL_FOLDER}/run-clang-format.py
+commit_limit=15
 file_limit=30
-insert_limit=300
+insert_limit=280
 delete_limit=500
 Ubuntu_Platform=0
 Centos_Platform=1
@@ -81,7 +82,12 @@ function check_PR_limit()
         LOG_ERROR "delete ${deletions} lines, limit is ${delete_limit}"
         exit 1
     fi
-    LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines."
+    local commits=$(git rev-list --count HEAD^..HEAD)
+    if [ ${commit_limit} -lt ${commits} ];then
+        LOG_ERROR "${commits} commits, limit is ${commit_limit}"
+        exit 1
+    fi
+    LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines. Total ${commits} commits."
 }
 
 init

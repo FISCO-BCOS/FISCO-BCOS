@@ -97,7 +97,8 @@ public:
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t num = 0);
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
-    virtual std::pair<int64_t, int64_t> totalTransactionCount() override;
+    std::pair<int64_t, int64_t> totalTransactionCount() override;
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
     dev::h512s sealerList() override;
