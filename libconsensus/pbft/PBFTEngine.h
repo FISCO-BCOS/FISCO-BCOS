@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 
 /**
@@ -23,7 +23,7 @@
  */
 #pragma once
 #include "Common.h"
-#include "PBFTMsgCache.h"
+#include "PBFTBroadcastCache.h"
 #include "PBFTReqCache.h"
 #include "PBFTReqFactory.h"
 #include "TimeManager.h"
@@ -128,6 +128,11 @@ public:
         /// handled before the current leader generate a new block, the conditions before can be
         /// deleted
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
+    }
+
+    virtual bool shouldPushMsg(byte const& packetType)
+    {
+        return (packetType <= PBFTPacketType::ViewChangeReqPacket);
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
@@ -264,7 +269,7 @@ protected:
     bool handleViewChangeMsg(
         std::shared_ptr<ViewChangeReq>& viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
-    std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
+    virtual std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
 
     void catchupView(std::shared_ptr<ViewChangeReq> req, std::ostringstream& oss);
     virtual void checkAndCommit();
@@ -272,6 +277,7 @@ protected:
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     virtual void checkAndSave();
     void checkAndChangeView();
+    virtual void checkAndCommitBlock(size_t const& commitSize);
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
@@ -564,7 +570,7 @@ protected:
         return true;
     }
 
-    inline bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
+    virtual bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
     {
         auto leader = getLeader();
         /// get leader failed or this prepareReq is not broadcasted from leader

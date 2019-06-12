@@ -21,6 +21,7 @@
  * @author: yujiechen
  * @date: 2018-10-11
  */
+#include <libconsensus/pbft/PBFTBroadcastCache.h>
 #include <libconsensus/pbft/PBFTMsgCache.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -43,9 +44,17 @@ void checkKeyExist(PBFTBroadcastCache& cache, unsigned const& type, KeyPair cons
         BOOST_CHECK(!cache.keyExists(keyPair.pub(), type, key));
 }
 
+void initPBFTBroadcastCache(PBFTBroadcastCache& cache)
+{
+    std::shared_ptr<PBFTReqFactory> pbftReqFactory = std::make_shared<PBFTReqFactory>();
+    cache.setPBFTReqFactory(pbftReqFactory);
+}
+
 BOOST_AUTO_TEST_CASE(testInsertKey)
 {
     PBFTBroadcastCache broadCast_cache;
+    initPBFTBroadcastCache(broadCast_cache);
+
     KeyPair key_pair = KeyPair::create();
     std::string key = dev::sign(key_pair.secret(), sha3("test")).hex();
     /// test insertKey && keyExist

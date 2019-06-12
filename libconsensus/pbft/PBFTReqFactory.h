@@ -16,7 +16,7 @@
  */
 
 /**
- * @brief : Factory class to create PBFTReq objects
+ * @brief : Factory used to create PBFTReq objects
  * @file: PBFTReqFactory.h
  * @author: yujiechen
  * @date: 2018-09-28
@@ -36,8 +36,8 @@ public:
     virtual ~PBFTReqFactoryInterface(){};
     // create PBFTReqCache
     virtual std::shared_ptr<PBFTReqCache> buildPBFTReqCache() = 0;
-    // create PBFT cache for broadcasting
-    virtual std::shared_ptr<PBFTBroadcastCache> buildPBFTBroadcastCache() = 0;
+    // create PBFTMsgCache for broadcast
+    virtual std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() = 0;
 };
 
 /// this is used for PBFT consensus algorithem
@@ -50,10 +50,9 @@ public:
         std::shared_ptr<PBFTReqCache> reqCache = std::make_shared<PBFTReqCache>();
         return reqCache;
     }
-
-    std::shared_ptr<PBFTBroadcastCache> buildPBFTBroadcastCache() override
+    std::shared_ptr<PBFTMsgCache> buildPBFTMsgCache() override
     {
-        std::shared_ptr<PBFTBroadcastCache> pbftMsgCache = std::make_shared<PBFTBroadcastCache>();
+        std::shared_ptr<PBFTMsgCache> pbftMsgCache = std::make_shared<PBFTMsgCache>();
         return pbftMsgCache;
     }
 };
