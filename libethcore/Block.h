@@ -95,7 +95,7 @@ public:
 
     ///-----get interfaces
     Transactions const& transactions() const { return m_transactions; }
-    TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
+    TransactionReceipts const& getTransactionReceipts() const { return m_transactionReceipts; }
     Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
@@ -230,7 +230,6 @@ public:
         noteReceiptChange();
     }
 
-    const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
     void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
