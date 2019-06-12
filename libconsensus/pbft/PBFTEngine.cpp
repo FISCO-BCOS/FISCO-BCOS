@@ -27,6 +27,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
