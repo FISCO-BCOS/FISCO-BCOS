@@ -36,8 +36,10 @@ ZdbStorage::ZdbStorage() {}
 Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
-    Json::Value responseJson;
-    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
+    std::vector<std::string> columns;
+    std::vector<std::vector<std::string> > valueList;
+    int ret =
+        m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, columns, valueList);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -49,38 +51,28 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
         BOOST_THROW_EXCEPTION(e);
     }
 
-    ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
-                          << "select resp:" << responseJson.toStyledString();
-    std::vector<std::string> columns;
-    for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
-    {
-        columns.push_back(responseJson["result"]["columns"].get(i, "").asString());
-    }
-
     Entries::Ptr entries = std::make_shared<Entries>();
-    for (Json::ArrayIndex i = 0; i < responseJson["result"]["data"].size(); ++i)
+    auto it = valueList.begin();
+    for (; it != valueList.end(); ++it)
     {
-        Json::Value line = responseJson["result"]["data"].get(i, "");
         Entry::Ptr entry = std::make_shared<Entry>();
-
-        for (Json::ArrayIndex j = 0; j < line.size(); ++j)
+        for (size_t j = 0; j < it->size(); ++j)
         {
             if (columns[j] == ID_FIELD)
             {
-                entry->setID(line.get(j, "").asString());
+                entry->setID(it->at(j));
             }
             else if (columns[j] == NUM_FIELD)
             {
-                entry->setNum(line.get(j, "").asString());
+                entry->setNum(it->at(j));
             }
             else if (columns[j] == STATUS)
             {
-                entry->setStatus(line.get(j, "").asString());
+                entry->setStatus(it->at(j));
             }
             else
             {
-                std::string fieldValue = line.get(j, "").asString();
-                entry->setField(columns[j], fieldValue);
+                entry->setField(columns[j], it->at(j));
             }
         }
 

@@ -30,7 +30,8 @@ using namespace dev::storage;
 using namespace std;
 
 int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const std::string& key,
-    Condition::Ptr condition, Json::Value& respJson)
+    Condition::Ptr condition, std::vector<std::string>& columns,
+    std::vector<std::vector<std::string> >& valueList)
 {
     std::string sql = this->BuildQuerySql(_table, condition);
     SQLBasicAccess_LOG(DEBUG) << "hash:" << hash.hex() << " num:" << num << " table:" << _table
@@ -72,21 +73,20 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
         int32_t columnCnt = ResultSet_getColumnCount(result);
         for (int32_t index = 1; index <= columnCnt; ++index)
         {
-            respJson["result"]["columns"].append(ResultSet_getColumnName(result, index));
+            columns.push_back(ResultSet_getColumnName(result, index));
         }
         while (ResultSet_next(result))
         {
-            Json::Value valueJson;
+            std::vector<std::string> value;
             for (int32_t index = 1; index <= columnCnt; ++index)
             {
-                valueJson.append(ResultSet_getString(result, index));
+                value.push_back(ResultSet_getString(result, index));
             }
-            respJson["result"]["data"].append(valueJson);
+            valueList.push_back(value);
         }
     }
     CATCH(SQLException)
     {
-        respJson["result"]["columns"].resize(0);
         SQLBasicAccess_LOG(ERROR) << "select exception:" << Exception_frame.message;
         m_connPool->ReturnConnection(conn);
         return 0;
@@ -253,7 +253,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
 int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas)
 {
     string errmsg;
-    uint32_t retryCnt = 0;
+    volatile uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
     volatile int ret = 0;
     TRY
