@@ -60,6 +60,7 @@ private:
     std::string m_topic;
     dev::ChannelRPCServer::Ptr m_channelRPCServer;
     int m_maxRetry = 0;
+    size_t m_timeout = 10 * 1000;  // timeout by ms
 };
 
 }  // namespace storage

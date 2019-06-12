@@ -282,7 +282,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
 
             LOG(TRACE) << "Retry Request amdb :" << retry;
             request->setData((const byte*)str.data(), str.size());
-            response = m_channelRPCServer->pushChannelMessage(request);
+            response = m_channelRPCServer->pushChannelMessage(request, m_timeout);
             if (response.get() == NULL || response->result() != 0)
             {
                 LOG(ERROR) << "requestDB error:" << response->result();
