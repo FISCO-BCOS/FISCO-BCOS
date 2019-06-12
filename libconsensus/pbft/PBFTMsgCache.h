@@ -29,15 +29,16 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/easylog.h>
-#include <unordered_map>
 namespace dev
 {
 namespace consensus
 {
 /// cache object of given ndoe
-struct PBFTMsgCache
+class PBFTMsgCache
 {
 public:
+    PBFTMsgCache() {}
+    virtual ~PBFTMsgCache() { clearAll(); }
     /**
      * @brief: insert given key into the given-type-cache of the given node id
      *
@@ -46,7 +47,7 @@ public:
      * @return true : insert succeed
      * @return false : insert failed
      */
-    inline bool insertByPacketType(unsigned const& type, std::string const& key)
+    virtual bool insertByPacketType(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -76,7 +77,7 @@ public:
      * @return true: the given key exists
      * @return false: the given key doesn't exist
      */
-    inline bool exists(unsigned const& type, std::string const& key)
+    virtual bool exists(unsigned const& type, std::string const& key)
     {
         switch (type)
         {
@@ -94,7 +95,7 @@ public:
         }
     }
 
-    inline bool exists(SharedMutex& lock, QueueSet<std::string>& queue, std::string const& key)
+    bool exists(SharedMutex& lock, QueueSet<std::string>& queue, std::string const& key)
     {
         /// lock succ
         ReadGuard l(lock);
@@ -111,7 +112,7 @@ public:
         queue.push(key);
     }
     /// clear all the cache
-    inline void clearAll()
+    virtual void clearAll()
     {
         {
             WriteGuard l(x_knownPrepare);
@@ -157,53 +158,6 @@ private:
     static const unsigned c_knownCommit = 1024;
     /// the limit size for viewchange packet cache
     static const unsigned c_knownViewChange = 1024;
-};
-
-class PBFTBroadcastCache
-{
-public:
-    /**
-     * @brief : insert key into the queue according to node id and packet type
-     *
-     * @param nodeId : node id
-     * @param type: packet type
-     * @param key: key (mainly the signature of specified broadcast packet)
-     * @return true: insert success
-     * @return false: insert failed
-     */
-    inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
-    {
-        if (!m_broadCastKeyCache.count(nodeId))
-            m_broadCastKeyCache[nodeId] = std::make_shared<PBFTMsgCache>();
-        return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
-    }
-
-    /**
-     * @brief: determine whether the key of given packet type existed in the cache of given node id
-     *
-     * @param nodeId : node id
-     * @param type: packet type
-     * @param key: mainly the signature of specified broadcast packe
-     * @return true : the key exists in the cache
-     * @return false: the key doesn't exist in the cache
-     */
-    inline bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
-    {
-        if (!m_broadCastKeyCache.count(nodeId))
-            return false;
-        return m_broadCastKeyCache[nodeId]->exists(type, key);
-    }
-
-    /// clear all caches
-    inline void clearAll()
-    {
-        for (auto& item : m_broadCastKeyCache)
-            item.second->clearAll();
-    }
-
-private:
-    /// maps between node id and its broadcast cache
-    std::unordered_map<h512, std::shared_ptr<PBFTMsgCache>> m_broadCastKeyCache;
 };
 }  // namespace consensus
 }  // namespace dev
