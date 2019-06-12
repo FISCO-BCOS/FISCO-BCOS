@@ -52,7 +52,9 @@ public:
     inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
         if (!m_broadCastKeyCache.count(nodeId))
+        {
             m_broadCastKeyCache[nodeId] = m_pbftReqFactory->buildPBFTMsgCache();
+        }
         return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
     }
 
@@ -68,7 +70,9 @@ public:
     inline bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
         if (!m_broadCastKeyCache.count(nodeId))
+        {
             return false;
+        }
         return m_broadCastKeyCache[nodeId]->exists(type, key);
     }
 
@@ -76,7 +80,9 @@ public:
     inline void clearAll()
     {
         for (auto& item : m_broadCastKeyCache)
+        {
             item.second->clearAll();
+        }
     }
 
 private:
