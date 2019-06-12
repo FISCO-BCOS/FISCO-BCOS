@@ -169,7 +169,8 @@ void DBInitializer::initSQLStorage()
     sqlStorage->setFatalHandler([](std::exception& e) {
         (void)e;
         LOG(FATAL) << "Access amdb failed, exit";
-        raise(SIGTERM);
+
+        exit(1);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
     initTableFactory2(sqlStorage);
@@ -275,7 +276,7 @@ void DBInitializer::initZdbStorage()
 
     zdbStorage->setFatalHandler([](std::exception& e) {
         LOG(FATAL) << "access mysql failed exit:" << e.what();
-        raise(SIGTERM);
+        exit(1);
     });
 
     initTableFactory2(zdbStorage);
