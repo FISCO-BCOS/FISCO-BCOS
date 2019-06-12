@@ -116,7 +116,7 @@ public:
     void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
 
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
-        dev::channel::TopicChannelMessage::Ptr message);
+        dev::channel::TopicChannelMessage::Ptr message, size_t timeout);
 
     virtual std::string newSeq();
 
