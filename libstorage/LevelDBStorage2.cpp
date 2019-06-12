@@ -34,7 +34,6 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/easylog.h>
-#include <tbb/parallel_for.h>
 #include <memory>
 #include <thread>
 
@@ -93,7 +92,6 @@ Entries::Ptr LevelDBStorage2::select(
     {
         STORAGE_LEVELDB_LOG(ERROR) << LOG_DESC("Query leveldb exception")
                                    << LOG_KV("msg", boost::diagnostic_information(e));
-
         BOOST_THROW_EXCEPTION(e);
     }
 
@@ -123,7 +121,6 @@ size_t LevelDBStorage2::commit(h256 hash, int64_t num, const std::vector<TableDa
                 stringstream ss;
                 boost::archive::binary_oarchive oa(ss);
                 oa << it.second;
-
                 batch->insertSlice(Slice(entryKey), Slice(ss.str()));
             }
         }
@@ -172,7 +169,6 @@ void LevelDBStorage2::processNewEntries(h256, int64_t num,
 
             std::string value;
             auto s = m_db->Get(ReadOptions(), Slice(entryKey), &value);
-            // l.unlock();
             if (!s.ok() && !s.IsNotFound())
             {
                 STORAGE_LEVELDB_LOG(ERROR)
@@ -223,7 +219,6 @@ void LevelDBStorage2::processDirtyEntries(h256, int64_t num,
         {
             it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
-
         std::map<std::string, std::string> value;
         for (auto& fieldIt : *(entry))
         {
