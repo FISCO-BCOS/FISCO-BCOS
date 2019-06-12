@@ -129,8 +129,8 @@ CachedStorage::~CachedStorage()
     }
 }
 
-Entries::Ptr CachedStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
+    const std::string& key, Condition::Ptr condition)
 {
     auto out = std::make_shared<Entries>();
 

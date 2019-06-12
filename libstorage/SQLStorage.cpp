@@ -36,8 +36,8 @@ using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
 
-Entries::Ptr SQLStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
+    const std::string& key, Condition::Ptr condition)
 {
     try
     {
