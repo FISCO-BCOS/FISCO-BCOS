@@ -112,7 +112,7 @@ public:
 
     void setBackend(Storage::Ptr backend);
     void init();
-    void stop();
+    void stop() override;
 
     void clear();
 

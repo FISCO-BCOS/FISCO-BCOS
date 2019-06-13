@@ -44,6 +44,8 @@ public:
     void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
     dev::GROUP_ID groupID() const { return m_groupID; }
 
+    virtual void stop() {}
+
 protected:
     dev::GROUP_ID m_groupID = 0;
 };
