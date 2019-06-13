@@ -767,7 +767,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
 }
 
 dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
-    dev::channel::TopicChannelMessage::Ptr message)
+    dev::channel::TopicChannelMessage::Ptr message, size_t timeout)
 {
     try
     {
@@ -787,7 +787,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr response;
         for (auto& it : activedSessions)
         {
-            dev::channel::Message::Ptr responseMessage = it->sendMessage(message, 0);
+            dev::channel::Message::Ptr responseMessage = it->sendMessage(message, timeout);
 
             if (responseMessage.get() != NULL && responseMessage->result() == 0)
             {
