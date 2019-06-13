@@ -75,8 +75,8 @@ rm -rf node0/data node0/log
 bash start_all.sh
 sleep 5
 num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 22 ];then
-    LOG_ERROR "[round2] sync block failed! ${num} != 22"
+if [ ${num} -ne 21 ];then
+    LOG_ERROR "[round2] sync block failed! ${num} != 21"
     cat node*/log/* 
     exit 1
 fi
