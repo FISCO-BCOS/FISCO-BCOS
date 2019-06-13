@@ -48,7 +48,7 @@ Entries::Ptr EncryptedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tab
     const std::string& key, Condition::Ptr condition)
 {
     // Ignore system field
-    if (isHashField(key))
+    if (!isHashField(key))
     {
         return m_backend->select(hash, num, tableInfo, key, condition);
     }
