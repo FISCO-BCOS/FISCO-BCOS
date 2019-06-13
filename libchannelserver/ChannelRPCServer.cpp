@@ -434,7 +434,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 CHANNEL_LOG(ERROR) << "push message totaly failed"
                                    << LOG_KV("what", boost::diagnostic_information(e));
 
-                channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
+                channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILABLE);
                 channelMessage->setType(0x31);
 
                 auto buffer = std::make_shared<bytes>();
@@ -449,13 +449,17 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
         }
-        else if(channelMessage->type() == 0x35) {
-        	try {
-        		asyncBroadcastChannelMessage(topic, channelMessage);
-        	}
-        	catch(std::exception &e) {
-        		CHANNEL_LOG(ERROR) << "Broadcast channel message failed: " << boost::diagnostic_information(e);
-        	}
+        else if (channelMessage->type() == 0x35)
+        {
+            try
+            {
+                asyncBroadcastChannelMessage(topic, channelMessage);
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR)
+                    << "Broadcast channel message failed: " << boost::diagnostic_information(e);
+            }
         }
     }
     catch (std::exception& e)
@@ -552,7 +556,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                             << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
                         message->setType(0x31);
-                        message->setResult(REMOTE_PEER_UNAVAILIBLE);
+                        message->setResult(REMOTE_PEER_UNAVAILABLE);
                         message->clearData();
 
                         session->asyncSendMessage(
@@ -573,47 +577,47 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
             message->setType(0x31);
-            message->setResult(REMOTE_PEER_UNAVAILIBLE);
+            message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
     }
-    else if(message->type() == 0x35) {
-    	// client multicast message
-    	try
-		{
-			CHANNEL_LOG(DEBUG) << "channel2 multicast request"
-							   << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
+    else if (message->type() == 0x35)
+    {
+        // client multicast message
+        try
+        {
+            CHANNEL_LOG(DEBUG) << "channel2 multicast request"
+                               << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
 
-			auto buffer = std::make_shared<bytes>();
-			message->encode(*buffer);
+            auto buffer = std::make_shared<bytes>();
+            message->encode(*buffer);
 
-			auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
-				m_service->p2pMessageFactory()->buildMessage());
-			p2pMessage->setBuffer(buffer);
-			p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
-			p2pMessage->setPacketType(1u);
+            auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
+                m_service->p2pMessageFactory()->buildMessage());
+            p2pMessage->setBuffer(buffer);
+            p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
+            p2pMessage->setPacketType(1u);
 
-			dev::network::Options options;
+            dev::network::Options options;
 
-			m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
+            m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
 
-			message->setType(0x31);
-			message->setResult(0);
-			session->asyncSendMessage(
-					message, dev::channel::ChannelSession::CallbackType(), 0);
-		}
-		catch (exception& e)
-		{
-			CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
+            message->setType(0x31);
+            message->setResult(0);
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
+        catch (exception& e)
+        {
+            CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
-			message->setType(0x31);
-			message->setResult(REMOTE_PEER_UNAVAILIBLE);
-			message->clearData();
+            message->setType(0x31);
+            message->setResult(REMOTE_PEER_UNAVAILABLE);
+            message->clearData();
 
-			session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-		}
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
     }
     else
     {
