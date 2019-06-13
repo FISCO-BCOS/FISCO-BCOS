@@ -600,8 +600,6 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
             p2pMessage->setPacketType(1u);
 
-            dev::network::Options options;
-
             m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
 
             message->setType(0x31);
