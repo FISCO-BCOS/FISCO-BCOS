@@ -62,8 +62,8 @@ LOG_INFO "[round2]==============send a transaction is ok"
 LOG_INFO "[round2]==============check report block"
 sleep 2
 num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 8 ];then
-    LOG_ERROR "[round2] check report block failed! ${num} != 8"
+if [ ${num} -ne 19 ];then
+    LOG_ERROR "[round2] check report block failed! ${num} != 19"
     cat node*/log/* 
     exit 1
 fi
@@ -75,8 +75,8 @@ rm -rf node0/data node0/log
 bash start_all.sh
 sleep 5
 num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 11 ];then
-    LOG_ERROR "[round2] sync block failed! ${num} != 11"
+if [ ${num} -ne 22 ];then
+    LOG_ERROR "[round2] sync block failed! ${num} != 22"
     cat node*/log/* 
     exit 1
 fi
