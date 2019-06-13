@@ -47,7 +47,7 @@ Block::Block(
 Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
     m_transactions(_block.transactions()),
-    m_transactionReceipts(_block.getTransactionReceipts()),
+    m_transactionReceipts(_block.transactionReceipts()),
     m_sigList(_block.sigList()),
     m_txsCache(_block.m_txsCache),
     m_tReceiptsCache(_block.m_tReceiptsCache),
@@ -61,7 +61,7 @@ Block& Block::operator=(Block const& _block)
     /// init transactions
     m_transactions = _block.transactions();
     /// init transactionReceipts
-    m_transactionReceipts = _block.getTransactionReceipts();
+    m_transactionReceipts = _block.transactionReceipts();
     /// init sigList
     m_sigList = _block.sigList();
     m_txsCache = _block.m_txsCache;

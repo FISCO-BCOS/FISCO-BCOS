@@ -8,7 +8,7 @@
 # !/bin/bash
 SHELL_FOLDER=$(cd $(dirname $0);pwd)
 check_script=${SHELL_FOLDER}/run-clang-format.py
-commit_limit=85
+commit_limit=15
 file_limit=30
 insert_limit=280
 delete_limit=500
@@ -55,7 +55,6 @@ function check_codeFormat()
     sum=0
     for file in $(git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
-        LOG_INFO "=== file: ${file}"
         sum=$(expr ${sum} + $?)
     done
 
@@ -85,6 +84,11 @@ function check_PR_limit()
     local commits=$(git rev-list --count HEAD^..HEAD)
     if [ ${commit_limit} -lt ${commits} ];then
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
+        exit 1
+    fi
+    local merges=$(git log --format=%s HEAD^..HEAD | grep -i merge | wc -l)
+    if [ ${merges} -gt 2 ];then
+        LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi
     LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines. Total ${commits} commits."

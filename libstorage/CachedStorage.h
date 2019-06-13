@@ -100,7 +100,7 @@ public:
 
     virtual ~CachedStorage();
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
     virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(h256 hash,
@@ -112,7 +112,7 @@ public:
 
     void setBackend(Storage::Ptr backend);
     void init();
-    void stop();
+    void stop() override;
 
     void clear();
 

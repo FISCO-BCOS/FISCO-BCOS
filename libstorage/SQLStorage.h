@@ -38,7 +38,7 @@ public:
     SQLStorage();
     virtual ~SQLStorage(){};
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
@@ -60,6 +60,7 @@ private:
     std::string m_topic;
     dev::ChannelRPCServer::Ptr m_channelRPCServer;
     int m_maxRetry = 0;
+    size_t m_timeout = 10 * 1000;  // timeout by ms
 };
 
 }  // namespace storage

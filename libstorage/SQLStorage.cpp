@@ -36,8 +36,8 @@ using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
 
-Entries::Ptr SQLStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
+    const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -282,7 +282,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
 
             LOG(TRACE) << "Retry Request amdb :" << retry;
             request->setData((const byte*)str.data(), str.size());
-            response = m_channelRPCServer->pushChannelMessage(request);
+            response = m_channelRPCServer->pushChannelMessage(request, m_timeout);
             if (response.get() == NULL || response->result() != 0)
             {
                 LOG(ERROR) << "requestDB error:" << response->result();
