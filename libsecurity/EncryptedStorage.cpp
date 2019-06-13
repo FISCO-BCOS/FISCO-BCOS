@@ -60,9 +60,8 @@ Entries::Ptr EncryptedStorage::select(
         Thus, force onlyDiry() to return false and overwrite condition to empty
     */
 
-    // Overwrite condition to empty
-    condition = std::make_shared<Condition>();
-    Entries::Ptr encEntries = m_backend->select(hash, num, tableInfo, key, condition);
+    Entries::Ptr encEntries =
+        m_backend->select(hash, num, tableInfo, key, std::make_shared<Condition>());
     return decryptEntries(encEntries);
 }
 
