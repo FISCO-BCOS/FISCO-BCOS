@@ -39,7 +39,7 @@ public:
     dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message, size_t timeout) override
     {
-    	BOOST_TEST(timeout > 0);
+        BOOST_TEST(timeout > 0);
 
         std::string jsonStr(message->data(), message->data() + message->dataSize());
 
