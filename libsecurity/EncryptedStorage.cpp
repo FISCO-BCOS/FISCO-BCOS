@@ -92,7 +92,7 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
         {
-            if (!isHashField(inKV.first))
+            if (isHashField(inKV.first))
             {
                 string v = encryptValue(m_dataKey, inKV.second);
                 inEntry->setField(inKV.first, v);
@@ -112,7 +112,7 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
         {
-            if (!isHashField(inKV.first))
+            if (isHashField(inKV.first))
             {
                 string v = decryptValue(m_dataKey, inKV.second);
                 inEntry->setField(inKV.first, v);
