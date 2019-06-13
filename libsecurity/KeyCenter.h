@@ -84,6 +84,7 @@ public:
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
     void setKcClient(KeyCenterHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
+    dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 
     static std::shared_ptr<KeyCenter> instance();
 
@@ -103,9 +104,6 @@ private:
     // Query cache
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
-
-public:
-    dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 };
 
 #define g_keyCenter KeyCenter::instance()  // Only one keycenter in a node
