@@ -44,8 +44,8 @@ std::string decryptValue(const bytes& dataKey, const std::string& value)
     return asString(deData);
 }
 
-Entries::Ptr EncryptedStorage::select(
-    h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+Entries::Ptr EncryptedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
+    const std::string& key, Condition::Ptr condition)
 {
     // Ignore system field
     if (isHashField(key))
