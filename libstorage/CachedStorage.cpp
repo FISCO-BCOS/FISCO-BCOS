@@ -490,7 +490,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                               << ", current syncd block: " << m_syncNum;
 
             uint64_t waitCount = 0;
-            while ((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock)
+            while (((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock) && m_running->load())
             {
                 CACHED_STORAGE_LOG(INFO)
                     << "Current block number: " << m_commitNum
