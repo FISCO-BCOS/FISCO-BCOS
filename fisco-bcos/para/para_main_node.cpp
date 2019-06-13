@@ -70,7 +70,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             Transaction tx(value, gasPrice, gas, dest, data, nonce);
             Signature sig = sign(sec, tx.sha3(WithoutSignature));
 
-            for (auto group : ledgerManager->getGrouplList())
+            for (auto group : ledgerManager->getGroupList())
             {
                 tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + 250);
                 tx.updateSignature(SignatureStruct(sig));
@@ -79,7 +79,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
         }
         catch (std::exception& e)
         {
-            LOG(TRACE) << "[#SYNC_MAIN]: submit transaction failed: [EINFO]:  "
+            LOG(TRACE) << "[SYNC_MAIN]: submit transaction failed: [EINFO]:  "
                        << boost::diagnostic_information(e);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -98,7 +98,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
     while (true)
     {
-        for (auto group : ledgerManager->getGrouplList())
+        for (auto group : ledgerManager->getGroupList())
         {
             auto hasGenerated = false;
             while (ledgerManager->blockChain(group)->number() <= 0)
@@ -140,7 +140,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
             catch (std::exception& e)
             {
-                LOG(TRACE) << "[#PARA_MAIN_NODE]: submit transaction failed: [EINFO]:  "
+                LOG(TRACE) << "[PARA_MAIN_NODE]: submit transaction failed: [EINFO]:  "
                            << boost::diagnostic_information(e);
             }
         }

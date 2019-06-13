@@ -22,7 +22,6 @@
 
 #include "Storage.h"
 #include "StorageException.h"
-#include "Table.h"
 #include <json/json.h>
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
@@ -38,10 +37,9 @@ class LevelDBStorage2 : public Storage
 {
 public:
     typedef std::shared_ptr<LevelDBStorage2> Ptr;
-
     virtual ~LevelDBStorage2(){};
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
@@ -49,12 +47,17 @@ public:
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
-    void processEntries(h256 hash, int64_t num,
-        std::shared_ptr<std::map<std::string, Json::Value> > key2value, TableInfo::Ptr tableInfo,
-        Entries::Ptr entries);
+    void processNewEntries(h256 hash, int64_t num,
+        std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+            key2value,
+        TableInfo::Ptr tableInfo, Entries::Ptr entries);
+
+    void processDirtyEntries(h256 hash, int64_t num,
+        std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
+            key2value,
+        TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
-    dev::SharedMutex m_remoteDBMutex;
 };
 
 }  // namespace storage

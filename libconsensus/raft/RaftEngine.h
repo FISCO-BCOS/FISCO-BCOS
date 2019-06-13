@@ -69,6 +69,9 @@ public:
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
         m_blockSync->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
+        /// set thread name for raftEngine
+        std::string threadName = "Raft-" + std::to_string(m_groupId);
+        setName(threadName);
     }
 
     raft::NodeIndex getNodeIdx() const

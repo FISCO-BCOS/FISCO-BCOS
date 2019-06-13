@@ -76,23 +76,31 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
 {
     // createTable
     dev::eth::ContractABI abi;
-    bytes param =
-        abi.abiIn("createTable(string,string,string)", "t_test", "id", "item_name,item_id");
+    bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
+        std::string("id"), std::string("item_name,item_id"));
     bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
-    u256 errCode;
+    s256 errCode;
     abi.abiOut(&out, errCode);
     BOOST_TEST(errCode == 0);
 
     // createTable exist
-    param = abi.abiIn("createTable(string,string,string)", "t_test", "id", "item_name,item_id");
+    param = abi.abiIn("createTable(string,string,string)", std::string("t_test"), std::string("id"),
+        std::string("item_name,item_id"));
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     abi.abiOut(&out, errCode);
-    BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
+    }
+    else
+    {
+        BOOST_TEST(errCode == -CODE_TABLE_NAME_ALREADY_EXIST);
+    }
 
     // openTable not exist
     param.clear();
     out.clear();
-    param = abi.abiIn("openTable(string)", "t_poor");
+    param = abi.abiIn("openTable(string)", std::string("t_poor"));
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     Address addressOut;
     addressOut.clear();
@@ -101,7 +109,7 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
 
     param.clear();
     out.clear();
-    param = abi.abiIn("openTable(string)", "t_test");
+    param = abi.abiIn("openTable(string)", std::string("t_test"));
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     addressOut.clear();
     abi.abiOut(&out, addressOut);

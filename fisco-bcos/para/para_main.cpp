@@ -43,7 +43,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 INITIALIZE_EASYLOGGINGPP
 
-static Secret sec = KeyPair::create().secret();
+static shared_ptr<Secret> sec;
 
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
@@ -64,7 +64,7 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
         tx.setBlockLimit(250);
         // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
+        Signature sig = sign(*sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         txs.push_back(tx);
     }
@@ -120,7 +120,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         Transaction tx(value, gasPrice, gas, dest, data, nonce);
         tx.setBlockLimit(250);
         // sec = KeyPair::create().secret();
-        Signature sig = sign(sec, tx.sha3(WithoutSignature));
+        Signature sig = sign(*sec, tx.sha3(WithoutSignature));
         tx.updateSignature(SignatureStruct(sig));
         txs.push_back(tx);
     }
@@ -144,7 +144,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     /// init the basic config
     /// set storage db related param
     params->mutableStorageParam().type = "LevelDB";
-    params->mutableStorageParam().path = "data/block";
+    params->mutableStorageParam().path = "/tmp/data/block";
     /// set state db related param
     params->mutableStateParam().type = "storage";
 
@@ -153,6 +153,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     dbInitializer->initStorageDB();
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(dbInitializer->storage());
+    blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
         "stateType", 5000, 300000000, 0};
@@ -160,7 +161,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
-    dbInitializer->initStateDB(genesisHash);
+    dbInitializer->initState(genesisHash);
 
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(true);
     /// set params for blockverifier
@@ -207,6 +208,7 @@ int main(int argc, const char* argv[])
         std::cout << "Example: mini-para 1000 10000" << std::endl;
         return 0;
     }
+    sec = make_shared<Secret>(KeyPair::create().secret());
     int totalUser = atoi(argv[1]);
     int totalTxs = atoi(argv[2]);
     startExecute(totalUser, totalTxs);

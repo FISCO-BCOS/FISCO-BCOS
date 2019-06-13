@@ -127,7 +127,19 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
+    {
+        auto callback = _tx.rpcCallback();
+        if (callback)
+        {
+            dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+                std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                    executive::TransactionException::TxPoolIsFull);
+
+            m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
+        }
+
         return ImportResult::TransactionPoolIsFull;
+    }
     /// check the verify result(nonce && signature check)
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
@@ -221,7 +233,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     }
     catch (std::exception& e)
     {
-        TXPOOL_LOG(ERROR) << "[#Verify] invalid signature, tx = " << tx_hash.abridged();
+        TXPOOL_LOG(ERROR) << "[Verify] invalid signature, tx = " << tx_hash.abridged();
         return ImportResult::Malformed;
     }
     /// nonce related to txpool must be checked at the last, since this will insert nonce of the

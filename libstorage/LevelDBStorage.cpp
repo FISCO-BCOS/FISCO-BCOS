@@ -35,9 +35,8 @@ using namespace dev;
 using namespace dev::storage;
 
 Entries::Ptr LevelDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    h256, int64_t, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
 {
-    (void)condition;
     try
     {
         std::string entryKey = tableInfo->name;
@@ -74,7 +73,7 @@ Entries::Ptr LevelDBStorage::select(
                 {
                     entry->setField(valueIt.key().asString(), valueIt->asString());
                 }
-
+                entry->setStatus(entry->getField(STATUS));
                 if (entry->getStatus() == Entry::Status::NORMAL)
                 {
                     entry->setDirty(false);
@@ -122,12 +121,13 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
         for (size_t i = 0; i < dataIt->second->size(); ++i)
         {
             Json::Value value;
-            for (auto& fieldIt : *(dataIt->second->get(i)->fields()))
+            for (auto& fieldIt : *(dataIt->second->get(i)))
             {
                 value[fieldIt.first] = fieldIt.second;
             }
             value["_hash_"] = hash.hex();
-            value["_num_"] = num;
+            value[NUM_FIELD] = num;
+            value[STATUS] = dataIt->second->get(i)->getStatus();
             entry["values"].append(value);
         }
 

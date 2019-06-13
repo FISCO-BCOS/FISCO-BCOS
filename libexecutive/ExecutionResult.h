@@ -36,7 +36,7 @@ struct VMException;
 
 namespace executive
 {
-enum class TransactionException : int
+enum class TransactionException : uint32_t
 {
     None = 0,
     Unknown = 1,
@@ -64,7 +64,9 @@ enum class TransactionException : int
     InvalidZeroSignatureFormat = 23,
     AddressAlreadyUsed = 24,
     PermissionDenied = 25,
-    CallAddressError = 26
+    CallAddressError = 26,
+    GasOverflow = 27,
+    TxPoolIsFull = 28,
 };
 
 enum class CodeDeposit

@@ -214,7 +214,8 @@ public:
         TransactionReceipts receipts;
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
         {
-            TransactionReceipt receipt(u256(0), u256(100), LogEntries(), u256(0), bytes(),
+            TransactionReceipt receipt(u256(0), u256(100), LogEntries(),
+                executive::TransactionException::None, bytes(),
                 block.transactions()[index].receiveAddress());
             receipts.push_back(receipt);
         }
@@ -237,16 +238,20 @@ class FakeLedger : public Ledger
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir, std::string const& _configFile)
-      : Ledger(service, _groupId, _keyPair, _baseDir, _configFile)
+        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+      : Ledger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger() override
+    bool initLedger(const std::string& _configPath) override
     {
+        initGenesisConfig(_configPath);
+        std::string iniConfigFileName = _configPath;
+        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
+        initIniConfig(_configPath);
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
         /// init blockChain
-        initBlockChain();
+        initBlockChain(m_genesisParam);
         /// intit blockVerifier
         initBlockVerifier();
         /// init txPool
@@ -264,11 +269,12 @@ public:
         m_blockVerifier = std::make_shared<FakeBlockVerifier>();
         return true;
     }
-    bool initBlockChain() override
+    bool initBlockChain(GenesisBlockParam&) override
     {
         m_blockChain = std::make_shared<FakeBlockChain>();
         return true;
     }
+    GenesisBlockParam m_genesisParam;
     /// init the blockSync
     /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };

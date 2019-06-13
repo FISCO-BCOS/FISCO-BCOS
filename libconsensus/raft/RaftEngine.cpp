@@ -71,7 +71,6 @@ void RaftEngine::initRaftEnv()
         m_heartbeatTimeout = m_minElectTimeout;
         m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
         m_increaseTime = (m_maxElectTimeout - m_minElectTimeout) / 4;
-        m_connectedNode = m_nodeNum;
     }
 
     resetElectTimeout();
@@ -114,7 +113,6 @@ void RaftEngine::resetConfig()
         {
             m_nodeNum = nodeNum;
             m_idx = nodeIdx;
-            m_idx = m_idx;
             m_f = (m_nodeNum - 1) / 2;
             shouldSwitchToFollower = true;
             RAFTENGINE_LOG(INFO) << LOG_DESC("[#resetConfig]Reset config")
@@ -199,7 +197,7 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
     }
     /// check whether this node is in the sealer list
     h512 nodeId;
-    bool isSealer = getNodeIdByIndex(nodeId, m_idx);
+    bool isSealer = getNodeIdByIndex(nodeId, nodeIdx());
     if (!isSealer || _session->nodeID() == nodeId)
     {
         RAFTENGINE_LOG(WARNING) << LOG_DESC("[#isValidReq]I'm not a sealer");
@@ -1453,7 +1451,6 @@ bool RaftEngine::commit(Block const& _block)
 
     if (!bool(m_uncommittedBlock))
     {
-        assert(m_uncommittedBlockNumber == 0);
         ul.unlock();
         return false;
     }
@@ -1564,24 +1561,24 @@ bool RaftEngine::reachBlockIntervalTime()
 
 const std::string RaftEngine::consensusStatus()
 {
-    json_spirit::Array status;
-    json_spirit::Object statusObj;
+    Json::Value status;
+    Json::Value statusObj;
     getBasicConsensusStatus(statusObj);
     // get current leader ID
     h512 leaderId;
     auto isSucc = getNodeIdByIndex(leaderId, m_leader);
     if (isSucc)
     {
-        statusObj.push_back(json_spirit::Pair("leaderId", toString(leaderId)));
-        statusObj.push_back(json_spirit::Pair("leaderIdx", m_leader));
+        statusObj["leaderId"] = toString(leaderId);
+        statusObj["leaderIdx"] = m_leader;
     }
     else
     {
-        statusObj.push_back(json_spirit::Pair("leaderId", "get leader ID failed"));
-        statusObj.push_back(json_spirit::Pair("leaderIdx", "NULL"));
+        statusObj["leaderId"] = "get leader ID failed";
+        statusObj["leaderIdx"] = "NULL";
     }
-    status.push_back(statusObj);
-    json_spirit::Value value(status);
-    std::string status_str = json_spirit::write_string(value, true);
+    status.append(statusObj);
+    Json::FastWriter fastWriter;
+    std::string status_str = fastWriter.write(status);
     return status_str;
 }

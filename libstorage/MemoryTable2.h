@@ -42,8 +42,6 @@ class MemoryTable2 : public Table
 public:
     using Ptr = std::shared_ptr<MemoryTable2>;
 
-    MemoryTable2();
-
     virtual ~MemoryTable2(){};
 
     Entries::ConstPtr select(const std::string& key, Condition::Ptr condition) override;
@@ -87,42 +85,25 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    bool dump(dev::storage::TableData::Ptr data) override;
+    dev::storage::TableData::Ptr dump() override;
 
     void rollback(const Change& _change) override;
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
 
-    Entries::Ptr m_newEntries;
-    tbb::concurrent_unordered_map<uint32_t, Entry::Ptr> m_dirty;
+    tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
+    tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;
 
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
-        if (condition->getConditions()->empty())
+        if (condition->empty())
         {
             for (size_t i = 0; i < entries->size(); ++i)
             {
-                /*
-                When dereferencing a entry pointer(named as entry_ptr) contained in entries(name as
-                v), we MUST need to check whether entry_ptr.get() equals to nullptr. It is NOT safe
-                to use a subscript to visit elements in a tbb::concurrent_vector even though the
-                subscript < v.size(), due to that the elements in the vector may not be already
-                constructed.
-
-                In the implementation of our ConcurrentEntries, we specify that the
-                concurrent_vector container using tbb::zero_allocator<T, A> as its memory allocator.
-                Zero allocator forwards allocation requests to A and zeros the allocation before
-                returning it, which means the return value of get() method of an uncontructed
-                entry_ptr would keep as 0x0(nullptr), until the entry constructed successfully. If
-                the pointer is null, we just skip this element.
-                */
-                if (entries->get(i).get() != nullptr)
-                {
-                    indexes.emplace_back(i);
-                }
+                indexes.emplace_back(i);
             }
             return indexes;
         }
@@ -143,19 +124,11 @@ private:
         return indexes;
     }
 
-    bool isHashField(const std::string& _key)
-    {
-        if (!_key.empty())
-        {
-            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                    (_key == STATUS));
-        }
-        return false;
-    }
-
     void checkField(Entry::Ptr entry)
     {
-        for (auto& it : *(entry->fields()))
+        auto lock = entry->lock(false);
+
+        for (auto& it : *(entry))
         {
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
@@ -169,9 +142,16 @@ private:
         }
     }
 
+    void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
+        const Entries::Ptr& resultEntries);
+
     Storage::Ptr m_remoteDB;
     h256 m_blockHash;
     int m_blockNum = 0;
+
+    bool m_isDirty = false;  // mark if the tableData had been dump
+    dev::h256 m_hash;
+    dev::storage::TableData::Ptr m_tableData;
 };
 }  // namespace storage
 }  // namespace dev

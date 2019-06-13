@@ -54,7 +54,7 @@ struct TablePrecompiledFixture
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back("name");
-        info->fields.emplace_back("_status_");
+        info->fields.emplace_back(STATUS);
         table->setTableInfo(info);
         table->setRecorder(
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(call_select)
     conditionPrecompiled->setCondition(condition);
     Address conditionAddress = context->registerPrecompiled(conditionPrecompiled);
     eth::ContractABI abi;
-    bytes in = abi.abiIn("select(string,address)", "name", conditionAddress);
+    bytes in = abi.abiIn("select(string,address)", std::string("name"), conditionAddress);
     bytes out = tablePrecompiled->call(context, bytesConstRef(&in));
     Address entriesAddress;
     abi.abiOut(bytesConstRef(&out), entriesAddress);
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(call_insert)
 
     auto entryAddress = context->registerPrecompiled(entryPrecompiled);
     eth::ContractABI abi;
-    bytes in = abi.abiIn("insert(string,address)", "name", entryAddress);
+    bytes in = abi.abiIn("insert(string,address)", std::string("name"), entryAddress);
     bytes out = tablePrecompiled->call(context, bytesConstRef(&in));
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(call_remove)
     conditionPrecompiled->setCondition(condition);
     Address conditionAddress = context->registerPrecompiled(conditionPrecompiled);
     eth::ContractABI abi;
-    bytes in = abi.abiIn("remove(string,address)", "name", conditionAddress);
+    bytes in = abi.abiIn("remove(string,address)", std::string("name"), conditionAddress);
     bytes out = tablePrecompiled->call(context, bytesConstRef(&in));
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
@@ -173,7 +173,8 @@ BOOST_AUTO_TEST_CASE(call_update2)
     entryPrecompiled->setEntry(entry);
     auto entryAddress = context->registerPrecompiled(entryPrecompiled);
     eth::ContractABI abi;
-    bytes in = abi.abiIn("update(string,address,address)", "name", entryAddress, conditionAddress);
+    bytes in = abi.abiIn(
+        "update(string,address,address)", std::string("name"), entryAddress, conditionAddress);
     bytes out = tablePrecompiled->call(context, bytesConstRef(&in));
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);

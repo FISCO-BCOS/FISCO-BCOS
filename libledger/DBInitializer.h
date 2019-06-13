@@ -33,7 +33,7 @@
 #include <libstorage/Storage.h>
 #include <memory>
 
-#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[#DBINITIALIZER] "
+#define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
 {
 namespace ledger
@@ -46,7 +46,7 @@ public:
     ///  must be open before init
     virtual void initStorageDB();
     virtual ~DBInitializer() = default;
-    virtual void initStateDB(dev::h256 const& genesisHash)
+    virtual void initState(dev::h256 const& genesisHash)
     {
         if (!m_param)
             return;
@@ -76,15 +76,17 @@ protected:
     virtual void createExecutiveContext();
 
 private:
-    /// TODO: init AMOP storage
-    void initSQLStorage();
-    /// TOCHECK: init levelDB storage
     void initLevelDBStorage();
+    // below use MemoryTableFactory2
+    void initSQLStorage();
+    void initTableFactory2(dev::storage::Storage::Ptr _backend);
+    void initRocksDBStorage();
 
-    void initLevelDBStorage2();
-    /// TOCHECK: create storage/mpt state
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
+
+    void initZdbStorage();
+
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;

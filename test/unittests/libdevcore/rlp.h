@@ -27,7 +27,7 @@
 #include <sstream>
 #include <string>
 
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libdevcore/Exceptions.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
@@ -38,7 +38,6 @@
 #include <libdevcore/easylog.h>
 
 namespace fs = boost::filesystem;
-namespace js = json_spirit;
 using namespace dev;
 namespace dev
 {
@@ -61,17 +60,17 @@ public:
      *           "out" is the valid or invalid  rlp string
      * @ return:
      * */
-    static void doRlpTests(js::mValue const& jsonObj);
+    static void doRlpTests(Json::Value const& jsonObj);
 
 private:
     // check encode
-    static void inline checkEncode(std::string const& testName, js::mObject const& jsonObj)
+    static void inline checkEncode(std::string const& testName, Json::Value const& jsonObj)
     {
         RLPStream transedRlp;
         // transform in into rlp
-        buildRLP(jsonObj.at("in"), transedRlp);
+        buildRLP(jsonObj, transedRlp);
         std::string hexRlp = toHex(transedRlp.out());
-        std::string expectedRlp = (jsonObj.at("out").get_str());
+        std::string expectedRlp = (jsonObj["out"].asString());
         transform(expectedRlp.begin(), expectedRlp.end(), expectedRlp.begin(), ::tolower);
 
         BOOST_CHECK_MESSAGE(hexRlp == expectedRlp, testName + "Encoding Failed:\n" +
@@ -80,15 +79,15 @@ private:
     }
     // check decode
     static void inline checkDecode(
-        js::mObject const& jsonObj, RlpType const& rlpType, bool& is_exception)
+        Json::Value const& jsonObj, RlpType const& rlpType, bool& is_exception)
     {
         is_exception = false;
         try
         {
-            bytes rlpBytes = fromHex(jsonObj.at("out").get_str());
+            bytes rlpBytes = fromHex(jsonObj["out"].asString());
             RLP rlpObj(rlpBytes);
             if (rlpType == RlpType::Test)
-                checkRlp(jsonObj.at("in"), rlpObj);
+                checkRlp(jsonObj["in"], rlpObj);
         }
         catch (Exception const& e)
         {
@@ -96,8 +95,8 @@ private:
             LOG(ERROR) << "RLP Decode Exception:" << e.what();
         }
     }
-    static void buildRLP(js::mValue const& jsonObj, dev::RLPStream& retRlp);
-    static void checkRlp(js::mValue const& jsonObj, dev::RLP const& rlp);
+    static void buildRLP(Json::Value const& jsonObj, dev::RLPStream& retRlp);
+    static void checkRlp(Json::Value const& jsonObj, dev::RLP const& rlp);
 };
 }  // namespace test
 }  // namespace dev

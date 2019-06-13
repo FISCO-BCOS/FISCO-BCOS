@@ -21,6 +21,7 @@
  */
 
 #include "SyncMaster.h"
+#include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
 
 using namespace std;
@@ -70,35 +71,33 @@ SyncStatus SyncMaster::status() const
 
 string const SyncMaster::syncInfo() const
 {
-    json_spirit::Object syncInfo;
-    syncInfo.push_back(json_spirit::Pair("isSyncing", isSyncing()));
-    syncInfo.push_back(json_spirit::Pair("protocolId", m_protocolId));
-    syncInfo.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(m_syncStatus->genesisHash)));
-    syncInfo.push_back(json_spirit::Pair("nodeId", toHex(m_nodeId)));
+    Json::Value syncInfo;
+    syncInfo["isSyncing"] = isSyncing();
+    syncInfo["protocolId"] = m_protocolId;
+    syncInfo["genesisHash"] = toHexPrefixed(m_syncStatus->genesisHash);
+    syncInfo["nodeId"] = toHex(m_nodeId);
 
     int64_t currentNumber = m_blockChain->number();
-    syncInfo.push_back(json_spirit::Pair("blockNumber", currentNumber));
-    syncInfo.push_back(
-        json_spirit::Pair("latestHash", toHexPrefixed(m_blockChain->numberHash(currentNumber))));
-    syncInfo.push_back(json_spirit::Pair("knownHighestNumber", m_syncStatus->knownHighestNumber));
-    syncInfo.push_back(json_spirit::Pair("knownLatestHash", toHex(m_syncStatus->knownLatestHash)));
-    syncInfo.push_back(json_spirit::Pair("txPoolSize", std::to_string(m_txPool->pendingSize())));
+    syncInfo["blockNumber"] = currentNumber;
+    syncInfo["latestHash"] = toHexPrefixed(m_blockChain->numberHash(currentNumber));
+    syncInfo["knownHighestNumber"] = m_syncStatus->knownHighestNumber;
+    syncInfo["knownLatestHash"] = toHex(m_syncStatus->knownLatestHash);
+    syncInfo["txPoolSize"] = std::to_string(m_txPool->pendingSize());
 
-    json_spirit::Array peersInfo;
+    Json::Value peersInfo(Json::arrayValue);
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        json_spirit::Object info;
-        info.push_back(json_spirit::Pair("nodeId", toHex(_p->nodeId)));
-        info.push_back(json_spirit::Pair("genesisHash", toHexPrefixed(_p->genesisHash)));
-        info.push_back(json_spirit::Pair("blockNumber", _p->number));
-        info.push_back(json_spirit::Pair("latestHash", toHexPrefixed(_p->latestHash)));
-        peersInfo.push_back(info);
+        Json::Value info;
+        info["nodeId"] = toHex(_p->nodeId);
+        info["genesisHash"] = toHexPrefixed(_p->genesisHash);
+        info["blockNumber"] = _p->number;
+        info["latestHash"] = toHexPrefixed(_p->latestHash);
+        peersInfo.append(info);
         return true;
     });
 
-    syncInfo.push_back(json_spirit::Pair("peers", peersInfo));
-
-    json_spirit::Value value(syncInfo);
-    std::string statusStr = json_spirit::write_string(value, true);
+    syncInfo["peers"] = peersInfo;
+    Json::FastWriter fastWriter;
+    std::string statusStr = fastWriter.write(syncInfo);
     return statusStr;
 }
 
@@ -224,6 +223,13 @@ void SyncMaster::noteSealingBlockNumber(int64_t _number)
 bool SyncMaster::isSyncing() const
 {
     return m_syncStatus->state != SyncState::Idle;
+}
+
+// is my number is far smaller than max block number of this block chain
+bool SyncMaster::isFarSyncing() const
+{
+    int64_t currentNumber = m_blockChain->number();
+    return m_syncStatus->knownHighestNumber - currentNumber > 10;
 }
 
 void SyncMaster::maintainTransactions()
@@ -492,16 +498,15 @@ bool SyncMaster::maintainDownloadingQueue()
                 {
                     m_txPool->dropBlockTrans(*topBlock);
                     auto dropBlockTrans_time_cost = utcTime() - record_time;
-                    SYNC_LOG(DEBUG)
-                        << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Download block commit")
-                        << LOG_KV("number", topBlock->header().number())
-                        << LOG_KV("txs", topBlock->transactions().size())
-                        << LOG_KV("hash", topBlock->headerHash().abridged())
-                        << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
-                        << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
-                        << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
-                        << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
+                    SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                   << LOG_DESC("Download block commit")
+                                   << LOG_KV("number", topBlock->header().number())
+                                   << LOG_KV("txs", topBlock->transactions().size())
+                                   << LOG_KV("hash", topBlock->headerHash().abridged())
+                                   << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
+                                   << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
+                                   << LOG_KV("commitBlockTimeCost", commitBlock_time_cost)
+                                   << LOG_KV("dropBlockTransTimeCost", dropBlockTrans_time_cost);
                 }
                 else
                 {

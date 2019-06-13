@@ -23,7 +23,7 @@
 
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <json_spirit/JsonSpiritHeaders.h>
+#include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
@@ -135,41 +135,43 @@ BOOST_AUTO_TEST_CASE(select)
     in = abi.abiIn("selectByName(string)", contractName);
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     std::string retStr;
-    json_spirit::mValue retJson;
     abi.abiOut(&out, retStr);
+
     LOG(TRACE) << "select result:" << retStr;
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 2);
+    Json::Value retJson;
+    Json::Reader reader;
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 2);
 
     // select no existing keys
-    in = abi.abiIn("selectByName(string)", "Ok2");
+    in = abi.abiIn("selectByName(string)", std::string("Ok2"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 0);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 0);
 
     // select existing keys and version
     in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, contractVersion);
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 1);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 1);
 
     // select no existing keys and version
-    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, "3.0");
+    in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, std::string("3.0"));
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 0);
-    in = abi.abiIn("selectByNameAndVersion(string,string)", "Ok2", contractVersion);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 0);
+    in = abi.abiIn("selectByNameAndVersion(string,string)", std::string("Ok2"), contractVersion);
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
-    BOOST_TEST(json_spirit::read_string(retStr, retJson) == true);
-    BOOST_TEST(retJson.get_array().size() == 0);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(toString)
@@ -180,7 +182,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
-    bytes in = abi.abiIn("insert(string)", "test");
+    bytes in = abi.abiIn("insert(string)", std::string("test"));
     bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
 }
 

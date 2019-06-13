@@ -137,7 +137,7 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTEngine>& fake_pbft, Pre
         prepareReq.height = block.header().number();
         prepareReq.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     }
-    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
+    fake_pbft.consensus()->setConsensusBlockNumber(prepareReq.height);
     if (shouldAdd)
     {
         fake_pbft.consensus()->reqCache()->addRawPrepare(prepareReq);
@@ -331,7 +331,7 @@ static void testIsFuture(
     {
         int64_t org_height = req.height;
         VIEWTYPE org_view = req.view;
-        req.height = fake_pbft.consensus()->mutableConsensusNumber();
+        req.height = fake_pbft.consensus()->consensusBlockNumber();
         req.view = fake_pbft.consensus()->view() + 1;
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         if (shouldFix)
@@ -346,9 +346,9 @@ static void testIsValidLeader(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareR
 {
     if (!succ)
     {
-        fake_pbft.consensus()->mutableLeaderFailed() = true;
+        fake_pbft.consensus()->setLeaderFailed(true);
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
-        fake_pbft.consensus()->mutableLeaderFailed() = false;
+        fake_pbft.consensus()->setLeaderFailed(false);
     }
 }
 
@@ -389,7 +389,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     fake_pbft.consensus()->setHighest(highest);
     fake_pbft.consensus()->setView(2);
     req.idx = fake_pbft.consensus()->getLeader().second;
-    req.height = fake_pbft.consensus()->mutableConsensusNumber();
+    req.height = fake_pbft.consensus()->consensusBlockNumber();
     req.view = fake_pbft.consensus()->view();
     Block block;
     fake_pbft.consensus()->resetBlock(block);
@@ -400,7 +400,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
-    fake_pbft.consensus()->mutableConsensusNumber() = req.height;
+    fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
     Secret sec = fake_pbft.m_secrets[req.idx];
     req.sig = dev::sign(sec, req.block_hash);
@@ -456,7 +456,7 @@ void FakeValidSignorCommitReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PBFTMsgP
     /// add prepareReq
     fake_pbft.consensus()->reqCache()->addPrepareReq(prepareReq);
     /// reset current consensusNumber and View
-    fake_pbft.consensus()->mutableConsensusNumber() = prepareReq.height;
+    fake_pbft.consensus()->setConsensusBlockNumber(prepareReq.height);
     fake_pbft.consensus()->setView(prepareReq.view);
     FakePBFTMsgPacket(
         packet, req, SignReqPacket, fake_pbft.m_sealerList.size() - 1, peer_keyPair.pub());
@@ -497,7 +497,7 @@ static void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq co
         /// test is the future block
         FakeValidNodeNum(fake_pbft, 4);
         SignReq copiedReq = signReq;
-        copiedReq.height = fake_pbft.consensus()->mutableConsensusNumber() + 1;
+        copiedReq.height = fake_pbft.consensus()->consensusBlockNumber() + 1;
         FakeValidNodeNum(fake_pbft, 4);
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::INVALID);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
@@ -584,7 +584,7 @@ static void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewCh
 
     req.block_hash = highest.hash();
     req.height = highest.number();
-    fake_pbft.consensus()->mutableConsensusNumber() = req.height + 1;
+    fake_pbft.consensus()->setConsensusBlockNumber(req.height + 1);
     Secret sec = fake_pbft.m_secrets[req.idx];
     req.sig = dev::sign(sec, req.block_hash);
     req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());

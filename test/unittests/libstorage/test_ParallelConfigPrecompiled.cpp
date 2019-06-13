@@ -20,7 +20,6 @@
  */
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -139,7 +138,7 @@ BOOST_AUTO_TEST_CASE(registerParallelFunction)
     bytes param =
         abi.abiIn(PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT, contractAddr, TRANSFER_FUNC, 2);
     bytes ret = callPrecompiled(ref(param));
-    BOOST_CHECK(ret == abi.abiIn("", CODE_SUCCESS));
+    BOOST_CHECK(ret == abi.abiIn("", (int)CODE_SUCCESS));
     BOOST_CHECK(hasRegistered(contractAddr, TRANSFER_FUNC) == true);
 
     auto config = parallelConfigPrecompiled->getParallelConfig(
@@ -150,7 +149,7 @@ BOOST_AUTO_TEST_CASE(registerParallelFunction)
     // update
     param = abi.abiIn(PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT, contractAddr, TRANSFER_FUNC, 1);
     ret = callPrecompiled(ref(param));
-    BOOST_CHECK(ret == abi.abiIn("", CODE_SUCCESS));
+    BOOST_CHECK(ret == abi.abiIn("", (int)CODE_SUCCESS));
     BOOST_CHECK(hasRegistered(contractAddr, TRANSFER_FUNC) == true);
 
     config = parallelConfigPrecompiled->getParallelConfig(
@@ -161,7 +160,7 @@ BOOST_AUTO_TEST_CASE(registerParallelFunction)
     // delete
     param = abi.abiIn(PARA_CONFIG_UNREGISTER_METHOD_ADDR_STR, contractAddr, TRANSFER_FUNC);
     ret = callPrecompiled(ref(param));
-    BOOST_CHECK(ret == abi.abiIn("", CODE_SUCCESS));
+    BOOST_CHECK(ret == abi.abiIn("", (int)CODE_SUCCESS));
     BOOST_CHECK(hasRegistered(contractAddr, TRANSFER_FUNC) == false);
 }
 

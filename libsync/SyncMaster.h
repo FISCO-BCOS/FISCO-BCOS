@@ -27,7 +27,6 @@
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -74,6 +73,10 @@ public:
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
+
+        /// set thread name
+        std::string threadName = "Sync-" + std::to_string(m_groupId);
+        setName(threadName);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -91,6 +94,8 @@ public:
     virtual std::string const syncInfo() const override;
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
+    // is my number is far smaller than max block number of this block chain
+    bool isFarSyncing() const override;
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override

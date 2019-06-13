@@ -29,6 +29,7 @@
 #include "Sealer.h"
 #include <libethcore/LogEntry.h>
 #include <libsync/SyncStatus.h>
+using namespace std;
 using namespace dev::sync;
 using namespace dev::blockverifier;
 using namespace dev::eth;
@@ -40,10 +41,10 @@ void Sealer::start()
 {
     if (m_startConsensus)
     {
-        SEAL_LOG(WARNING) << "[#Sealer module has already been started]";
+        SEAL_LOG(WARNING) << "[Sealer module has already been started]";
         return;
     }
-    SEAL_LOG(INFO) << "[#Start sealer module]";
+    SEAL_LOG(INFO) << "[Start sealer module]";
     resetSealingBlock();
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
@@ -70,11 +71,11 @@ void Sealer::reportNewBlock()
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
     {
-        std::shared_ptr<dev::eth::Block> p_block =
+        shared_ptr<dev::eth::Block> p_block =
             m_blockChain->getBlockByNumber(m_blockChain->number());
         if (!p_block)
         {
-            LOG(ERROR) << "[#reportNewBlock] empty block";
+            LOG(ERROR) << "[reportNewBlock] empty block";
             return;
         }
         m_consensusEngine->reportBlock(*p_block);
@@ -82,7 +83,7 @@ void Sealer::reportNewBlock()
         {
             if (shouldResetSealing())
             {
-                SEAL_LOG(DEBUG) << "[#reportNewBlock] Reset sealing: [number]:  "
+                SEAL_LOG(DEBUG) << "[reportNewBlock] Reset sealing: [number]:  "
                                 << m_blockChain->number()
                                 << ", sealing number:" << m_sealing.block.blockHeader().number();
                 resetSealingBlock();
@@ -123,8 +124,8 @@ void Sealer::doWork(bool wait)
             if (!checkTxsEnough(maxTxsPerBlock))
             {
                 ///< 10 milliseconds to next loop
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(1));
+                unique_lock<mutex> l(x_signalled);
+                m_signalled.wait_for(l, chrono::milliseconds(1));
                 return;
             }
             if (shouldHandleBlock())
@@ -133,8 +134,8 @@ void Sealer::doWork(bool wait)
     }
     if (shouldWait(wait))
     {
-        std::unique_lock<std::mutex> l(x_blocksignalled);
-        m_blockSignalled.wait_for(l, std::chrono::milliseconds(10));
+        unique_lock<mutex> l(x_blocksignalled);
+        m_blockSignalled.wait_for(l, chrono::milliseconds(10));
     }
 }
 
@@ -197,8 +198,15 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
     /// 1. clear the block; 2. populate header from the highest block
     else
     {
-        block.resetCurrentBlock(
-            m_blockChain->getBlockByNumber(m_blockChain->number())->blockHeader());
+        auto highestBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
+        if (!highestBlock)
+        {  // impossible so exit
+            SEAL_LOG(FATAL) << LOG_DESC("exit because can't get highest block")
+                            << LOG_KV("number", m_blockChain->number());
+            raise(SIGTERM);
+            BOOST_THROW_EXCEPTION(invalid_argument("sealer can't get highest block."));
+        }
+        block.resetCurrentBlock(highestBlock->blockHeader());
     }
 }
 
@@ -230,7 +238,7 @@ void Sealer::stop()
     {
         return;
     }
-    SEAL_LOG(INFO) << "[#Stop sealer module...]";
+    SEAL_LOG(INFO) << "Stop sealer module...";
     m_startConsensus = false;
     doneWorking();
     if (isWorking())

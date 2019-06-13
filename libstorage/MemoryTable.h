@@ -40,6 +40,9 @@ namespace dev
 {
 namespace storage
 {
+using Parallel = std::true_type;
+using Serial = std::false_type;
+
 template <typename Mode = Serial>
 class MemoryTable : public Table
 {
@@ -101,7 +104,7 @@ public:
             for (auto& i : indexes)
             {
                 Entry::Ptr updateEntry = entries->get(i);
-                for (auto& it : *(entry->fields()))
+                for (auto& it : *(entry))
                 {
                     records.emplace_back(i, it.first, updateEntry->getField(it.first));
                     updateEntry->setField(it.first, it.second);
@@ -218,9 +221,13 @@ public:
                 {
                     if (it.second->get(i)->dirty() && !it.second->get(i)->deleted())
                     {
-                        for (auto& fieldIt : *(it.second->get(i)->fields()))
+                        auto entry = it.second->get(i);
+                        entry->setField(
+                            STATUS, boost::lexical_cast<std::string>(entry->getStatus()));
+
+                        for (auto& fieldIt : *(it.second->get(i)))
                         {
-                            if (isHashField(fieldIt.first))
+                            if (isHashField(fieldIt.first) || fieldIt.first == STATUS)
                             {
                                 data.insert(data.end(), fieldIt.first.begin(), fieldIt.first.end());
                                 data.insert(
@@ -274,9 +281,11 @@ public:
         m_recorder = _recorder;
     }
 
-    virtual bool dump(TableData::Ptr _data) override
+    virtual TableData::Ptr dump() override
     {
+        auto _data = std::make_shared<TableData>();
         bool dirtyTable = false;
+
         for (auto it : m_cache)
         {
             _data->data.insert(make_pair(it.first, it.second));
@@ -286,7 +295,15 @@ public:
                 dirtyTable = true;
             }
         }
-        return dirtyTable;
+
+        if (dirtyTable)
+        {
+            return _data;
+        }
+        else
+        {
+            return std::make_shared<TableData>();
+        }
     }
 
     virtual void rollback(const Change& _change) override
@@ -386,140 +403,37 @@ private:
     {
         std::vector<size_t> indexes;
         indexes.reserve(entries->size());
-#if 0
-        if (condition->getConditions()->empty())
-        {
-            for (size_t i = 0; i < entries->size(); ++i)
-                indexes.emplace_back(i);
-            return indexes;
-        }
-#endif
-
         for (size_t i = 0; i < entries->size(); ++i)
         {
             Entry::Ptr entry = entries->get(i);
             if (condition->process(entry))
-            // if (processCondition(entry, condition))
             {
                 indexes.push_back(i);
             }
+        }
+        if (condition->getOffset() >= 0 && condition->getCount() >= 0)
+        {
+            int begin = condition->getOffset();
+            int end = begin + condition->getCount();
+            std::vector<size_t> limitedIndex;
+            int size = indexes.size();
+            if (begin >= size)
+            {
+                return limitedIndex;
+            }
+            return std::vector<size_t>(indexes.begin() + begin,
+                indexes.begin() + end > indexes.end() ? indexes.end() : indexes.begin() + end);
         }
 
         return indexes;
     }
 
-#if 0
-    bool processCondition(Entry::Ptr entry, Condition::Ptr condition)
-    {
-        try
-        {
-            for (auto& it : *condition->getConditions())
-            {
-                if (entry->getStatus() == Entry::Status::DELETED)
-                {
-                    return false;
-                }
-
-                std::string lhs = entry->getField(it.first);
-                std::string rhs = it.second.second;
-
-                if (it.second.first == Condition::Op::eq)
-                {
-                    if (lhs != rhs)
-                    {
-                        return false;
-                    }
-                }
-                else if (it.second.first == Condition::Op::ne)
-                {
-                    if (lhs == rhs)
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    if (lhs.empty())
-                    {
-                        lhs = "0";
-                    }
-                    if (rhs.empty())
-                    {
-                        rhs = "0";
-                    }
-
-                    int lhsNum = boost::lexical_cast<int>(lhs);
-                    int rhsNum = boost::lexical_cast<int>(rhs);
-
-                    switch (it.second.first)
-                    {
-                    case Condition::Op::eq:
-                    case Condition::Op::ne:
-                    {
-                        break;
-                    }
-                    case Condition::Op::gt:
-                    {
-                        if (lhsNum <= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::ge:
-                    {
-                        if (lhsNum < rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::lt:
-                    {
-                        if (lhsNum >= rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    case Condition::Op::le:
-                    {
-                        if (lhsNum > rhsNum)
-                        {
-                            return false;
-                        }
-                        break;
-                    }
-                    }
-                }
-            }
-        }
-        catch (std::exception& e)
-        {
-            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Compare error")
-                               << LOG_KV("msg", boost::diagnostic_information(e));
-            return false;
-        }
-
-        return true;
-    }
-#endif
-
-    bool isHashField(const std::string& _key)
-    {
-        if (!_key.empty())
-        {
-            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                    (_key == STATUS));
-        }
-        return false;
-    }
 
     void checkField(Entry::Ptr entry)
     {
-        for (auto& it : *(entry->fields()))
+        for (auto& it : *(entry))
         {
-            if (it.first == "_id_")
+            if (it.first == ID_FIELD)
             {
                 continue;
             }

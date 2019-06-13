@@ -20,7 +20,6 @@
  */
 #include "Common.h"
 #include "MemoryStorage.h"
-#include <json_spirit/JsonSpiritHeaders.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
@@ -168,14 +167,6 @@ BOOST_AUTO_TEST_CASE(getParallelTag)
     param = abi.abiIn(userTransferFunc, from, to, amount);
     vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
     BOOST_TEST(vTags.empty());
-
-    // amount zero
-    from = "from";
-    to = "to";
-    amount = 0;
-    param = abi.abiIn(userTransferFunc, from, to, amount);
-    vTags = dtPrecompiled->getParallelTag(bytesConstRef(&param));
-    BOOST_TEST(vTags.empty());
 }
 
 BOOST_AUTO_TEST_CASE(userAdd)
@@ -194,8 +185,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // normal input, first add this user
     user = "user";
@@ -211,7 +201,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
     params = abi.abiIn(userAddFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_ALREADY_EXIST)) == result);
+    BOOST_TEST(CODE_INVALID_USER_ALREADY_EXIST == result);
 }
 
 BOOST_AUTO_TEST_CASE(userSave)
@@ -230,7 +220,8 @@ BOOST_AUTO_TEST_CASE(userSave)
     params = abi.abiIn(userSaveFunc, user, amount);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
+
 
     // invalid input, amount zero
     user = "user";
@@ -238,7 +229,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     params = abi.abiIn(userSaveFunc, user, amount0);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_AMOUNT)) == result);
+    BOOST_TEST(CODE_INVALID_AMOUNT == result);
 
     // normal input, user is not exist, add this user.
     user = "user";
@@ -270,7 +261,7 @@ BOOST_AUTO_TEST_CASE(userSave)
     params = abi.abiIn(userSaveFunc, user, amount3);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_BALANCE_OVERFLOW)) == result);
+    BOOST_TEST(CODE_INVALID_BALANCE_OVERFLOW == result);
 }
 
 BOOST_AUTO_TEST_CASE(userDraw)
@@ -289,7 +280,8 @@ BOOST_AUTO_TEST_CASE(userDraw)
     params = abi.abiIn(userDrawFunc, user, amount0);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
+
 
     // invalid input, amount zero
     user = "user";
@@ -297,7 +289,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     params = abi.abiIn(userDrawFunc, user, amount1);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_AMOUNT)) == result);
+    BOOST_TEST(CODE_INVALID_AMOUNT == result);
 
     // add user first, after this the balance of "user" is 11111
     user = "user";
@@ -320,7 +312,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
     params = abi.abiIn(userDrawFunc, user, amount4);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_INSUFFICIENT_BALANCE)) == result);
+    BOOST_TEST(CODE_INVALID_INSUFFICIENT_BALANCE == result);
 
     // get balance of this user
     dev::u256 balance;
@@ -348,7 +340,7 @@ BOOST_AUTO_TEST_CASE(userBalance)
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result, balance);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // normal input, user not exist
     user = "user";
@@ -356,7 +348,7 @@ BOOST_AUTO_TEST_CASE(userBalance)
     params = abi.abiIn(userBalanceFunc, user);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result, balance);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NOT_EXIST)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NOT_EXIST == result);
 
     // create user
     user = "user";
@@ -380,7 +372,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
 
     std::string from, to;
     // dev::u256 amount;
-    dev::u256 result;
+    dev::s256 result;
     bytes out;
     bytes params;
 
@@ -389,7 +381,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, from, to, amount0);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // invalid input, from user name empty string.
     from = "";
@@ -398,7 +390,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, from, to, amount1);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // invalid input, to user name empty string.
     from = "from";
@@ -407,7 +399,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, from, to, amount2);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NAME)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NAME == result);
 
     // invalid input, amount zero.
     from = "from";
@@ -416,7 +408,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, from, to, amount3);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_AMOUNT)) == result);
+    BOOST_TEST(CODE_INVALID_AMOUNT == result);
 
     // from and to user all not exist
     from = "from";
@@ -425,7 +417,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, from, to, amount4);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_USER_NOT_EXIST)) == result);
+    BOOST_TEST(CODE_INVALID_USER_NOT_EXIST == result);
 
     // insert three user: user0(111111)  user1(2222222)
     // user3(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
@@ -462,7 +454,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, user0, user1, transfer);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_INSUFFICIENT_BALANCE)) == result);
+    BOOST_TEST(CODE_INVALID_INSUFFICIENT_BALANCE == result);
 
     dev::u256 balance;
     // get balance of user0
@@ -481,7 +473,7 @@ BOOST_AUTO_TEST_CASE(userTransfer)
     params = abi.abiIn(userTransferFunc, user1, user2, transfer);
     out = dtPrecompiled->call(context, bytesConstRef(&params), origin);
     abi.abiOut(bytesConstRef(&out), result);
-    BOOST_TEST((std::abs(CODE_INVALID_BALANCE_OVERFLOW)) == result);
+    BOOST_TEST(CODE_INVALID_BALANCE_OVERFLOW == result);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

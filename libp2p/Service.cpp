@@ -77,16 +77,15 @@ void Service::stop()
         }
         m_host->stop();
         /// disconnect sessions
+
+        RecursiveGuard l(x_sessions);
+        for (auto session : m_sessions)
         {
-            DEV_RECURSIVE_GUARDED(x_sessions)
-            for (auto session : m_sessions)
-            {
-                session.second->stop(dev::network::ClientQuit);
-            }
+            session.second->stop(dev::network::ClientQuit);
         }
 
+
         /// clear sessions
-        RecursiveGuard l(x_sessions);
         m_sessions.clear();
     }
 }
@@ -99,7 +98,7 @@ void Service::heartBeat()
     }
     std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes;
     {
-        RecursiveGuard l(x_sessions);
+        RecursiveGuard l(x_nodes);
         staticNodes = m_staticNodes;
     }
 
@@ -134,8 +133,7 @@ void Service::heartBeat()
     }
     {
         RecursiveGuard l(x_sessions);
-        SERVICE_LOG(INFO) << LOG_DESC("heartBeat connected count")
-                          << LOG_KV("size", m_sessions.size());
+        SERVICE_LOG(INFO) << LOG_DESC("heartBeat") << LOG_KV("connected count", m_sessions.size());
     }
 
     auto self = std::weak_ptr<Service>(shared_from_this());
@@ -714,7 +712,7 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
             if (find(it->second.begin(), it->second.end(), i.first) != it->second.end())
             {
                 infos.push_back(P2PSessionInfo(i.second->nodeInfo(),
-                    i.second->session()->nodeIPEndpoint(), (i.second->topics())));
+                    i.second->session()->nodeIPEndpoint(), i.second->topics()));
             }
         }
     }

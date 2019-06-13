@@ -35,6 +35,8 @@ macro(eth_default_option O DEF)
     endif()
 endmacro()
 
+set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
 
@@ -46,9 +48,14 @@ macro(configure_project)
 
     eth_default_option(BUILD_SHARED_LIBS OFF)
    
-    eth_default_option(STATIC_BUILD OFF)
+    eth_default_option(BUILD_STATIC OFF)
+
     #ARCH TYPE
-    eth_default_option(ARCH_TYPE OFF)
+    eth_default_option(ARCH_NATIVE OFF)
+    
+    if(ARCH_NATIVE)
+        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
+    endif()
     # unit tests
     eth_default_option(TESTS OFF)
     # mini demos
@@ -76,10 +83,9 @@ macro(configure_project)
     #perf
     eth_default_option(PROF OFF)
     if (PROF)
-    	add_definitions(-DPROF)
+    	#add_definitions(-DPROF)
 	endif()
-
-
+	
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
         set(SUPPORT_${FEATURE} TRUE)
@@ -110,22 +116,21 @@ macro(print_config NAME)
     message("------------------------------------------------------------------------")
     message("-- Configuring ${NAME} ${PROJECT_VERSION}${VERSION_SUFFIX}")
     message("------------------------------------------------------------------------")
-    message("-- CMake            Cmake version and location         ${CMAKE_VERSION} (${CMAKE_COMMAND})")
-    message("-- Compiler         C++ compiler type and version      ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
-    message("-- CMAKE_BUILD_TYPE Build type                         ${CMAKE_BUILD_TYPE}")
-    message("-- TARGET_PLATFORM  Target platform                    ${CMAKE_SYSTEM_NAME}")
-    message("-- STATIC_BUILD     Build static                       ${STATIC_BUILD}")
-    message("-- DEMO             Build demos                        ${DEMO}")
-    message("-- COVERAGE         Build code coverage                ${COVERAGE}")
-    message("-- TESTS            Build tests                        ${TESTS}")
-    message("-- EasyLog          Enable easyLog                     ${EASYLOG}")
-    message("-- ARCH_TYPE                                           ${ARCH_TYPE}")
-    message("-- PROF                                                ${PROF}")
-    message("------------------------------------------------------------------------")
+    message("-- CMake            Cmake version and location   ${CMAKE_VERSION} (${CMAKE_COMMAND})")
+    message("-- Compiler         C++ compiler version         ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+    message("-- CMAKE_BUILD_TYPE Build type                   ${CMAKE_BUILD_TYPE}")
+    message("-- TARGET_PLATFORM  Target platform              ${CMAKE_SYSTEM_NAME}")
+    message("-- BUILD_STATIC     Build static                 ${BUILD_STATIC}")
+    message("-- DEMO             Build demos                  ${DEMO}")
+    message("-- COVERAGE         Build code coverage          ${COVERAGE}")
+    message("-- TESTS            Build tests                  ${TESTS}")
+    message("-- EasyLog          Enable easyLog               ${EASYLOG}")
+    message("-- ARCH_NATIVE      Enable native code           ${ARCH_NATIVE}")
+    message("-- PROF                                          ${PROF}")
 if (BUILD_GM)
-    message("-- GM               Build GM                           ${BUILD_GM}")
-    message("------------------------------------------------------------------------")
+    message("-- GM               Build GM                     ${BUILD_GM}")
 endif()
+    message("------------------------------------------------------------------------")
     message("")
 endmacro()
 

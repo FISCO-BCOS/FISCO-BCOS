@@ -270,7 +270,8 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        return TransactionReceipt(h256(0x3), u256(8), entries,
+            executive::TransactionException::None, bytes(), Address(0x1000));
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
@@ -460,6 +461,7 @@ public:
         return syncStatus;
     }
     bool isSyncing() const override { return m_isSyncing; }
+    bool isFarSyncing() const override { return false; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
@@ -473,12 +475,12 @@ private:
     PROTOCOL_ID m_protocolId;
 };
 
-// class FakeLedger : public LedgerInterface
 class FakeLedger : public LedgerInterface
 {
 public:
-    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface>, dev::GROUP_ID const&, dev::KeyPair const&,
-        std::string const&, std::string const&)
+    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface>, dev::GROUP_ID const&,
+        dev::KeyPair const& keyPair, std::string const&, std::string const&)
+      : LedgerInterface(keyPair)
     {
         /// init blockChain
         initBlockChain();
@@ -491,8 +493,8 @@ public:
         /// init
         initLedgerParam();
     }
-    bool initLedger() override { return true; };
-    void initConfig(std::string const&) override{};
+    bool initLedger(const std::string&) override { return true; };
+    void initGenesisConfig(std::string const&) override{};
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {

@@ -45,9 +45,11 @@ public:
         m_service = std::make_shared<FakesService>();
         std::string configurationPath =
             getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
-        m_ledgerManager = std::make_shared<LedgerManager>(m_service, m_keyPair);
-        m_ledgerManager->initSingleLedger<FakeLedger>(groupId, "", configurationPath);
-
+        m_ledgerManager = std::make_shared<LedgerManager>();
+        std::shared_ptr<LedgerInterface> ledger =
+            std::make_shared<FakeLedger>(m_service, groupId, m_keyPair, "", configurationPath);
+        ledger->initLedger(configurationPath);
+        m_ledgerManager->insertLedger(groupId, ledger);
         rpc = std::make_shared<Rpc>(m_ledgerManager, m_service);
     }
 
@@ -102,7 +104,7 @@ BOOST_AUTO_TEST_CASE(GM_testP2pPart)
     BOOST_CHECK(response.size() == 1);
 
     response = rpc->getGroupList();
-    BOOST_CHECK(response.size() == 1);
+    BOOST_CHECK(response.size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(GM_testGetBlockByHash)
@@ -561,7 +563,7 @@ BOOST_AUTO_TEST_CASE(testP2pPart)
     BOOST_CHECK(response.size() == 1);
 
     response = rpc->getGroupList();
-    BOOST_CHECK(response.size() == 1);
+    BOOST_CHECK(response.size() == 0);
 
     response = rpc->getNodeIDList(groupId);
     BOOST_CHECK(response.size() == 2);

@@ -34,7 +34,7 @@
 #include <libp2p/Service.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
-#define Ledger_LOG(LEVEL) LOG(LEVEL) << "[g:" << std::to_string(m_groupId) << "][LEDGER]"
+#define Ledger_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace dev
 {
@@ -60,42 +60,28 @@ public:
      * by the param ${configFileName}
      */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir,
-        std::string const& configFileName)
-      : m_service(service),
-        m_groupId(_groupId),
-        m_keyPair(_keyPair),
-        m_configFileName(configFileName)
+        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+      : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
     {
         m_param = std::make_shared<LedgerParam>();
         std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
         if (_baseDir == "")
             prefix = "./group" + std::to_string(_groupId);
         m_param->setBaseDir(prefix);
+        // m_keyPair = _keyPair;
         assert(m_service);
-        if (m_configFileName == "")
-            m_configFileName = "./group." + std::to_string(_groupId) + m_postfixGenesis;
-
-        Ledger_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", m_configFileName)
-                         << LOG_KV("baseDir", m_param->baseDir());
-        /// The file group.X.genesis is required, otherwise the program terminates.
-        /// load genesis config of group
-        initConfig(m_configFileName);
-        /// The file group.X.ini is available by default.
-        /// In this case, the configuration item uses the default value.
-        /// load ini config of group for TxPool/Sync modules
-        std::string iniConfigFileName = m_configFileName;
-        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
-
-        /// you should invoke initConfig first before invoke initIniConfig
-        initIniConfig(iniConfigFileName);
-        initMark();
     }
 
     /// start all modules(sync, consensus)
     void startAll() override
     {
         assert(m_sync && m_sealer);
+#ifndef FISCO_EASYLOG
+        /// tag this scope with GroupId
+        BOOST_LOG_SCOPED_THREAD_ATTR(
+            "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
+#endif
+
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();
@@ -112,7 +98,7 @@ public:
 
     virtual ~Ledger(){};
 
-    bool initLedger() override;
+    bool initLedger(const std::string& _configFilePath = "config.ini") override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -142,19 +128,17 @@ public:
 
 protected:
     /// load genesis config of group
-    void initConfig(std::string const& configPath) override;
+    void initGenesisConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
-    virtual bool initBlockChain();
+    virtual bool initBlockChain(GenesisBlockParam& _genesisParam);
     /// create consensus moudle
     virtual bool consensusInitFactory();
     /// init the blockSync
     virtual bool initSync();
 
-    /// make these functions protected for UT
-    void initGenesisConfig(boost::property_tree::ptree const& pt);
-    void initMark();
+    void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
@@ -181,8 +165,6 @@ protected:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::GROUP_ID m_groupId;
-    dev::KeyPair m_keyPair;
-    std::string m_configFileName = "config";
     std::string m_postfixGenesis = ".genesis";
     std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;

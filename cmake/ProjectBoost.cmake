@@ -29,18 +29,11 @@ elseif(CORES GREATER 2)
   set(CORES 2)
 endif()
 
-set(BOOST_CXXFLAGS "")
+set(BOOST_CXXFLAGS "cxxflags=-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
 set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
 set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
-if (${BUILD_SHARED_LIBS})
-    set(BOOST_CXXFLAGS "cxxflags=-fPIC")
-else()
-    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        set(BOOST_CXXFLAGS "cxxflags=-Wa,-march=generic64")
-    endif()
-endif()
 
 set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
 set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
@@ -139,5 +132,10 @@ set_property(TARGET Boost::Log PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libbo
 set_property(TARGET Boost::Log PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 set_property(TARGET Boost::Log PROPERTY INTERFACE_LINK_LIBRARIES Boost::Filesystem Boost::Thread)
 add_dependencies(Boost::Log boost)
+
+add_library(Boost::Serialization STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::Serialization PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_serialization${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::Serialization PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+add_dependencies(Boost::Serialization boost)
 
 unset(SOURCE_DIR)

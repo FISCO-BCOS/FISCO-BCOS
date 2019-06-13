@@ -29,7 +29,8 @@
 using namespace std;
 using namespace dev;
 
-bytes EncryptedFile::decryptContents(const std::string& _filePath)
+bytes EncryptedFile::decryptContents(
+    const std::string& _filePath, std::shared_ptr<KeyCenter> _keyCenter)
 {
     bytes encFileBytes;
     bytes encFileBase64Bytes;
@@ -39,7 +40,16 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
         string encContextsStr = contentsString(_filePath);
         encFileBytes = fromHex(encContextsStr);
 
-        bytes dataKey = g_keyCenter.getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+        bytes dataKey;
+        if (nullptr == _keyCenter)
+        {
+            dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+        }
+        else
+        {
+            dataKey = _keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+        }
+
         encFileBase64Bytes = aesCBCDecrypt(ref(encFileBytes), ref(dataKey));
 
         string decFileBytesBase64 = asString(encFileBase64Bytes);
@@ -48,6 +58,8 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
     }
     catch (exception& e)
     {
+        LOG(ERROR) << LOG_DESC("[ENCFILE] EncryptedFile error")
+                   << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
     LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"

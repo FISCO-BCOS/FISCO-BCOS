@@ -35,6 +35,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
+#include <csignal>
 #include <string>
 #include <utility>
 #include <vector>
@@ -81,8 +82,6 @@ std::shared_ptr<Block> BlockCache::add(Block const& _block)
 
 std::pair<std::shared_ptr<Block>, h256> BlockCache::get(h256 const& _hash)
 {
-    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("[get]Read block from block cache")
-                          << LOG_KV("blockHash", _hash.abridged());
     {
         ReadGuard guard(m_sharedMutex);
 
@@ -108,7 +107,7 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
     m_stateFactory = _stateFactory;
 }
 
-shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory()
+shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory(int64_t num)
 {
 #if 0
     dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
@@ -116,7 +115,7 @@ shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory()
     memoryTableFactory->setStateStorage(m_stateStorage);
 #endif
 
-    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), 0);
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), num);
     return memoryTableFactory;
 }
 
@@ -137,6 +136,10 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
             auto entry = entries->get(0);
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
             return getBlock(blockHash);
+        }
+        else
+        {
+            // BLOCKCHAIN_LOG(ERROR) << "Can't find blocknumber" << LOG_KV()
         }
     }
 
@@ -315,11 +318,12 @@ void BlockChainImp::getNonces(
 {
     if (_blockNumber > number())
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getNonces]Invalid block number")
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
         return;
     }
+    BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
@@ -348,8 +352,12 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             auto entry = entries->get(0);
             std::string strCount = entry->getField(SYS_VALUE);
             count = lexical_cast<int64_t>(strCount);
-            std::string strNumber = entry->getField("_num_");
-            number = lexical_cast<int64_t>(strNumber);
+            number = entry->num();
+            if (g_BCOSConfig.version() <= RC2_VERSION)
+            {
+                std::string strNumber = entry->getField(NUM_FIELD);
+                number = lexical_cast<int64_t>(strNumber);
+            }
         }
     }
     return std::make_pair(count, number);
@@ -524,8 +532,15 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
                 initParam.consensusType = s[2];
-                initParam.storageType = s[3];
-                initParam.stateType = s[4];
+                if (g_BCOSConfig.version() <= RC2_VERSION)
+                {
+                    initParam.storageType = s[3];
+                    initParam.stateType = s[4];
+                }
+                else
+                {
+                    initParam.stateType = s[3];
+                }
             }
             catch (std::exception& e)
             {
@@ -926,45 +941,21 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
-        // auto constructEntry_time_cost = 0;
-        // auto insertTb_time_cost = 0;
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
                 for (size_t i = _r.begin(); i != _r.end(); ++i)
                 {
-                    // record_time = utcTime();
                     Entry::Ptr entry = std::make_shared<Entry>();
                     entry->setField(
                         SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
                     entry->setField("index", lexical_cast<std::string>(i));
                     entry->setForce(true);
-                    // constructEntry_time_cost += utcTime() - record_time;
-                    // record_time = utcTime();
 
                     tb->insert(txs[i].sha3().hex(), entry,
                         std::make_shared<dev::storage::AccessOptions>(), false);
                     nonce_vector[i] = txs[i].nonce();
-                    // insertTb_time_cost += utcTime() - record_time;
-                    // record_time = utcTime();
                 }
             });
-        /*
-        for (uint i = 0; i < txs.size(); i++)
-        {
-            // record_time = utcTime();
-            Entry::Ptr entry = std::make_shared<Entry>();
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-            entry->setField("index", lexical_cast<std::string>(i));
-            // constructEntry_time_cost += utcTime() - record_time;
-            // record_time = utcTime();
-
-            tb->insert(
-                txs[i].sha3().hex(), entry, std::make_shared<dev::storage::AccessOptions>(), false);
-            nonce_vector[i] = txs[i].nonce();
-            // insertTb_time_cost += utcTime() - record_time;
-            // record_time = utcTime();
-        }
-        */
 
         auto insertTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -1135,20 +1126,24 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
                               << LOG_KV("addBlockCacheTimeCost", addBlockCache_time_cost)
                               << LOG_KV("noteReadyTimeCost", noteReady_time_cost)
                               << LOG_KV("totalTimeCost", utcTime() - start_time);
-
-        return CommitResult::OK;
     }
-    catch (OpenSysTableFailed&)
+    catch (OpenSysTableFailed const& e)
     {
-        BLOCKCHAIN_LOG(FATAL) << LOG_DESC(
-            "[#commitBlock]System meets error when try to write block to storage");
-        throw;
+        BLOCKCHAIN_LOG(FATAL)
+            << LOG_DESC("[commitBlock]System meets error when try to write block to storage")
+            << LOG_KV("EINFO", boost::diagnostic_information(e));
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
     /// leveldb caused exception: database corruption or the disk has no space left
     catch (StorageException& e)
     {
-        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: leveldb exception")
+        BLOCKCHAIN_LOG(FATAL) << LOG_BADGE("CommitBlock: storage exception")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
-        exit(1);
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
+    return CommitResult::OK;
 }

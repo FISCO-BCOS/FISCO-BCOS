@@ -27,7 +27,7 @@
 #include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
 #include <libethcore/LogEntry.h>
-#include <libevm/ExtVMFace.h>
+#include <libexecutive/ExecutionResult.h>
 #include <array>
 
 namespace dev
@@ -37,10 +37,11 @@ namespace eth
 class TransactionReceipt
 {
 public:
-    TransactionReceipt(){};
+    TransactionReceipt() : m_status(executive::TransactionException::None){};
     TransactionReceipt(bytesConstRef _rlp);
     TransactionReceipt(h256 const& _root, u256 const& _gasUsed, LogEntries const& _log,
-        u256 _status, bytes _bytes, Address const& _contractAddress = Address());
+        executive::TransactionException _status, bytes _bytes,
+        Address const& _contractAddress = Address());
     TransactionReceipt(TransactionReceipt const& _other);
     h256 const& stateRoot() const { return m_stateRoot; }
     void setStateRoot(h256 const& _stateRoot) { m_stateRoot = _stateRoot; }
@@ -49,7 +50,7 @@ public:
     Address const& contractAddress() const { return m_contractAddress; }
     LogBloom const& bloom() const { return m_bloom; }
     LogEntries const& log() const { return m_log; }
-    u256 const& status() const { return m_status; }
+    executive::TransactionException const& status() const { return m_status; }
     bytes const& outputBytes() const { return m_outputBytes; }
 
     void streamRLP(RLPStream& _s) const;
@@ -76,7 +77,11 @@ private:
     u256 m_gasUsed;
     Address m_contractAddress;
     LogBloom m_bloom;
-    u256 m_status;
+
+protected:
+    executive::TransactionException m_status;
+
+private:
     bytes m_outputBytes;
     LogEntries m_log;
 };
@@ -108,6 +113,11 @@ public:
             m_localisedLogs.push_back(LocalisedLogEntry(
                 entries[i], m_blockHash, m_blockNumber, m_hash, m_transactionIndex, i));
     }
+
+    LocalisedTransactionReceipt(executive::TransactionException status) : m_blockNumber(0)
+    {
+        TransactionReceipt::m_status = status;
+    };
 
     h256 const& hash() const { return m_hash; }
     h256 const& blockHash() const { return m_blockHash; }
