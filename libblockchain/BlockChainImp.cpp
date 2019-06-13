@@ -363,6 +363,25 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
     return std::make_pair(count, number);
 }
 
+std::pair<int64_t, int64_t> BlockChainImp::totalFailedTransactionCount()
+{
+    int64_t count = 0;
+    int64_t number = 0;
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE, false);
+    if (tb)
+    {
+        auto entries = tb->select(SYS_KEY_TOTAL_FAILED_TRANSACTION, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string strCount = entry->getField(SYS_VALUE);
+            count = lexical_cast<int64_t>(strCount);
+            number = entry->num();
+        }
+    }
+    return std::make_pair(count, number);
+}
+
 bytes BlockChainImp::getCode(Address _address)
 {
     bytes ret;
@@ -823,7 +842,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             {
                 return TransactionReceipt();
             }
-            std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > lexical_cast<uint>(txIndex))
             {
                 return receipts[lexical_cast<uint>(txIndex)];
@@ -917,6 +936,31 @@ void BlockChainImp::writeTotalTransactionCount(
             auto entry = tb->newEntry();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
+        }
+        const TransactionReceipts& receipts = block.transactionReceipts();
+        int32_t failedTransactions = 0;
+        for (auto& receipt : receipts)
+        {
+            if (receipt.status() != TransactionException::None)
+            {
+                ++failedTransactions;
+            }
+        }
+        entries = tb->select(SYS_KEY_TOTAL_FAILED_TRANSACTION, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+            currentCount += failedTransactions;
+            auto updateEntry = tb->newEntry();
+            updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_FAILED_TRANSACTION, updateEntry, tb->newCondition());
+        }
+        else
+        {
+            auto entry = tb->newEntry();
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(failedTransactions));
+            tb->insert(SYS_KEY_TOTAL_FAILED_TRANSACTION, entry);
         }
     }
     else

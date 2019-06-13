@@ -37,8 +37,12 @@ bytes EncryptedFile::decryptContents(
     bytes decFileBytes;
     try
     {
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Trying to read enc file")
+                   << LOG_KV("file", _filePath);
         string encContextsStr = contentsString(_filePath);
         encFileBytes = fromHex(encContextsStr);
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
+                   << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
         bytes dataKey;
         if (nullptr == _keyCenter)

@@ -69,7 +69,9 @@ addons:
     - python
     - pip
 install: |
-    if [ $TRAVIS_OS_NAME == linux ]; then bash tools/ci/check-commit.sh; fi
+    if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then 
+      bash tools/ci/check-commit.sh; 
+    fi
 script: |
     mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
     make -j2 && cd ../tools && bash ci/ci_check.sh
