@@ -842,7 +842,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             {
                 return TransactionReceipt();
             }
-            const TransactionReceipts& receipts = pblock->getTransactionReceipts();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > lexical_cast<uint>(txIndex))
             {
                 return receipts[lexical_cast<uint>(txIndex)];
@@ -873,7 +873,7 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
                     TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
             }
             const Transactions& txs = pblock->transactions();
-            const TransactionReceipts& receipts = pblock->getTransactionReceipts();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > txIndex && txs.size() > txIndex)
             {
                 auto& tx = txs[txIndex];
@@ -937,18 +937,15 @@ void BlockChainImp::writeTotalTransactionCount(
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
         }
-        const TransactionReceipts& receipts = block.getTransactionReceipts();
-        std::atomic<int32_t> failedTransactions(0);
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, receipts.size()),
-            [&](const tbb::blocked_range<size_t>& _r) {
-                for (size_t i = _r.begin(); i != _r.end(); ++i)
-                {
-                    if (receipts[i].status() != TransactionException::None)
-                    {
-                        ++failedTransactions;
-                    }
-                }
-            });
+        const TransactionReceipts& receipts = block.transactionReceipts();
+        int32_t failedTransactions = 0;
+        for (auto& receipt : receipts)
+        {
+            if (receipt.status() != TransactionException::None)
+            {
+                ++failedTransactions;
+            }
+        }
         entries = tb->select(SYS_KEY_TOTAL_FAILED_TRANSACTION, tb->newCondition());
         if (entries->size() > 0)
         {
