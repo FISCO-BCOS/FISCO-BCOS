@@ -57,8 +57,8 @@ class ChannelRPCServer : public jsonrpc::AbstractServerConnector,
 public:
     enum ChannelERRORCODE
     {
-        REMOTE_PEER_UNAVAILIBLE = 100,
-        REMOTE_CLIENT_PEER_UNAVAILBLE = 101,
+        REMOTE_PEER_UNAVAILABLE = 100,
+        REMOTE_CLIENT_PEER_UNAVAILABLE = 101,
         TIMEOUT = 102
     };
 
