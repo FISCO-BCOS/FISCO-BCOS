@@ -62,11 +62,6 @@ macro(configure_project)
     eth_default_option(DEMO OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
-    # log control
-    eth_default_option(EASYLOG OFF)
-    if (EASYLOG)
-        add_definitions(-DFISCO_EASYLOG)
-    endif()
 
     # guomi
     eth_default_option(BUILD_GM OFF)
@@ -124,7 +119,6 @@ macro(print_config NAME)
     message("-- DEMO             Build demos                  ${DEMO}")
     message("-- COVERAGE         Build code coverage          ${COVERAGE}")
     message("-- TESTS            Build tests                  ${TESTS}")
-    message("-- EasyLog          Enable easyLog               ${EASYLOG}")
     message("-- ARCH_NATIVE      Enable native code           ${ARCH_NATIVE}")
     message("-- PROF                                          ${PROF}")
 if (BUILD_GM)
