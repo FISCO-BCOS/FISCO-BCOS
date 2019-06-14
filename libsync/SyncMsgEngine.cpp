@@ -93,8 +93,7 @@ bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
 
 bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
 {
-    bool hasPeer = m_syncStatus->hasPeer(_packet.nodeId);
-    return hasPeer;
+    return m_syncStatus->hasPeer(_packet.nodeId);
 }
 
 bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
