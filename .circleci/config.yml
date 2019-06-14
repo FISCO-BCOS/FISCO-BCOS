@@ -59,7 +59,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON -DEASYLOG=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
