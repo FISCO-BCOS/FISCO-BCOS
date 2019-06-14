@@ -77,10 +77,10 @@ function check_PR_limit()
         exit 1
     fi
     local deletions=$(git diff --shortstat HEAD^ | awk  -F ' '  '{print $6}')
-    if [ ${delete_limit} -lt ${deletions} ];then
-        LOG_ERROR "delete ${deletions} lines, limit is ${delete_limit}"
-        exit 1
-    fi
+    #if [ ${delete_limit} -lt ${deletions} ];then
+    #    LOG_ERROR "delete ${deletions} lines, limit is ${delete_limit}"
+    #    exit 1
+    #fi
     local commits=$(git rev-list --count HEAD^..HEAD)
     if [ ${commit_limit} -lt ${commits} ];then
         LOG_ERROR "${commits} commits, limit is ${commit_limit}"
