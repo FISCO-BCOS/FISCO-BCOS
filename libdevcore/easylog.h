@@ -22,50 +22,12 @@
  */
 
 #pragma once
-
-#pragma warning(push)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#ifdef FISCO_EASYLOG
-#include "easylogging++.h"
-#else
 #include "Log.h"
-#endif
-#pragma warning(pop)
-#pragma GCC diagnostic pop
-#include "vector_ref.h"
-#include <chrono>
-#include <ctime>
-//#include "Terminal.h"
-#include <map>
 #include <string>
 namespace dev
 {
-class ThreadContext
-{
-public:
-    ThreadContext(std::string const& _info) { push(_info); }
-    ~ThreadContext() { pop(); }
-
-    static void push(std::string const& _n);
-    static void pop();
-    static std::string join(std::string const& _prior);
-};
-
 void pthread_setThreadName(std::string const& _n);
-
-/// Set the current thread's log name.
-std::string getThreadName();
 }  // namespace dev
-
-#ifdef FISCO_EASYLOG
-#define MY_CUSTOM_LOGGER(LEVEL) CLOG(LEVEL, "default", "fileLogger")
-#undef LOG
-#define LOG(LEVEL) CLOG(LEVEL, "default", "fileLogger")
-#undef VLOG
-#define VLOG(LEVEL) CVLOG(LEVEL, "default", "fileLogger")
-#define LOGCOMWARNING LOG(WARNING) << "common|"
-#endif
 
 // BCOS log format
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"

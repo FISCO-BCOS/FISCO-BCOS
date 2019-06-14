@@ -36,11 +36,9 @@ void SyncMsgEngine::messageHandler(
 {
 #if 0
 // here will degrade the performance
-#ifndef FISCO_EASYLOG
     /// tag this scope with GroupId
     BOOST_LOG_SCOPED_THREAD_ATTR(
         "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
-#endif
 #endif
 
     SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
