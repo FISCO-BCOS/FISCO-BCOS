@@ -23,6 +23,8 @@
 #pragma once
 #include "Common.h"
 #include <libdevcore/easylog.h>
+#include <signal.h>
+#include <sys/types.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>
@@ -33,6 +35,7 @@
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/shared_ptr.hpp>
+
 namespace dev
 {
 namespace initializer
@@ -40,8 +43,23 @@ namespace initializer
 class LogInitializer
 {
 public:
+    class Sink : public boost::log::sinks::text_file_backend
+    {
+    public:
+        void consume(const boost::log::record_view& rec, const std::string& str)
+        {
+            boost::log::sinks::text_file_backend::consume(rec, str);
+            auto severity =
+                rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
+                    .extract<boost::log::trivial::severity_level>();
+            if (severity.get() == boost::log::trivial::severity_level::fatal)
+            {
+                raise(SIGTERM);
+            }
+        }
+    };
     typedef std::shared_ptr<LogInitializer> Ptr;
-    typedef boost::log::sinks::asynchronous_sink<boost::log::sinks::text_file_backend> sink_t;
+    typedef boost::log::sinks::asynchronous_sink<Sink> sink_t;
     virtual ~LogInitializer() { stopLogging(); }
     LogInitializer() {}
     void initLog(boost::property_tree::ptree const& _pt,
