@@ -477,9 +477,8 @@ Transactions TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 
     ReadGuard l(m_lock);
     Transactions ret;
     uint64_t limit = min(m_limit, _limit);
-    uint64_t txCnt = 0;
-
     {
+        uint64_t txCnt = 0;
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
