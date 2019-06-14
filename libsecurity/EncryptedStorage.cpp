@@ -23,6 +23,7 @@
 #include "EncryptedStorage.h"
 #include "Common.h"
 #include "KeyCenter.h"
+#include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <libstorage/Common.h>
 
@@ -30,47 +31,74 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-std::string encryptValue(const bytes& dataKey, const string& value)
+std::string encryptValue(const bytes& dataKey, const string& value, const string& k)
 {
-    bytesConstRef valueRef{(const unsigned char*)value.c_str(), value.length()};
-    bytes enData = aesCBCEncrypt(valueRef, ref(dataKey));
-    return asString(enData);
+    try
+    {
+        bytesConstRef valueRef{(const unsigned char*)value.c_str(), value.length()};
+        bytes enData = aesCBCEncrypt(valueRef, ref(dataKey));
+        return asString(enData);
+    }
+    catch (...)
+    {
+        LOG(ERROR) << LOG_BADGE("EncStorage")
+                   << LOG_DESC("encryptValue error, just return without encrypt")
+                   << LOG_KV(k, value);
+    }
+    return value;
 }
 
-std::string decryptValue(const bytes& dataKey, const std::string& value)
+std::string decryptValue(const bytes& dataKey, const std::string& value, const string& k)
 {
-    bytes deData = aesCBCDecrypt(
-        bytesConstRef{(const unsigned char*)value.c_str(), value.length()}, ref(dataKey));
-    return asString(deData);
+    try
+    {
+        bytes deData = aesCBCDecrypt(
+            bytesConstRef{(const unsigned char*)value.c_str(), value.length()}, ref(dataKey));
+        return asString(deData);
+    }
+    catch (...)
+    {
+        LOG(ERROR) << LOG_BADGE("EncStorage")
+                   << LOG_DESC("decryptValue error, just return without decrypt")
+                   << LOG_KV(k, value);
+    }
+    return value;
 }
 
 Entries::Ptr EncryptedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
     const std::string& key, Condition::Ptr condition)
 {
-    // Ignore system field
-    if (!isHashField(key))
-    {
-        return m_backend->select(hash, num, tableInfo, key, condition);
-    }
-
+    (void)condition;
     /*
         Notice:
         If config.ini [storage security] enable=true, the selection condition is not available!
         The condition selection is only depended on upper class(MemoryTable2's processEntry()).
         Thus, force onlyDiry() to return false and overwrite condition to empty
     */
-
+    checkDataKey();
+    string encKey = encryptValue(m_dataKey, key, "entries key");
     Entries::Ptr encEntries =
-        m_backend->select(hash, num, tableInfo, key, std::make_shared<Condition>());
+        m_backend->select(hash, num, tableInfo, encKey, std::make_shared<Condition>());
     return decryptEntries(encEntries);
 }
 
 size_t EncryptedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
+    set<string> hasEncryptedTable;
     for (auto data : datas)
     {
+        string tableName = data->info->name;
+        auto it = hasEncryptedTable.find(tableName);
+        if (it != hasEncryptedTable.end())
+        {
+            LOG(WARNING) << LOG_BADGE("EncStorage") << LOG_DESC("Commit table twice")
+                         << LOG_KV("tableName", tableName);
+            continue;  // Forbid encrypting a table twice at a commit process
+        }
+
         data->dirtyEntries = encryptEntries(data->dirtyEntries);
         data->newEntries = encryptEntries(data->newEntries);
+        hasEncryptedTable.insert(tableName);
     }
     return m_backend->commit(hash, num, datas);
 }
@@ -84,7 +112,6 @@ void EncryptedStorage::setBackend(Storage::Ptr backend)
 Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
 {
     checkDataKey();
-
     auto entriesSize = inEntries->size();
     for (size_t i = 0; i < entriesSize; i++)  // XX need parallel
     {
@@ -93,7 +120,7 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
         {
             if (isHashField(inKV.first))
             {
-                string v = encryptValue(m_dataKey, inKV.second);
+                string v = encryptValue(m_dataKey, inKV.second, inKV.first);
                 inEntry->setField(inKV.first, v);
             }
         }
@@ -113,7 +140,7 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
         {
             if (isHashField(inKV.first))
             {
-                string v = decryptValue(m_dataKey, inKV.second);
+                string v = decryptValue(m_dataKey, inKV.second, inKV.first);
                 inEntry->setField(inKV.first, v);
             }
         }
