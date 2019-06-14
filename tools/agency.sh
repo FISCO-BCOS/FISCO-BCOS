@@ -43,7 +43,7 @@ dir_must_not_exists() {
 gen_agency_cert() {
     chain="$2"
     agencypath="$3"
-    name=`getname "$agencypath"`
+    name=$(getname "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
