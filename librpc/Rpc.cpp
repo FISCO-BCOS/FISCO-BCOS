@@ -1006,7 +1006,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
-            tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
+            tx.setRpcCallback([transactionCallback](
+                                  LocalisedTransactionReceipt::Ptr receipt, bytes const& input) {
                 Json::Value response;
 
                 response["transactionHash"] = toJS(receipt->hash());
@@ -1030,6 +1031,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                 }
                 response["logsBloom"] = toJS(receipt->bloom());
                 response["status"] = toJS(receipt->status());
+                response["input"] = toJS(input);
                 response["output"] = toJS(receipt->outputBytes());
 
                 auto receiptContent = response.toStyledString();
