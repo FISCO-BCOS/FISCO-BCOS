@@ -47,7 +47,9 @@ class BasicCheck(object):
         build local db blockchain
         """
         LOG_INFO("========== build_localdb_blockchain")
-        command = "bash build_chain.sh -l "+ self.rpc_ip + ":" + str(self.node_num) + " -e ../build/bin/fisco-bcos -p " + str(self.p2p_port) + "," + str(self.channel_port) + "," + str(self.rpc_port) + " -v " + self.version
+        command = ("bash build_chain.sh -l "+ self.rpc_ip + ":" + str(self.node_num) 
+                   + " -e ../build/bin/fisco-bcos -p " + str(self.p2p_port) + "," +
+                    str(self.channel_port) + "," + str(self.rpc_port) + " -v " + self.version)
         (status, result) = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("=== start node:")
@@ -137,8 +139,8 @@ class BasicCheck(object):
                     LOG_ERROR("unexpected return value of getConsensusStatus:" + response.text)
             else:
                 LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, maybe the node has been shut-down!")
-        except Exception, e:
-            LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, error info:" + str(e))
+        except Exception as err:
+            LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, error info:" + str(err))
 
     def getTotalTransaction(self, node_id):
         """
