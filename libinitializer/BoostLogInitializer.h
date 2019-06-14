@@ -23,8 +23,6 @@
 #pragma once
 #include "Common.h"
 #include <libdevcore/easylog.h>
-#include <signal.h>
-#include <sys/types.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>
@@ -54,7 +52,10 @@ public:
                     .extract<boost::log::trivial::severity_level>();
             if (severity.get() == boost::log::trivial::severity_level::fatal)
             {
-                raise(SIGTERM);
+                // abort if encounter fatal, will generate coredump
+                // must make sure only use LOG(FATAL) when encounter the most serious problem
+                // forbid use LOG(FATAL) in the function that should exit normally
+                std::abort();
             }
         }
     };
