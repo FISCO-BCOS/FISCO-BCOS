@@ -24,7 +24,6 @@
 
 #include "ChannelException.h"
 #include "Message.h"
-#include "http_parser.h"
 #include <arpa/inet.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
