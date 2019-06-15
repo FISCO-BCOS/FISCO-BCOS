@@ -956,7 +956,6 @@ void PBFTEngine::checkAndSave()
                 record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
                 auto noteSealing_time_cost = utcTime() - record_time;
-                record_time = utcTime();
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("CommitBlock Succ")
                     << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)

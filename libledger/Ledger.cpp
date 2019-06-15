@@ -568,9 +568,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
             m_param->mutableConsensusParam().maxElectTime, protocol_id,
             m_param->mutableConsensusParam().sealerList);
-    /// set params for RaftEngine
-    std::shared_ptr<RaftEngine> raftEngine =
-        std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
     return raftSealer;
 }
 
