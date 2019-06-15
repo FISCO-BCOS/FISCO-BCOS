@@ -86,43 +86,6 @@ bool ChannelRPCServer::StartListening()
     return true;
 }
 
-void ChannelRPCServer::initSSLContext()
-{
-    _sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
-
-    vector<pair<string, Public> > certificates;
-    string nodepri;
-
-    EC_KEY* ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-    SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(), ecdh);
-    EC_KEY_free(ecdh);
-
-    _sslContext->set_verify_depth(3);
-    _sslContext->add_certificate_authority(
-        boost::asio::const_buffer(certificates[0].first.c_str(), certificates[0].first.size()));
-
-    string chain = certificates[0].first + certificates[1].first;
-    _sslContext->use_certificate_chain(boost::asio::const_buffer(chain.c_str(), chain.size()));
-    _sslContext->use_certificate(
-        boost::asio::const_buffer(certificates[2].first.c_str(), certificates[2].first.size()),
-        ba::ssl::context::file_format::pem);
-
-    _sslContext->use_private_key(
-        boost::asio::const_buffer(nodepri.c_str(), nodepri.size()), ba::ssl::context_base::pem);
-
-    _server = make_shared<dev::channel::ChannelServer>();
-    _server->setIOService(_ioService);
-    _server->setSSLContext(_sslContext);
-
-    _server->setEnableSSL(true);
-    _server->setBind(_listenAddr, _listenPort);
-
-    std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp =
-        std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1,
-            std::placeholders::_2);
-    _server->setConnectionHandler(fp);
-}
-
 bool ChannelRPCServer::StopListening()
 {
     if (_running)

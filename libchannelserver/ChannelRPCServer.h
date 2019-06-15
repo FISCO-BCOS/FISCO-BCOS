@@ -129,8 +129,6 @@ public:
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
-    void initSSLContext();
-
     dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
         dev::channel::Message::Ptr message,
         const std::set<dev::channel::ChannelSession::Ptr>& exclude);
