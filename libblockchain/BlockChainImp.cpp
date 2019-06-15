@@ -766,11 +766,11 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLPByNumber(int64_t _i)
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
-    string strblock = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblock = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
@@ -795,11 +795,11 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 
 LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
-    string strblockhash = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblockhash = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
@@ -826,11 +826,11 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
-    string strblock = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblock = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
