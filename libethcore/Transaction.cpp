@@ -292,7 +292,9 @@ void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) 
     try
     {
         if (m_rpcCallback)
-            m_rpcCallback(pReceipt);
+        {
+            m_rpcCallback(pReceipt, bytes());
+        }
     }
     catch (std::exception& e)
     {
