@@ -69,18 +69,18 @@ if [ ${num} -ne 19 ];then
 fi
 LOG_INFO "[round2]==============check report block is ok"
 
-LOG_INFO "[round2]==============check sync block"
-bash stop_all.sh
-rm -rf node0/data node0/log
-bash start_all.sh
-sleep 10
-num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 21 ];then
-    LOG_ERROR "[round2] sync block failed! ${num} != 21"
-    cat node*/log/* 
-    exit 1
-fi
-LOG_INFO "[round2]==============check sync block is ok"
+# LOG_INFO "[round2]==============check sync block"
+# bash stop_all.sh
+# rm -rf node0/data node0/log
+# bash start_all.sh
+# sleep 10
+# num=$(cat node*/log/* | grep Report | wc -l)
+# if [ ${num} -ne 21 ];then
+#     LOG_ERROR "[round2] sync block failed! ${num} != 21"
+#     cat node*/log/* 
+#     exit 1
+# fi
+# LOG_INFO "[round2]==============check sync block is ok"
 
 cd ../..
 python ci/ci_check.py
