@@ -137,15 +137,21 @@ void DBInitializer::initLevelDBStorage()
 
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
+    auto cachedStorage = std::make_shared<CachedStorage>();
+
     if (g_BCOSConfig.diskEncryption.enable)
     {
         auto encryptedStorage = std::make_shared<EncryptedStorage>();
         encryptedStorage->setBackend(_backend);
-        _backend = std::dynamic_pointer_cast<Storage>(encryptedStorage);
+        // TODO: delete global g_keyCenter
+        encryptedStorage->setDataKey(
+            g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey));
+        cachedStorage->setBackend(encryptedStorage);
     }
-
-    auto cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->setBackend(_backend);
+    else
+    {
+        cachedStorage->setBackend(_backend);
+    }
     cachedStorage->setMaxCapacity(
         m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
