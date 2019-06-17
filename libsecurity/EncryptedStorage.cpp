@@ -33,6 +33,7 @@ using namespace std;
 
 std::string encryptValue(const bytes& dataKey, const string& value, const string& k)
 {
+    // FIXME: use std::string instead of bytesRef
     try
     {
         bytesConstRef valueRef{(const unsigned char*)value.c_str(), value.length()};
@@ -75,7 +76,6 @@ Entries::Ptr EncryptedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tab
         The condition selection is only depended on upper class(MemoryTable2's processEntry()).
         Thus, force onlyDiry() to return false and overwrite condition to empty
     */
-    checkDataKey();
     string encKey = encryptValue(m_dataKey, key, "entries key");
     Entries::Ptr encEntries =
         m_backend->select(hash, num, tableInfo, encKey, std::make_shared<Condition>());
@@ -95,7 +95,7 @@ size_t EncryptedStorage::commit(h256 hash, int64_t num, const std::vector<TableD
                          << LOG_KV("tableName", tableName);
             continue;  // Forbid encrypting a table twice at a commit process
         }
-
+        // FIXME: should not overwrite const params, find a more elegant way
         data->dirtyEntries = encryptEntries(data->dirtyEntries);
         data->newEntries = encryptEntries(data->newEntries);
         hasEncryptedTable.insert(tableName);
@@ -105,15 +105,14 @@ size_t EncryptedStorage::commit(h256 hash, int64_t num, const std::vector<TableD
 
 void EncryptedStorage::setBackend(Storage::Ptr backend)
 {
-    // Check backend storage
     m_backend = backend;
 }
 
 Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
 {
-    checkDataKey();
     auto entriesSize = inEntries->size();
-    for (size_t i = 0; i < entriesSize; i++)  // XX need parallel
+    // TODO: use tbb parallel for
+    for (size_t i = 0; i < entriesSize; i++)
     {
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
@@ -130,10 +129,8 @@ Entries::Ptr EncryptedStorage::encryptEntries(Entries::Ptr inEntries)
 
 Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
 {
-    checkDataKey();
-
     auto entriesSize = inEntries->size();
-    for (size_t i = 0; i < entriesSize; i++)  // XX need parallel
+    for (size_t i = 0; i < entriesSize; i++)
     {
         Entry::Ptr inEntry = inEntries->get(i);
         for (auto const& inKV : *inEntry)
@@ -146,12 +143,4 @@ Entries::Ptr EncryptedStorage::decryptEntries(Entries::Ptr inEntries)
         }
     }
     return inEntries;
-}
-
-void EncryptedStorage::checkDataKey()
-{
-    if (m_dataKey == bytes())
-    {
-        m_dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
-    }
 }

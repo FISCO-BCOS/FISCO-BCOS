@@ -43,11 +43,11 @@ public:
     dev::GROUP_ID groupID() const { return m_backend->groupID(); }
     void setBackend(Storage::Ptr backend);
 
+    void setDataKey(const bytes& _dataKey) { m_dataKey = _dataKey; };
+
 private:
     Entries::Ptr encryptEntries(Entries::Ptr inEntries);
     Entries::Ptr decryptEntries(Entries::Ptr inEntries);
-
-    void checkDataKey();
 
 private:
     Storage::Ptr m_backend;
