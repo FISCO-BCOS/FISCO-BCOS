@@ -627,16 +627,6 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Optio
     }
 }
 
-bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs)
-{
-    for (auto const& nodeID : nodeIDs)
-    {
-        if (targetNodeID == nodeID)
-            return true;
-    }
-    return false;
-}
-
 void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler)
 {
     RecursiveGuard l(x_protocolID2Handler);

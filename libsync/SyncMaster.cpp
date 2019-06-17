@@ -180,7 +180,6 @@ void SyncMaster::doWork()
                 noteDownloadingFinish();
         }
         maintainDownloadingQueue_time_cost = utcTime() - record_time;
-        record_time = utcTime();
     }
 
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")

@@ -140,8 +140,6 @@ public:
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
-    bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
-
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 

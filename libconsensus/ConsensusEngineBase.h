@@ -111,9 +111,8 @@ public:
         status_obj["cfgErr"] = bool(m_cfgErr);
         status_obj["omitEmptyBlock"] = m_omitEmptyBlock;
         status_obj["nodeId"] = toHex(m_keyPair.pub());
-        int i = 0;
-        std::string sealer_list = "";
         {
+            int i = 0;
             ReadGuard l(m_sealerListMutex);
             for (auto sealer : m_sealerList)
             {
