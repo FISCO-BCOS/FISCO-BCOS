@@ -20,7 +20,7 @@ bin_path=
 make_tar=
 debug_log="false"
 log_level="info"
-logfile=build.log
+logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
 bcos_bin_name=fisco-bcos
 guomi_mode=
@@ -35,7 +35,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.0.0-rc3"
+default_version="2.0.0"
 macOS=""
 
 help() {
@@ -255,8 +255,6 @@ gen_agency_cert() {
         -in $agencydir/agency.csr -out $agencydir/agency.crt  -extensions v4_req -extfile $chain/cert.cnf
     
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
-    cp $chain/ca.crt $agencydir/ca-agency.crt
-    more $agencydir/agency.crt | cat >>$agencydir/ca-agency.crt
     rm -f $agencydir/agency.csr
 
     echo "build $name agency cert successful!"
@@ -359,8 +357,6 @@ gen_agency_cert_gm() {
     $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
-    cp $chain/gmca.crt $agencydir/ca-agency.crt
-    more $agencydir/gmagency.crt | cat >>$agencydir/ca-agency.crt
     rm -f $agencydir/gmagency.csr
 
     echo "build $name agency cert successful!"
