@@ -115,6 +115,10 @@ int main(int argc, const char* argv[])
     auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
     // get datetime and output welcome info
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+    ExitHandler exitHandler;
+    signal(SIGTERM, &ExitHandler::exitHandler);
+    signal(SIGABRT, &ExitHandler::exitHandler);
+    signal(SIGINT, &ExitHandler::exitHandler);
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
     try
@@ -133,10 +137,6 @@ int main(int argc, const char* argv[])
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     std::cout << "[" << buffer << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;
-    ExitHandler exitHandler;
-    signal(SIGABRT, &ExitHandler::exitHandler);
-    signal(SIGTERM, &ExitHandler::exitHandler);
-    signal(SIGINT, &ExitHandler::exitHandler);
 
     while (!exitHandler.shouldExit())
     {
