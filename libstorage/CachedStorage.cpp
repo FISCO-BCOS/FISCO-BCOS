@@ -177,12 +177,6 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
             {
                 totalCapacity += it->capacity();
             }
-
-#if 0
-            CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << tableInfo->name << "-" << key
-                                      << ", capacity: " << totalCapacity;
-#endif
-
             touchMRU(tableInfo->name, key, totalCapacity);
         }
     }
@@ -318,7 +312,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                                  it != caches->entries()->end(); ++it)
                                             {
                                                 if (it != entryIt)
-                                                {
+                                                {  // This addEntry is necessary, because backend
+                                                   // storage processDirtyEntries() will not get
+                                                   // data from real DB
                                                     commitData->dirtyEntries->addEntry(*it);
                                                 }
                                             }
@@ -327,21 +323,17 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
                                 else
                                 {
+                                    // impossible, so exit
                                     CACHED_STORAGE_LOG(FATAL)
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
-
-                                    // fatal log won't kill the program, manual exit here
-                                    exit(1);
                                 }
                             }
                             else
                             {
+                                // impossible, so exit
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
-
-                                // same as above
-                                exit(1);
                             }
 
                             touchMRU(requestData->info->name, key, change);
@@ -511,7 +503,12 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         }
         else
         {
-            commitBackend(task);
+            if (!commitBackend(task))
+            {
+                m_taskThreadPool->stop();
+                m_running->store(false);
+                BOOST_THROW_EXCEPTION(StorageException(-1, std::string("backend DB dead!")));
+            }
         }
     }
     else
@@ -734,7 +731,7 @@ bool CachedStorage::disabled()
     return ((m_maxCapacity == 0) && (m_maxForwardBlock == 0));
 }
 
-void CachedStorage::commitBackend(Task::Ptr task)
+bool CachedStorage::commitBackend(Task::Ptr task)
 {
     auto now = std::chrono::system_clock::now();
 
@@ -742,30 +739,33 @@ void CachedStorage::commitBackend(Task::Ptr task)
     try
     {
         m_backend->commit(task->hash, task->num, *(task->datas));
+
+        setSyncNum(task->num);
+
+        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+        STORAGE_LOG(INFO)
+            << "[g:" << std::to_string(groupID()) << "]"
+            << "\n---------------------------------------------------------------------\n"
+            << "Commit block: " << task->num
+            << " to backend storage finished, current cached block: " << m_commitNum << "\n"
+            << "Flush elapsed time: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
+            << elapsed.count() << "s"
+            << "\n---------------------------------------------------------------------\n";
+
+        if (disabled())
+        {
+            clear();
+        }
     }
     catch (std::exception& e)
     {
-        LOG(FATAL) << "Fail while commit data: " << e.what();
-
-        exit(1);
+        // stop() commit thread to exit
+        m_taskThreadPool->stop();
+        m_running->store(false);
+        STORAGE_LOG(ERROR) << "Stop commit thread. Fail to commit data: " << e.what();
+        return false;
     }
-
-    setSyncNum(task->num);
-
-    std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
-    STORAGE_LOG(INFO)
-        << "[g:" << std::to_string(groupID()) << "]"
-        << "\n---------------------------------------------------------------------\n"
-        << "Commit block: " << task->num
-        << " to backend storage finished, current cached block: " << m_commitNum << "\n"
-        << "Flush elapsed time: " << std::setiosflags(std::ios::fixed) << std::setprecision(4)
-        << elapsed.count() << "s"
-        << "\n---------------------------------------------------------------------\n";
-
-    if (disabled())
-    {
-        clear();
-    }
+    return true;
 }
 
 void CachedStorage::checkAndClear()
