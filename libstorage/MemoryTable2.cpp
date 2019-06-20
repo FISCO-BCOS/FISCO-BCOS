@@ -31,12 +31,22 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
+#include <csignal>
 #include <thread>
 #include <vector>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
+
+void prepareExit()
+{
+    raise(SIGTERM);
+    while (!g_BCOSConfig.shouldExit.load())
+    {
+        std::this_thread::yield();
+    }
+}
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
@@ -114,6 +124,8 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return std::make_shared<Entries>();
@@ -171,18 +183,17 @@ int MemoryTable2::update(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return 0;
 }
 
-int MemoryTable2::insert(
-    const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool needSelect)
+int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool)
 {
     try
     {
-        (void)needSelect;
-
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
@@ -214,7 +225,8 @@ int MemoryTable2::insert(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
+        // impossible, so exit
+        STORAGE_LOG(FATAL) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
@@ -263,6 +275,8 @@ int MemoryTable2::remove(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return 0;
