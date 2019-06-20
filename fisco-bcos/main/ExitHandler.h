@@ -21,15 +21,12 @@
  * @date 2018-11-07
  */
 #pragma once
-#include <map>
+#include "libconfig/GlobalConfigure.h"
+
 class ExitHandler
 {
 public:
     void exit() { exitHandler(0); }
-    static void exitHandler(int) { s_shouldExit = true; }
-    bool shouldExit() const { return s_shouldExit; }
-
-private:
-    static bool s_shouldExit;
+    static void exitHandler(int) { dev::g_BCOSConfig.shouldExit.store(true); }
+    bool shouldExit() const { return dev::g_BCOSConfig.shouldExit.load(); }
 };
-bool ExitHandler::s_shouldExit = false;

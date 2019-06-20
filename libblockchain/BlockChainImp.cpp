@@ -1132,8 +1132,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             writeTxToBlock(block, context);
             auto writeTxToBlock_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
-
-            context->dbCommit(block);
+            try
+            {
+                context->dbCommit(block);
+            }
+            catch (std::exception& e)
+            {
+                BLOCKCHAIN_LOG(ERROR)
+                    << LOG_DESC("Commit Block failed")
+                    << LOG_KV("number", block.blockHeader().number()) << LOG_KV("what", e.what());
+                return CommitResult::ERROR_COMMITTING;
+            }
             auto dbCommit_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             {

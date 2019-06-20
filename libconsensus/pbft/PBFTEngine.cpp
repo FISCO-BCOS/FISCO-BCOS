@@ -241,7 +241,7 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (DatabaseError const& e)
     {
-        PBFTENGINE_LOG(FATAL) << LOG_BADGE("DatabaseError")
+        PBFTENGINE_LOG(ERROR) << LOG_BADGE("DatabaseError")
                               << LOG_DESC("store backupMsg to leveldb failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
@@ -249,8 +249,8 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (std::exception const& e)
     {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
-                                << LOG_KV("EINFO", boost::diagnostic_information(e));
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to leveldb failed")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }

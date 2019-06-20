@@ -173,11 +173,9 @@ void DBInitializer::initSQLStorage()
     sqlStorage->setChannelRPCServer(m_channelRPCServer);
     sqlStorage->setTopic(m_param->mutableStorageParam().topic);
     sqlStorage->setFatalHandler([](std::exception& e) {
-        (void)e;
-        LOG(FATAL) << "Access amdb failed, exit";
-
-        // must use exit to avoid rasie failed
-        exit(1);
+        LOG(ERROR) << "Access amdb failed exit:" << e.what();
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(e);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
     initTableFactory2(sqlStorage);
@@ -243,10 +241,9 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {
-        LOG(FATAL) << "access mysql failed exit:" << e.what();
-
-        // must use exit to avoid rasie failed
-        exit(1);
+        LOG(ERROR) << "access mysql failed exit:" << e.what();
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(e);
     });
 
     initTableFactory2(zdbStorage);

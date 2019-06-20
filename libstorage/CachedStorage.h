@@ -137,7 +137,7 @@ private:
 
     bool disabled();
 
-    void commitBackend(Task::Ptr task);
+    bool commitBackend(Task::Ptr task);
 
     void checkAndClear();
 
