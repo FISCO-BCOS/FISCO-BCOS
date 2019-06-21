@@ -66,14 +66,12 @@ bytes CRUDPrecompiled::call(
 
     if (func == name2Selector[CRUD_METHOD_INSERT_STR])
     {  // insert(string tableName, string key, string entry, string optional)
-
         std::string tableName, key, entryStr, optional;
         abi.abiOut(data, tableName, key, entryStr, optional);
         if (key.size() > (size_t)USER_TABLE_KEY_VALUE_MAX_LENGTH)
         {
-            STORAGE_LOG(ERROR)
-            "key value:" << key << " size:" << key.size() << " greater than "
-                         << USER_TABLE_KEY_VALUE_MAX_LENGTH;
+            STORAGE_LOG(ERROR) << "key value:" << key << " size:" << key.size() << " greater than "
+                               << USER_TABLE_KEY_VALUE_MAX_LENGTH;
             char buff[1024] = {0};
             snprintf(buff, sizeof(buff), "size of value of key greater than %d",
                 USER_TABLE_KEY_VALUE_MAX_LENGTH);
