@@ -192,7 +192,7 @@ std::string SQLBasicAccess::BuildCreateTableSql(
     {
         boost::algorithm::replace_all_copy(*it, "\\", "\\\\");
         boost::algorithm::replace_all_copy(*it, "`", "\\`");
-        ss << "`" << *it << "` text,\n";
+        ss << "`" << *it << "` mediumtext,\n";
     }
     ss << " PRIMARY KEY( `_id_` ),\n";
     ss << " KEY(`" << keyfield << "`),\n";

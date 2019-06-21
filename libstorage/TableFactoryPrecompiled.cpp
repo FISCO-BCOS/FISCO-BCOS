@@ -118,24 +118,30 @@ bytes TableFactoryPrecompiled::call(
         for (auto& str : fieldNameList)
         {
             boost::trim(str);
-            if (str.size() > 64)
+            if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
             {  // mysql TableName and fieldName length limit is 64
-                BOOST_THROW_EXCEPTION(StorageException(
-                    CODE_TABLE_FILED_LENGTH_OVERFLOW, "table field name length overflow 64"));
+                char buff[1024] = {0};
+                snprintf(buff, sizeof(buff), "table field name length overflow %d",
+                    SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH);
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW, buff));
             }
         }
         valueFiled = boost::join(fieldNameList, ",");
-        if (valueFiled.size() > 1024)
+        if (valueFiled.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
         {
-            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW,
-                "total table field name length overflow 64"));
+            char buff[1024] = {0};
+            snprintf(buff, sizeof(buff), "total table field name length overflow %d",
+                SYS_TABLE_VALUE_FIELD_MAX_LENGTH);
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW, buff));
         }
 
         tableName = storage::USER_TABLE_PREFIX + tableName;
-        if (tableName.size() > 64)
+        if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(
-                StorageException(CODE_TABLE_NAME_LENGTH_OVERFLOW, "tableName length overflow 64"));
+            char buff[1024] = {0};
+            snprintf(
+                buff, sizeof(buff), "tableName length overflow %d", USER_TABLE_NAME_MAX_LENGTH);
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_NAME_LENGTH_OVERFLOW, buff));
         }
         int result = 0;
 

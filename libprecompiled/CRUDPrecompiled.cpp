@@ -20,8 +20,8 @@
  */
 
 #include "CRUDPrecompiled.h"
-
 #include "libstorage/EntriesPrecompiled.h"
+#include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
@@ -66,8 +66,20 @@ bytes CRUDPrecompiled::call(
 
     if (func == name2Selector[CRUD_METHOD_INSERT_STR])
     {  // insert(string tableName, string key, string entry, string optional)
+
         std::string tableName, key, entryStr, optional;
         abi.abiOut(data, tableName, key, entryStr, optional);
+        if (key.size() > (size_t)USER_TABLE_KEY_VALUE_MAX_LENGTH)
+        {
+            STORAGE_LOG(ERROR)
+            "key value:" << key << " size:" << key.size() << " greater than "
+                         << USER_TABLE_KEY_VALUE_MAX_LENGTH;
+            char buff[1024] = {0};
+            snprintf(buff, sizeof(buff), "size of value of key greater than %d",
+                USER_TABLE_KEY_VALUE_MAX_LENGTH);
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, buff));
+        }
+
         tableName = storage::USER_TABLE_PREFIX + tableName;
         Table::Ptr table = openTable(context, tableName);
         if (table)
@@ -78,6 +90,21 @@ bytes CRUDPrecompiled::call(
             {
                 out = abi.abiIn("", u256(parseEntryResult));
                 return out;
+            }
+
+            auto it = entry->begin();
+            for (; it != entry->end(); ++it)
+            {
+                if (it->second.size() > (size_t)USER_TABLE_FIELD_VALUE_MAX_LENGTH)
+                {
+                    STORAGE_LOG(ERROR) << "key:" << it->first << " value size:" << it->second.size()
+                                       << " greater than " << USER_TABLE_FIELD_VALUE_MAX_LENGTH;
+                    char buff[1024] = {0};
+                    snprintf(buff, sizeof(buff), "size of value of key greater than %d",
+                        USER_TABLE_FIELD_VALUE_MAX_LENGTH);
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, buff));
+                }
             }
 
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
@@ -114,6 +141,22 @@ bytes CRUDPrecompiled::call(
                 out = abi.abiIn("", u256(parseConditionResult));
                 return out;
             }
+
+            auto it = entry->begin();
+            for (; it != entry->end(); ++it)
+            {
+                if (it->second.size() > (size_t)USER_TABLE_FIELD_VALUE_MAX_LENGTH)
+                {
+                    STORAGE_LOG(ERROR) << "key:" << it->first << " value size:" << it->second.size()
+                                       << " greater than " << USER_TABLE_FIELD_VALUE_MAX_LENGTH;
+                    char buff[1024] = {0};
+                    snprintf(buff, sizeof(buff), "size of value of key greater than %d",
+                        USER_TABLE_FIELD_VALUE_MAX_LENGTH);
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, buff));
+                }
+            }
+
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", u256(result));

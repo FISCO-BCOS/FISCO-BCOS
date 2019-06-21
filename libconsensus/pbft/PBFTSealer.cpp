@@ -69,6 +69,9 @@ void PBFTSealer::handleBlock()
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
+
+
+    
 }
 void PBFTSealer::setBlock()
 {

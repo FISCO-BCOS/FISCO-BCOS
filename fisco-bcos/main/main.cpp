@@ -105,6 +105,7 @@ string initCommandLine(int argc, const char* argv[])
     return configPath;
 }
 
+#include <malloc.h>
 int main(int argc, const char* argv[])
 {
     /// set LC_ALL
