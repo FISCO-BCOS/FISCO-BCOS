@@ -310,6 +310,10 @@ uint64_t utcTime();
 /// Get the current time in seconds since the epoch in UTC(us)
 uint64_t utcTimeUs();
 
+// callback when throw exceptions
+struct Exception;
+void errorExit(std::stringstream& _exitInfo, Exception const& exception);
+
 /// Reference to a slice of buffer that also owns the buffer.
 ///
 /// This is extension to the concept C++ STL library names as array_view
