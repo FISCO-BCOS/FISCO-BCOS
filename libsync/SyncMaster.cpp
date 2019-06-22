@@ -491,9 +491,21 @@ bool SyncMaster::maintainDownloadingQueue()
                     parentBlock->header().number(), parentBlock->header().stateRoot()};
                 auto getBlockByNumber_time_cost = utcTime() - record_time;
                 record_time = utcTime();
-
+                SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                               << LOG_DESC("Download block execute")
+                               << LOG_KV("number", topBlock->header().number())
+                               << LOG_KV("txs", topBlock->transactions().size())
+                               << LOG_KV("hash", topBlock->headerHash().abridged());
                 ExecutiveContext::Ptr exeCtx =
                     m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
+
+                if (exeCtx == nullptr)
+                {
+                    bq.pop();
+                    topBlock = bq.top();
+                    continue;
+                }
+
                 auto executeBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -505,7 +517,7 @@ bool SyncMaster::maintainDownloadingQueue()
                     m_txPool->dropBlockTrans(*topBlock);
                     auto dropBlockTrans_time_cost = utcTime() - record_time;
                     SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                   << LOG_DESC("Download block commit")
+                                   << LOG_DESC("Download block commit succ")
                                    << LOG_KV("number", topBlock->header().number())
                                    << LOG_KV("txs", topBlock->transactions().size())
                                    << LOG_KV("hash", topBlock->headerHash().abridged())

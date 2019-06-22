@@ -167,7 +167,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
             conditionKey->EQ(tableInfo->key, key);
             auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
 
-            CACHED_STORAGE_LOG(DEBUG) << tableInfo->name << ": " << key << " miss the cache";
+            CACHED_STORAGE_LOG(TRACE) << tableInfo->name << ": " << key << " miss the cache";
 
             caches->setEntries(backendData);
             caches->setEmpty(false);
@@ -398,7 +398,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                         auto backendData =
                             m_backend->select(hash, num, commitData->info, key, conditionKey);
 
-                        CACHED_STORAGE_LOG(DEBUG) << commitData->info->name << "-" << key
+                        CACHED_STORAGE_LOG(TRACE) << commitData->info->name << "-" << key
                                                   << " miss the cache while commit new entries";
 
                         caches->setEntries(backendData);

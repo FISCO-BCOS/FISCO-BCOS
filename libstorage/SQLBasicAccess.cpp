@@ -29,20 +29,22 @@
 using namespace dev::storage;
 using namespace std;
 
-int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const std::string& key,
+int SQLBasicAccess::Select(h256, int, const std::string& _table, const std::string&,
     Condition::Ptr condition, std::vector<std::string>& columns,
     std::vector<std::vector<std::string> >& valueList)
 {
     std::string sql = this->BuildQuerySql(_table, condition);
+#if 0
     SQLBasicAccess_LOG(DEBUG) << "hash:" << hash.hex() << " num:" << num << " table:" << _table
                               << " key:" << key << " query sql:" << sql;
+#endif
     Connection_T conn = m_connPool->GetConnection();
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
     while (conn == NULL && retryCnt++ < retryMax)
     {
-        SQLBasicAccess_LOG(DEBUG) << "table:" << _table << "sql:" << sql
-                                  << " get connection failed";
+        SQLBasicAccess_LOG(WARNING)
+            << "table:" << _table << "sql:" << sql << " get connection failed";
         sleep(1);
         conn = m_connPool->GetConnection();
     }
@@ -64,9 +66,11 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
             {
                 PreparedStatement_setString(
                     _prepareStatement, ++index, it.second.right.second.c_str());
+#if 0
                 SQLBasicAccess_LOG(DEBUG)
                     << "hash:" << hash.hex() << " num:" << num << " table:" << _table
                     << " key:" << key << " index:" << index << " value:" << it.second.right.second;
+#endif
             }
         }
         ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
@@ -92,9 +96,11 @@ int SQLBasicAccess::Select(h256 hash, int num, const std::string& _table, const 
         return 0;
     }
     END_TRY;
+#if 0
     SQLBasicAccess_LOG(DEBUG) << "select now active connections:"
                               << m_connPool->GetActiveConnections()
                               << " max connections:" << m_connPool->GetMaxConnections();
+#endif
     m_connPool->ReturnConnection(conn);
     return 0;
 }
@@ -230,8 +236,10 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
                 _fieldName.push_back(fieldIt.first);
             }
             _fieldValue.push_back(fieldIt.second);
+#if 0
             SQLBasicAccess_LOG(DEBUG)
                 << "new entry key:" << fieldIt.first << " value:" << fieldIt.second;
+#endif
         }
         _fieldValue.push_back(hash.hex());
         _fieldValue.push_back(_num);
@@ -350,9 +358,10 @@ int SQLBasicAccess::CommitDo(
             auto itValue = _fieldValue.begin();
             for (; itSql != sqlList.end(); ++itSql)
             {
+#if 0
                 SQLBasicAccess_LOG(DEBUG) << " commit hash:" << hash.hex() << " num:" << num
                                           << " commit sql:" << itSql->sql;
-
+#endif
                 PreparedStatement_T preSatement =
                     Connection_prepareStatement(oConn, "%s", itSql->sql.c_str());
 
