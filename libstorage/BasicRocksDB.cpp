@@ -44,7 +44,6 @@ std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const st
     DB* db = nullptr;
     auto status = DB::Open(options, dbname, &db);
     checkStatus(status, dbname);
-
     m_db.reset(db);
     return m_db;
 }
@@ -54,7 +53,6 @@ Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std
     assert(m_db);
     auto status = m_db->Get(options, Slice(std::move(key)), &value);
     checkStatus(status);
-
     // decrypt value
     if (m_decryptHandler && !value.empty())
     {
@@ -67,7 +65,6 @@ Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::st
 {
     auto status = batch.Put(Slice(std::move(key)), Slice(value));
     checkStatus(status);
-
     return status;
 }
 
