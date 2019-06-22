@@ -82,7 +82,6 @@ public:
 
 protected:
     void checkStatus(rocksdb::Status const& status, std::string const& path = "");
-
     rocksdb::Status BatchPut(
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 
