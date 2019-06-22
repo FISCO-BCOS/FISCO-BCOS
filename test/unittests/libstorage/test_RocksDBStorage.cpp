@@ -19,19 +19,21 @@
  *  @date 20180425
  */
 
-#include "libstorage/RocksDBStorage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Log.h>
+#include <libstorage/BasicRocksDB.h>
+#include <libstorage/RocksDBStorage.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace std;
 using namespace dev::storage;
 using namespace rocksdb;
+using namespace dev::db;
 namespace rocksdb
 {
 Status ReadRecordFromWriteBatch(Slice* input, char* tag, uint32_t* column_family, Slice* key,
@@ -50,36 +52,14 @@ struct MockWriteBatch : public rocksdb::WriteBatch
     }
 };
 
-class MockRocksDB : public rocksdb::DB
+class MockRocksDB : public BasicRocksDB
 {
 public:
     MockRocksDB() {}
     virtual ~MockRocksDB() {}
-
-    virtual Status Put(const WriteOptions&, ColumnFamilyHandle*, const Slice&, const Slice&)
+    Status Write(WriteOptions const&, WriteBatch& updates) override
     {
-        return Status::OK();
-    }
-
-    virtual Status Delete(const WriteOptions&, ColumnFamilyHandle*, const Slice& key)
-    {
-        db.erase(key.ToString());
-        return Status::OK();
-    }
-    Status SingleDelete(const WriteOptions&, ColumnFamilyHandle*, const Slice& key)
-    {
-        db.erase(key.ToString());
-        return Status::OK();
-    }
-    Status Merge(const WriteOptions&, ColumnFamilyHandle*, const Slice&, const Slice&)
-    {
-        return Status::OK();
-    }
-    virtual Status Write(const WriteOptions&, WriteBatch* updates)
-    {
-        if (updates == nullptr)
-            return Status::InvalidArgument(Slice("InvalidArgument"));
-        auto batch = reinterpret_cast<MockWriteBatch*>(updates);
+        auto batch = reinterpret_cast<MockWriteBatch*>(&updates);
         size_t count = batch->Count();
         auto input = batch->getOriginData();
         char tag = 0;
@@ -93,7 +73,7 @@ public:
             {
                 break;
             }
-            if (key.ToString() == "e_Exception")
+            if (key == "e_Exception")
                 return Status::InvalidArgument(Slice("InvalidArgument"));
             LOG(INFO) << "write key=" << key.ToString();
             db.insert(std::make_pair(key.ToString(), value.ToString()));
@@ -101,17 +81,37 @@ public:
         return Status::OK();
     }
 
-    virtual Status Get(
-        const ReadOptions&, ColumnFamilyHandle*, const Slice& key, std::string* value)
+    Status Get(ReadOptions const&, std::string const& key, std::string& value) override
     {
-        if (value == nullptr || key.empty() || key == "e_Exception")
+        if (key.empty() || key == "e_Exception")
             return Status::InvalidArgument(Slice("InvalidArgument"));
-        auto it = db.find(key.ToString());
+        auto it = db.find(key);
         if (it == db.end())
             return Status::NotFound(Slice("NotFound"));
-        *value = it->second;
+        value = it->second;
         return Status::OK();
     }
+#if 0
+    virtual Status Delete(const WriteOptions&, ColumnFamilyHandle*, const Slice& key)
+    {
+        db.erase(key.ToString());
+        return Status::OK();
+    }
+    
+    Status SingleDelete(const WriteOptions&, ColumnFamilyHandle*, const Slice& key)
+    {
+        db.erase(key.ToString());
+        return Status::OK();
+    }
+    Status Merge(const WriteOptions&, ColumnFamilyHandle*, const Slice&, const Slice&)
+    {
+        return Status::OK();
+    }
+        virtual Status Put(const WriteOptions&, ColumnFamilyHandle*, const Slice&, const Slice&)
+    {
+        return Status::OK();
+    }
+    
     Status Get(const ReadOptions&, ColumnFamilyHandle*, const Slice&, PinnableSlice*)
     {
         return Status::OK();
@@ -207,7 +207,7 @@ public:
     {
         return Status::OK();
     }
-
+#endif
 private:
     // No copying allowed
     MockRocksDB(const MockRocksDB&) = delete;
