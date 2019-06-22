@@ -22,6 +22,7 @@
 #include "ParallelConfigPrecompiled.h"
 #include <libstorage/EntriesPrecompiled.h>
 #include <libstorage/TableFactoryPrecompiled.h>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 using namespace dev;
@@ -142,7 +143,8 @@ void ParallelConfigPrecompiled::registerParallelFunction(
         Entry::Ptr entry = table->newEntry();
         entry->setField(PARA_SELECTOR, to_string(selector));
         entry->setField(PARA_FUNC_NAME, functionName);
-        entry->setField(PARA_CRITICAL_SIZE, toBigEndianString(criticalSize));
+        // entry->setField(PARA_CRITICAL_SIZE, toBigEndianString(criticalSize));
+        entry->setField(PARA_CRITICAL_SIZE, boost::lexical_cast<std::string>(criticalSize));
 
         Condition::Ptr cond = table->newCondition();
         cond->EQ(PARA_SELECTOR, to_string(selector));
@@ -210,7 +212,8 @@ ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
     {
         auto entry = entries->get(0);
         string funtionName = entry->getField(PARA_FUNC_NAME);
-        u256 criticalSize = fromBigEndian<u256, string>(entry->getField(PARA_CRITICAL_SIZE));
+        u256 criticalSize = boost::lexical_cast<u256>(entry->getField(PARA_CRITICAL_SIZE));
+        // u256 criticalSize = fromBigEndian<u256, string>(entry->getField(PARA_CRITICAL_SIZE));
         return make_shared<ParallelConfig>(ParallelConfig{funtionName, criticalSize});
     }
 }
