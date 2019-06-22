@@ -556,14 +556,14 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
-    if(block.blockHeader().number() <= m_blockChain->number())
+    if (block.blockHeader().number() <= m_blockChain->number())
     {
         return false;
     }
     {
         // decrease the range of mutex
         Guard l(m_mutex);
-        if(block.blockHeader().number() <= m_blockChain->number())
+        if (block.blockHeader().number() <= m_blockChain->number())
         {
             return false;
         }
