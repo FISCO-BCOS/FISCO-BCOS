@@ -54,14 +54,7 @@ Entries::Ptr RocksDBStorage::select(
         entryKey.append("_").append(key);
 
         string value;
-        auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
-        if (!s.ok() && !s.IsNotFound())
-        {
-            STORAGE_ROCKSDB_LOG(ERROR)
-                << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
-
-            BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
-        }
+        auto s = m_db->Get(ReadOptions(), entryKey, value);
 
         Entries::Ptr entries = make_shared<Entries>();
         if (!s.IsNotFound())
@@ -131,8 +124,8 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
                         boost::archive::binary_oarchive oa(ss);
                         oa << it.second;
                         {
-                            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                            batch.Put(Slice(std::move(entryKey)), Slice(ss.str()));
+                            std::string value = ss.str();
+                            m_db->PutWithLock(batch, entryKey, value, m_writeBatchMutex);
                         }
                     }
                 }
@@ -141,7 +134,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
         WriteOptions options;
         options.sync = false;
-        m_db->Write(options, &batch);
+        m_db->Write(options, batch);
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
@@ -166,10 +159,6 @@ bool RocksDBStorage::onlyDirty()
     return false;
 }
 
-void RocksDBStorage::setDB(shared_ptr<rocksdb::DB> db)
-{
-    m_db = db;
-}
 
 void RocksDBStorage::processNewEntries(int64_t num,
     shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
@@ -194,15 +183,7 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 entryKey.append("_").append(key);
 
                 string value;
-                auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
-                if (!s.ok() && !s.IsNotFound())
-                {
-                    STORAGE_ROCKSDB_LOG(ERROR)
-                        << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
-
-                    BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Query rocksdb exception:" + s.ToString()));
-                }
+                auto s = m_db->Get(ReadOptions(), entryKey, value);
 
                 if (s.IsNotFound())
                 {
