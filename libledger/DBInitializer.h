@@ -28,6 +28,7 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
@@ -80,6 +81,12 @@ protected:
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
+    // open and init rocksDB
+    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
+    // set handler to rocksDB
+    template <typename T>
+    void setHandlerForDB(std::shared_ptr<T> rocksDB);
+    void unsupportedFeatures(std::string const& desc);
 
 private:
     void initLevelDBStorage();
@@ -92,7 +99,6 @@ private:
     void createMptState(dev::h256 const& genesisHash);
 
     void initZdbStorage();
-
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;

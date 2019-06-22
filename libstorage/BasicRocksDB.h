@@ -26,7 +26,6 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
 #include <libdevcore/Common.h>
-//#include <libdevcore/db.h>
 #include <libdevcore/easylog.h>
 #include <tbb/spin_mutex.h>
 #include <memory>
