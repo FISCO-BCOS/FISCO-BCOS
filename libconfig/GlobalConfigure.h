@@ -62,6 +62,7 @@ public:
         std::string keyCenterIP;
         int keyCenterPort;
         std::string cipherDataKey;
+        std::string dataKey;
     } diskEncryption;
 
     /// default block time

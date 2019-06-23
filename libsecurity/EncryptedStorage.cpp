@@ -22,7 +22,6 @@
 
 #include "EncryptedStorage.h"
 #include "Common.h"
-#include "KeyCenter.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <libstorage/Common.h>
