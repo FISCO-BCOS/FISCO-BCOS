@@ -164,11 +164,16 @@ void PBFTEngine::initBackupDB()
     db::BasicLevelDB* basicDB = NULL;
     leveldb::Status status;
 
-    if (g_BCOSConfig.diskEncryption.enable)
-        status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(),
-            &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey);
+    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        status =
+            EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB,
+                g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
+    }
     else
+    {
         status = BasicLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB);
+    }
 
     LevelDB::checkStatus(status, path_handler);
 

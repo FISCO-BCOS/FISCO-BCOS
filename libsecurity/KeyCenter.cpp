@@ -221,7 +221,7 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     catch (exception& e)
     {
         clearCache();
-        KC_LOG(DEBUG) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
+        KC_LOG(ERROR) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
@@ -234,12 +234,6 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     m_port = _port;
     m_url = m_ip + ":" + std::to_string(m_port);
     KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
-}
-
-shared_ptr<KeyCenter> KeyCenter::instance()
-{
-    static shared_ptr<KeyCenter> ins = make_shared<KeyCenter>();
-    return ins;
 }
 
 dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)

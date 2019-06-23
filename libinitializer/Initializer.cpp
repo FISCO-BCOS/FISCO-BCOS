@@ -41,9 +41,6 @@ void Initializer::init(std::string const& _path)
         /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
 
-        /// init key center
-        KeyCenterInitializer::init();
-
         /// init certificates
         m_secureInitializer = std::make_shared<SecureInitializer>();
         m_secureInitializer->initConfig(pt);

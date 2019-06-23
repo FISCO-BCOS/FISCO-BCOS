@@ -28,8 +28,8 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
-#include <libsecurity/EncryptedLevelDB.h>
 #include <libsecurity/EncryptedStorage.h>
+#include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
@@ -100,7 +100,7 @@ void DBInitializer::initLevelDBStorage()
             // Use disk encryption
             DBInitializer_LOG(DEBUG) << LOG_DESC("open encrypted leveldb handler");
             status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
-                &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey);
+                &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey,g_BCOSConfig.diskEncryption.dataKey);
         }
         else
         {
@@ -143,9 +143,7 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
     {
         auto encryptedStorage = std::make_shared<EncryptedStorage>();
         encryptedStorage->setBackend(_backend);
-        // TODO: delete global g_keyCenter
-        encryptedStorage->setDataKey(
-            g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey));
+        encryptedStorage->setDataKey(asBytes(g_BCOSConfig.diskEncryption.dataKey));
         cachedStorage->setBackend(encryptedStorage);
     }
     else

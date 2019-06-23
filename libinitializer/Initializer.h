@@ -25,7 +25,6 @@
 #include "BoostLogInitializer.h"
 #include "Common.h"
 #include "InitializerInterface.h"
-#include "KeyCenterInitializer.h"
 #include "LedgerInitializer.h"
 #include "P2PInitializer.h"
 #include "RPCInitializer.h"

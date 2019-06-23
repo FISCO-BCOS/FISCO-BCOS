@@ -36,6 +36,35 @@ using namespace dev;
 using namespace dev::crypto;
 using namespace std;
 
+string dev::aesCBCEncrypt(const string& _plainData, const string& _key)
+{
+    string ivData(_key.substr(0, 16));
+    string cipherData;
+    CryptoPP::AES::Encryption aesEncryption((const unsigned char*)_key.data(), _key.size());
+    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(
+        aesEncryption, (const unsigned char*)ivData.data());
+    CryptoPP::StreamTransformationFilter stfEncryptor(
+        cbcEncryption, new CryptoPP::StringSink(cipherData));
+    stfEncryptor.Put((const unsigned char*)_plainData.data(), _plainData.size());
+    stfEncryptor.MessageEnd();
+    return cipherData;
+}
+
+string dev::aesCBCDecrypt(const string& _cypherData, const string& _key)
+{
+    string ivData(_key.substr(0, 16));
+    // LOG(DEBUG)<<"AES DE TYPE....................";
+    string decryptedData;
+    CryptoPP::AES::Decryption aesDecryption((const unsigned char*)_key.data(), _key.size());
+    CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption(
+        aesDecryption, (const unsigned char*)ivData.data());
+    CryptoPP::StreamTransformationFilter stfDecryptor(
+        cbcDecryption, new CryptoPP::StringSink(decryptedData));
+    // stfDecryptor.Put( reinterpret_cast<const unsigned char*>( cipherData.c_str() ),cipherLen);
+    stfDecryptor.Put((const unsigned char*)_cypherData.data(), _cypherData.size());
+    stfDecryptor.MessageEnd();
+    return decryptedData;
+}
 
 bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key)
 {
@@ -64,12 +93,4 @@ bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key)
     stfDecryptor.Put(_cypherData.data(), _cypherData.size());
     stfDecryptor.MessageEnd();
     return asBytes(decryptedData);
-}
-
-bytes dev::readableKeyBytes(const std::string& _readableKey)
-{
-    if (_readableKey.length() != 32)
-        BOOST_THROW_EXCEPTION(AESKeyLengthError() << errinfo_comment("Key must has 32 characters"));
-
-    return bytesConstRef{(unsigned char*)_readableKey.c_str(), _readableKey.length()}.toBytes();
 }
