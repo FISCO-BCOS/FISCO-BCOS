@@ -22,7 +22,6 @@
 
 #pragma once
 #include "Common.h"
-#include "KeyCenter.h"
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
 #include <libdevcore/BasicLevelDB.h>
@@ -53,13 +52,12 @@ class EncryptedLevelDB : public BasicLevelDB
 {
 public:
     EncryptedLevelDB(const leveldb::Options& _options, const std::string& _name,
-        const std::string& _cipherDataKey, std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);
+        const std::string& _cipherDataKey, const std::string& _dataKey);
     ~EncryptedLevelDB(){};
 
     static leveldb::Status Open(const leveldb::Options& _options, const std::string& _name,
-        BasicLevelDB** _dbptr, const std::string& _cipherDataKey = "",
-        std::shared_ptr<dev::KeyCenter> _keyCenter = nullptr);  // DB
-                                                                // open
+        BasicLevelDB** _dbptr, const std::string& _cipherDataKey,
+        const std::string& _dataKey);  // DB open
     leveldb::Status Get(const leveldb::ReadOptions& _options, const leveldb::Slice& _key,
         std::string* _value) override;
     leveldb::Status Put(const leveldb::WriteOptions& _options, const leveldb::Slice& _key,
@@ -78,7 +76,6 @@ public:
 private:
     std::string m_cipherDataKey;
     dev::bytes m_dataKey;
-    std::shared_ptr<dev::KeyCenter> m_keyCenter;
 
 private:
     std::string getKeyOfDatabase();

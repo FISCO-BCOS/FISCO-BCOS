@@ -86,8 +86,6 @@ public:
     void setKcClient(KeyCenterHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
     dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
 
-    static std::shared_ptr<KeyCenter> instance();
-
     void clearCache()
     {
         m_lastQueryCipherDataKey.clear();
@@ -105,7 +103,5 @@ private:
     std::string m_lastQueryCipherDataKey;
     dev::bytes m_lastRcvDataKey;
 };
-
-#define g_keyCenter KeyCenter::instance()  // Only one keycenter in a node
 
 }  // namespace dev

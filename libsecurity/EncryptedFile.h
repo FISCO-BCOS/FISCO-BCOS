@@ -22,7 +22,6 @@
 
 #pragma once
 #include "Common.h"
-#include "KeyCenter.h"
 #include <libdevcore/Common.h>
 #include <libdevcrypto/AES.h>
 #include <memory>
@@ -32,9 +31,7 @@ namespace dev
 class EncryptedFile
 {
 public:
-    static bytes decryptContents(
-        const std::string& _filePath, std::shared_ptr<KeyCenter> _keyCenter = nullptr);
-    // static bytes encrypt(const bytes& _fileBytes, std::shared_ptr<KeyCenter> _keyCenter);
+    static bytes decryptContents(const std::string& _filePath);
 };
 
 

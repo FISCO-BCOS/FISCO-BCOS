@@ -42,7 +42,6 @@ BOOST_AUTO_TEST_CASE(GM_testAESen)
     bytes seed_true = fromHex("01234567012345670123456701234564");
     bytes _plainData = fromHex("12345");
     // h256 key = dev::sha3(&seed);
-    BOOST_CHECK_THROW(readableKeyBytes("ref(seed)"), std::exception);
     bytes endata = aesCBCEncrypt(ref(_plainData), ref(seed_true));
     bytes dedata = aesCBCDecrypt(ref(endata), ref(seed_true));
     BOOST_CHECK_EQUAL(toHex(_plainData), toHex(dedata));
