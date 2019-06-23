@@ -55,6 +55,13 @@ Entries::Ptr RocksDBStorage::select(
 
         string value;
         auto s = m_db->Get(ReadOptions(), entryKey, value);
+        if (!s.ok() && !s.IsNotFound())
+        {
+            STORAGE_ROCKSDB_LOG(ERROR)
+                << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
+
+            BOOST_THROW_EXCEPTION(StorageException(-1, "Query rocksdb exception:" + s.ToString()));
+        }
 
         Entries::Ptr entries = make_shared<Entries>();
         if (!s.IsNotFound())
@@ -184,7 +191,14 @@ void RocksDBStorage::processNewEntries(int64_t num,
 
                 string value;
                 auto s = m_db->Get(ReadOptions(), entryKey, value);
+                if (!s.ok() && !s.IsNotFound())
+                {
+                    STORAGE_ROCKSDB_LOG(ERROR)
+                        << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(-1, "Query rocksdb exception:" + s.ToString()));
+                }
                 if (s.IsNotFound())
                 {
                     it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
