@@ -26,6 +26,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
 #include <libdevcore/Common.h>
+//#include <libdevcore/db.h>
 #include <libdevcore/easylog.h>
 #include <tbb/spin_mutex.h>
 #include <memory>
@@ -65,9 +66,6 @@ public:
     virtual rocksdb::Status PutWithLock(rocksdb::WriteBatch& batch, std::string const& key,
         std::string& value, tbb::spin_mutex& mutex);
 
-    virtual rocksdb::Status PutValue(
-        const rocksdb::WriteOptions& options, std::string const& key, std::string& value);
-
     virtual rocksdb::Status Write(
         rocksdb::WriteOptions const& options, rocksdb::WriteBatch& updates);
 
@@ -84,6 +82,8 @@ public:
     std::shared_ptr<rocksdb::DB> getDBHandler() { return m_db; }
 
 protected:
+    void checkStatus(rocksdb::Status const& status, std::string const& path = "");
+
     rocksdb::Status BatchPut(
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 

@@ -59,13 +59,7 @@ Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std
 {
     assert(m_db);
     auto status = m_db->Get(options, Slice(std::move(key)), &value);
-    if (!status.ok() && !status.IsNotFound())
-    {
-        std::stringstream exitInfo;
-        exitInfo << "Query rocksDB failed, status:" << status.ToString();
-        ROCKSDB_LOG(ERROR) << LOG_DESC(exitInfo.str());
-        errorExit(exitInfo, QueryDBFailed());
-    }
+    checkStatus(status);
     // decrypt value
     if (m_decryptHandler && !value.empty())
     {
@@ -77,13 +71,7 @@ Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std
 Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::string const& value)
 {
     auto status = batch.Put(Slice(std::move(key)), Slice(value));
-    if (!status.ok() && !status.IsNotFound())
-    {
-        std::stringstream exitInfo;
-        exitInfo << "Put key = " << key << " into rocksDB failed, status:" << status.ToString();
-        ROCKSDB_LOG(ERROR) << LOG_DESC(exitInfo.str());
-        errorExit(exitInfo, PutBatchFailed());
-    }
+    checkStatus(status);
     return status;
 }
 
@@ -95,7 +83,6 @@ Status BasicRocksDB::PutWithLock(
     {
         m_encryptHandler(value);
     }
-
     // put handled value into the batch
     tbb::spin_mutex::scoped_lock lock(mutex);
     return BatchPut(batch, key, value);
@@ -112,34 +99,26 @@ Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string&
     return BatchPut(batch, key, value);
 }
 
-Status BasicRocksDB::PutValue(
-    const WriteOptions& options, std::string const& key, std::string& value)
+void BasicRocksDB::checkStatus(Status const& status, std::string const& path)
 {
-    if (m_encryptHandler)
+    if (status.ok())
+        return;
+    if (status.IsIOError() || status.IsCorruption() || status.IsNoSpace())
     {
-        m_encryptHandler(value);
+        std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
+        if (!path.empty())
+        {
+            errorInfo = errorInfo + ", path:" + path;
+        }
+        ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
+        BOOST_THROW_EXCEPTION(DatabaseError() << errinfo_comment(errorInfo));
     }
-    auto status = m_db->Put(options, rocksdb::Slice(key), rocksdb::Slice(value));
-    if (!status.ok())
-    {
-        std::stringstream exitInfo;
-        exitInfo << "Put Data into db failed , status:" << status.ToString();
-        ROCKSDB_LOG(ERROR) << LOG_DESC(exitInfo.str());
-        errorExit(exitInfo, WriteDBFailed());
-    }
-    return status;
 }
 
 Status BasicRocksDB::Write(WriteOptions const& options, WriteBatch& batch)
 {
     auto status = m_db->Write(options, &batch);
-    if (!status.ok())
-    {
-        std::stringstream exitInfo;
-        exitInfo << "WriteDB failed , status:" << status.ToString();
-        ROCKSDB_LOG(ERROR) << LOG_DESC(exitInfo.str());
-        errorExit(exitInfo, WriteDBFailed());
-    }
+    checkStatus(status);
     return status;
 }
 
