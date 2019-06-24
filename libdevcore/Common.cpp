@@ -24,6 +24,7 @@
 #include "Common.h"
 #include "Exceptions.h"
 #include "easylog.h"
+#include <csignal>
 
 using namespace std;
 
@@ -65,6 +66,14 @@ uint64_t utcTimeUs()
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+void errorExit(std::stringstream& _exitInfo, Exception const& exception)
+{
+    LOG(ERROR) << _exitInfo.str();
+    std::cerr << _exitInfo.str();
+    raise(SIGTERM);
+    BOOST_THROW_EXCEPTION(exception << errinfo_comment(_exitInfo.str()));
 }
 
 thread_local std::string TimeRecorder::m_name;
