@@ -142,6 +142,7 @@ void PBFTEngine::resetConfig()
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
             "Must set at least one pbft sealer, current number of sealers is zero");
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(
             EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
     }
@@ -184,6 +185,7 @@ void PBFTEngine::initBackupDB()
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
             "initBackupDB: Disk space is insufficient, less than 100MB. Release disk space and try "
             "again");
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
     // reload msg from db to commited-prepare-cache
@@ -554,8 +556,20 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
-    Guard l(m_mutex);
-    resetConfig();
+    if (block.blockHeader().number() <= m_blockChain->number())
+    {
+        return false;
+    }
+    {
+        // decrease the range of mutex
+        Guard l(m_mutex);
+        if (block.blockHeader().number() <= m_blockChain->number())
+        {
+            return false;
+        }
+        resetConfig();
+    }
+
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
