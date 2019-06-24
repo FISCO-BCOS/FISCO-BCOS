@@ -28,8 +28,8 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libmptstate/MPTStateFactory.h>
-#include <libsecurity/EncryptedStorage.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libsecurity/EncryptedStorage.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
@@ -99,8 +99,9 @@ void DBInitializer::initLevelDBStorage()
         {
             // Use disk encryption
             DBInitializer_LOG(DEBUG) << LOG_DESC("open encrypted leveldb handler");
-            status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
-                &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey,g_BCOSConfig.diskEncryption.dataKey);
+            status =
+                EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb),
+                    g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
         }
         else
         {
