@@ -9,7 +9,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev zlib1g-dev ccache
+            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev zlib1g-dev ccache autoconf automake libtool
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -47,7 +47,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache autoconf automake libtool
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -86,7 +86,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache autoconf automake libtool
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -125,7 +125,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
+            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache autoconf automake libtool
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -164,7 +164,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev
+            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev autoconf automake libtool
       - checkout
       - run:
           name: Compile
@@ -193,7 +193,7 @@ jobs:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev
+            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev autoconf automake libtool
       - checkout
       - run:
           name: Compile
