@@ -102,28 +102,37 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 {
     std::string addInfo = *((std::string*)_addInfo);
 
-    std::lock_guard<std::mutex> lock(_seqMutex);
-    auto it = _seq2session.find(addInfo);
+    std::string seq;
+    ChannelSession::Ptr session;
+    {
+        std::lock_guard<std::mutex> lock(_seqMutex);
+        auto it = _seq2session.find(addInfo);
 
-    delete (std::string*)_addInfo;
+        if (it != _seq2session.end())
+        {
+            seq = it->first;
+            session = it->second;
+            _seq2session.erase(it);
+        }
 
-    if (it != _seq2session.end())
+        delete (std::string*)_addInfo;
+    }
+
+    if (session)
     {
         CHANNEL_LOG(TRACE) << "send ethereum resp seq"
-                           << LOG_KV("seq", it->first.substr(0, c_seqAbridgedLen))
+                           << LOG_KV("seq", seq.substr(0, c_seqAbridgedLen))
                            << LOG_KV("response", _response);
 
         std::shared_ptr<bytes> resp(new bytes());
 
-        auto message = it->second->messageFactory()->buildMessage();
-        message->setSeq(it->first);
+        auto message = session->messageFactory()->buildMessage();
+        message->setSeq(seq);
         message->setResult(0);
         message->setType(0x12);
         message->setData((const byte*)_response.data(), _response.size());
 
-        it->second->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-
-        _seq2session.erase(it);
+        session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
     }
     else
     {
