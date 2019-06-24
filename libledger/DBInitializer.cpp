@@ -208,7 +208,7 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
             InvalidDiskEncryptionSetting() << errinfo_comment("empty cipherDataKey"));
     }
     // get dataKey according to ciperDataKey from keyCenter
-    dev::bytes dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
+    dev::bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
     if (dataKey.size() == 0)
     {
         DBInitializer_LOG(ERROR) << LOG_DESC(
@@ -260,6 +260,8 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
+
+    // any exception will cause initBasicRocksDB failed, and the program will be stopped
     rocksDB->Open(options, m_param->mutableStorageParam().path);
 
     setHandlerForDB(rocksDB);

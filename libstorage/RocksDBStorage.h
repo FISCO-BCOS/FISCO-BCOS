@@ -20,7 +20,6 @@
  */
 #pragma once
 
-#include "BasicRocksDB.h"
 #include "Storage.h"
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
@@ -34,6 +33,11 @@ class DB;
 }
 namespace dev
 {
+namespace db
+{
+class BasicRocksDB;
+}
+
 namespace storage
 {
 class RocksDBStorage : public Storage

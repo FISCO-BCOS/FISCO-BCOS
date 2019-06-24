@@ -94,8 +94,10 @@ Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string&
 
 void BasicRocksDB::checkStatus(Status const& status, std::string const& path)
 {
-    if (status.ok())
+    if (status.ok() || status.IsNotFound())
+    {
         return;
+    }
     std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
     if (!path.empty())
     {
