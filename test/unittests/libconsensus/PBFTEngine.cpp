@@ -69,6 +69,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
                 std::chrono::system_clock::now());
 }
 /// test exception case of initPBFT
+#if 0
 BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
 {
     FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
@@ -76,6 +77,7 @@ BOOST_AUTO_TEST_CASE(testInitPBFTExceptionCase)
     fake_pbft.consensus()->setBaseDir("./invalid");
     BOOST_CHECK_THROW(fake_pbft.consensus()->initPBFTEnv(1000), NotEnoughAvailableSpace);
 }
+#endif
 
 /// test onRecvPBFTMessage
 BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
