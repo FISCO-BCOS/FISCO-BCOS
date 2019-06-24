@@ -20,6 +20,7 @@
  */
 
 #include "RocksDBStorage.h"
+#include "BasicRocksDB.h"
 #include "StorageException.h"
 #include "Table.h"
 #include "boost/archive/binary_iarchive.hpp"
@@ -93,6 +94,11 @@ Entries::Ptr RocksDBStorage::select(
 
         return entries;
     }
+    catch (DatabaseNeedRetry const& e)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("Query rocksdb exception, need to retry again ")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
+    }
     catch (exception& e)
     {
         STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Query rocksdb exception")
@@ -151,6 +157,11 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
         return datas.size();
     }
+    catch (DatabaseNeedRetry const& e)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("Query rocksdb exception, need to retry again ")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
+    }
     catch (exception& e)
     {
         STORAGE_ROCKSDB_LOG(ERROR) << LOG_DESC("Commit rocksdb exception")
@@ -190,6 +201,8 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 entryKey.append("_").append(key);
 
                 string value;
+
+                // this exception has already been catched in commit function
                 auto s = m_db->Get(ReadOptions(), entryKey, value);
                 if (!s.ok() && !s.IsNotFound())
                 {
