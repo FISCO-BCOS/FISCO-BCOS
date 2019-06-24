@@ -720,7 +720,7 @@ generate_node_scripts()
     local docker_tag="v${compatibility_version}"
     generate_script_template "$output/start.sh"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
-    local start_cmd="nohup \${fisco_bcos} -c config.ini 2>>nohup.out"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1"
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
