@@ -64,6 +64,7 @@ include(ProjectJsonRpcCpp)
 include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
+include(ProjectTcMalloc)
 
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
