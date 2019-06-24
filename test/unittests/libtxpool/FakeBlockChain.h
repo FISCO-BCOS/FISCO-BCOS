@@ -135,6 +135,7 @@ public:
     }
 
     int64_t number() override { return m_blockNumber - 1; }
+    void setBlockNumber(int64_t const& number) { m_blockNumber = number; }
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
     {
         auto pBlock = getBlockByNumber(_blockNumber);
