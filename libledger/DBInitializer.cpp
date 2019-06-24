@@ -31,6 +31,7 @@
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libsecurity/EncryptedStorage.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
@@ -197,26 +198,8 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
     }
     DBInitializer_LOG(DEBUG) << LOG_DESC(
         "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
-    // check cipherDataKey
-    if (g_BCOSConfig.diskEncryption.cipherDataKey.empty())
-    {
-        DBInitializer_LOG(ERROR) << LOG_DESC("invalid cipherDataKey")
-                                 << LOG_KV(
-                                        "cipherDataKey", g_BCOSConfig.diskEncryption.cipherDataKey);
-        raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(
-            InvalidDiskEncryptionSetting() << errinfo_comment("empty cipherDataKey"));
-    }
     // get dataKey according to ciperDataKey from keyCenter
     dev::bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
-    if (dataKey.size() == 0)
-    {
-        DBInitializer_LOG(ERROR) << LOG_DESC(
-                                        "getDataKey failed, please check the status of keycenter ")
-                                 << LOG_KV("dataKey", toHex(dataKey));
-        raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(InvalidDiskEncryptionSetting() << errinfo_comment("empty datakey"));
-    }
     rocksDB->setEncryptHandler([=](std::string& data) {
         try
         {

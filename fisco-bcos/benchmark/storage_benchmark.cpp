@@ -26,6 +26,7 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
@@ -36,7 +37,6 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
-#include <libstorage/BasicRocksDB.h>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/from_stream.hpp>
