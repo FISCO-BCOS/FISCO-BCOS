@@ -29,7 +29,7 @@
 using namespace dev::storage;
 using namespace std;
 
-int SQLBasicAccess::Select(h256, int, const std::string& _table, const std::string&,
+int SQLBasicAccess::Select(h256, int64_t, const std::string& _table, const std::string&,
     Condition::Ptr condition, std::vector<std::string>& columns,
     std::vector<std::vector<std::string> >& valueList)
 {
@@ -258,7 +258,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
 }
 
 
-int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas)
+int SQLBasicAccess::Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     string errmsg;
     volatile uint32_t retryCnt = 0;
@@ -288,7 +288,7 @@ int SQLBasicAccess::Commit(h256 hash, int num, const std::vector<TableData::Ptr>
 }
 
 int SQLBasicAccess::CommitDo(
-    h256 hash, int num, const std::vector<TableData::Ptr>& datas, string& errmsg)
+    h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, string& errmsg)
 {
     SQLBasicAccess_LOG(INFO) << " commit hash:" << hash.hex() << " num:" << num;
     string strNum = to_string(num);

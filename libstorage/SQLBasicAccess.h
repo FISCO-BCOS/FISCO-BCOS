@@ -49,10 +49,10 @@ class SQLBasicAccess
 public:
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
-    virtual int Select(h256 hash, int num, const std::string& table, const std::string& key,
+    virtual int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
         Condition::Ptr condition, std::vector<std::string>& vecFields,
         std::vector<std::vector<std::string> >& vecValueList);
-    virtual int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
+    virtual int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas);
 
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
@@ -70,7 +70,8 @@ private:
         std::vector<std::string>& _fieldName, std::vector<std::string>& _fieldValue,
         bool& _hasGetField);
 
-    int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
+    int CommitDo(
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
 
 public:
     virtual void ExecuteSql(const std::string& _sql);

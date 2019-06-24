@@ -101,7 +101,7 @@ private:
     unsigned int m_threadNum = -1;
 
     std::mutex m_executingMutex;
-    std::atomic<uint64_t> m_executingNumber = {0};
+    std::atomic<int64_t> m_executingNumber = {0};
 };
 
 }  // namespace blockverifier
