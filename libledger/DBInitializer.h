@@ -28,7 +28,6 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
-#include <libstorage/BasicRocksDB.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
@@ -37,6 +36,11 @@
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
 {
+namespace db
+{
+class BasicRocksDB;
+}
+
 namespace ledger
 {
 class DBInitializer
