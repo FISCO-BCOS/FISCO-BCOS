@@ -131,7 +131,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
                 << LOG_DESC(
                        " Database key ERROR! Please set cipherDataKey when enable disk encryption!")
                 << LOG_KV("name", _name);
-            errorExit(exitInfo);
+            errorExit(exitInfo, InvalidDiskEncryptionSetting());
         }
         setCipherDataKey(m_cipherDataKey);
         ENCDB_LOG(DEBUG) << LOG_BADGE("open") << LOG_DESC("First creation encrypted DB")
@@ -153,7 +153,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         exitInfo << LOG_BADGE("Open")
                  << LOG_DESC("Database type ERROR! This DB is not EncryptedLevelDB")
                  << LOG_KV("db", _name) << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, InvalidDiskEncryptionSetting());
         break;
     }
 
@@ -167,7 +167,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
                    "database")
             << LOG_KV("name", _name) << LOG_KV("database", getKeyOfDatabase())
             << LOG_KV("configure", _cipherDataKey) << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, InvalidDiskEncryptionSetting());
         break;
     }
 
@@ -176,7 +176,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("Open") << LOG_DESC("Unknown Open encrypted DB TYPE")
                  << LOG_KV("name", _name) << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, InvalidDiskEncryptionSetting());
     }
     }
 
@@ -294,7 +294,7 @@ void EncryptedLevelDB::setCipherDataKey(string _cipherDataKey)
                    "database")
             << LOG_KV("name", m_name) << LOG_KV("oldKey", oldKey)
             << LOG_KV("keyToSet", _cipherDataKey) << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, InvalidDiskEncryptionSetting());
     }
 
     auto status = m_db->Put(leveldb::WriteOptions(), leveldb::Slice(c_cipherDataKeyName),
@@ -305,7 +305,7 @@ void EncryptedLevelDB::setCipherDataKey(string _cipherDataKey)
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("key") << LOG_DESC("Configure CipherDataKey ERROR! Write key failed.")
                  << LOG_KV("name", m_name) << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, WriteDBFailed());
     }
     else
         ENCDB_LOG(DEBUG) << LOG_BADGE("key") << LOG_DESC("Configure CipherDataKey")

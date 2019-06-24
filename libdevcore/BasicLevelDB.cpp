@@ -68,7 +68,7 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
         std::stringstream exitInfo;
         exitInfo << "Database open error"
                  << ", path=" << _name << ", error_info=" << m_openStatus.ToString() << endl;
-        errorExit(exitInfo);
+        errorExit(exitInfo, OpenDBFailed());
     }
     m_db.reset(db);
 
@@ -82,7 +82,7 @@ BasicLevelDB::BasicLevelDB(const leveldb::Options& _options, const std::string& 
         {
             std::stringstream exitInfo;
             exitInfo << "[ENCDB] Database is encrypted" << endl;
-            errorExit(exitInfo);
+            errorExit(exitInfo, EncryptedDB());
         }
     }
 }
@@ -149,13 +149,13 @@ std::unique_ptr<LevelDBWriteBatch> BasicLevelDB::createWriteBatch() const
 bool BasicLevelDB::empty()
 {
     if (!m_db)
-        BOOST_THROW_EXCEPTION(LevelDBNotOpened() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(DBNotOpened() << errinfo_comment(
                                   "LevelDB not opened before calling function: empty()"));
 
     leveldb::Iterator* it = m_db->NewIterator(leveldb::ReadOptions());
     if (it == NULL)
         BOOST_THROW_EXCEPTION(
-            LevelDBNotOpened() << errinfo_comment("LevelDB not opened before getting iterator"));
+            DBNotOpened() << errinfo_comment("LevelDB not opened before getting iterator"));
 
     it->SeekToFirst();
     bool isEmpty = !it->Valid();

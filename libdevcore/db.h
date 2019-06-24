@@ -70,8 +70,6 @@ public:
     virtual void forEach(std::function<bool(Slice, Slice)> f) const = 0;
 };
 
-DEV_SIMPLE_EXCEPTION(DatabaseError);
-
 enum class DatabaseStatus
 {
     Ok,

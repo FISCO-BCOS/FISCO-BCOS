@@ -88,15 +88,5 @@ protected:
     leveldb::Status m_openStatus;
     std::string m_name;
 };
-
-inline void errorExit(std::stringstream& _exitInfo)
-{
-    LOG(ERROR) << _exitInfo.str();
-    std::cerr << _exitInfo.str();
-    raise(SIGTERM);
-
-    BOOST_THROW_EXCEPTION(OpenLevelDBFailed());
-}
-
 }  // namespace db
 }  // namespace dev
