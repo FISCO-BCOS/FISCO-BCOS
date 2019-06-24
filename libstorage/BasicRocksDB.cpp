@@ -68,6 +68,8 @@ Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::st
     return status;
 }
 
+// since rocksDBStorage use put with TBB
+// this function set m_encryptHandler into the parallel field to impove the performance
 Status BasicRocksDB::PutWithLock(
     WriteBatch& batch, std::string const& key, std::string& value, tbb::spin_mutex& mutex)
 {
