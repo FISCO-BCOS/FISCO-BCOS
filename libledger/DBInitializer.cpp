@@ -254,7 +254,10 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     boost::filesystem::create_directories(m_param->mutableStorageParam().path);
     /// open and init the rocksDB
     rocksdb::Options options;
-    options.IncreaseParallelism();
+
+    // set Parallelism to the hardware concurrency
+    options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+
     options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;
     options.max_open_files = 1000;
