@@ -43,14 +43,7 @@ std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const st
     ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler");
     DB* db = nullptr;
     auto status = DB::Open(options, dbname, &db);
-    if (!status.ok() || !db)
-    {
-        std::stringstream exitInfo;
-        exitInfo << "Database open error, dbname = " << dbname
-                 << ", status = " << status.ToString();
-        ROCKSDB_LOG(ERROR) << LOG_DESC(exitInfo.str());
-        errorExit(exitInfo, OpenDBFailed());
-    }
+    checkStatus(status);
     m_db.reset(db);
     return m_db;
 }
@@ -103,15 +96,24 @@ void BasicRocksDB::checkStatus(Status const& status, std::string const& path)
 {
     if (status.ok())
         return;
-    if (status.IsIOError() || status.IsCorruption() || status.IsNoSpace())
+    std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
+    if (!path.empty())
     {
-        std::string errorInfo = "access rocksDB failed, status: " + status.ToString();
-        if (!path.empty())
-        {
-            errorInfo = errorInfo + ", path:" + path;
-        }
+        errorInfo = errorInfo + ", path:" + path;
+    }
+    if (status.IsIOError() || status.IsCorruption() || status.IsNoSpace() ||
+        status.IsNotSupported() || status.IsShutdownInProgress())
+    {
         ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
         BOOST_THROW_EXCEPTION(DatabaseError() << errinfo_comment(errorInfo));
+    }
+    if (status.IsBusy() || status.IsTimedOut() || status.IsTryAgain() || status.IsAborted() ||
+        status.IsMergeInProgress() || status.IsIncomplete() || status.IsExpired() ||
+        status.IsCompactionTooLarge())
+    {
+        errorInfo = errorInfo + ", please try again!";
+        ROCKSDB_LOG(WARNING) << LOG_DESC(errorInfo);
+        BOOST_THROW_EXCEPTION(DatabaseNeedRetry() << errinfo_comment(errorInfo));
     }
 }
 
