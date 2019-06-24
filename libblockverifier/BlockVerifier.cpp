@@ -40,6 +40,18 @@ using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
+    if (block.blockHeader().number() < m_executingNumber)
+    {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> l(m_executingMutex);
+    if (block.blockHeader().number() < m_executingNumber)
+    {
+        return nullptr;
+    }
+
+    m_executingNumber = block.blockHeader().number();
+
     if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
     {
         return parallelExecuteBlock(block, parentBlockInfo);
