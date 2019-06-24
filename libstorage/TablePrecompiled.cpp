@@ -55,6 +55,19 @@ std::string TablePrecompiled::toString()
     return "Table";
 }
 
+void TablePrecompiled::checkLengthValidate(
+    const std::string& field_value, int32_t max_length, int32_t throw_exception)
+{
+    if (field_value.size() > (size_t)max_length)
+    {
+        STORAGE_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
+                           << " greater than " << max_length;
+        char buff[1024] = {0};
+        snprintf(buff, sizeof(buff), "size of value of key greater than %d", max_length);
+        BOOST_THROW_EXCEPTION(StorageException(throw_exception, buff));
+    }
+}
+
 bytes TablePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
@@ -95,29 +108,14 @@ bytes TablePrecompiled::call(
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
-        if (key.size() > (size_t)USER_TABLE_KEY_VALUE_MAX_LENGTH)
-        {
-            auto entry = entryPrecompiled->getEntry();
-            STORAGE_LOG(ERROR) << "key value:" << key << " size:" << key.size() << " greater than "
-                               << USER_TABLE_KEY_VALUE_MAX_LENGTH;
-            char buff[1024] = {0};
-            snprintf(buff, sizeof(buff), "size of value of key greater than %d",
-                USER_TABLE_KEY_VALUE_MAX_LENGTH);
-            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, buff));
-        }
+        checkLengthValidate(
+            key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
 
         auto it = entry->begin();
         for (; it != entry->end(); ++it)
         {
-            if (it->second.size() > (size_t)USER_TABLE_FIELD_VALUE_MAX_LENGTH)
-            {
-                STORAGE_LOG(ERROR) << "key:" << it->first << " value size:" << it->second.size()
-                                   << " greater than " << USER_TABLE_FIELD_VALUE_MAX_LENGTH;
-                char buff[1024] = {0};
-                snprintf(buff, sizeof(buff), "size of value of key greater than %d",
-                    USER_TABLE_FIELD_VALUE_MAX_LENGTH);
-                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, buff));
-            }
+            checkLengthValidate(
+                it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
         }
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
@@ -171,16 +169,8 @@ bytes TablePrecompiled::call(
         auto it = entry->begin();
         for (; it != entry->end(); ++it)
         {
-            if (it->second.size() > (size_t)USER_TABLE_FIELD_VALUE_MAX_LENGTH)
-            {
-                STORAGE_LOG(ERROR) << "key:" << it->first << " value size:" << it->second.size()
-                                   << " greater than " << USER_TABLE_FIELD_VALUE_MAX_LENGTH;
-                char buff[1024] = {0};
-                snprintf(buff, sizeof(buff), "size of value of key greater than %d",
-                    USER_TABLE_FIELD_VALUE_MAX_LENGTH);
-                BOOST_THROW_EXCEPTION(
-                    StorageException(CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW, buff));
-            }
+            checkLengthValidate(it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH,
+                CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW);
         }
         auto condition = conditionPrecompiled->getCondition();
 
