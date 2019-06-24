@@ -49,17 +49,17 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     {
         return nullptr;
     }
-
-    m_executingNumber = block.blockHeader().number();
-
+    ExecutiveContext::Ptr context = nullptr;
     if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
     {
-        return parallelExecuteBlock(block, parentBlockInfo);
+        context = parallelExecuteBlock(block, parentBlockInfo);
     }
     else
     {
-        return serialExecuteBlock(block, parentBlockInfo);
+        context = serialExecuteBlock(block, parentBlockInfo);
     }
+    m_executingNumber = block.blockHeader().number();
+    return context;
 }
 
 ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
