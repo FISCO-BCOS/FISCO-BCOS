@@ -22,13 +22,19 @@
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerParam.h>
 #include <libstorage/BasicRocksDB.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::ledger;
 using namespace dev::db;
 using namespace rocksdb;
 
-BOOST_AUTO_TEST_SUITE(TestRocksDB)
+namespace dev
+{
+namespace test
+{
+BOOST_FIXTURE_TEST_SUITE(TestRocksDB, TestOutputHelperFixture)
 
 std::shared_ptr<BasicRocksDB> openTable(
     std::shared_ptr<BasicRocksDB> basicRocksDB, std::string const& dbName)
@@ -86,7 +92,7 @@ std::shared_ptr<BasicRocksDB> testBasicOperation(std::shared_ptr<BasicRocksDB> b
     // get a non-exist key
     auto dbStatus = basicRocksDB->Get(rocksdb::ReadOptions(), key, value);
     BOOST_CHECK(dbStatus.IsNotFound() == true);
-    BOOST_CHECK(value == valuePrefix);
+    BOOST_CHECK(value == "");
 
     ROCKSDB_LOG(DEBUG) << LOG_DESC("* Check Write and Get value from DB");
     // put the key value into batch
@@ -152,8 +158,8 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
     // enable disk encryption
     g_BCOSConfig.diskEncryption.enable = true;
     // set datakey
-    g_BCOSConfig.diskEncryption.dataKey = "313233343536";
-
+    g_BCOSConfig.diskEncryption.dataKey =
+        asString(fromHex("3031323334353637303132333435363730313233343536373031323334353637"));
     // init rocksDB, open db and set handler for DB
     std::shared_ptr<BasicRocksDB> basicRocksDB = dbInitializer->initBasicRocksDB();
 
@@ -162,10 +168,20 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
     // test db operation
     std::string keyPrefix = "test_encKey";
     std::string valuePrefix = "value_encValue";
-    testAllDBOperation(dbName, keyPrefix, valuePrefix);
+    size_t succNum = 0;
+    auto handler = testBasicOperation(basicRocksDB, dbName, keyPrefix, valuePrefix, succNum);
+    if (handler)
+    {
+        BOOST_CHECK(succNum > 0);
+        // test reopen table
+        basicRocksDB->closeDB();
+        testReGetValue(basicRocksDB, keyPrefix, valuePrefix, dbName, succNum, true);
+    }
     boost::filesystem::remove_all(dbName);
     // disable disk encryption
     g_BCOSConfig.diskEncryption.enable = false;
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+}  // namespace test
+}  // namespace dev

@@ -51,6 +51,7 @@ std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const st
 Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std::string& value)
 {
     assert(m_db);
+    value = "";
     auto status = m_db->Get(options, Slice(std::move(key)), &value);
     checkStatus(status);
     // decrypt value

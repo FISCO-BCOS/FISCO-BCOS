@@ -209,7 +209,8 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
         }
         catch (const std::exception& e)
         {
-            std::string error_info = "encryt value for data=" + data + " failed";
+            std::string error_info = "encryt value for data=" + data +
+                                     " failed, EINFO: " + boost::diagnostic_information(e);
             ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
             BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
         }
