@@ -135,7 +135,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         http::read(m_socket, buffer, rsp);
 
         KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("key manager respond")
-                      << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
+                      << LOG_KV("code", rsp.result_int());
 
         if (rsp.result_int() != 200)
         {
