@@ -64,7 +64,6 @@ addons:
     packages:
     - openssl
     - clang-format
-    - clang-omp
     - ccache
     - python
     - pip

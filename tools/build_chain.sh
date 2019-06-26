@@ -155,14 +155,12 @@ echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
 
-EXIT_CODE=-1
-
 check_env() {
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         echo "please install openssl!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
-        exit $EXIT_CODE
+        exit 1
     }
     if [ ! -z "$(openssl version | grep reSSL)" ];then
         export PATH="/usr/local/opt/openssl/bin:$PATH"
@@ -427,17 +425,15 @@ generate_config_ini()
     fi
     cat << EOF > ${output}
 [rpc]
-    ; rpc listen ip
     listen_ip=${listen_ip}
     channel_listen_port=$(( offset + port_start[1] ))
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
+    ;enable_compress=true
     ; nodes to connect
     $ip_list
-    ;enable/disable network compress
-    ;enable_compress=true
 
 [certificate_blacklist]		
     ; crl.0 should be nodeid, nodeid's length is 128 
@@ -458,12 +454,12 @@ generate_config_ini()
     ca_cert=${prefix}ca.crt
 
 [storage_security]
-enable=false
-; the IP of key mananger
-key_manager_ip=
-; the Port of key manager
-key_manager_port=
-cipher_data_key=
+    enable=false
+    ; the IP of key mananger
+    key_manager_ip=
+    ; the Port of key manager
+    key_manager_port=
+    cipher_data_key=
 
 [chain]
     id=${chain_id}
@@ -477,10 +473,7 @@ cipher_data_key=
     level=${log_level}
     ; MB
     max_log_file_size=200
-    ; control log auto_flush
     flush=${auto_flush}
-    ; easylog config
-    format=%level|%datetime{%Y-%M-%d %H:%m:%s:%g}|%msg
     log_flush_threshold=100
 EOF
 }
