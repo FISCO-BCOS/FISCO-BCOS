@@ -80,16 +80,19 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
+    // open and init rocksDB
+    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
+
 protected:
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
-    // open and init rocksDB
-    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
+
     // set handler to rocksDB
     template <typename T>
     void setHandlerForDB(std::shared_ptr<T> rocksDB);
+
     void unsupportedFeatures(std::string const& desc);
 
 private:
