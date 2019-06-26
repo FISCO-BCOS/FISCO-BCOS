@@ -132,8 +132,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
                               << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                               << LOG_KV("url.port",
-                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                              << LOG_KV("key", cipherDataKey);
+                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
     }
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
