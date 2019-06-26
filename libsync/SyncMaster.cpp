@@ -444,9 +444,9 @@ void SyncMaster::maintainPeersStatus()
             // update max request number
             m_maxRequestNumber = max(m_maxRequestNumber, to);
 
-            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                            << LOG_DESC("Request blocks") << LOG_KV("frm", from) << LOG_KV("to", to)
-                            << LOG_KV("peer", _p->nodeId.abridged());
+            SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                           << LOG_DESC("Request blocks") << LOG_KV("frm", from) << LOG_KV("to", to)
+                           << LOG_KV("peer", _p->nodeId.abridged());
 
             ++shard;  // shard move
 
@@ -528,7 +528,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 }
                 else
                 {
-                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                     << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
                                     << LOG_KV("txs", topBlock->transactions().size())
@@ -568,10 +568,9 @@ bool SyncMaster::maintainDownloadingQueue()
     {
         h256 const& latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Download finish")
-                        << LOG_KV("latestHash", latestHash.abridged())
-                        << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
+        SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                       << LOG_DESC("Download finish") << LOG_KV("latestHash", latestHash.abridged())
+                       << LOG_KV("expectedHash", m_syncStatus->knownLatestHash.abridged());
 
         if (m_syncStatus->knownLatestHash != latestHash)
             SYNC_LOG(ERROR)
@@ -711,10 +710,11 @@ void SyncMaster::maintainBlockRequest()
                 shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
                 if (!blockRLP)
                 {
-                    SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                                    << LOG_DESC("Get block for node failed")
-                                    << LOG_KV("reason", "block is null") << LOG_KV("number", number)
-                                    << LOG_KV("nodeId", _p->nodeId.abridged());
+                    SYNC_LOG(WARNING)
+                        << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Get block for node failed")
+                        << LOG_KV("reason", "block is null") << LOG_KV("number", number)
+                        << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
                 }
 
@@ -724,12 +724,6 @@ void SyncMaster::maintainBlockRequest()
                                 << LOG_KV("timeCost", utcTime() - start_get_block_time);
                 blockContainer.batchAndSend(blockRLP);
             }
-
-            if (req.fromNumber < number)
-                SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                                << LOG_BADGE("BlockSync") << LOG_DESC("Send blocks")
-                                << LOG_KV("from", req.fromNumber) << LOG_KV("to", number - 1)
-                                << LOG_KV("peer", _p->nodeId.abridged());
 
             if (number < numberLimit)  // This respond not reach the end due to timeout
             {
