@@ -42,7 +42,7 @@ class BasicRocksDB
 {
 public:
     BasicRocksDB() {}
-    virtual ~BasicRocksDB() {}
+    virtual ~BasicRocksDB() { closeDB(); }
 
     // open rocksDB with the given option
     // if rocksDB is opened successfully, return the DB handler
@@ -78,7 +78,7 @@ public:
         m_decryptHandler = decryptHandler;
     }
 
-    std::shared_ptr<rocksdb::DB> getDBHandler() { return m_db; }
+    void closeDB() { m_db.reset(); }
 
 protected:
     void checkStatus(rocksdb::Status const& status, std::string const& path = "");
