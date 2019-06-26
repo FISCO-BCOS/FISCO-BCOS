@@ -58,7 +58,7 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
                    << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-               << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
+    //LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
+    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
     return decFileBytes;
 }
