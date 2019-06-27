@@ -30,8 +30,7 @@ enum VERSION : uint32_t
 {
     RC1_VERSION = 1,
     RC2_VERSION = 2,
-    RC3_VERSION = 3,
-    V2_VERSION = 4
+    RC3_VERSION = 3
 };
 class GlobalConfigure
 {
