@@ -32,7 +32,8 @@
 #include <string>
 
 #define ROCKSDB_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("ROCKSDB")
-#define HookFunction std::function<void(std::string&)>
+#define DecHookFunction std::function<void(std::string&)>
+#define EncHookFunction std::function<void(std::string const&, std::string&)>
 
 namespace dev
 {
@@ -63,17 +64,17 @@ public:
     // callback hook function, and put (key, value) into batch later
     // for performance consideration, hook is called without lock, batch put is called with lock
     virtual rocksdb::Status PutWithLock(rocksdb::WriteBatch& batch, std::string const& key,
-        std::string& value, tbb::spin_mutex& mutex);
+        std::string const& value, tbb::spin_mutex& mutex);
 
     virtual rocksdb::Status Write(
         rocksdb::WriteOptions const& options, rocksdb::WriteBatch& updates);
 
-    virtual void setEncryptHandler(HookFunction const& encryptHandler)
+    virtual void setEncryptHandler(EncHookFunction const& encryptHandler)
     {
         m_encryptHandler = encryptHandler;
     }
 
-    virtual void setDecryptHandler(HookFunction const& decryptHandler)
+    virtual void setDecryptHandler(DecHookFunction const& decryptHandler)
     {
         m_decryptHandler = decryptHandler;
     }
@@ -86,8 +87,8 @@ protected:
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 
     std::shared_ptr<rocksdb::DB> m_db;
-    HookFunction m_encryptHandler = nullptr;
-    HookFunction m_decryptHandler = nullptr;
+    EncHookFunction m_encryptHandler = nullptr;
+    DecHookFunction m_decryptHandler = nullptr;
 };
 }  // namespace db
 }  // namespace dev
