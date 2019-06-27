@@ -78,12 +78,7 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_CHECK_THROW(
         assertThrow(false, FailedInvariant, "Throw FailedInvariant Exception"), FailedInvariant);
     BOOST_CHECK_THROW(
-        assertThrow(false, ValueTooLarge, "Throw ValueTooLarge Exception"), ValueTooLarge);
-    BOOST_CHECK_THROW(assertThrow(false, UnknownField, "Throw  Exception"), UnknownField);
-    BOOST_CHECK_THROW(
         assertThrow(false, MissingField, "Throw  MissingField Exception"), MissingField);
-    BOOST_CHECK_THROW(
-        assertThrow(false, WrongFieldType, "Throw WrongFieldType Exception"), WrongFieldType);
     BOOST_CHECK_THROW(
         assertThrow(false, InterfaceNotSupported, "Throw InterfaceNotSupported Exception"),
         InterfaceNotSupported);
