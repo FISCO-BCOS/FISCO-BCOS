@@ -86,14 +86,8 @@ void Executive::verifyTransaction(
 bool Executive::execute()
 {
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    // bug fix:
-    // modify assert->BOOST_THROW_EXCEPTION, in case of coredump of the nodes when gas is not
-    // enough
-    // *origin code:
-    // assert(m_t.gas() >= (u256)m_baseGasRequired);
-    // *modified:
 
-    if (g_BCOSConfig.version() >= V2_VERSION)
+    if (g_BCOSConfig.version() > RC3_VERSION)
     {
         if (txGasLimit < (u256)m_baseGasRequired)
         {
