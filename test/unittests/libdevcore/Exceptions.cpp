@@ -78,8 +78,6 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_CHECK_THROW(
         assertThrow(false, FailedInvariant, "Throw FailedInvariant Exception"), FailedInvariant);
     BOOST_CHECK_THROW(
-        assertThrow(false, MissingField, "Throw  MissingField Exception"), MissingField);
-    BOOST_CHECK_THROW(
         assertThrow(false, InterfaceNotSupported, "Throw InterfaceNotSupported Exception"),
         InterfaceNotSupported);
     BOOST_CHECK_THROW(
