@@ -200,12 +200,11 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
         "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
     // get dataKey according to ciperDataKey from keyCenter
     dev::bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
-    rocksDB->setEncryptHandler([=](std::string& data) {
+    rocksDB->setEncryptHandler([=](std::string const& data, std::string& encData) {
         try
         {
             bytesConstRef dataRef = bytesConstRef((const unsigned char*)data.data(), data.size());
-            bytes enData = aesCBCEncrypt(dataRef, ref(dataKey));
-            data = asString(enData);
+            encData = asString(aesCBCEncrypt(dataRef, ref(dataKey)));
         }
         catch (const std::exception& e)
         {

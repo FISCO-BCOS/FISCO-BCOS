@@ -137,8 +137,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
                         boost::archive::binary_oarchive oa(ss);
                         oa << it.second;
                         {
-                            std::string value = ss.str();
-                            m_db->PutWithLock(batch, entryKey, value, m_writeBatchMutex);
+                            m_db->PutWithLock(batch, entryKey, ss.str(), m_writeBatchMutex);
                         }
                     }
                 }
