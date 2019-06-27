@@ -92,12 +92,26 @@ bool Executive::execute()
     // *origin code:
     // assert(m_t.gas() >= (u256)m_baseGasRequired);
     // *modified:
-    if (m_t.gas() < (u256)m_baseGasRequired)
+
+    if (g_BCOSConfig.version() >= V2_VERSION)
     {
-        m_excepted = TransactionException::OutOfGasBase;
-        BOOST_THROW_EXCEPTION(
-            OutOfGasBase() << errinfo_comment(
-                "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        if (txGasLimit < (u256)m_baseGasRequired)
+        {
+            m_excepted = TransactionException::OutOfGasBase;
+            BOOST_THROW_EXCEPTION(
+                OutOfGasBase() << errinfo_comment(
+                    "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        }
+    }
+    else
+    {
+        if (m_t.gas() < (u256)m_baseGasRequired)
+        {
+            m_excepted = TransactionException::OutOfGasBase;
+            BOOST_THROW_EXCEPTION(
+                OutOfGasBase() << errinfo_comment(
+                    "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        }
     }
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
