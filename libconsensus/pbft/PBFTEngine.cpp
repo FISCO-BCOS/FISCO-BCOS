@@ -560,16 +560,7 @@ bool PBFTEngine::checkBlock(Block const& block)
     {
         return false;
     }
-    {
-        // decrease the range of mutex
-        Guard l(m_mutex);
-        if (block.blockHeader().number() <= m_blockChain->number())
-        {
-            return false;
-        }
-        resetConfig();
-    }
-
+    resetConfig();
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
@@ -842,6 +833,12 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     try
     {
         execBlock(workingSealing, prepareReq, oss);
+        // old block (has already executed correctly by block sync)
+        if (workingSealing.p_execContext == nullptr &&
+            workingSealing.block.getTransactionSize() > 0)
+        {
+            return false;
+        }
     }
     catch (std::exception& e)
     {
