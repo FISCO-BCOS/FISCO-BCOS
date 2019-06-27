@@ -72,16 +72,23 @@ Status BasicRocksDB::BatchPut(WriteBatch& batch, std::string const& key, std::st
 // since rocksDBStorage use put with TBB
 // this function set m_encryptHandler into the parallel field to impove the performance
 Status BasicRocksDB::PutWithLock(
-    WriteBatch& batch, std::string const& key, std::string& value, tbb::spin_mutex& mutex)
+    WriteBatch& batch, std::string const& key, std::string const& value, tbb::spin_mutex& mutex)
 {
     // encrypt value
     if (m_encryptHandler)
     {
-        m_encryptHandler(value);
+        std::string encryptValue;
+        m_encryptHandler(value, encryptValue);
+        // put handled value into the batch
+        tbb::spin_mutex::scoped_lock lock(mutex);
+        return BatchPut(batch, key, encryptValue);
     }
-    // put handled value into the batch
-    tbb::spin_mutex::scoped_lock lock(mutex);
-    return BatchPut(batch, key, value);
+    else
+    {
+        // put handled value into the batch
+        tbb::spin_mutex::scoped_lock lock(mutex);
+        return BatchPut(batch, key, value);
+    }
 }
 
 Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string& value)
@@ -89,10 +96,15 @@ Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string&
     // encrypt value
     if (m_encryptHandler)
     {
-        m_encryptHandler(value);
+        std::string encryptValue;
+        m_encryptHandler(value, encryptValue);
+        return BatchPut(batch, key, encryptValue);
     }
-    // put handled value into the batch
-    return BatchPut(batch, key, value);
+    else
+    {
+        // put handled value into the batch
+        return BatchPut(batch, key, value);
+    }
 }
 
 void BasicRocksDB::checkStatus(Status const& status, std::string const& path)
