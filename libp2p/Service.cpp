@@ -257,10 +257,10 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
     {
         if (e.errorCode())
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("disconnect error P2PSession")
-                               << LOG_KV("nodeID", p2pSession->nodeID().abridged())
-                               << LOG_KV("endpoint", session->nodeIPEndpoint().name())
-                               << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
+            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
+                                 << LOG_KV("nodeID", p2pSession->nodeID().abridged())
+                                 << LOG_KV("endpoint", session->nodeIPEndpoint().name())
+                                 << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
 
             p2pSession->stop(dev::network::UserReason);
             onDisconnect(e, p2pSession);

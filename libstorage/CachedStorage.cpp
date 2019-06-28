@@ -507,6 +507,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             {
                 m_taskThreadPool->stop();
                 m_running->store(false);
+                raise(SIGTERM);
                 BOOST_THROW_EXCEPTION(StorageException(-1, std::string("backend DB dead!")));
             }
         }
@@ -558,9 +559,8 @@ void CachedStorage::init()
 void CachedStorage::stop()
 {
     STORAGE_LOG(INFO) << "Stoping flushStorage thread";
-    m_running->store(false);
-
     m_taskThreadPool->stop();
+    m_running->store(false);
 
     if (m_clearThread)
     {
@@ -762,6 +762,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
         // stop() commit thread to exit
         m_taskThreadPool->stop();
         m_running->store(false);
+        raise(SIGTERM);
         STORAGE_LOG(ERROR) << "Stop commit thread. Fail to commit data: " << e.what();
         return false;
     }
