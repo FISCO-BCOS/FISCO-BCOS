@@ -1031,7 +1031,10 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     }
                     response["logsBloom"] = toJS(receipt->bloom());
                     response["status"] = toJS(receipt->status());
-                    response["input"] = toJS(input);
+                    if (g_BCOSConfig.version() > RC3_VERSION)
+                    {
+                        response["input"] = toJS(input);
+                    }
                     response["output"] = toJS(receipt->outputBytes());
 
                     auto receiptContent = response.toStyledString();
