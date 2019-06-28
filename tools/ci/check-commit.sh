@@ -8,12 +8,10 @@
 # !/bin/bash
 SHELL_FOLDER=$(cd $(dirname $0);pwd)
 check_script=${SHELL_FOLDER}/run-clang-format.py
-commit_limit=15
+commit_limit=12
 file_limit=30
-insert_limit=280
+insert_limit=250
 delete_limit=500
-Ubuntu_Platform=0
-Centos_Platform=1
 
 LOG_ERROR() {
     content=${1}
