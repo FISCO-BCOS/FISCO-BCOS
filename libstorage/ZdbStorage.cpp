@@ -36,10 +36,8 @@ ZdbStorage::ZdbStorage() {}
 Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
-    std::vector<std::string> columns;
-    std::vector<std::vector<std::string> > valueList;
-    int ret =
-        m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, columns, valueList);
+    std::vector<std::map<std::string, std::string> > values;
+    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, values);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -52,30 +50,32 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableI
     }
 
     Entries::Ptr entries = std::make_shared<Entries>();
-    auto it = valueList.begin();
-    for (; it != valueList.end(); ++it)
+    auto it = values.begin();
+    for (; it != values.end(); ++it)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        for (size_t j = 0; j < it->size(); ++j)
+        auto it2 = it->begin();
+        for (; it2 != it->end(); ++it2)
         {
-            if (columns[j] == ID_FIELD)
+            if (it2->first == ID_FIELD)
             {
-                entry->setID(it->at(j));
+                entry->setID(it2->second);
             }
-            else if (columns[j] == NUM_FIELD)
+
+            else if (it2->first == NUM_FIELD)
             {
-                entry->setNum(it->at(j));
+                entry->setNum(it2->second);
             }
-            else if (columns[j] == STATUS)
+
+            else if (it2->first == STATUS)
             {
-                entry->setStatus(it->at(j));
+                entry->setStatus(it2->second);
             }
             else
             {
-                entry->setField(columns[j], it->at(j));
+                entry->setField(it2->first, it2->second);
             }
         }
-
         if (entry->getStatus() == 0)
         {
             entry->setDirty(false);
