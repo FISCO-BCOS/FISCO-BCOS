@@ -30,8 +30,7 @@ using namespace dev::storage;
 using namespace std;
 
 int SQLBasicAccess::Select(h256, int64_t, const std::string& _table, const std::string&,
-    Condition::Ptr condition, std::vector<std::string>& columns,
-    std::vector<std::vector<std::string> >& valueList)
+    Condition::Ptr condition, std::vector<std::map<std::string, std::string> >& values)
 {
     std::string sql = this->BuildQuerySql(_table, condition);
 #if 0
@@ -75,18 +74,18 @@ int SQLBasicAccess::Select(h256, int64_t, const std::string& _table, const std::
         }
         ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
         int32_t columnCnt = ResultSet_getColumnCount(result);
-        for (int32_t index = 1; index <= columnCnt; ++index)
-        {
-            columns.push_back(ResultSet_getColumnName(result, index));
-        }
         while (ResultSet_next(result))
         {
-            std::vector<std::string> value;
+            std::map<std::string, std::string> value;
             for (int32_t index = 1; index <= columnCnt; ++index)
             {
-                value.push_back(ResultSet_getString(result, index));
+                if (ResultSet_getString(result, index) != NULL)
+                {
+                    value[ResultSet_getColumnName(result, index)] =
+                        ResultSet_getString(result, index);
+                }
             }
-            valueList.push_back(value);
+            values.push_back(value);
         }
     }
     CATCH(SQLException)
