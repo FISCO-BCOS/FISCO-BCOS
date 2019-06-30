@@ -43,8 +43,15 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
     {
         LOG(TRACE) << "Query AMOPDB data";
         Json::Value requestJson;
+        if (g_BCOSConfig.version() <= RC3_VERSION)
+        {
+            requestJson["op"] = "select";
+        }
+        else
+        {
+            requestJson["op"] = "select2";
+        }
 
-        requestJson["op"] = "select";
         requestJson["params"]["blockHash"] = hash.hex();
         requestJson["params"]["num"] = num;
         requestJson["params"]["table"] = tableInfo->name;
@@ -107,48 +114,87 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
                 -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
         }
 
-        std::vector<std::string> columns;
-        for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
-        {
-            std::string fieldName = responseJson["result"]["columns"].get(i, "").asString();
-            columns.push_back(fieldName);
-        }
-
         Entries::Ptr entries = std::make_shared<Entries>();
-        for (Json::ArrayIndex i = 0; i < responseJson["result"]["data"].size(); ++i)
+        if (g_BCOSConfig.version() <= RC3_VERSION)
         {
-            Json::Value line = responseJson["result"]["data"].get(i, "");
-            Entry::Ptr entry = std::make_shared<Entry>();
-
-            for (Json::ArrayIndex j = 0; j < line.size(); ++j)
+            std::vector<std::string> columns;
+            for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
             {
-                std::string fieldValue = line.get(j, "").asString();
-
-                if (columns[j] == ID_FIELD)
-                {
-                    entry->setID(fieldValue);
-                }
-                else if (columns[j] == NUM_FIELD)
-                {
-                    entry->setNum(fieldValue);
-                }
-                else if (columns[j] == STATUS)
-                {
-                    entry->setStatus(fieldValue);
-                }
-                else
-                {
-                    entry->setField(columns[j], fieldValue);
-                }
+                std::string fieldName = responseJson["result"]["columns"].get(i, "").asString();
+                columns.push_back(fieldName);
             }
 
-            if (entry->getStatus() == 0)
+            for (Json::ArrayIndex i = 0; i < responseJson["result"]["data"].size(); ++i)
             {
-                entry->setDirty(false);
-                entries->addEntry(entry);
+                Json::Value line = responseJson["result"]["data"].get(i, "");
+                Entry::Ptr entry = std::make_shared<Entry>();
+
+                for (Json::ArrayIndex j = 0; j < line.size(); ++j)
+                {
+                    std::string fieldValue = line.get(j, "").asString();
+
+                    if (columns[j] == ID_FIELD)
+                    {
+                        entry->setID(fieldValue);
+                    }
+                    else if (columns[j] == NUM_FIELD)
+                    {
+                        entry->setNum(fieldValue);
+                    }
+                    else if (columns[j] == STATUS)
+                    {
+                        entry->setStatus(fieldValue);
+                    }
+                    else
+                    {
+                        entry->setField(columns[j], fieldValue);
+                    }
+                }
+
+                if (entry->getStatus() == 0)
+                {
+                    entry->setDirty(false);
+                    entries->addEntry(entry);
+                }
             }
         }
+        else
+        {
+            for (Json::ArrayIndex i = 0; i < responseJson["result"]["column_value"].size(); ++i)
+            {
+                Json::Value line = responseJson["result"]["column_value"][i];
+                Entry::Ptr entry = std::make_shared<Entry>();
 
+                Json::Value::Members member = line.getMemberNames();
+                for (Json::Value::Members::iterator iter = member.begin(); iter != member.end();
+                     ++iter)
+                {
+                    std::string key = *iter;
+                    std::string fieldValue = line.get(key, "").asString();
+                    if (key == ID_FIELD)
+                    {
+                        entry->setID(fieldValue);
+                    }
+                    else if (key == NUM_FIELD)
+                    {
+                        entry->setNum(fieldValue);
+                    }
+                    else if (key == STATUS)
+                    {
+                        entry->setStatus(fieldValue);
+                    }
+                    else
+                    {
+                        entry->setField(key, fieldValue);
+                    }
+                }
+                if (entry->getStatus() == 0)
+                {
+                    entry->setDirty(false);
+                    entries->addEntry(entry);
+                }
+            }
+        }
         entries->setDirty(false);
         return entries;
     }
