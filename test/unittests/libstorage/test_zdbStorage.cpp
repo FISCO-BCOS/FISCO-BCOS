@@ -56,6 +56,9 @@ public:
                 std::map<std::string, std::string> value;
                 value["id"] = "1000000";
                 value["name"] = "darrenyin";
+                value["_id_"] = "10";
+                value["_num_"] = "100";
+                value["_status_"] = "0";
                 values.push_back(value);
             }
         }
@@ -88,6 +91,10 @@ struct zdbStorageFixture
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("Name", "darrenyin");
         entry->setField("id", "1000000");
+        entry->setField("_id_", "10");
+        entry->setField("_num_", "100");
+        entry->setField("_status_", "0");
+
         entries->addEntry(entry);
         return entries;
     }

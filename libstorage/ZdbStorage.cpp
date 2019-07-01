@@ -50,32 +50,16 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableI
     }
 
     Entries::Ptr entries = std::make_shared<Entries>();
-    auto it = values.begin();
-    for (; it != values.end(); ++it)
+    for (auto it : values)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        auto it2 = it->begin();
-        for (; it2 != it->end(); ++it2)
+        for (auto it2 : it)
         {
-            if (it2->first == ID_FIELD)
-            {
-                entry->setID(it2->second);
-            }
-
-            else if (it2->first == NUM_FIELD)
-            {
-                entry->setNum(it2->second);
-            }
-
-            else if (it2->first == STATUS)
-            {
-                entry->setStatus(it2->second);
-            }
-            else
-            {
-                entry->setField(it2->first, it2->second);
-            }
+            entry->setField(it2.first, it2.second);
         }
+        entry->setID(it.at(ID_FIELD));
+        entry->setNum(it.at(NUM_FIELD));
+        entry->setStatus(it.at(STATUS));
         if (entry->getStatus() == 0)
         {
             entry->setDirty(false);
