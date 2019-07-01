@@ -214,6 +214,42 @@ std::string SQLBasicAccess::GetCreateTableSql(const Entry::Ptr& entry)
     return sql;
 }
 
+void SQLBasicAccess::GetCommitFieldNameAndValue(h256 hash, const std::string& _num,
+    const Entries::Ptr& data, const std::vector<size_t>& indexlist,
+    std::vector<std::string>& fieldList, std::vector<std::string>& valueList)
+{
+    uint32_t loopcount = 0;
+    for (auto index : indexlist)
+    {
+        const Entry::Ptr& entry = data->get(index);
+        for (auto fieldIt : *entry)
+        {
+            if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
+                fieldIt.first == "_id_" || fieldIt.first == "_status_")
+            {
+                continue;
+            }
+            if (loopcount == 0)
+            {
+                fieldList.push_back(fieldIt.first);
+            }
+            valueList.push_back(fieldIt.second);
+        }
+        valueList.push_back(hash.hex());
+        valueList.push_back(_num);
+        valueList.push_back(boost::lexical_cast<std::string>(entry->getID()));
+        valueList.push_back(boost::lexical_cast<std::string>(entry->getStatus()));
+        ++loopcount;
+    }
+    if (fieldList.size() > 0)
+    {
+        fieldList.push_back("_hash_");
+        fieldList.push_back(NUM_FIELD);
+        fieldList.push_back(ID_FIELD);
+        fieldList.push_back(STATUS);
+    }
+}
+
 
 void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 hash,
     const std::string& _num,
@@ -235,43 +271,11 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 h
         }
         splitDataItem[field].push_back(i);
     }
-
-    for (auto it : splitDataItem)
+    for (const auto& it : splitDataItem)
     {
-        const std::vector<size_t>& indexlist = it.second;
         std::vector<std::string> fieldList;
         std::vector<std::string> valueList;
-
-        uint32_t loopcount = 0;
-        for (auto index : indexlist)
-        {
-            const Entry::Ptr& entry = data->get(index);
-            for (auto fieldIt : *entry)
-            {
-                if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
-                    fieldIt.first == "_id_" || fieldIt.first == "_status_")
-                {
-                    continue;
-                }
-                if (loopcount == 0)
-                {
-                    fieldList.push_back(fieldIt.first);
-                }
-                valueList.push_back(fieldIt.second);
-            }
-            valueList.push_back(hash.hex());
-            valueList.push_back(_num);
-            valueList.push_back(boost::lexical_cast<std::string>(entry->getID()));
-            valueList.push_back(boost::lexical_cast<std::string>(entry->getStatus()));
-            ++loopcount;
-        }
-        if (fieldList.size() > 0)
-        {
-            fieldList.push_back("_hash_");
-            fieldList.push_back(NUM_FIELD);
-            fieldList.push_back(ID_FIELD);
-            fieldList.push_back(STATUS);
-        }
+        GetCommitFieldNameAndValue(hash, _num, data, it.second, fieldList, valueList);
         _fieldValue[fieldList].insert(
             _fieldValue[fieldList].end(), valueList.begin(), valueList.end());
     }

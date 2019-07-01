@@ -66,9 +66,12 @@ private:
         const std::string& tablename, const std::string& keyfield, const std::string& valuefield);
 
     std::string GetCreateTableSql(const Entry::Ptr& data);
-    void GetCommitFieldNameAndValue(const Entries::Ptr& data,
-        h256 hash, const std::string& strNum,
+    void GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 hash, const std::string& strNum,
         std::map<std::vector<std::string>, std::vector<std::string>>& _fieldValue);
+
+    void GetCommitFieldNameAndValue(h256 hash, const std::string& _num, const Entries::Ptr& data,
+        const std::vector<size_t>& indexlist, std::vector<std::string>& fieldList,
+        std::vector<std::string>& valueList);
 
     int CommitDo(
         h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
