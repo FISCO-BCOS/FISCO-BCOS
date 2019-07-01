@@ -37,6 +37,7 @@ chain_id=1
 compatibility_version=""
 default_version="2.0.0"
 macOS=""
+download_timeout=360
 
 help() {
     echo $1
@@ -893,6 +894,45 @@ parse_ip_config()
     done < ${config}
 }
 
+download_bin()
+{
+    bin_path=${output_dir}/${bcos_bin_name}
+    package_name="fisco-bcos.tar.gz"
+    [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
+    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
+        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+    fi
+    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+    if [ $(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}) == 200 ];then
+        curl -LO ${Download_Link} --speed-time 30 --speed-limit 1024 -m ${download_timeout} || {
+            LOG_INFO "Download speed is too low, try https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}"
+            curl -LO https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}
+        }
+    else
+        curl -LO ${Download_Link}
+    fi
+    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
+    chmod a+x ${bin_path}
+}
+
+check_bin()
+{
+    echo "Checking fisco-bcos binary..."
+    bin_version=$(${bin_path} -v)
+    if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
+        exit_with_clean "${bin_path} is wrong. Please correct it and try again."
+    fi
+    if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
+        exit_with_clean "${bin_path} isn't gm version. Please correct it and try again."
+    fi
+    if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
+        exit_with_clean "${bin_path} isn't standard version. Please correct it and try again."
+    fi
+    echo "Binary check passed."
+}
+
 main()
 {
 output_dir="$(pwd)/${output_dir}"
@@ -924,31 +964,9 @@ fi
 # download fisco-bcos and check it
 if [ -z ${docker_mode} ];then
     if [[ -z ${bin_path} ]];then
-        bin_path=${output_dir}/${bcos_bin_name}
-        package_name="fisco-bcos.tar.gz"
-        [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
-        [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-        if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
-            exit_with_clean "We don't provide binary of GuoMi of macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
-        fi
-        Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
-        LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
-        curl -LO ${Download_Link}
-        tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
-        chmod a+x ${bin_path}
+        download_bin
     else
-        echo "Checking fisco-bcos binary..."
-        bin_version=$(${bin_path} -v)
-        if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
-            exit_with_clean "${bin_path} is wrong. Please correct it and try again."
-        fi
-        if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
-            exit_with_clean "${bin_path} isn't gm version. Please correct it and try again."
-        fi
-        if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
-            exit_with_clean "${bin_path} isn't standard version. Please correct it and try again."
-        fi
-        echo "Binary check passed."
+        check_bin
     fi
 fi
 if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
