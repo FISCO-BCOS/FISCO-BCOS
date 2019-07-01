@@ -44,13 +44,14 @@ struct SQLPlaceHoldItem
     SQLPlaceHoldItem() : placeHolerCnt(0) {}
 };
 
+
 class SQLBasicAccess
 {
 public:
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
     virtual int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, std::vector<std::map<std::string, std::string> >& values);
+        Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values);
     virtual int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas);
 
 private:
@@ -65,9 +66,9 @@ private:
         const std::string& tablename, const std::string& keyfield, const std::string& valuefield);
 
     std::string GetCreateTableSql(const Entry::Ptr& data);
-    void GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 hash, const std::string& strNum,
-        std::vector<std::string>& _fieldName, std::vector<std::string>& _fieldValue,
-        bool& _hasGetField);
+    void GetCommitFieldNameAndValue(const Entries::Ptr& data,
+        h256 hash, const std::string& strNum,
+        std::map<std::vector<std::string>, std::vector<std::string>>& _fieldValue);
 
     int CommitDo(
         h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
