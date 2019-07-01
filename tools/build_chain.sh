@@ -326,8 +326,6 @@ gen_chain_cert_gm() {
 	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
 	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
-    ls $chaindir
-
     cp gmcert.cnf gmsm2.param $chaindir
 
     if $(cp gmcert.cnf gmsm2.param $chaindir)
