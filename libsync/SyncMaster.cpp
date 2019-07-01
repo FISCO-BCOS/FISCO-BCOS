@@ -774,14 +774,14 @@ bool SyncMaster::isNextBlock(BlockPtr _block)
     // check block sealerlist sig
     if (fp_isConsensusOk && !(fp_isConsensusOk)(*_block))
     {
-        SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Ignore illegal block")
-                        << LOG_KV("reason", "consensus check failed")
-                        << LOG_KV("thisNumber", _block->header().number())
-                        << LOG_KV("currentNumber", currentNumber)
-                        << LOG_KV("thisParentHash", _block->header().parentHash().abridged())
-                        << LOG_KV(
-                               "currentHash", m_blockChain->numberHash(currentNumber).abridged());
+        SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                          << LOG_DESC("Ignore illegal block")
+                          << LOG_KV("reason", "consensus check failed")
+                          << LOG_KV("thisNumber", _block->header().number())
+                          << LOG_KV("currentNumber", currentNumber)
+                          << LOG_KV("thisParentHash", _block->header().parentHash().abridged())
+                          << LOG_KV(
+                                 "currentHash", m_blockChain->numberHash(currentNumber).abridged());
         return false;
     }
 

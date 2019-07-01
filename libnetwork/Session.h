@@ -156,7 +156,7 @@ private:
     boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
-    bool m_writing = false;
+    std::atomic_bool m_writing = {false};
     Mutex x_writeQueue;
 
     mutable Mutex x_info;
