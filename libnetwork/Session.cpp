@@ -240,7 +240,6 @@ void Session::write()
 void Session::drop(DisconnectReason _reason)
 {
     auto server = m_server.lock();
-    m_writing = false;
     if (!m_actived)
         return;
 
