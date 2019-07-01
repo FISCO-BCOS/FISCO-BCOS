@@ -436,7 +436,7 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
     if (_fieldName.size() == 0 || _fieldValue.size() == 0 ||
         (_fieldValue.size() % _fieldName.size()))
     {
-        /*throw execption*/
+        /*throw exception*/
         SQLBasicAccess_LOG(ERROR) << "tablename:" << _table << "field size:" << _fieldName.size()
                                   << " value size:" << _fieldValue.size()
                                   << " field size and value should be greate than 0";
