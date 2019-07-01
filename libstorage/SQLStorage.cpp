@@ -165,29 +165,14 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
                 Json::Value line = responseJson["result"]["column_value"][i];
                 Entry::Ptr entry = std::make_shared<Entry>();
 
-                Json::Value::Members member = line.getMemberNames();
-                for (Json::Value::Members::iterator iter = member.begin(); iter != member.end();
-                     ++iter)
+                for (auto key : line.getMemberNames())
                 {
-                    std::string key = *iter;
-                    std::string fieldValue = line.get(key, "").asString();
-                    if (key == ID_FIELD)
-                    {
-                        entry->setID(fieldValue);
-                    }
-                    else if (key == NUM_FIELD)
-                    {
-                        entry->setNum(fieldValue);
-                    }
-                    else if (key == STATUS)
-                    {
-                        entry->setStatus(fieldValue);
-                    }
-                    else
-                    {
-                        entry->setField(key, fieldValue);
-                    }
+                    entry->setField(key, line.get(key, "").asString());
                 }
+                entry->setID(line.get(ID_FIELD, "").asString());
+                entry->setNum(line.get(NUM_FIELD, "").asString());
+                entry->setStatus(line.get(STATUS, "").asString());
+
                 if (entry->getStatus() == 0)
                 {
                     entry->setDirty(false);
