@@ -85,7 +85,7 @@ int SQLBasicAccess::Select(h256, int64_t, const std::string& _table, const std::
                         ResultSet_getString(result, index);
                 }
             }
-            values.push_back(value);
+            values.push_back(std::move(value));
         }
     }
     CATCH(SQLException)
