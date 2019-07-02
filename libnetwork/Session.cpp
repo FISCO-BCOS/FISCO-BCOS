@@ -180,6 +180,8 @@ void Session::write()
 
     try
     {
+        Guard l(x_writeQueue);
+
         if (m_writing)
         {
             return;
