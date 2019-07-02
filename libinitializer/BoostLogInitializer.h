@@ -50,7 +50,9 @@ public:
             auto severity =
                 rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
                     .extract<boost::log::trivial::severity_level>();
-            if (severity.get() == boost::log::trivial::severity_level::fatal)
+            // bug fix: determine m_ptr before get the log level
+            //          serverity.get() will call  BOOST_ASSERT(m_ptr)
+            if (severity.get_ptr() && severity.get() == boost::log::trivial::severity_level::fatal)
             {
                 // abort if encounter fatal, will generate coredump
                 // must make sure only use LOG(FATAL) when encounter the most serious problem
