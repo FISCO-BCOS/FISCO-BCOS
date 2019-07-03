@@ -27,9 +27,9 @@ LOG_INFO "[round1]==============send a transaction is ok"
 
 LOG_INFO "[round1]==============check report block"
 sleep 2
-num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 8 ];then
-    LOG_ERROR "check report block failed! ${num} != 8"
+num=$(cat node*/log/* | grep Report | grep "num=1" | wc -l)
+if [ ${num} -ne 4 ];then
+    LOG_ERROR "check report block failed! ${num} != 4"
     cat node*/log/* 
     exit 1
 fi
@@ -37,12 +37,12 @@ LOG_INFO "[round1]==============check report block is ok"
 
 LOG_INFO "[round1]==============check sync block"
 bash stop_all.sh
-rm -rf node0/data node0/log
+rm -rf node0/data node*/log
 bash start_all.sh
 sleep 5
-num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 11 ];then
-    LOG_ERROR "[round1] sync block failed! ${num} != 11"
+num=$(cat node*/log/* | grep Report | grep "num=1" | wc -l)
+if [ ${num} -ne 4 ];then
+    LOG_ERROR "[round1] sync block failed! ${num} != 4"
     cat node*/log/* 
     exit 1
 fi
@@ -50,6 +50,7 @@ LOG_INFO "[round1]==============check sync block is ok"
 
 LOG_INFO "[round2]==============restart all node"
 bash stop_all.sh
+rm -rf node*/log
 bash start_all.sh
 
 LOG_INFO "[round2]==============send a transaction"
@@ -61,26 +62,26 @@ LOG_INFO "[round2]==============send a transaction is ok"
 
 LOG_INFO "[round2]==============check report block"
 sleep 2
-num=$(cat node*/log/* | grep Report | wc -l)
-if [ ${num} -ne 19 ];then
-    LOG_ERROR "[round2] check report block failed! ${num} != 19"
+num=$(cat node*/log/* | grep Report | grep "num=2" | wc -l)
+if [ ${num} -ne 4 ];then
+    LOG_ERROR "[round2] check report block failed! ${num} != 4"
     cat node*/log/* 
     exit 1
 fi
 LOG_INFO "[round2]==============check report block is ok"
 
-# LOG_INFO "[round2]==============check sync block"
-# bash stop_all.sh
-# rm -rf node0/data node0/log
-# bash start_all.sh
-# sleep 10
-# num=$(cat node*/log/* | grep Report | wc -l)
-# if [ ${num} -ne 21 ];then
-#     LOG_ERROR "[round2] sync block failed! ${num} != 21"
-#     cat node*/log/* 
-#     exit 1
-# fi
-# LOG_INFO "[round2]==============check sync block is ok"
+LOG_INFO "[round2]==============check sync block"
+bash stop_all.sh
+rm -rf node0/data node*/log
+bash start_all.sh
+sleep 10
+num=$(cat node*/log/* | grep Report | grep "num=2" | wc -l)
+if [ ${num} -ne 4 ];then
+    LOG_ERROR "[round2] sync block failed! ${num} != 4"
+    cat node*/log/* 
+    exit 1
+fi
+LOG_INFO "[round2]==============check sync block is ok"
 
 cd ../..
 python ci/ci_check.py
