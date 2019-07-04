@@ -66,12 +66,10 @@ public:
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
 
-public:
-    bool needCheckPacketInGroup = true;
-
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
+    bool checkGroupPacket(SyncMsgPacket const& _packet);
     bool interpret(SyncMsgPacket const& _packet);
 
 private:

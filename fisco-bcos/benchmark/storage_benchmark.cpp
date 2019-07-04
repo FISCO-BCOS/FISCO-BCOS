@@ -26,6 +26,7 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
@@ -59,16 +60,10 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;
     rocksdb::Status status;
+    std::shared_ptr<dev::db::BasicRocksDB> rocksDB = std::make_shared<dev::db::BasicRocksDB>();
+    rocksDB->Open(options, "./RocksDB");
 
-    status = rocksdb::DB::Open(options, "./RocksDB", &db);
-
-    if (!status.ok())
-    {
-        throw std::runtime_error("open RocksDB failed");
-    }
     std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
-    std::shared_ptr<rocksdb::DB> rocksDB;
-    rocksDB.reset(db);
 
     rocksdbStorage->setDB(rocksDB);
 

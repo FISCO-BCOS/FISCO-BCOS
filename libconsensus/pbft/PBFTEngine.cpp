@@ -142,6 +142,7 @@ void PBFTEngine::resetConfig()
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
             "Must set at least one pbft sealer, current number of sealers is zero");
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(
             EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
     }
@@ -164,11 +165,16 @@ void PBFTEngine::initBackupDB()
     db::BasicLevelDB* basicDB = NULL;
     leveldb::Status status;
 
-    if (g_BCOSConfig.diskEncryption.enable)
-        status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(),
-            &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey);
+    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        status =
+            EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB,
+                g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
+    }
     else
+    {
         status = BasicLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB);
+    }
 
     LevelDB::checkStatus(status, path_handler);
 
@@ -179,6 +185,7 @@ void PBFTEngine::initBackupDB()
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
             "initBackupDB: Disk space is insufficient, less than 100MB. Release disk space and try "
             "again");
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(NotEnoughAvailableSpace());
     }
     // reload msg from db to commited-prepare-cache
@@ -241,7 +248,7 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (DatabaseError const& e)
     {
-        PBFTENGINE_LOG(FATAL) << LOG_BADGE("DatabaseError")
+        PBFTENGINE_LOG(ERROR) << LOG_BADGE("DatabaseError")
                               << LOG_DESC("store backupMsg to leveldb failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
@@ -249,8 +256,8 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     }
     catch (std::exception const& e)
     {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC("store backupMsg to leveldb failed")
-                                << LOG_KV("EINFO", boost::diagnostic_information(e));
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to leveldb failed")
+                              << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
@@ -549,6 +556,11 @@ void PBFTEngine::checkSealerList(Block const& block)
 /// check Block sign
 bool PBFTEngine::checkBlock(Block const& block)
 {
+    if (block.blockHeader().number() <= m_blockChain->number())
+    {
+        return false;
+    }
+    resetConfig();
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
@@ -821,6 +833,12 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     try
     {
         execBlock(workingSealing, prepareReq, oss);
+        // old block (has already executed correctly by block sync)
+        if (workingSealing.p_execContext == nullptr &&
+            workingSealing.block.getTransactionSize() > 0)
+        {
+            return false;
+        }
     }
     catch (std::exception& e)
     {
@@ -954,7 +972,6 @@ void PBFTEngine::checkAndSave()
                 record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
                 auto noteSealing_time_cost = utcTime() - record_time;
-                record_time = utcTime();
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("CommitBlock Succ")
                     << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)

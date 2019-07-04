@@ -203,8 +203,6 @@ void Sealer::resetBlock(Block& block, bool resetNextLeader)
         {  // impossible so exit
             SEAL_LOG(FATAL) << LOG_DESC("exit because can't get highest block")
                             << LOG_KV("number", m_blockChain->number());
-            raise(SIGTERM);
-            BOOST_THROW_EXCEPTION(invalid_argument("sealer can't get highest block."));
         }
         block.resetCurrentBlock(highestBlock->blockHeader());
     }

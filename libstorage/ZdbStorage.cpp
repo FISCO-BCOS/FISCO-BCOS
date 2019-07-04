@@ -36,10 +36,8 @@ ZdbStorage::ZdbStorage() {}
 Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
-    std::vector<std::string> columns;
-    std::vector<std::vector<std::string> > valueList;
-    int ret =
-        m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, columns, valueList);
+    std::vector<std::map<std::string, std::string> > values;
+    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, values);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -52,30 +50,16 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableI
     }
 
     Entries::Ptr entries = std::make_shared<Entries>();
-    auto it = valueList.begin();
-    for (; it != valueList.end(); ++it)
+    for (auto it : values)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        for (size_t j = 0; j < it->size(); ++j)
+        for (auto it2 : it)
         {
-            if (columns[j] == ID_FIELD)
-            {
-                entry->setID(it->at(j));
-            }
-            else if (columns[j] == NUM_FIELD)
-            {
-                entry->setNum(it->at(j));
-            }
-            else if (columns[j] == STATUS)
-            {
-                entry->setStatus(it->at(j));
-            }
-            else
-            {
-                entry->setField(columns[j], it->at(j));
-            }
+            entry->setField(it2.first, it2.second);
         }
-
+        entry->setID(it.at(ID_FIELD));
+        entry->setNum(it.at(NUM_FIELD));
+        entry->setStatus(it.at(STATUS));
         if (entry->getStatus() == 0)
         {
             entry->setDirty(false);

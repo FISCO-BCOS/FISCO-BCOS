@@ -78,7 +78,8 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const&, WithExisting _we
 
         if (g_BCOSConfig.diskEncryption.enable)
             status = devdb::EncryptedLevelDB::Open(devdb::LevelDB::defaultDBOptions(),
-                path.string(), &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey);
+                path.string(), &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey,
+                g_BCOSConfig.diskEncryption.dataKey);
         else
             status = devdb::BasicLevelDB::Open(
                 devdb::LevelDB::defaultDBOptions(), path.string(), &basicDB);

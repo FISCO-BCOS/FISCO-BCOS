@@ -60,6 +60,7 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
+        setMaxBlockTransactions(300000000);
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -81,7 +82,7 @@ public:
         std::size_t pos = path.find("invalid");
         if (pos != std::string::npos)
             return false;
-        return boost::filesystem::space(path).available > 1024;
+        return true;
     }
     void resetSealingHeader(BlockHeader& header)
     {
@@ -92,6 +93,7 @@ public:
         header.setLogBloom(LogBloom());
         header.setGasUsed(u256(0));
     }
+
 
     void resetBlock(Block& block)
     {
@@ -127,8 +129,17 @@ public:
     void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
-
-    bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
+    void updateMaxBlockTransactions() override {}
+    bool checkBlock(dev::eth::Block const& block)
+    {
+        auto orgNumber = m_blockChain->number();
+        std::shared_ptr<FakeBlockChain> blockChain =
+            std::dynamic_pointer_cast<FakeBlockChain>(m_blockChain);
+        blockChain->setBlockNumber(0);
+        bool ret = PBFTEngine::checkBlock(block);
+        blockChain->setBlockNumber(orgNumber);
+        return ret;
+    }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }

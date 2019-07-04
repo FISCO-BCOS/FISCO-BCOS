@@ -22,6 +22,7 @@
 
 
 #include "GlobalConfigureInitializer.h"
+#include "libsecurity/KeyCenter.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -101,8 +102,6 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                                              "failed! Invalid key_manange_port!"));
     }
 
-    g_BCOSConfig.diskEncryption.cipherDataKey =
-        _pt.get<std::string>(sectionName + ".cipher_data_key", "");
 
     /// compress related option, default enable
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
@@ -119,11 +118,21 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 
     if (g_BCOSConfig.diskEncryption.enable)
     {
+        auto cipherDataKey = _pt.get<std::string>(sectionName + ".cipher_data_key", "");
+        if (cipherDataKey.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                MissingField() << errinfo_comment("Please provide cipher_data_key!"));
+        }
+        KeyCenter keyClient;
+        keyClient.setIpPort(
+            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
+        g_BCOSConfig.diskEncryption.cipherDataKey = cipherDataKey;
+        g_BCOSConfig.diskEncryption.dataKey = asString(keyClient.getDataKey(cipherDataKey));
         INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
                               << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                               << LOG_KV("url.port",
-                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                              << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey);
+                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
     }
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")

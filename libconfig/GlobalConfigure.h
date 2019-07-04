@@ -22,8 +22,8 @@
 
 #pragma once
 
+#include <atomic>
 #include <string>
-
 namespace dev
 {
 enum VERSION : uint32_t
@@ -40,7 +40,7 @@ public:
         static GlobalConfigure ins;
         return ins;
     }
-
+    GlobalConfigure() : shouldExit(false) {}
     VERSION const& version() const { return m_version; }
     void setCompress(bool const& compress) { m_compress = compress; }
 
@@ -62,6 +62,7 @@ public:
         std::string keyCenterIP;
         int keyCenterPort;
         std::string cipherDataKey;
+        std::string dataKey;
     } diskEncryption;
 
     /// default block time
@@ -73,6 +74,8 @@ public:
 
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
+
+    std::atomic_bool shouldExit;
 
 private:
     VERSION m_version = RC3_VERSION;

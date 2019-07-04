@@ -135,6 +135,7 @@ public:
     }
 
     int64_t number() override { return m_blockNumber - 1; }
+    void setBlockNumber(int64_t const& number) { m_blockNumber = number; }
     void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
     {
         auto pBlock = getBlockByNumber(_blockNumber);
@@ -144,6 +145,11 @@ public:
         }
     }
     std::pair<int64_t, int64_t> totalTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
+    }
+
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }

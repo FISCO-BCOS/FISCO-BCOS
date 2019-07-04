@@ -36,14 +36,13 @@ namespace test_zdbStorage
 class MockSQLBasicAccess : public dev::storage::SQLBasicAccess
 {
 public:
-    int Select(h256 hash, int num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, std::vector<std::string>& columns,
-        std::vector<std::vector<std::string> >& valueList) override
+    int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
+        Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values) override
     {
-        printf("hash:%s num:%u key:%s\n", hash.hex().c_str(), num, key.c_str());
+        std::cout << "hash: " << hash.hex() << ", num:" << num << ", key: " << key << std::endl;
         if (key == "_empty_key_" || !condition)
         {
-            columns.resize(0);
+            values.resize(0);
             return 0;
         }
         else
@@ -54,20 +53,20 @@ public:
             }
             else
             {
-                columns.push_back("id");
-                columns.push_back("name");
-
-                std::vector<std::string> value;
-                value.push_back("1000000");
-                value.push_back("darrenyin");
-                valueList.push_back(value);
+                std::map<std::string, std::string> value;
+                value["id"] = "1000000";
+                value["name"] = "darrenyin";
+                value["_id_"] = "10";
+                value["_num_"] = "100";
+                value["_status_"] = "0";
+                values.push_back(value);
             }
         }
         return 0;
     }
-    int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas) override
+    int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
-        printf("hash:%s num:%u\n", hash.hex().c_str(), num);
+        std::cout << "hash:" << hash.hex() << ", num:" << num << std::endl;
         return datas.size();
     }
     void ExecuteSql(const std::string& _sql) override { printf("sql:%s\n", _sql.c_str()); }
@@ -92,6 +91,10 @@ struct zdbStorageFixture
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("Name", "darrenyin");
         entry->setField("id", "1000000");
+        entry->setField("_id_", "10");
+        entry->setField("_num_", "100");
+        entry->setField("_status_", "0");
+
         entries->addEntry(entry);
         return entries;
     }

@@ -53,7 +53,7 @@ size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
 size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedData)
 {
     size_t uncompressedLen = 0;
-    auto start_t = utcTimeUs();
+    // auto start_t = utcTimeUs();
     snappy::GetUncompressedLength(
         (const char*)compressedData.data(), compressedData.size(), &uncompressedLen);
     uncompressedData.resize(uncompressedLen);

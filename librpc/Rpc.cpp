@@ -778,15 +778,17 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
         checkRequest(_groupID);
-        Json::Value response;
-
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         h256 hash = jsToFixed<32>(_transactionHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto tx = blockchain->getLocalisedTxByHash(hash);
+        if (tx.blockNumber() == INVALIDNUMBER)
+            return Json::nullValue;
         auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
         if (txReceipt.blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
+        Json::Value response;
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(txReceipt.transactionIndex());
         response["blockNumber"] = toJS(txReceipt.blockNumber());
@@ -808,6 +810,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         }
         response["logsBloom"] = toJS(txReceipt.bloom());
         response["status"] = toJS(txReceipt.status());
+        response["input"] = toJS(tx.data());
         response["output"] = toJS(txReceipt.outputBytes());
 
         return response;
@@ -926,6 +929,8 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
         response["txSum"] = toJS(result.first);
         response["blockNumber"] = toJS(result.second);
+        result = blockChain->totalFailedTransactionCount();
+        response["failedTxSum"] = toJS(result.first);
         return response;
     }
     catch (JsonRpcException& e)
@@ -1001,36 +1006,41 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
-            tx.setRpcCallback([transactionCallback](LocalisedTransactionReceipt::Ptr receipt) {
-                Json::Value response;
+            tx.setRpcCallback(
+                [transactionCallback](LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+                    Json::Value response;
 
-                response["transactionHash"] = toJS(receipt->hash());
-                response["transactionIndex"] = toJS(receipt->transactionIndex());
-                response["blockNumber"] = toJS(receipt->blockNumber());
-                response["blockHash"] = toJS(receipt->blockHash());
-                response["from"] = toJS(receipt->from());
-                response["to"] = toJS(receipt->to());
-                response["gasUsed"] = toJS(receipt->gasUsed());
-                response["contractAddress"] = toJS(receipt->contractAddress());
-                response["logs"] = Json::Value(Json::arrayValue);
-                for (unsigned int i = 0; i < receipt->log().size(); ++i)
-                {
-                    Json::Value log;
-                    log["address"] = toJS(receipt->log()[i].address);
-                    log["topics"] = Json::Value(Json::arrayValue);
-                    for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-                        log["topics"].append(toJS(receipt->log()[i].topics[j]));
-                    log["data"] = toJS(receipt->log()[i].data);
-                    response["logs"].append(log);
-                }
-                response["logsBloom"] = toJS(receipt->bloom());
-                response["status"] = toJS(receipt->status());
-                response["output"] = toJS(receipt->outputBytes());
+                    response["transactionHash"] = toJS(receipt->hash());
+                    response["transactionIndex"] = toJS(receipt->transactionIndex());
+                    response["blockNumber"] = toJS(receipt->blockNumber());
+                    response["blockHash"] = toJS(receipt->blockHash());
+                    response["from"] = toJS(receipt->from());
+                    response["to"] = toJS(receipt->to());
+                    response["gasUsed"] = toJS(receipt->gasUsed());
+                    response["contractAddress"] = toJS(receipt->contractAddress());
+                    response["logs"] = Json::Value(Json::arrayValue);
+                    for (unsigned int i = 0; i < receipt->log().size(); ++i)
+                    {
+                        Json::Value log;
+                        log["address"] = toJS(receipt->log()[i].address);
+                        log["topics"] = Json::Value(Json::arrayValue);
+                        for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                            log["topics"].append(toJS(receipt->log()[i].topics[j]));
+                        log["data"] = toJS(receipt->log()[i].data);
+                        response["logs"].append(log);
+                    }
+                    response["logsBloom"] = toJS(receipt->bloom());
+                    response["status"] = toJS(receipt->status());
+                    if (g_BCOSConfig.version() > RC3_VERSION)
+                    {
+                        response["input"] = toJS(input);
+                    }
+                    response["output"] = toJS(receipt->outputBytes());
 
-                auto receiptContent = response.toStyledString();
+                    auto receiptContent = response.toStyledString();
 
-                transactionCallback(receiptContent);
-            });
+                    transactionCallback(receiptContent);
+                });
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 

@@ -27,7 +27,6 @@
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/LevelDB.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libsecurity/KeyCenter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -41,21 +40,6 @@ namespace dev
 {
 namespace test
 {
-class FakeKeyCenter : public KeyCenter
-{
-    const dev::bytes getDataKey(const std::string&) override
-    {
-        return fromHex("3031323334353637303132333435363730313233343536373031323334353637");
-    }
-
-    const std::string generateCipherDataKey() override
-    {
-        return "97f6ff07713e4758d769e693d4cf387ec562ff22d50451c119148eaab486f8d80c6b1148c0f23a68194"
-               "552ccbdc165b7";
-    }
-};
-
-
 class EncryptedLevelDBFixture : public TestOutputHelperFixture
 {
 public:
@@ -66,14 +50,14 @@ public:
 
     shared_ptr<BasicLevelDB> openEncryptedDB(const string& _name)
     {
-        shared_ptr<KeyCenter> keycenter = make_shared<FakeKeyCenter>();
         if (boost::filesystem::exists(_name))
         {
             boost::filesystem::remove_all(_name);
         }
         dev::db::BasicLevelDB* pleveldb = nullptr;
         auto status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), _name, &pleveldb,
-            "85cf52964f7334c015545b394c1ffec9", keycenter);
+            "85cf52964f7334c015545b394c1ffec9",
+            asString(fromHex("3031323334353637303132333435363730313233343536373031323334353637")));
         if (!status.ok())
         {
             LOG(ERROR) << "[g:" << _name << "]"

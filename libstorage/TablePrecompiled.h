@@ -65,6 +65,8 @@ public:
 
 private:
     std::shared_ptr<storage::Table> m_table;
+    void checkLengthValidate(
+        const std::string& field_value, int32_t max_length, int32_t throw_exception);
 };
 
 }  // namespace blockverifier

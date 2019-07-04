@@ -138,27 +138,31 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
 {
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
-    auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
-    if (tableEntries->size() != 0)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory2")
-                           << LOG_DESC("table already exist in _sys_tables_")
-                           << LOG_KV("table name", tableName);
-        return nullptr;
-    }
-    // Write table entry
-    auto tableEntry = sysTable->newEntry();
-    tableEntry->setField("table_name", tableName);
-    tableEntry->setField("key_field", keyField);
-    tableEntry->setField("value_field", valueField);
-    auto result = sysTable->insert(
-        tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
-    if (result == storage::CODE_NO_AUTHORIZED)
-    {
-        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory2")
-                             << LOG_DESC("create table permission denied")
-                             << LOG_KV("origin", _origin.hex()) << LOG_KV("table name", tableName);
-        BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
+        RecursiveGuard l(x_name2Table);
+        auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
+        if (tableEntries->size() != 0)
+        {
+            STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory2")
+                               << LOG_DESC("table already exist in _sys_tables_")
+                               << LOG_KV("table name", tableName);
+            return nullptr;
+        }
+        // Write table entry
+        auto tableEntry = sysTable->newEntry();
+        tableEntry->setField("table_name", tableName);
+        tableEntry->setField("key_field", keyField);
+        tableEntry->setField("value_field", valueField);
+        auto result = sysTable->insert(
+            tableName, tableEntry, std::make_shared<AccessOptions>(_origin, authorityFlag));
+        if (result == storage::CODE_NO_AUTHORIZED)
+        {
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory2")
+                                 << LOG_DESC("create table permission denied")
+                                 << LOG_KV("origin", _origin.hex())
+                                 << LOG_KV("table name", tableName);
+            BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
+        }
     }
     return openTable(tableName, authorityFlag, isPara);
 }

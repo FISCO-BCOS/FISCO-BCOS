@@ -23,6 +23,7 @@
 #include <libevm/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/StorageException.h>
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
@@ -85,18 +86,26 @@ void Executive::verifyTransaction(
 bool Executive::execute()
 {
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    // bug fix:
-    // modify assert->BOOST_THROW_EXCEPTION, in case of coredump of the nodes when gas is not
-    // enough
-    // *origin code:
-    // assert(m_t.gas() >= (u256)m_baseGasRequired);
-    // *modified:
-    if (m_t.gas() < (u256)m_baseGasRequired)
+
+    if (g_BCOSConfig.version() > RC3_VERSION)
     {
-        m_excepted = TransactionException::OutOfGasBase;
-        BOOST_THROW_EXCEPTION(
-            OutOfGasBase() << errinfo_comment(
-                "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        if (txGasLimit < (u256)m_baseGasRequired)
+        {
+            m_excepted = TransactionException::OutOfGasBase;
+            BOOST_THROW_EXCEPTION(
+                OutOfGasBase() << errinfo_comment(
+                    "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        }
+    }
+    else
+    {
+        if (m_t.gas() < (u256)m_baseGasRequired)
+        {
+            m_excepted = TransactionException::OutOfGasBase;
+            BOOST_THROW_EXCEPTION(
+                OutOfGasBase() << errinfo_comment(
+                    "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
+        }
     }
     if (m_t.isCreation())
         return create(m_t.sender(), m_t.value(), m_t.gasPrice(),

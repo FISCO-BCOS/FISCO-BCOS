@@ -57,8 +57,8 @@ class ChannelRPCServer : public jsonrpc::AbstractServerConnector,
 public:
     enum ChannelERRORCODE
     {
-        REMOTE_PEER_UNAVAILIBLE = 100,
-        REMOTE_CLIENT_PEER_UNAVAILBLE = 101,
+        REMOTE_PEER_UNAVAILABLE = 100,
+        REMOTE_CLIENT_PEER_UNAVAILABLE = 101,
         TIMEOUT = 102
     };
 
@@ -129,8 +129,6 @@ public:
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
-    void initSSLContext();
-
     dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
         dev::channel::Message::Ptr message,
         const std::set<dev::channel::ChannelSession::Ptr>& exclude);

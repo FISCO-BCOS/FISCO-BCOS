@@ -363,6 +363,25 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
     return std::make_pair(count, number);
 }
 
+std::pair<int64_t, int64_t> BlockChainImp::totalFailedTransactionCount()
+{
+    int64_t count = 0;
+    int64_t number = 0;
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_CURRENT_STATE, false);
+    if (tb)
+    {
+        auto entries = tb->select(SYS_KEY_TOTAL_FAILED_TRANSACTION, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string strCount = entry->getField(SYS_VALUE);
+            count = lexical_cast<int64_t>(strCount);
+            number = entry->num();
+        }
+    }
+    return std::make_pair(count, number);
+}
+
 bytes BlockChainImp::getCode(Address _address)
 {
     bytes ret;
@@ -747,11 +766,11 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLPByNumber(int64_t _i)
 
 Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
-    string strblock = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblock = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
@@ -776,11 +795,11 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 
 LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
-    string strblockhash = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblockhash = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
@@ -807,11 +826,11 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
 
 TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
-    string strblock = "";
-    string txIndex = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
     {
+        string strblock = "";
+        string txIndex = "";
         auto entries = tb->select(_txHash.hex(), tb->newCondition());
         if (entries->size() > 0)
         {
@@ -823,7 +842,7 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             {
                 return TransactionReceipt();
             }
-            std::vector<TransactionReceipt> receipts = pblock->transactionReceipts();
+            const TransactionReceipts& receipts = pblock->transactionReceipts();
             if (receipts.size() > lexical_cast<uint>(txIndex))
             {
                 return receipts[lexical_cast<uint>(txIndex)];
@@ -917,6 +936,31 @@ void BlockChainImp::writeTotalTransactionCount(
             auto entry = tb->newEntry();
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
+        }
+        const TransactionReceipts& receipts = block.transactionReceipts();
+        int32_t failedTransactions = 0;
+        for (auto& receipt : receipts)
+        {
+            if (receipt.status() != TransactionException::None)
+            {
+                ++failedTransactions;
+            }
+        }
+        entries = tb->select(SYS_KEY_TOTAL_FAILED_TRANSACTION, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
+            currentCount += failedTransactions;
+            auto updateEntry = tb->newEntry();
+            updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
+            tb->update(SYS_KEY_TOTAL_FAILED_TRANSACTION, updateEntry, tb->newCondition());
+        }
+        else
+        {
+            auto entry = tb->newEntry();
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(failedTransactions));
+            tb->insert(SYS_KEY_TOTAL_FAILED_TRANSACTION, entry);
         }
     }
     else
@@ -1088,8 +1132,17 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             writeTxToBlock(block, context);
             auto writeTxToBlock_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
-
-            context->dbCommit(block);
+            try
+            {
+                context->dbCommit(block);
+            }
+            catch (std::exception& e)
+            {
+                BLOCKCHAIN_LOG(ERROR)
+                    << LOG_DESC("Commit Block failed")
+                    << LOG_KV("number", block.blockHeader().number()) << LOG_KV("what", e.what());
+                return CommitResult::ERROR_COMMITTING;
+            }
             auto dbCommit_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             {

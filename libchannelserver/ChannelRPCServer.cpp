@@ -86,43 +86,6 @@ bool ChannelRPCServer::StartListening()
     return true;
 }
 
-void ChannelRPCServer::initSSLContext()
-{
-    _sslContext = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
-
-    vector<pair<string, Public> > certificates;
-    string nodepri;
-
-    EC_KEY* ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-    SSL_CTX_set_tmp_ecdh(_sslContext->native_handle(), ecdh);
-    EC_KEY_free(ecdh);
-
-    _sslContext->set_verify_depth(3);
-    _sslContext->add_certificate_authority(
-        boost::asio::const_buffer(certificates[0].first.c_str(), certificates[0].first.size()));
-
-    string chain = certificates[0].first + certificates[1].first;
-    _sslContext->use_certificate_chain(boost::asio::const_buffer(chain.c_str(), chain.size()));
-    _sslContext->use_certificate(
-        boost::asio::const_buffer(certificates[2].first.c_str(), certificates[2].first.size()),
-        ba::ssl::context::file_format::pem);
-
-    _sslContext->use_private_key(
-        boost::asio::const_buffer(nodepri.c_str(), nodepri.size()), ba::ssl::context_base::pem);
-
-    _server = make_shared<dev::channel::ChannelServer>();
-    _server->setIOService(_ioService);
-    _server->setSSLContext(_sslContext);
-
-    _server->setEnableSSL(true);
-    _server->setBind(_listenAddr, _listenPort);
-
-    std::function<void(dev::channel::ChannelException, dev::channel::ChannelSession::Ptr)> fp =
-        std::bind(&ChannelRPCServer::onConnect, shared_from_this(), std::placeholders::_1,
-            std::placeholders::_2);
-    _server->setConnectionHandler(fp);
-}
-
 bool ChannelRPCServer::StopListening()
 {
     if (_running)
@@ -139,28 +102,37 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 {
     std::string addInfo = *((std::string*)_addInfo);
 
-    std::lock_guard<std::mutex> lock(_seqMutex);
-    auto it = _seq2session.find(addInfo);
+    std::string seq;
+    ChannelSession::Ptr session;
+    {
+        std::lock_guard<std::mutex> lock(_seqMutex);
+        auto it = _seq2session.find(addInfo);
 
-    delete (std::string*)_addInfo;
+        if (it != _seq2session.end())
+        {
+            seq = it->first;
+            session = it->second;
+            _seq2session.erase(it);
+        }
 
-    if (it != _seq2session.end())
+        delete (std::string*)_addInfo;
+    }
+
+    if (session)
     {
         CHANNEL_LOG(TRACE) << "send ethereum resp seq"
-                           << LOG_KV("seq", it->first.substr(0, c_seqAbridgedLen))
+                           << LOG_KV("seq", seq.substr(0, c_seqAbridgedLen))
                            << LOG_KV("response", _response);
 
         std::shared_ptr<bytes> resp(new bytes());
 
-        auto message = it->second->messageFactory()->buildMessage();
-        message->setSeq(it->first);
+        auto message = session->messageFactory()->buildMessage();
+        message->setSeq(seq);
         message->setResult(0);
         message->setType(0x12);
         message->setData((const byte*)_response.data(), _response.size());
 
-        it->second->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-
-        _seq2session.erase(it);
+        session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
     }
     else
     {
@@ -272,6 +244,7 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         }
         case 0x30:
         case 0x31:
+        case 0x35:
             onClientChannelRequest(session, message);
             break;
         case 0x32:
@@ -433,7 +406,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 CHANNEL_LOG(ERROR) << "push message totaly failed"
                                    << LOG_KV("what", boost::diagnostic_information(e));
 
-                channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILBLE);
+                channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILABLE);
                 channelMessage->setType(0x31);
 
                 auto buffer = std::make_shared<bytes>();
@@ -446,6 +419,18 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 p2pResponse->setSeq(msg->seq());
                 m_service->asyncSendMessageByNodeID(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+            }
+        }
+        else if (channelMessage->type() == 0x35)
+        {
+            try
+            {
+                asyncBroadcastChannelMessage(topic, channelMessage);
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR)
+                    << "Broadcast channel message failed: " << boost::diagnostic_information(e);
             }
         }
     }
@@ -543,7 +528,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                             << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
                         message->setType(0x31);
-                        message->setResult(REMOTE_PEER_UNAVAILIBLE);
+                        message->setResult(REMOTE_PEER_UNAVAILABLE);
                         message->clearData();
 
                         session->asyncSendMessage(
@@ -564,7 +549,41 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
             message->setType(0x31);
-            message->setResult(REMOTE_PEER_UNAVAILIBLE);
+            message->setResult(REMOTE_PEER_UNAVAILABLE);
+            message->clearData();
+
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
+    }
+    else if (message->type() == 0x35)
+    {
+        // client multicast message
+        try
+        {
+            CHANNEL_LOG(DEBUG) << "channel2 multicast request"
+                               << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
+
+            auto buffer = std::make_shared<bytes>();
+            message->encode(*buffer);
+
+            auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
+                m_service->p2pMessageFactory()->buildMessage());
+            p2pMessage->setBuffer(buffer);
+            p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
+            p2pMessage->setPacketType(1u);
+
+            m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
+
+            message->setType(0x31);
+            message->setResult(0);
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
+        catch (exception& e)
+        {
+            CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
+
+            message->setType(0x31);
+            message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);

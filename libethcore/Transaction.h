@@ -52,7 +52,7 @@ const int c_fieldCountRC2WithOutSig = 10;
 const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
-using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr)>;
+using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, bytes input)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 class Transaction
 {
