@@ -178,6 +178,10 @@ int MemoryTable2::update(
         m_isDirty = true;
         return entries->size();
     }
+    catch (std::invalid_argument& e)
+    {
+        BOOST_THROW_EXCEPTION(e);
+    }
     catch (std::exception& e)
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
@@ -222,6 +226,10 @@ int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions
 
         m_isDirty = true;
         return 1;
+    }
+    catch (std::invalid_argument& e)
+    {
+        BOOST_THROW_EXCEPTION(e);
     }
     catch (std::exception& e)
     {

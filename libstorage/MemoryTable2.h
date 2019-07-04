@@ -134,7 +134,7 @@ private:
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
                 STORAGE_LOG(ERROR)
-                    << LOG_BADGE("MemoryTable") << LOG_DESC("field doen not exist")
+                    << LOG_BADGE("MemoryTable") << LOG_DESC("field not exist")
                     << LOG_KV("table name", m_tableInfo->name) << LOG_KV("field", it.first);
 
                 throw std::invalid_argument("Invalid key.");
