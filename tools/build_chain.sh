@@ -218,7 +218,8 @@ dir_must_exists() {
 
 dir_must_not_exists() {
     if [ -e "$1" ]; then
-        exit_with_clean "$1 DIR exists, please clean old DIR!"
+        LOG_WARN "$1 DIR exists, please clean old DIR!"
+        exit 1
     fi
 }
 
