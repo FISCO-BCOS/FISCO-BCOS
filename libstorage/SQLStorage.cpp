@@ -160,9 +160,9 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         }
         else
         {
-            for (Json::ArrayIndex i = 0; i < responseJson["result"]["column_value"].size(); ++i)
+            for (Json::ArrayIndex i = 0; i < responseJson["result"]["columnValue"].size(); ++i)
             {
-                Json::Value line = responseJson["result"]["column_value"][i];
+                Json::Value line = responseJson["result"]["columnValue"][i];
                 Entry::Ptr entry = std::make_shared<Entry>();
 
                 for (auto key : line.getMemberNames())
