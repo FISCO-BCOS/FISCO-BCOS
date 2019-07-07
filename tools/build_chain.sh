@@ -953,7 +953,7 @@ dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
 if [ -z "${compatibility_version}" ];then
-    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "v2" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 fi
 # in case network is broken
 if [ -z "${compatibility_version}" ];then
