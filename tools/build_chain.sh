@@ -37,7 +37,8 @@ chain_id=1
 compatibility_version=""
 default_version="2.0.0"
 macOS=""
-download_timeout=360
+download_timeout=90
+cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
 help() {
     echo $1
@@ -906,10 +907,10 @@ download_bin()
     fi
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
-    if [ $(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}) == 200 ];then
-        curl -LO ${Download_Link} --speed-time 30 --speed-limit 1024 -m ${download_timeout} || {
-            LOG_INFO "Download speed is too low, try https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}"
-            curl -LO https://www.fisco.com.cn/cdn/fisco-bcos/releases/download/v${compatibility_version}/${package_name}
+    if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
+        curl -LO ${Download_Link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
+            LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
+            curl -LO ${cdn_link_header}/v${compatibility_version}/${package_name}
         }
     else
         curl -LO ${Download_Link}
