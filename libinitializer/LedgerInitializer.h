@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include <libdevcore/Guards.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
@@ -39,6 +40,9 @@ public:
     typedef std::shared_ptr<LedgerInitializer> Ptr;
 
     void initConfig(boost::property_tree::ptree const& _pt);
+    void initMoreConfig();
+    void setPropertyTree(boost::property_tree::ptree const& _pt) { m_pt = _pt; }
+    boost::property_tree::ptree const& properTree() { return m_pt; }
 
     std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
 
@@ -74,6 +78,8 @@ private:
     ChannelRPCServer::Ptr m_channelRPCServer;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
+    boost::property_tree::ptree m_pt;
+    mutable Mutex x_initConfig;
 };
 
 }  // namespace initializer

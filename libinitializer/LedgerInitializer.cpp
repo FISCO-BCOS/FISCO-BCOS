@@ -32,6 +32,8 @@ using namespace dev::initializer;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
+    Guard l(x_initConfig);
+    setPropertyTree(_pt);
     namespace fs = boost::filesystem;
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initConfig");
     m_groupDataDir = _pt.get<string>("group.group_data_path", "data/");
@@ -96,6 +98,94 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     if (m_ledgerManager->getGroupList().size() == 0)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
+                               << LOG_DESC("Should init at least one group");
+        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
+                              << errinfo_comment("[LedgerInitializer]: Should init at least one "
+                                                 "group! Please check configuration!"));
+    }
+}
+
+void LedgerInitializer::initMoreConfig()
+{
+    assert(m_pt.size() != 0);
+    Guard l(x_initConfig);
+    namespace fs = boost::filesystem;
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig");
+    m_groupDataDir = m_pt.get<string>("group.group_data_path", "data/");
+    auto groupConfigPath = m_pt.get<string>("group.group_config_path", "conf/");
+    assert(m_p2pService);
+    bool succ = true;
+    try
+    {
+        LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
+                  << LOG_KV("groupConfigPath", groupConfigPath);
+        fs::path path(groupConfigPath);
+        if (fs::is_directory(path))
+        {
+            fs::directory_iterator endIter;
+            for (fs::directory_iterator iter(path); iter != endIter; iter++)
+            {
+                if (fs::extension(*iter) == ".genesis")
+                {
+                    boost::property_tree::ptree pt;
+                    boost::property_tree::read_ini(iter->path().string(), pt);
+                    auto groupID = pt.get<int>("group.id", 0);
+                    if (groupID <= 0 || groupID > maxGroupID)
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
+                            << LOG_DESC("groupID invalid") << LOG_KV("groupID", groupID)
+                            << LOG_KV("configFile", iter->path().string());
+                        continue;
+                    }
+
+                    if (m_ledgerManager->isLedgerExist(groupID))
+                    {
+                        continue;  // Jump existing group
+                    }
+
+                    INITIALIZER_LOG(INFO)
+                        << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
+                        << LOG_DESC("Init more group") << LOG_KV("groupID", groupID)
+                        << LOG_KV("configFile", iter->path().string());
+                    succ = initLedger(groupID, m_groupDataDir, iter->path().string());
+
+                    if (!succ)
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
+                            << LOG_DESC("initSingleGroup failed")
+                            << LOG_KV("configFile", iter->path().string());
+                        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer")
+                                     << LOG_DESC("initSingleGroup failed")
+                                     << LOG_KV("configFile", iter->path().string()) << endl;
+                        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
+                    }
+                    h512s sealerList = m_ledgerManager->getParamByGroupId(groupID)
+                                           ->mutableConsensusParam()
+                                           .sealerList;
+                    m_p2pService->setNodeListByGroupID(groupID, sealerList);
+                    LOG(INFO) << LOG_BADGE("initMoreConfig")
+                              << LOG_BADGE("LedgerInitializer init group succ")
+                              << LOG_KV("groupID", groupID);
+                    m_ledgerManager->startByGroupID(groupID);
+                }
+            }
+        }
+    }
+    catch (exception& e)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
+                               << LOG_DESC("parse group config faield")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config faield")
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
+        BOOST_THROW_EXCEPTION(e);
+    }
+    /// stop the node if there is no group
+    if (m_ledgerManager->getGroupList().size() == 0)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer") << LOG_BADGE("initMoreConfig")
                                << LOG_DESC("Should init at least one group");
         BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
                               << errinfo_comment("[LedgerInitializer]: Should init at least one "
