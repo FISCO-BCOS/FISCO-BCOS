@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  *
  * @brief: Use file to trigger handler
  *
@@ -39,7 +39,7 @@ public:
         {
             if (boost::filesystem::exists(_file))
             {
-                boost::filesystem::remove(_file);  // Just call once, even _f() exception happend
+                boost::filesystem::remove(_file);  // Just call once, even _f() exception happens
                 _f();
             }
         }

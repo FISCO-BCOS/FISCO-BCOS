@@ -108,11 +108,10 @@ string initCommandLine(int argc, const char* argv[])
 
 void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
 {
-    (void)initializer;
     std::string moreGroupSignal = configPath + ".start_more_group";
     FileSignal::callIfFileExist(moreGroupSignal, [&]() {
         cout << "Start more group" << endl;
-        initializer->ledgerInitializer()->initMoreConfig();
+        initializer->ledgerInitializer()->startMoreLedger();
     });
 }
 

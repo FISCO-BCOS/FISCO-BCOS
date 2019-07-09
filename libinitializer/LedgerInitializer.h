@@ -22,11 +22,12 @@
 
 #pragma once
 #include "Common.h"
-#include <libdevcore/Guards.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
+#include <functional>
+#include <vector>
 
 using namespace dev::ledger;
 
@@ -40,9 +41,7 @@ public:
     typedef std::shared_ptr<LedgerInitializer> Ptr;
 
     void initConfig(boost::property_tree::ptree const& _pt);
-    void initMoreConfig();
-    void setPropertyTree(boost::property_tree::ptree const& _pt) { m_pt = _pt; }
-    boost::property_tree::ptree const& properTree() { return m_pt; }
+    void startMoreLedger();
 
     std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
 
@@ -50,9 +49,9 @@ public:
     {
         m_p2pService = _p2pService;
     }
-    void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
+    void setChannelRPCServer(ChannelRPCServer::Ptr _channelRPCServer)
     {
-        m_channelRPCServer = channelRPCServer;
+        m_channelRPCServer = _channelRPCServer;
     }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
@@ -71,15 +70,17 @@ public:
     }
 
 private:
+    std::vector<dev::GROUP_ID> initLedgers();
+    std::vector<dev::GROUP_ID> foreachLedgerConfigure(const std::string& _groupConfigPath,
+        std::function<bool(dev::GROUP_ID const&, const std::string&)> _f);
     bool initLedger(dev::GROUP_ID const& _groupId, std::string const& _dataDir = "data",
-        std::string const& configFileName = "");
+        std::string const& _configFileName = "");
     std::shared_ptr<LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> m_p2pService;
     ChannelRPCServer::Ptr m_channelRPCServer;
     KeyPair m_keyPair;
     std::string m_groupDataDir;
-    boost::property_tree::ptree m_pt;
-    mutable Mutex x_initConfig;
+    std::string m_groupConfigPath;
 };
 
 }  // namespace initializer
