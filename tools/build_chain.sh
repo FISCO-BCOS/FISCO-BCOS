@@ -298,10 +298,7 @@ gen_node_cert() {
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
-
     cd $ndpath
-
-    echo "build $node node cert successful!"
 }
 
 generate_gmsm2_param()
@@ -357,8 +354,6 @@ gen_agency_cert_gm() {
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
     rm -f $agencydir/gmagency.csr
-
-    echo "build $name agency cert successful!"
 }
 
 gen_node_cert_with_extensions_gm() {
@@ -406,12 +401,8 @@ gen_node_cert_gm() {
         $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
     fi
 
-
     cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
-
     cd $ndpath
-
-    echo "build $node node cert successful!"
 }
 
 generate_config_ini()
@@ -456,9 +447,7 @@ generate_config_ini()
 
 [storage_security]
     enable=false
-    ; the IP of key mananger
     key_manager_ip=
-    ; the Port of key manager
     key_manager_port=
     cipher_data_key=
 

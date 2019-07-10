@@ -33,8 +33,8 @@ flags:
   alltests:
     joined: false
 ignore:
-  - fisco-bcos/**/*
-  - evmc/**/*
-  - utils/**/*
-  - deps/**/*
-  - /usr/**/*
+  - "**/fisco-bcos/**/*"
+  - "**/evmc/**/*"
+  - "**/utils/**/*"
+  - "**/deps/**/*"
+  - "/usr/**/*"
