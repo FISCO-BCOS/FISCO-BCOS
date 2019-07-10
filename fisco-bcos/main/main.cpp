@@ -21,6 +21,7 @@
  * @date 2018-08-24
  */
 #include "ExitHandler.h"
+#include "FileSignal.h"
 #include <include/BuildInfo.h>
 #include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
@@ -105,6 +106,15 @@ string initCommandLine(int argc, const char* argv[])
     return configPath;
 }
 
+void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
+{
+    std::string moreGroupSignal = configPath + ".append_group";
+    FileSignal::callIfFileExist(moreGroupSignal, [&]() {
+        cout << "Start more group" << endl;
+        initializer->ledgerInitializer()->startMoreLedger();
+    });
+}
+
 int main(int argc, const char* argv[])
 {
     /// set LC_ALL
@@ -140,6 +150,7 @@ int main(int argc, const char* argv[])
 
     while (!exitHandler.shouldExit())
     {
+        checkAndCall(configPath, initialize);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         LogInitializer::logRotateByTime();
     }
