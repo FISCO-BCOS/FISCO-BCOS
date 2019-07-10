@@ -118,7 +118,7 @@ vector<dev::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
                 boost::property_tree::read_ini(iter->path().string(), pt);
                 auto groupID = pt.get<int>("group.id", 0);
 
-                //
+                // check groupID format
                 if (groupID <= 0 || groupID > maxGroupID)
                 {
                     INITIALIZER_LOG(ERROR)
