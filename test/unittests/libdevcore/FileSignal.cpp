@@ -62,11 +62,6 @@ BOOST_AUTO_TEST_CASE(FileSignal)
 
     // check the file is deleted after trigger
     BOOST_CHECK(!boost::filesystem::exists(file));
-
-    // check again: caller is not triggered as the file is not exist
-    called = false;
-    dev::FileSignal::callIfFileExist(file, caller);
-    BOOST_CHECK(!called);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
