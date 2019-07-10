@@ -21,7 +21,6 @@
  * @date 2019-07-08
  */
 #pragma once
-#include "libconfig/GlobalConfigure.h"
 #include <boost/filesystem.hpp>
 #include <cstdio>
 #include <functional>
@@ -29,7 +28,8 @@
 #include <memory>
 #include <string>
 
-
+namespace dev
+{
 class FileSignal
 {
 public:
@@ -50,3 +50,4 @@ public:
         }
     }
 };
+}  // namespace dev

@@ -21,8 +21,8 @@
  * @date 2018-08-24
  */
 #include "ExitHandler.h"
-#include "FileSignal.h"
 #include <include/BuildInfo.h>
+#include <libdevcore/FileSignal.h>
 #include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
@@ -109,7 +109,7 @@ string initCommandLine(int argc, const char* argv[])
 void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
 {
     std::string moreGroupSignal = configPath + ".append_group";
-    FileSignal::callIfFileExist(moreGroupSignal, [&]() {
+    dev::FileSignal::callIfFileExist(moreGroupSignal, [&]() {
         cout << "Start more group" << endl;
         initializer->ledgerInitializer()->startMoreLedger();
     });

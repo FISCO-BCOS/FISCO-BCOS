@@ -733,7 +733,8 @@ cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
-    echo " \${node} is running, ${pid} is \$node_pid."
+    echo " \${node} is running, ${pid} is \$node_pid. Trying to load new groups."
+    touch config.ini.append_group
     exit 0
 else 
     ${start_cmd} &
