@@ -23,7 +23,6 @@
 #include "ExitHandler.h"
 #include <include/BuildInfo.h>
 #include <libdevcore/FileSignal.h>
-#include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
 #include <clocale>

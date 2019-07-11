@@ -24,11 +24,8 @@
 #include "PBFTEngine.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libstorage/MemoryTableFactory2.h>
-#include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;

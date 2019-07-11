@@ -21,11 +21,13 @@
  */
 
 #include "P2PInitializer.h"
+#include "libdevcore/ThreadPool.h"
+#include "libnetwork/ASIOInterface.h"
+#include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
-#include <boost/algorithm/algorithm.hpp>
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 

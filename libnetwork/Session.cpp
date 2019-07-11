@@ -23,15 +23,13 @@
  */
 
 #include "Session.h"
-#include "ASIOInterface.h"
-#include "Common.h"
-#include "Host.h"
-#include "SocketFace.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
+#include "ASIOInterface.h"           // for ASIOIn...
+#include "Common.h"                  // for SESSIO...
+#include "Host.h"                    // for Host
+#include "SocketFace.h"              // for Socket...
+#include "libdevcore/Guards.h"       // for Guard
+#include "libdevcore/ThreadPool.h"   // for Thread...
+#include "libnetwork/SessionFace.h"  // for Respon...
 #include <chrono>
 
 using namespace dev;

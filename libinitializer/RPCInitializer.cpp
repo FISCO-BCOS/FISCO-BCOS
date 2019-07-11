@@ -21,6 +21,15 @@
  */
 
 #include "RPCInitializer.h"
+#include "libblockchain/BlockChainInterface.h"
+#include "libchannelserver/ChannelRPCServer.h"
+#include "libchannelserver/ChannelServer.h"
+#include "libdevcore/Common.h"  // for byte
+#include "libdevcore/Log.h"     // for LOG
+#include "libinitializer/Common.h"
+#include "libledger/LedgerManager.h"
+#include "librpc/Rpc.h"  // for Rpc
+#include "librpc/SafeHttpServer.h"
 
 using namespace dev;
 using namespace dev::initializer;

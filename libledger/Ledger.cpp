@@ -29,14 +29,9 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
-#include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
-#include <libprecompiled/Common.h>
-#include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
 using namespace boost::property_tree;
