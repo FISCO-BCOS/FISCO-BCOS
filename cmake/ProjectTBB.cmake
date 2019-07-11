@@ -20,6 +20,7 @@ ExternalProject_Add(tbb
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make extra_inc=big_iron.inc ${ENABLE_STD_LIB}
     INSTALL_COMMAND bash -c "cp ./build/*_release/*.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib"
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.${TBB_LIB_SUFFIX}
 )
 
 ExternalProject_Get_Property(tbb SOURCE_DIR)
