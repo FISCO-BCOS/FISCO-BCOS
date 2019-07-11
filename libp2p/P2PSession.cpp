@@ -20,11 +20,13 @@
  */
 
 #include "P2PSession.h"
-#include "P2PMessage.h"
 #include "Service.h"
-#include <libdevcore/Common.h>
-#include <libnetwork/Common.h>
-#include <libnetwork/Host.h>
+#include "libdevcore/easylog.h"        // for LOG_KV
+#include "libethcore/Protocol.h"       // for ProtocolID
+#include "libnetwork/ASIOInterface.h"  // for ASIOInte...
+#include "libnetwork/SessionFace.h"    // for SessionF...
+#include "libp2p/Common.h"             // for NetworkE...
+#include "libp2p/P2PMessageFactory.h"  // for P2PMessa...
 #include <boost/algorithm/string.hpp>
 
 using namespace dev;

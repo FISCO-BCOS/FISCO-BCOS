@@ -20,16 +20,14 @@
  */
 
 #include "Service.h"
-#include "Common.h"
-#include "P2PMessage.h"
-#include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/easylog.h>
-#include <libnetwork/Common.h>
-#include <libnetwork/Host.h>
+#include "libdevcore/FixedHash.h"      // for FixedHash, hash
+#include "libdevcore/ThreadPool.h"     // for ThreadPool
+#include "libnetwork/ASIOInterface.h"  // for ASIOInterface
+#include "libnetwork/SocketFace.h"     // for SocketFace
+#include "libp2p/P2PInterface.h"       // for CallbackFunc...
+#include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
+#include "libp2p/P2PSession.h"         // for P2PSession
 #include <boost/random.hpp>
-#include <unordered_map>
 
 using namespace dev;
 using namespace dev::p2p;

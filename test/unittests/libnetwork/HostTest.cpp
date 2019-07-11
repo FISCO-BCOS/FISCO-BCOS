@@ -21,6 +21,7 @@
 
 #include "libnetwork/Host.h"
 #include "FakeASIOInterface.h"
+#include "libdevcore/ThreadPool.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
 #include "test/tools/libutils/Common.h"

@@ -20,32 +20,36 @@
  */
 #pragma once
 
-#include <libdevcore/Guards.h>
-#include <libdevcore/ThreadPool.h>
-#include <libdevcore/Worker.h>
-#include <libdevcrypto/Common.h>
-#include <libdevcrypto/ECDHE.h>
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/strand.hpp>
-#include <chrono>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <set>
-#include <thread>
-#include <utility>
-#include <vector>
+#include "Common.h"                       // for MessageFactory::Ptr, NodeIP...
+#include <libdevcore/Guards.h>            // for Guard, Mutex
+#include <boost/asio/deadline_timer.hpp>  // for deadline_timer
+#include <boost/system/error_code.hpp>    // for error_code
+#include <set>                            // for set
+#include <string>                         // for string
+#include <thread>                         // for thread
+#include <utility>                        // for swap, move
+#include <vector>                         // for vector
 
-#include "ASIOInterface.h"
-#include "Common.h"
-#include "Session.h"
-#include "SessionFace.h"
-#include "Socket.h"
-
+namespace boost
+{
+namespace asio
+{
+namespace ssl
+{
+class verify_context;
+}
+}  // namespace asio
+}  // namespace boost
 namespace dev
 {
+class ThreadPool;
+
 namespace network
 {
+class SessionFactory;
+class SessionFace;
+class SocketFace;
+class ASIOInterface;
 class Host : public std::enable_shared_from_this<Host>
 {
 public:

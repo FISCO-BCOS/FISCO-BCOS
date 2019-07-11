@@ -35,14 +35,13 @@
  * Add send topicSeq
  */
 #include "Host.h"
-
-#include <libdevcore/Assertions.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FileSystem.h>
-#include <libdevcore/easylog.h>
-#include <libethcore/CommonJS.h>
+#include "Common.h"                    // for HOST_LOG
+#include "Session.h"                   // for Sessio...
+#include "libdevcore/Guards.h"         // for Guard
+#include "libdevcore/Log.h"            // for LOG
+#include "libdevcore/ThreadPool.h"     // for Thread...
+#include "libnetwork/ASIOInterface.h"  // for ASIOIn...
+#include "libnetwork/SocketFace.h"     // for Socket...
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -52,9 +51,6 @@
 #include <mutex>
 #include <set>
 #include <thread>
-
-#include "Common.h"
-#include "Session.h"
 
 using namespace std;
 using namespace dev;

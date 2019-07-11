@@ -25,14 +25,21 @@
  */
 
 #include "ChannelRPCServer.h"
-#include <arpa/inet.h>
-#include <fcntl.h>
+#include "libchannelserver/ChannelException.h"  // for CHANNEL_LOG
+#include "libchannelserver/ChannelMessage.h"    // for TopicChannelM...
+#include "libchannelserver/ChannelServer.h"     // for ChannelServer
+#include "libchannelserver/ChannelSession.h"    // for ChannelSessio...
+#include "libdevcore/Common.h"                  // for bytes, byte
+#include "libdevcore/Log.h"                     // for LOG
+#include "libethcore/Protocol.h"                // for AMOP, ProtocolID
+#include "libnetwork/Common.h"                  // for NetworkException
+#include "libp2p/P2PInterface.h"                // for P2PInterface
+#include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
+#include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <unistd.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
@@ -41,8 +48,6 @@
 #include <boost/range/algorithm/remove_if.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <cstdio>
-#include <cstdlib>
 #include <string>
 
 using namespace std;

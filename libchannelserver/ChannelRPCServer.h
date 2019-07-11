@@ -26,30 +26,49 @@
 
 #pragma once
 
-#include "ChannelException.h"
-#include "ChannelMessage.h"
-#include "ChannelServer.h"
-#include "ChannelSession.h"
-#include "libdevcore/ThreadPool.h"
+#include "ChannelMessage.h"            // for TopicChannelM...
+#include "ChannelSession.h"            // for ChannelSessio...
+#include "libchannelserver/Message.h"  // for Message, Mess...
+#include "libethcore/Common.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
-#include <libdevcore/FixedHash.h>
-#include <libethcore/Common.h>
-#include <libp2p/Service.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <boost/asio.hpp>
-#include <queue>
-#include <string>
+#include <boost/asio/io_service.hpp>  // for io_service
+#include <atomic>                     // for atomic
+#include <map>                        // for map
+#include <mutex>                      // for mutex
+#include <set>                        // for set
+#include <string>                     // for string
 #include <thread>
+#include <utility>  // for swap, move
+#include <vector>   // for vector
+namespace boost
+{
+namespace asio
+{
+namespace ssl
+{
+class context;
+}
+}  // namespace asio
+}  // namespace boost
+
 
 namespace dev
 {
+namespace channel
+{
+class ChannelException;
+class ChannelServer;
+}  // namespace channel
+namespace network
+{
+class NetworkException;
+}
 namespace p2p
 {
 class P2PInterface;
-}
+class P2PMessage;
+class P2PSession;
+}  // namespace p2p
 
 class ChannelRPCServer : public jsonrpc::AbstractServerConnector,
                          public std::enable_shared_from_this<ChannelRPCServer>

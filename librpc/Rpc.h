@@ -21,18 +21,24 @@
 
 #pragma once
 
-#include "RpcFace.h"
-#include <libdevcrypto/Common.h>
-#include <libledger/LedgerInterface.h>
-#include <libledger/LedgerManager.h>
-#include <libledger/LedgerParam.h>
-#include <libp2p/P2PInterface.h>
-#include <iosfwd>
-#include <memory>
-#include <mutex>
+#include "RpcFace.h"               // for RpcFace
+#include "libdevcore/Common.h"     // for bytes
+#include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
+#include <json/value.h>            // for Value
+#include <boost/thread/tss.hpp>    // for thread_specific_ptr
+#include <string>                  // for string
 
 namespace dev
 {
+namespace ledger
+{
+class LedgerManager;
+class LedgerParamInterface;
+}  // namespace ledger
+namespace p2p
+{
+class P2PInterface;
+}
 namespace rpc
 {
 /**

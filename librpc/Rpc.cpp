@@ -22,6 +22,7 @@
 #include "Rpc.h"
 #include "Common.h"
 #include "JsonHelper.h"
+#include "libledger/LedgerManager.h"  // for LedgerManager
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
