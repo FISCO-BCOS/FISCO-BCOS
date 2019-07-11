@@ -32,6 +32,9 @@ commands:
             make -j2
 
 executors:
+  ubuntu-build-env:
+    docker:
+      - image: fiscoorg/fiscobcos:build-env
   ubuntu-bionic:
     docker:
       - image: ubuntu:18.04
@@ -42,7 +45,7 @@ executors:
 jobs:
   build_static_test:
     working_directory: /FISCO-BCOS
-    executor: ubuntu-xenial
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "ccache lcov"
@@ -64,6 +67,7 @@ jobs:
           command: |
             cd build
             CTEST_OUTPUT_ON_FAILURE=TRUE make test
+            rm -rf /FISCO-BCOS/deps
       - persist_to_workspace:
           root: /
           paths:
@@ -71,7 +75,7 @@ jobs:
 
   generate_coverage:
     working_directory: /FISCO-BCOS
-    executor: ubuntu-xenial
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "lcov"
@@ -80,7 +84,7 @@ jobs:
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g "deps/**" -f "!*deps*" > /dev/null
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -f "!*/deps/*" > /dev/null
 
   build_test_guomi:
     working_directory: /FISCO-BCOS-GM
@@ -123,8 +127,7 @@ jobs:
 
   build_static:
     working_directory: /FISCO-BCOS
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "ccache"
@@ -152,11 +155,11 @@ jobs:
           destination: fisco-bcos.tar.gz
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos-mini.tar.gz
+          destination: fisco-bcos-mini.tar.gz
 
   build_guomi:
     working_directory: /FISCO-BCOS-GM
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "ccache"
@@ -184,11 +187,11 @@ jobs:
           destination: fisco-bcos-gm.tar.gz
       - store_artifacts:
           path: /FISCO-BCOS-GM/build/bin/fisco-bcos-mini-gm.tar.gz
+          destination: fisco-bcos-mini-gm.tar.gz
 
   deploy_static:
     working_directory: /FISCO-BCOS
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "ca-certificates golang-go"
@@ -211,8 +214,7 @@ jobs:
 
   deploy_guomi:
     working_directory: /FISCO-BCOS-GM
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
       - install_depencies:
           packages: "ca-certificates golang-go"

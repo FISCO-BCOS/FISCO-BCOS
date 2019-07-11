@@ -40,7 +40,8 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a 
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
         ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
-        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
+        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a 
+        ${BOOST_LIB_PREFIX}serialization.a)
 
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
