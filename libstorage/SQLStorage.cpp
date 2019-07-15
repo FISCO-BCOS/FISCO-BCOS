@@ -41,7 +41,7 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
 {
     try
     {
-        LOG(TRACE) << "Query AMOPDB data";
+        STORAGE_LOG(TRACE) << "Query AMOPDB data";
         Json::Value requestJson;
         if (g_BCOSConfig.version() <= RC3_VERSION)
         {
@@ -108,7 +108,7 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         int code = responseJson["code"].asInt();
         if (code != 0)
         {
-            LOG(ERROR) << "Remote database return error:" << code;
+            STORAGE_LOG(ERROR) << "Remote database return error:" << code;
 
             throw StorageException(
                 -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
@@ -185,7 +185,7 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Query database error:" << e.what();
+        STORAGE_LOG(ERROR) << "Query database error:" << e.what();
 
         throw StorageException(-1, std::string("Query database error:") + e.what());
     }
@@ -197,11 +197,11 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
 {
     try
     {
-        LOG(DEBUG) << "Commit data to database:" << datas.size();
+        STORAGE_LOG(DEBUG) << "Commit data to database:" << datas.size();
 
         if (datas.size() == 0)
         {
-            LOG(DEBUG) << "Empty data.";
+            STORAGE_LOG(DEBUG) << "Empty data.";
 
             return 0;
         }
@@ -263,7 +263,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         int code = responseJson["code"].asInt();
         if (code != 0)
         {
-            LOG(ERROR) << "Remote database return error:" << code;
+            STORAGE_LOG(ERROR) << "Remote database return error:" << code;
 
             throw StorageException(
                 -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
@@ -275,7 +275,7 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
     }
     catch (std::exception& e)
     {
-        LOG(ERROR) << "Commit data to database error:" << e.what();
+        STORAGE_LOG(ERROR) << "Commit data to database error:" << e.what();
 
         throw StorageException(-1, std::string("Commit data to database error:") + e.what());
     }
@@ -305,18 +305,18 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             ssOut << value;
 
             auto str = ssOut.str();
-            LOG(TRACE) << "Request AMOPDB:" << request->seq() << " " << str;
+            STORAGE_LOG(TRACE) << "Request AMOPDB:" << request->seq() << " " << str;
 
             request->setTopic(m_topic);
 
             dev::channel::TopicChannelMessage::Ptr response;
 
-            LOG(TRACE) << "Retry Request amdb :" << retry;
+            STORAGE_LOG(TRACE) << "Retry Request amdb :" << retry;
             request->setData((const byte*)str.data(), str.size());
             response = m_channelRPCServer->pushChannelMessage(request, m_timeout);
             if (response.get() == NULL || response->result() != 0)
             {
-                LOG(ERROR) << "requestDB error:" << response->result();
+                STORAGE_LOG(ERROR) << "requestDB error:" << response->result();
 
                 throw StorageException(
                     -1, "Remote database return error:" +
@@ -325,13 +325,13 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
 
             // resolving topic
             std::string topic = response->topic();
-            LOG(TRACE) << "Receive topic:" << topic;
+            STORAGE_LOG(TRACE) << "Receive topic:" << topic;
 
             std::stringstream ssIn;
             std::string jsonStr(response->data(), response->data() + response->dataSize());
             ssIn << jsonStr;
 
-            LOG(TRACE) << "AMOPDB Response:" << ssIn.str();
+            STORAGE_LOG(TRACE) << "AMOPDB Response:" << ssIn.str();
 
             Json::Value responseJson;
             ssIn >> responseJson;
@@ -358,15 +358,15 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         }
         catch (dev::channel::ChannelException& e)
         {
-            LOG(ERROR) << "AMDB error: " << e.what();
-            LOG(ERROR) << "Retrying...";
+            STORAGE_LOG(ERROR) << "AMDB error: " << e.what();
+            STORAGE_LOG(ERROR) << "Retrying..." << LOG_KV("count", retry);
         }
         catch (StorageException& e)
         {
             if (e.errorCode() == -1)
             {
-                LOG(ERROR) << "AMDB error: " << e.what();
-                LOG(ERROR) << "Retrying...";
+                STORAGE_LOG(ERROR) << "AMDB error: " << e.what();
+                STORAGE_LOG(ERROR) << "Retrying..." << LOG_KV("count", retry);
             }
             else
             {
@@ -377,7 +377,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         ++retry;
         if (m_maxRetry != 0 && retry >= m_maxRetry)
         {
-            LOG(ERROR) << "SQLStorage unreachable" << LOG_KV("maxRetry", retry);
+            STORAGE_LOG(ERROR) << "SQLStorage unreachable" << LOG_KV("maxRetry", retry);
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
             std::cout << "The sqlstorage doesn't work well,"
