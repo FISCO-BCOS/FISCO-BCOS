@@ -65,8 +65,6 @@ addons:
     - openssl
     - clang-format
     - ccache
-    - python
-    - pip
 install: |
     if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then 
       bash tools/ci/check-commit.sh; 

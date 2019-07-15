@@ -36,9 +36,9 @@ def check_sync(basic_check_object, wait_time):
         check_status_except(basic_check_object, i)
         time.sleep(wait_time)
         basic_check_object.start_a_node(i)
-        time.sleep(30)
+        time.sleep(10)
         basic_check_object.check_sync(i)
-        time.sleep(30)
+        time.sleep(10)
         basic_check_object.check_consensus(i)
 
 def main(argv=None):
@@ -47,7 +47,7 @@ def main(argv=None):
     """
     basic_check_object = basic_check.BasicCheck()
     check_basic_status(basic_check_object)
-    time.sleep(10)
+    time.sleep(5)
     check_sync(basic_check_object, 1)
 
 if __name__ == "__main__":

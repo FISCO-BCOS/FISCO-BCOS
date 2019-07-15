@@ -20,6 +20,7 @@
  */
 #include "MemoryTable2.h"
 #include "Common.h"
+#include "StorageException.h"
 #include "Table.h"
 #include <arpa/inet.h>
 #include <json/json.h>
@@ -46,6 +47,7 @@ void prepareExit()
     {
         std::this_thread::yield();
     }
+    BOOST_THROW_EXCEPTION(StorageException(-1, "backend DB is dead. Prepare to exit."));
 }
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
@@ -279,7 +281,8 @@ int MemoryTable2::remove(
         return entries->size();
     }
     catch (std::exception& e)
-    {
+    {  // this catch is redundant, because selectNoLock already catch.
+        // TODO: make catch simple, remove catch in selectNoLock
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
