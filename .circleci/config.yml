@@ -12,7 +12,7 @@ commands:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git curl build-essential clang cmake libssl-dev zlib1g-dev  << parameters.packages >>
+            apt-get install -y git curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
   compile:
     description: Compile
@@ -71,7 +71,11 @@ jobs:
       - persist_to_workspace:
           root: /
           paths:
-            - FISCO-BCOS/
+            - FISCO-BCOS/lib*
+            - FISCO-BCOS/build/*
+            - FISCO-BCOS/test/*
+            - FISCO-BCOS/tools/*
+            - FISCO-BCOS/.codecov.yml
 
   generate_coverage:
     working_directory: /FISCO-BCOS
@@ -80,11 +84,28 @@ jobs:
       - install_depencies:
           packages: "lcov"
       - attach_workspace:
-          at: FISCO-BCOS/
+          at: /
       - run:
           name: Upload Coverage
           command: |
             bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -f "!*/deps/*" > /dev/null
+
+  integration_test:
+    working_directory: /FISCO-BCOS
+    executor: ubuntu-build-env
+    steps:
+      - install_depencies:
+          packages: "python-pip"
+      - attach_workspace:
+          at: /
+      - run:
+          name: Run integration test
+          command: |
+            pip install requests
+            bash tools/build_chain.sh -l "127.0.0.1:4" -e build/bin/fisco-bcos -v $(/FISCO-BCOS/build/bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]")
+            bash nodes/127.0.0.1/start_all.sh
+            python tools/ci/ci_check.py
+            bash nodes/127.0.0.1/stop_all.sh
 
   build_test_guomi:
     working_directory: /FISCO-BCOS-GM
@@ -245,6 +266,14 @@ workflows:
             tags:
               ignore: /.*/
       - generate_coverage:
+          requires:
+            - build_static_test
+          filters:
+            branches:
+              only: /^pull.*/
+            tags:
+              ignore: /.*/
+      - integration_test:
           requires:
             - build_static_test
           filters:

@@ -391,7 +391,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     }
     catch (Exception const& _e)
     {
-        // only OutOfGasBase exception will throw
+        // only OutOfGasBase ExecutorNotFound exception will throw
         BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
     }
     catch (std::exception const& _e)
