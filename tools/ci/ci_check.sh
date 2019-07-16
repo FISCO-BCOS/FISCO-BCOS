@@ -12,8 +12,9 @@ LOG_INFO()
     local content=${1}
     echo -e "\033[32m ${content}\033[0m"
 }
-pip install requests
-bash build_chain.sh -l "127.0.0.1:4" -e ../build/bin/fisco-bcos -v 2.0.0
+
+fisco_version=$(../build/bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]" )
+bash build_chain.sh -l "127.0.0.1:4" -e ../build/bin/fisco-bcos -v ${fisco_version}
 cd nodes/127.0.0.1
 bash start_all.sh
 sleep 1
@@ -61,7 +62,7 @@ fi
 LOG_INFO "[round2]==============send a transaction is ok"
 
 LOG_INFO "[round2]==============check report block"
-sleep 2
+sleep 4
 num=$(cat node*/log/* | grep Report | grep "num=2" | wc -l)
 if [ ${num} -ne 4 ];then
     LOG_ERROR "[round2] check report block failed! ${num} != 4"
@@ -83,7 +84,4 @@ if [ ${num} -ne 4 ];then
 fi
 LOG_INFO "[round2]==============check sync block is ok"
 
-cd ../..
-python ci/ci_check.py
-
-bash nodes/127.0.0.1/stop_all.sh 2 > /dev/null
+bash stop_all.sh
