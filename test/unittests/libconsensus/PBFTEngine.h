@@ -67,7 +67,7 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
-    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+    NodeIPEndpoint m_endpoint("127.0.0.1", "30303");
 
     dev::network::NodeInfo node_info;
     node_info.nodeID = node_id;

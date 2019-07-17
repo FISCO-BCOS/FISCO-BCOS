@@ -81,6 +81,22 @@ LOG_INFO()
     echo -e "\033[32m[INFO] ${content}\033[0m"
 }
 
+get_value()
+{
+    local var_name=${1}
+    var_name=var_${var_name//./}
+    local res=$(eval echo '$'"${var_name}")
+    echo ${res}
+}
+
+set_value()
+{
+    local var_name=${1}
+    var_name=var_${var_name//./}
+    local var_value=${2}
+    eval "${var_name}=${var_value}"
+}
+
 exit_with_clean()
 {
     local content=${1}
@@ -130,7 +146,8 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     d) docker_mode="yes"
-    [ ! -z "${macOS}" ] && LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;;
+    if [ ! -z "${macOS}" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
+    ;;
     h) help;;
     esac
 done
@@ -138,9 +155,6 @@ done
 
 print_result()
 {
-echo "================================================================"
-LOG_INFO "Execute the following command to get FISCO-BCOS console"
-echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
 echo "================================================================"
 [ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
@@ -153,6 +167,9 @@ LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
+echo "================================================================"
+LOG_INFO "Execute the following command to get FISCO-BCOS console"
+echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
 echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -409,7 +426,7 @@ generate_config_ini()
 {
     local output=${1}
     local ip=${2}
-    local offset=${ip_node_counts[${ip//./}]}
+    local offset=$(get_value ${ip//./}_count)
     local node_groups=(${3//,/ })
     local prefix=""
     if [ -n "$guomi_mode" ]; then
@@ -703,7 +720,7 @@ generate_node_scripts()
     local docker_tag="v${compatibility_version}"
     generate_script_template "$output/start.sh"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
-    local start_cmd="nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1"
+    local start_cmd="nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1 &"
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
@@ -726,7 +743,7 @@ if [ ! -z \${node_pid} ];then
     touch config.ini.append_group
     exit 0
 else 
-    ${start_cmd} &
+    ${start_cmd}
     sleep 1.5
 fi
 try_times=4
@@ -1013,20 +1030,20 @@ ip_list=""
 count=0
 server_count=0
 groups=
-ip_node_counts=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
-        exit_with_clean "Please check IP address: ${ip}"
+        LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
+    [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> ${logfile}
-        node_dir="${output_dir}/${ip}/node${ip_node_counts[${ip//./}]}"
+        local node_coount=$(get_value ${ip//./}_count)
+        node_dir="${output_dir}/${ip}/node${node_coount}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
         
         while :
@@ -1101,9 +1118,9 @@ for line in ${ip_array[*]};do
     "
         fi
         
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( ${ip_node_counts[${ip//./}]} + port_start[0] ))"
+        ip_list=$"${ip_list}node.${count}="${ip}:$(( $(get_value ${ip//./}_count) + port_start[0] ))"
     "
-        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
+        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
         ((++count))
     done
     sdk_path="${output_dir}/${ip}/sdk"
@@ -1115,9 +1132,10 @@ for line in ${ip_array[*]};do
         cd ${output_dir}
     fi
     ((++server_count))
+    # clean 
+    set_value ${ip//./}_count 0
 done 
 
-ip_node_counts=()
 echo "=============================================================="
 echo "Generating configurations..."
 cd ${current_dir}
@@ -1126,11 +1144,11 @@ for line in ${ip_array[*]};do
     ip=${line%:*}
     num=${line#*:}
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    [ -z "${ip_node_counts[${ip//./}]}" ] && ip_node_counts[${ip//./}]=0
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> ${logfile}
-        node_dir="${output_dir}/${ip}/node${ip_node_counts[${ip//./}]}"
+        local node_coount=$(get_value ${ip//./}_count)
+        node_dir="${output_dir}/${ip}/node${node_coount}"
         generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -1143,7 +1161,7 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
-        ip_node_counts[${ip//./}]=$(( ${ip_node_counts[${ip//./}]} + 1 ))
+        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
     if [ -z ${docker_mode} ];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi

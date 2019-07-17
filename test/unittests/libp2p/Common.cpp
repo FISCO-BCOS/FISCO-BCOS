@@ -78,38 +78,23 @@ BOOST_AUTO_TEST_CASE(testDisconnectReason)
 BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
     /// test default construct
-    dev::network::NodeIPEndpoint m_endpoint;
-    BOOST_CHECK(m_endpoint.address.to_string() == "0.0.0.0");
-    BOOST_CHECK(m_endpoint.udpPort == 0);
-    BOOST_CHECK(m_endpoint.tcpPort == 0);
-    BOOST_CHECK(m_endpoint.host == "");
-    BOOST_CHECK(bool(m_endpoint) == false);
+    dev::network::NodeIPEndpoint m_endpoint("0.0.0.0", "0");
+    BOOST_CHECK(m_endpoint.host == "0.0.0.0");
+    BOOST_CHECK(m_endpoint.port == "0");
     BOOST_CHECK(m_endpoint.name() == "0.0.0.0:0");
-    BOOST_CHECK(m_endpoint.isValid() == false);
-    /// "0.0.0.0" not the public address
-    m_endpoint.address = bi::address::from_string("0.0.0.0");
     /// "0.0.0.0" is not the specified address
-    m_endpoint.address = bi::address::from_string("10.0.0.0");
+    m_endpoint.host = std::string("10.0.0.0");
     /// test construct: NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
     uint16_t port = 30303;
-    NodeIPEndpoint m_endpoint2(bi::address::from_string("127.0.0.1"), port, port);
-    BOOST_CHECK(m_endpoint2.address.to_string() == "127.0.0.1");
-    BOOST_CHECK(m_endpoint2.udpPort == port);
-    BOOST_CHECK(m_endpoint2.tcpPort == port);
-    BOOST_CHECK(m_endpoint2.host == "");
-    BOOST_CHECK(bool(m_endpoint2) == true);
+    NodeIPEndpoint m_endpoint2("127.0.0.1", std::to_string(port));
+    BOOST_CHECK(m_endpoint2.host == "127.0.0.1");
+    BOOST_CHECK(m_endpoint2.port == std::to_string(port));
     m_endpoint2.name();
     BOOST_CHECK_MESSAGE(true, "127.0.0.1:" + toString(port) + ":" + toString(port));
-    /// specified address
-    BOOST_CHECK(m_endpoint2.isValid() == true);
-    /// test endpoint convert
-    BOOST_CHECK(bi::udp::endpoint(m_endpoint2) ==
-                bi::udp::endpoint(m_endpoint2.address, m_endpoint2.udpPort));
-    BOOST_CHECK(bi::tcp::endpoint(m_endpoint2) ==
-                bi::tcp::endpoint(m_endpoint2.address, m_endpoint2.tcpPort));
+
     /// test operators
     /// operator ==
-    BOOST_CHECK(m_endpoint2 == NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port));
+    BOOST_CHECK(m_endpoint2 == NodeIPEndpoint("127.0.0.1", port));
     /// opearator <
     BOOST_CHECK(m_endpoint < m_endpoint2);
     /// test map
@@ -119,7 +104,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     m_endpoint_map[m_endpoint2] = false;
     BOOST_CHECK(m_endpoint_map.size() == 2);
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == false);
-    m_endpoint_map[NodeIPEndpoint(bi::address::from_string("127.0.0.1"), port, port)] = true;
+    m_endpoint_map[NodeIPEndpoint("127.0.0.1", port)] = true;
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == true);
 }
 

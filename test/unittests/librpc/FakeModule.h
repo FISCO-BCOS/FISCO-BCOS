@@ -58,7 +58,7 @@ public:
     FakesService() : Service()
     {
         NodeID nodeID = h512(100);
-        NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
+        NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30310);
         dev::network::NodeInfo node_info;
         node_info.nodeID = nodeID;
         P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());

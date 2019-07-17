@@ -94,7 +94,7 @@ void Host::startAccept(boost::system::error_code boost_error)
 
                 /// if the connected peer over the limitation, drop socket
                 socket->setNodeIPEndpoint(
-                    NodeIPEndpoint(endpoint.address(), endpoint.port(), endpoint.port()));
+                    NodeIPEndpoint(endpoint.address().to_string(), to_string(endpoint.port())));
 
                 HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// register ssl callback to get the NodeID of peers
@@ -406,7 +406,6 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     }
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(_nodeIPEndpoint);
-
     /// if async connect timeout, close the socket directly
     auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
         *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
@@ -433,33 +432,32 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     });
     /// callback async connect
-    m_asioInterface->asyncConnect(
-        socket, _nodeIPEndpoint, [=](boost::system::error_code const& ec) {
-            if (ec)
-            {
-                HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
-                                  << LOG_KV("endpoint", _nodeIPEndpoint.name())
-                                  << LOG_KV("message", ec.message());
-                socket->close();
+    m_asioInterface->asyncResolveConnect(socket, [=](boost::system::error_code const& ec) {
+        if (ec)
+        {
+            HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
+                              << LOG_KV("endpoint", _nodeIPEndpoint.name())
+                              << LOG_KV("message", ec.message());
+            socket->close();
 
-                m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                    callback(NetworkException(ConnectError, "Connect failed"), NodeInfo(),
-                        std::shared_ptr<SessionFace>());
-                });
-                return;
-            }
-            else
-            {
-                insertPendingConns(_nodeIPEndpoint);
-                /// get the public key of the server during handshake
-                std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-                m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
-                /// call handshakeClient after handshake succeed
-                m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
-                    boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
-                        socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
-            }
-        });
+            m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
+                callback(NetworkException(ConnectError, "Connect failed"), NodeInfo(),
+                    std::shared_ptr<SessionFace>());
+            });
+            return;
+        }
+        else
+        {
+            insertPendingConns(_nodeIPEndpoint);
+            /// get the public key of the server during handshake
+            std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
+            m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+            /// call handshakeClient after handshake succeed
+            m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::client,
+                boost::bind(&Host::handshakeClient, shared_from_this(), ba::placeholders::error,
+                    socket, endpointPublicKey, callback, _nodeIPEndpoint, connect_timer));
+        }
+    });
 }
 
 /**

@@ -78,9 +78,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         exit(1);
                     }
                     NodeIPEndpoint endpoint;
-                    endpoint.address = boost::asio::ip::address::from_string(s[0]);
-                    endpoint.tcpPort = boost::lexical_cast<uint16_t>(s[1]);
-                    endpoint.udpPort = boost::lexical_cast<uint16_t>(s[1]);
+                    endpoint.host = s[0];
+                    endpoint.port = s[1];
                     nodes.insert(std::make_pair(endpoint, NodeID()));
                 }
                 catch (std::exception& e)
