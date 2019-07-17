@@ -113,7 +113,7 @@ public:
     void noteNewTransactions()
     {
         m_newTransactions = true;
-        // m_signalled.notify_all();
+        m_signalled.notify_all();
     }
 
     void noteNewBlocks()

@@ -158,7 +158,6 @@ void SyncMaster::doWork()
         // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
         if (m_needMaintainTransactions && m_newTransactions)
         {
-            m_newTransactions = false;
             maintainTransactions();
         }
         maintainTransactions_time_cost = utcTime() - record_time;
@@ -203,7 +202,7 @@ void SyncMaster::workLoop()
     while (workerState() == WorkerState::Started)
     {
         doWork();
-        if (idleWaitMs())
+        if (idleWaitMs() && !m_newTransactions)
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -237,6 +236,11 @@ void SyncMaster::maintainTransactions()
 
     auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
     auto txSize = ts.size();
+    if (txSize == 0)
+    {
+        m_newTransactions = false;
+        return;
+    }
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
