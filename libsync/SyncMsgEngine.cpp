@@ -182,6 +182,12 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
     }
 }
 
+bool SyncMsgEngine::isFarSyncing() const
+{
+    int64_t currentNumber = m_blockChain->number();
+    return m_syncStatus->knownHighestNumber - currentNumber > 10;
+}
+
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
 {
     if (!checkGroupPacket(_packet))
@@ -190,10 +196,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
-
-    if (m_syncStatus->state == SyncState::Downloading)
+    // only drop the transactions when the block height of this node falls behind a log
+    if (isFarSyncing())
     {
-        SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Tx")
+        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx")
                                << LOG_DESC("Drop peer transactions when dowloading blocks")
                                << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;

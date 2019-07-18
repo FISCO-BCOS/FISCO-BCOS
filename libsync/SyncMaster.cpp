@@ -202,7 +202,7 @@ void SyncMaster::workLoop()
     while (workerState() == WorkerState::Started)
     {
         doWork();
-        if (idleWaitMs() && !m_newTransactions)
+        if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -226,8 +226,7 @@ bool SyncMaster::isSyncing() const
 // is my number is far smaller than max block number of this block chain
 bool SyncMaster::isFarSyncing() const
 {
-    int64_t currentNumber = m_blockChain->number();
-    return m_syncStatus->knownHighestNumber - currentNumber > 10;
+    return m_msgEngine->isFarSyncing();
 }
 
 void SyncMaster::maintainTransactions()
