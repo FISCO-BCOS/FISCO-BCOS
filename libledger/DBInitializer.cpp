@@ -241,7 +241,9 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     // set Parallelism to the hardware concurrency
     options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
 
-    options.OptimizeLevelStyleCompaction();
+    // fix the memory problem
+    // options.OptimizeLevelStyleCompaction(); // This option will increase much memory
+
     options.create_if_missing = true;
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;
