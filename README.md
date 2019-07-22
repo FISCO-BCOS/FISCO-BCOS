@@ -2,7 +2,7 @@ English / [中文](docs/README_CN.md)
 
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS** is a secure and reliable financial-grade open-source blockchain platform led by Chinese enterprises. Its performance has reached over 10,000 TPS with single-chain setup. The platform provides rich features including group architecture, cross-chain communication protocols, pluggable consensus mechanisms, privacy protection algorithms, OSCCA-approved (Office of state Commercial Cryptography Administration) cryptography algorithms, and distributed storage. Its performance, usability and security has been testified by many institutional users and successful business applications in live production environment.
+**FISCO BCOS** is a secure and reliable financial-grade open-source blockchain platform led by Chinese enterprises. Its performance has reached over 10,000 TPS with single-chain setup. The platform provides rich features including group architecture, cross-chain communication protocols, pluggable consensus mechanisms, privacy protection algorithms, OSCCA-approved (Office of State Commercial Cryptography Administration) cryptography algorithms, and distributed storage. Its performance, usability, and security have been testified by many institutional users and successful business applications in a live production environment.
 
 [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS) [![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
@@ -10,7 +10,7 @@ English / [中文](docs/README_CN.md)
 
 ## Group Architecture
 
-Our group architecture is designed to allow simultaneous management of multiple ledger groups in the same blockchain network to facilitate speedy ledger setup and support massive service requests. This innovative architecture supports better scalability with key designs including inter-group transaction processing, distributed data storage and intra-group consensus isolation. It aims to effectively scale up the business and simplify toilsome operational procedures, while accommodating to data privacy protection requirements.
+Our group architecture is designed to allow the simultaneous management of multiple ledger groups in the same blockchain network to facilitate speedy ledger setup and support massive service requests. This innovative architecture supports better scalability with key designs including inter-group transaction processing, distributed data storage, and intra-group consensus isolation. It aims to effectively scale up the business and simplify toilsome operational procedures while accommodating to data privacy protection requirements.
 
 ## Distributed Storage
 
@@ -22,11 +22,9 @@ Parallel transaction processing engine effectively exploits multi-core computati
 
 ## Developer Friendly
 
-FISCO BCOS provides various guide to compile and deploy blockchain instances, offering one-click deployment, speedy installation and deployment on all mainstream platforms including Docker. It includes a comprehensive toolkit for speedy deployment, continuous monitoring, enterprise-level data governance, to save developers’ valuable time from toil.
+FISCO BCOS provides various guides to compile and deploy blockchain instances, offering one-click deployment, speedy installation, and deployment on all mainstream platforms including Docker. It includes a comprehensive toolkit for speedy deployment, continuous monitoring, enterprise-level data governance, to save developers’ valuable time from toil.
 
 ![Key Features of FISCO BCOS 2.0](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/plane_en.png)
-
-
 
 For more information, please refer to new features in [version 2.0](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
 
@@ -41,7 +39,7 @@ Read [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/
 
 ## Featured applications
 
-**FISCO BCOS** has been adopted in over 10 applications in areas like government affair, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment. 
+**FISCO BCOS** has been adopted in over 10 applications in areas like government affairs, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment.
 
 - Finance: inter-institutional reconciliation, supply chain finance, tourism finance, etc.
 - Judicial services: arbitration chain, digital IOUs, etc.
@@ -52,7 +50,7 @@ Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FIS
 
 ## Code contribution
 
-- Your contributions are most welcome and appreciated. Please read the [contribution instructions ](https://mp.weixin.qq.com/s/hEn2rxqnqp0dF6OKH6Ua-A) and [coding code style guide](CODING_STYLE.md).
+- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/hEn2rxqnqp0dF6OKH6Ua-A) and [coding code style guide](CODING_STYLE.md).
 - If this project is useful to you, please star us on GitHub project page!
 - If you find any security vulnerabilities, please report [them](https://security.webank.com) here!
 
@@ -61,8 +59,6 @@ Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FIS
 The FISCO BCOS community is one of the most active open-source blockchain communities in China. It provides long-term technical support for both institutional and individual developers and users of FISCO BCOS. Thousands of technical enthusiasts from numerous industry sectors have joined this community, studying and using FISCO BCOS platform. If you are also interested, you are most welcome to join us for more support and fun.
 
 ![](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/QR_image_en.png)
-
-
 
 ## License
 
