@@ -118,7 +118,7 @@ void Service::heartBeat()
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
-        if (it.first.address.to_string().empty())
+        if (it.first.host.empty() || it.first.port.empty())
         {
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore invalid address");
             continue;
@@ -154,18 +154,21 @@ void Service::heartBeat()
 void Service::updateStaticNodes(
     std::shared_ptr<dev::network::SocketFace> const& _s, dev::network::NodeID const& nodeID)
 {
-    /// update the staticNodes
-    dev::network::NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_v4(),
-        _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
+    dev::network::NodeIPEndpoint endpoint(_s->nodeIPEndpoint());
     RecursiveGuard l(x_nodes);
     auto it = m_staticNodes.find(endpoint);
-    /// modify m_staticNodes(including accept cases, namely the client endpoint)
+    // modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(DEBUG) << LOG_DESC("startPeerSession updateStaticNodes")
-                           << LOG_KV("nodeID", nodeID.abridged())
+        SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes") << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("endpoint", endpoint.name());
         it->second = nodeID;
+    }
+    else
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes can't find endpoint")
+                           << LOG_KV("nodeID", nodeID.abridged())
+                           << LOG_KV("endpoint", endpoint.name());
     }
 }
 
