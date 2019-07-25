@@ -26,8 +26,9 @@
 #include "libp2p/Common.h"
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
 #include <json/value.h>            // for Value
-#include <boost/thread/tss.hpp>    // for thread_specific_ptr
-#include <string>                  // for string
+#include <libethcore/Transaction.h>
+#include <boost/thread/tss.hpp>  // for thread_specific_ptr
+#include <string>                // for string
 
 namespace dev
 {
@@ -117,6 +118,10 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+
+    std::string buildReceipt(uint32_t clientProtocolVersion, int errorCode,
+        const std::string& errorMessage, const bytes& input,
+        dev::eth::LocalisedTransactionReceipt::Ptr receipt);
 
     /// transaction callback related
     std::function<std::function<void>()> setTransactionCallbackFactory();
