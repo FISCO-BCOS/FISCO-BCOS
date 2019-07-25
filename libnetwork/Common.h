@@ -199,11 +199,10 @@ inline std::string reasonOf(DisconnectReason _r)
 }
 
 /**
- * @brief IPv4,UDP/TCP endpoints.
+ * @brief client end endpoint. Node will connect to NodeIPEndpoint.
  */
 struct NodeIPEndpoint
 {
-    /// Setting true causes isAllowed to return true for all addresses. (Used by test fixtures)
     NodeIPEndpoint() = default;
     NodeIPEndpoint(const std::string& _host, const std::string& _port) : host(_host), port(_port) {}
     NodeIPEndpoint(const std::string& _host, uint16_t _port)

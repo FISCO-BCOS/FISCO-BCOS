@@ -37,6 +37,7 @@ chain_id=1
 compatibility_version=""
 default_version="2.0.0"
 macOS=""
+x86_64_arch="true"
 download_timeout=90
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
@@ -168,6 +169,7 @@ LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "================================================================"
+if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
 LOG_INFO "Execute the following command to get FISCO-BCOS console"
 echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
 echo "================================================================"
@@ -187,7 +189,9 @@ check_env() {
     if [ "$(uname)" == "Darwin" ];then
         macOS="macOS"
     fi
-
+    if [ "$(uname -m)" != "x86_64" ];then
+        x86_64_arch="false"
+    fi
 }
 
 # TASSL env
@@ -905,6 +909,7 @@ parse_ip_config()
 
 download_bin()
 {
+    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
     package_name="fisco-bcos.tar.gz"
     [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
