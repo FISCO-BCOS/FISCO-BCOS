@@ -238,10 +238,6 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     boost::filesystem::create_directories(m_param->mutableStorageParam().path);
     /// open and init the rocksDB
     rocksdb::Options options;
-    rocksdb::BlockBasedTableOptions table_options;
-    // table_options.cache_index_and_filter_blocks = true;
-    table_options.block_cache = rocksdb::NewLRUCache(1 * 256 * 1024 * 1024);
-    options.table_factory.reset(NewBlockBasedTableFactory(table_options));
 
     // set Parallelism to the hardware concurrency
     // This option will increase much memory
@@ -249,7 +245,7 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
 
     // options.OptimizeLevelStyleCompaction();  // This option will increase much memory too
     options.create_if_missing = true;
-    options.max_open_files = 1000;
+    options.max_open_files = 200;
     options.compression = rocksdb::kSnappyCompression;
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
 
