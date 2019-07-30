@@ -78,8 +78,10 @@ void Executive::verifyTransaction(
         _t.baseGasRequired(schedule) > (bigint)txGasLimit)
     {
         m_excepted = TransactionException::OutOfGasIntrinsic;
-        m_exceptionReason << LOG_KV(
-            "reason", "The gas required by deploying this contract is more than tx_gas_limit");
+        m_exceptionReason
+            << LOG_KV("reason",
+                   "The gas required by deploying this contract is more than tx_gas_limit")
+            << LOG_KV("limit", txGasLimit) << LOG_KV("require", _t.baseGasRequired(schedule));
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
     }
@@ -94,8 +96,10 @@ bool Executive::execute()
         if (txGasLimit < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
-            m_exceptionReason << LOG_KV(
-                "reason", "The gas required by deploying this contract is more than tx_gas_limit");
+            m_exceptionReason
+                << LOG_KV("reason",
+                       "The gas required by deploying this contract is more than tx_gas_limit")
+                << LOG_KV("limit", txGasLimit) << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
@@ -106,8 +110,10 @@ bool Executive::execute()
         if (m_t.gas() < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
-            m_exceptionReason << LOG_KV(
-                "reason", "The gas required by deploying this contract is more than sender given");
+            m_exceptionReason
+                << LOG_KV("reason",
+                       "The gas required by deploying this contract is more than sender given")
+                << LOG_KV("given", m_t.gas()) << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
