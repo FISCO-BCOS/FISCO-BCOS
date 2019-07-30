@@ -398,8 +398,9 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     {
         BLOCKVERIFIER_LOG(ERROR) << _e.what();
     }
-    /// mptstate calculates every transactions
-    /// storagestate ignore hash calculation
+
+    e.loggingException();
+
     return make_pair(
         res, TransactionReceipt(executiveContext->getState()->rootHash(false), e.gasUsed(),
                  e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));

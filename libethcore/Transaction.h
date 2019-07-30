@@ -184,6 +184,9 @@ public:
     /// @returns the transaction-count of the sender.
     u256 nonce() const { return m_nonce; }
 
+    /// @returns the groupId of this transaction
+    u256 groupId() const { return m_groupId; }
+
     /// Sets the nonce to the given value. Clears any signature.
     void setNonce(u256 const& _n)
     {
