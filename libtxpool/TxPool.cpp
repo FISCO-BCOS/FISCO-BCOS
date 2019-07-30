@@ -287,9 +287,9 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     {
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-        auto tx = m_blockChain->getLocalisedTxByHash(_txHash);
+        bytes input = p_tx->second->data();
         TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
-        m_callbackPool.enqueue([callback, tx] { callback.call(callback.pReceipt, tx.data()); });
+        m_callbackPool.enqueue([callback, input] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
