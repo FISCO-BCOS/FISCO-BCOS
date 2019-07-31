@@ -743,8 +743,7 @@ cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
-    echo " \${node} is running, ${pid} is \$node_pid. Trying to load new groups."
-    touch config.ini.append_group
+    echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else 
     ${start_cmd}
@@ -791,6 +790,20 @@ do
 done
 echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
+EOF
+    generate_script_template "$output/load_new_groups.sh"
+    cat << EOF >> "$output/load_new_groups.sh"
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+if [ ! -z \${node_pid} ];then
+    echo "\${node} is trying to load new groups. Check log for more information."
+    touch config.ini.append_group
+    exit 0
+else 
+    echo "\${node} is not running, use start.sh to start all group directlly."
+fi
 EOF
 }
 
