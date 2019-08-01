@@ -101,15 +101,7 @@ public:
 
     virtual void onClientRequest(dev::channel::ChannelSession::Ptr session,
         dev::channel::ChannelException e, dev::channel::Message::Ptr message);
-
-    virtual void onClientEthereumRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
-
-    virtual void onClientTopicRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
-
-    virtual void onClientChannelRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+    virtual void blockNotify(int16_t _groupID, int64_t _blockNumber);
 
     void setListenAddr(const std::string& listenAddr);
 
@@ -139,8 +131,9 @@ public:
 
     virtual std::string newSeq();
 
-    void setCallbackSetter(
-        std::function<void(std::function<void(const std::string& receiptContext)>*)> callbackSetter)
+    void setCallbackSetter(std::function<void(
+            std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+            callbackSetter)
     {
         m_callbackSetter = callbackSetter;
     };
@@ -148,6 +141,21 @@ public:
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
+    virtual void onClientRPCRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientTopicRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientChannelRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientHandshake(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientHeartbeat(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
     dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
         dev::channel::Message::Ptr message,
         const std::set<dev::channel::ChannelSession::Ptr>& exclude);
@@ -178,7 +186,9 @@ private:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
-    std::function<void(std::function<void(const std::string& receiptContext)>*)> m_callbackSetter;
+    std::function<void(
+        std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+        m_callbackSetter;
     std::vector<dev::eth::Handler<int64_t> > m_handlers;
 };
 
