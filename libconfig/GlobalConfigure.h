@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <libethcore/EVMSchedule.h>
 #include <atomic>
 #include <string>
 namespace dev
@@ -56,6 +57,9 @@ public:
     }
     std::string const& supportedVersion() { return m_supportedVersion; }
 
+    void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
+    dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -82,6 +86,7 @@ private:
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
+    dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

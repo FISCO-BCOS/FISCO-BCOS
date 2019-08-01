@@ -23,6 +23,7 @@
 
 #include "GlobalConfigureInitializer.h"
 #include "libsecurity/KeyCenter.h"
+#include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -89,6 +90,11 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     else if (getVersionNumber(version, versionNumber))
     {
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
+
+        if (g_BCOSConfig.version() < getVersionNumber("2.1.0"))
+        {
+            g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
+        }
     }
     else
     {
