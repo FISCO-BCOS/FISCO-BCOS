@@ -26,6 +26,7 @@
 #include "Common.h"
 #include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
+#include <boost/algorithm/string.hpp>
 #include <string>
 
 namespace dev
@@ -57,7 +58,7 @@ namespace eth
 /// "latest".
 inline BlockNumber jsToBlockNumber(std::string const& _js)
 {
-    return (unsigned)jsToInt(_js);
+    return boost::lexical_cast<BlockNumber>(jsToU256(_js));
 }
 
 }  // namespace eth
