@@ -37,6 +37,7 @@ bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versi
 {
     // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
+    _versionNumber = 0;
     boost::split(versions, _version, boost::is_any_of("."));
     if (versions.size() != 3)
     {
@@ -56,6 +57,16 @@ bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versi
         return false;
     }
     return true;
+}
+
+uint32_t dev::initializer::getVersionNumber(const string& _version)
+{
+    uint32_t vnum = 0;
+    if (!getVersionNumber(_version, vnum))
+    {
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
+    }
+    return vnum;
 }
 
 void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
