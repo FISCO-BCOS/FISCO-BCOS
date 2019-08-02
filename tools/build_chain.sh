@@ -1150,9 +1150,13 @@ for line in ${ip_array[*]};do
         cd ${output_dir}
     fi
     ((++server_count))
-    # clean 
-    set_value ${ip//./}_count 0
 done 
+
+# clean 
+for line in ${ip_array[*]};do
+    ip=${line%:*}
+    set_value ${ip//./}_count 0
+done
 
 echo "=============================================================="
 echo "Generating configurations..."
