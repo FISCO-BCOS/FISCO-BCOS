@@ -34,40 +34,30 @@ using namespace dev::initializer;
 
 DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 
-bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versionNumber)
+uint32_t dev::initializer::getVersionNumber(const string& _version)
 {
     // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
-    _versionNumber = 0;
+    uint32_t versionNumber = 0;
     boost::split(versions, _version, boost::is_any_of("."));
     if (versions.size() != 3)
     {
-        return false;
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
     }
     try
     {
         for (size_t i = 0; i < versions.size(); ++i)
         {
-            _versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
-            _versionNumber <<= 8;
+            versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
+            versionNumber <<= 8;
         }
     }
     catch (const boost::bad_lexical_cast& e)
     {
         INITIALIZER_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
-        return false;
-    }
-    return true;
-}
-
-uint32_t dev::initializer::getVersionNumber(const string& _version)
-{
-    uint32_t vnum = 0;
-    if (!getVersionNumber(_version, vnum))
-    {
         BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
     }
-    return vnum;
+    return versionNumber;
 }
 
 void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
@@ -87,19 +77,22 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     {
         g_BCOSConfig.setSupportedVersion(version, RC3_VERSION);
     }
-    else if (getVersionNumber(version, versionNumber))
+    else
     {
+        versionNumber = getVersionNumber(version);
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
+    }
 
-        if (g_BCOSConfig.version() < getVersionNumber("2.1.0"))
-        {
-            g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
-        }
+    // set evmSchedule
+    if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
+    {
+        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
     }
     else
     {
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(version));
+        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV2);
     }
+
 
     std::string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
