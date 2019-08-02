@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcrypto/Hash.h>
@@ -247,7 +248,7 @@ public:
 
     /// Return the EVM gas-price schedule for this execution context.
     /// default is FiscoBcosSchedule
-    virtual EVMSchedule const& evmSchedule() const { return DefaultSchedule; }
+    virtual EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
 
 public:
     /// ------ get interfaces related to ExtVMFace------

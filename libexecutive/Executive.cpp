@@ -51,7 +51,7 @@ void Executive::accrueSubState(SubState& _parentContext)
 void Executive::initialize(Transaction const& _transaction)
 {
     m_t = _transaction;
-    m_baseGasRequired = m_t.baseGasRequired(DefaultSchedule);
+    m_baseGasRequired = m_t.baseGasRequired(g_BCOSConfig.evmSchedule());
 
     verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
@@ -69,7 +69,7 @@ void Executive::initialize(Transaction const& _transaction)
 void Executive::verifyTransaction(
     ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&)
 {
-    eth::EVMSchedule const& schedule = DefaultSchedule;
+    eth::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
 
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     // The gas limit is dynamic, not fixed.

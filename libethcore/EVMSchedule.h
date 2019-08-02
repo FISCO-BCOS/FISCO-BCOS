@@ -167,7 +167,13 @@ static const EVMSchedule FiscoBcosSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule DefaultSchedule = FiscoBcosSchedule;
+static const EVMSchedule FiscoBcosScheduleV2 = [] {
+    EVMSchedule schedule = ConstantinopleSchedule;
+    schedule.maxCodeSize = 0x40000;
+    return schedule;
+}();
+
+static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV2;
 
 }  // namespace eth
 }  // namespace dev
