@@ -33,10 +33,7 @@
 using namespace dev::channel;
 using namespace dev::p2p;
 
-ChannelSession::ChannelSession()
-{
-    m_topics = std::make_shared<std::map<std::string, uint32_t> >();
-}
+ChannelSession::ChannelSession() : m_topics(std::make_shared<std::map<std::string, uint32_t> >()) {}
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 {

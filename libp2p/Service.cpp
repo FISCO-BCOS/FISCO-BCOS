@@ -730,8 +730,6 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             for (auto& j : it.second->topics())
             {
-                SERVICE_LOG(TRACE) << LOG_DESC("getPeersByTopic") << LOG_KV("topic", j.topic)
-                                   << LOG_KV("status", j.topicStatus);
                 if ((j.topic == topic) && (j.topicStatus == TopicStatus::ENABLE_STATUS))
                 {
                     nodeList.push_back(it.first);

@@ -168,6 +168,9 @@ private:
         dev::channel::Message::Ptr channelMessage, const std::string& topic2Send,
         dev::p2p::AMOPPacketType packetType);
 
+    void dealWithAmopCert(dev::p2p::NodeID nodeID, const std::string& topic,
+        p2p::P2PMessage::Ptr msg, dev::channel::Message::Ptr channelMessage);
+
     bool _running = false;
 
     std::string _listenAddr;

@@ -112,13 +112,16 @@ public:
 
     bool isConnected(NodeID const&) const override { return true; };
 
-    std::vector<std::string> topics() override { return std::vector<std::string>(); };
+    std::vector<dev::p2p::TopicItem> topics() override
+    {
+        return std::vector<dev::p2p::TopicItem>();
+    };
 
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
     void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
 
-    void setTopics(std::shared_ptr<std::vector<std::string>>) override{};
+    void setTopics(std::shared_ptr<std::vector<dev::p2p::TopicItem>>) override{};
 
     std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return nullptr; };
 };
