@@ -25,15 +25,17 @@
 #include "ChannelException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
+#include <libp2p/P2PMessage.h>
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
 
 using namespace dev::channel;
+using namespace dev::p2p;
 
 ChannelSession::ChannelSession()
 {
-    m_topics = std::make_shared<std::set<std::string> >();
+    m_topics = std::make_shared<std::map<std::string, uint32_t> >();
 }
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
@@ -638,5 +640,18 @@ void ChannelSession::updateIdleTimer()
                 s->onIdle(error);
             }
         });
+    }
+}
+
+
+void ChannelSession::updateTopicStatus(const std::string& topic, uint32_t topicStatus)
+{
+    dev::WriteGuard l(x_topics);
+    auto it = m_topics->find(topic);
+    if (it != m_topics->end() && it->second == TopicStatus::INIT_STATUS)
+    {
+        it->second = topicStatus;
+        CHANNEL_SESSION_LOG(DEBUG) << LOG_DESC("set ") << LOG_KV("topic", topic) << LOG_DESC(" to ")
+                                   << LOG_KV("status", topicStatus);
     }
 }

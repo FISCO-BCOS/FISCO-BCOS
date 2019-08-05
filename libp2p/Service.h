@@ -111,12 +111,12 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    std::vector<std::string> topics() override
+    std::vector<dev::p2p::TopicItem> topics() override
     {
         RecursiveGuard l(x_topics);
         return *m_topics;
     }
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    void setTopics(std::shared_ptr<std::vector<dev::p2p::TopicItem>> _topics) override
     {
         RecursiveGuard l(x_topics);
         m_topics = _topics;
@@ -137,6 +137,18 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
+
+    CallbackFuncWithSession getHandlerByprotocolID(uint32_t protocolID)
+    {
+        RecursiveGuard lock(x_protocolID2Handler);
+        auto it = m_protocolID2Handler->find(protocolID);
+        if (it != m_protocolID2Handler->end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
@@ -149,7 +161,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::vector<std::string>> m_topics;
+    std::shared_ptr<std::vector<dev::p2p::TopicItem>> m_topics;
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins
