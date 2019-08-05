@@ -20,6 +20,8 @@
  */
 
 #include "Service.h"
+#include "Common.h"
+#include "P2PMessage.h"
 #include "libdevcore/FixedHash.h"      // for FixedHash, hash
 #include "libdevcore/ThreadPool.h"     // for ThreadPool
 #include "libnetwork/ASIOInterface.h"  // for ASIOInterface
@@ -28,9 +30,11 @@
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
 #include <boost/random.hpp>
+#include <unordered_map>
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::network;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
@@ -39,7 +43,7 @@ Service::Service()
     m_protocolID2Handler =
         std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
     m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::vector<std::string>>();
+    m_topics = std::make_shared<std::vector<TopicItem>>();
 }
 
 void Service::start()
@@ -726,7 +730,9 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             for (auto& j : it.second->topics())
             {
-                if (j == topic)
+                SERVICE_LOG(TRACE) << LOG_DESC("getPeersByTopic") << LOG_KV("topic", j.topic)
+                                   << LOG_KV("status", j.topicStatus);
+                if ((j.topic == topic) && (j.topicStatus == TopicStatus::ENABLE_STATUS))
                 {
                     nodeList.push_back(it.first);
                 }

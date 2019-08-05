@@ -12,25 +12,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 /** @file P2PSession.cpp
  *  @author monan
  *  @date 20181112
+ *  @darrenyin
+ *  @date 20190801
  */
 
 #include "P2PSession.h"
+#include "P2PMessage.h"
 #include "Service.h"
-#include "libdevcore/easylog.h"        // for LOG_KV
-#include "libethcore/Protocol.h"       // for ProtocolID
-#include "libnetwork/ASIOInterface.h"  // for ASIOInte...
-#include "libnetwork/SessionFace.h"    // for SessionF...
-#include "libp2p/Common.h"             // for NetworkE...
-#include "libp2p/P2PMessageFactory.h"  // for P2PMessa...
+#include "libchannelserver/ChannelMessage.h"
+#include "libnetwork/ASIOInterface.h"
+#include <json/json.h>
+#include <libdevcore/Common.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Host.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::channel;
 
 void P2PSession::start()
 {
@@ -64,7 +68,8 @@ void P2PSession::heartBeat()
         {
             SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
                                << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
-                               << LOG_KV("name", m_session->nodeIPEndpoint().name());
+                               << LOG_KV("name", m_session->nodeIPEndpoint().name())
+                               << LOG_KV("seq", service->topicSeq());
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
@@ -129,7 +134,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     dev::network::Options option;
                     option.timeout = 5 * 1000;  // 5 seconds timeout
                     m_session->asyncSendMessage(requestTopics, option,
-                        [self](NetworkException e, dev::network::Message::Ptr response) {
+                        [self, this](NetworkException e, dev::network::Message::Ptr response) {
                             try
                             {
                                 if (e.errorCode())
@@ -139,7 +144,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                                        << LOG_KV("message", e.what());
                                     return;
                                 }
-
                                 std::vector<std::string> topics;
 
                                 auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
@@ -154,7 +158,9 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList = std::make_shared<std::set<std::string> >();
+                                    auto topicList =
+                                        std::make_shared<std::vector<dev::p2p::TopicItem> >();
+                                    dev::p2p::TopicItem item;
                                     for (uint32_t i = 0; i < topics.size(); ++i)
                                     {
                                         if (i == 0)
@@ -163,11 +169,27 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                         }
                                         else
                                         {
-                                            topicList->insert(topics[i]);
+                                            if (i % 2 == 1)
+                                            {
+                                                item.topic = topics[i];
+                                            }
+                                            else
+                                            {
+                                                item.topicStatus =
+                                                    boost::lexical_cast<uint32_t>(topics[i]);
+                                                topicList->push_back(std::move(item));
+                                            }
                                         }
                                     }
 
                                     session->setTopics(topicSeq, topicList);
+                                    for (auto topicIt : *topicList)
+                                    {
+                                        if (topicIt.topicStatus == TopicStatus::INIT_STATUS)
+                                        {
+                                            this->requestRandValue(session, topicIt.topic, e);
+                                        }
+                                    }
                                 }
                             }
                             catch (std::exception& e)
@@ -181,7 +203,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             }
             case AMOPPacketType::RequestTopics:
             {
-                SESSION_LOG(TRACE) << "Receive request topics, reponse topics";
+                SESSION_LOG(TRACE) << "Receive request topics, response topics";
 
                 auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(
                     service->p2pMessageFactory()->buildMessage());
@@ -197,8 +219,12 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     for (auto& it : service->topics())
                     {
                         s.append("\t");
-                        s.append(it);
+                        s.append(it.topic);
+                        s.append("\t");
+                        s.append(boost::lexical_cast<std::string>(it.topicStatus));
                     }
+
+                    SESSION_LOG(TRACE) << "Receive request topics, reponse topics content:" << s;
 
                     buffer->assign(s.begin(), s.end());
 
@@ -209,6 +235,27 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                         responseTopics, dev::network::Options(), CallbackFunc());
                 }
 
+                break;
+            }
+            case AMOPPacketType::RequestSign:
+            {
+                /*request sign */
+                std::string seq(32, '2');
+                signForAmop(message, seq, (uint16_t)0x38);
+                break;
+            }
+
+            case AMOPPacketType::RequestCheckSign:
+            {
+                /*request check sign */
+                std::string seq(32, '3');
+                signForAmop(message, seq, (uint16_t)0x39);
+                break;
+            }
+            case AMOPPacketType::UpdateTopicStatus:
+            {
+                std::string seq(32, '4');
+                signForAmop(message, seq, (uint16_t)0x3a);
                 break;
             }
             default:
@@ -224,4 +271,71 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             SESSION_LOG(ERROR) << "Error onTopicMessage: " << boost::diagnostic_information(e);
         }
     }
+}
+
+
+void P2PSession::signForAmop(P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType)
+{
+    SESSION_LOG(DEBUG)
+        << LOG_DESC("get request sign type[4 RequestSign 5 RequestCheckSign 6 UpdateTopicStatus]")
+        << LOG_KV("type", message->packetType());
+    auto self = std::weak_ptr<P2PSession>(shared_from_this());
+    auto session = self.lock();
+    auto service = session->service().lock();
+    CallbackFuncWithSession callback = service->getHandlerByprotocolID(dev::eth::ProtocolID::AMOP);
+    auto requestData =
+        std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+    requestData->setProtocolID(dev::eth::ProtocolID::AMOP);
+    std::shared_ptr<ChannelMessage> channelMessage = std::make_shared<ChannelMessage>();
+
+    ssize_t result = channelMessage->decode(message->buffer()->data(), message->buffer()->size());
+
+    if (result <= 0)
+    {
+        CHANNEL_LOG(ERROR) << "onNodeChannelRequest decode error"
+                           << LOG_KV(" package size", message->buffer()->size());
+        return;
+    }
+
+    CHANNEL_LOG(DEBUG) << LOG_KV("length", message->buffer()->size())
+                       << LOG_KV("type", channelMessage->type())
+                       << LOG_KV("seq", channelMessage->seq())
+                       << LOG_KV("result", channelMessage->result());
+
+    channelMessage->setType(cmdType);
+    channelMessage->setSeq(seq);
+
+    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+    channelMessage->encode(*buffer);
+    requestData->setBuffer(buffer);
+    requestData->setSeq(message->seq());
+    SESSION_LOG(DEBUG) << "new seq:" << requestData->seq();
+    NetworkException e;
+    callback(e, session, requestData);
+}
+
+void P2PSession::requestRandValue(
+    dev::p2p::P2PSession::Ptr session, const std::string& topicToSend, NetworkException e)
+{
+    auto service = session->service().lock();
+    CallbackFuncWithSession callback = service->getHandlerByprotocolID(dev::eth::ProtocolID::AMOP);
+    auto requestData =
+        std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+    requestData->setProtocolID(dev::eth::ProtocolID::AMOP);
+    std::shared_ptr<ChannelMessage> channelMessage = std::make_shared<ChannelMessage>();
+    std::shared_ptr<bytes> data = std::make_shared<bytes>();
+    uint8_t topiclen = (uint8_t)(topicToSend.length() + 1);
+    data->insert(data->end(), (byte*)&topiclen, (byte*)&topiclen + sizeof(topiclen));
+    data->insert(
+        data->end(), (byte*)topicToSend.c_str(), (byte*)topicToSend.c_str() + topicToSend.length());
+
+    channelMessage->setType(0x37);
+    channelMessage->setData(data->data(), data->size());
+    channelMessage->setSeq(std::string(32, '1'));
+    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+    channelMessage->encode(*buffer);
+    requestData->setBuffer(buffer);
+    requestData->setSeq(service->p2pMessageFactory()->newSeq());
+    SESSION_LOG(DEBUG) << "new seq:" << requestData->seq();
+    callback(e, session, requestData);
 }

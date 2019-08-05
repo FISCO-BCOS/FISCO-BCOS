@@ -17,10 +17,12 @@
 /** @file P2PSession.h
  *  @author monan
  *  @date 20181112
+ *  @author darrenyin
  */
 
 #pragma once
 
+#include "P2PMessage.h"
 #include <libnetwork/Common.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
@@ -38,7 +40,7 @@ class P2PSession : public std::enable_shared_from_this<P2PSession>
 public:
     typedef std::shared_ptr<P2PSession> Ptr;
 
-    P2PSession() { m_topics = std::make_shared<std::set<std::string> >(); }
+    P2PSession() { m_topics = std::make_shared<std::vector<dev::p2p::TopicItem> >(); }
 
     virtual ~P2PSession(){};
 
@@ -58,7 +60,7 @@ public:
     virtual dev::network::NodeInfo const& nodeInfo() const& { return m_nodeInfo; }
     /// virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
-    virtual std::set<std::string> topics()
+    virtual std::vector<dev::p2p::TopicItem> topics()
     {
         std::lock_guard<std::mutex> lock(x_topic);
         return *m_topics;
@@ -69,12 +71,17 @@ public:
 
     virtual void onTopicMessage(std::shared_ptr<P2PMessage> message);
 
-    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<std::string> > topics)
+    virtual void setTopics(uint32_t seq, std::shared_ptr<std::vector<dev::p2p::TopicItem> > topics)
     {
         std::lock_guard<std::mutex> lock(x_topic);
         m_topicSeq = seq;
         m_topics = topics;
     }
+
+private:
+    void signForAmop(dev::p2p::P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType);
+    void requestRandValue(
+        dev::p2p::P2PSession::Ptr session, const std::string& topic, NetworkException e);
 
 private:
     dev::network::SessionFace::Ptr m_session;
@@ -83,11 +90,10 @@ private:
 
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;
-    std::shared_ptr<std::set<std::string> > m_topics;
+    std::shared_ptr<std::vector<dev::p2p::TopicItem> > m_topics;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
-
     const uint32_t HEARTBEAT_INTERVEL = 5000;
 };
 

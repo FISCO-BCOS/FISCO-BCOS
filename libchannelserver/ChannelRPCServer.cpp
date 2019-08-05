@@ -40,6 +40,8 @@
 #include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
@@ -48,12 +50,17 @@
 #include <boost/range/algorithm/remove_if.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
+
+#include "libp2p/P2PMessage.h"
 
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::channel;
+using namespace dev::p2p;
 
 static const int c_seqAbridgedLen = 8;
 
@@ -367,7 +374,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 auto nodeID = s->nodeID();
                 auto p2pMessage = msg;
                 auto service = m_service;
-                asyncPushChannelMessage(topic, channelMessage,
+                asyncPushChannelMessage(topic, channelMessage, dev::p2p::seqNeed2GetSession,
                     [nodeID, channelMessage, service, p2pMessage](
                         dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
                         if (e.errorCode())
@@ -438,10 +445,170 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                     << "Broadcast channel message failed: " << boost::diagnostic_information(e);
             }
         }
+        else if (channelMessage->type() == 0x37)
+        {
+            try
+            {
+                std::string topic2Send = dev::p2p::publicKeyPrefix;
+                topic2Send.append(topic);
+                dealAmopCertification(
+                    s->nodeID(), msg, channelMessage, topic2Send, AMOPPacketType::RequestSign);
+            }
+            catch (dev::channel::ChannelException& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+        }
+        else if (channelMessage->type() == 0x38)
+        {
+            try
+            {
+                std::string topic2Send = dev::p2p::privateKeyPrefix;
+                topic2Send.append(topic);
+                dealAmopCertification(
+                    s->nodeID(), msg, channelMessage, topic2Send, AMOPPacketType::RequestCheckSign);
+            }
+
+            /* ChannelException is normal in this Scenes*/
+            catch (dev::channel::ChannelException& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+        }
+
+        else if (channelMessage->type() == 0x39)
+        {
+            try
+            {
+                std::string topic2Send = dev::p2p::publicKeyPrefix;
+                topic2Send.append(topic);
+                dealAmopCertification(s->nodeID(), msg, channelMessage, topic2Send,
+                    AMOPPacketType::UpdateTopicStatus);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+
+            /* ChannelException is normal in this Scenes*/
+            catch (dev::channel::ChannelException& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+        }
+
+        else if (channelMessage->type() == 0x3a)
+        {
+            try
+            {
+                CHANNEL_LOG(TRACE)
+                    << "Receive other node request 0x3a" << LOG_KV("p2pseq", msg->seq());
+                updateTopicStatus(channelMessage);
+                updateHostTopics();
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+            catch (std::exception& e)
+            {
+                CHANNEL_LOG(ERROR) << "push message failed:" << boost::diagnostic_information(e);
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(msg->seq()));
+            }
+        }
     }
     catch (std::exception& e)
     {
         CHANNEL_LOG(ERROR) << "error" << LOG_KV("what", boost::diagnostic_information(e));
+    }
+}
+
+void dev::ChannelRPCServer::eraseP2pSeq2Session(const std::string& p2pSeq)
+{
+    std::lock_guard<std::mutex> lock(_p2pSeqMutex);
+
+    auto it = _p2pSeq2Session.find(p2pSeq);
+
+    if (it != _p2pSeq2Session.end())
+    {
+        _p2pSeq2Session.erase(it);
+    }
+}
+
+void dev::ChannelRPCServer::dealAmopCertification(dev::p2p::NodeID nodeID,
+    p2p::P2PMessage::Ptr p2pMessage, dev::channel::Message::Ptr channelMessage,
+    const std::string& topic2Send, dev::p2p::AMOPPacketType packetType)
+{
+    auto service = m_service;
+    channelMessage->setSeq(this->newSeq());
+    asyncPushChannelMessage(topic2Send, channelMessage,
+        boost::lexical_cast<std::string>(p2pMessage->seq()),
+        [nodeID, channelMessage, service, p2pMessage, this, packetType](
+            dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
+            if (e.errorCode())
+            {
+                CHANNEL_LOG(ERROR) << "Push channel message failed"
+                                   << LOG_KV("what", boost::diagnostic_information(e));
+                eraseP2pSeq2Session(boost::lexical_cast<std::string>(p2pMessage->seq()));
+                return;
+            }
+            CHANNEL_LOG(TRACE) << "Receive sdk response"
+                               << LOG_KV("msgtype", channelMessage->type())
+                               << LOG_KV("seq", response->seq())
+                               << LOG_KV("p2pseq", p2pMessage->seq());
+            auto buffer = std::make_shared<bytes>();
+            response->encode(*buffer);
+            auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+                service->p2pMessageFactory()->buildMessage());
+            p2pResponse->setBuffer(buffer);
+            p2pResponse->setProtocolID(dev::eth::ProtocolID::Topic);
+            p2pResponse->setPacketType(packetType);
+            p2pResponse->setSeq(p2pMessage->seq());
+            service->asyncSendMessageByNodeID(
+                nodeID, p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+        });
+}
+
+void dev::ChannelRPCServer::updateTopicStatus(dev::channel::Message::Ptr channelMessage)
+{
+    uint16_t dataLen = ntohs(*((uint16_t*)((char*)channelMessage->data() + topicLen)));
+    std::string content((char*)channelMessage->data() + topicLen + 2, dataLen);
+    CHANNEL_LOG(TRACE) << "Receive sdk response 0x39:" << LOG_KV("dataLen", dataLen)
+                       << LOG_KV("content", content);
+    std::stringstream ss;
+    ss << content;
+    Json::Value root;
+    ss >> root;
+    int32_t checkResult = root["check_result"].asInt();
+
+    std::lock_guard<std::mutex> lock(_sessionMutex);
+    for (auto& it : _sessions)
+    {
+        if (it.second->topics().empty() || !it.second->actived())
+        {
+            continue;
+        }
+        auto session = it.second;
+        if (checkResult == 0)
+        {
+            session->updateTopicStatus(topic, TopicStatus::ENABLE_STATUS);
+        }
+        else
+        {
+            session->updateTopicStatus(topic, TopicStatus::DISABLE_STATUS);
+        }
     }
 }
 
@@ -464,17 +631,23 @@ void dev::ChannelRPCServer::onClientTopicRequest(
         Json::Value root;
         ss >> root;
 
-        std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
+        std::shared_ptr<std::map<std::string, uint32_t> > topics =
+            std::make_shared<std::map<std::string, uint32_t> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
         {
             for (size_t i = 0; i < topicsValue.size(); ++i)
             {
                 std::string topic = topicsValue[(int)i].asString();
-
                 CHANNEL_LOG(TRACE) << "onClientTopicRequest insert" << LOG_KV("topic", topic);
-
-                topics->insert(topic);
+                if (topic.find(topicNeedCertPrefix) == 0)
+                {
+                    topics->insert(std::make_pair(topic, TopicStatus::INIT_STATUS));
+                }
+                else
+                {
+                    topics->insert(std::make_pair(topic, TopicStatus::ENABLE_STATUS));
+                }
             }
         }
 
@@ -488,11 +661,10 @@ void dev::ChannelRPCServer::onClientTopicRequest(
                            << LOG_KV("what", boost::diagnostic_information(e));
     }
 }
-
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    CHANNEL_LOG(DEBUG) << "SDK channel2 request";
+    CHANNEL_LOG(DEBUG) << "SDK channel2 request type:" << message->type();
 
     if (message->dataSize() < 1)
     {
@@ -631,7 +803,7 @@ void ChannelRPCServer::setChannelServer(std::shared_ptr<dev::channel::ChannelSer
 }
 
 void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
-    dev::channel::Message::Ptr message,
+    dev::channel::Message::Ptr message, const std::string& p2pSeq,
     std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback)
 {
     try
@@ -644,8 +816,13 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             Callback(std::string topic, dev::channel::Message::Ptr message,
                 ChannelRPCServer::Ptr server,
                 std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
-                    callback)
-              : _topic(topic), _message(message), _server(server), _callback(callback){};
+                    callback,
+                const std::string& p2pSeq)
+              : _topic(topic),
+                _message(message),
+                _server(server),
+                _callback(callback),
+                _p2pSeq(p2pSeq){};
 
             void onResponse(dev::channel::ChannelException e, dev::channel::Message::Ptr message)
             {
@@ -696,43 +873,58 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
             void sendMessage()
             {
-                std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
-                    _server->getSessionByTopic(_topic);
-
-                if (activedSessions.empty())
+                dev::channel::ChannelSession::Ptr session;
+                std::lock_guard<std::mutex> lock(_server->_p2pSeqMutex);
+                auto it = _server->_p2pSeq2Session.find(_p2pSeq);
+                if (_p2pSeq == dev::p2p::seqNeed2GetSession || it == _server->_p2pSeq2Session.end())
                 {
-                    CHANNEL_LOG(ERROR)
-                        << "sendMessage failed: no session use topic" << LOG_KV("topic", _topic);
-                    throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
-                }
+                    std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
+                        _server->getSessionByTopic(_topic);
 
-                for (auto sessionIt = activedSessions.begin(); sessionIt != activedSessions.end();)
-                {
-                    if (_exclude.find(*sessionIt) != _exclude.end())
+                    if (activedSessions.empty())
                     {
-                        sessionIt = activedSessions.erase(sessionIt);
+                        CHANNEL_LOG(ERROR) << "sendMessage failed: no session use topic"
+                                           << LOG_KV("topic", _topic);
+                        throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
                     }
-                    else
+
+                    for (auto sessionIt = activedSessions.begin();
+                         sessionIt != activedSessions.end();)
                     {
-                        ++sessionIt;
+                        if (_exclude.find(*sessionIt) != _exclude.end())
+                        {
+                            sessionIt = activedSessions.erase(sessionIt);
+                        }
+                        else
+                        {
+                            ++sessionIt;
+                        }
+                    }
+
+                    if (activedSessions.empty())
+                    {
+                        CHANNEL_LOG(ERROR) << "all session try failed";
+
+                        throw dev::channel::ChannelException(104, "all session failed");
+                    }
+
+                    boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
+                    boost::uniform_int<int> index(0, activedSessions.size() - 1);
+
+                    auto ri = index(rng);
+                    CHANNEL_LOG(TRACE) << "random node" << ri;
+                    session = activedSessions[ri];
+                    if (_p2pSeq != dev::p2p::seqNeed2GetSession)
+                    {
+                        _server->_p2pSeq2Session.insert(std::make_pair(_p2pSeq, session));
                     }
                 }
-
-                if (activedSessions.empty())
+                else
                 {
-                    CHANNEL_LOG(ERROR) << "all session try failed";
-
-                    throw dev::channel::ChannelException(104, "all session failed");
+                    session = it->second;
+                    CHANNEL_LOG(DEBUG) << "p2pseq:" << _p2pSeq << " use existing session"
+                                       << session->host() << ":" << session->port();
                 }
-
-                boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
-                boost::uniform_int<int> index(0, activedSessions.size() - 1);
-
-                auto ri = index(rng);
-                CHANNEL_LOG(TRACE) << "random node" << ri;
-
-                auto session = activedSessions[ri];
-
                 std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp =
                     std::bind(&Callback::onResponse, shared_from_this(), std::placeholders::_1,
                         std::placeholders::_2);
@@ -752,10 +944,11 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             std::set<dev::channel::ChannelSession::Ptr> _exclude;
             std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
                 _callback;
+            std::string _p2pSeq;
         };
 
         Callback::Ptr pushCallback =
-            std::make_shared<Callback>(topic, message, shared_from_this(), callback);
+            std::make_shared<Callback>(topic, message, shared_from_this(), callback, p2pSeq);
         pushCallback->sendMessage();
     }
     catch (dev::channel::ChannelException& ex)
@@ -853,15 +1046,19 @@ std::string ChannelRPCServer::newSeq()
 
 void ChannelRPCServer::updateHostTopics()
 {
-    auto allTopics = std::make_shared<std::vector<std::string> >();
-
+    auto allTopics = std::make_shared<std::vector<dev::p2p::TopicItem> >();
     std::lock_guard<std::mutex> lock(_sessionMutex);
     for (auto& it : _sessions)
     {
         auto topics = it.second->topics();
-        allTopics->insert(allTopics->end(), topics.begin(), topics.end());
+        for (auto topic : topics)
+        {
+            dev::p2p::TopicItem item;
+            item.topic = topic.first;
+            item.topicStatus = topic.second;
+            allTopics->push_back(std::move(item));
+        }
     }
-
     m_service->setTopics(allTopics);
 }
 
@@ -880,9 +1077,15 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
         auto topics = it.second->topics();
         auto topicIt = topics.find(topic);
-        if (topicIt != topics.end())
+        if (topicIt != topics.end() && topicIt->second == TopicStatus::ENABLE_STATUS)
         {
             activedSessions.push_back(it.second);
+        }
+
+        for (auto topicIt : topics)
+        {
+            CHANNEL_LOG(DEBUG) << "get session topic:" << topicIt.first
+                               << " status:" << topicIt.second;
         }
     }
 

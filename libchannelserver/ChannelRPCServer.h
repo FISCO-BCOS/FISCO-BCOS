@@ -26,10 +26,13 @@
 
 #pragma once
 
-#include "ChannelMessage.h"            // for TopicChannelM...
+#include "ChannelException.h"
+#include "ChannelMessage.h"
+#include "ChannelServer.h"
 #include "ChannelSession.h"            // for ChannelSessio...
 #include "libchannelserver/Message.h"  // for Message, Mess...
 #include "libethcore/Common.h"
+#include "libp2p/Common.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
@@ -130,6 +133,7 @@ public:
     void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
 
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
+        const std::string& p2pSeq,
         std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
     void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
@@ -156,6 +160,14 @@ private:
 
     std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
+    void updateTopicStatus(dev::channel::Message::Ptr channelMessage);
+
+    void eraseP2pSeq2Session(const std::string& p2pSeq);
+
+    void dealAmopCertification(dev::p2p::NodeID nodeID, p2p::P2PMessage::Ptr msg,
+        dev::channel::Message::Ptr channelMessage, const std::string& topic2Send,
+        dev::p2p::AMOPPacketType packetType);
+
     bool _running = false;
 
     std::string _listenAddr;
@@ -170,6 +182,9 @@ private:
 
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
+
+    std::map<std::string, dev::channel::ChannelSession::Ptr> _p2pSeq2Session;
+    std::mutex _p2pSeqMutex;
 
     // boost::atomic_int m_seq;
     std::atomic<size_t> m_seq;

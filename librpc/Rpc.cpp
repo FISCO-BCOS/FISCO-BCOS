@@ -360,8 +360,14 @@ Json::Value Rpc::getPeers(int _groupID)
             node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
 
-            for (std::string topic : it->topics)
-                node["Topic"].append(topic);
+            for (auto topic : it->topics)
+            {
+                if (topic.topicStatus == TopicStatus::ENABLE_STATUS)
+                {
+                    node["Topic"].append(topic.topic);
+                }
+            }
+
             response.append(node);
         }
 

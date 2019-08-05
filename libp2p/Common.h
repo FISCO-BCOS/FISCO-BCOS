@@ -8,6 +8,7 @@
 
 #include <libdevcore/FixedHash.h>
 #include <libnetwork/Common.h>
+#include <libp2p/P2PMessage.h>
 
 namespace dev
 {
@@ -32,9 +33,10 @@ struct P2PSessionInfo
 {
     dev::network::NodeInfo nodeInfo;
     dev::network::NodeIPEndpoint nodeIPEndpoint;
-    std::set<std::string> topics;
+    std::vector<dev::p2p::TopicItem> topics;
     P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
-        dev::network::NodeIPEndpoint const& _nodeIPEndpoint, std::set<std::string> const& _topics)
+        dev::network::NodeIPEndpoint const& _nodeIPEndpoint,
+        std::vector<dev::p2p::TopicItem> const& _topics)
     {
         nodeInfo = _nodeInfo;
         nodeIPEndpoint = _nodeIPEndpoint;
