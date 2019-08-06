@@ -277,7 +277,8 @@ public:
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303);
             dev::network::NodeInfo node_info;
             node_info.nodeID = m_sealerList[i];
-            P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
+            std::vector<dev::p2p::TopicItem> topicList;
+            P2PSessionInfo info(node_info, m_endpoint, topicList);
             service->appendSessionInfo(info);
         }
     }

@@ -22,9 +22,19 @@
 
 #pragma once
 
+#include <libdevcore/Exceptions.h>
+#include <libdevcore/easylog.h>
 #include <libethcore/EVMSchedule.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <atomic>
 #include <string>
+#include <vector>
+
+
+#define GLOBALCONFIGURE_LOG(LEVEL) LOG(LEVEL) << "[GlobalConfigure]"
+
 namespace dev
 {
 enum VERSION : uint32_t
@@ -33,6 +43,7 @@ enum VERSION : uint32_t
     RC2_VERSION = 2,
     RC3_VERSION = 3
 };
+DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 class GlobalConfigure
 {
 public:
@@ -59,6 +70,33 @@ public:
 
     void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
     dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+
+
+    static uint32_t getVersionNumber(const std::string& _version)
+    {
+        // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
+        std::vector<std::string> versions;
+        uint32_t versionNumber = 0;
+        boost::split(versions, _version, boost::is_any_of("."));
+        if (versions.size() != 3)
+        {
+            BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
+        }
+        try
+        {
+            for (size_t i = 0; i < versions.size(); ++i)
+            {
+                versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
+                versionNumber <<= 8;
+            }
+        }
+        catch (const boost::bad_lexical_cast& e)
+        {
+            GLOBALCONFIGURE_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
+            BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
+        }
+        return versionNumber;
+    }
 
     struct DiskEncryption
     {

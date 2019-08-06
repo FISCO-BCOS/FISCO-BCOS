@@ -25,16 +25,15 @@
 #include "ChannelException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
+#include <libp2p/P2PMessage.h>
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
 
 using namespace dev::channel;
+using namespace dev::p2p;
 
-ChannelSession::ChannelSession()
-{
-    m_topics = std::make_shared<std::set<std::string> >();
-}
+ChannelSession::ChannelSession() : m_topics(std::make_shared<std::map<std::string, uint32_t> >()) {}
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 {

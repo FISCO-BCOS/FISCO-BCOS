@@ -106,5 +106,22 @@ enum AMOPPacketType
     RequestTopics = 2,
     SendTopics = 3
 };
+enum TopicStatus
+{
+    INIT_STATUS = 0,
+    ENABLE_STATUS = 1,
+    DISABLE_STATUS = 2,
+};
+
+class TopicItem
+{
+public:
+    std::string topic;
+    uint32_t topicStatus;
+
+public:
+    TopicItem() : topicStatus(INIT_STATUS) {}
+};
+const std::string topicNeedCertPrefix = "needcert_";
 }  // namespace p2p
 }  // namespace dev

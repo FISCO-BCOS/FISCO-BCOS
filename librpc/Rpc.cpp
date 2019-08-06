@@ -346,10 +346,8 @@ Json::Value Rpc::getPeers(int _groupID)
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
-
         checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
-
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
@@ -359,9 +357,10 @@ Json::Value Rpc::getPeers(int _groupID)
             node["Agency"] = it->nodeInfo.agencyName;
             node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
-
-            for (std::string topic : it->topics)
-                node["Topic"].append(topic);
+            for (auto topic : it->topics)
+            {
+                node["Topic"].append(topic.topic);
+            }
             response.append(node);
         }
 
@@ -425,7 +424,6 @@ Json::Value Rpc::getGroupPeers(int _groupID)
         {
             response.append((*it).hex());
         }
-
         return response;
     }
     catch (JsonRpcException& e)

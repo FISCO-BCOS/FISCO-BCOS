@@ -22,6 +22,7 @@
 
 
 #include "GlobalConfigureInitializer.h"
+#include "libconfig/GlobalConfigure.h"
 #include "libsecurity/KeyCenter.h"
 #include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
@@ -31,34 +32,6 @@
 using namespace std;
 using namespace dev;
 using namespace dev::initializer;
-
-DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
-
-uint32_t dev::initializer::getVersionNumber(const string& _version)
-{
-    // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
-    vector<string> versions;
-    uint32_t versionNumber = 0;
-    boost::split(versions, _version, boost::is_any_of("."));
-    if (versions.size() != 3)
-    {
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
-    }
-    try
-    {
-        for (size_t i = 0; i < versions.size(); ++i)
-        {
-            versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
-            versionNumber <<= 8;
-        }
-    }
-    catch (const boost::bad_lexical_cast& e)
-    {
-        INITIALIZER_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
-    }
-    return versionNumber;
-}
 
 void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 {
@@ -79,12 +52,12 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
     else
     {
-        versionNumber = getVersionNumber(version);
+        versionNumber = dev::GlobalConfigure::getVersionNumber(version);
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
     }
 
     // set evmSchedule
-    if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
+    if (g_BCOSConfig.version() <= dev::GlobalConfigure::getVersionNumber("2.0.0"))
     {
         g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
     }

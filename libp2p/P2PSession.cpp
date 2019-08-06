@@ -20,17 +20,20 @@
  */
 
 #include "P2PSession.h"
+#include "P2PMessage.h"
 #include "Service.h"
-#include "libdevcore/easylog.h"        // for LOG_KV
-#include "libethcore/Protocol.h"       // for ProtocolID
-#include "libnetwork/ASIOInterface.h"  // for ASIOInte...
-#include "libnetwork/SessionFace.h"    // for SessionF...
-#include "libp2p/Common.h"             // for NetworkE...
-#include "libp2p/P2PMessageFactory.h"  // for P2PMessa...
+#include "libchannelserver/ChannelMessage.h"
+#include "libconfig/GlobalConfigure.h"
+#include "libnetwork/ASIOInterface.h"
+#include <json/json.h>
+#include <libdevcore/Common.h>
+#include <libnetwork/Common.h>
+#include <libnetwork/Host.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::channel;
 
 void P2PSession::start()
 {
@@ -64,7 +67,8 @@ void P2PSession::heartBeat()
         {
             SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
                                << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
-                               << LOG_KV("name", m_session->nodeIPEndpoint().name());
+                               << LOG_KV("name", m_session->nodeIPEndpoint().name())
+                               << LOG_KV("seq", service->topicSeq());
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
@@ -154,7 +158,12 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList = std::make_shared<std::set<std::string> >();
+                                    auto topicList =
+                                        std::make_shared<std::vector<dev::p2p::TopicItem> >();
+                                    dev::p2p::TopicItem item;
+                                    bool versionLe2 =
+                                        g_BCOSConfig.version() <=
+                                        dev::GlobalConfigure::getVersionNumber("2.0.0");
                                     for (uint32_t i = 0; i < topics.size(); ++i)
                                     {
                                         if (i == 0)
@@ -163,10 +172,27 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                         }
                                         else
                                         {
-                                            topicList->insert(topics[i]);
+                                            if (versionLe2)
+                                            {
+                                                item.topic = topics[i];
+                                                item.topicStatus = dev::p2p::ENABLE_STATUS;
+                                                topicList->push_back(std::move(item));
+                                            }
+                                            else
+                                            {
+                                                if (i % 2 == 1)
+                                                {
+                                                    item.topic = topics[i];
+                                                }
+                                                else
+                                                {
+                                                    item.topicStatus =
+                                                        boost::lexical_cast<uint32_t>(topics[i]);
+                                                    topicList->push_back(std::move(item));
+                                                }
+                                            }
                                         }
                                     }
-
                                     session->setTopics(topicSeq, topicList);
                                 }
                             }
@@ -181,8 +207,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             }
             case AMOPPacketType::RequestTopics:
             {
-                SESSION_LOG(TRACE) << "Receive request topics, reponse topics";
-
                 auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(
                     service->p2pMessageFactory()->buildMessage());
 
@@ -193,13 +217,19 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                 auto service = m_service.lock();
                 if (service)
                 {
+                    bool versionGt2 =
+                        g_BCOSConfig.version() > dev::GlobalConfigure::getVersionNumber("2.0.0");
                     std::string s = boost::lexical_cast<std::string>(service->topicSeq());
                     for (auto& it : service->topics())
                     {
                         s.append("\t");
-                        s.append(it);
+                        s.append(it.topic);
+                        if (versionGt2)
+                        {
+                            s.append("\t");
+                            s.append(boost::lexical_cast<std::string>(it.topicStatus));
+                        }
                     }
-
                     buffer->assign(s.begin(), s.end());
 
                     responseTopics->setBuffer(buffer);

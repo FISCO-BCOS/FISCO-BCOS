@@ -61,11 +61,13 @@ public:
         NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30310);
         dev::network::NodeInfo node_info;
         node_info.nodeID = nodeID;
-        P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
-        std::set<std::string> topics;
-        std::string topic = "Topic1";
-        topics.insert(topic);
-        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topics));
+        std::vector<dev::p2p::TopicItem> topicList;
+        P2PSessionInfo info(node_info, m_endpoint, topicList);
+        TopicItem item;
+        item.topic = "Topic1";
+        item.topicStatus = TopicStatus::ENABLE_STATUS;
+        topicList.push_back(std::move(item));
+        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topicList));
         h512s nodeList;
         nodeList.push_back(
             h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
