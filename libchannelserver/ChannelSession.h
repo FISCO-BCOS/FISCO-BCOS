@@ -44,6 +44,12 @@ namespace dev
 {
 namespace channel
 {
+enum class ProtocolVersion : uint32_t
+{
+    v1 = 1,
+    v2 = 2
+};
+
 class ChannelSession : public std::enable_shared_from_this<ChannelSession>
 {
 public:
@@ -120,6 +126,14 @@ public:
     void setIdleTime(size_t idleTime) { _idleTime = idleTime; }
 
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
+
+    ProtocolVersion protocolVersion() { return m_channelProtocol; }
+    ProtocolVersion latestProtocolVersion() { return m_latestchannelProtocol; }
+    ProtocolVersion setProtocolVersion(ProtocolVersion _channelProtocol)
+    {
+        return m_channelProtocol = _channelProtocol;
+    }
+    std::string clientType() { return m_clientType; }
 
 private:
     void startRead();
@@ -207,7 +221,9 @@ private:
     std::shared_ptr<std::map<std::string, uint32_t> > m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
-
+    ProtocolVersion m_channelProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_latestchannelProtocol = ProtocolVersion::v2;
+    std::string m_clientType;
     size_t _idleTime = 30000;
 };
 

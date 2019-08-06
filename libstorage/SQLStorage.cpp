@@ -307,12 +307,11 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             auto str = ssOut.str();
             STORAGE_LOG(TRACE) << "Request AMOPDB:" << request->seq() << " " << str;
 
-            request->setTopic(m_topic);
 
             dev::channel::TopicChannelMessage::Ptr response;
 
             STORAGE_LOG(TRACE) << "Retry Request amdb :" << retry;
-            request->setData((const byte*)str.data(), str.size());
+            request->setTopicData(m_topic, (const byte*)str.data(), str.size());
             response = m_channelRPCServer->pushChannelMessage(request, m_timeout);
             if (response.get() == NULL || response->result() != 0)
             {

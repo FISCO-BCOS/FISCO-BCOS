@@ -98,9 +98,11 @@ public:
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
     void setCurrentTransactionCallback(
-        std::function<void(const std::string& receiptContext)>* callback)
+        std::function<void(const std::string& receiptContext)>* _callback,
+        std::function<uint32_t()>* _callbackVersion)
     {
-        m_currentTransactionCallback.reset(callback);
+        m_currentTransactionCallback.reset(_callback);
+        m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
 
@@ -119,6 +121,7 @@ private:
     std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
+    boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
 
     void checkRequest(int _groupID);
     void checkTxReceive(int _groupID);
