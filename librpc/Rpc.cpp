@@ -1007,10 +1007,12 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
-            tx.setRpcCallback(
-                [transactionCallback](LocalisedTransactionReceipt::Ptr receipt, bytes input) {
-                    Json::Value response;
-
+            auto clientProtocolversion = (*m_transactionCallbackVersion)();
+            tx.setRpcCallback([transactionCallback, clientProtocolversion](
+                                  LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+                Json::Value response;
+                if (clientProtocolversion > 0)
+                {  // FIXME: If made protocol modify, please modify upside if
                     response["transactionHash"] = toJS(receipt->hash());
                     response["transactionIndex"] = toJS(receipt->transactionIndex());
                     response["blockNumber"] = toJS(receipt->blockNumber());
@@ -1037,11 +1039,12 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                         response["input"] = toJS(input);
                     }
                     response["output"] = toJS(receipt->outputBytes());
+                }
 
-                    auto receiptContent = response.toStyledString();
+                auto receiptContent = response.toStyledString();
 
-                    transactionCallback(receiptContent);
-                });
+                transactionCallback(receiptContent);
+            });
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
