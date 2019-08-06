@@ -34,9 +34,11 @@
 #include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
-#include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
-#include "libp2p/P2PSession.h"                  // for P2PSession
+#include "libp2p/P2PMessage.h"
+#include "libp2p/P2PMessageFactory.h"  // for P2PMessageFac...
+#include "libp2p/P2PSession.h"         // for P2PSession
 #include <json/json.h>
+#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
@@ -50,10 +52,12 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <string>
 
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::channel;
+using namespace dev::p2p;
 
 static const int c_seqAbridgedLen = 8;
 
@@ -563,20 +567,27 @@ void dev::ChannelRPCServer::onClientTopicRequest(
         Json::Value root;
         ss >> root;
 
-        std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
+        std::shared_ptr<std::map<std::string, TopicStatus> > topics =
+            std::make_shared<std::map<std::string, TopicStatus> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
         {
+            bool versionGt2 = (g_BCOSConfig.version() > dev::VERSION::V2_0_0);
             for (size_t i = 0; i < topicsValue.size(); ++i)
             {
                 std::string topic = topicsValue[(int)i].asString();
-
                 CHANNEL_LOG(TRACE) << "onClientTopicRequest insert" << LOG_KV("topic", topic);
-
-                topics->insert(topic);
+                if (topic.substr(0, topicNeedCertPrefix.size()) == topicNeedCertPrefix &&
+                    versionGt2)
+                {
+                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYING_STATUS));
+                }
+                else
+                {
+                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYI_SUCCESS_STATUS));
+                }
             }
         }
-
         session->setTopics(topics);
 
         updateHostTopics();
@@ -591,7 +602,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    CHANNEL_LOG(DEBUG) << "SDK channel2 request";
+    CHANNEL_LOG(DEBUG) << "SDK channel2 request type:" << message->type();
 
     if (message->dataSize() < 1)
     {
@@ -939,11 +950,6 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
 std::string ChannelRPCServer::newSeq()
 {
-#if 0
-    static boost::uuids::random_generator uuidGenerator;
-    std::string s = to_string(uuidGenerator());
-    s.erase(boost::remove_if(s, boost::is_any_of("-")), s.end());
-#endif
     auto seq = m_seq.fetch_add(1) + 1;
     std::stringstream ss;
     ss << std::setfill('0') << std::setw(32) << seq;
@@ -952,15 +958,19 @@ std::string ChannelRPCServer::newSeq()
 
 void ChannelRPCServer::updateHostTopics()
 {
-    auto allTopics = std::make_shared<std::vector<std::string> >();
-
+    auto allTopics = std::make_shared<std::vector<dev::TopicItem> >();
     std::lock_guard<std::mutex> lock(_sessionMutex);
     for (auto& it : _sessions)
     {
         auto topics = it.second->topics();
-        allTopics->insert(allTopics->end(), topics.begin(), topics.end());
+        for (auto topic : topics)
+        {
+            dev::TopicItem item;
+            item.topic = topic.first;
+            item.topicStatus = topic.second;
+            allTopics->push_back(std::move(item));
+        }
     }
-
     m_service->setTopics(allTopics);
 }
 
@@ -979,7 +989,7 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
         auto topics = it.second->topics();
         auto topicIt = topics.find(topic);
-        if (topicIt != topics.end())
+        if (topicIt != topics.end() && topicIt->second == TopicStatus::VERIFYI_SUCCESS_STATUS)
         {
             activedSessions.push_back(it.second);
         }

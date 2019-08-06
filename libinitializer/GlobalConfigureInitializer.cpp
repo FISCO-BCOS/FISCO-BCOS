@@ -36,7 +36,7 @@ DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 
 uint32_t dev::initializer::getVersionNumber(const string& _version)
 {
-    // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
+    // 0XMNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
     uint32_t versionNumber = 0;
     boost::split(versions, _version, boost::is_any_of("."));

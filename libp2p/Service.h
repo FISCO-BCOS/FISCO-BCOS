@@ -30,6 +30,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/TopicInfo.h>
 #include <libnetwork/Host.h>
 #include <map>
 #include <memory>
@@ -111,12 +112,12 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    std::vector<std::string> topics() override
+    std::vector<dev::TopicItem> topics() override
     {
         RecursiveGuard l(x_topics);
         return *m_topics;
     }
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    void setTopics(std::shared_ptr<std::vector<dev::TopicItem>> _topics) override
     {
         RecursiveGuard l(x_topics);
         m_topics = _topics;
@@ -149,7 +150,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::vector<std::string>> m_topics;
+    std::shared_ptr<std::vector<dev::TopicItem>> m_topics;
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins

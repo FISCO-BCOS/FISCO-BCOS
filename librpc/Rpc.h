@@ -21,8 +21,9 @@
 
 #pragma once
 
-#include "RpcFace.h"               // for RpcFace
-#include "libdevcore/Common.h"     // for bytes
+#include "RpcFace.h"            // for RpcFace
+#include "libdevcore/Common.h"  // for bytes
+#include "libp2p/Common.h"
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
 #include <json/value.h>            // for Value
 #include <boost/thread/tss.hpp>    // for thread_specific_ptr

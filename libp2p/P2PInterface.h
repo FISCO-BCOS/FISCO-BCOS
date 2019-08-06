@@ -21,8 +21,10 @@
 
 #pragma once
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/TopicInfo.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
+#include <libp2p/P2PMessage.h>
 #include <memory>
 
 #define CallbackFuncWithSession                                                               \
@@ -76,13 +78,13 @@ public:
 
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
 
-    virtual std::vector<std::string> topics() = 0;
+    virtual std::vector<dev::TopicItem> topics() = 0;
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
     virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) = 0;
 
-    virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
+    virtual void setTopics(std::shared_ptr<std::vector<dev::TopicItem>> _topics) = 0;
 
     virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() = 0;
 };
