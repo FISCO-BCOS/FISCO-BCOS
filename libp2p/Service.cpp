@@ -176,9 +176,13 @@ void Service::setWhitelist(PeerWhitelist::Ptr _whitelist)
 
 void Service::checkWhitelistAndClearSession()
 {
-    if (m_whitelist != nullptr && m_whitelist->enable() && m_sessions.size() != 0)
+    if (m_whitelist != nullptr && m_whitelist->enable())
     {
-        auto sessions = m_sessions;
+        std::unordered_map<NodeID, P2PSession::Ptr> sessions;
+        {
+            RecursiveGuard l(x_sessions);
+            sessions = m_sessions;
+        }
         for (auto session : sessions)
         {
             NodeID nodeID = session.first;

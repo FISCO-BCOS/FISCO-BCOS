@@ -452,6 +452,11 @@ generate_config_ini()
     ; crl.0 should be nodeid, nodeid's length is 128 
     ;crl.0=
 
+[certificate_whitelist]		
+    ; cal.0 should be nodeid, nodeid's length is 128 
+    enable=false
+    ;cal.0=
+
 [group]
     group_data_path=data/
     group_config_path=${conf_path}/
@@ -803,6 +808,20 @@ if [ ! -z \${node_pid} ];then
     exit 0
 else 
     echo "\${node} is not running, use start.sh to start all group directlly."
+fi
+EOF
+    generate_script_template "$output/reset_certificate_whitelist.sh"
+    cat << EOF >> "$output/reset_certificate_whitelist.sh"
+fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+cd \${SHELL_FOLDER}
+node=\$(basename \${SHELL_FOLDER})
+node_pid=${ps_cmd}
+if [ ! -z \${node_pid} ];then
+    echo "\${node} is trying to reset certificate whitelist. Check log for more information."
+    touch config.ini.reset_certificate_whitelist
+    exit 0
+else 
+    echo "\${node} is not running, use start.sh to start and enable whitelist directlly."
 fi
 EOF
 }

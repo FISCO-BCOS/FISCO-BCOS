@@ -41,10 +41,20 @@ public:
             {
                 boost::filesystem::remove(_file);  // Just call once, even _f() exception happens
                 _f();
+                if (boost::filesystem::exists(_file))
+                {
+                    // Delete file signal generated during f() is executing
+                    boost::filesystem::remove(_file);
+                }
             }
         }
         catch (std::exception _e)
         {
+            if (boost::filesystem::exists(_file))
+            {
+                // Delete file signal generated during f() is executing
+                boost::filesystem::remove(_file);
+            }
             std::cerr << "FISCO BCOS file signal error: "
                       << "file: " << _file << " what: " << _e.what() << std::endl;
         }
