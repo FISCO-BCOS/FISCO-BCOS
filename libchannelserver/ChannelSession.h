@@ -39,6 +39,7 @@
 #include "ChannelException.h"
 #include "Message.h"
 #include "libdevcore/ThreadPool.h"
+#include "libdevcore/TopicInfo.h"
 
 namespace dev
 {
@@ -99,12 +100,13 @@ public:
         _ioService = IOService;
     };
 
-    std::set<std::string> topics()
+    std::map<std::string, dev::TopicStatus> topics()
     {
         dev::ReadGuard l(x_topics);
         return *m_topics;
     };
-    void setTopics(std::shared_ptr<std::set<std::string> > topics)
+
+    void setTopics(std::shared_ptr<std::map<std::string, dev::TopicStatus> > topics)
     {
         dev::WriteGuard l(x_topics);
         m_topics = topics;
@@ -215,7 +217,7 @@ private:
     std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
 
     mutable SharedMutex x_topics;
-    std::shared_ptr<std::set<std::string> > m_topics;
+    std::shared_ptr<std::map<std::string, dev::TopicStatus> > m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
     ProtocolVersion m_channelProtocol = ProtocolVersion::v1;

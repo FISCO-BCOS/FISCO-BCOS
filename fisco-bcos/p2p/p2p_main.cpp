@@ -21,6 +21,7 @@
  * @date 2018-09-10
  */
 
+#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/P2PInitializer.h>
@@ -44,12 +45,14 @@ int main()
     uint32_t counter = 0;
     while (true)
     {
-        std::shared_ptr<std::vector<std::string>> p_topics =
-            std::shared_ptr<std::vector<std::string>>();
-        std::string topic = "Topic" + to_string(counter++);
-        p_topics->push_back(topic);
+        std::shared_ptr<std::vector<dev::TopicItem>> p_topics =
+            std::shared_ptr<std::vector<dev::TopicItem>>();
+        dev::TopicItem item;
+        item.topic = "Topic" + to_string(counter++);
+        item.topicStatus = TopicStatus::VERIFYI_SUCCESS_STATUS;
         P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << p_topics->size() - 1
-                          << "]:" << topic;
+                          << "]:" << item.topic;
+        p_topics->push_back(std::move(item));
         p2pService->setTopics(p_topics);
         LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));
