@@ -21,6 +21,7 @@
  */
 
 #include <libdevcore/CommonJS.h>
+#include <libdevcore/Exceptions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -119,20 +120,20 @@ BOOST_AUTO_TEST_CASE(test_jsToInt)
     BOOST_CHECK(43832124 == jsToInt("43832124"));
     BOOST_CHECK(1342356623 == jsToInt("0x5002bc8f"));
     BOOST_CHECK(3483942 == jsToInt("015224446"));
-    BOOST_CHECK(0 == jsToInt("NotAHexadecimalOrDecimal"));
+    BOOST_CHECK_THROW(jsToInt("NotAHexadecimalOrDecimal"), std::exception);
 
     BOOST_CHECK(u256("983298932490823474234") == jsToInt<32>("983298932490823474234"));
     BOOST_CHECK(u256("983298932490823474234") == jsToInt<32>("0x354e03915c00571c3a"));
-    BOOST_CHECK(u256() == jsToInt<32>("NotAHexadecimalOrDecimal"));
+    BOOST_CHECK_THROW(jsToInt<32>("NotAHexadecimalOrDecimal"), std::exception);
     BOOST_CHECK(u128("228273101986715476958866839113050921216") ==
                 jsToInt<16>("0xabbbccddeeff11223344556677889900"));
-    BOOST_CHECK(u128() == jsToInt<16>("NotAHexadecimalOrDecimal"));
+    BOOST_CHECK_THROW(jsToInt<16>("NotAHexadecimalOrDecimal"), dev::BadCast);
 }
 
 BOOST_AUTO_TEST_CASE(test_jsToU256)
 {
     BOOST_CHECK(u256("983298932490823474234") == jsToU256("983298932490823474234"));
-    BOOST_CHECK(u256() == jsToU256("NotAHexadecimalOrDecimal"));
+    BOOST_CHECK_THROW(jsToU256("NotAHexadecimalOrDecimal"), dev::BadCast);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
