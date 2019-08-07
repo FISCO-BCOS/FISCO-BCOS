@@ -95,6 +95,7 @@ enum P2PExceptionType
     P2PExceptionTypeCnt,
     ConnectError,
     DuplicateSession,
+    NotInWhitelist,
     ALL,
 };
 

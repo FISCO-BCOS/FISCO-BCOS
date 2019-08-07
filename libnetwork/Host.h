@@ -21,6 +21,7 @@
 #pragma once
 
 #include "Common.h"                       // for MessageFactory::Ptr, NodeIP...
+#include "PeerWhitelist.h"                // for PeerWhitelist
 #include <libdevcore/Guards.h>            // for Guard, Mutex
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code
@@ -117,6 +118,9 @@ public:
     }
     virtual const std::vector<std::string>& certBlacklist() const { return m_certBlacklist; }
 
+    virtual void setWhitelist(dev::PeerWhitelist::Ptr _whitelist) { m_whitelist = _whitelist; }
+    virtual dev::PeerWhitelist::Ptr whitelist() { return m_whitelist; }
+
 private:
     /// called by 'startedWorking' to accept connections
     void startAccept(boost::system::error_code ec = boost::system::error_code());
@@ -186,6 +190,9 @@ private:
 
     // certificate rejected list of nodeID
     std::vector<std::string> m_certBlacklist;
+
+    // certificate accepted list of nodeID
+    dev::PeerWhitelist::Ptr m_whitelist;
 };
 }  // namespace network
 
