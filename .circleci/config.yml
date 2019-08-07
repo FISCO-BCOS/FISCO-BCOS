@@ -224,14 +224,16 @@ jobs:
           name: Strip
           command: |
             cd build/bin
+            tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
             strip fisco-bcos
             tar -zcf fisco-bcos.tar.gz fisco-bcos
       - run:
           name: Upload to GitHub Release
           command: |
             go get github.com/tcnksm/ghr
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
 
   deploy_guomi:
     working_directory: /FISCO-BCOS-GM

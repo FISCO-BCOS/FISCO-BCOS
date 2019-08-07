@@ -383,22 +383,34 @@ void dev::ChannelRPCServer::onClientHandshake(
 
         Json::Value value;
         ss >> value;
-        auto protocolVersion =
-            static_cast<ProtocolVersion>(value.get("HighestSupported", 1).asInt());
-        session->setProtocolVersion(protocolVersion > session->latestProtocolVersion() ?
-                                        session->latestProtocolVersion() :
-                                        protocolVersion);
-
+        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("MinimumSupport", 1).asInt());
+        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("MaximumSupport", 1).asInt());
         auto clientType = value.get("ClientType", "Unknow Client Type").asString();
+        if (session->maximumProtocolVersion() < minimumProtocol ||
+            session->minimumProtocolVersion() > maximumProtocol)
+        {  // If the scope does not intersect, disconnect
+            CHANNEL_LOG(WARNING) << "onClientHandshake failed, unsupported protocol"
+                                 << LOG_KV("ClientType", clientType)
+                                 << LOG_KV("endpoint", session->host())
+                                 << LOG_KV("SDKMinSupport", value.get("MinimumSupport", 1).asInt())
+                                 << LOG_KV("SDKMaxSupport", value.get("MaximumSupport", 1).asInt());
+            session->disconnectByQuit();
+            onDisconnect(dev::channel::ChannelException(-1, "Unsupport protocol"), session);
+            return;
+        }
+        // Choose the next largest version number
+        session->setProtocolVersion(session->maximumProtocolVersion() > maximumProtocol ?
+                                        maximumProtocol :
+                                        session->maximumProtocolVersion());
+
         Json::Value response;
-        response["HighestSupported"] = static_cast<int>(session->protocolVersion());
+        response["Protocol"] = static_cast<int>(session->protocolVersion());
         response["NodeVersion"] = g_BCOSConfig.supportedVersion();
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        CHANNEL_LOG(INFO) << "onClientHandshake"
-                          << LOG_KV("ProtocolVersion", response["HighestSupported"])
+        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["Protocol"])
                           << LOG_KV("ClientType", clientType) << LOG_KV("endpoint", session->host())
                           << session->port();
     }
