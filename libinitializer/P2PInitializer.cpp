@@ -27,6 +27,7 @@
 #include "libp2p/P2PMessageFactory.h"
 #include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -122,6 +123,8 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             }
         }
 
+        auto whitelist = parseWhitelistFromPropertyTree(_pt);
+
         auto asioInterface = std::make_shared<dev::network::ASIOInterface>();
         asioInterface->setIOService(std::make_shared<ba::io_service>());
         asioInterface->setSSLContext(m_SSLContext);
@@ -151,6 +154,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_p2pService->setStaticNodes(nodes);
         m_p2pService->setKeyPair(m_keyPair);
         m_p2pService->setP2PMessageFactory(messageFactory);
+        m_p2pService->setWhitelist(whitelist);
         m_p2pService->start();
     }
     catch (std::exception& e)
@@ -166,4 +170,51 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
+}
+
+void P2PInitializer::resetWhitelist(const std::string& _configFile)
+{
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_ini(_configFile, pt);
+
+    auto whitelist = parseWhitelistFromPropertyTree(pt);
+
+    p2pService()->setWhitelist(whitelist);
+}
+
+PeerWhitelist::Ptr P2PInitializer::parseWhitelistFromPropertyTree(
+    boost::property_tree::ptree const& _pt)
+{
+    std::string certWhitelistSection = "cal";
+    if (_pt.get_child_optional("certificate_whitelist"))
+    {
+        certWhitelistSection = "certificate_whitelist";
+    }
+    std::vector<std::string> certWhitelist;
+    bool enableWhitelist = _pt.get<bool>(certWhitelistSection + ".enable", false);
+    // CAL means certificate accepted list, CAL optional in config.ini
+    if (enableWhitelist && _pt.get_child_optional(certWhitelistSection))
+    {
+        for (auto it : _pt.get_child(certWhitelistSection))
+        {
+            if (it.first.find("cal.") == 0)
+            {
+                try
+                {
+                    std::string nodeID = boost::to_upper_copy(it.second.data());
+                    INITIALIZER_LOG(TRACE) << LOG_BADGE("P2PInitializer")
+                                           << LOG_DESC("get certificate accepted by nodeID")
+                                           << LOG_KV("nodeID", nodeID);
+                    certWhitelist.push_back(nodeID);
+                }
+                catch (std::exception& e)
+                {
+                    INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer")
+                                           << LOG_DESC("get certificate accepted failed")
+                                           << LOG_KV("EINFO", boost::diagnostic_information(e));
+                }
+            }
+        }
+    }
+    return std::make_shared<PeerWhitelist>(certWhitelist, enableWhitelist);
 }
