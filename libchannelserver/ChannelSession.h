@@ -125,7 +125,8 @@ public:
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
 
     ProtocolVersion protocolVersion() { return m_channelProtocol; }
-    ProtocolVersion latestProtocolVersion() { return m_latestchannelProtocol; }
+    ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
+    ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
     ProtocolVersion setProtocolVersion(ProtocolVersion _channelProtocol)
     {
         return m_channelProtocol = _channelProtocol;
@@ -219,7 +220,8 @@ private:
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
     ProtocolVersion m_channelProtocol = ProtocolVersion::v1;
-    ProtocolVersion m_latestchannelProtocol = ProtocolVersion::v2;
+    ProtocolVersion m_minimumProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_maximumProtocol = ProtocolVersion::v2;
     std::string m_clientType;
     size_t _idleTime = 30000;
 };
