@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(testToBlockNumber)
 {
     BOOST_CHECK(dev::eth::jsToBlockNumber("0x14") == (dev::eth::BlockNumber)(20));
     BOOST_CHECK(dev::eth::jsToBlockNumber("100") == (dev::eth::BlockNumber)(100));
-    BOOST_CHECK(dev::eth::jsToBlockNumber("adk") == (dev::eth::BlockNumber)(0));
+    BOOST_CHECK_THROW(dev::eth::jsToBlockNumber("adk"), std::exception);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -610,6 +610,12 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         h256 blockHash = blockchain->numberHash(number);
+        // get blockHash failed
+        if (blockHash == h256())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
         return toJS(blockHash);
     }
     catch (JsonRpcException& e)
