@@ -32,6 +32,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/TopicInfo.h>
 #include <libnetwork/Host.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -52,6 +53,8 @@ public:
     virtual void start();
     virtual void stop();
     virtual void heartBeat();
+
+    virtual void setWhitelist(PeerWhitelist::Ptr _whitelist);
 
     virtual bool actived() { return m_run; }
     NodeID id() const override { return m_alias.pub(); }
@@ -140,6 +143,7 @@ public:
 
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
+    void checkWhitelistAndClearSession();
 
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
@@ -172,6 +176,8 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
+
+    PeerWhitelist::Ptr m_whitelist;
 };
 
 }  // namespace p2p
