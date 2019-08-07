@@ -126,6 +126,9 @@ private:
 
     void checkRequest(int _groupID);
     void checkTxReceive(int _groupID);
+
+    void copyPeers(dev::p2p::P2PSessionInfos sessions, Json::Value& response);
+    bool checkEmpty(const Json::Value& request);
 };
 
 }  // namespace rpc

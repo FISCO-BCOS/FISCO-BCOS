@@ -341,6 +341,28 @@ Json::Value Rpc::getClientVersion()
     return Json::Value();
 }
 
+
+void Rpc::copyPeers(P2PSessionInfos sessions, Json::Value& response)
+{
+    for (auto it = sessions.begin(); it != sessions.end(); ++it)
+    {
+        Json::Value node;
+        node["NodeID"] = it->nodeInfo.nodeID.hex();
+        node["IPAndPort"] = it->nodeIPEndpoint.name();
+        node["Agency"] = it->nodeInfo.agencyName;
+        node["Node"] = it->nodeInfo.nodeName;
+        node["Topic"] = Json::Value(Json::arrayValue);
+        for (auto topic : it->topics)
+        {
+            if (topic.topicStatus == TopicStatus::ENABLE_STATUS)
+            {
+                node["Topic"].append(topic.topic);
+            }
+        }
+        response.append(node);
+    }
+}
+
 Json::Value Rpc::getPeers(int _groupID)
 {
     try
@@ -349,21 +371,7 @@ Json::Value Rpc::getPeers(int _groupID)
         checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
         auto sessions = service()->sessionInfos();
-        for (auto it = sessions.begin(); it != sessions.end(); ++it)
-        {
-            Json::Value node;
-            node["NodeID"] = it->nodeInfo.nodeID.hex();
-            node["IPAndPort"] = it->nodeIPEndpoint.name();
-            node["Agency"] = it->nodeInfo.agencyName;
-            node["Node"] = it->nodeInfo.nodeName;
-            node["Topic"] = Json::Value(Json::arrayValue);
-            for (auto topic : it->topics)
-            {
-                node["Topic"].append(topic.topic);
-            }
-            response.append(node);
-        }
-
+        copyPeers(sessions, response);
         return response;
     }
     catch (JsonRpcException& e)
@@ -943,6 +951,11 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
     }
 }
 
+bool Rpc::checkEmpty(const Json::Value& request)
+{
+    return (request["from"].empty() || request["from"].asString().empty());
+}
+
 Json::Value Rpc::call(int _groupID, const Json::Value& request)
 {
     try
@@ -951,7 +964,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
                        << LOG_KV("callParams", request.toStyledString());
 
         checkRequest(_groupID);
-        if (request["from"].empty() || request["from"].asString().empty())
+        bool fromEmpty = checkEmpty(request);
+        if (fromEmpty)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::CallFrom, RPCMsg[RPCExceptionType::CallFrom]));
 
