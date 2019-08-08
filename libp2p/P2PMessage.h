@@ -104,7 +104,10 @@ enum AMOPPacketType
 {
     SendTopicSeq = 1,
     RequestTopics = 2,
-    SendTopics = 3
+    SendTopics = 3,
+    RequestSign = 4,
+    RequestCheckSign = 5,
+    UpdateTopicStatus = 6,
 };
 }  // namespace p2p
 }  // namespace dev

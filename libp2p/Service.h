@@ -138,6 +138,17 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
+    CallbackFuncWithSession getHandlerByprotocolID(uint32_t protocolID)
+    {
+        RecursiveGuard lock(x_protocolID2Handler);
+        auto it = m_protocolID2Handler->find(protocolID);
+        if (it != m_protocolID2Handler->end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
 
