@@ -454,7 +454,6 @@ generate_config_ini()
 
 [certificate_whitelist]		
     ; cal.0 should be nodeid, nodeid's length is 128 
-    enable=false
     ;cal.0=
 
 [group]
