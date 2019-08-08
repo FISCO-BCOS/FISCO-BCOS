@@ -80,6 +80,12 @@ public:
     void parseTopicList(const std::vector<std::string>& topics,
         std::shared_ptr<std::vector<dev::TopicItem>>& topicList, uint32_t& topicSeq);
 
+    void requestRandValue(
+        dev::p2p::P2PSession::Ptr session, const std::string& topic, NetworkException e);
+
+private:
+    void signForAmop(dev::p2p::P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType);
+
 private:
     dev::network::SessionFace::Ptr m_session;
     /// NodeID m_nodeID;

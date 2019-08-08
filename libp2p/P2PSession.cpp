@@ -162,6 +162,14 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                         std::make_shared<std::vector<dev::TopicItem>>();
                                     session->parseTopicList(topics, topicList, topicSeq);
                                     session->setTopics(topicSeq, topicList);
+
+                                    for (auto topicIt : *topicList)
+                                    {
+                                        if (topicIt.topicStatus == TopicStatus::VERIFYING_STATUS)
+                                        {
+                                            session->requestRandValue(session, topicIt.topic, e);
+                                        }
+                                    }
                                 }
                             }
                             catch (std::exception& e)
@@ -208,6 +216,24 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
                 break;
             }
+
+            case AMOPPacketType::RequestSign:
+            {
+                signForAmop(message, std::string(32, '2'), (uint16_t)0x38);
+                break;
+            }
+
+            case AMOPPacketType::RequestCheckSign:
+            {
+                signForAmop(message, std::string(32, '3'), (uint16_t)0x39);
+                break;
+            }
+            case AMOPPacketType::UpdateTopicStatus:
+            {
+                signForAmop(message, std::string(32, '4'), (uint16_t)0x3a);
+                break;
+            }
+
             default:
             {
                 SESSION_LOG(ERROR) << LOG_DESC("Unknown topic packet type")
@@ -256,4 +282,74 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
             }
         }
     }
+}
+
+void P2PSession::signForAmop(P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType)
+{
+    SESSION_LOG(DEBUG)
+        << LOG_DESC("get request sign type[4 RequestSign 5 RequestCheckSign 6 UpdateTopicStatus]")
+        << LOG_KV("type", message->packetType());
+    auto self = std::weak_ptr<P2PSession>(shared_from_this());
+    auto session = self.lock();
+    auto service = session->service().lock();
+    CallbackFuncWithSession callback = service->getHandlerByprotocolID(dev::eth::ProtocolID::AMOP);
+    auto requestData =
+        std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+    requestData->setProtocolID(dev::eth::ProtocolID::AMOP);
+    std::shared_ptr<ChannelMessage> channelMessage = std::make_shared<ChannelMessage>();
+
+    ssize_t result = channelMessage->decode(message->buffer()->data(), message->buffer()->size());
+
+    if (result <= 0)
+    {
+        CHANNEL_LOG(ERROR) << "onNodeChannelRequest decode error"
+                           << LOG_KV(" package size", message->buffer()->size());
+        return;
+    }
+
+    CHANNEL_LOG(DEBUG) << LOG_KV("length", message->buffer()->size())
+                       << LOG_KV("type", channelMessage->type())
+                       << LOG_KV("seq", channelMessage->seq())
+                       << LOG_KV("result", channelMessage->result());
+
+    channelMessage->setType(cmdType);
+    channelMessage->setSeq(seq);
+
+    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+    channelMessage->encode(*buffer);
+    requestData->setBuffer(buffer);
+    requestData->setSeq(message->seq());
+    SESSION_LOG(DEBUG) << "signForAmop new seq:" << requestData->seq();
+    NetworkException e;
+    callback(e, session, requestData);
+}
+
+void P2PSession::requestRandValue(
+    dev::p2p::P2PSession::Ptr session, const std::string& topicToSend, NetworkException e)
+{
+    auto service = session->service().lock();
+    CallbackFuncWithSession callback = service->getHandlerByprotocolID(dev::eth::ProtocolID::AMOP);
+    auto requestData =
+        std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
+    requestData->setProtocolID(dev::eth::ProtocolID::AMOP);
+    std::shared_ptr<ChannelMessage> channelMessage = std::make_shared<ChannelMessage>();
+    std::shared_ptr<bytes> data = std::make_shared<bytes>();
+    uint8_t topiclen = (uint8_t)(topicToSend.length() + 1);
+    data->insert(data->end(), (byte*)&topiclen, (byte*)&topiclen + sizeof(topiclen));
+    data->insert(
+        data->end(), (byte*)topicToSend.c_str(), (byte*)topicToSend.c_str() + topicToSend.length());
+
+    //  0x37  request rand value
+    //  0x38  sign the rand value by private key
+    //  0x39    check sign validate by public   key
+    //  0x3a    update topic status
+    channelMessage->setType(0x37);
+    channelMessage->setData(data->data(), data->size());
+    channelMessage->setSeq(std::string(32, '1'));
+    std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+    channelMessage->encode(*buffer);
+    requestData->setBuffer(buffer);
+    requestData->setSeq(service->p2pMessageFactory()->newSeq());
+    SESSION_LOG(DEBUG) << "requestRandValue new seq:" << requestData->seq();
+    callback(e, session, requestData);
 }
