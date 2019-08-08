@@ -191,9 +191,9 @@ PeerWhitelist::Ptr P2PInitializer::parseWhitelistFromPropertyTree(
         certWhitelistSection = "certificate_whitelist";
     }
     std::vector<std::string> certWhitelist;
-    bool enableWhitelist = _pt.get<bool>(certWhitelistSection + ".enable", false);
+    bool enableWhitelist = false;
     // CAL means certificate accepted list, CAL optional in config.ini
-    if (enableWhitelist && _pt.get_child_optional(certWhitelistSection))
+    if (_pt.get_child_optional(certWhitelistSection))
     {
         for (auto it : _pt.get_child(certWhitelistSection))
         {
@@ -205,7 +205,19 @@ PeerWhitelist::Ptr P2PInitializer::parseWhitelistFromPropertyTree(
                     INITIALIZER_LOG(TRACE) << LOG_BADGE("P2PInitializer")
                                            << LOG_DESC("get certificate accepted by nodeID")
                                            << LOG_KV("nodeID", nodeID);
-                    certWhitelist.push_back(nodeID);
+
+                    if (PeerWhitelist::isNodeIDOk(nodeID))
+                    {
+                        enableWhitelist = true;
+                        certWhitelist.push_back(nodeID);
+                    }
+                    else
+                    {
+                        INITIALIZER_LOG(ERROR)
+                            << LOG_BADGE("P2PInitializer")
+                            << LOG_DESC("get certificate accepted by nodeID failed, illegal nodeID")
+                            << LOG_KV("nodeID", nodeID);
+                    }
                 }
                 catch (std::exception& e)
                 {

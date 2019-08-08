@@ -69,3 +69,23 @@ std::string PeerWhitelist::dump(bool _isAbridged)
 
     return ret.str();
 }
+
+bool PeerWhitelist::isNodeIDOk(NodeID _nodeID)
+{
+    return NodeID() != _nodeID;
+}
+
+bool PeerWhitelist::isNodeIDOk(const string& _nodeID)
+{
+    try
+    {
+        NodeID nodeID = NodeID(_nodeID);
+        return isNodeIDOk(nodeID);
+    }
+    catch (...)
+    {
+        return false;
+    }
+
+    return false;
+}
