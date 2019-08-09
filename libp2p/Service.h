@@ -115,12 +115,12 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    std::vector<dev::TopicItem> topics() override
+    std::set<dev::TopicItem> topics() override
     {
         RecursiveGuard l(x_topics);
         return *m_topics;
     }
-    void setTopics(std::shared_ptr<std::vector<dev::TopicItem>> _topics) override
+    void setTopics(std::shared_ptr<std::set<dev::TopicItem>> _topics) override
     {
         RecursiveGuard l(x_topics);
         m_topics = _topics;
@@ -165,7 +165,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::vector<dev::TopicItem>> m_topics;
+    std::shared_ptr<std::set<dev::TopicItem>> m_topics;
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins

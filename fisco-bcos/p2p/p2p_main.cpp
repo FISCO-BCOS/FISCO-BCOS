@@ -45,14 +45,14 @@ int main()
     uint32_t counter = 0;
     while (true)
     {
-        std::shared_ptr<std::vector<dev::TopicItem>> p_topics =
-            std::shared_ptr<std::vector<dev::TopicItem>>();
+        std::shared_ptr<std::set<dev::TopicItem>> p_topics =
+            std::shared_ptr<std::set<dev::TopicItem>>();
         dev::TopicItem item;
         item.topic = "Topic" + to_string(counter++);
         item.topicStatus = TopicStatus::VERIFYI_SUCCESS_STATUS;
         P2PMSG_LOG(TRACE) << "Add topic periodically, now Topics[" << p_topics->size() - 1
                           << "]:" << item.topic;
-        p_topics->push_back(std::move(item));
+        p_topics->insert(std::move(item));
         p2pService->setTopics(p_topics);
         LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));

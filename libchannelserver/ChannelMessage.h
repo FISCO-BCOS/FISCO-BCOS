@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
 #include <climits>
@@ -127,7 +128,8 @@ public:
 
     virtual std::string topic()
     {
-        if (!(_type == 0x30 || _type == 0x31 || _type == 0x1001))
+        if (!(_type == dev::CMD_AMOP_REQUEST || _type == dev::CMD_AMOP_RESPONSE ||
+                _type == dev::CMD_AMOP_PUSH_BLOCKNUM))
         {
             throw(ChannelException(
                 -1, "type: " + boost::lexical_cast<std::string>(_type) +

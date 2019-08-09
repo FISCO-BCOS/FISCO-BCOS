@@ -107,7 +107,6 @@ enum AMOPPacketType
     SendTopics = 3,
     RequestSign = 4,
     RequestCheckSign = 5,
-    UpdateTopicStatus = 6,
 };
 }  // namespace p2p
 }  // namespace dev

@@ -34,6 +34,22 @@ enum TopicStatus
                                  // finished with not ok result
 };
 
+enum CmdForAmop
+{
+    CMD_AMOP_RPCREUEST = 0x12,           // cmd for rpc request
+    CMD_AMOP_HEARBEAT = 0x13,            // cmd for heart beat for sdk
+    CMD_AMOP_HANDSHAKE = 0x14,           // cmd for hand shake
+    CMD_AMOP_REQUEST = 0x30,             // cmd for request from sdk
+    CMD_AMOP_RESPONSE = 0x31,            // cmd for response to sdk
+    CMD_AMOP_TOPICREQUEST = 0x32,        // cmd for topic request
+    CMD_AMOP_MULBROADCAST = 0x35,        // cmd for mult broadcast
+    CMD_REQUEST_RANDVALUE = 0x37,        // cmd request rand value
+    CMD_REQUEST_SIGN = 0x38,             // cmd request sign for rand value
+    CMD_REQUEST_CHECKSIGN = 0x39,        // cmd request check sign
+    CMD_AMOP_PUSH_TRANSACTION = 0x1000,  // cmd for push transaction notify
+    CMD_AMOP_PUSH_BLOCKNUM = 0x1001,     // cmd for push  block number 
+};
+
 class TopicItem
 {
 public:
@@ -42,6 +58,10 @@ public:
 
 public:
     TopicItem() : topicStatus(VERIFYING_STATUS) {}
-};
+    friend bool operator<(const TopicItem& item1, const TopicItem& item2)
+    {
+        return item1.topic < item2.topic;
+    }
+};  // namespace dev
 const std::string topicNeedCertPrefix = "needcert_";
 }  // namespace dev

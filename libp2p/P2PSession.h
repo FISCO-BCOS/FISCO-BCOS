@@ -39,7 +39,7 @@ class P2PSession : public std::enable_shared_from_this<P2PSession>
 public:
     typedef std::shared_ptr<P2PSession> Ptr;
 
-    P2PSession() { m_topics = std::make_shared<std::vector<dev::TopicItem>>(); }
+    P2PSession() { m_topics = std::make_shared<std::set<dev::TopicItem>>(); }
 
     virtual ~P2PSession(){};
 
@@ -59,7 +59,7 @@ public:
     virtual dev::network::NodeInfo const& nodeInfo() const& { return m_nodeInfo; }
     /// virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
-    virtual std::vector<dev::TopicItem> topics()
+    virtual std::set<dev::TopicItem> topics()
     {
         std::lock_guard<std::mutex> lock(x_topic);
         return *m_topics;
@@ -70,7 +70,7 @@ public:
 
     virtual void onTopicMessage(std::shared_ptr<P2PMessage> message);
 
-    virtual void setTopics(uint32_t seq, std::shared_ptr<std::vector<dev::TopicItem>> topics)
+    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<dev::TopicItem>> topics)
     {
         std::lock_guard<std::mutex> lock(x_topic);
         m_topicSeq = seq;
@@ -78,13 +78,15 @@ public:
     }
 
     void parseTopicList(const std::vector<std::string>& topics,
-        std::shared_ptr<std::vector<dev::TopicItem>>& topicList, uint32_t& topicSeq);
+        const std::set<dev::TopicItem>& originTopicList,
+        std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq);
 
     void requestRandValue(
         dev::p2p::P2PSession::Ptr session, const std::string& topic, NetworkException e);
 
 private:
-    void signForAmop(dev::p2p::P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType);
+    void signForAmop(
+        dev::p2p::P2PMessage::Ptr message, const std::string& seq, dev::CmdForAmop cmdType);
 
 private:
     dev::network::SessionFace::Ptr m_session;
@@ -93,7 +95,7 @@ private:
 
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;
-    std::shared_ptr<std::vector<dev::TopicItem>> m_topics;
+    std::shared_ptr<std::set<dev::TopicItem>> m_topics;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;

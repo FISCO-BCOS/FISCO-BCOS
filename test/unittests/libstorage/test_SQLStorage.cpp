@@ -106,7 +106,7 @@ public:
         auto response = std::make_shared<dev::channel::TopicChannelMessage>();
         response->setResult(0);
         response->setSeq(message->seq());
-        response->setType(0x31);
+        response->setType(CMD_AMOP_RESPONSE);
         response->setTopicData(
             message->topic(), (const unsigned char*)responseStr.data(), responseStr.size());
 
