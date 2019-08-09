@@ -299,8 +299,8 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         {
             dev::channel::TopicChannelMessage::Ptr request =
                 std::make_shared<dev::channel::TopicChannelMessage>();
-            request->setType(CMD_AMOP_REQUEST);
-            request->setSeq(m_channelRPCServer->newSeq());
+            request->setType(AMOP_REQUEST);
+            request->setSeq(dev::newSeq());
 
             std::stringstream ssOut;
             ssOut << value;

@@ -34,20 +34,19 @@ enum TopicStatus
                                  // finished with not ok result
 };
 
-enum CmdForAmop
+enum ChannelMessageType
 {
-    CMD_AMOP_RPCREUEST = 0x12,           // cmd for rpc request
-    CMD_AMOP_HEARBEAT = 0x13,            // cmd for heart beat for sdk
-    CMD_AMOP_HANDSHAKE = 0x14,           // cmd for hand shake
-    CMD_AMOP_REQUEST = 0x30,             // cmd for request from sdk
-    CMD_AMOP_RESPONSE = 0x31,            // cmd for response to sdk
-    CMD_AMOP_TOPICREQUEST = 0x32,        // cmd for topic request
-    CMD_AMOP_MULBROADCAST = 0x35,        // cmd for mult broadcast
-    CMD_REQUEST_RANDVALUE = 0x37,        // cmd request rand value
-    CMD_REQUEST_SIGN = 0x38,             // cmd request sign for rand value
-    CMD_REQUEST_CHECKSIGN = 0x39,        // cmd request check sign
-    CMD_AMOP_PUSH_TRANSACTION = 0x1000,  // cmd for push transaction notify
-    CMD_AMOP_PUSH_BLOCKNUM = 0x1001,     // cmd for push  block number 
+    CHANNEL_RPC_REQUEST = 0x12,   // type for rpc request
+    CLIENT_HEARTBEAT = 0x13,      // type for heart beat for sdk
+    CLIENT_HANDSHAKE = 0x14,      // type for hand shake
+    AMOP_REQUEST = 0x30,          // type for request from sdk
+    AMOP_RESPONSE = 0x31,         // type for response to sdk
+    AMOP_CLIENT_TOPICS = 0x32,    // type for topic request
+    AMOP_MULBROADCAST = 0x35,     // type for mult broadcast
+    REQUEST_TOPICCERT = 0x37,     // type request verify
+    UPDATE_TOPIICSTATUS = 0x38,   // type for update status
+    TRANSACTION_NOTIFY = 0x1000,  // type for  transaction notify
+    BLOCK_NOTIFY = 0x1001,        // type for  block notify
 };
 
 class TopicItem
@@ -58,10 +57,9 @@ public:
 
 public:
     TopicItem() : topicStatus(VERIFYING_STATUS) {}
-    friend bool operator<(const TopicItem& item1, const TopicItem& item2)
-    {
-        return item1.topic < item2.topic;
-    }
-};  // namespace dev
-const std::string topicNeedCertPrefix = "needcert_";
+    bool operator<(const TopicItem& item) const { return this->topic < item.topic; }
+};
+const std::string topicNeedVerifyPrefix = "#!$TopicNeedVerify_";
+const std::string verifyChannelPrefix = "#!$VerifyChannel_";
+const std::string pushChannelPrefix = "#!$PushChannel_";
 }  // namespace dev

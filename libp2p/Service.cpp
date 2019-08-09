@@ -39,12 +39,10 @@ using namespace dev::network;
 static const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
-{
-    m_protocolID2Handler =
-        std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
-    m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::set<TopicItem>>();
-}
+  : m_topics(std::make_shared<std::set<std::string>>()),
+    m_protocolID2Handler(std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>()),
+    m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>())
+{}
 
 void Service::start()
 {
