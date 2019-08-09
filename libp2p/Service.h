@@ -115,12 +115,12 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    std::set<dev::TopicItem> topics() override
+    std::set<std::string> topics() override
     {
         RecursiveGuard l(x_topics);
         return *m_topics;
     }
-    void setTopics(std::shared_ptr<std::set<dev::TopicItem>> _topics) override
+    void setTopics(std::shared_ptr<std::set<std::string>> _topics) override
     {
         RecursiveGuard l(x_topics);
         m_topics = _topics;
@@ -141,11 +141,21 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
-    CallbackFuncWithSession getHandlerByprotocolID(uint32_t protocolID)
+    void setCallbackFuncForTopicVerify(CallbackFuncForTopicVerify channelRpcCallBack) override
     {
-        RecursiveGuard lock(x_protocolID2Handler);
-        auto it = m_protocolID2Handler->find(protocolID);
-        if (it != m_protocolID2Handler->end())
+        m_channelRpcCallBack = channelRpcCallBack;
+    }
+
+    CallbackFuncForTopicVerify callbackFuncForTopicVerify() override
+    {
+        return m_channelRpcCallBack;
+    }
+
+    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) override
+    {
+        RecursiveGuard l(x_sessions);
+        auto it = m_sessions.find(_nodeID);
+        if (it != m_sessions.end())
         {
             return it->second;
         }
@@ -165,7 +175,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::set<dev::TopicItem>> m_topics;
+    std::shared_ptr<std::set<std::string>> m_topics;
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins
@@ -185,6 +195,9 @@ private:
     KeyPair m_alias;
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
+
+
+    CallbackFuncForTopicVerify m_channelRpcCallBack;
 
     bool m_run = false;
 

@@ -81,12 +81,13 @@ public:
         const std::set<dev::TopicItem>& originTopicList,
         std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq);
 
-    void requestRandValue(
-        dev::p2p::P2PSession::Ptr session, const std::string& topic, NetworkException e);
+    void requestCertTopic(const std::string& topic, const std::string& topicForCert);
+    void updateTopicStatus(const std::string& topic, dev::TopicStatus topicStatus);
+    std::string getTopicForCertRoute(
+        const std::string& topic, const std::vector<std::string>& topics);
+    void requestCertTopic(
+        const std::set<dev::TopicItem>& topiclist, const std::vector<std::string>& topics);
 
-private:
-    void signForAmop(
-        dev::p2p::P2PMessage::Ptr message, const std::string& seq, dev::CmdForAmop cmdType);
 
 private:
     dev::network::SessionFace::Ptr m_session;
@@ -100,6 +101,8 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
     const uint32_t HEARTBEAT_INTERVEL = 5000;
+
+    std::vector<std::string> getTopicNameList(const std::set<dev::TopicItem>& topiclist);
 };
 
 }  // namespace p2p

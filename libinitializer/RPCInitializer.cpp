@@ -141,6 +141,16 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             m_channelRPCServer->addHandler(handler);
         }
 
+        auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+        m_p2pService->setCallbackFuncForTopicVerify(
+            [channelRPCServerWeak](const std::string& _1, const std::string& _2) {
+                auto channelRPCServer = channelRPCServerWeak.lock();
+                if (channelRPCServer)
+                {
+                    channelRPCServer->asyncPushChannelMessageHandler(_1, _2);
+                }
+            });
+
         /// init httpListenPort
         ///< Donot to set destructions, the ModularServer will destruct.
         rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
