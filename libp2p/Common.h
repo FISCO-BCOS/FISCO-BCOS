@@ -34,10 +34,10 @@ struct P2PSessionInfo
 {
     dev::network::NodeInfo nodeInfo;
     dev::network::NodeIPEndpoint nodeIPEndpoint;
-    std::vector<dev::TopicItem> topics;
+    std::set<dev::TopicItem> topics;
     P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
         dev::network::NodeIPEndpoint const& _nodeIPEndpoint,
-        std::vector<dev::TopicItem> const& _topics)
+        std::set<dev::TopicItem> const& _topics)
     {
         nodeInfo = _nodeInfo;
         nodeIPEndpoint = _nodeIPEndpoint;

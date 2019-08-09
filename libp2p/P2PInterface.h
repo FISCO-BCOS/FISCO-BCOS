@@ -78,13 +78,13 @@ public:
 
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
 
-    virtual std::vector<dev::TopicItem> topics() = 0;
+    virtual std::set<dev::TopicItem> topics() = 0;
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
     virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) = 0;
 
-    virtual void setTopics(std::shared_ptr<std::vector<dev::TopicItem>> _topics) = 0;
+    virtual void setTopics(std::shared_ptr<std::set<dev::TopicItem>> _topics) = 0;
 
     virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() = 0;
 };

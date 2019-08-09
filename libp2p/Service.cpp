@@ -43,7 +43,7 @@ Service::Service()
     m_protocolID2Handler =
         std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
     m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::vector<TopicItem>>();
+    m_topics = std::make_shared<std::set<TopicItem>>();
 }
 
 void Service::start()
