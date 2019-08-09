@@ -144,9 +144,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                                        << LOG_KV("message", e.what());
                                     return;
                                 }
-
                                 std::vector<std::string> topics;
-
                                 auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
                                 std::string s((const char*)p2pResponse->buffer()->data(),
                                     p2pResponse->buffer()->size());
@@ -158,9 +156,11 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList =
-                                        std::make_shared<std::vector<dev::TopicItem>>();
-                                    session->parseTopicList(topics, topicList, topicSeq);
+                                    auto topicList = std::make_shared<std::set<dev::TopicItem>>();
+                                    auto orignTopicList = session->topics();
+
+                                    session->parseTopicList(
+                                        topics, orignTopicList, topicList, topicSeq);
                                     session->setTopics(topicSeq, topicList);
 
                                     for (auto topicIt : *topicList)
@@ -193,17 +193,11 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                 auto service = m_service.lock();
                 if (service)
                 {
-                    bool versionGt2 = g_BCOSConfig.version() > dev::VERSION::V2_0_0;
                     std::string s = boost::lexical_cast<std::string>(service->topicSeq());
                     for (auto& it : service->topics())
                     {
                         s.append("\t");
-                        s.append(it.topic);
-                        if (versionGt2)
-                        {
-                            s.append("\t");
-                            s.append(boost::lexical_cast<std::string>(it.topicStatus));
-                        }
+                        s.append(it);
                     }
                     buffer->assign(s.begin(), s.end());
 
@@ -219,18 +213,13 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
             case AMOPPacketType::RequestSign:
             {
-                signForAmop(message, std::string(32, '2'), (uint16_t)0x38);
+                signForAmop(message, std::string(32, '2'), dev::CMD_REQUEST_SIGN);
                 break;
             }
 
             case AMOPPacketType::RequestCheckSign:
             {
-                signForAmop(message, std::string(32, '3'), (uint16_t)0x39);
-                break;
-            }
-            case AMOPPacketType::UpdateTopicStatus:
-            {
-                signForAmop(message, std::string(32, '4'), (uint16_t)0x3a);
+                signForAmop(message, std::string(32, '3'), dev::CMD_REQUEST_CHECKSIGN);
                 break;
             }
 
@@ -250,10 +239,10 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 }
 
 void P2PSession::parseTopicList(const std::vector<std::string>& topics,
-    std::shared_ptr<std::vector<dev::TopicItem>>& topicList, uint32_t& topicSeq)
+    const std::set<dev::TopicItem>& originTopicList,
+    std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq)
 {
     dev::TopicItem item;
-    bool versionLe2 = g_BCOSConfig.version() <= dev::VERSION::V2_0_0;
     for (uint32_t i = 0; i < topics.size(); ++i)
     {
         if (i == 0)
@@ -262,29 +251,34 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
         }
         else
         {
-            if (versionLe2)
+            item.topic = topics[i];
+            item.topicStatus = dev::VERIFYI_SUCCESS_STATUS;
+            if (item.topic.substr(0, topicNeedCertPrefix.size()) == topicNeedCertPrefix)
             {
-                item.topic = topics[i];
-                item.topicStatus = dev::VERIFYI_SUCCESS_STATUS;
-                topicList->push_back(std::move(item));
-            }
-            else
-            {
-                if (i % 2 == 1)
+                // if originTopicList has the topic status is set to VERIFYING_SUCCESS_STATUS
+
+                bool hasFound = false;
+                for (auto it : originTopicList)
                 {
-                    item.topic = topics[i];
+                    if (it.topic == item.topic)
+                    {
+                        hasFound = true;
+                        item.topicStatus = it.topicStatus;
+                        break;
+                    }
                 }
-                else
+                if (!hasFound)
                 {
-                    item.topicStatus = (dev::TopicStatus)boost::lexical_cast<uint32_t>(topics[i]);
-                    topicList->push_back(std::move(item));
+                    item.topicStatus = dev::VERIFYING_STATUS;
                 }
             }
+            topicList->insert(std::move(item));
         }
     }
 }
 
-void P2PSession::signForAmop(P2PMessage::Ptr message, const std::string& seq, uint16_t cmdType)
+void P2PSession::signForAmop(
+    P2PMessage::Ptr message, const std::string& seq, dev::CmdForAmop cmdType)
 {
     SESSION_LOG(DEBUG)
         << LOG_DESC("get request sign type[4 RequestSign 5 RequestCheckSign 6 UpdateTopicStatus]")
@@ -339,11 +333,10 @@ void P2PSession::requestRandValue(
     data->insert(
         data->end(), (byte*)topicToSend.c_str(), (byte*)topicToSend.c_str() + topicToSend.length());
 
-    //  0x37  request rand value
-    //  0x38  sign the rand value by private key
-    //  0x39    check sign validate by public   key
-    //  0x3a    update topic status
-    channelMessage->setType(0x37);
+    //  0x37(CMD_REQUEST_RANDVALUE)  request rand value
+    //  0x38(CMD_REQUEST_SIGN)  sign the rand value by private key
+    //  0x39(CMD_REQUEST_CHECKSIGN)    check sign validate by public   key
+    channelMessage->setType(dev::CMD_REQUEST_RANDVALUE);
     channelMessage->setData(data->data(), data->size());
     channelMessage->setSeq(std::string(32, '1'));
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();

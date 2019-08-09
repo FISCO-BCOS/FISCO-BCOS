@@ -31,9 +31,7 @@
 
 using namespace dev::channel;
 
-ChannelSession::ChannelSession()
-  : m_topics(std::make_shared<std::map<std::string, dev::TopicStatus> >())
-{}
+ChannelSession::ChannelSession() : m_topics(std::make_shared<std::set<std::string>>()) {}
 
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 {
@@ -155,7 +153,7 @@ void ChannelSession::run()
 }
 
 void ChannelSession::setSSLSocket(
-    std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > socket)
+    std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> socket)
 {
     _sslSocket = socket;
 

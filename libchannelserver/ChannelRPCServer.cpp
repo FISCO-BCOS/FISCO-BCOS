@@ -34,9 +34,8 @@
 #include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
-#include "libp2p/P2PMessage.h"
-#include "libp2p/P2PMessageFactory.h"  // for P2PMessageFac...
-#include "libp2p/P2PSession.h"         // for P2PSession
+#include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
+#include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
 #include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
@@ -236,7 +235,7 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     }
     std::shared_ptr<dev::channel::TopicChannelMessage> message =
         std::make_shared<dev::channel::TopicChannelMessage>();
-    message->setType(0x1001);
+    message->setType(CMD_AMOP_PUSH_BLOCKNUM);
     message->setSeq(std::string(32, '0'));
     message->setResult(0);
     std::string content =
@@ -277,21 +276,21 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 
         switch (message->type())
         {
-        case 0x12:
+        case CMD_CHANNEL_RPC_REQUEST:
             onClientRPCRequest(session, message);
             break;
-        case 0x13:
+        case CMD_CLIENT_HEARTBEAT:
             onClientHeartbeat(session, message);
             break;
-        case 0x14:
+        case CMD_CLIENT_HANDSHAKE:
             onClientHandshake(session, message);
             break;
-        case 0x30:
-        case 0x31:
-        case 0x35:
+        case CMD_AMOP_REQUEST:
+        case CMD_AMOP_RESPONSE:
+        case CMD_AMOP_MULBROADCAST:
             onClientChannelRequest(session, message);
             break;
-        case 0x32:
+        case CMD_AMOP_CLIENT_TOPICS:
             onClientTopicRequest(session, message);
             break;
         default:
@@ -339,7 +338,7 @@ void dev::ChannelRPCServer::onClientRPCRequest(
                         if (server && session)
                         {
                             auto channelMessage = server->messageFactory()->buildMessage();
-                            channelMessage->setType(0x1000);
+                            channelMessage->setType(CMD_AMOP_PUSH_TRANSACTION);
                             channelMessage->setSeq(seq);
                             channelMessage->setResult(0);
                             channelMessage->setData(
@@ -475,7 +474,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 
         CHANNEL_LOG(DEBUG) << "onNodeChannelRequest target" << LOG_KV("topic", topic);
 
-        if (channelMessage->type() == 0x30)
+        if (channelMessage->type() == CMD_AMOP_REQUEST)
         {
             try
             {
@@ -491,7 +490,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                                                << LOG_KV("what", boost::diagnostic_information(e));
 
                             channelMessage->setResult(e.errorCode());
-                            channelMessage->setType(0x31);
+                            channelMessage->setType(CMD_AMOP_RESPONSE);
 
                             auto buffer = std::make_shared<bytes>();
                             channelMessage->encode(*buffer);
@@ -527,7 +526,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                                    << LOG_KV("what", boost::diagnostic_information(e));
 
                 channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILABLE);
-                channelMessage->setType(0x31);
+                channelMessage->setType(CMD_AMOP_RESPONSE);
 
                 auto buffer = std::make_shared<bytes>();
                 channelMessage->encode(*buffer);
@@ -541,7 +540,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
         }
-        else if (channelMessage->type() == 0x35)
+        else if (channelMessage->type() == CMD_AMOP_MULBROADCAST)
         {
             try
             {
@@ -579,25 +578,15 @@ void dev::ChannelRPCServer::onClientTopicRequest(
         Json::Value root;
         ss >> root;
 
-        std::shared_ptr<std::map<std::string, TopicStatus> > topics =
-            std::make_shared<std::map<std::string, TopicStatus> >();
+        std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
         {
-            bool versionGt2 = (g_BCOSConfig.version() > dev::VERSION::V2_0_0);
             for (size_t i = 0; i < topicsValue.size(); ++i)
             {
                 std::string topic = topicsValue[(int)i].asString();
                 CHANNEL_LOG(TRACE) << "onClientTopicRequest insert" << LOG_KV("topic", topic);
-                if (topic.substr(0, topicNeedCertPrefix.size()) == topicNeedCertPrefix &&
-                    versionGt2)
-                {
-                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYING_STATUS));
-                }
-                else
-                {
-                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYI_SUCCESS_STATUS));
-                }
+                topics->insert(topic);
             }
         }
         session->setTopics(topics);
@@ -627,7 +616,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
     CHANNEL_LOG(DEBUG) << "target topic:" << topic;
 
-    if (message->type() == 0x30)
+    if (message->type() == CMD_AMOP_REQUEST)
     {
         try
         {
@@ -654,7 +643,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                         CHANNEL_LOG(WARNING)
                             << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
-                        message->setType(0x31);
+                        message->setType(CMD_AMOP_RESPONSE);
                         message->setResult(REMOTE_PEER_UNAVAILABLE);
                         message->clearData();
 
@@ -675,14 +664,14 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
-            message->setType(0x31);
+            message->setType(CMD_AMOP_RESPONSE);
             message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
     }
-    else if (message->type() == 0x35)
+    else if (message->type() == CMD_AMOP_MULBROADCAST)
     {
         // client multicast message
         try
@@ -701,7 +690,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
             m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
 
-            message->setType(0x31);
+            message->setType(CMD_AMOP_RESPONSE);
             message->setResult(0);
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
@@ -709,7 +698,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
-            message->setType(0x31);
+            message->setType(CMD_AMOP_RESPONSE);
             message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
@@ -970,17 +959,14 @@ std::string ChannelRPCServer::newSeq()
 
 void ChannelRPCServer::updateHostTopics()
 {
-    auto allTopics = std::make_shared<std::vector<dev::TopicItem> >();
+    auto allTopics = std::make_shared<std::set<std::string> >();
     std::lock_guard<std::mutex> lock(_sessionMutex);
     for (auto& it : _sessions)
     {
         auto topics = it.second->topics();
         for (auto topic : topics)
         {
-            dev::TopicItem item;
-            item.topic = topic.first;
-            item.topicStatus = topic.second;
-            allTopics->push_back(std::move(item));
+            allTopics->insert(topic);
         }
     }
     m_service->setTopics(allTopics);
@@ -1001,7 +987,7 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
         auto topics = it.second->topics();
         auto topicIt = topics.find(topic);
-        if (topicIt != topics.end() && topicIt->second == TopicStatus::VERIFYI_SUCCESS_STATUS)
+        if (topicIt != topics.end())
         {
             activedSessions.push_back(it.second);
         }
