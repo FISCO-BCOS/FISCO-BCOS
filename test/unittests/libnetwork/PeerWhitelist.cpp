@@ -37,6 +37,23 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(PeerWhitelistTest, TestOutputHelperFixture)
 
+BOOST_AUTO_TEST_CASE(NodeIDOkTest)
+{
+    string okIDStr =
+        "2e18411c287bc0f6c106fb025210e67dedd90fa30c95b7b21004f5928b8c86aa0c4eb5a769bb5858d5ea69dd4e"
+        "4329106e78c501866dcfb829dceb3100000000";
+    string nullStr = "";
+    string shortStr = "1";
+    string illegalTextStr =
+        "2e18411c287bc0f6c106fb025210e67dedd90fa30c95b7b21004f5928b8c86aa0c4eb5a769bb5858d5ea69dd4e"
+        "4329106e78c501866dcfb829dceb31gggggggg";
+
+    BOOST_CHECK(PeerWhitelist::isNodeIDOk(okIDStr));
+    BOOST_CHECK(!PeerWhitelist::isNodeIDOk(nullStr));
+    BOOST_CHECK(!PeerWhitelist::isNodeIDOk(shortStr));
+    BOOST_CHECK(!PeerWhitelist::isNodeIDOk(illegalTextStr));
+}
+
 BOOST_AUTO_TEST_CASE(AllTest)
 {
     string id0 =

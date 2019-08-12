@@ -196,10 +196,20 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
             if (find(certBlacklist.begin(), certBlacklist.end(), nodeID) != certBlacklist.end())
             {
-                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate rejected list")
+                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
                                << LOG_KV("nodeID", nodeID.substr(0, 4));
                 return false;
             }
+
+            // check nodeID in certWhitelist, only filter by nodeID.
+            if (host->whitelist() != nullptr && !host->whitelist()->has(nodeID))
+            {
+                HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
+                               << LOG_KV("nodeID", nodeID.substr(0, 4));
+                return false;
+            }
+
+
             /// append cert-name and issuer name after node ID
             /// get subject name
             const char* certName = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);

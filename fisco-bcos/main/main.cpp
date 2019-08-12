@@ -112,6 +112,12 @@ void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initial
         cout << "Start more group" << endl;
         initializer->ledgerInitializer()->startMoreLedger();
     });
+
+    std::string resetCalSignal = configPath + ".reset_certificate_whitelist";
+    dev::FileSignal::callIfFileExist(resetCalSignal, [&]() {
+        cout << "Reset certificate whitelist(CAL)" << endl;
+        initializer->p2pInitializer()->resetWhitelist(configPath);
+    });
 }
 
 int main(int argc, const char* argv[])
