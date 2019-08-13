@@ -133,6 +133,16 @@ public:
             return nullptr;
         return m_ledgerMap[groupId]->blockVerifier();
     }
+
+    /// get ledger
+    std::shared_ptr<LedgerInterface> ledger(dev::GROUP_ID const& groupId)
+    {
+        if (!m_ledgerMap.count(groupId))
+            return nullptr;
+
+        return m_ledgerMap[groupId];
+    }
+
     /// get pointer of blockchain by group id
     std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(dev::GROUP_ID const& groupId)
     {

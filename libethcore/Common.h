@@ -35,6 +35,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <stdint.h>
 
 #include <functional>
 #include <string>
@@ -72,8 +73,13 @@ static const u256 shannon = exp10<9>();
 static const u256 wei = exp10<0>();
 
 using Nonce = h64;
-using BlockNumber = int64_t;
 using NonceKeyType = u256;
+using BlockNumber = int64_t;
+// the max blocknumber value
+static const BlockNumber MAX_BLOCK_NUMBER = INT64_MAX;
+// the max number of topic in event logd
+static const uint32_t MAX_NUM_TOPIC_EVENT_LOG = 4;
+
 enum class BlockPolarity
 {
     Unknown,

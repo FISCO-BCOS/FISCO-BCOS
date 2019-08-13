@@ -286,6 +286,9 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         case 0x14:
             onClientHandshake(session, message);
             break;
+        case 0x15:
+            onClientEventLogRequest(session, message);
+            break;
         case 0x30:
         case 0x31:
         case 0x35:
@@ -336,6 +339,7 @@ void dev::ChannelRPCServer::onClientRPCRequest(
                     [serverRef, sessionRef, seq](const std::string& receiptContext) {
                         auto server = serverRef.lock();
                         auto session = sessionRef.lock();
+
                         if (server && session)
                         {
                             auto channelMessage = server->messageFactory()->buildMessage();
@@ -369,6 +373,56 @@ void dev::ChannelRPCServer::onClientRPCRequest(
     if (m_callbackSetter)
     {
         m_callbackSetter(NULL, NULL);
+    }
+}
+
+void dev::ChannelRPCServer::onClientEventLogRequest(
+    dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
+{
+    try
+    {
+        std::string data(message->data(), message->data() + message->dataSize());
+        CHANNEL_LOG(TRACE) << "onClientEventLogRequest, request=" << data;
+
+        auto seq = message->seq();
+        auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+        auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+        auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
+
+        auto callback = [serverRef, sessionRef](int32_t retCode, const std::string& seq,
+                            uint32_t type, const std::string& response, bool shouldSend) {
+            auto server = serverRef.lock();
+            auto session = sessionRef.lock();
+
+            if (server && session && session->actived())
+            {
+                if (shouldSend)
+                {
+                    auto channelMessage = server->messageFactory()->buildMessage();
+                    channelMessage->setType(type);
+                    channelMessage->setSeq(seq);
+                    channelMessage->setResult(retCode);
+                    channelMessage->setData((const byte*)response.c_str(), response.size());
+
+                    CHANNEL_LOG(TRACE)
+                        << " event log callback, seq:" << seq << ", code:" << retCode;
+                    session->asyncSendMessage(channelMessage,
+                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                }
+
+                return true;
+            }
+
+            return false;
+        };
+
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, callback);
+        // send response back
+        callback(ret, seq, 0x15, std::string(""), true);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "onClientEventLogRequest" << boost::diagnostic_information(e);
     }
 }
 
@@ -646,7 +700,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(
+                topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
