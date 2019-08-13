@@ -74,6 +74,10 @@ static const u256 wei = exp10<0>();
 using Nonce = h64;
 using BlockNumber = int64_t;
 using NonceKeyType = u256;
+
+// the max blocknumber value
+static const BlockNumber MAXBLOCKNUMBER = 0x7fffffffffffffff;
+
 enum class BlockPolarity
 {
     Unknown,

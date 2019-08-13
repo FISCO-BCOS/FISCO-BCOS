@@ -150,6 +150,9 @@ private:
     virtual void onClientChannelRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
+    virtual void onClientEventLogRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
     virtual void onClientHandshake(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
@@ -189,6 +192,7 @@ private:
     std::function<void(
         std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
         m_callbackSetter;
+
     std::vector<dev::eth::Handler<int64_t> > m_handlers;
 };
 

@@ -286,6 +286,9 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         case 0x14:
             onClientHandshake(session, message);
             break;
+        case 0x15:
+            onClientEventLogRequest(session, message);
+            break;
         case 0x30:
         case 0x31:
         case 0x35:
@@ -336,6 +339,7 @@ void dev::ChannelRPCServer::onClientRPCRequest(
                     [serverRef, sessionRef, seq](const std::string& receiptContext) {
                         auto server = serverRef.lock();
                         auto session = sessionRef.lock();
+
                         if (server && session)
                         {
                             auto channelMessage = server->messageFactory()->buildMessage();
@@ -370,6 +374,14 @@ void dev::ChannelRPCServer::onClientRPCRequest(
     {
         m_callbackSetter(NULL, NULL);
     }
+}
+
+void dev::ChannelRPCServer::onClientEventLogRequest(
+    dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
+{
+    std::string data(message->data(), message->data() + message->dataSize());
+    CHANNEL_LOG(TRACE) << "onClientEventLogRequest, message=" << data
+                       << ", session active=" << session->actived();
 }
 
 void dev::ChannelRPCServer::onClientHandshake(
@@ -646,7 +658,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(
+                topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
