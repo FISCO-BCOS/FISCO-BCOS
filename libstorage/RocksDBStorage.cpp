@@ -20,6 +20,7 @@
  */
 
 #include "RocksDBStorage.h"
+#include "BasicRocksDB.h"
 #include "StorageException.h"
 #include "Table.h"
 #include "boost/archive/binary_iarchive.hpp"
@@ -46,7 +47,7 @@ using namespace dev::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(
-    h256, int, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
+    h256, int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     try
     {
@@ -54,7 +55,7 @@ Entries::Ptr RocksDBStorage::select(
         entryKey.append("_").append(key);
 
         string value;
-        auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
+        auto s = m_db->Get(ReadOptions(), entryKey, value);
         if (!s.ok() && !s.IsNotFound())
         {
             STORAGE_ROCKSDB_LOG(ERROR)
@@ -81,12 +82,7 @@ Entries::Ptr RocksDBStorage::select(
                 }
                 entry->setID(it->at(ID_FIELD));
                 entry->setNum(it->at(NUM_FIELD));
-
-                auto statusIt = it->find(STATUS);
-                if (statusIt != it->end())
-                {
-                    entry->setStatus(statusIt->second);
-                }
+                entry->setStatus(it->at(STATUS));
 
                 if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
                 {
@@ -97,6 +93,11 @@ Entries::Ptr RocksDBStorage::select(
         }
 
         return entries;
+    }
+    catch (DatabaseNeedRetry const& e)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("Query rocksdb exception, need to retry again ")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
     }
     catch (exception& e)
     {
@@ -136,8 +137,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
                         boost::archive::binary_oarchive oa(ss);
                         oa << it.second;
                         {
-                            tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                            batch.Put(Slice(std::move(entryKey)), Slice(ss.str()));
+                            m_db->PutWithLock(batch, entryKey, ss.str(), m_writeBatchMutex);
                         }
                     }
                 }
@@ -146,7 +146,7 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
         WriteOptions options;
         options.sync = false;
-        m_db->Write(options, &batch);
+        m_db->Write(options, batch);
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
@@ -155,6 +155,11 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
             << LOG_KV("totalTimeCost", utcTime() - start_time);
 
         return datas.size();
+    }
+    catch (DatabaseNeedRetry const& e)
+    {
+        STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("Query rocksdb exception, need to retry again ")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
     }
     catch (exception& e)
     {
@@ -171,10 +176,6 @@ bool RocksDBStorage::onlyDirty()
     return false;
 }
 
-void RocksDBStorage::setDB(shared_ptr<rocksdb::DB> db)
-{
-    m_db = db;
-}
 
 void RocksDBStorage::processNewEntries(int64_t num,
     shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
@@ -199,16 +200,17 @@ void RocksDBStorage::processNewEntries(int64_t num,
                 entryKey.append("_").append(key);
 
                 string value;
-                auto s = m_db->Get(ReadOptions(), Slice(std::move(entryKey)), &value);
+
+                // this exception has already been catched in commit function
+                auto s = m_db->Get(ReadOptions(), entryKey, value);
                 if (!s.ok() && !s.IsNotFound())
                 {
                     STORAGE_ROCKSDB_LOG(ERROR)
-                        << LOG_DESC("Query leveldb failed") << LOG_KV("status", s.ToString());
+                        << LOG_DESC("Query rocksdb failed") << LOG_KV("status", s.ToString());
 
                     BOOST_THROW_EXCEPTION(
-                        StorageException(-1, "Query leveldb exception:" + s.ToString()));
+                        StorageException(-1, "Query rocksdb exception:" + s.ToString()));
                 }
-
                 if (s.IsNotFound())
                 {
                     it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;

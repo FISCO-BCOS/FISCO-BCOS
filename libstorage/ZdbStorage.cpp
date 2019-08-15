@@ -33,11 +33,11 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
-Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
+Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
     const std::string& _key, Condition::Ptr _condition)
 {
-    Json::Value responseJson;
-    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, responseJson);
+    std::vector<std::map<std::string, std::string> > values;
+    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, values);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -49,41 +49,17 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
         BOOST_THROW_EXCEPTION(e);
     }
 
-    ZdbStorage_LOG(DEBUG) << " tablename:" << _tableInfo->name
-                          << "select resp:" << responseJson.toStyledString();
-    std::vector<std::string> columns;
-    for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
-    {
-        columns.push_back(responseJson["result"]["columns"].get(i, "").asString());
-    }
-
     Entries::Ptr entries = std::make_shared<Entries>();
-    for (Json::ArrayIndex i = 0; i < responseJson["result"]["data"].size(); ++i)
+    for (auto it : values)
     {
-        Json::Value line = responseJson["result"]["data"].get(i, "");
         Entry::Ptr entry = std::make_shared<Entry>();
-
-        for (Json::ArrayIndex j = 0; j < line.size(); ++j)
+        for (auto it2 : it)
         {
-            if (columns[j] == ID_FIELD)
-            {
-                entry->setID(line.get(j, "").asString());
-            }
-            else if (columns[j] == NUM_FIELD)
-            {
-                entry->setNum(line.get(j, "").asString());
-            }
-            else if (columns[j] == STATUS)
-            {
-                entry->setStatus(line.get(j, "").asString());
-            }
-            else
-            {
-                std::string fieldValue = line.get(j, "").asString();
-                entry->setField(columns[j], fieldValue);
-            }
+            entry->setField(it2.first, it2.second);
         }
-
+        entry->setID(it.at(ID_FIELD));
+        entry->setNum(it.at(NUM_FIELD));
+        entry->setStatus(it.at(STATUS));
         if (entry->getStatus() == 0)
         {
             entry->setDirty(false);
@@ -93,7 +69,6 @@ Entries::Ptr ZdbStorage::select(h256 _hash, int _num, TableInfo::Ptr _tableInfo,
     entries->setDirty(false);
     return entries;
 }
-
 
 void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
 {
@@ -316,7 +291,8 @@ void ZdbStorage::createSysBlock2NoncesTables()
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
-    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, `value_field`)values "
+    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, "
+          "`value_field`)values "
           "\n";
     ss << "	('_sys_tables_', 'table_name','key_field,value_field'),\n";
     ss << "	('_sys_consensus_', 'name','type,node_id,enable_num'),\n";

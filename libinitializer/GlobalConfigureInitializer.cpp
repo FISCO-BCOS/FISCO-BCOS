@@ -22,6 +22,8 @@
 
 
 #include "GlobalConfigureInitializer.h"
+#include "libsecurity/KeyCenter.h"
+#include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -32,29 +34,30 @@ using namespace dev::initializer;
 
 DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
 
-bool dev::initializer::getVersionNumber(const string& _version, uint32_t& _versionNumber)
+uint32_t dev::initializer::getVersionNumber(const string& _version)
 {
-    // 0MNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
+    // 0XMNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
+    uint32_t versionNumber = 0;
     boost::split(versions, _version, boost::is_any_of("."));
     if (versions.size() != 3)
     {
-        return false;
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
     }
     try
     {
         for (size_t i = 0; i < versions.size(); ++i)
         {
-            _versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
-            _versionNumber <<= 8;
+            versionNumber += boost::lexical_cast<uint32_t>(versions[i]);
+            versionNumber <<= 8;
         }
     }
     catch (const boost::bad_lexical_cast& e)
     {
         INITIALIZER_LOG(ERROR) << LOG_KV("what", boost::diagnostic_information(e));
-        return false;
+        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(_version));
     }
-    return true;
+    return versionNumber;
 }
 
 void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
@@ -74,14 +77,22 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     {
         g_BCOSConfig.setSupportedVersion(version, RC3_VERSION);
     }
-    else if (getVersionNumber(version, versionNumber))
+    else
     {
+        versionNumber = getVersionNumber(version);
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
+    }
+
+    // set evmSchedule
+    if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
+    {
+        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
     }
     else
     {
-        BOOST_THROW_EXCEPTION(UnknowSupportVersion() << errinfo_comment(version));
+        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV2);
     }
+
 
     std::string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
@@ -101,8 +112,6 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                                              "failed! Invalid key_manange_port!"));
     }
 
-    g_BCOSConfig.diskEncryption.cipherDataKey =
-        _pt.get<std::string>(sectionName + ".cipher_data_key", "");
 
     /// compress related option, default enable
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
@@ -119,11 +128,21 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 
     if (g_BCOSConfig.diskEncryption.enable)
     {
+        auto cipherDataKey = _pt.get<std::string>(sectionName + ".cipher_data_key", "");
+        if (cipherDataKey.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                MissingField() << errinfo_comment("Please provide cipher_data_key!"));
+        }
+        KeyCenter keyClient;
+        keyClient.setIpPort(
+            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
+        g_BCOSConfig.diskEncryption.cipherDataKey = cipherDataKey;
+        g_BCOSConfig.diskEncryption.dataKey = asString(keyClient.getDataKey(cipherDataKey));
         INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
                               << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                               << LOG_KV("url.port",
-                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort))
-                              << LOG_KV("key", g_BCOSConfig.diskEncryption.cipherDataKey);
+                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
     }
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")

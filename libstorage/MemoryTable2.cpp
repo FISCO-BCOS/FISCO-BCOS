@@ -20,6 +20,7 @@
  */
 #include "MemoryTable2.h"
 #include "Common.h"
+#include "StorageException.h"
 #include "Table.h"
 #include <arpa/inet.h>
 #include <json/json.h>
@@ -31,12 +32,23 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
+#include <csignal>
 #include <thread>
 #include <vector>
 
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
+
+void prepareExit()
+{
+    raise(SIGTERM);
+    while (!g_BCOSConfig.shouldExit.load())
+    {
+        std::this_thread::yield();
+    }
+    BOOST_THROW_EXCEPTION(StorageException(-1, "backend DB is dead. Prepare to exit."));
+}
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
 {
@@ -114,6 +126,8 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return std::make_shared<Entries>();
@@ -166,23 +180,26 @@ int MemoryTable2::update(
         m_isDirty = true;
         return entries->size();
     }
+    catch (std::invalid_argument& e)
+    {
+        BOOST_THROW_EXCEPTION(e);
+    }
     catch (std::exception& e)
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return 0;
 }
 
-int MemoryTable2::insert(
-    const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool needSelect)
+int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool)
 {
     try
     {
-        (void)needSelect;
-
         if (options->check && !checkAuthority(options->origin))
         {
             STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
@@ -212,9 +229,14 @@ int MemoryTable2::insert(
         m_isDirty = true;
         return 1;
     }
+    catch (std::invalid_argument& e)
+    {
+        BOOST_THROW_EXCEPTION(e);
+    }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
+        // impossible, so exit
+        STORAGE_LOG(FATAL) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
@@ -259,10 +281,13 @@ int MemoryTable2::remove(
         return entries->size();
     }
     catch (std::exception& e)
-    {
+    {  // this catch is redundant, because selectNoLock already catch.
+        // TODO: make catch simple, remove catch in selectNoLock
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        // wait to exit
+        prepareExit();
     }
 
     return 0;
@@ -281,7 +306,7 @@ dev::h256 MemoryTable2::hash()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-    TIME_RECORD("Start dump");
+    TIME_RECORD("MemoryTable2 Dump");
     if (m_isDirty)
     {
         m_tableData = std::make_shared<dev::storage::TableData>();
@@ -336,6 +361,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
             }
+            char status = (char)entry->getStatus();
+            allData.insert(allData.end(), &status, &status + sizeof(status));
         }
 
         if (allData.empty())

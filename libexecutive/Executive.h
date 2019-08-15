@@ -153,7 +153,7 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    u256 status() const { return u256(m_excepted); }
+    executive::TransactionException status() const { return m_excepted; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
@@ -165,6 +165,9 @@ public:
 
     /// Revert all changes made to the state by this execution.
     void revert();
+
+    /// print exception to log
+    void loggingException();
 
 private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
@@ -184,6 +187,8 @@ private:
     unsigned m_depth = 0;  ///< The context's call-depth.
     TransactionException m_excepted =
         TransactionException::None;  ///< Details if the VM's execution resulted in an exception.
+    std::stringstream m_exceptionReason;
+
     int64_t m_baseGasRequired;  ///< The base amount of gas requried for executing this transaction.
     u256 m_gas = 0;       ///< The gas for EVM code execution. Initial amount before go() execution,
                           ///< final amount after go() execution.

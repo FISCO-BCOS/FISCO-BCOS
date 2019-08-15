@@ -114,7 +114,7 @@ public:
 
     virtual ssize_t refCount();
 
-    std::shared_ptr<RWMutexScoped> lock();
+    std::shared_ptr<RWMutexScoped> lock(bool write = false);
 
 private:
     struct EntryData

@@ -27,6 +27,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/ConsensusInterface.h>
 #include <libdevcore/CommonData.h>
+#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
@@ -58,14 +59,16 @@ public:
     FakesService() : Service()
     {
         NodeID nodeID = h512(100);
-        NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30310);
+        NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30310);
         dev::network::NodeInfo node_info;
         node_info.nodeID = nodeID;
-        P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
-        std::set<std::string> topics;
-        std::string topic = "Topic1";
-        topics.insert(topic);
-        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topics));
+        std::vector<dev::TopicItem> topicList;
+        P2PSessionInfo info(node_info, m_endpoint, topicList);
+        TopicItem item;
+        item.topic = "Topic1";
+        item.topicStatus = TopicStatus::VERIFYI_SUCCESS_STATUS;
+        topicList.push_back(std::move(item));
+        m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topicList));
         h512s nodeList;
         nodeList.push_back(
             h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
@@ -159,6 +162,10 @@ public:
     std::pair<int64_t, int64_t> totalTransactionCount() override
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber);
+    }
+    std::pair<int64_t, int64_t> totalFailedTransactionCount() override
+    {
+        return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
     void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
@@ -270,7 +277,8 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries, 0, bytes(), Address(0x1000));
+        return TransactionReceipt(h256(0x3), u256(8), entries,
+            executive::TransactionException::None, bytes(), Address(0x1000));
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override

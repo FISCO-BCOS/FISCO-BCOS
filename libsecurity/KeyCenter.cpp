@@ -42,7 +42,7 @@ namespace net = boost::asio;     // from <boost/asio.hpp>
 using tcp = net::ip::tcp;        // from <boost/asio/ip/tcp.hpp>
 
 KeyCenterHttpClient::KeyCenterHttpClient(const string& _ip, int _port)
-  : m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
+  : KeyCenterHttpClientInterface(), m_ip(_ip), m_port(_port), m_ioc(), m_socket(m_ioc)
 {}
 
 KeyCenterHttpClient::~KeyCenterHttpClient()
@@ -135,7 +135,7 @@ Json::Value KeyCenterHttpClient::callMethod(const string& _method, Json::Value _
         http::read(m_socket, buffer, rsp);
 
         KC_LOG(DEBUG) << LOG_BADGE("callMethod") << LOG_DESC("key manager respond")
-                      << LOG_KV("code", rsp.result_int()) << LOG_KV("string", rsp.body());
+                      << LOG_KV("code", rsp.result_int());
 
         if (rsp.result_int() != 200)
         {
@@ -181,14 +181,24 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
     string dataKeyBytesStr;
     try
     {
+        // Create
+        KeyCenterHttpClientInterface::Ptr kcclient;
+        if (m_kcclient == nullptr)
+        {
+            kcclient = make_shared<KeyCenterHttpClient>(m_ip, m_port);
+        }
+        else
+        {
+            kcclient = m_kcclient;
+        }
+
         // connect
-        KeyCenterHttpClient kcclient(m_ip, m_port);
-        kcclient.connect();
+        kcclient->connect();
 
         // send and receive
         Json::Value params(Json::arrayValue);
         params.append(_cipherDataKey);
-        Json::Value rsp = kcclient.callMethod("decDataKey", params);
+        Json::Value rsp = kcclient->callMethod("decDataKey", params);
 
         // parse respond
         int error = rsp["error"].asInt();
@@ -206,26 +216,16 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
         m_lastRcvDataKey = uniformDataKey(readableDataKey);
 
         // close
-        kcclient.close();
+        kcclient->close();
     }
     catch (exception& e)
     {
         clearCache();
-        KC_LOG(DEBUG) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
+        KC_LOG(ERROR) << LOG_DESC("Get datakey exception") << LOG_KV("reason", e.what());
         BOOST_THROW_EXCEPTION(KeyCenterConnectionError() << errinfo_comment(e.what()));
     }
 
     return m_lastRcvDataKey;
-}
-
-const std::string KeyCenter::generateCipherDataKey()
-{
-    std::string ret;
-    for (size_t i = 0; i < 32; i++)
-    {
-        ret += std::to_string(utcTime() % 10);
-    }
-    return ret;
 }
 
 void KeyCenter::setIpPort(const std::string& _ip, int _port)
@@ -234,12 +234,6 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     m_port = _port;
     m_url = m_ip + ":" + std::to_string(m_port);
     KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
-}
-
-shared_ptr<KeyCenter> KeyCenter::instance()
-{
-    static shared_ptr<KeyCenter> ins = make_shared<KeyCenter>();
-    return ins;
 }
 
 dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)

@@ -33,6 +33,7 @@ void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
     m_buffer->emplace_back(_txsBytes, _fromPeer);
 }
 
+
 void DownloadingTxsQueue::pop2TxPool(
     std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, dev::eth::CheckTransaction _checkSig)
 {

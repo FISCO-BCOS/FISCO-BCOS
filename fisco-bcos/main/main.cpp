@@ -22,7 +22,7 @@
  */
 #include "ExitHandler.h"
 #include <include/BuildInfo.h>
-#include <libdevcore/easylog.h>
+#include <libdevcore/FileSignal.h>
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
 #include <clocale>
@@ -105,6 +105,21 @@ string initCommandLine(int argc, const char* argv[])
     return configPath;
 }
 
+void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
+{
+    std::string moreGroupSignal = configPath + ".append_group";
+    dev::FileSignal::callIfFileExist(moreGroupSignal, [&]() {
+        cout << "Start more group" << endl;
+        initializer->ledgerInitializer()->startMoreLedger();
+    });
+
+    std::string resetCalSignal = configPath + ".reset_certificate_whitelist";
+    dev::FileSignal::callIfFileExist(resetCalSignal, [&]() {
+        cout << "Reset certificate whitelist(CAL)" << endl;
+        initializer->p2pInitializer()->resetWhitelist(configPath);
+    });
+}
+
 int main(int argc, const char* argv[])
 {
     /// set LC_ALL
@@ -115,6 +130,10 @@ int main(int argc, const char* argv[])
     auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
     // get datetime and output welcome info
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+    ExitHandler exitHandler;
+    signal(SIGTERM, &ExitHandler::exitHandler);
+    signal(SIGABRT, &ExitHandler::exitHandler);
+    signal(SIGINT, &ExitHandler::exitHandler);
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
     try
@@ -133,13 +152,10 @@ int main(int argc, const char* argv[])
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     std::cout << "[" << buffer << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;
-    ExitHandler exitHandler;
-    signal(SIGABRT, &ExitHandler::exitHandler);
-    signal(SIGTERM, &ExitHandler::exitHandler);
-    signal(SIGINT, &ExitHandler::exitHandler);
 
     while (!exitHandler.shouldExit())
     {
+        checkAndCall(configPath, initialize);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         LogInitializer::logRotateByTime();
     }
@@ -148,5 +164,6 @@ int main(int argc, const char* argv[])
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     std::cout << "[" << buffer << "] ";
     std::cout << "FISCO-BCOS program exit normally." << std::endl;
+
     return 0;
 }

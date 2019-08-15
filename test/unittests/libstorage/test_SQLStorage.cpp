@@ -37,8 +37,10 @@ class MockChannelRPCServer : public dev::ChannelRPCServer
 {
 public:
     dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
-        dev::channel::TopicChannelMessage::Ptr message) override
+        dev::channel::TopicChannelMessage::Ptr message, size_t timeout) override
     {
+        BOOST_TEST(timeout > 0);
+
         std::string jsonStr(message->data(), message->data() + message->dataSize());
 
         std::stringstream ssIn;
@@ -104,9 +106,9 @@ public:
         auto response = std::make_shared<dev::channel::TopicChannelMessage>();
         response->setResult(0);
         response->setSeq(message->seq());
-        response->setTopic(message->topic());
         response->setType(0x31);
-        response->setData((const unsigned char*)responseStr.data(), responseStr.size());
+        response->setTopicData(
+            message->topic(), (const unsigned char*)responseStr.data(), responseStr.size());
 
         return response;
     }

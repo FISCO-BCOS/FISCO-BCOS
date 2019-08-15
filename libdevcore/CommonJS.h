@@ -26,10 +26,19 @@
 #include "CommonData.h"
 #include "CommonIO.h"
 #include "FixedHash.h"
+#include <libdevcore/Exceptions.h>
+#include <libexecutive/ExecutionResult.h>
 #include <string>
 
 namespace dev
 {
+inline std::string toJS(executive::TransactionException const& _i)
+{
+    std::stringstream stream;
+    stream << "0x" << std::hex << static_cast<int>(_i);
+    return stream.str();
+}
+
 inline std::string toJS(byte _b)
 {
     return "0x" + std::to_string(_b);
@@ -108,7 +117,7 @@ FixedHash<N> jsToFixed(std::string const& _s)
         return (typename FixedHash<N>::Arith)(_s);
     else
         // Binary
-        return FixedHash<N>();  // FAIL
+        return FixedHash<N>();
 }
 
 template <unsigned N>
@@ -127,7 +136,7 @@ jsToInt(std::string const& _s)
             boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>(_s);
     else
         // Binary
-        return 0;  // FAIL
+        BOOST_THROW_EXCEPTION(dev::BadCast() << errinfo_comment("can't convert " + _s + " to int"));
 }
 
 inline u256 jsToU256(std::string const& _s)
@@ -140,9 +149,7 @@ inline u256 jsToU256(std::string const& _s)
 /// 0 Returns 0 in case of failure
 inline int jsToInt(std::string const& _s)
 {
-    int ret = 0;
-    DEV_IGNORE_EXCEPTIONS(ret = std::stoi(_s, nullptr, 0));
-    return ret;
+    return std::stoi(_s, nullptr, 0);
 }
 
 inline std::string jsToDecimal(std::string const& _s)

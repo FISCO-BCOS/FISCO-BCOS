@@ -42,6 +42,7 @@ static const std::string SYS_CURRENT_STATE = "_sys_current_state_";
 static const std::string SYS_KEY_CURRENT_NUMBER = "current_number";
 static const std::string SYS_KEY_CURRENT_ID = "current_id";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
+static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_KEY = "key";
 static const std::string SYS_TX_HASH_2_BLOCK = "_sys_tx_hash_2_block_";
@@ -79,14 +80,23 @@ const int CODE_NO_AUTHORIZED = -50000;
 const int CODE_TABLE_NAME_ALREADY_EXIST = -50001;
 const int CODE_TABLE_NAME_LENGTH_OVERFLOW = -50002;
 const int CODE_TABLE_FILED_LENGTH_OVERFLOW = -50003;
+const int CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW = -50004;
+const int CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW = -50005;
+const int CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW = -50006;
 
+
+const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
+const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
+const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
+const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
+const int USER_TABLE_NAME_MAX_LENGTH = 64;
+const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
 inline bool isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {
-        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                (_key == STATUS));
+        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_"));
     }
     return false;
 }

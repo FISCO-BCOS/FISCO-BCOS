@@ -20,8 +20,8 @@
  */
 
 #include "CRUDPrecompiled.h"
-
 #include "libstorage/EntriesPrecompiled.h"
+#include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
@@ -52,6 +52,18 @@ std::string CRUDPrecompiled::toString()
     return "CRUD";
 }
 
+
+void CRUDPrecompiled::checkLengthValidate(
+    const std::string& field_value, int32_t max_length, int32_t throw_exception)
+{
+    if (field_value.size() > (size_t)max_length)
+    {
+        STORAGE_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
+                           << " greater than " << max_length;
+        BOOST_THROW_EXCEPTION(StorageException(throw_exception, std::string("size of value of key greater than")+std::to_string(max_length)));
+    }
+}
+
 bytes CRUDPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
@@ -68,6 +80,9 @@ bytes CRUDPrecompiled::call(
     {  // insert(string tableName, string key, string entry, string optional)
         std::string tableName, key, entryStr, optional;
         abi.abiOut(data, tableName, key, entryStr, optional);
+        checkLengthValidate(
+            key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
+
         tableName = storage::USER_TABLE_PREFIX + tableName;
         Table::Ptr table = openTable(context, tableName);
         if (table)
@@ -78,6 +93,13 @@ bytes CRUDPrecompiled::call(
             {
                 out = abi.abiIn("", u256(parseEntryResult));
                 return out;
+            }
+
+            auto it = entry->begin();
+            for (; it != entry->end(); ++it)
+            {
+                checkLengthValidate(it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH,
+                    CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
             }
 
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
@@ -114,6 +136,14 @@ bytes CRUDPrecompiled::call(
                 out = abi.abiIn("", u256(parseConditionResult));
                 return out;
             }
+
+            auto it = entry->begin();
+            for (; it != entry->end(); ++it)
+            {
+                checkLengthValidate(it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH,
+                    CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
+            }
+
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
             out = abi.abiIn("", u256(result));

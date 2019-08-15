@@ -25,10 +25,13 @@
 #include "FakePBFTEngine.h"
 #include "PBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
+#include <libdevcore/TopicInfo.h>
 #include <libethcore/Protocol.h>
 #include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+
+using namespace dev;
 using namespace dev::eth;
 using namespace dev::blockverifier;
 using namespace dev::txpool;
@@ -82,11 +85,12 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
-    NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+    NodeIPEndpoint m_endpoint("127.0.0.1", "30303");
 
     dev::network::NodeInfo node_info;
     node_info.nodeID = node_id;
-    P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
+    std::vector<dev::TopicItem> topicList;
+    P2PSessionInfo info(node_info, m_endpoint, topicList);
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();
     service->appendSessionInfo(info);

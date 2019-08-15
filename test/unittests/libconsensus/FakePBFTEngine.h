@@ -25,6 +25,7 @@
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
+#include <libdevcore/TopicInfo.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -60,6 +61,7 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
+        setMaxBlockTransactions(300000000);
         std::shared_ptr<dev::eth::BlockFactory> blockFactory =
             std::make_shared<dev::eth::BlockFactory>();
         setBlockFactory(blockFactory);
@@ -88,7 +90,7 @@ public:
         std::size_t pos = path.find("invalid");
         if (pos != std::string::npos)
             return false;
-        return boost::filesystem::space(path).available > 1024;
+        return true;
     }
     void resetSealingHeader(BlockHeader& header)
     {
@@ -99,6 +101,7 @@ public:
         header.setLogBloom(LogBloom());
         header.setGasUsed(u256(0));
     }
+
 
     void resetBlock(Block& block)
     {
@@ -134,8 +137,17 @@ public:
     void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
-
-    bool checkBlock(dev::eth::Block const& block) { return PBFTEngine::checkBlock(block); }
+    void updateMaxBlockTransactions() override {}
+    bool checkBlock(dev::eth::Block const& block)
+    {
+        auto orgNumber = m_blockChain->number();
+        std::shared_ptr<FakeBlockChain> blockChain =
+            std::dynamic_pointer_cast<FakeBlockChain>(m_blockChain);
+        blockChain->setBlockNumber(0);
+        bool ret = PBFTEngine::checkBlock(block);
+        blockChain->setBlockNumber(orgNumber);
+        return ret;
+    }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
@@ -277,10 +289,11 @@ public:
         service->clearSessionInfo();
         for (size_t i = 0; i < m_sealerList.size(); i++)
         {
-            NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+            NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303);
             dev::network::NodeInfo node_info;
             node_info.nodeID = m_sealerList[i];
-            P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
+            std::vector<dev::TopicItem> topicList;
+            P2PSessionInfo info(node_info, m_endpoint, topicList);
             service->appendSessionInfo(info);
         }
     }

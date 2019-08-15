@@ -24,7 +24,6 @@
 
 #include "ChannelException.h"
 #include "Message.h"
-#include "http_parser.h"
 #include <arpa/inet.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
@@ -154,7 +153,7 @@ public:
         return topic;
     }
 
-    virtual void setTopic(const std::string& topic)
+    virtual void setTopicData(const std::string& topic, const byte* p, size_t size)
     {
         if (_data->size() > 0)
         {
@@ -163,6 +162,7 @@ public:
 
         _data->push_back((char)topic.size() + 1);
         _data->insert(_data->end(), topic.begin(), topic.end());
+        _data->insert(_data->end(), p, p + size);
     }
 
     virtual byte* data() override
@@ -178,16 +178,7 @@ public:
 
         return _data->size() - 1 - topic.size();
     }
-
-    virtual void setData(const byte* p, size_t size) override
-    {
-        if (_data->empty())
-        {
-            throw(ChannelException(-1, "Topic not set, can't set data."));
-        }
-
-        _data->insert(_data->end(), p, p + size);
-    }
+    void setData(const byte*, size_t) override { assert(false); };
 };
 
 }  // namespace channel

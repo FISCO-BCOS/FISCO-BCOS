@@ -39,7 +39,7 @@ def execute_command(command):
     status = child.returncode
     if(status != 0):
         LOG_ERROR("=== execute " + command + " failed, information = " + result + " error information:" + err.decode('utf-8'))
-    if not err is None:
+    if err is not None:
         result += err.decode('utf-8')
     return (status, result)
     

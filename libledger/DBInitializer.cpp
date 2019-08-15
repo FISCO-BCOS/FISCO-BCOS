@@ -25,13 +25,16 @@
 #include "LedgerParam.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/table.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
+#include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libsecurity/EncryptedStorage.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
-#include <libstorage/LevelDBStorage2.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
@@ -68,13 +71,6 @@ void DBInitializer::initStorageDB()
     {
         initZdbStorage();
     }
-// LevelDB is deprecated from RC3
-#if 0
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB2"))
-    {
-        initLevelDBStorage2();
-    }
-#endif
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
@@ -106,8 +102,9 @@ void DBInitializer::initLevelDBStorage()
         {
             // Use disk encryption
             DBInitializer_LOG(DEBUG) << LOG_DESC("open encrypted leveldb handler");
-            status = EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path,
-                &(pleveldb), g_BCOSConfig.diskEncryption.cipherDataKey);
+            status =
+                EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb),
+                    g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
         }
         else
         {
@@ -119,7 +116,7 @@ void DBInitializer::initLevelDBStorage()
 
         if (!status.ok())
         {
-            BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment(status.ToString()));
+            BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment(status.ToString()));
         }
         DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
                                  << LOG_KV("status", status.ok());
@@ -138,14 +135,30 @@ void DBInitializer::initLevelDBStorage()
     {
         DBInitializer_LOG(ERROR) << LOG_DESC("initLevelDBStorage failed")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
+        BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
 
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
+#if 0
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        auto encryptedStorage = std::make_shared<EncryptedStorage>();
+        encryptedStorage->setBackend(_backend);
+
+        encryptedStorage->setDataKey(asBytes(g_BCOSConfig.diskEncryption.dataKey));
+        cachedStorage->setBackend(encryptedStorage);
+    }
+    else
+    {
+#endif
     cachedStorage->setBackend(_backend);
+#if 0
+    }
+#endif
+
     cachedStorage->setMaxCapacity(
         m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
@@ -163,101 +176,122 @@ void DBInitializer::initSQLStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initSQLStorage");
 
+    unsupportedFeatures("SQLStorage(External)");
+
     auto sqlStorage = std::make_shared<SQLStorage>();
     sqlStorage->setChannelRPCServer(m_channelRPCServer);
     sqlStorage->setTopic(m_param->mutableStorageParam().topic);
     sqlStorage->setFatalHandler([](std::exception& e) {
-        (void)e;
-        LOG(FATAL) << "Access amdb failed, exit";
-        raise(SIGTERM);
+        LOG(ERROR) << "Access amdb failed exit:" << e.what();
+        BOOST_THROW_EXCEPTION(e);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
     initTableFactory2(sqlStorage);
 }
 
-void DBInitializer::initLevelDBStorage2()
+template <typename T>
+void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
 {
-    DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage2");
-    /// open and init the levelDB
-    leveldb::Options ldb_option;
-    dev::db::BasicLevelDB* pleveldb = nullptr;
-    try
+    assert(rocksDB);
+    if (!g_BCOSConfig.diskEncryption.enable)
     {
-        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/LevelDB2";
-        boost::filesystem::create_directories(m_param->mutableStorageParam().path);
-        ldb_option.create_if_missing = true;
-        ldb_option.max_open_files = 1000;
-        ldb_option.compression = leveldb::kSnappyCompression;
-        leveldb::Status status;
-
-        // Not to use disk encryption
-        DBInitializer_LOG(DEBUG) << LOG_DESC("open leveldb handler");
-        status = BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
-
-        if (!status.ok())
+        return;
+    }
+    DBInitializer_LOG(DEBUG) << LOG_DESC(
+        "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
+    // get dataKey according to ciperDataKey from keyCenter
+    dev::bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
+    rocksDB->setEncryptHandler([=](std::string const& data, std::string& encData) {
+        try
         {
-            throw std::runtime_error("open LevelDB failed");
+            bytesConstRef dataRef = bytesConstRef((const unsigned char*)data.data(), data.size());
+            encData = asString(aesCBCEncrypt(dataRef, ref(dataKey)));
         }
-        DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
-                                 << LOG_KV("status", status.ok());
-        std::shared_ptr<LevelDBStorage2> leveldbStorage = std::make_shared<LevelDBStorage2>();
-        std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
-            std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
-        leveldbStorage->setDB(leveldb_handler);
-        initTableFactory2(leveldbStorage);
-    }
-    catch (std::exception& e)
-    {
-        DBInitializer_LOG(ERROR) << LOG_DESC("initLevelDBStorage2 failed")
-                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initLevelDBStorage failed"));
-    }
+        catch (const std::exception& e)
+        {
+            std::string error_info = "encryt value for data=" + data +
+                                     " failed, EINFO: " + boost::diagnostic_information(e);
+            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
+            BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
+        }
+    });
+
+    rocksDB->setDecryptHandler([=](std::string& data) {
+        try
+        {
+            bytes deData = aesCBCDecrypt(
+                bytesConstRef{(const unsigned char*)data.c_str(), data.length()}, ref(dataKey));
+            data = asString(deData);
+        }
+        catch (const std::exception& e)
+        {
+            std::string error_info = "decrypt value for data=" + data + " failed";
+            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
+            BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
+        }
+    });
+}
+
+std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
+{
+    m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
+    boost::filesystem::create_directories(m_param->mutableStorageParam().path);
+    /// open and init the rocksDB
+    rocksdb::Options options;
+
+    // set Parallelism to the hardware concurrency
+    // This option will increase much memory
+    // options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+
+    // options.OptimizeLevelStyleCompaction();  // This option will increase much memory too
+    options.create_if_missing = true;
+    options.max_open_files = 200;
+    options.compression = rocksdb::kSnappyCompression;
+    std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
+
+    // any exception will cause initBasicRocksDB failed, and the program will be stopped
+    rocksDB->Open(options, m_param->mutableStorageParam().path);
+
+    setHandlerForDB(rocksDB);
+    return rocksDB;
 }
 
 void DBInitializer::initRocksDBStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
-    /// open and init the levelDB
-    rocksdb::Options options;
-    rocksdb::DB* db = nullptr;
     try
     {
-        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
-        boost::filesystem::create_directories(m_param->mutableStorageParam().path);
-        options.IncreaseParallelism();
-        options.OptimizeLevelStyleCompaction();
-        options.create_if_missing = true;
-        options.max_open_files = 1000;
-        options.compression = rocksdb::kSnappyCompression;
-        rocksdb::Status status;
-
-        // Not to use disk encryption
-        DBInitializer_LOG(DEBUG) << LOG_DESC("open rocks handler");
-        status = rocksdb::DB::Open(options, m_param->mutableStorageParam().path, &db);
-
-        if (!status.ok())
-        {
-            throw std::runtime_error("open RocksDB failed");
-        }
-        DBInitializer_LOG(DEBUG) << LOG_KV("status", status.ok());
+        std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
+        // create and init rocksDBStorage
         std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
-        std::shared_ptr<rocksdb::DB> rocksDB;
-        rocksDB.reset(db);
-
         rocksdbStorage->setDB(rocksDB);
+        // init TableFactory2
         initTableFactory2(rocksdbStorage);
     }
     catch (std::exception& e)
     {
         DBInitializer_LOG(ERROR) << LOG_DESC("initRocksDBStorage failed")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(OpenLevelDBFailed() << errinfo_comment("initRocksDBStorage failed"));
+        BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment("initRocksDBStorage failed"));
+    }
+}
+
+void DBInitializer::unsupportedFeatures(std::string const& desc)
+{
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        BOOST_THROW_EXCEPTION(
+            UnsupportedFeature() << errinfo_comment(desc + " doesn't support disk encryption"));
     }
 }
 
 void DBInitializer::initZdbStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
+
+    // exit when enable the unsupported features
+    unsupportedFeatures("ZdbStorage");
+
     auto zdbStorage = std::make_shared<ZdbStorage>();
     ZDBConfig zdbConfig{m_param->mutableStorageParam().dbType, m_param->mutableStorageParam().dbIP,
         m_param->mutableStorageParam().dbPort, m_param->mutableStorageParam().dbUsername,
@@ -274,9 +308,8 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {
-        (void)e;
-        LOG(FATAL) << "access mysql failed exit";
-        raise(SIGTERM);
+        LOG(ERROR) << "access mysql failed exit:" << e.what();
+        BOOST_THROW_EXCEPTION(e);
     });
 
     initTableFactory2(zdbStorage);
@@ -291,6 +324,7 @@ void DBInitializer::createExecutiveContext()
             "createExecutiveContext Failed for storage has not been initialized");
         return;
     }
+
     DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
     m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage

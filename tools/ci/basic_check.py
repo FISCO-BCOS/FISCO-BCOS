@@ -33,7 +33,7 @@ class BasicCheck(object):
     """
     basic check include check sync and check consensus
     """
-    def __init__(self, rpc_port=8545, group = 1, node_num = 4, version = "2.0.0-rc3", rpc_ip = "127.0.0.1"):
+    def __init__(self, rpc_port=8545, group = 1, node_num = 4, version = "2.1.0", rpc_ip = "127.0.0.1"):
         self.rpc_port = rpc_port
         self.p2p_port = rpc_port + 1000
         self.channel_port = rpc_port + 2000
@@ -47,7 +47,9 @@ class BasicCheck(object):
         build local db blockchain
         """
         LOG_INFO("========== build_localdb_blockchain")
-        command = "bash build_chain.sh -l "+ self.rpc_ip + ":" + str(self.node_num) + " -e ../build/bin/fisco-bcos -p " + str(self.p2p_port) + "," + str(self.channel_port) + "," + str(self.rpc_port) + " -v " + self.version
+        command = ("bash build_chain.sh -l "+ self.rpc_ip + ":" + str(self.node_num) 
+                   + " -e ../build/bin/fisco-bcos -p " + str(self.p2p_port) + "," +
+                    str(self.channel_port) + "," + str(self.rpc_port) + " -v " + self.version)
         (status, result) = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + result)
         LOG_INFO("=== start node:")
@@ -63,7 +65,6 @@ class BasicCheck(object):
         command = "bash nodes/" + self.rpc_ip + "/stop_all.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
     
     def stop_a_node(self, node_id):
         """
@@ -73,17 +74,15 @@ class BasicCheck(object):
         command = "bash nodes/" + self.rpc_ip + "/node" + str(node_id) + "/stop.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
     
     def start_a_node(self, node_id):
         """
         start the specified node
         """
         LOG_INFO("========= start node" + str(node_id))
-        command = "nohup bash ./nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh >/dev/null 2>&1"
+        command = "nohup bash ./nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
 
     def stop_and_delete_data(self, node_id):
         """
@@ -93,7 +92,6 @@ class BasicCheck(object):
         self.stop_a_node(node_id)
         command = "rm -rf nodes/" + self.rpc_ip + "/node" + str(node_id) + "/data"
         execute_command(command)
-        time.sleep(1)
 
     def send_transaction(self, trans_num):
         """
@@ -137,8 +135,8 @@ class BasicCheck(object):
                     LOG_ERROR("unexpected return value of getConsensusStatus:" + response.text)
             else:
                 LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, maybe the node has been shut-down!")
-        except Exception, e:
-            LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, error info:" + str(e))
+        except Exception as err:
+            LOG_ERROR("getConsensusStatus for node" + str(node_id) + " failed, error info:" + str(err))
 
     def getTotalTransaction(self, node_id):
         """

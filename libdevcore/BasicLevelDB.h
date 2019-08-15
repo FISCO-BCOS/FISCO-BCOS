@@ -27,8 +27,6 @@
 #include <leveldb/status.h>
 #include <leveldb/write_batch.h>
 #include <libdevcore/Guards.h>
-#include <libdevcore/easylog.h>
-#include <csignal>
 #include <memory>
 #include <string>
 
@@ -88,13 +86,5 @@ protected:
     leveldb::Status m_openStatus;
     std::string m_name;
 };
-
-inline void errorExit(std::stringstream& _exitInfo)
-{
-    LOG(ERROR) << _exitInfo.str();
-    std::cerr << _exitInfo.str();
-    raise(SIGTERM);
-}
-
 }  // namespace db
 }  // namespace dev

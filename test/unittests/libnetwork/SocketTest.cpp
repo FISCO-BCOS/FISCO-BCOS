@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
     ba::io_service m_io_service;
     std::string address = "127.0.0.1";
     int port = 30303;
-    NodeIPEndpoint m_endpoint(bi::address::from_string(address), port, port);
+    NodeIPEndpoint m_endpoint(address, std::to_string(port));
     setDataDir(getTestPath().string() + "/fisco-bcos-data");
 
     boost::property_tree::ptree pt;

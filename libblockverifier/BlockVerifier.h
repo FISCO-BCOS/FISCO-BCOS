@@ -100,6 +100,9 @@ private:
     NumberHashCallBackFunction m_pNumberHash;
     bool m_enableParallel;
     unsigned int m_threadNum = -1;
+
+    std::mutex m_executingMutex;
+    std::atomic<int64_t> m_executingNumber = {0};
 };
 
 }  // namespace blockverifier

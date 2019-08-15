@@ -133,9 +133,9 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
         {
             dev::eth::LocalisedTransactionReceipt::Ptr receipt =
                 std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                    ImportResult::TransactionPoolIsFull);
+                    executive::TransactionException::TxPoolIsFull);
 
-            m_callbackPool.enqueue([callback, receipt] { callback(receipt); });
+            m_callbackPool.enqueue([callback, receipt] { callback(receipt, bytes()); });
         }
 
         return ImportResult::TransactionPoolIsFull;
@@ -287,8 +287,9 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     {
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+        bytes input = p_tx->second->data();
         TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
-        m_callbackPool.enqueue([callback] { callback.call(callback.pReceipt); });
+        m_callbackPool.enqueue([callback, input] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
@@ -477,9 +478,8 @@ Transactions TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 
     ReadGuard l(m_lock);
     Transactions ret;
     uint64_t limit = min(m_limit, _limit);
-    uint64_t txCnt = 0;
-
     {
+        uint64_t txCnt = 0;
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {

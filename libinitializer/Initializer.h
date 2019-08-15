@@ -22,15 +22,10 @@
 
 #pragma once
 
+#include "BoostLogInitializer.h"
 #include "Common.h"
 #include "InitializerInterface.h"
-#include "KeyCenterInitializer.h"
 #include "LedgerInitializer.h"
-#ifndef FISCO_EASYLOG
-#include "BoostLogInitializer.h"
-#else
-#include "EasyLogInitializer.h"
-#endif
 #include "P2PInitializer.h"
 #include "RPCInitializer.h"
 #include "SecureInitializer.h"

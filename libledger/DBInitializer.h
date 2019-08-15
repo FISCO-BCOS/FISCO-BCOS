@@ -36,6 +36,11 @@
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
 {
+namespace db
+{
+class BasicRocksDB;
+}
+
 namespace ledger
 {
 class DBInitializer
@@ -45,7 +50,13 @@ public:
     /// create storage DB(must be storage)
     ///  must be open before init
     virtual void initStorageDB();
-    virtual ~DBInitializer() = default;
+    virtual ~DBInitializer()
+    {
+        if (m_storage)
+        {
+            m_storage->stop();
+        }
+    };
     virtual void initState(dev::h256 const& genesisHash)
     {
         if (!m_param)
@@ -69,25 +80,32 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
+    // open and init rocksDB
+    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
+
 protected:
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
 
+    // set handler to rocksDB
+    template <typename T>
+    void setHandlerForDB(std::shared_ptr<T> rocksDB);
+
+    void unsupportedFeatures(std::string const& desc);
+
 private:
     void initLevelDBStorage();
     // below use MemoryTableFactory2
     void initSQLStorage();
     void initTableFactory2(dev::storage::Storage::Ptr _backend);
-    void initLevelDBStorage2();
     void initRocksDBStorage();
 
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 
     void initZdbStorage();
-
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;

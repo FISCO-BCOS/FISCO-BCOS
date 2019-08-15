@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())
     {
-        LOG(ERROR) << "Open storage leveldb error: " << s.ToString();
+        LOG(ERROR) << "Open storage db error: " << s.ToString();
     }
 
     auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);

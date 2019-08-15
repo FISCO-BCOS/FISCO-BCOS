@@ -1,30 +1,64 @@
-version: 2
-jobs:
-  build_static_test:
-    working_directory: /FISCO-BCOS
-    docker:
-      - image: ubuntu:16.04
+version: 2.1
+
+commands:
+  install_depencies:
+    description: Setup Ubuntu dependencies
+    parameters:
+      packages:
+        type: string
+        default: ""
     steps:
       - run:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git g++ make curl lcov build-essential cmake libssl-dev zlib1g-dev ccache
+            apt-get install -y git curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
-      - checkout
-      - restore_cache:
-          keys:
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-
+  compile:
+    description: Compile
+    parameters:
+      options:
+        type: string
+        default: ""
+      compiler:
+        type: string
+        default: ""
+    steps:
       - run:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake -DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON ..
+            << parameters.compiler >> cmake << parameters.options >> ..
             make -j2
+
+executors:
+  ubuntu-build-env:
+    docker:
+      - image: fiscoorg/fiscobcos:build-env
+  ubuntu-bionic:
+    docker:
+      - image: ubuntu:18.04
+  ubuntu-xenial:
+    docker:
+      - image: ubuntu:16.04
+
+jobs:
+  build_static_test:
+    working_directory: /FISCO-BCOS
+    executor: ubuntu-build-env
+    steps:
+      - install_depencies:
+          packages: "ccache lcov"
+      - checkout
+      - restore_cache:
+          keys:
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
+      - compile:
+          options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -33,10 +67,45 @@ jobs:
           command: |
             cd build
             CTEST_OUTPUT_ON_FAILURE=TRUE make test
+            rm -rf /FISCO-BCOS/deps
+      - persist_to_workspace:
+          root: /
+          paths:
+            - FISCO-BCOS/lib*
+            - FISCO-BCOS/build/*
+            - FISCO-BCOS/test/*
+            - FISCO-BCOS/tools/*
+            - FISCO-BCOS/.codecov.yml
+
+  generate_coverage:
+    working_directory: /FISCO-BCOS
+    executor: ubuntu-build-env
+    steps:
+      - install_depencies:
+          packages: "lcov"
+      - attach_workspace:
+          at: /
       - run:
           name: Upload Coverage
           command: |
-            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -g ./deps/** > /dev/null
+            bash <(curl -s https://codecov.io/bash) -C $CIRCLE_SHA1 -f "!*/deps/*" > /dev/null
+
+  integration_test:
+    working_directory: /FISCO-BCOS
+    executor: ubuntu-build-env
+    steps:
+      - install_depencies:
+          packages: "python-pip"
+      - attach_workspace:
+          at: /
+      - run:
+          name: Run integration test
+          command: |
+            pip install requests
+            bash tools/build_chain.sh -l "127.0.0.1:4" -e build/bin/fisco-bcos -v $(/FISCO-BCOS/build/bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]")
+            bash nodes/127.0.0.1/start_all.sh
+            python tools/ci/ci_check.py
+            bash nodes/127.0.0.1/stop_all.sh
 
   build_test_guomi:
     working_directory: /FISCO-BCOS-GM
@@ -52,17 +121,17 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON -DEASYLOG=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -79,27 +148,19 @@ jobs:
 
   build_static:
     working_directory: /FISCO-BCOS
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
-      - run:
-          name: Setup dependencies
-          command: |
-            apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
-            echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
+      - install_depencies:
+          packages: "ccache"
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-      - run:
-          name: Compile
-          command: |
-            mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON ..
-            make -j2
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+      - compile:
+          options: "-DBUILD_STATIC=ON"
+          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
-          key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -108,37 +169,30 @@ jobs:
           command: |
             cd build/bin
             tar -zcf fisco-bcos.tar.gz fisco-bcos
+            strip fisco-bcos
+            tar -zcf fisco-bcos-mini.tar.gz fisco-bcos
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
           destination: fisco-bcos.tar.gz
-      # - persist_to_workspace:
-      #     root: build
-      #     paths:
-      #       - bin
+      - store_artifacts:
+          path: /FISCO-BCOS/build/bin/fisco-bcos-mini.tar.gz
+          destination: fisco-bcos-mini.tar.gz
 
   build_guomi:
     working_directory: /FISCO-BCOS-GM
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
-      - run:
-          name: Setup dependencies
-          command: |
-            apt-get update
-            apt-get install -y git clang make curl build-essential cmake libssl-dev zlib1g-dev g++ ccache
-            echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
+      - install_depencies:
+          packages: "ccache"
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-      - run:
-          name: Compile
-          command: |
-            mkdir -p build && cd build 
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DBUILD_GM=ON ..
-            make -j2
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+      - compile:
+          options: "-DBUILD_STATIC=ON -DBUILD_GM=ON"
+          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
-          key: deps-cache-{{ checksum "/proc/version" }}-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -147,60 +201,50 @@ jobs:
           command: |
             cd build/bin
             tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
+            strip fisco-bcos
+            tar -zcf fisco-bcos-mini-gm.tar.gz fisco-bcos
       - store_artifacts:
           path: /FISCO-BCOS-GM/build/bin/fisco-bcos-gm.tar.gz
           destination: fisco-bcos-gm.tar.gz
-      # - persist_to_workspace:
-      #     root: build
-      #     paths:
-      #       - bin
+      - store_artifacts:
+          path: /FISCO-BCOS-GM/build/bin/fisco-bcos-mini-gm.tar.gz
+          destination: fisco-bcos-mini-gm.tar.gz
 
   deploy_static:
     working_directory: /FISCO-BCOS
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
-      - run:
-          name: Setup dependencies
-          command: |
-            apt-get update
-            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev
+      - install_depencies:
+          packages: "ca-certificates golang-go"
       - checkout
-      - run:
-          name: Compile
-          command: |
-            mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release ..
-            make -j2
+      - compile:
+          options: "-DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
+          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - run:
           name: Strip
           command: |
             cd build/bin
+            tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
             strip fisco-bcos
             tar -zcf fisco-bcos.tar.gz fisco-bcos
       - run:
           name: Upload to GitHub Release
           command: |
             go get github.com/tcnksm/ghr
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
 
   deploy_guomi:
     working_directory: /FISCO-BCOS-GM
-    docker:
-      - image: ubuntu:18.04
+    executor: ubuntu-build-env
     steps:
-      - run:
-          name: Setup dependencies
-          command: |
-            apt-get update
-            apt-get install -y ca-certificates golang-go clang git clang make curl build-essential cmake libssl-dev zlib1g-dev
+      - install_depencies:
+          packages: "ca-certificates golang-go"
       - checkout
-      - run:
-          name: Compile
-          command: |
-            mkdir -p build && cd build
-            CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DBUILD_STATIC=ON -DBUILD_GM=ON  -DCMAKE_BUILD_TYPE=Release ..
-            make -j2
+      - compile:
+          options: "-DBUILD_STATIC=ON -DBUILD_GM=ON -DCMAKE_BUILD_TYPE=Release"
+          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - run:
           name: Strip
           command: |
@@ -211,13 +255,29 @@ jobs:
           name: Upload to GitHub Release
           command: |
             go get github.com/tcnksm/ghr
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} /FISCO-BCOS-GM/build/bin/fisco-bcos-gm.tar.gz
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS-GM/build/bin/fisco-bcos-gm.tar.gz
 
 workflows:
   version: 2
   build_and_test:
     jobs:
       - build_static_test:
+          filters:
+            branches:
+              only: /^pull.*/
+            tags:
+              ignore: /.*/
+      - generate_coverage:
+          requires:
+            - build_static_test
+          filters:
+            branches:
+              only: /^pull.*/
+            tags:
+              ignore: /.*/
+      - integration_test:
+          requires:
+            - build_static_test
           filters:
             branches:
               only: /^pull.*/

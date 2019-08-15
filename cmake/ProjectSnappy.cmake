@@ -18,7 +18,7 @@ ExternalProject_Add(snappy
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_COMMAND make
+    # BUILD_COMMAND make
     ${_overwrite_install_command}
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}snappy${CMAKE_STATIC_LIBRARY_SUFFIX}
 )

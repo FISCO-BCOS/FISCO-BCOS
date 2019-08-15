@@ -22,17 +22,20 @@
 #include "Service.h"
 #include "Common.h"
 #include "P2PMessage.h"
-#include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/easylog.h>
-#include <libnetwork/Common.h>
-#include <libnetwork/Host.h>
+#include "libdevcore/FixedHash.h"      // for FixedHash, hash
+#include "libdevcore/ThreadPool.h"     // for ThreadPool
+#include "libnetwork/ASIOInterface.h"  // for ASIOInterface
+#include "libnetwork/Common.h"         // for SocketFace
+#include "libnetwork/SocketFace.h"     // for SocketFace
+#include "libp2p/P2PInterface.h"       // for CallbackFunc...
+#include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
+#include "libp2p/P2PSession.h"         // for P2PSession
 #include <boost/random.hpp>
 #include <unordered_map>
 
 using namespace dev;
 using namespace dev::p2p;
+using namespace dev::network;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
@@ -41,7 +44,7 @@ Service::Service()
     m_protocolID2Handler =
         std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>();
     m_topic2Handler = std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>();
-    m_topics = std::make_shared<std::vector<std::string>>();
+    m_topics = std::make_shared<std::vector<TopicItem>>();
 }
 
 void Service::start()
@@ -96,6 +99,9 @@ void Service::heartBeat()
     {
         return;
     }
+
+    checkWhitelistAndClearSession();
+
     std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes;
     {
         RecursiveGuard l(x_nodes);
@@ -120,9 +126,15 @@ void Service::heartBeat()
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
-        if (it.first.address.to_string().empty())
+        if (it.first.host.empty() || it.first.port.empty())
         {
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore invalid address");
+            continue;
+        }
+        if (m_whitelist != nullptr && !m_whitelist->has(it.second))
+        {
+            SERVICE_LOG(TRACE) << LOG_DESC("heartBeat outside whitelist")
+                               << LOG_KV("nodeid", it.second.abridged());
             continue;
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
@@ -152,22 +164,65 @@ void Service::heartBeat()
     });
 }
 
+// reset whitelist: stop session which is not in whitelist
+void Service::setWhitelist(PeerWhitelist::Ptr _whitelist)
+{
+    m_whitelist = _whitelist;
+    host()->setWhitelist(_whitelist);
+    checkWhitelistAndClearSession();
+    SERVICE_LOG(DEBUG) << LOG_BADGE("Whitelist") << LOG_DESC("Set whitelist")
+                       << m_whitelist->dump(true);
+}
+
+void Service::checkWhitelistAndClearSession()
+{
+    if (m_whitelist != nullptr && m_whitelist->enable())
+    {
+        std::unordered_map<NodeID, P2PSession::Ptr> sessions;
+        {
+            RecursiveGuard l(x_sessions);
+            sessions = m_sessions;
+        }
+        for (auto session : sessions)
+        {
+            NodeID nodeID = session.first;
+            if (m_whitelist->has(nodeID))
+            {
+                // Find in whitelist
+                continue;
+            }
+
+            auto p2pSession = session.second;
+            std::string msg = "resetWhitelist: node " + nodeID.abridged() + " is not in whitelist";
+            NetworkException e(dev::network::P2PExceptionType::NotInWhitelist, msg);
+            p2pSession->stop(dev::network::UselessPeer);
+            onDisconnect(e, p2pSession);
+            SERVICE_LOG(DEBUG) << LOG_BADGE("Whitelist")
+                               << LOG_DESC("Disconnect section outside whitelist")
+                               << LOG_KV("nodeId", nodeID.abridged());
+        }
+    }
+}
+
 /// update the staticNodes
 void Service::updateStaticNodes(
     std::shared_ptr<dev::network::SocketFace> const& _s, dev::network::NodeID const& nodeID)
 {
-    /// update the staticNodes
-    dev::network::NodeIPEndpoint endpoint(_s->remoteEndpoint().address().to_v4(),
-        _s->remoteEndpoint().port(), _s->remoteEndpoint().port());
+    dev::network::NodeIPEndpoint endpoint(_s->nodeIPEndpoint());
     RecursiveGuard l(x_nodes);
     auto it = m_staticNodes.find(endpoint);
-    /// modify m_staticNodes(including accept cases, namely the client endpoint)
+    // modify m_staticNodes(including accept cases, namely the client endpoint)
     if (it != m_staticNodes.end())
     {
-        SERVICE_LOG(DEBUG) << LOG_DESC("startPeerSession updateStaticNodes")
-                           << LOG_KV("nodeID", nodeID.abridged())
+        SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes") << LOG_KV("nodeID", nodeID.abridged())
                            << LOG_KV("endpoint", endpoint.name());
         it->second = nodeID;
+    }
+    else
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes can't find endpoint")
+                           << LOG_KV("nodeID", nodeID.abridged())
+                           << LOG_KV("endpoint", endpoint.name());
     }
 }
 
@@ -257,10 +312,10 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
     {
         if (e.errorCode())
         {
-            SERVICE_LOG(ERROR) << LOG_DESC("disconnect error P2PSession")
-                               << LOG_KV("nodeID", p2pSession->nodeID().abridged())
-                               << LOG_KV("endpoint", session->nodeIPEndpoint().name())
-                               << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
+            SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
+                                 << LOG_KV("nodeID", p2pSession->nodeID().abridged())
+                                 << LOG_KV("endpoint", session->nodeIPEndpoint().name())
+                                 << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
 
             p2pSession->stop(dev::network::UserReason);
             onDisconnect(e, p2pSession);
@@ -627,16 +682,6 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, dev::network::Optio
     }
 }
 
-bool Service::isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs)
-{
-    for (auto const& nodeID : nodeIDs)
-    {
-        if (targetNodeID == nodeID)
-            return true;
-    }
-    return false;
-}
-
 void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWithSession handler)
 {
     RecursiveGuard l(x_protocolID2Handler);
@@ -735,7 +780,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             for (auto& j : it.second->topics())
             {
-                if (j == topic)
+                if ((j.topic == topic) && (j.topicStatus == TopicStatus::VERIFYI_SUCCESS_STATUS))
                 {
                     nodeList.push_back(it.first);
                 }

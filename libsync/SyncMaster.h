@@ -113,7 +113,7 @@ public:
     void noteNewTransactions()
     {
         m_newTransactions = true;
-        // m_signalled.notify_all();
+        m_signalled.notify_all();
     }
 
     void noteNewBlocks()
@@ -180,11 +180,11 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    bool m_newTransactions = false;
-    bool m_newBlocks = false;
+    std::atomic_bool m_newTransactions = {false};
+    std::atomic_bool m_newBlocks = {false};
     uint64_t m_maintainBlocksTimeout = 0;
     bool m_needMaintainTransactions = false;
-
+    bool m_needSendStatus = true;
 
     // settings
     dev::eth::Handler<> m_tqReady;
@@ -204,7 +204,7 @@ public:
     void maintainBlockRequest();
 
 private:
-    bool isNewBlock(BlockPtr _block);
+    bool isNextBlock(BlockPtr _block);
     void printSyncInfo();
 };
 

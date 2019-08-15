@@ -3,13 +3,13 @@ set -e
 LOG_ERROR()
 {
     content=${1}
-    echo -e "\033[31m"${content}"\033[0m"
+    echo -e "\033[31m${content}\033[0m"
 }
 
 LOG_INFO()
 {
     content=${1}
-    echo -e "\033[32m"${content}"\033[0m"
+    echo -e "\033[32m${content}\033[0m"
 }
 
 execute_cmd()

@@ -31,6 +31,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}")
     endif()
+    # set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "/usr/bin/time")
+    # set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "/usr/bin/time")
     # Use ISO C++11 standard language.
     set(CMAKE_CXX_FLAGS "-std=c++11 -pthread -fvisibility=hidden -fvisibility-inlines-hidden")
 
@@ -62,7 +64,11 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         SET(BUILD_SHARED_LIBRARIES OFF)
         SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
     endif ()
-    
+
+    if(TESTS)
+        add_compile_options(-DBOOST_TEST_THREAD_SAFE)
+    endif ()
+
     if(PROF)
     	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
 		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")

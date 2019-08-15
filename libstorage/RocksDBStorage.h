@@ -33,6 +33,11 @@ class DB;
 }
 namespace dev
 {
+namespace db
+{
+class BasicRocksDB;
+}
+
 namespace storage
 {
 class RocksDBStorage : public Storage
@@ -42,12 +47,12 @@ public:
 
     virtual ~RocksDBStorage(){};
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
 
-    void setDB(std::shared_ptr<rocksdb::DB> db);
+    void setDB(std::shared_ptr<dev::db::BasicRocksDB> db) { m_db = db; }
 
 private:
     void processNewEntries(int64_t num,
@@ -60,7 +65,7 @@ private:
             key2value,
         TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
-    std::shared_ptr<rocksdb::DB> m_db;
+    std::shared_ptr<dev::db::BasicRocksDB> m_db;
     tbb::spin_mutex m_writeBatchMutex;
 };
 

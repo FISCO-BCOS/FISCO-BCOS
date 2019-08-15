@@ -30,7 +30,7 @@ namespace dev
 namespace initializer
 {
 void initGlobalConfig(const boost::property_tree::ptree& _pt);
-bool getVersionNumber(const std::string& _version, uint32_t& _versionNumber);
+uint32_t getVersionNumber(const std::string& _version);
 
 }  // namespace initializer
 

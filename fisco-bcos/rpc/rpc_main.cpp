@@ -57,14 +57,13 @@ int main()
 
 #endif
 
-#if 1
 
     /// http demo
     auto initialize = std::make_shared<Initializer>();
     initialize->init("./config.ini");
 
     auto secureInitializer = initialize->secureInitializer();
-    KeyPair key_pair = secureInitializer->keyPair();
+    // KeyPair key_pair = secureInitializer->keyPair();
     auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
 
     auto p2pInitializer = initialize->p2pInitializer();
@@ -80,6 +79,4 @@ int main()
     LOG(INFO) << "JsonrpcHttpServer started.";
     sleep(10000);
     delete jsonrpcHttpServer;
-
-#endif
 }

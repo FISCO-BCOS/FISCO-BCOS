@@ -1,0 +1,10 @@
+FROM ubuntu:18.04
+
+LABEL maintainer service@fisco.com.cn
+
+RUN apt-get -q update && apt-get install -qy --no-install-recommends \
+    git clang build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm  -rf /tmp/* \
+    && rm -rf /var/lib/apt/lists/*

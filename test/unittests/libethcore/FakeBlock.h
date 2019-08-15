@@ -187,7 +187,7 @@ public:
         h256 root = h256("0x1024");
         u256 gasUsed = u256(10000);
         LogEntries logEntries = LogEntries();
-        u256 status = u256(1);
+        executive::TransactionException status = executive::TransactionException::Unknown;
         bytes outputBytes = bytes();
         Address address = toAddress(KeyPair::create().pub());
         m_singleTransactionReceipt =

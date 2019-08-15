@@ -36,7 +36,7 @@ class FakeBlockverifier : public BlockVerifierInterface
 public:
     std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block::Ptr, BlockInfo const&) override
     {
-        return m_execContext;
+        return std::make_shared<ExecutiveContext>();
     }
     virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
     executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override

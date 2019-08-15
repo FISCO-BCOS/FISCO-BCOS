@@ -53,7 +53,10 @@ public:
     void stop()
     {
         _ioService.stop();
-        _workers.join_all();
+        if (!_workers.is_this_thread_in())
+        {
+            _workers.join_all();
+        }
     }
     ~ThreadPool() { stop(); }
 

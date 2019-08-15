@@ -30,7 +30,9 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/TopicInfo.h>
 #include <libnetwork/Host.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -51,6 +53,8 @@ public:
     virtual void start();
     virtual void stop();
     virtual void heartBeat();
+
+    virtual void setWhitelist(PeerWhitelist::Ptr _whitelist);
 
     virtual bool actived() { return m_run; }
     NodeID id() const override { return m_alias.pub(); }
@@ -111,12 +115,12 @@ public:
     virtual uint32_t topicSeq() { return m_topicSeq; }
     virtual void increaseTopicSeq() { ++m_topicSeq; }
 
-    std::vector<std::string> topics() override
+    std::vector<dev::TopicItem> topics() override
     {
         RecursiveGuard l(x_topics);
         return *m_topics;
     }
-    void setTopics(std::shared_ptr<std::vector<std::string>> _topics) override
+    void setTopics(std::shared_ptr<std::vector<dev::TopicItem>> _topics) override
     {
         RecursiveGuard l(x_topics);
         m_topics = _topics;
@@ -139,8 +143,7 @@ public:
 
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
-
-    bool isSessionInNodeIDList(NodeID const& targetNodeID, NodeIDs const& nodeIDs);
+    void checkWhitelistAndClearSession();
 
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
@@ -151,7 +154,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::vector<std::string>> m_topics;
+    std::shared_ptr<std::vector<dev::TopicItem>> m_topics;
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins
@@ -173,6 +176,8 @@ private:
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
     bool m_run = false;
+
+    PeerWhitelist::Ptr m_whitelist;
 };
 
 }  // namespace p2p

@@ -111,9 +111,8 @@ public:
         status_obj["cfgErr"] = bool(m_cfgErr);
         status_obj["omitEmptyBlock"] = m_omitEmptyBlock;
         status_obj["nodeId"] = toHex(m_keyPair.pub());
-        int i = 0;
-        std::string sealer_list = "";
         {
+            int i = 0;
             ReadGuard l(m_sealerListMutex);
             for (auto sealer : m_sealerList)
             {
@@ -150,11 +149,7 @@ public:
     virtual void reportBlock(dev::eth::Block const&) override {}
 
     /// obtain maxBlockTransactions
-    uint64_t maxBlockTransactions() override
-    {
-        ReadGuard l(x_maxblockTransactions);
-        return m_maxBlockTransactions;
-    }
+    uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
 
     void setBlockFactory(std::shared_ptr<dev::eth::BlockFactory> blockFactory) override
     {
@@ -244,7 +239,6 @@ protected:
         /// update m_maxBlockTransactions stored in sealer when reporting a new block
         std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
         {
-            WriteGuard l(x_maxblockTransactions);
             m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
         }
         ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
@@ -260,9 +254,7 @@ private:
     }
 
 protected:
-    /// max transaction num of a block
-    mutable SharedMutex x_maxblockTransactions;
-    uint64_t m_maxBlockTransactions = 1000;
+    std::atomic<uint64_t> m_maxBlockTransactions = {1000};
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler

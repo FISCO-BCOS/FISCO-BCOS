@@ -11,12 +11,12 @@ coverage:
   status:
     project:
       app:
-        target: 69.6
-        threshold: 0.1
+        target: 69
+        threshold: 0.2
         paths: "!test/"
       default:
-        target: 78.8
-        threshold: 0.1
+        target: 78
+        threshold: 0.2
     patch:
       default:
         target: 10
@@ -25,7 +25,7 @@ coverage:
       default:
         enabled: no
 comment:
-  layout: "reach, diff"
+  layout: "reach, diff, files"
   behavior: default
   require_changes: false  # if true: only post the comment if coverage changes
   require_base: no        # [yes :: must have a base report to post]
@@ -33,9 +33,8 @@ flags:
   alltests:
     joined: false
 ignore:
-  - "fisco-bcos"
-  - "evmc"
-  - "utils"
-  - "deps/**/*"
+  - "**/fisco-bcos/**/*"
+  - "**/evmc/**/*"
+  - "**/utils/**/*"
+  - "**/deps/**/*"
   - "/usr/**/*"
-  

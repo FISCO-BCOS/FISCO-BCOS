@@ -39,11 +39,18 @@
 #include "ChannelException.h"
 #include "Message.h"
 #include "libdevcore/ThreadPool.h"
+#include "libdevcore/TopicInfo.h"
 
 namespace dev
 {
 namespace channel
 {
+enum class ProtocolVersion : uint32_t
+{
+    v1 = 1,
+    v2 = 2
+};
+
 class ChannelSession : public std::enable_shared_from_this<ChannelSession>
 {
 public:
@@ -93,12 +100,13 @@ public:
         _ioService = IOService;
     };
 
-    std::set<std::string> topics()
+    std::map<std::string, dev::TopicStatus> topics()
     {
         dev::ReadGuard l(x_topics);
         return *m_topics;
     };
-    void setTopics(std::shared_ptr<std::set<std::string> > topics)
+
+    void setTopics(std::shared_ptr<std::map<std::string, dev::TopicStatus> > topics)
     {
         dev::WriteGuard l(x_topics);
         m_topics = topics;
@@ -116,6 +124,15 @@ public:
     void setIdleTime(size_t idleTime) { _idleTime = idleTime; }
 
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
+
+    ProtocolVersion protocolVersion() { return m_channelProtocol; }
+    ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
+    ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
+    ProtocolVersion setProtocolVersion(ProtocolVersion _channelProtocol)
+    {
+        return m_channelProtocol = _channelProtocol;
+    }
+    std::string clientType() { return m_clientType; }
 
 private:
     void startRead();
@@ -200,10 +217,13 @@ private:
     std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
 
     mutable SharedMutex x_topics;
-    std::shared_ptr<std::set<std::string> > m_topics;
+    std::shared_ptr<std::map<std::string, dev::TopicStatus> > m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
-
+    ProtocolVersion m_channelProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_minimumProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_maximumProtocol = ProtocolVersion::v2;
+    std::string m_clientType;
     size_t _idleTime = 30000;
 };
 

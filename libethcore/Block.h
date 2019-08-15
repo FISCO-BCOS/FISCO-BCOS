@@ -232,7 +232,6 @@ public:
         noteReceiptChange();
     }
 
-    const TransactionReceipts& getTransactionReceipts() const { return m_transactionReceipts; }
     void calTransactionRoot(bool update = true) const;
     void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;

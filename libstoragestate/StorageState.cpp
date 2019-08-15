@@ -411,6 +411,8 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
     if (!table)
     {
+        LOG(ERROR) << LOG_BADGE("StorageState") << LOG_DESC("createAccount failed")
+                   << LOG_KV("Account", tableName);
         return;
     }
     auto entry = table->newEntry();

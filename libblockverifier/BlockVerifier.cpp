@@ -21,6 +21,7 @@
 #include "BlockVerifier.h"
 #include "ExecutiveContext.h"
 #include "TxDAG.h"
+#include "libstorage/StorageException.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -41,14 +42,35 @@ using namespace dev::storage;
 ExecutiveContext::Ptr BlockVerifier::executeBlock(
     Block::Ptr block, BlockInfo const& parentBlockInfo)
 {
-    if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
+    if (block.blockHeader().number() < m_executingNumber)
     {
-        return parallelExecuteBlock(block, parentBlockInfo);
+        return nullptr;
     }
-    else
+    std::lock_guard<std::mutex> l(m_executingMutex);
+    if (block.blockHeader().number() < m_executingNumber)
     {
-        return serialExecuteBlock(block, parentBlockInfo);
+        return nullptr;
     }
+    ExecutiveContext::Ptr context = nullptr;
+    try
+    {
+        if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
+        {
+            context = parallelExecuteBlock(block, parentBlockInfo);
+        }
+        else
+        {
+            context = serialExecuteBlock(block, parentBlockInfo);
+        }
+    }
+    catch (exception& e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock") << LOG_DESC("executeBlock exception")
+                                 << LOG_KV("blockNumber", block.blockHeader().number());
+        return nullptr;
+    }
+    m_executingNumber = block.blockHeader().number();
+    return context;
 }
 
 ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
@@ -336,6 +358,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
 
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
     envInfo.setPrecompiledEngine(executiveContext);
+    // only Rpc::call will use executeTransaction, RPC do catch exception
     return execute(envInfo, _t, OnOpFunc(), executiveContext);
 }
 
@@ -362,17 +385,23 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
             e.go(onOp);
         e.finalize();
     }
+    catch (StorageException const& e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("get StorageException") << LOG_KV("what", e.what());
+        BOOST_THROW_EXCEPTION(e);
+    }
     catch (Exception const& _e)
     {
-        // should not throw exceptions to here, but catch it in case
+        // only OutOfGasBase ExecutorNotFound exception will throw
         BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
     }
     catch (std::exception const& _e)
     {
         BLOCKVERIFIER_LOG(ERROR) << _e.what();
     }
-    /// mptstate calculates every transactions
-    /// storagestate ignore hash calculation
+
+    e.loggingException();
+
     return make_pair(
         res, TransactionReceipt(executiveContext->getState()->rootHash(false), e.gasUsed(),
                  e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));

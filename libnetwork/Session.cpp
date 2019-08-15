@@ -23,15 +23,13 @@
  */
 
 #include "Session.h"
-#include "ASIOInterface.h"
-#include "Common.h"
-#include "Host.h"
-#include "SocketFace.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
+#include "ASIOInterface.h"           // for ASIOIn...
+#include "Common.h"                  // for SESSIO...
+#include "Host.h"                    // for Host
+#include "SocketFace.h"              // for Socket...
+#include "libdevcore/Guards.h"       // for Guard
+#include "libdevcore/ThreadPool.h"   // for Thread...
+#include "libnetwork/SessionFace.h"  // for Respon...
 #include <chrono>
 
 using namespace dev;
@@ -108,7 +106,8 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
         addSeqCallback(message->seq(), handler);
     }
     SESSION_LOG(TRACE) << LOG_DESC("Session asyncSendMessage")
-                       << LOG_KV("seq2Callback.size", m_seq2Callback->size());
+                       << LOG_KV("seq2Callback.size", m_seq2Callback->size())
+                       << LOG_KV("endpoint", nodeIPEndpoint().name());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
     send(p_buffer);
@@ -152,7 +151,6 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
             return;
         }
         {
-            Guard l(x_writeQueue);
             if (m_writing)
             {
                 m_writing = false;
@@ -164,6 +162,7 @@ void Session::onWrite(boost::system::error_code ec, std::size_t, std::shared_ptr
     catch (std::exception& e)
     {
         SESSION_LOG(ERROR) << LOG_DESC("onWrite error")
+                           << LOG_KV("endpoint", nodeIPEndpoint().name())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -216,7 +215,8 @@ void Session::write()
             }
             else
             {
-                SESSION_LOG(WARNING) << "Error sending ssl socket is close!";
+                SESSION_LOG(WARNING) << "Error sending ssl socket is close!"
+                                     << LOG_KV("endpoint", nodeIPEndpoint().name());
                 drop(TCPError);
                 return;
             }
@@ -230,7 +230,7 @@ void Session::write()
     }
     catch (std::exception& e)
     {
-        SESSION_LOG(ERROR) << LOG_DESC("write error")
+        SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint().name())
                            << LOG_KV("what", boost::diagnostic_information(e));
         drop(TCPError);
         return;
@@ -253,7 +253,8 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
-    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!";
+    SESSION_LOG(INFO) << "drop, call and erase all callbackFunc in this session!"
+                      << LOG_KV("endpoint", nodeIPEndpoint().name());
     RecursiveGuard l(x_seq2Callback);
     for (auto& it : *m_seq2Callback)
     {
@@ -352,6 +353,8 @@ void Session::drop(DisconnectReason _reason)
                     /// force to close the socket
                     if (socket->ref().is_open())
                     {
+                        SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
+                                             << LOG_KV("endpoint", socket->ref().remote_endpoint());
                         socket->close();
                     }
                 });
@@ -374,10 +377,9 @@ void Session::start()
         auto server = m_server.lock();
         if (server && server->haveNetwork())
         {
+            m_actived = true;
             server->asioInterface()->strandPost(
                 boost::bind(&Session::doRead, shared_from_this()));  // doRead();
-
-            m_actived = true;
         }
     }
 }
@@ -443,6 +445,12 @@ void Session::doRead()
             drop(TCPError);
             return;
         }
+    }
+    else
+    {
+        SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactived")
+                           << LOG_KV("active", m_actived)
+                           << LOG_KV("haveNetwork", server->haveNetwork());
     }
 }
 

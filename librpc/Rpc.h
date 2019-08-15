@@ -21,18 +21,25 @@
 
 #pragma once
 
-#include "RpcFace.h"
-#include <libdevcrypto/Common.h>
-#include <libledger/LedgerInterface.h>
-#include <libledger/LedgerManager.h>
-#include <libledger/LedgerParam.h>
-#include <libp2p/P2PInterface.h>
-#include <iosfwd>
-#include <memory>
-#include <mutex>
+#include "RpcFace.h"            // for RpcFace
+#include "libdevcore/Common.h"  // for bytes
+#include "libp2p/Common.h"
+#include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
+#include <json/value.h>            // for Value
+#include <boost/thread/tss.hpp>    // for thread_specific_ptr
+#include <string>                  // for string
 
 namespace dev
 {
+namespace ledger
+{
+class LedgerManager;
+class LedgerParamInterface;
+}  // namespace ledger
+namespace p2p
+{
+class P2PInterface;
+}
 namespace rpc
 {
 /**
@@ -92,9 +99,11 @@ public:
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
     void setCurrentTransactionCallback(
-        std::function<void(const std::string& receiptContext)>* callback)
+        std::function<void(const std::string& receiptContext)>* _callback,
+        std::function<uint32_t()>* _callbackVersion)
     {
-        m_currentTransactionCallback.reset(callback);
+        m_currentTransactionCallback.reset(_callback);
+        m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
 
@@ -113,6 +122,7 @@ private:
     std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
+    boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
 
     void checkRequest(int _groupID);
     void checkTxReceive(int _groupID);

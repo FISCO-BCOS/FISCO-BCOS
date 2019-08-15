@@ -21,6 +21,15 @@
  */
 
 #include "RPCInitializer.h"
+#include "libblockchain/BlockChainInterface.h"
+#include "libchannelserver/ChannelRPCServer.h"
+#include "libchannelserver/ChannelServer.h"
+#include "libdevcore/Common.h"  // for byte
+#include "libdevcore/Log.h"     // for LOG
+#include "libinitializer/Common.h"
+#include "libledger/LedgerManager.h"
+#include "librpc/Rpc.h"  // for Rpc
+#include "librpc/SafeHttpServer.h"
 
 using namespace dev;
 using namespace dev::initializer;
@@ -112,8 +121,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                               << LOG_DESC("ChannelRPCHttpServer started.");
 
-        m_channelRPCServer->setCallbackSetter(
-            std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
+        m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
+            rpcEntity, std::placeholders::_1, std::placeholders::_2));
 
         for (auto it : m_ledgerManager->getGroupList())
         {
@@ -122,21 +131,10 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
             auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
                 LOG(INFO) << "Push block notify: " << std::to_string(groupID) << "-" << number;
-                auto c = channelRPCServer.lock();
-
-                if (c)
+                auto channelRpcServer = channelRPCServer.lock();
+                if (channelRpcServer)
                 {
-                    std::string topic = "_block_notify_" + std::to_string(groupID);
-                    std::string content =
-                        std::to_string(groupID) + "," + boost::lexical_cast<std::string>(number);
-                    std::shared_ptr<dev::channel::TopicChannelMessage> message =
-                        std::make_shared<dev::channel::TopicChannelMessage>();
-                    message->setType(0x1001);
-                    message->setSeq(std::string(32, '0'));
-                    message->setResult(0);
-                    message->setTopic(topic);
-                    message->setData((const byte*)content.data(), content.size());
-                    c->asyncBroadcastChannelMessage(topic, message);
+                    channelRpcServer->blockNotify(groupID, number);
                 }
             });
 

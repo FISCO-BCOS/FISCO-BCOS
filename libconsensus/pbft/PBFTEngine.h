@@ -417,7 +417,8 @@ protected:
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReq: Is Syncing higher number")
                                   << LOG_KV("ReqNumber", req->height)
                                   << LOG_KV(
-                                         "syncingNumber", m_blockSync->status().knownHighestNumber);
+                                         "syncingNumber", m_blockSync->status().knownHighestNumber)
+                                  << LOG_KV("INFO", oss.str());
             return CheckResult::INVALID;
         }
 

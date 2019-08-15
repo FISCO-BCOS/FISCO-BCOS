@@ -56,6 +56,12 @@ public:
     void pop2TxPool(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         dev::eth::CheckTransaction _checkSig = dev::eth::CheckTransaction::None);
 
+    ssize_t bufferSize() const
+    {
+        ReadGuard l(x_buffer);
+        return m_buffer->size();
+    }
+
 private:
     NodeID m_nodeId;
     std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;

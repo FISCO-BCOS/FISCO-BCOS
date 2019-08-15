@@ -23,32 +23,28 @@
 #include "EncryptedFile.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Base64.h>
+#include <libdevcore/CommonIO.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/easylog.h>
 
 using namespace std;
 using namespace dev;
 
-bytes EncryptedFile::decryptContents(
-    const std::string& _filePath, std::shared_ptr<KeyCenter> _keyCenter)
+bytes EncryptedFile::decryptContents(const std::string& _filePath)
 {
     bytes encFileBytes;
     bytes encFileBase64Bytes;
     bytes decFileBytes;
     try
     {
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Trying to read enc file")
+                   << LOG_KV("file", _filePath);
         string encContextsStr = contentsString(_filePath);
         encFileBytes = fromHex(encContextsStr);
+        LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
+                   << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
-        bytes dataKey;
-        if (nullptr == _keyCenter)
-        {
-            dataKey = g_keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
-        }
-        else
-        {
-            dataKey = _keyCenter->getDataKey(g_BCOSConfig.diskEncryption.cipherDataKey);
-        }
+        bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
 
         encFileBase64Bytes = aesCBCDecrypt(ref(encFileBytes), ref(dataKey));
 
@@ -62,7 +58,7 @@ bytes EncryptedFile::decryptContents(
                    << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-               << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
+    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
+    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
     return decFileBytes;
 }

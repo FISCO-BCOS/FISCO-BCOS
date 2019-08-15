@@ -97,7 +97,7 @@ public:
     void suicide(Address const& _a) final;
 
     /// Return the EVM gas-price schedule for this execution context.
-    dev::eth::EVMSchedule const& evmSchedule() const final { return dev::eth::DefaultSchedule; }
+    dev::eth::EVMSchedule const& evmSchedule() const final { return g_BCOSConfig.evmSchedule(); }
 
     std::shared_ptr<StateFace> const& state() const { return m_s; }
 

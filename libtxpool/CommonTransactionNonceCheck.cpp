@@ -33,7 +33,13 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
         auto key = this->generateKey(_trans);
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
+        {
+            // dupulated transaction sync may cause duplicated nonce
+            LOG(TRACE) << LOG_DESC("CommonTransactionNonceCheck: isNonceOk: duplicated nonce")
+                       << LOG_KV("transHash", _trans.sha3().abridged());
+
             return false;
+        }
         if (needInsert)
         {
             UpgradeGuard ul(l);

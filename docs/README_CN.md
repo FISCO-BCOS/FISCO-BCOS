@@ -2,51 +2,78 @@
 
 ![](./images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS**平台是金融区块链合作联盟(深圳)(以下简称：金链盟)开源工作组以金融业务实践为参考样本，在BCOS开源平台基础上进行模块升级与功能重塑，深度定制的安全可控、适用于金融行业且完全开源的区块链底层平台。FISCO BCOS平台基于现有的BCOS开源项目进行开发，聚焦于金融行业的分布式商业需求，从业务适当性、性能、安全、技术可行性、运维与治理、成本等多个维度进行综合考虑，打造金融版本的区块链解决方案。
 
- [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
+[![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS) [![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)  [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
-[![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
+
+**FISCO BCOS**是由中国企业主导研发、对外开源、安全可控的企业级金融区块链底层技术平台。单链配置下，性能TPS可达万级。提供群组架构、跨链通信协议、可插拔的共识机制、隐私保护算法、支持国密算法、分布式存储等诸多特性。经过多个机构、多个应用，长时间在生产环境中的实践检验，具备金融级的高性能、高可用性及高安全性。
+
+- **群组架构**
+
+群组架构设计支持区块链节点同时启动多个群组，实现快速组链，满足海量服务请求。群组架构可以通过群组间交易处理、分布式数据存储、区块共识相互隔离等技术有效地实现平行扩展。在扩大业务规模和保障区块链系统隐私性的同时，极大简化了系统的运维复杂度。
+
+- **分布式存储**
+
+分布式数据存储可突破单机限制，带来容量和性能的极大提升。支持计算和存储分离，模块化的数据交换接口，提供更好的扩展性。为了简化数据管理和业务开发流程，定义了标准数据访问CRUD接口，适配多种数据存储系统（例如MySQL），同时支持业界通用Key-Value与SQL数据表结构。
+
+- **并行计算模型**
+
+并行交易处理模型可有效利用多核处理能力，实现交易并行计算。针对业务执行中的高频计算和复杂计算，提供了预编译合约框架，支持采用C++编写合约，极大提升交易执行效率。
+
+- **简单易用**
+
+提供多种编译部署方式，支持一键部署，支持Docker等所有主流平台的快速安装部署。提供了完整的工具套件来实现快速安装部署，系统监控、企业级数据治理等，解放开发人员的非业务开发时间。
+
+<div style="text-align:center"><img src="https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/plane.jpg"/> </div>
+
+更多信息，请[参阅2.0版本新特性](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html#id11)。
+
+## 快速开始
+
+阅读[快速开始](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html)，了解使用FISCO BCOS所需的必要安装和配置，帮助您快速体验FISCO BCOS强大功能。。
 
 ## 文档
 
-- [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)
+阅读[**技术文档**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)，详细了解如何使用FISCO BCOS。
 
-## 兼容性说明
+- [2.0版本新特性](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
+- [版本及兼容](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
+- [安装](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html)
+- [教程](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/tutorial/index.html#)
+- [使用手册](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/manual/index.html)
+- [企业级部署工具](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/enterprise_tools/index.html)
+- [系统设计](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/design/index.html)
+- [Web3SDK](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/sdk/sdk.html)
+- [JSON-RPC API](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/api.html)
+- [常见问答](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/faq.html)
 
-2.0版本与1.0版本数据和协议不兼容，合约兼容。如果要从1.3版本升级到2.0版本，需要做数据迁移。
 
-## 贡献代码
-
-要参与进来，很简单，你可以：
-
-- 点亮我们的小星星！  
-- 提交代码(Pull requests)，我们有[代码贡献流程](CONTRIBUTING_CN.md)和[编码规范](../CODING_STYLE.md)。
-- 也可以[提问](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)和[提交BUG](https://github.com/FISCO-BCOS/FISCO-BCOS/issues)。
-- 或者可以在[微信群](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg)和[Gitter](https://gitter.im/fisco-bcos/Lobby)里讨论。
-- 欢迎反馈代码存在的安全漏洞，如果发现，请在[这里](https://security.webank.com)上报！
-
-## 关键特性
-
-- **安全**：提供准入机制、权限控制、CA认证，密钥管理，国密等高级安全功能，满足金融级商业应用场景需求。
-- **性能**：提供并行交易处理、预编译合约、分布式存储等功能，能够高效地处理大吞吐量的交易请求。
-- **稳定**：已有多个跨机构的金融级商业应用落地，长时间的实践检验了其稳定性。
-- **易用**：提供控制台、部署工具、浏览器和SDK等配套工具，便于用户快速上手。
 
 ## 落地应用案例
 
-FISCO BCOS有很多的应用案例。此处提供一些具有代表性的[落地应用案例](https://www.fisco.com.cn/files/FISCOBCOS_FeaturedCases.pdf)。
+FISCO BCOS已落地应用达数十个，场景覆盖政务、金融、公益、医疗、教育、交通、版权、商品溯源、供应链、招聘、农业、社交、游戏等多个领域，如：
 
-## 社区生态
+- 金融业：机构间对账、供应链金融、旅游金融等。
+- 司法服务：仲裁链、电子借据等。
+- 文化版权：版权存证与交易等。
+- 社会管理：不动产登记等。
 
-**金链盟**开源工作组，获得金链盟成员机构的广泛认可，并由专注于区块链底层技术研发的成员机构及开发者牵头开展工作。其中首批成员包括以下单位(排名不分先后): 博彦科技、华为、深证通、神州数码、四方精创、腾讯、微众银行、越秀金科。
+此处提供一些具有代表性的[落地应用案例](https://mp.weixin.qq.com/s/vUSq80LkhF8yCfUF7AILgQ)。
 
-- 微信群：[![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg)  公众号：[![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Official%20accounts)](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/OfficialAccountsQR.jpg)
 
-- Twitter：[![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
+## 贡献代码
 
-- e-mail：[![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
+- 我们欢迎并非常感谢您的贡献，请参阅[代码贡献流程](https://mp.weixin.qq.com/s/hEn2rxqnqp0dF6OKH6Ua-A
+)和[代码规范](../CODING_STYLE.md)。
+- 如项目对您有帮助，欢迎star支持！
+- 如果发现代码存在安全漏洞，请在[这里](https://security.webank.com)上报。
+
+## 加入我们的社区
+
+**FISCO BCOS开源社区**是国内活跃的开源社区，社区长期为机构和个人开发者提供各类支持与帮助。已有来自各行业的数千名技术爱好者在研究和使用FISCO BCOS。如您对FISCO BCOS开源技术及应用感兴趣，欢迎加入社区获得更多支持与帮助。
+
+![](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/QR_image.png)
 
 ## License
 

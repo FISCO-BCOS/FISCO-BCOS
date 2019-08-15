@@ -49,9 +49,9 @@ class SQLBasicAccess
 public:
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
-    virtual int Select(h256 hash, int num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, Json::Value& respJson);
-    virtual int Commit(h256 hash, int num, const std::vector<TableData::Ptr>& datas);
+    virtual int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
+        Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values);
+    virtual int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas);
 
 private:
     std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
@@ -59,17 +59,21 @@ private:
         std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition);
 
     std::vector<SQLPlaceHoldItem> BuildCommitSql(const std::string& _table,
-        const std::vector<std::string>& _fieldName, const std::vector<std::string>& _fieldValue);
+        const std::string& _fieldStr, const std::vector<std::string>& _fieldValue);
 
     std::string BuildCreateTableSql(
         const std::string& tablename, const std::string& keyfield, const std::string& valuefield);
 
     std::string GetCreateTableSql(const Entry::Ptr& data);
     void GetCommitFieldNameAndValue(const Entries::Ptr& data, h256 hash, const std::string& strNum,
-        std::vector<std::string>& _fieldName, std::vector<std::string>& _fieldValue,
-        bool& _hasGetField);
+        std::map<std::string, std::vector<std::string>>& _fieldValue);
 
-    int CommitDo(h256 hash, int num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
+    void GetCommitFieldNameAndValueEachTable(h256 hash, const std::string& _num,
+        const Entries::Ptr& data, const std::vector<size_t>& indexlist, std::string& fieldList,
+        std::vector<std::string>& valueList);
+
+    int CommitDo(
+        h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
 
 public:
     virtual void ExecuteSql(const std::string& _sql);

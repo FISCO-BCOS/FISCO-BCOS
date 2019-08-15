@@ -22,15 +22,17 @@
 
 #pragma once
 
+#include <libethcore/EVMSchedule.h>
+#include <atomic>
 #include <string>
-
 namespace dev
 {
 enum VERSION : uint32_t
 {
     RC1_VERSION = 1,
     RC2_VERSION = 2,
-    RC3_VERSION = 3
+    RC3_VERSION = 3,
+    V2_0_0 = 0x02000000,
 };
 class GlobalConfigure
 {
@@ -40,7 +42,7 @@ public:
         static GlobalConfigure ins;
         return ins;
     }
-
+    GlobalConfigure() : shouldExit(false) {}
     VERSION const& version() const { return m_version; }
     void setCompress(bool const& compress) { m_compress = compress; }
 
@@ -56,12 +58,16 @@ public:
     }
     std::string const& supportedVersion() { return m_supportedVersion; }
 
+    void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
+    dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+
     struct DiskEncryption
     {
         bool enable = false;
         std::string keyCenterIP;
         int keyCenterPort;
         std::string cipherDataKey;
+        std::string dataKey;
     } diskEncryption;
 
     /// default block time
@@ -74,11 +80,14 @@ public:
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
 
+    std::atomic_bool shouldExit;
+
 private:
     VERSION m_version = RC3_VERSION;
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
+    dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

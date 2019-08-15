@@ -22,6 +22,7 @@
 #include "ConditionPrecompiled.h"
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
+#include "StorageException.h"
 #include "Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/easylog.h>
@@ -52,6 +53,18 @@ TablePrecompiled::TablePrecompiled()
 std::string TablePrecompiled::toString()
 {
     return "Table";
+}
+
+void TablePrecompiled::checkLengthValidate(
+    const std::string& field_value, int32_t max_length, int32_t throw_exception)
+{
+    if (field_value.size() > (size_t)max_length)
+    {
+        STORAGE_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
+                           << " greater than " << max_length;
+        BOOST_THROW_EXCEPTION(StorageException(throw_exception,
+            std::string("size of value of key greater than") + std::to_string(max_length)));
+    }
 }
 
 bytes TablePrecompiled::call(
@@ -94,7 +107,15 @@ bytes TablePrecompiled::call(
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
+        checkLengthValidate(
+            key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
 
+        auto it = entry->begin();
+        for (; it != entry->end(); ++it)
+        {
+            checkLengthValidate(
+                it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
+        }
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
         out = abi.abiIn("", u256(count));
     }
@@ -143,6 +164,13 @@ bytes TablePrecompiled::call(
             std::dynamic_pointer_cast<ConditionPrecompiled>(
                 context->getPrecompiled(conditionAddress));
         auto entry = entryPrecompiled->getEntry();
+
+        auto it = entry->begin();
+        for (; it != entry->end(); ++it)
+        {
+            checkLengthValidate(it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH,
+                CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW);
+        }
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));

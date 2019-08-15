@@ -29,14 +29,9 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
-#include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
-#include <libprecompiled/Common.h>
-#include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
 using namespace boost::property_tree;
@@ -385,7 +380,7 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
     m_param->mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     m_param->mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
-    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 20);
+    m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
@@ -575,9 +570,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
             m_param->mutableConsensusParam().maxElectTime, protocol_id,
             m_param->mutableConsensusParam().sealerList);
-    /// set params for RaftEngine
-    std::shared_ptr<RaftEngine> raftEngine =
-        std::dynamic_pointer_cast<RaftEngine>(raftSealer->consensusEngine());
     return raftSealer;
 }
 

@@ -2,53 +2,67 @@ English / [中文](docs/README_CN.md)
 
 ![](docs/images/FISCO_BCOS_Logo.svg)
 
-**FISCO BCOS** is a collaborative, secure, and high-performance open-source blockchain platform led by FISCO community. Evolved from BCOS project, FISCO BCOS strives to advance blockchain technology to promote effortless collaboration and innovation of blockchain-based financial applications. By focusing on performance, security and privacy, application adaptability, and operation optimization, FISCO BCOS helps community members to explore new business scenarios with state-of-the-art consortium blockchain technology.
+**FISCO BCOS** is a secure and reliable financial-grade open-source blockchain platform led by Chinese enterprises. Its performance has reached over 10,000 TPS with single-chain setup. The platform provides rich features including group architecture, cross-chain communication protocols, pluggable consensus mechanisms, privacy protection algorithms, OSCCA-approved (Office of state Commercial Cryptography Administration) cryptography algorithms, and distributed storage. Its performance, usability and security has been testified by many institutional users and successful business applications in live production environment.
 
- [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
+[![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS) [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/08552871ee104fe299b00bc79f8a12b9)](https://www.codacy.com/app/fisco-dev/FISCO-BCOS?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=FISCO-BCOS/FISCO-BCOS&amp;utm_campaign=Badge_Grade) [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS) [![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)  [![Build Status](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
-[![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
+
+## Group Architecture
+
+Our group architecture is designed to allow simultaneous management of multiple ledger groups in the same blockchain network to facilitate speedy ledger setup and support massive service requests. This innovative architecture supports better scalability with key designs including inter-group transaction processing, distributed data storage and intra-group consensus isolation. It aims to effectively scale up the business and simplify toilsome operational procedures, while accommodating to data privacy protection requirements.
+
+## Distributed Storage
+
+Distributed storage framework aims to break the limitations of single-machine resource and boost system capacity and performance. It separates computation and storage units with modularized data exchange API for better flexibility. This framework simplifies data management and accelerate business development flow by defining standard CURD adaptors for common databases like MySQL, and supporting widely-used Key-Value and SQL-like data tables.
+
+## Parallel Transaction Processing
+
+Parallel transaction processing engine effectively exploits multi-core computation resources to parallelize transaction processing. To address key performance bottleneck caused high frequency and high complexity computation, it provides pre-compiled framework to run C++-based smart contracts, which significantly boosts the efficiency of transaction execution.
+
+## Developer Friendly
+
+FISCO BCOS provides various guide to compile and deploy blockchain instances, offering one-click deployment, speedy installation and deployment on all mainstream platforms including Docker. It includes a comprehensive toolkit for speedy deployment, continuous monitoring, enterprise-level data governance, to save developers’ valuable time from toil.
+
+![Key Features of FISCO BCOS 2.0](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/plane_en.png)
 
 
-## Documentation
 
+For more information, please refer to new features in [version 2.0](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
+
+## Quick Start
+
+Read [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html) to learn the installation and deployment procedures, and experience the rich features of FISCO BCOS.
+
+## Technical documentation
+
+- [**English**](https://fisco-bcos-documentation.readthedocs.io/en/latest/)
 - [**中文**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)
 
-## Compatibility
+## Featured applications
 
-Version 2.0 introduces new internal block data formats and network protocols for new features and improved capabilities. For the users of version 1.3, the existing smart contracts can be directly reused on version 2.0, but extra data migration will be required to upgrade from version 1.3 to version 2.0.
+**FISCO BCOS** has been adopted in over 10 applications in areas like government affair, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment. 
 
-## Developing & Contributing
+- Finance: inter-institutional reconciliation, supply chain finance, tourism finance, etc.
+- Judicial services: arbitration chain, digital IOUs, etc.
+- Copyright: copyright registration and trading, etc.
+- Social management: real-estate registration, etc.
 
-- Star our project.
-- Submit pull requests. See [CONTRIBUTING](CONTRIBUTING.md) and [CODING_STYLE](CODING_STYLE.md).
-- [Ask questions](https://github.com/FISCO-BCOS/FISCO-BCOS/issues).
-- Join the discussion in [WeChat](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg) or [Gitter](https://gitter.im/fisco-bcos/Lobby).
-- Highly welcomed to [report security issues](https://security.webank.com)!
+Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 
-## Features
+## Code contribution
 
-**Security**: Support the sensitive financial business scenarios by providing advanced security features including node access management, data permission control, CA certificate verification, guomi crypto support.
+- Your contributions are most welcome and appreciated. Please read the [contribution instructions ](https://mp.weixin.qq.com/s/hEn2rxqnqp0dF6OKH6Ua-A) and [coding code style guide](CODING_STYLE.md).
+- If this project is useful to you, please star us on GitHub project page!
+- If you find any security vulnerabilities, please report [them](https://security.webank.com) here!
 
-**Performance**: Tackle high transaction throughput with optimization technologies including parallel transaction processing, precompiled smart contracts, advanced mass database.
+## Join Our Community
 
-**Reliability**: Verified by multiple running cross-organization financial applications.
+The FISCO BCOS community is one of the most active open-source blockchain communities in China. It provides long-term technical support for both institutional and individual developers and users of FISCO BCOS. Thousands of technical enthusiasts from numerous industry sectors have joined this community, studying and using FISCO BCOS platform. If you are also interested, you are most welcome to join us for more support and fun.
 
-**Usability**: Offer user-friendly and comprehensive toolkits including interactive console, deployment tools, block browsers, SDK, and other supporting tools.
+![](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/QR_image_en.png)
 
-## Featured Cases
 
-Since FISCO BCOS launched, dozens of applications have been implemented and launched. See [FEATURED CASES](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
-
-## Community
-
-By 2019, Financial Blockchain Shenzhen Consortium (FISCO) has been well recognized by more than 100 members from 6 industrial sectors including banking, fund management, securities brokerage, insurance, regional equity exchanges, and financial information service companies. The first group of members includes the following organizations: Beyondsoft, Huawei, Shenzhen Securities Communications, Digital China, Forms Syntron, Tencent, WeBank, and Yuexiu FinTech.
-
-- Join our WeChat [![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Group)](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/WeChatQR.jpg) and [![Scan](https://img.shields.io/badge/style-Scan_QR_Code-green.svg?logo=wechat&longCache=false&style=social&label=Official%20accounts)](https://github.com/FISCO-BCOS/FISCO-BCOS-DOC/blob/release-2.0/images/community/OfficialAccountsQR.jpg)
-
-- Read news by [![](https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Follow@FiscoBcos)](https://twitter.com/FiscoBcos)
-
-- Mail us at [![](https://img.shields.io/twitter/url/http/shields.io.svg?logo=Gmail&style=social&label=service@fisco.com.cn)](mailto:service@fisco.com.cn)
 
 ## License
 

@@ -21,16 +21,35 @@
  */
 
 #pragma once
+#include "Common.h"                             // for INITIALIZER_LOG
+#include "librpc/ModularServer.h"               // for ModularServer
+#include <libchannelserver/ChannelRPCServer.h>  // for ChannelRPCServer
+#include <boost/property_tree/ptree_fwd.hpp>    // for ptree
+#include <vector>                               // for vector
 
-#include "Common.h"
-#include <libchannelserver/ChannelRPCServer.h>
-#include <libledger/LedgerManager.h>
-#include <libp2p/P2PInterface.h>
-#include <librpc/Rpc.h>
-#include <librpc/SafeHttpServer.h>
+namespace boost
+{
+namespace asio
+{
+namespace ssl
+{
+class context;
+}
+}  // namespace asio
+}  // namespace boost
+
 
 namespace dev
 {
+class SafeHttpServer;
+namespace ledger
+{
+class LedgerManager;
+}
+namespace p2p
+{
+class P2PInterface;
+}
 namespace initializer
 {
 class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>

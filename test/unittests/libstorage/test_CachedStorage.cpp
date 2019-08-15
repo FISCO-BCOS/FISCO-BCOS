@@ -40,7 +40,7 @@ namespace test_CachedStorage
 class MockStorage : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
@@ -150,7 +150,7 @@ public:
         }
     }
 
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
@@ -223,6 +223,8 @@ struct CachedStorageFixture
         cachedStorage->setBackend(mockStorage);
         cachedStorage->setMaxForwardBlock(51);
     }
+
+    ~CachedStorageFixture() { cachedStorage->stop(); }
 
     Entries::Ptr getEntries()
     {
@@ -695,7 +697,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 class CommitCheckMock : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
         (void)hash;
@@ -761,8 +763,8 @@ public:
 BOOST_AUTO_TEST_CASE(commitCheck)
 {
     cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->setMaxCapacity(2000 * 1024 * 1024);
-    cachedStorage->setMaxForwardBlock(100000);
+    cachedStorage->setMaxCapacity(256 * 1024 * 1024);
+    cachedStorage->setMaxForwardBlock(100);
     auto backend = std::make_shared<CommitCheckMock>();
     cachedStorage->setBackend(backend);
 
