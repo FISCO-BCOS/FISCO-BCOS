@@ -849,8 +849,8 @@ bool PBFTEngine::handlePrepareMsg(
     {
         execBlock(workingSealing, prepareReq, oss);
         // old block (has already executed correctly by block sync)
-        if (workingSealing.p_execContext == nullptr &&
-            workingSealing.block.getTransactionSize() > 0)
+        if (workingSealing->p_execContext == nullptr &&
+            workingSealing->block->getTransactionSize() > 0)
         {
             return false;
         }

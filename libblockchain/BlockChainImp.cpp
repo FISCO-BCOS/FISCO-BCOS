@@ -937,7 +937,7 @@ void BlockChainImp::writeTotalTransactionCount(
             entry->setField(SYS_VALUE, lexical_cast<std::string>(block->transactions().size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
         }
-        const TransactionReceipts& receipts = block.transactionReceipts();
+        const TransactionReceipts& receipts = block->transactionReceipts();
         int32_t failedTransactions = 0;
         for (auto& receipt : receipts)
         {
