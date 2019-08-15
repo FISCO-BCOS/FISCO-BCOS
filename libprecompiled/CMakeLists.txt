@@ -4,6 +4,5 @@ file(GLOB_RECURSE HEADERS "*.h")
 
 add_library(precompiled ${SRC_LIST} ${HEADERS})
 target_link_libraries(precompiled PRIVATE blockverifier ethcore)
-target_link_libraries(precompiled PUBLIC storage devcore Paillier)
-
+target_link_libraries(precompiled PUBLIC storage devcore Paillier JsonCpp)
 add_subdirectory(extension)
