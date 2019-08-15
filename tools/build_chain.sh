@@ -589,6 +589,7 @@ EOF
 generate_script_template()
 {
     local filepath=$1
+    mkdir -p $(dirname $filepath)
     cat << EOF > "${filepath}"
 #!/bin/bash
 SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
@@ -795,11 +796,12 @@ done
 echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
-    generate_script_template "$output/load_new_groups.sh"
-    cat << EOF >> "$output/load_new_groups.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-cd \${SHELL_FOLDER}
-node=\$(basename \${SHELL_FOLDER})
+    generate_script_template "$output/scripts/load_new_groups.sh"
+    cat << EOF >> "$output/scripts/load_new_groups.sh"
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo "\${node} is trying to load new groups. Check log for more information."
@@ -809,11 +811,12 @@ else
     echo "\${node} is not running, use start.sh to start all group directlly."
 fi
 EOF
-    generate_script_template "$output/reset_certificate_whitelist.sh"
-    cat << EOF >> "$output/reset_certificate_whitelist.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-cd \${SHELL_FOLDER}
-node=\$(basename \${SHELL_FOLDER})
+    generate_script_template "$output/scripts/reload_whitelist.sh"
+    cat << EOF >> "$output/scripts/reload_whitelist.sh"
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo "\${node} is trying to reset certificate whitelist. Check log for more information."
