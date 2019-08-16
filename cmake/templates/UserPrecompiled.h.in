@@ -22,13 +22,18 @@
 #include "libblockverifier/ExecutiveContextFactory.h"
 @USER_PRECOMPILED_HEADER@
 
-    void dev::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(dev::blockverifier::ExecutiveContext::Ptr context)
+
+    void
+    dev::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(
+        dev::blockverifier::ExecutiveContext::Ptr context)
 {
     // Address should in [0x5001,0xffff]
     // context->setAddress2Precompiled(Address(0x5001),
     // std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x5002), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
+#ifdef FISCO_CRYPTO_EXTENSION
     context->setAddress2Precompiled(
         Address(0x5003), std::make_shared<dev::precompiled::PaillierPrecompiled>());
+#endif
 }
