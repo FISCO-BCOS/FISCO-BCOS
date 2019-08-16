@@ -32,6 +32,7 @@ namespace storage
 #define CACHED_STORAGE_LOG(LEVEL)                                                   \
     LOG(LEVEL) << "[g:" << std::to_string(groupID()) << "]" << LOG_BADGE("STORAGE") \
                << LOG_BADGE("CachedStorage")
+#define BINLOG_HANDLER_LOG(LEVEL) LOG(LEVEL) << "[BINLOG]"
 
 /// \brief Sign of the DB key is valid or not
 static const std::string ID_FIELD = "_id_";
