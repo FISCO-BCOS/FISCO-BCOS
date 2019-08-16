@@ -59,6 +59,7 @@ void ConsensusEngineBase::stop()
         // will not restart worker, so terminate it
         terminate();
     }
+    ENGINE_LOG(INFO) << "ConsensusEngineBase stopped";
 }
 
 /// update m_sealing and receiptRoot

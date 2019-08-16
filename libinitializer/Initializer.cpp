@@ -77,3 +77,26 @@ void Initializer::init(std::string const& _path)
         BOOST_THROW_EXCEPTION(e);
     }
 }
+
+Initializer::~Initializer()
+{
+    /// modify the destructure order to ensure that the log is destructed at last
+    /// stop the ledger
+    if (m_ledgerInitializer)
+    {
+        m_ledgerInitializer->stopAll();
+    }
+    INITIALIZER_LOG(INFO) << LOG_DESC("ledgerInitializer stopped");
+    /// stop rpc
+    if (m_rpcInitializer)
+    {
+        m_rpcInitializer->stop();
+    }
+    INITIALIZER_LOG(INFO) << LOG_DESC("RPCInitializer stopped");
+    /// stop p2p
+    if (m_p2pInitializer)
+    {
+        m_p2pInitializer->stop();
+    }
+    INITIALIZER_LOG(INFO) << LOG_DESC("P2PInitializer stopped");
+}
