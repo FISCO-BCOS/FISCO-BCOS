@@ -42,7 +42,6 @@ namespace precompiled
 enum PrecompiledError : int
 {
     // PaillierPrecompiled -51699 ~ --51600
-    CODE_DIFFERENT_PUBKEYS = -51602,
     CODE_INVALID_CIPHERS = -51601,
     CODE_UNDEFINED_FUNC = -51600,
 

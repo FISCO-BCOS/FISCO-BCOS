@@ -22,6 +22,7 @@
 #pragma once
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
+#include <callpaillier.h>
 
 namespace dev
 {
@@ -43,6 +44,9 @@ public:
 
     virtual bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
         Address const& origin = Address());
+
+private:
+    CallPaillier::Ptr callPaillier;
 };
 
 }  // namespace precompiled
