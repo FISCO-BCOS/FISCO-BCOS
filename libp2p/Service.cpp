@@ -131,12 +131,6 @@ void Service::heartBeat()
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore invalid address");
             continue;
         }
-        if (m_whitelist != nullptr && !m_whitelist->has(it.second))
-        {
-            SERVICE_LOG(TRACE) << LOG_DESC("heartBeat outside whitelist")
-                               << LOG_KV("nodeid", it.second.abridged());
-            continue;
-        }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
                            << LOG_KV("endpoint", it.first.name());
         m_host->asyncConnect(

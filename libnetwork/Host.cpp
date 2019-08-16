@@ -197,7 +197,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (find(certBlacklist.begin(), certBlacklist.end(), nodeID) != certBlacklist.end())
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
-                               << LOG_KV("nodeID", nodeID.substr(0, 4));
+                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
                 return false;
             }
 
@@ -205,7 +205,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             if (host->whitelist() != nullptr && !host->whitelist()->has(nodeID))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
-                               << LOG_KV("nodeID", nodeID.substr(0, 4));
+                               << LOG_KV("nodeID", NodeID(nodeID).abridged());
                 return false;
             }
 
