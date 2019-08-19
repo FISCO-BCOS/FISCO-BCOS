@@ -36,8 +36,6 @@
 
 
 # ignore some directory
-cmake-build-debug
-cmake-build-debug/**
 build
 build/**
 deps
