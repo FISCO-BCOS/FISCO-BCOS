@@ -42,6 +42,27 @@ namespace dev
 {
 namespace test
 {
+class FakeSyncMaster : public SyncMaster
+{
+public:
+    FakeSyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+        PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
+        unsigned _idleWaitMs = 200)
+      : SyncMaster(_service, _txPool, _blockChain, _blockVerifier, _protocolId, _nodeId,
+            _genesisHash, _idleWaitMs)
+    {}
+
+    /// start blockSync
+    void start() override
+    {
+        auto& state = workerState();
+        state = WorkerState::Started;
+    }
+};
+
 class SyncFixture : public TestOutputHelperFixture
 {
 public:
@@ -62,7 +83,7 @@ public:
 
     struct FakeSyncToolsSet
     {
-        std::shared_ptr<SyncMaster> sync;
+        std::shared_ptr<FakeSyncMaster> sync;
         std::shared_ptr<FakeService> service;
         std::shared_ptr<TxPoolInterface> txPool;
         std::shared_ptr<BlockChainInterface> blockChain;
@@ -78,9 +99,10 @@ public:
 
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
             std::make_shared<FakeBlockverifier>();
-        std::shared_ptr<SyncMaster> fakeSyncMaster =
-            std::make_shared<SyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
+        std::shared_ptr<FakeSyncMaster> fakeSyncMaster =
+            std::make_shared<FakeSyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
                 txpool_creator.m_blockChain, blockVerifier, c_protocolId, _nodeId, m_genesisHash);
+        fakeSyncMaster->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
         std::shared_ptr<DownloadingTxsQueue> txQueue =
             std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId);
         return FakeSyncToolsSet{fakeSyncMaster, txpool_creator.m_topicService,
@@ -299,6 +321,7 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
     status->bq().push(blocks);
     status->bq().flushBufferToQueue();
     BOOST_CHECK_EQUAL(blockChain->number(), 0);
+    sync->start();
     BOOST_CHECK_EQUAL(sync->maintainDownloadingQueue(), false);  // Not finish
     BOOST_CHECK_EQUAL(blockChain->number(), 1);
 

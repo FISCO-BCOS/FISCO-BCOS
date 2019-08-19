@@ -246,13 +246,15 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     try
     {
+        tbb::atomic<bool> isWarnedTimeout(false);
         tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
             [&](const tbb::blocked_range<unsigned int>& _r) {
                 (void)_r;
                 while (!txDag->hasFinished())
                 {
-                    if (utcTime() >= parallelTimeOut)
+                    if (!isWarnedTimeout.load() && utcTime() >= parallelTimeOut)
                     {
+                        isWarnedTimeout.store(true);
                         BLOCKVERIFIER_LOG(WARNING)
                             << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
                             << LOG_KV("txNum", block.transactions().size())

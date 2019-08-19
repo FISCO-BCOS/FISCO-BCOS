@@ -36,18 +36,20 @@
 #include <thread>
 #include <vector>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-void prepareExit()
-{
+void prepareExit(const std::string& _key)
+{  // wait to exit
     raise(SIGTERM);
     while (!g_BCOSConfig.shouldExit.load())
     {
         std::this_thread::yield();
     }
-    BOOST_THROW_EXCEPTION(StorageException(-1, "backend DB is dead. Prepare to exit."));
+    BOOST_THROW_EXCEPTION(
+        StorageException(-1, string("backend DB is dead. Prepare to exit.") + _key));
 }
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
@@ -126,8 +128,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        prepareExit(key);
     }
 
     return std::make_shared<Entries>();
@@ -189,8 +190,7 @@ int MemoryTable2::update(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        prepareExit(key);
     }
 
     return 0;
@@ -286,8 +286,7 @@ int MemoryTable2::remove(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        prepareExit(key);
     }
 
     return 0;

@@ -43,6 +43,9 @@ public:
     bool enable() const { return m_enable; }
     std::string dump(bool _isAbridged = false);
 
+    static bool isNodeIDOk(NodeID _nodeID);
+    static bool isNodeIDOk(const std::string& _nodeID);
+
 private:
     bool m_enable = false;
     std::set<NodeID> m_whitelist;

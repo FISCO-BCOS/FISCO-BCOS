@@ -55,6 +55,11 @@ public:
 
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
+    void resetWhitelist(const std::string& _configFile);
+
+private:
+    PeerWhitelist::Ptr parseWhitelistFromPropertyTree(boost::property_tree::ptree const& _pt);
+
 private:
     std::shared_ptr<Service> m_p2pService;
     std::shared_ptr<bas::context> m_SSLContext;

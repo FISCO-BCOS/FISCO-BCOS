@@ -91,9 +91,11 @@ public:
     void stopAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << LOG_DESC("stopAll...") << std::endl;
+        Ledger_LOG(INFO) << LOG_DESC("stop sealer") << LOG_KV("groupID", groupId());
         m_sealer->stop();
+        Ledger_LOG(INFO) << LOG_DESC("sealer stopped. stop sync") << LOG_KV("groupID", groupId());
         m_sync->stop();
+        Ledger_LOG(INFO) << LOG_DESC("ledger stopped") << LOG_KV("groupID", groupId());
     }
 
     virtual ~Ledger(){};

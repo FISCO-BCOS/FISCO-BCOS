@@ -118,6 +118,7 @@ void SyncMaster::stop()
     stopWorking();
     // will not restart worker, so terminate it
     terminate();
+    SYNC_LOG(INFO) << LOG_DESC("SyncMaster stopped");
 }
 
 void SyncMaster::doWork()
@@ -481,11 +482,12 @@ bool SyncMaster::maintainDownloadingQueue()
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
-    while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
+    while (isWorking() && topBlock != nullptr &&
+           topBlock->header().number() <= (m_blockChain->number() + 1))
     {
         try
         {
-            if (isNextBlock(topBlock))
+            if (isWorking() && isNextBlock(topBlock))
             {
                 auto record_time = utcTime();
                 auto parentBlock =
