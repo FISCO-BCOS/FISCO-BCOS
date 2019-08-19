@@ -33,14 +33,12 @@ const char* const PAILLIER_METHOD_SET_STR = "paillierAdd(string,string)";
 
 PaillierPrecompiled::PaillierPrecompiled()
 {
-    callPaillier = std::make_shared<CallPaillier>();
+    m_callPaillier = std::make_shared<CallPaillier>();
     name2Selector[PAILLIER_METHOD_SET_STR] = getFuncSelector(PAILLIER_METHOD_SET_STR);
 }
 
-bytes PaillierPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes PaillierPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
 {
-    (void)(context), (void)(origin);
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("PaillierPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
 
@@ -59,7 +57,7 @@ bytes PaillierPrecompiled::call(
         abi.abiOut(data, cipher1, cipher2);
         try
         {
-            result = callPaillier->paillierAdd(cipher1, cipher2);
+            result = m_callPaillier->paillierAdd(cipher1, cipher2);
         }
         catch (CallException& e)
         {

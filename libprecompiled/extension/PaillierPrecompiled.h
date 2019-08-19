@@ -20,9 +20,9 @@
  */
 
 #pragma once
+#include <callpaillier.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
-#include <callpaillier.h>
 
 namespace dev
 {
@@ -46,7 +46,7 @@ public:
         Address const& origin = Address());
 
 private:
-    CallPaillier::Ptr callPaillier;
+    CallPaillier::Ptr m_callPaillier;
 };
 
 }  // namespace precompiled
