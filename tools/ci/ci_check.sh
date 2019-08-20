@@ -21,6 +21,7 @@ bash build_chain.sh -f ipconf -e ../build/bin/fisco-bcos -v ${fisco_version}
 bash check_node_config.sh -p nodes/127.0.0.1/node0
 cd nodes/127.0.0.1
 bash start_all.sh
+bash ../../check_node_config.sh -p node0
 sleep 1
 
 LOG_INFO "[round1]==============send a transaction"
