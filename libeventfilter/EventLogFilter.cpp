@@ -42,7 +42,7 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
     }
 }
 
-// filter individual log to see if the requirements are met
+// filter individual log to see if the requirements are meet
 bool EventLogFilter::matches(LogEntry const& _log)
 {
     auto addresses = getParams()->getAddresses();
