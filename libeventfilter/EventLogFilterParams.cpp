@@ -152,7 +152,86 @@ bool EventLogFilterParams::getTopicField(const Json::Value& _json, EventLogFilte
 EventLogFilterParams::Ptr EventLogFilterParams::buildEventLogFilterParamsObject(
     const std::string& _json)
 {
-    // ADD TO DO
-    EVENT_LOG(ERROR) << LOG_BADGE("buildEventLogFilterParamsObject") << LOG_KV("json", _json);
+    BlockNumber startBlock = 0;
+    BlockNumber endBlock = 0;
+    dev::GROUP_ID groupID = 0;
+    std::string filterID;
+    std::string strDesc;
+
+    do
+    {
+        try
+        {
+            Json::Reader reader;
+            Json::Value root;
+
+            if (!reader.parse(_json, root) || !root.isObject())
+            {  // json parser failed
+                strDesc = "not json string, parser failed.";
+                break;
+            }
+
+            // filterID
+            if (!getFilterIDField(root, filterID))
+            {
+                strDesc = "get filterID failed.";
+                break;
+            }
+
+            // groupID
+            if (!getGroupIDField(root, groupID))
+            {
+                strDesc = "get groupID failed.";
+                break;
+            }
+
+            // startBlock
+            if (!getFromBlockField(root, startBlock))
+            {
+                strDesc = "get fromBlock failed.";
+                break;
+            }
+
+            // endBlock
+            if (!getToBlockField(root, endBlock))
+            {
+                strDesc = "get toBlock failed.";
+                break;
+            }
+
+            EventLogFilterParams::Ptr params =
+                std::make_shared<EventLogFilterParams>(groupID, filterID, startBlock, endBlock);
+            // addresses
+            if (!getAddressField(root, params))
+            {
+                strDesc = "get addresses failed.";
+                break;
+            }
+
+            // topics
+            if (!getTopicField(root, params))
+            {
+                strDesc = "get topics failed.";
+                break;
+            }
+
+
+            EVENT_LOG(INFO) << LOG_BADGE("buildEventLogFilterParamsObject")
+                            << LOG_KV("filterID", filterID) << LOG_KV("startBlock", startBlock)
+                            << LOG_KV("endBlock", endBlock) << LOG_KV("groupID", groupID);
+
+            return params;
+        }
+        catch (const std::exception& e)
+        {  // exception throw when parser json
+            strDesc = "exception throw when json parser, message is " + std::string(e.what());
+            break;
+        }
+    } while (0);
+
+    EVENT_LOG(ERROR) << LOG_BADGE("buildEventLogFilterParamsObject") << LOG_KV("desc", strDesc)
+                     << LOG_KV("json", _json);
+
+    // end failed, the input json is not valid.
     return nullptr;
 }
