@@ -1,3 +1,4 @@
+# !/bin/bash
 # "Copyright [2018] <fisco-bcos>"
 # @ function: check code format of {.h, .hpp and .cpp} files
 # @ require : Make sure your machine is linux (centos/ubuntu), yum or apt is ready
@@ -5,7 +6,6 @@
 # @ file    : check-commit.sh
 # @ date    : 2018
 
-# !/bin/bash
 SHELL_FOLDER=$(
     cd $(dirname $0)
     pwd
@@ -17,6 +17,7 @@ file_limit=30
 insert_limit=250
 delete_limit=500
 new_file_header_length=20
+skip_check_words="sync code"
 
 LOG_ERROR() {
     content=${1}
@@ -40,21 +41,11 @@ execute_cmd() {
     fi
 }
 
-function init() {
-    if git rev-parse --verify HEAD >/dev/null 2>&1; then
-        against=HEAD^
-    else
-        # Initial commit: diff against an empty tree object
-        against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
-    fi
-    LOG_INFO "against: ${against}"
-}
-
 function check_codeFormat() {
     # Redirect output to stderr.
     exec 1>&2
     sum=0
-    for file in $(git diff-index --name-status $against -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
+    for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
         sum=$(expr ${sum} + $?)
     done
@@ -66,6 +57,15 @@ function check_codeFormat() {
 }
 
 function check_PR_limit() {
+    if [ "${TRAVIS_PULL_REQUEST}" != "false" ]; then
+        local skip=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/pulls/${TRAVIS_PULL_REQUEST} | grep "title\"" | grep "${skip_check_words}")
+        if [ ! -z "${skip}" ]; then
+            LOG_INFO "sync code PR, skip PR limit check!"
+            exit 0
+        else
+            LOG_INFO "PR-${TRAVIS_PULL_REQUEST}, checking PR limit..."
+        fi
+    fi
     local files=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $1}')
     if [ ${file_limit} -lt ${files} ]; then
         LOG_ERROR "modify ${files} files, limit is ${file_limit}"
@@ -102,6 +102,5 @@ function check_PR_limit() {
     LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines. Total ${commits} commits."
 }
 
-init
-check_PR_limit
 check_codeFormat
+check_PR_limit
