@@ -245,7 +245,7 @@ void EventLogFilterManager::executeFilters()
 
     if (shouldSleep)
     {
-        EVENT_LOG(TRACE) << LOG_BADGE("doWork") << LOG_KV("filter count", filters().size());
+        // EVENT_LOG(TRACE) << LOG_BADGE("doWork") << LOG_KV("filter count", filters().size());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
