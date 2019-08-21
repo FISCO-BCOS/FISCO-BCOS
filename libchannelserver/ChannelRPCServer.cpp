@@ -284,6 +284,9 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         case CLIENT_HANDSHAKE:
             onClientHandshake(session, message);
             break;
+        case CLIENT_REGISTER_EVENT_LOG:
+            onClientEventLogRequest(session, message);
+            break;
         case AMOP_REQUEST:
         case AMOP_RESPONSE:
         case AMOP_MULBROADCAST:
@@ -426,6 +429,56 @@ void dev::ChannelRPCServer::onClientRPCRequest(
     if (m_callbackSetter)
     {
         m_callbackSetter(NULL, NULL);
+    }
+}
+
+void dev::ChannelRPCServer::onClientEventLogRequest(
+    dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
+{
+    try
+    {
+        std::string data(message->data(), message->data() + message->dataSize());
+        CHANNEL_LOG(TRACE) << "onClientEventLogRequest, request=" << data;
+
+        auto seq = message->seq();
+        auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+        auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+        auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
+
+        auto callback = [serverRef, sessionRef](int32_t retCode, const std::string& seq,
+                            uint32_t type, const std::string& response, bool shouldSend) {
+            auto server = serverRef.lock();
+            auto session = sessionRef.lock();
+
+            if (server && session && session->actived())
+            {
+                if (shouldSend)
+                {
+                    auto channelMessage = server->messageFactory()->buildMessage();
+                    channelMessage->setType(type);
+                    channelMessage->setSeq(seq);
+                    channelMessage->setResult(retCode);
+                    channelMessage->setData((const byte*)response.c_str(), response.size());
+
+                    CHANNEL_LOG(TRACE)
+                        << " event log callback, seq:" << seq << ", code:" << retCode;
+                    session->asyncSendMessage(channelMessage,
+                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+                }
+
+                return true;
+            }
+
+            return false;
+        };
+
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, callback);
+        // response back
+        callback(ret, seq, EVENT_LOG_PUSH, std::string(""), true);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "onClientEventLogRequest" << boost::diagnostic_information(e);
     }
 }
 

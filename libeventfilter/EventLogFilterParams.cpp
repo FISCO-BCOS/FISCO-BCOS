@@ -41,7 +41,7 @@ bool EventLogFilterParams::getGroupIDField(const Json::Value& _json, GROUP_ID& _
     // groupID field
     if (_json.isMember("groupID"))
     {  // groupID field not exist
-        int groupID = _json["groupID"].asInt();
+        int groupID = jsToInt(_json["groupID"].asString());
         if (validGroupID(groupID))
         {
             _groupID = (GROUP_ID)groupID;
@@ -116,13 +116,13 @@ bool EventLogFilterParams::getTopicField(const Json::Value& _json, EventLogFilte
         return false;
     }
 
-    if (_json["topics"].isArray() && _json["topics"].size() >= eth::MAX_NUM_TOPIC_EVENT_LOG)
-    {  // there is at most 4 topics in one event log
-        return false;
-    }
-
     if (_json["topics"].isArray())
     {
+        if (_json["topics"].size() > eth::MAX_NUM_TOPIC_EVENT_LOG)
+        {  // there is at most 4 topics in one event log
+            return false;
+        }
+
         for (Json::ArrayIndex i = 0; i < _json["topics"].size(); i++)
         {
             if (_json["topics"][i].isArray())

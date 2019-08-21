@@ -141,6 +141,14 @@ public:
         m_callbackSetter = callbackSetter;
     };
 
+    void setEventFilterCallback(std::function<bool(const std::string&, uint32_t version,
+            std::function<int32_t(int32_t retCode, const std::string& seq, uint32_t type,
+                const std::string& response, bool shouldSend)>)>
+            _callback)
+    {
+        m_eventFilterCallBack = _callback;
+    };
+
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
@@ -151,6 +159,9 @@ private:
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
     virtual void onClientChannelRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientEventLogRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
     virtual void onClientHandshake(
@@ -191,6 +202,12 @@ private:
     std::function<void(
         std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
         m_callbackSetter;
+
+    std::function<bool(const std::string&, uint32_t,
+        std::function<int32_t(int32_t retCode, const std::string& seq, uint32_t type,
+            const std::string& response, bool shouldSend)>)>
+        m_eventFilterCallBack;
+
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
 };
 
