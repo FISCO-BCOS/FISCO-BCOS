@@ -530,6 +530,12 @@ public:
             "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
+
+    std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() override
+    {
+        // just for compile, do nothing
+        return nullptr;
+    }
     virtual void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
     virtual void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }
     virtual void initBlockSync() { m_sync = std::make_shared<MockBlockSync>(); }
