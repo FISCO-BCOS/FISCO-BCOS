@@ -97,11 +97,11 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
-        BOOST_TEST(count == CODE_UNDEFINED_FUNC);
+        BOOST_TEST(count == CODE_UNKNOW_FUNCTION_CALL);
     }
     else
     {
-        BOOST_TEST(count == -CODE_UNDEFINED_FUNC);
+        BOOST_TEST(count == -CODE_UNKNOW_FUNCTION_CALL);
     }
 }
 
