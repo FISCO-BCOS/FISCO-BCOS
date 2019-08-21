@@ -7,7 +7,6 @@ if (CRYPTO_EXTENSION)
         GIT_REPOSITORY https://github.com/FISCO-BCOS/paillier.git
 	    GIT_TAG 10ebe553d6d238e6b88fbf722509709db792dcb4
         BUILD_IN_SOURCE 1
-        # SOURCE_SUBDIR ./paillier_cpp/
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         -DCMAKE_POSITION_INDEPENDENT_CODE=on
         LOG_CONFIGURE 1
