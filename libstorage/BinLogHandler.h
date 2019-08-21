@@ -40,6 +40,32 @@ namespace storage
                        (((uint64_t)ntohl((x)&0xFFFFFFFFUL)) << 32) | ntohl((uint32_t)((x) >> 32)))
 #endif
 
+enum DecodeBlockResult
+{
+    Success = 0,               // decode block success
+    WrittenBlock = 1,          // the block has already been wirtten
+    BlockDataLengthError = 2,  // decode block fail because of invalid block data length
+};
+
+struct BinLogContext
+{
+    BinLogContext(const std::string& path) : version(0), length(0), offset(0)
+    {
+        file.open(path, std::ios::in | std::ios::binary);
+    }
+    ~BinLogContext()
+    {
+        if (file.is_open())
+        {
+            file.close();
+        }
+    }
+    std::ifstream file;
+    uint32_t version;
+    uint32_t length;
+    uint32_t offset;
+};
+
 class BinLogHandler
 {
 public:
@@ -60,7 +86,7 @@ public:
     /// @return true : it's completely written
     /// @return false : missing binlog in database
     bool getMissingBlocksFromBinLog(
-        int64_t num, std::map<int64_t, std::vector<TableData::Ptr>> binLogData);
+        int64_t _dataNum, std::map<int64_t, std::vector<TableData::Ptr>>& _binLogData);
 
 private:
     /// write data interface
@@ -84,6 +110,28 @@ private:
         const std::vector<std::string>& vecField, Entries::Ptr entries, bytes& buffer);
     void encodeTable(TableData::Ptr table, bytes& buffer);
     void encodeBlock(int64_t num, const std::vector<TableData::Ptr>& datas, bytes& buffer);
+
+    /// decodeEntries/decodeTable
+    /// @param buffer : [in] data buffer
+    /// @param offset : [in/out] data offset in buffer, will be increased after read
+    /// @param entries/table : [out] data read
+    /// @return : buffer length read
+    uint32_t decodeEntries(const bytes& buffer, uint32_t& offset,
+        const std::vector<std::string>& vecField, Entries::Ptr entries);
+    uint32_t decodeTable(const bytes& buffer, uint32_t& offset, TableData::Ptr table);
+    /// decodeBlock
+    /// @param dataNum : [in] block height recorded in the database
+    /// @param buffer : [in] data buffer
+    /// @param num & datas : [out] tabledata in block num
+    /// @return : WrittenBlock or Success or BlockDataLengthError
+    DecodeBlockResult decodeBlock(
+        int64_t dataNum, const bytes& buffer, int64_t& num, std::vector<TableData::Ptr>& datas);
+    bool getBinLogContext(BinLogContext& binlog);
+    bool getBlockData(BinLogContext& binlog, int64_t dataNum,
+        std::map<int64_t, std::vector<TableData::Ptr>>& blocksData);
+    /// convert "filePath" contents to "blocksData" records with block height less than "dataNum"
+    bool readBinLog(const std::string& filePath, int64_t dataNum,
+        std::map<int64_t, std::vector<TableData::Ptr>>& blocksData);
 
     uint32_t m_writtenBytesLength = 0;  // length already written
     std::fstream m_outBinaryFile;       // the file being written
