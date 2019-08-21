@@ -92,8 +92,8 @@ check_port_available() {
 
 check_ip_available() {
     local config_file=$1
-    ip_addrs=($(awk -F "=" '/listen_ip/ {print $2}' ${config_file} | tr -d ' '))
-    local_addr=($(ifconfig | grep inet | awk -F " " '{print $2}' | tr -d ' ') 0.0.0.0)
+    local ip_addrs=($(awk -F "=" '/listen_ip/ {print $2}' ${config_file} | tr -d ' '))
+    local local_addr=($(ifconfig | grep inet | awk -F " " '{print $2}' | grep -v inet6 | tr -d ' ') 0.0.0.0)
     for ip in ${ip_addrs[*]}; do
         if echo "${local_addr[*]}" | grep -w "${ip}" &>/dev/null; then
             LOG_INFO "${ip} is valid listen IP."

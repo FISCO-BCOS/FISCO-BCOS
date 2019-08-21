@@ -99,7 +99,7 @@ function check_PR_limit() {
         LOG_ERROR "PR contain merge : ${merges}, Please rebase!"
         exit 1
     fi
-    LOG_INFO "modify ${files} files, insert ${insertions} lines, delete ${deletions} lines. Total ${commits} commits."
+    LOG_INFO "modify ${files} files, insert ${insertions} lines, valid insertion ${valid_insertions}, delete ${deletions} lines. Total ${commits} commits."
 }
 
 check_codeFormat
