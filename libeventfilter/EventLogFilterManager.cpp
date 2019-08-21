@@ -2,8 +2,11 @@
 #include "EventLogFilterManager.h"
 #include "Common.h"
 #include <libblockchain/BlockChainInterface.h>
+#include <libdevcore/TopicInfo.h>
 #include <libethcore/CommonJS.h>
 #include <libeventfilter/EventLogFilterParams.h>
+#include <libledger/LedgerParam.h>
+
 
 using namespace std;
 using namespace dev;
@@ -17,9 +20,13 @@ void EventLogFilterManager::start()
     {  // already start
         return;
     }
+
     startWorking();
     m_isInit = true;
-    EVENT_LOG(INFO) << LOG_BADGE("EventLogFilterManager") << LOG_DESC("start");
+
+    EVENT_LOG(INFO) << LOG_BADGE("EventLogFilterManager") << LOG_DESC("start")
+                    << LOG_KV("m_maxBlockRange", m_maxBlockRange)
+                    << LOG_KV("m_maxBlockPerLoopFilter", m_maxBlockPerLoopFilter);
 }
 
 // stop EventLogFilterManager
@@ -31,6 +38,7 @@ void EventLogFilterManager::stop()
         // will not restart worker, so terminate it
         terminate();
         m_isInit = false;
+
         EVENT_LOG(INFO) << LOG_BADGE("EventLogFilterManager") << LOG_DESC("stop");
     }
 }
@@ -46,9 +54,88 @@ void EventLogFilterManager::doWork()
 EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
     EventLogFilter::Ptr _filter)
 {
-    EVENT_LOG(DEBUG) << LOG_KV("groupID", _filter->getParams()->getGroupID());
-    // ADD TO DO
-    return filter_status::WAIT_FOR_MORE_BLOCK;
+    filter_status status;
+    std::string strDesc;
+
+    EventLogFilter::Ptr filter = _filter;
+    do
+    {
+        auto blockchain = getBlockChain();
+
+        // the blockNumber of this blockchain
+        BlockNumber blockNumber = blockchain->number();
+        BlockNumber nextBlockToProcess = filter->getNextBlockToProcess();
+
+        // check if session active
+        if (!filter->getResponseCallBack()(static_cast<int32_t>(ResponseCode::SUCCESS),
+                std::string(""), EVENT_LOG_PUSH, std::string(""), false))
+        {  // call back failed, maybe sesseion disconnect
+            strDesc = "Session Not Active";
+            status = filter_status::CALLBACK_FAILED;
+            break;
+        }
+
+        if (blockNumber <= nextBlockToProcess)
+        {  // wait for more block to be sealed
+            status = filter_status::WAIT_FOR_MORE_BLOCK;
+            break;
+        }
+
+        int64_t leftBlockCanProcess = blockNumber - nextBlockToProcess + 1;
+        // Process up to m_maxBlockPerFilter blocks at a time, default MAX_BLOCK_PER_PROCESS
+        int64_t thisLoopBlockCanProcess = MAX_BLOCK_PER_PROCESS;
+        int64_t maxBlockPerLoopFilter = getMaxBlockPerFilter();
+        if (maxBlockPerLoopFilter > 0 && maxBlockPerLoopFilter > leftBlockCanProcess)
+        {
+            thisLoopBlockCanProcess = leftBlockCanProcess;
+        }
+
+        Json::Value response(Json::arrayValue);
+        for (int64_t i = 0; i < thisLoopBlockCanProcess; i++)
+        {
+            auto block = blockchain->getBlockByNumber(nextBlockToProcess + i);
+            filter->matches(*block.get(), response);
+        }
+
+        filter->updateNextBlockToProcess(nextBlockToProcess + thisLoopBlockCanProcess);
+
+        Json::FastWriter writer;
+        auto resp = writer.write(response);
+        // call back
+        if (!filter->getResponseCallBack()(static_cast<int32_t>(ResponseCode::SUCCESS),
+                filter->getParams()->getFilterID(), EVENT_LOG_PUSH, resp, true))
+        {  // call back failed, maybe sesseion disconnect
+            strDesc = "respCallBackFailed, Session Not Active";
+            status = filter_status::CALLBACK_FAILED;
+            break;
+        }
+
+        // this filter push completed, remove this filter
+        if (filter->pushCompleted())
+        {
+            filter->getResponseCallBack()(static_cast<int32_t>(ResponseCode::PUSH_COMPLETED),
+                filter->getParams()->getFilterID(), EVENT_LOG_PUSH, std::string(""), true);
+            status = filter_status::PUSH_COMPLETED;
+            break;
+        }
+
+        // There are remaining blocks to continue processing in the next loop
+        status =
+            (leftBlockCanProcess > thisLoopBlockCanProcess ? filter_status::WAIT_FOR_NEXT_LOOP :
+                                                             filter_status::WAIT_FOR_MORE_BLOCK);
+    } while (0);
+
+    if (isErrorStatus(status))
+    {
+        EVENT_LOG(WARNING) << LOG_BADGE("doWork")
+                           << LOG_KV("groupID", filter->getParams()->getGroupID())
+                           << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess())
+                           << LOG_KV("startBlockNumber", filter->getParams()->getFromBlock())
+                           << LOG_KV("endBlockNumber", filter->getParams()->getToBlock())
+                           << LOG_KV("decs", strDesc);
+    }
+
+    return status;
 }
 
 // add EventLogFilter to m_filters by client json request
@@ -121,6 +208,7 @@ void EventLogFilterManager::addFilter()
         {
             // insert all waiting filters to m_filters to be processed
             m_filters.insert(m_filters.begin(), m_waitAddFilter.begin(), m_waitAddFilter.end());
+
             m_waitAddFilter.clear();
             m_waitAddCount = 0;
         }
@@ -136,7 +224,9 @@ void EventLogFilterManager::executeFilters()
         EventLogFilter::Ptr filter = *it;
         EVENT_LOG(TRACE) << LOG_BADGE("doWork")
                          << LOG_KV("groupID", filter->getParams()->getGroupID())
-                         << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess());
+                         << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess())
+                         << LOG_KV("startBlockNumber", filter->getParams()->getFromBlock())
+                         << LOG_KV("endBlockNumber", filter->getParams()->getToBlock());
 
         auto status = executeFilter(filter);
         if ((isErrorStatus(status)) || (status == filter_status::PUSH_COMPLETED))
