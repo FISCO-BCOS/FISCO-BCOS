@@ -23,6 +23,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <paillier/callpaillier.h>
 #include <string>
 
 using namespace dev;
@@ -68,13 +69,12 @@ bytes PaillierPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addr
             return out;
         }
         out = abi.abiIn("", result);
-        return out;
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("PaillierPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
+        getErrorCodeOut(out, CODE_UNKNOW_FUNCTION_CALL);
     }
-    getErrorCodeOut(out, CODE_UNDEFINED_FUNC);
     return out;
 }
