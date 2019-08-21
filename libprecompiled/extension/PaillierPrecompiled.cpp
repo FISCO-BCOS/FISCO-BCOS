@@ -23,6 +23,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
+#include <paillier/callpaillier.h>
 #include <string>
 
 using namespace dev;
