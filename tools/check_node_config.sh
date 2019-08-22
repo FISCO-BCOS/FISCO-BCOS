@@ -23,6 +23,7 @@ Usage:
     -h Help
 e.g 
     $0 -p node0
+    $0 -p node_127.0.0.1_30300
 EOF
 
     exit 0
@@ -48,8 +49,46 @@ print_config_info() {
 }
 
 check_cert() {
-    local config_file=$1
-    # TODO: verify cert and nodeID
+    local path=$1
+    # use ca_cert verify node_cert
+    ca_name=($(awk -F "=" '/ca_cert/ {print $2}' ${path}/config.ini | tr -d ' '))
+    node_name=($(awk -F "=" '/^[[:space:]]*cert/ {print $2}' ${path}/config.ini | tr -d ' '))
+    data_path=($(awk -F "=" '/^[[:space:]]*data_path/ {print $2}' ${path}/config.ini | tr -d ' '))
+    if [ "${data_path:0:1}" != "/" ]; then
+        data_path=${path}/${data_path}
+    fi 
+    ca_cert=${data_path}/${ca_name}
+    node_cert=${data_path}/${node_name}
+    agency_start=$(grep -n "BEGIN CERTIFICATE" ${node_cert} | cut -d ":" -f 1 | sed -n "2,1p")
+    if [ -z "${agency_start}" ];then
+        LOG_WARN "${node_name} type check failed, this certificate doesn't contain agency."
+        return 1
+    fi
+    agency_end=$(grep -n "END CERTIFICATE" ${node_cert} | cut -d ":" -f 1 | sed -n "2,1p")
+    if [ -z "${agency_end}" ];then
+        LOG_WARN "${node_name} type check failed, this certificate doesn't contain agency."
+        return 1
+    fi
+    sed -n "${agency_start},${agency_end}p" ${node_cert} > ./.agency.crt
+    sed -n "1,${agency_start}p" ${node_cert} > ./.node.crt
+    if ! openssl verify -CAfile ${ca_cert} -untrusted ./.agency.crt ./.node.crt &>/dev/null; then
+        LOG_WARN "use ${ca_cert} verify ${node_cert} failed"
+        return 1
+    fi
+    rm ./.agency.crt
+    rm ./.node.crt
+    LOG_INFO "use ${ca_cert} verify ${node_cert} successful"
+
+    # check if the node.nodeid match with node.crt
+    nodeid_from_cert=$(openssl x509  -text -in ${node_cert} | sed -n "15,20p" |  sed "s/://g" | tr "\n" " " | sed "s/ //g" | cut -c 3-130)
+    nodeid_from_file=$(cat ${data_path}/node.nodeid)
+    if [[ "${nodeid_from_cert}" != "${nodeid_from_file}" ]]; then
+        LOG_WARN "nodeid match failed!"
+        LOG_WARN "nodeid from ${node_cert} is ${nodeid_from_cert}"
+        LOG_WARN "nodeid from ${data_path}/node.nodeid is ${nodeid_from_file}"
+        return 1
+    fi
+    LOG_INFO "The contents of ${data_path}/node.nodeid and ${node_cert} are same."
 }
 
 check_node_reachable() {
@@ -93,7 +132,7 @@ check_port_available() {
 check_ip_available() {
     local config_file=$1
     local ip_addrs=($(awk -F "=" '/listen_ip/ {print $2}' ${config_file} | tr -d ' '))
-    local local_addr=($(ifconfig | grep inet | awk -F " " '{print $2}' | grep -v inet6 | tr -d ' ') 0.0.0.0)
+    local local_addr=($(ifconfig | grep inet | awk -F " " '{print $2}' | grep -v inet6 | tr -d ' ') " 0.0.0.0")
     for ip in ${ip_addrs[*]}; do
         if echo "${local_addr[*]}" | grep -w "${ip}" &>/dev/null; then
             LOG_INFO "${ip} is valid listen IP."
@@ -119,7 +158,7 @@ check_node() {
     check_ip_available ${config_file}
     check_port_available ${config_file}
     check_node_reachable ${config_file}
-    check_cert ${config_file}
+    check_cert ${path}
     check_process ${path}
     print_config_info ${config_file}
 }
