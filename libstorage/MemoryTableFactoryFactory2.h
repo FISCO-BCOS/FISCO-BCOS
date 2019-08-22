@@ -39,6 +39,7 @@ public:
         tableFactory->setStateStorage(m_stroage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
+        tableFactory->init();
 
         return tableFactory;
     }

@@ -56,6 +56,21 @@ MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 }
 
 
+void MemoryTableFactory2::init()
+{
+    auto table = openTable(SYS_CURRENT_STATE);
+    auto condition = table->newCondition();
+    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
+    // get id from backend
+    auto out = table->select(SYS_KEY_CURRENT_ID, condition);
+    if (out->size() > 0)
+    {
+        auto entry = out->get(0);
+        auto numStr = entry->getField(SYS_VALUE);
+        m_ID = boost::lexical_cast<size_t>(numStr);
+    }
+}
+
 Table::Ptr MemoryTableFactory2::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
 {
@@ -269,6 +284,22 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
             return lhs->info->name < rhs->info->name;
         });
+    for (auto tableData : datas)
+    {
+        for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
+             ++entry)
+        {
+            (*entry)->setID(++m_ID);
+        }
+    }
+    auto table = openTable(SYS_CURRENT_STATE);
+    auto condition = table->newCondition();
+    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
+
+    Entry::Ptr idEntry = std::make_shared<Entry>();
+    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
+    table->update(SYS_KEY, idEntry, condition);
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
