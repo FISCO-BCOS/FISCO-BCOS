@@ -19,7 +19,6 @@
 #
 # (c) 2016-2018 FISCO-BCOS contributors.
 #------------------------------------------------------------------------------
-language: cpp
 branches:
   only:
       - /.*/
@@ -31,13 +30,28 @@ env:
 matrix:
     fast_finish: true
     include:
-        - os: linux
+        - language: python
+          python: 3.6
+          dist: xenial
+          before_cache:
+          cache:
+          addons:
+          before_install:
+          install:
+          script: |
+            bash ./tools/ci/ci_scan_commit.sh
+          webhooks:
+
+        - language: cpp
+          os: linux
           dist: xenial
           sudo: required
           env: 
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
-        - os: osx
+
+        - language: cpp
+          os: osx
           osx_image: xcode10.2
           env: 
             - CACHE_NAME=osx
