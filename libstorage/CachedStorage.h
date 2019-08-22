@@ -122,8 +122,6 @@ public:
     void setMaxCapacity(int64_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
-    size_t ID();
-
     void startClearThread();
 
 private:
@@ -159,7 +157,7 @@ private:
 
     // boost::multi_index
     Storage::Ptr m_backend;
-    uint64_t m_ID = 1;
+
 
     tbb::atomic<uint64_t> m_syncNum;
     tbb::atomic<uint64_t> m_commitNum;
