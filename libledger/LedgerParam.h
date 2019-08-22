@@ -80,7 +80,7 @@ struct StorageParam
 {
     std::string type;
     std::string path;
-
+    bool binaryLog = false;
     // for amop storage
     std::string topic;
     size_t timeout;

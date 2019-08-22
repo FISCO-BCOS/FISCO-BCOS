@@ -527,6 +527,8 @@ function generate_group_ini()
 [storage]
     ; storage db type, rocksdb / mysql / external, rocksdb is recommended
     type=${storage_type}
+    ; set true to turn on binary log
+    binary_log=false
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10

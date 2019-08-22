@@ -338,6 +338,7 @@ void Ledger::initDBConfig(ptree const& pt)
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        m_param->mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
         if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
         {
             m_param->mutableStorageParam().type = "RocksDB";
