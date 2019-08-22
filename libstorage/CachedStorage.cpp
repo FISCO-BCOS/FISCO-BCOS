@@ -323,7 +323,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
                                 else
                                 {
-                                    // impossible, so exit
+                                    // impossible, should exit
                                     CACHED_STORAGE_LOG(FATAL)
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
@@ -331,7 +331,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             }
                             else
                             {
-                                // impossible, so exit
+                                // impossible, should exit
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
                             }
@@ -347,8 +347,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 commitData->newEntries->shallowFrom(requestData->newEntries);
 
                 TIME_RECORD("Sort new entries");
-                tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
-                    EntryLessNoLock(requestData->info));
+                // tbb::parallel_sort(commitData->newEntries->begin(),
+                // commitData->newEntries->end(),
+                //     EntryLessNoLock(requestData->info));
 
                 (*commitDatas)[idx] = commitData;
             }
@@ -364,11 +365,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         for (size_t j = 0; j < newEntriesSize; ++j)
         {
             auto commitEntry = commitData->newEntries->get(j);
-            commitEntry->setID(++m_ID);
+            // commitEntry->setID(++m_ID);
             commitEntry->setNum(num);
-#if 0
-            STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
-#endif
             ++total;
 
             auto key = commitEntry->getField(commitData->info->key);
@@ -452,14 +450,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
             data = (*commitDatas)[currentStateIdx];
         }
 
-        Entry::Ptr idEntry = std::make_shared<Entry>();
-        idEntry->setID(1);
-        idEntry->setNum(num);
-        idEntry->setStatus(0);
-        idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
-        idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
-
-        data->dirtyEntries->addEntry(idEntry);
 
         task->datas->push_back(data);
         auto backend = m_backend;
@@ -533,23 +523,6 @@ void CachedStorage::setBackend(Storage::Ptr backend)
 
 void CachedStorage::init()
 {
-    auto tableInfo = std::make_shared<storage::TableInfo>();
-    tableInfo->name = SYS_CURRENT_STATE;
-    tableInfo->key = SYS_KEY;
-    tableInfo->fields = std::vector<std::string>{"value"};
-
-    auto condition = std::make_shared<Condition>();
-    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
-
-    // get id from backend
-    auto out = m_backend->select(h256(), 0, tableInfo, SYS_KEY_CURRENT_ID, condition);
-    if (out->size() > 0)
-    {
-        auto entry = out->get(0);
-        auto numStr = entry->getField(SYS_VALUE);
-        m_ID = boost::lexical_cast<size_t>(numStr);
-    }
-
     if (!disabled())
     {
         startClearThread();
@@ -602,11 +575,6 @@ void CachedStorage::setMaxCapacity(int64_t maxCapacity)
 void CachedStorage::setMaxForwardBlock(size_t maxForwardBlock)
 {
     m_maxForwardBlock = maxForwardBlock;
-}
-
-size_t CachedStorage::ID()
-{
-    return m_ID;
 }
 
 void CachedStorage::startClearThread()
