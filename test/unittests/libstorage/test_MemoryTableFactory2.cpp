@@ -242,6 +242,12 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
     memoryDBFactory->setBlockNum(2);
 }
 
+BOOST_AUTO_TEST_CASE(init)
+{
+    memoryDBFactory->init();
+    BOOST_TEST(memoryDBFactory->ID() == 1);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_MemoryTableFactory2
