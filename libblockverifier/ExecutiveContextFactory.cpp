@@ -27,9 +27,9 @@
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
