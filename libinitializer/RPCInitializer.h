@@ -95,6 +95,7 @@ public:
     }
 
     ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
+    std::shared_ptr<ledger::LedgerManager> getLedgerManager() { return m_ledgerManager; }
 
 private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
