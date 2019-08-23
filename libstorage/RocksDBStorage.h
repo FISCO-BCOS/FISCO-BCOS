@@ -44,7 +44,7 @@ class RocksDBStorage : public Storage
 {
 public:
     typedef std::shared_ptr<RocksDBStorage> Ptr;
-
+    RocksDBStorage(bool _disableWAL = false) : m_disableWAL(_disableWAL) {}
     virtual ~RocksDBStorage(){};
 
     Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
@@ -55,6 +55,7 @@ public:
     void setDB(std::shared_ptr<dev::db::BasicRocksDB> db) { m_db = db; }
 
 private:
+    bool m_disableWAL = false;
     void processNewEntries(int64_t num,
         std::shared_ptr<std::map<std::string, std::vector<std::map<std::string, std::string>>>>
             key2value,
