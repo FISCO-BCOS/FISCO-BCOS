@@ -145,7 +145,11 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
+        // by default sync is false
         options.sync = false;
+        // by default disableWAL is false
+        options.disableWAL = m_disableWAL;
+
         m_db->Write(options, batch);
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)

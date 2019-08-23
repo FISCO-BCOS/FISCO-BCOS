@@ -23,6 +23,8 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include "libstorage/BinLogHandler.h"
+#include "libstorage/BinaryLogStorage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -31,7 +33,6 @@
 #include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libsecurity/EncryptedStorage.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
@@ -42,19 +43,17 @@
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
+using namespace dev::ledger;
 using namespace dev::eth;
 using namespace dev::mptstate;
 using namespace dev::executive;
 using namespace dev::storagestate;
 
-namespace dev
-{
-namespace ledger
-{
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
@@ -142,33 +141,27 @@ void DBInitializer::initLevelDBStorage()
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
-#if 0
-    if (g_BCOSConfig.diskEncryption.enable)
-    {
-        auto encryptedStorage = std::make_shared<EncryptedStorage>();
-        encryptedStorage->setBackend(_backend);
-
-        encryptedStorage->setDataKey(asBytes(g_BCOSConfig.diskEncryption.dataKey));
-        cachedStorage->setBackend(encryptedStorage);
-    }
-    else
-    {
-#endif
     cachedStorage->setBackend(_backend);
-#if 0
-    }
-#endif
 
     cachedStorage->setMaxCapacity(
         m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
     cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
 
     cachedStorage->init();
+    auto binaryLogStorage = make_shared<BinaryLogStorage>();
+    binaryLogStorage->setBackend(cachedStorage);
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(cachedStorage);
+    if (m_param->mutableStorageParam().binaryLog)
+    {
+        auto path = m_param->mutableStorageParam().path + "/BinaryLogs";
+        boost::filesystem::create_directories(path);
+        binaryLogStorage->setBinaryLogger(make_shared<BinLogHandler>(path));
+    }
 
-    m_storage = cachedStorage;
+    tableFactoryFactory->setStorage(binaryLogStorage);
+
+    m_storage = binaryLogStorage;
     m_tableFactoryFactory = tableFactoryFactory;
 }
 
@@ -263,7 +256,7 @@ void DBInitializer::initRocksDBStorage()
     {
         std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
         // create and init rocksDBStorage
-        std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
+        std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
         rocksdbStorage->setDB(rocksDB);
         // init TableFactory2
         initTableFactory2(rocksdbStorage);
@@ -369,6 +362,3 @@ void DBInitializer::createMptState(dev::h256 const& genesisHash)
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
     DBInitializer_LOG(DEBUG) << LOG_DESC("createMptState SUCC");
 }
-
-}  // namespace ledger
-}  // namespace dev
