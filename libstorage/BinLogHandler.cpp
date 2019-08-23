@@ -21,6 +21,7 @@
 
 #include "BinLogHandler.h"
 #include <json/json.h>
+#include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -49,9 +50,10 @@ BinLogHandler::~BinLogHandler()
 void BinLogHandler::setBinLogStoragePath(const std::string& path)
 {
     // called during chain initialization
-    m_path = path;
+    m_path = path + "/";
     // If the directory exists, the function does nothing
     fs::create_directory(m_path);
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("set binLog storage path") << LOG_KV("path", m_path);
 }
 
 bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -71,7 +73,8 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
         if (m_outBinaryFile && m_outBinaryFile.is_open())
         {
             BINLOG_HANDLER_LOG(INFO)
-                << LOG_DESC("open binary file successful!") << LOG_KV("fileName", buffer.size())
+                << LOG_DESC("open binary file successful!") << LOG_KV("fileName", filePath)
+                << LOG_KV("buffer size", buffer.size())
                 << LOG_KV("writtenBytesLength", m_writtenBytesLength);
             m_writtenBytesLength = 0;
             // write version
@@ -94,10 +97,50 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     return true;
 }
 
-bool BinLogHandler::getMissingBlocksFromBinLog(
-    int64_t, std::map<int64_t, std::vector<TableData::Ptr>>&)
+std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t _currentNum)
 {
-    return true;
+    std::shared_ptr<BlockDateMap> binLogData = std::make_shared<BlockDateMap>();
+
+    fs::path path(m_path);
+    if (fs::is_directory(path))
+    {
+        try
+        {
+            bool dataLoss = true;
+            typedef std::vector<fs::path> vec;
+            vec v;
+            // descending sort, read from first
+            std::copy(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(v));
+            std::sort(v.begin(), v.end(), [](fs::path const& a, fs::path const& b) {
+                return std::stoll(a.filename().string()) >= std::stoll(b.filename().string());
+            });
+            for (vec::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
+            {
+                BINLOG_HANDLER_LOG(INFO)
+                    << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
+                readBinLog(it->string(), _currentNum, *binLogData);
+                if (_currentNum >= std::stoll(it->filename().string()))
+                {
+                    dataLoss = false;
+                    break;
+                }
+            }
+            if (dataLoss)
+            {
+                BOOST_THROW_EXCEPTION(
+                    dev::StorageError() << errinfo_comment(
+                        "the database block height is less than the binlog record's minimum block "
+                        "height"));
+            }
+        }
+        catch (std::exception& e)
+        {
+            BOOST_THROW_EXCEPTION(
+                dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
+        }
+    }
+
+    return binLogData;
 }
 
 void BinLogHandler::writeUINT32(bytes& buffer, uint32_t ui)
@@ -153,15 +196,19 @@ void BinLogHandler::encodeEntries(
                                   << LOG_KV("id", entry->getID())
                                   << LOG_KV("status", (uint32_t)status);
         buffer.insert(buffer.end(), (byte*)&status, (byte*)&status + 1);
-        for (size_t k = 0; k < vecField.size(); k++)
+        for (const auto& key : vecField)
         {
+            if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
+            {
+                continue;
+            }
             std::string value = "";
-            auto fieldIt = entry->find(vecField[k]);
+            auto fieldIt = entry->find(key);
             if (fieldIt != entry->end())
             {
                 value = fieldIt->second;
             }
-            BINLOG_HANDLER_LOG(TRACE) << "key:" << vecField[k] << ", value:" << value;
+            BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
             writeString(buffer, value);
         }
     }
@@ -214,7 +261,7 @@ void BinLogHandler::encodeBlock(
     writeUINT32(buffer, crc32);
 
     // insert length
-    uint32_t length = htonl(buffer.size() + 4);
+    uint32_t length = htonl(buffer.size());
     buffer.insert(buffer.begin(), (byte*)&length, (byte*)&length + 4);
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("block binary data length include header and CRC32")
                              << LOG_KV("num", num) << LOG_KV("size", buffer.size())
@@ -277,11 +324,11 @@ uint32_t BinLogHandler::decodeTable(const bytes& buffer, uint32_t& offset, Table
 }
 
 DecodeBlockResult BinLogHandler::decodeBlock(
-    int64_t dataNum, const bytes& buffer, int64_t& binLogNum, std::vector<TableData::Ptr>& datas)
+    int64_t currentNum, const bytes& buffer, int64_t& binLogNum, std::vector<TableData::Ptr>& datas)
 {
     uint32_t offset = 0;
     binLogNum = readUINT64(buffer, offset);
-    if (binLogNum <= dataNum)
+    if (binLogNum <= currentNum)
     {
         BINLOG_HANDLER_LOG(INFO) << LOG_DESC("decode block, the block height has been written!");
         return DecodeBlockResult::WrittenBlock;
@@ -298,9 +345,9 @@ DecodeBlockResult BinLogHandler::decodeBlock(
         uint32_t dirtySize = decodeEntries(buffer, offset, vecField, data->dirtyEntries);
         uint32_t newSize = decodeEntries(buffer, offset, vecField, data->newEntries);
         BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block") << LOG_KV("idx", i)
-                                  << LOG_KV("tableInfo", tableSize)
-                                  << LOG_KV("dirtyEntries", dirtySize)
-                                  << LOG_KV("newEntries", newSize);
+                                  << LOG_KV("tableInfo buffer size", tableSize)
+                                  << LOG_KV("dirtyEntries buffer size", dirtySize)
+                                  << LOG_KV("newEntries buffer size", newSize);
 
         datas.push_back(data);
     }
@@ -344,8 +391,8 @@ bool BinLogHandler::getBinLogContext(BinLogContext& binlog)
     return true;
 }
 
-bool BinLogHandler::getBlockData(BinLogContext& binlog, int64_t dataNum,
-    std::map<int64_t, std::vector<TableData::Ptr>>& blocksData)
+bool BinLogHandler::getBlockData(
+    BinLogContext& binlog, int64_t currentNum, BlockDateMap& blocksData)
 {
     while (binlog.offset < binlog.length)
     {
@@ -359,15 +406,15 @@ bool BinLogHandler::getBlockData(BinLogContext& binlog, int64_t dataNum,
             return false;
         }
         blockLen = ntohl(blockLen);
+        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block")
+                                  << LOG_KV("block index", binlog.offset)
+                                  << LOG_KV("block data length", blockLen);
         binlog.offset += sizeof(uint32_t);
         if (binlog.offset + blockLen > binlog.length)
         {
             BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("readBinLog, block data length error!");
             return false;
         }
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block")
-                                  << LOG_KV("block index", binlog.offset)
-                                  << LOG_KV("block data length", blockLen);
 
         // get block buffer, include CRC32
         bytes buffer;
@@ -381,7 +428,7 @@ bool BinLogHandler::getBlockData(BinLogContext& binlog, int64_t dataNum,
         binlog.offset += blockLen;
         int64_t num;
         std::vector<TableData::Ptr> datas;
-        DecodeBlockResult decodeRet = decodeBlock(dataNum, buffer, num, datas);
+        DecodeBlockResult decodeRet = decodeBlock(currentNum, buffer, num, datas);
         if (DecodeBlockResult::Success == decodeRet)
         {
             blocksData[num] = datas;
@@ -394,8 +441,8 @@ bool BinLogHandler::getBlockData(BinLogContext& binlog, int64_t dataNum,
     return true;
 }
 
-bool BinLogHandler::readBinLog(const std::string& filePath, int64_t dataNum,
-    std::map<int64_t, std::vector<TableData::Ptr>>& blocksData)
+bool BinLogHandler::readBinLog(
+    const std::string& filePath, int64_t currentNum, BlockDateMap& blocksData)
 {
     BinLogContext binlog(filePath);
     if (!binlog.file.is_open() || !getBinLogContext(binlog))
@@ -403,11 +450,12 @@ bool BinLogHandler::readBinLog(const std::string& filePath, int64_t dataNum,
         return false;
     }
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("readBinLog start") << LOG_KV("file length", binlog.length)
-                             << LOG_KV("version", binlog.version);
+                             << LOG_KV("version", binlog.version)
+                             << LOG_KV("offset", binlog.offset);
     bool ret = false;
     if (binlog.version == BINLOG_VERSION)
     {
-        ret = getBlockData(binlog, dataNum, blocksData);
+        ret = getBlockData(binlog, currentNum, blocksData);
     }
     return ret;
 }
