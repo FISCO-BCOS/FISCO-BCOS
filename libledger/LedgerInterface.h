@@ -33,6 +33,11 @@
 #include <memory>
 namespace dev
 {
+namespace event
+{
+class EventLogFilterManager;
+}
+
 namespace ledger
 {
 class LedgerInterface
@@ -59,6 +64,7 @@ public:
     {
         (void)channelRPCServer;
     };
+    virtual std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() = 0;
 
 protected:
     dev::KeyPair m_keyPair;

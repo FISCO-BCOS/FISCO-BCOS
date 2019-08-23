@@ -24,8 +24,9 @@
 #include "libblockchain/BlockChainInterface.h"
 #include "libchannelserver/ChannelRPCServer.h"
 #include "libchannelserver/ChannelServer.h"
-#include "libdevcore/Common.h"  // for byte
-#include "libdevcore/Log.h"     // for LOG
+#include "libdevcore/Common.h"                    // for byte
+#include "libdevcore/Log.h"                       // for LOG
+#include "libeventfilter/EventLogFilterParams.h"  // for eventfilter
 #include "libinitializer/Common.h"
 #include "libledger/LedgerManager.h"
 #include "librpc/Rpc.h"  // for Rpc
@@ -123,6 +124,28 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
             rpcEntity, std::placeholders::_1, std::placeholders::_2));
+
+        // event log filter callback
+        m_channelRPCServer->setEventFilterCallback(
+            [this](const std::string& _json, uint32_t _version,
+                std::function<bool(int32_t, const std::string&, uint32_t, const std::string&, bool)>
+                    _callback) -> int32_t {
+                auto params =
+                    dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
+                if (!params)
+                {  // json parser failed
+                    return dev::event::ResponseCode::INVALID_REQUEST;
+                }
+
+                auto ledger = getLedgerManager()->ledger(params->getGroupID());
+                if (!ledger)
+                {
+                    return dev::event::ResponseCode::GROUP_NOT_EXIST;
+                }
+
+                return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
+                    params, _version, _callback);
+            });
 
         for (auto it : m_ledgerManager->getGroupList())
         {
