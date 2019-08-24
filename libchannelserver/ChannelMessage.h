@@ -132,11 +132,11 @@ public:
     virtual std::string topic()
     {
         if (!(m_type == dev::AMOP_REQUEST || m_type == dev::AMOP_RESPONSE ||
-                m_type == dev::TRANSACTION_NOTIFY))
+                m_type == dev::TRANSACTION_NOTIFY || m_type == dev::CLIENT_REGISTER_EVENT_LOG))
         {
-            throw(ChannelException(
-                -1, "type: " + boost::lexical_cast<std::string>(m_type) +
-                        " Not ChannelMessage, ChannelMessage type must be 0x30, 0x31 or 0x1001"));
+            throw(ChannelException(-1, "type: " + boost::lexical_cast<std::string>(m_type) +
+                                           " Not ChannelMessage, ChannelMessage type must be 0x30, "
+                                           "0x31 or 0x1001 or 0x15"));
         }
 
         if (m_data->size() < 1)

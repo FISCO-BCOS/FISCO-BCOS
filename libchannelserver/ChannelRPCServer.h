@@ -52,6 +52,10 @@ class context;
 }  // namespace asio
 }  // namespace boost
 
+namespace Json
+{
+class Value;
+}  // namespace Json
 
 namespace dev
 {
@@ -141,9 +145,10 @@ public:
         m_callbackSetter = callbackSetter;
     };
 
-    void setEventFilterCallback(std::function<bool(const std::string&, uint32_t version,
-            std::function<int32_t(int32_t retCode, const std::string& seq, uint32_t type,
-                const std::string& response, bool shouldSend)>)>
+    void setEventFilterCallback(std::function<bool(const std::string&, uint32_t,
+            std::function<int32_t(
+                const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+            std::function<bool()>)>
             _callback)
     {
         m_eventFilterCallBack = _callback;
@@ -204,8 +209,9 @@ private:
         m_callbackSetter;
 
     std::function<bool(const std::string&, uint32_t,
-        std::function<int32_t(int32_t retCode, const std::string& seq, uint32_t type,
-            const std::string& response, bool shouldSend)>)>
+        std::function<int32_t(
+            const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+        std::function<bool()>)>
         m_eventFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;

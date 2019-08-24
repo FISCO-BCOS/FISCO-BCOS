@@ -437,34 +437,42 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
 {
     try
     {
-        std::string data(message->data(), message->data() + message->dataSize());
-        CHANNEL_LOG(TRACE) << "onClientEventLogRequest, request=" << data;
-
         auto seq = message->seq();
+        uint8_t topicLen = *((uint8_t*)message->data());
+        // skip topic field
+        std::string data(message->data() + topicLen, message->data() + message->dataSize());
+
         auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
         auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
         auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
 
-        auto callback = [serverRef, sessionRef](int32_t retCode, const std::string& seq,
-                            uint32_t type, const std::string& response, bool shouldSend) {
+        auto respCallback = [serverRef, sessionRef](const std::string& _filterID, int32_t _result,
+                                const Json::Value& _logs) {
             auto server = serverRef.lock();
             auto session = sessionRef.lock();
 
             if (server && session && session->actived())
             {
-                if (shouldSend)
-                {
-                    auto channelMessage = server->messageFactory()->buildMessage();
-                    channelMessage->setType(type);
-                    channelMessage->setSeq(seq);
-                    channelMessage->setResult(retCode);
-                    channelMessage->setData((const byte*)response.c_str(), response.size());
+                Json::Value jsonResp;
+                jsonResp["result"] = _result;
+                jsonResp["filterID"] = _filterID;
+                jsonResp["logs"] = _logs;
 
-                    CHANNEL_LOG(TRACE)
-                        << " event log callback, seq:" << seq << ", code:" << retCode;
-                    session->asyncSendMessage(channelMessage,
-                        std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
-                }
+                Json::FastWriter writer;
+                auto resp = writer.write(jsonResp);
+
+                auto channelMessage = server->messageFactory()->buildMessage();
+                channelMessage->setType(EVENT_LOG_PUSH);
+                channelMessage->setResult(0);
+                channelMessage->setSeq(std::string(32, '0'));
+                channelMessage->setData((const byte*)resp.c_str(), resp.size());
+
+                CHANNEL_LOG(TRACE) << LOG_BADGE("EVENT") << LOG_DESC("response callback")
+                                   << LOG_KV("filterID", _filterID) << LOG_KV("result", _result)
+                                   << LOG_KV("resp", resp);
+
+                session->asyncSendMessage(channelMessage,
+                    std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
                 return true;
             }
@@ -472,9 +480,31 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
             return false;
         };
 
-        int32_t ret = m_eventFilterCallBack(data, protocolVersion, callback);
-        // response back
-        callback(ret, seq, EVENT_LOG_PUSH, std::string(""), true);
+        auto activeCallback = [serverRef, sessionRef]() {
+            auto server = serverRef.lock();
+            auto session = sessionRef.lock();
+            return server && session && session->actived();
+        };
+
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback);
+
+        CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
+                           << LOG_KV("request", data);
+
+        // send event register request back
+        Json::Value response;
+        response["result"] = ret;
+        Json::FastWriter writer;
+        auto resp = writer.write(response);
+
+        std::shared_ptr<dev::channel::TopicChannelMessage> message =
+            std::make_shared<dev::channel::TopicChannelMessage>();
+        message->setType(CLIENT_REGISTER_EVENT_LOG);
+        message->setSeq(seq);
+        message->setResult(0);
+        message->setTopicData(std::string(""), (const byte*)resp.data(), resp.size());
+
+        session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
     }
     catch (std::exception& e)
     {

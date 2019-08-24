@@ -25,6 +25,12 @@
 #include "EventLogFilter.h"
 #include <libdevcore/Worker.h>
 #include <atomic>
+
+namespace Json
+{
+class Value;
+}
+
 namespace dev
 {
 namespace blockchain
@@ -76,8 +82,9 @@ public:
 public:
     // add EventLogFilter to m_filters by client json request
     int32_t addEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version,
-        std::function<bool(int32_t, const std::string&, uint32_t, const std::string&, bool)>
-            callback);
+        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+            _respCallback,
+        std::function<bool()> _activeCallback);
 
 public:
     enum class filter_status

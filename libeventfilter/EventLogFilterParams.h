@@ -23,11 +23,15 @@
 
 #pragma once
 #include "Common.h"
-#include <json/json.h>
 #include <libdevcore/Address.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
+
+namespace Json
+{
+class Value;
+}
 
 namespace dev
 {

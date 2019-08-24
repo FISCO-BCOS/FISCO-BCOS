@@ -49,11 +49,13 @@ public:
     // m_nextBlockToProcess
     eth::BlockNumber getNextBlockToProcess() const { return m_nextBlockToProcess; }
     // m_responseCallback
-    std::function<bool(int32_t, const std::string&, uint32_t, const std::string&, bool)>
-    getResponseCallBack()
+    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+    getResponseCallback()
     {
         return m_responseCallback;
     }
+    // m_sessionActive
+    std::function<bool()> getSessionActiveCallback() { return m_isSessionActive; }
 
     // this filter pushed end
     bool pushCompleted() const { return m_nextBlockToProcess > m_params->getToBlock(); }
@@ -65,10 +67,15 @@ public:
     }
     // set response call back
     void setResponseCallBack(
-        std::function<bool(int32_t, const std::string&, uint32_t type, const std::string&, bool)>
+        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
             _callback)
     {
         m_responseCallback = _callback;
+    }
+
+    void setCheckSessionActiveCallBack(std::function<bool()> _callback)
+    {
+        m_isSessionActive = _callback;
     }
 
     uint32_t getChannelProtocolVersion() const { return m_channelProtocolVersion; }
@@ -85,8 +92,10 @@ private:
     // channel protocol version
     uint32_t m_channelProtocolVersion;
     // response callback function
-    std::function<bool(int32_t, const std::string&, uint32_t, const std::string&, bool)>
+    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
         m_responseCallback;
+    // connect active check function
+    std::function<bool()> m_isSessionActive;
 };
 
 }  // namespace event
