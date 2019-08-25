@@ -1,28 +1,11 @@
 #include "EventLogFilterParams.h"
+#include "json/json.h"
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::event;
-
-/*
-from json received from client create EventLogFilterParams, the json should be like :
-{
-  "groupId": "1",
-  "fromBlock": "0x1",
-  "toBlock": "0x2",
-  "address": "0x8888f1f195afa192cfee860698584c030f4c9db1",
-  "topics": [
-    "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-    null,
-    [
-      "0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-      "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"
-    ]
-  ]
-}
-*/
 
 bool EventLogFilterParams::getFilterIDField(const Json::Value& _json, std::string& _filterID)
 {
@@ -89,21 +72,21 @@ bool EventLogFilterParams::getAddressField(
     const Json::Value& _json, EventLogFilterParams::Ptr params)
 {
     // address field
-    if (!_json.isMember("address"))
+    if (!_json.isMember("addresses"))
     {
         return false;
     }
 
-    if (_json["address"].isArray())
+    if (_json["addresses"].isArray())
     {  // Multiple addresses
-        for (auto i : _json["address"])
+        for (auto i : _json["addresses"])
         {
             params->addAddress(jsToAddress(i.asString()));
         }
     }
     else
     {  // Single address
-        params->addAddress(jsToAddress(_json["address"].asString()));
+        params->addAddress(jsToAddress(_json["addresses"].asString()));
     }
 
     return true;
@@ -229,8 +212,8 @@ EventLogFilterParams::Ptr EventLogFilterParams::buildEventLogFilterParamsObject(
         }
     } while (0);
 
-    EVENT_LOG(ERROR) << LOG_BADGE("buildEventLogFilterParamsObject") << LOG_KV("desc", strDesc)
-                     << LOG_KV("json", _json);
+    EVENT_LOG(ERROR) << LOG_BADGE("buildEventLogFilterParamsObject")
+                     << LOG_KV("error desc", strDesc) << LOG_KV("json", _json);
 
     // end failed, the input json is not valid.
     return nullptr;

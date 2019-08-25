@@ -22,6 +22,7 @@
  */
 #include <iostream>
 
+#include "json/value.h"
 #include <libdevcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/LogEntry.h>
@@ -54,7 +55,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test0)
     std::string json0 =
         "{\"groupId\":\"1\",\"filterID\":\"43289048jhkjjk\",\"fromBlock\":\"0x1\",\"toBlock\":"
         "\"0x2\","
-        "\"address\":"
+        "\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -65,7 +66,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test0)
 
     // topics loss
     std::string json1 =
-        "{\"groupId\":\"1\",\"fromBlock\":\"0x1\",\"toBlock\":\"0x2\",\"address\":"
+        "{\"groupId\":\"1\",\"fromBlock\":\"0x1\",\"toBlock\":\"0x2\",\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\"}";
     auto params1 = EventLogFilterParams::buildEventLogFilterParamsObject(json1);
 
@@ -83,7 +84,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test0)
 
     // address loss
     std::string json3 =
-        "{\"groupId\":\"1\",\"fromBlock\":\"0x1\",\"toBlock\":\"0x2\",\"address\":"
+        "{\"groupId\":\"1\",\"fromBlock\":\"0x1\",\"toBlock\":\"0x2\",\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -96,7 +97,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test0)
     std::string json4 =
         "{\"groupId\":\"0\",\"filterID\":\"43289048jhkjjk\",\"fromBlock\":\"0x1\",\"toBlock\":"
         "\"0x2\","
-        "\"address\":"
+        "\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -110,7 +111,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test1)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"fromBlock\":\"latest\",\"toBlock\":"
-        "\"latest\",\"address\":"
+        "\"latest\",\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -124,7 +125,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test1)
         "0x8888f1f195afa192cfee860698584c030f4c9db1");
 
     std::string json1 =
-        "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"address\":"
+        "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -143,7 +144,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test0)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"fromBlock\":\"latest\",\"toBlock\":"
-        "\"latest\",\"address\":"
+        "\"latest\",\"addresses\":"
         "\"0x8888f1f195afa192cfee860698584c030f4c9db1\",\"topics\":["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\",null,["
         "\"0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b\","
@@ -157,25 +158,22 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test0)
     filter->updateNextBlockToProcess(-1);
     BOOST_CHECK_EQUAL(filter->getNextBlockToProcess(), -1);
 
-    filter->setResponseCallBack([](int32_t code, const std::string& filterID, uint32_t type,
-                                    const std::string& resp, bool shouldSend) -> bool {
-        EVENT_LOG(INFO) << LOG_KV("code", code) << LOG_KV("filterID", filterID)
-                        << LOG_KV("type", type) << LOG_KV("resp", resp);
-        return shouldSend;
-    });
+    filter->setResponseCallBack(
+        [](const std::string& _filterID, int32_t _result, const Json::Value& _logs) -> bool {
+            EVENT_LOG(INFO) << LOG_KV("result", _result) << LOG_KV("_filterID", _filterID);
+            (void)_logs;
+            return true;
+        });
 
-    auto r0 = filter->getResponseCallBack()(1, std::string(""), 0x15, std::string(""), false);
-    BOOST_CHECK_EQUAL(r0, false);
-
-    auto r1 = filter->getResponseCallBack()(1, std::string(""), 0x15, std::string(""), true);
-    BOOST_CHECK_EQUAL(r1, true);
+    auto r0 = filter->getResponseCallback()("aaa", -1, Json::Value());
+    BOOST_CHECK_EQUAL(r0, true);
 }
 
 BOOST_AUTO_TEST_CASE(EventLogFilter_test1)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"fromBlock\":\"latest\","
-        "\"toBlock\":\"latest\",\"address\":"
+        "\"toBlock\":\"latest\",\"addresses\":"
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3a\",\"topics\":["
         "\"0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4\"]}";
 
@@ -211,7 +209,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test2)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"fromBlock\":\"latest\",\"toBlock\":"
-        "\"latest\",\"address\":"
+        "\"latest\",\"addresses\":"
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3a\",\"topics\":["
         "\"0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5\"]}";
 
@@ -254,7 +252,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"adfsflkjklj9poi9\",\"fromBlock\":\"1111\",\"toBlock\":"
-        "\"2222\",\"address\":["
+        "\"2222\",\"addresses\":["
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3a\","
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3b\","
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3c\"],\"topics\":["
@@ -347,7 +345,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
     std::string json =
         "{\"groupID\":\"10\",\"filterID\":\"adfsflkjklj9poi9aa\",\"fromBlock\":\"1111\","
         "\"toBlock\":"
-        "\"2222\",\"address\":[],\"topics\":[]}";
+        "\"2222\",\"addresses\":[],\"topics\":[]}";
 
     auto params = EventLogFilterParams::buildEventLogFilterParamsObject(json);
 
@@ -431,7 +429,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterManager_test0)
 {
     std::string json =
         "{\"groupID\":\"1\",\"filterID\":\"aaaa\",\"fromBlock\":\"1111\",\"toBlock\":\"2222\","
-        "\"address\":["
+        "\"addresses\":["
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3a\","
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3b\","
         "\"0x692a70d2e424a56d2c6c27aa97d1a86395877b3c\"],\"topics\":["

@@ -8,10 +8,12 @@ using namespace dev::event;
 void EventLogFilter::matches(Block const& _block, Json::Value& _value)
 {
     const auto& receipts = _block.transactionReceipts();
+    const auto& transactions = _block.transactions();
 
     for (size_t i = 0; i < receipts.size(); ++i)
     {
         auto const& receipt = receipts[i];
+        auto const& tx = transactions[i];
         auto const& logs = receipt.log();
 
         for (size_t j = 0; j < logs.size(); ++j)
@@ -23,9 +25,10 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
             }
 
             Json::Value resp;
-
-
+            resp["blockNumber"] = toString(_block.blockHeader().number());
+            resp["blockHash"] = toJS(_block.blockHeader().hash());
             resp["address"] = toJS(log.address);
+            resp["logIndex"] = toJS(j);
             resp["data"] = toJS(log.data);
             resp["topics"] = Json::Value(Json::arrayValue);
 
@@ -34,7 +37,7 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
                 resp["topics"].append(toJS(log.topics[k]));
             }
 
-            resp["logIndex"] = toJS(j);
+            resp["transactionHash"] = toJS(tx.sha3());
             resp["transactionIndex"] = toJS(i);
 
             _value.append(resp);

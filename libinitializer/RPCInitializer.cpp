@@ -128,8 +128,10 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         // event log filter callback
         m_channelRPCServer->setEventFilterCallback(
             [this](const std::string& _json, uint32_t _version,
-                std::function<bool(int32_t, const std::string&, uint32_t, const std::string&, bool)>
-                    _callback) -> int32_t {
+                std::function<bool(
+                    const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+                    _respCallback,
+                std::function<bool()> _activeCallback) -> int32_t {
                 auto params =
                     dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
@@ -144,7 +146,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 }
 
                 return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
-                    params, _version, _callback);
+                    params, _version, _respCallback, _activeCallback);
             });
 
         for (auto it : m_ledgerManager->getGroupList())
