@@ -206,18 +206,6 @@ check_and_install_tassl()
     fi
 }
 
-getname() {
-    local name="$1"
-    if [ -z "$name" ]; then
-        return 0
-    fi
-    [[ "$name" =~ ^.*/$ ]] && {
-        name="${name%/*}"
-    }
-    name="${name##*/}"
-    echo "$name"
-}
-
 check_name() {
     local name="$1"
     local value="$2"
@@ -247,7 +235,7 @@ dir_must_not_exists() {
 
 gen_chain_cert() {
     local path="${1}"
-    name=$(getname "$path")
+    name=$(basename "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -262,7 +250,7 @@ gen_chain_cert() {
 gen_agency_cert() {
     local chain="${1}"
     local agencypath="${2}"
-    name=$(getname "$agencypath")
+    name=$(basename "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -283,29 +271,31 @@ gen_agency_cert() {
 }
 
 gen_cert_secp256k1() {
-    capath="$1"
+    agpath="$1"
     certpath="$2"
     name="$3"
     type="$4"
     openssl ecparam -out $certpath/${type}.param -name secp256k1
     openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
     openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
-    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
-        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
-    openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
-    rm -f $certpath/${type}.csr
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $agpath/cert.cnf -out $certpath/${type}.csr
+    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $agpath/agency.key -CA $agpath/agency.crt\
+        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $agpath/cert.cnf
+    # openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
+    cat ${agpath}/agency.crt >> $certpath/${type}.crt
+    rm -f $certpath/${type}.csr $certpath/${type}.pubkey $certpath/${type}.param
 }
 
-gen_node_cert() {
+gen_cert() {
     if [ "" == "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         exit_with_clean "openssl don't support secp256k1, please upgrade openssl!"
     fi
 
     agpath="${1}"
-    agency=$(getname "$agpath")
+    agency=$(basename "$agpath")
     ndpath="${2}"
-    node=$(getname "$ndpath")
+    local cert_name="${3}"
+    node=$(basename "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -314,11 +304,11 @@ gen_node_cert() {
 
     mkdir -p $ndpath
 
-    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
+    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
-    cp $agpath/ca.crt $agpath/agency.crt $ndpath
+    cp $agpath/ca.crt $ndpath
     cd $ndpath
 }
 
@@ -335,7 +325,7 @@ EOF
 
 gen_chain_cert_gm() {
     local path="${1}"
-    name=$(getname "$path")
+    name=$(basename "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -360,7 +350,7 @@ gen_chain_cert_gm() {
 gen_agency_cert_gm() {
     local chain="${1}"
     local agencypath="${2}"
-    name=$(getname "$agencypath")
+    name=$(basename "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/gmca.key"
@@ -397,9 +387,9 @@ gen_node_cert_gm() {
     fi
 
     agpath="${1}"
-    agency=$(getname "$agpath")
+    agency=$(basename "$agpath")
     ndpath="${2}"
-    node=$(getname "$ndpath")
+    node=$(basename "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/gmagency.key"
     check_name agency "$agency"
@@ -1087,9 +1077,8 @@ for line in ${ip_array[*]};do
         
         while :
         do
-            gen_node_cert ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >${logfile} 2>&1
+            gen_cert ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} "node" >${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.param node.private node.pubkey agency.crt
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -1119,7 +1108,6 @@ for line in ${ip_array[*]};do
             fi
             break;
         done
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
             cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
@@ -1131,9 +1119,9 @@ for line in ${ip_array[*]};do
         fi
 
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
         else
-            nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
 
         if [ -n "$guomi_mode" ]; then
@@ -1164,9 +1152,8 @@ for line in ${ip_array[*]};do
     done
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d ${sdk_path} ];then
-        gen_node_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">${logfile} 2>&1
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
-        rm node.param node.private node.pubkey node.nodeid agency.crt
+        gen_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}" "sdk" >${logfile} 2>&1
+        rm node.nodeid
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
         cd ${output_dir}
     fi
