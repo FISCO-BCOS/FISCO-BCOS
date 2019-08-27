@@ -110,13 +110,12 @@ Entries::Ptr RocksDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(h256, int64_t num, const vector<TableData::Ptr>& datas)
 {
     try
     {
         auto start_time = utcTime();
 
-        auto hex = hash.hex();
         WriteBatch batch;
         tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
             [&](const tbb::blocked_range<size_t>& range) {
