@@ -41,6 +41,11 @@ namespace db
 class BasicRocksDB;
 }
 
+namespace storage
+{
+class BinLogHandler;
+}
+
 namespace ledger
 {
 class DBInitializer
@@ -107,6 +112,8 @@ private:
     void createMptState(dev::h256 const& genesisHash);
 
     void initZdbStorage();
+    void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
+        dev::storage::Storage::Ptr _storage);
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
