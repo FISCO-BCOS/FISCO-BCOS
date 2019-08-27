@@ -1153,6 +1153,10 @@ for line in ${ip_array[*]};do
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d ${sdk_path} ];then
         gen_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}" "sdk" >${logfile} 2>&1
+        # FIXME: delete the below unbelievable ugliest operation in future
+        cp sdk.crt node.crt
+        cp sdk.key node.key
+        # FIXME: delete the upside unbelievable ugliest operation in future
         rm node.nodeid
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
         cd ${output_dir}
