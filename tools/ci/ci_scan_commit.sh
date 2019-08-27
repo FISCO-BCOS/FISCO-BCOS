@@ -33,6 +33,7 @@ scan_code()
     exec 1>&2
     for file in $(git diff-index --name-status HEAD^ | awk '{print $2}'); do
         if should_ignore ${file}; then continue; fi
+        if [ ! -f ${file} ];then continue; fi
         LOG_INFO "check file ${file}"
         python ${scan_code_script} $file 
         trigger_rules=$(jq -r '.' /tmp/report.json | grep 'trigger_rules' | awk '{print $2}' | sed 's/,//g')
@@ -51,5 +52,5 @@ install_cobra() {
    cp cobra/config.template cobra/config
 }
 
-# install_cobra
+install_cobra
 scan_code
