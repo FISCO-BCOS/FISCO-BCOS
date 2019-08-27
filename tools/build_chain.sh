@@ -525,7 +525,7 @@ function generate_group_ini()
     max_capacity=32
     max_forward_block=10
     ; only for external
-    max_retry=100
+    max_retry=60
     topic=DB
     ; only for mysql
     db_ip=127.0.0.1
