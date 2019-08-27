@@ -206,21 +206,5 @@ void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highest
     }
 }
 
-/// get the consensus status
-void PBFTReqCache::getCacheConsensusStatus(Json::Value& status_array) const
-{
-    /// prepare cache
-    getCacheStatus(status_array, "prepareCache", m_prepareCache);
-    /// raw prepare cache
-    getCacheStatus(status_array, "rawPrepareCache", m_rawPrepareCache);
-    /// commited prepare cache
-    getCacheStatus(status_array, "committedPrepareCache", m_committedPrepareCache);
-    /// future prepare cache
-    /// signCache
-    getCollectedCacheStatus(status_array, "signCache", m_signCache);
-    getCollectedCacheStatus(status_array, "commitCache", m_commitCache);
-    getCollectedCacheStatus(status_array, "viewChangeCache", m_recvViewChangeReq);
-}
-
 }  // namespace consensus
 }  // namespace dev

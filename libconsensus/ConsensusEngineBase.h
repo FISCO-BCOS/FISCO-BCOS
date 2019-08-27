@@ -151,7 +151,6 @@ public:
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
 
-
 protected:
     virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }

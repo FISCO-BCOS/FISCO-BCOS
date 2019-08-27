@@ -1362,8 +1362,7 @@ void PBFTEngine::checkAndChangeView()
 
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
-        VIEWTYPE toView = m_toView;
-        m_view = toView;
+        m_view = m_toView.load();
         m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -1578,9 +1577,6 @@ const std::string PBFTEngine::consensusStatus()
     status.append(statusObj);
     /// get view of node id
     getAllNodesViewStatus(status);
-
-    /// get cache-related informations
-    m_reqCache->getCacheConsensusStatus(status);
 
     Json::FastWriter fastWriter;
     std::string status_str = fastWriter.write(status);
