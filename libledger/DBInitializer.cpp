@@ -42,6 +42,7 @@
 #include <libstorage/SQLStorage.h>
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <boost/lexical_cast.hpp>
 
 using namespace std;
 using namespace dev;
@@ -138,6 +139,41 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
+void DBInitializer::recoverFromBinaryLog(
+    std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
+{
+    int64_t num = 0;
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), num);
+    Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
+    if (tb)
+    {
+        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+        if (entries->size() > 0)
+        {
+            auto entry = entries->get(0);
+            std::string currentNumber = entry->getField(SYS_VALUE);
+            num = boost::lexical_cast<int64_t>(currentNumber.c_str());
+        }
+    }
+    auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num);
+    if (blocksData->size() > 0)
+    {
+        for (size_t i = 1; i <= blocksData->size(); ++i)
+        {
+            auto blockData = blocksData->at(num + i);
+            if (blockData.empty())
+            {
+                DBInitializer_LOG(ERROR) << LOG_DESC("recoverFromBinaryLog failed");
+                BOOST_THROW_EXCEPTION(
+                    StorageError() << errinfo_comment("recoverFromBinaryLog failed"));
+            }
+            // FIXME: delete _hash_ field and try to delete hash parameter of storage
+            // FIXME: use h256() for now
+            _storage->commit(h256(), num + i, blockData);
+        }
+    }
+}
+
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
     auto cachedStorage = std::make_shared<CachedStorage>();
@@ -152,17 +188,18 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
     binaryLogStorage->setBackend(cachedStorage);
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    tableFactoryFactory->setStorage(binaryLogStorage);
+    m_tableFactoryFactory = tableFactoryFactory;
     if (m_param->mutableStorageParam().binaryLog)
     {
         auto path = m_param->mutableStorageParam().path + "/BinaryLogs";
         boost::filesystem::create_directories(path);
-        binaryLogStorage->setBinaryLogger(make_shared<BinLogHandler>(path));
+        auto binaryLogger = make_shared<BinLogHandler>(path);
+        // recover
+        recoverFromBinaryLog(binaryLogger, cachedStorage);
+        binaryLogStorage->setBinaryLogger(binaryLogger);
     }
-
-    tableFactoryFactory->setStorage(binaryLogStorage);
-
     m_storage = binaryLogStorage;
-    m_tableFactoryFactory = tableFactoryFactory;
 }
 
 void DBInitializer::initSQLStorage()
@@ -257,7 +294,8 @@ void DBInitializer::initRocksDBStorage()
     {
         std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
         // create and init rocksDBStorage
-        std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
+        std::shared_ptr<RocksDBStorage> rocksdbStorage =
+            std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
         rocksdbStorage->setDB(rocksDB);
         // init TableFactory2
         initTableFactory2(rocksdbStorage);
