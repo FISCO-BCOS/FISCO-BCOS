@@ -128,6 +128,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        m_remoteDB->stop();
         prepareExit(key);
     }
 
@@ -190,6 +191,7 @@ int MemoryTable2::update(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        m_remoteDB->stop();
         prepareExit(key);
     }
 
@@ -286,6 +288,7 @@ int MemoryTable2::remove(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
+        m_remoteDB->stop();
         prepareExit(key);
     }
 
