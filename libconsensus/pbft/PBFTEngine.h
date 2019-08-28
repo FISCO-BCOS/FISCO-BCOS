@@ -196,6 +196,9 @@ public:
 
     uint64_t sealingTxNumber() const { return m_sealingNumber; }
 
+    VIEWTYPE view() const override { return m_view; }
+    VIEWTYPE toView() const override { return m_toView; }
+
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
@@ -558,8 +561,8 @@ protected:
 
 
 protected:
-    VIEWTYPE m_view = 0;
-    VIEWTYPE m_toView = 0;
+    std::atomic<VIEWTYPE> m_view = {0};
+    std::atomic<VIEWTYPE> m_toView = {0};
     std::string m_baseDir;
     std::atomic_bool m_leaderFailed = {false};
     std::atomic_bool m_notifyNextLeaderSeal = {false};
