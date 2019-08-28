@@ -99,6 +99,8 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
 
 std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t _currentNum)
 {
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get missing blocks")
+                             << LOG_KV("current database num", _currentNum);
     std::shared_ptr<BlockDateMap> binLogData = std::make_shared<BlockDateMap>();
 
     fs::path path(m_path);
@@ -114,16 +116,23 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
             std::sort(v.begin(), v.end(), [](fs::path const& a, fs::path const& b) {
                 return std::stoll(a.filename().string()) >= std::stoll(b.filename().string());
             });
-            for (vec::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
+            if (v.size() > 0)
             {
-                BINLOG_HANDLER_LOG(INFO)
-                    << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
-                readBinLog(it->string(), _currentNum, *binLogData);
-                if (_currentNum >= std::stoll(it->filename().string()))
+                for (vec::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
                 {
-                    dataLoss = false;
-                    break;
+                    BINLOG_HANDLER_LOG(INFO)
+                        << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
+                    readBinLog(it->string(), _currentNum, *binLogData);
+                    if (_currentNum >= std::stoll(it->filename().string()))
+                    {
+                        dataLoss = false;
+                        break;
+                    }
                 }
+            }
+            else
+            {
+                dataLoss = false;
             }
             if (dataLoss)
             {
@@ -330,7 +339,8 @@ DecodeBlockResult BinLogHandler::decodeBlock(
     binLogNum = readUINT64(buffer, offset);
     if (binLogNum <= currentNum)
     {
-        BINLOG_HANDLER_LOG(INFO) << LOG_DESC("decode block, the block height has been written!");
+        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("decode block, the block height has been written!")
+                                  << LOG_KV("block height", binLogNum);
         return DecodeBlockResult::WrittenBlock;
     }
     uint32_t dataSize = readUINT32(buffer, offset);
