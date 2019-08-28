@@ -284,22 +284,44 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
             return lhs->info->name < rhs->info->name;
         });
-    for (auto tableData : datas)
+    ssize_t currentStateIdx = -1;
+    for (size_t i = 0; i < datas.size(); ++i)
     {
+        auto tableData = datas[i];
+        if (currentStateIdx < 0 && tableData->info->name == SYS_CURRENT_STATE)
+        {
+            currentStateIdx = i;
+        }
         for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
              ++entry)
         {
             (*entry)->setID(++m_ID);
         }
     }
-    auto table = openTable(SYS_CURRENT_STATE);
-    auto condition = table->newCondition();
-    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
 
+    // Write m_ID to SYS_CURRENT_STATE
+    TableData::Ptr currentState;
+    if (currentStateIdx < 0)
+    {
+        currentState = std::make_shared<TableData>();
+        currentState->info->name = SYS_CURRENT_STATE;
+        currentState->info->key = SYS_KEY;
+        currentState->info->fields = std::vector<std::string>{"value"};
+        datas.push_back(currentState);
+    }
+    else
+    {
+        currentState = datas[currentStateIdx];
+    }
     Entry::Ptr idEntry = std::make_shared<Entry>();
+    idEntry->setID(1);
+    idEntry->setNum(_blockNumber);
+    idEntry->setStatus(0);
     idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
     idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
-    table->update(SYS_KEY, idEntry, condition);
+    idEntry->setForce(true);
+    currentState->newEntries->addEntry(idEntry);
+
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

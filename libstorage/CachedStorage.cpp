@@ -201,8 +201,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     commitDatas->resize(datas.size());
 
-    ssize_t currentStateIdx = -1;
-
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
@@ -211,11 +209,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 auto commitData = std::make_shared<TableData>();
                 commitData->info = requestData->info;
                 commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
-
-                if (currentStateIdx < 0 && commitData->info->name == SYS_CURRENT_STATE)
-                {
-                    currentStateIdx = idx;
-                }
 
                 // addtion data
                 std::set<std::string> addtionKey;
@@ -437,21 +430,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         task->num = num;
         task->datas = commitDatas;
 
-        TableData::Ptr data;
-        if (currentStateIdx < 0)
-        {
-            data = std::make_shared<TableData>();
-            data->info->name = SYS_CURRENT_STATE;
-            data->info->key = SYS_KEY;
-            data->info->fields = std::vector<std::string>{"value"};
-        }
-        else
-        {
-            data = (*commitDatas)[currentStateIdx];
-        }
-
-
-        task->datas->push_back(data);
         auto backend = m_backend;
         auto self = std::weak_ptr<CachedStorage>(
             std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
