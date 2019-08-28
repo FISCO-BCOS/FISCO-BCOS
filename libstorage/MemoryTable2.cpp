@@ -164,7 +164,7 @@ int MemoryTable2::update(
 
             for (auto& it : *(entry))
             {
-                //_id_ always got initialized value 0 from Entry::Entry()
+                // _id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
                 if (it.first != ID_FIELD && it.first != m_tableInfo->key)
                 {
