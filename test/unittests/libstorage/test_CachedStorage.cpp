@@ -94,7 +94,7 @@ public:
         BOOST_CHECK(hash == h256());
         BOOST_CHECK(num == commitNum);
 
-        BOOST_CHECK(datas.size() == 2);
+        BOOST_CHECK(datas.size() == 1);
         for (auto it : datas)
         {
             if (it->info->name == "t_test")
@@ -170,7 +170,7 @@ public:
         BOOST_CHECK(hash == h256());
         BOOST_CHECK(num == commitNum);
 
-        BOOST_CHECK(datas.size() == 101);
+        BOOST_CHECK(datas.size() == 100);
         for (size_t i = 0; i < 100; ++i)
         {
             auto tableData = datas[i];
