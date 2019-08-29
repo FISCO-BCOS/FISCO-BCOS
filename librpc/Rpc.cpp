@@ -168,15 +168,7 @@ std::string Rpc::getPbftView(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
-        std::string status = consensus->consensusStatus();
-        Json::Reader reader;
-        Json::Value statusJson;
-        u256 view;
-        if (!reader.parse(status, statusJson))
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::JsonParse, RPCMsg[RPCExceptionType::JsonParse]));
-
-        view = statusJson[0]["currentView"].asUInt64();
+        dev::consensus::VIEWTYPE view = consensus->view();
         return toJS(view);
     }
     catch (JsonRpcException& e)
