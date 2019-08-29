@@ -1,3 +1,11 @@
+### v2.0.1
+
+**修复**
+
+- 修复getConsensusStatus和getPbtView RPC接口访问线程不安全的函数导致的节点死机
+- 修复rocksdb选项设置导致的内存问题
+
+
 ### v2.0.0
 
 (2019-07-05)
