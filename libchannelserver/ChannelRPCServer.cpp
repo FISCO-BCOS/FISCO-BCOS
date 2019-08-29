@@ -594,6 +594,13 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
     {
         CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("topic", toTopic)
                            << LOG_KV("content", content);
+
+        if (getSessionByTopic(toTopic).empty())
+        {
+            CHANNEL_LOG(DEBUG) << "no SDK follow topic" << LOG_KV("topic", toTopic)
+                               << "just return";
+            return;
+        }
         dev::channel::TopicVerifyChannelMessage::Ptr channelMessage =
             std::make_shared<TopicVerifyChannelMessage>();
         channelMessage->setData(content);

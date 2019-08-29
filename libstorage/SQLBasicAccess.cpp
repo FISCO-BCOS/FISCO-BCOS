@@ -194,7 +194,7 @@ std::string SQLBasicAccess::BuildCreateTableSql(
         ss << "`" << *it << "` mediumtext,\n";
     }
     ss << " PRIMARY KEY( `_id_` ),\n";
-    ss << " KEY(`" << keyfield << "`),\n";
+    ss << " KEY(`" << keyfield << "`(191)),\n";
     ss << " KEY(`_num_`)\n";
     ss << ")ENGINE=InnoDB default charset=utf8mb4;";
 
