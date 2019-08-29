@@ -239,11 +239,12 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     rocksdb::Options options;
 
     // set Parallelism to the hardware concurrency
-    options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+    // This option will increase much memory
+    // options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
 
-    options.OptimizeLevelStyleCompaction();
+    // options.OptimizeLevelStyleCompaction();  // This option will increase much memory too
     options.create_if_missing = true;
-    options.max_open_files = 1000;
+    options.max_open_files = 200;
     options.compression = rocksdb::kSnappyCompression;
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
 
