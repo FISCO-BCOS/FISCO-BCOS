@@ -107,11 +107,16 @@ public:
         m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
+    void setLedgerManager(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager)
+    {
+        m_ledgerManager = _ledgerManager;
+    }
+    void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
 protected:
-    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
+    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
+    std::shared_ptr<dev::p2p::P2PInterface> service();
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
-    std::shared_ptr<dev::p2p::P2PInterface> service() { return m_service; }
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:

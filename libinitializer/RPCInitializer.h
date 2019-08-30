@@ -50,6 +50,10 @@ namespace p2p
 {
 class P2PInterface;
 }
+namespace rpc
+{
+class Rpc;
+}
 namespace initializer
 {
 class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>
@@ -101,6 +105,7 @@ private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
+    std::shared_ptr<dev::rpc::Rpc> m_rpcForChannel;
     std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
     ChannelRPCServer::Ptr m_channelRPCServer;
     ModularServer<>* m_channelRPCHttpServer;

@@ -153,11 +153,6 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
     {
         m_lastTimeoutTx = sealingTxNumber;
     }
-    else
-    {
-        /// attempt to increase m_lastTimeoutTx in case of cpu-fluctuation
-        attempIncreaseTimeoutTx();
-    }
     /// update the maxBlockCanSeal
     {
         UpgradableGuard l(x_maxBlockCanSeal);
@@ -208,6 +203,11 @@ void PBFTSealer::onCommitBlock(
     {
         return;
     }
+    // if m_lastTimeoutTx is no large than to m_maxNoTimeoutTx, try to increase m_TimeoutTx
+    if (m_lastTimeoutTx <= m_maxNoTimeoutTx)
+    {
+        attempIncreaseTimeoutTx();
+    }
     /// if the current maxBlockCanSeal is larger than m_lastTimeoutTx, return directly
     if (m_lastTimeoutTx != 0 && maxBlockCanSeal() >= m_lastTimeoutTx)
     {
@@ -230,11 +230,6 @@ void PBFTSealer::increaseMaxTxsCanSeal()
     else
     {
         m_maxBlockCanSeal += 1;
-    }
-    // if m_lastTimeoutTx is no large than to m_maxNoTimeoutTx, try to increase m_TimeoutTx
-    if (m_lastTimeoutTx <= m_maxNoTimeoutTx)
-    {
-        attempIncreaseTimeoutTx();
     }
     // increased m_maxBlockCanSeal is large than m_lastTimeoutTx, reset m_maxBlockCanSeal to
     // m_lastTimeoutTx
