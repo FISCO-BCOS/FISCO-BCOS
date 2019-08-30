@@ -38,7 +38,7 @@ compatibility_version=""
 default_version="2.1.0"
 macOS=""
 x86_64_arch="true"
-download_timeout=90
+download_timeout=60
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
 help() {
@@ -157,7 +157,7 @@ done
 print_result()
 {
 echo "================================================================"
-[ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
+[ -z ${docker_mode} ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
@@ -1262,6 +1262,7 @@ for line in ${ip_array[*]};do
     ((++server_count))
 done 
 rm ${logfile}
+if [ -f "${output_dir}/${bcos_bin_name}" ];then rm ${output_dir}/${bcos_bin_name};fi 
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in $(seq 0 ${#groups_count[@]});do

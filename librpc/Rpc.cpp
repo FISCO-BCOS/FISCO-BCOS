@@ -56,12 +56,33 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::NoView, "Only pbft consensus supports the view property"},
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
-        "Don't send request to this node who doesn't belong to the group"}};
+        "Don't send request to this node who doesn't belong to the group"},
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
+
+std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
+{
+    if (!m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_ledgerManager;
+}
+
+std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
+{
+    if (!m_service)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_service;
+}
 
 bool Rpc::isValidSystemConfig(std::string const& key)
 {
@@ -70,6 +91,11 @@ bool Rpc::isValidSystemConfig(std::string const& key)
 
 void Rpc::checkRequest(int _groupID)
 {
+    if (!m_service || !m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
     auto blockchain = ledgerManager()->blockChain(_groupID);
     if (!blockchain)
     {
