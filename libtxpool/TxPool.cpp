@@ -128,6 +128,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
+#if 0
         auto callback = _tx.rpcCallback();
         if (callback)
         {
@@ -137,6 +138,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
 
             m_callbackPool.enqueue([callback, receipt] { callback(receipt, bytes()); });
         }
+#endif
 
         return ImportResult::TransactionPoolIsFull;
     }
@@ -289,7 +291,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
         bytes input = p_tx->second->data();
         TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
-        m_callbackPool.enqueue([callback, input] { callback.call(callback.pReceipt, input); });
+        m_callbackPool->enqueue([callback, input] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
