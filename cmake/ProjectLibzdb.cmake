@@ -11,9 +11,7 @@ ExternalProject_Add(MySQLClient
     URL ${MYSQL_CONNECTOR_URL}
     URL_HASH SHA256=${MYSQL_CONNECTOR_SHA256}
     #please make sure MYSQL_TCP_PORT is set and not equal to 3306
-    CMAKE_ARGS  -DMYSQL_TCP_PORT=3305
-    BUILD_COMMAND make 
-    INSTALL_COMMAND bash -c "cp libmysql/libmysqlclient.a ${CMAKE_SOURCE_DIR}/deps/lib/"
+    CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a
 )
 ExternalProject_Get_Property(MySQLClient SOURCE_DIR)
@@ -29,9 +27,9 @@ ExternalProject_Add(libzdb DEPENDS MySQLClient
     URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
     URL_HASH SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2
     BUILD_IN_SOURCE 1
-    LOG_CONFIGURE 1
-    LOG_BUILD 1
-    LOG_INSTALL 1
+    LOG_CONFIGURE 0
+    LOG_BUILD 0
+    LOG_INSTALL 0
     CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
     BUILD_COMMAND make
     INSTALL_COMMAND ""

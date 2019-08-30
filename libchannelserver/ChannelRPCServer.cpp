@@ -609,9 +609,14 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
         CHANNEL_LOG(DEBUG) << "async push channel message" << LOG_KV("seq", channelMessage->seq())
                            << LOG_KV("type", channelMessage->type())
                            << LOG_KV("datalen", channelMessage->length());
+
         asyncPushChannelMessage(toTopic, channelMessage,
-            std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
-                dev::channel::ChannelSession::Ptr)>());
+            [channelMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr,
+                dev::channel::ChannelSession::Ptr) {
+                CHANNEL_LOG(DEBUG)
+                    << "async push channel message response" << LOG_KV("seq", channelMessage->seq())
+                    << " errcode:" << e.errorCode();
+            });
     }
     catch (ChannelException& e)
     {
