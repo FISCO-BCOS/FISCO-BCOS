@@ -39,7 +39,7 @@ matrix:
           before_install:
           install:
           script: |
-            bash ./tools/ci/ci_scan_commit.sh
+            bash ./tools/ci/security_audit.sh
           webhooks:
 
         - language: cpp

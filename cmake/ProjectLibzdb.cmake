@@ -1,15 +1,15 @@
 include(ExternalProject)
 
-set(MYSQL_CONNECTOR_URL https://downloads.mysql.com/archives/get/file/mysql-connector-c-6.1.11-src.tar.gz)
-set(MYSQL_CONNECTOR_SHA256 c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4)
-
 ExternalProject_Add(MySQLClient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME mysql-connector-c-6.1.11-src.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     BUILD_IN_SOURCE 1
-    URL ${MYSQL_CONNECTOR_URL}
-    URL_HASH SHA256=${MYSQL_CONNECTOR_SHA256}
+    LOG_CONFIGURE 1
+    LOG_BUILD 1
+    LOG_INSTALL 1
+    URL https://downloads.mysql.com/archives/get/file/mysql-connector-c-6.1.11-src.tar.gz
+    URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
     #please make sure MYSQL_TCP_PORT is set and not equal to 3306
     CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a
@@ -27,9 +27,9 @@ ExternalProject_Add(libzdb DEPENDS MySQLClient
     URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
     URL_HASH SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2
     BUILD_IN_SOURCE 1
-    LOG_CONFIGURE 0
-    LOG_BUILD 0
-    LOG_INSTALL 0
+    LOG_CONFIGURE 1
+    LOG_BUILD 1
+    LOG_INSTALL 1
     CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
     BUILD_COMMAND make
     INSTALL_COMMAND ""

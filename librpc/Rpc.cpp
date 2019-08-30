@@ -56,20 +56,110 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::NoView, "Only pbft consensus supports the view property"},
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
-        "Don't send request to this node who doesn't belong to the group"}};
+        "Don't send request to this node who doesn't belong to the group"},
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
 
+std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
+{
+    if (!m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_ledgerManager;
+}
+
+std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
+{
+    if (!m_service)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_service;
+}
+
 bool Rpc::isValidSystemConfig(std::string const& key)
 {
     return (key == "tx_count_limit" || key == "tx_gas_limit");
 }
 
+std::string Rpc::buildReceipt(uint32_t clientProtocolVersion, int errorCode,
+    const std::string& errorMessage, const bytes& input, LocalisedTransactionReceipt::Ptr receipt)
+{
+    if (errorCode)
+    {
+        Json::Value response;
+        response["transactionHash"] = Json::Value(Json::stringValue);
+        response["transactionIndex"] = Json::Value(Json::intValue);
+        response["blockNumber"] = Json::Value(Json::intValue);
+        response["blockHash"] = Json::Value(Json::stringValue);
+        response["from"] = Json::Value(Json::stringValue);
+        response["to"] = Json::Value(Json::stringValue);
+        response["gasUsed"] = Json::Value(Json::intValue);
+        response["contractAddress"] = Json::Value(Json::stringValue);
+        response["logs"] = Json::Value(Json::arrayValue);
+        response["logsBloom"] = Json::Value(Json::stringValue);
+        response["status"] = toJS(errorCode);
+        if (clientProtocolVersion > 1)
+        {
+            response["message"] = toJS(errorMessage);
+        }
+        response["output"] = Json::Value(Json::stringValue);
+
+        auto receiptContent = response.toStyledString();
+
+        return receiptContent;
+    }
+    else
+    {
+        Json::Value response;
+        response["transactionHash"] = toJS(receipt->hash());
+        response["transactionIndex"] = toJS(receipt->transactionIndex());
+        response["blockNumber"] = toJS(receipt->blockNumber());
+        response["blockHash"] = toJS(receipt->blockHash());
+        response["from"] = toJS(receipt->from());
+        response["to"] = toJS(receipt->to());
+        response["gasUsed"] = toJS(receipt->gasUsed());
+        response["contractAddress"] = toJS(receipt->contractAddress());
+        response["logs"] = Json::Value(Json::arrayValue);
+        for (unsigned int i = 0; i < receipt->log().size(); ++i)
+        {
+            Json::Value log;
+            log["address"] = toJS(receipt->log()[i].address);
+            log["topics"] = Json::Value(Json::arrayValue);
+            for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                log["topics"].append(toJS(receipt->log()[i].topics[j]));
+            log["data"] = toJS(receipt->log()[i].data);
+            response["logs"].append(log);
+        }
+        response["logsBloom"] = toJS(receipt->bloom());
+        response["status"] = toJS(receipt->status());
+        if (g_BCOSConfig.version() > RC3_VERSION)
+        {
+            response["input"] = toJS(input);
+        }
+
+        response["output"] = toJS(receipt->outputBytes());
+
+        auto receiptContent = response.toStyledString();
+
+        return receiptContent;
+    }
+}
+
 void Rpc::checkRequest(int _groupID)
 {
+    if (!m_service || !m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
     auto blockchain = ledgerManager()->blockChain(_groupID);
     if (!blockchain)
     {
@@ -168,15 +258,7 @@ std::string Rpc::getPbftView(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
-        std::string status = consensus->consensusStatus();
-        Json::Reader reader;
-        Json::Value statusJson;
-        u256 view;
-        if (!reader.parse(status, statusJson))
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(RPCExceptionType::JsonParse, RPCMsg[RPCExceptionType::JsonParse]));
-
-        view = statusJson[0]["currentView"].asUInt64();
+        dev::consensus::VIEWTYPE view = consensus->view();
         return toJS(view);
     }
     catch (JsonRpcException& e)
@@ -999,6 +1081,12 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
+    std::function<void(const std::string& receiptContext)>* currentTransactionCallback = NULL;
+    auto txPool = ledgerManager()->txPool(_groupID);
+
+    int errorCode = 0;
+    std::string errorMessage;
+
     try
     {
         RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
@@ -1007,48 +1095,17 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         checkRequest(_groupID);
         checkTxReceive(_groupID);
 
-        auto txPool = ledgerManager()->txPool(_groupID);
-
         Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
-        auto currentTransactionCallback = m_currentTransactionCallback.get();
+
+        currentTransactionCallback = m_currentTransactionCallback.get();
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
             auto clientProtocolversion = (*m_transactionCallbackVersion)();
-            tx.setRpcCallback([transactionCallback, clientProtocolversion](
+            tx.setRpcCallback([this, transactionCallback, clientProtocolversion, errorCode](
                                   LocalisedTransactionReceipt::Ptr receipt, bytes input) {
-                Json::Value response;
-                if (clientProtocolversion > 0)
-                {  // FIXME: If made protocol modify, please modify upside if
-                    response["transactionHash"] = toJS(receipt->hash());
-                    response["transactionIndex"] = toJS(receipt->transactionIndex());
-                    response["blockNumber"] = toJS(receipt->blockNumber());
-                    response["blockHash"] = toJS(receipt->blockHash());
-                    response["from"] = toJS(receipt->from());
-                    response["to"] = toJS(receipt->to());
-                    response["gasUsed"] = toJS(receipt->gasUsed());
-                    response["contractAddress"] = toJS(receipt->contractAddress());
-                    response["logs"] = Json::Value(Json::arrayValue);
-                    for (unsigned int i = 0; i < receipt->log().size(); ++i)
-                    {
-                        Json::Value log;
-                        log["address"] = toJS(receipt->log()[i].address);
-                        log["topics"] = Json::Value(Json::arrayValue);
-                        for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-                            log["topics"].append(toJS(receipt->log()[i].topics[j]));
-                        log["data"] = toJS(receipt->log()[i].data);
-                        response["logs"].append(log);
-                    }
-                    response["logsBloom"] = toJS(receipt->bloom());
-                    response["status"] = toJS(receipt->status());
-                    if (g_BCOSConfig.version() > RC3_VERSION)
-                    {
-                        response["input"] = toJS(input);
-                    }
-                    response["output"] = toJS(receipt->outputBytes());
-                }
-
-                auto receiptContent = response.toStyledString();
+                auto receiptContent =
+                    buildReceipt(clientProtocolversion, errorCode, "", input, receipt);
 
                 transactionCallback(receiptContent);
             });
@@ -1059,11 +1116,38 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
     catch (JsonRpcException& e)
     {
+        errorCode = e.GetCode();
+        errorMessage = boost::diagnostic_information(e);
+
         throw e;
+    }
+    catch (dev::eth::TransactionRefused& e)
+    {
+        errorCode = (int)dev::executive::TransactionException::TransactionRefused;
+
+        errorMessage = boost::diagnostic_information(e);
     }
     catch (std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+        errorCode = Errors::ERROR_RPC_INTERNAL_ERROR;
+        errorMessage = boost::diagnostic_information(e);
     }
+
+    if (errorCode)
+    {
+        if (currentTransactionCallback)
+        {
+            auto transactionCallback = *currentTransactionCallback;
+            auto clientProtocolversion = (*m_transactionCallbackVersion)();
+
+            auto receiptContent = buildReceipt(clientProtocolversion, errorCode, errorMessage,
+                bytes(), LocalisedTransactionReceipt::Ptr());
+
+            transactionCallback(receiptContent);
+        }
+
+        BOOST_THROW_EXCEPTION(JsonRpcException(errorCode, errorMessage));
+    }
+
+    return "";
 }
