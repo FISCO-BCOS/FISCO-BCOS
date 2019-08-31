@@ -243,7 +243,7 @@ void BinLogHandler::encodeTable(TableData::Ptr table, bytes& buffer)
         }
     }
     writeString(buffer, ss.str());
-    BINLOG_HANDLER_LOG(TRACE) << "fields(include key):" << ss.str();
+    BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" << ss.str();
     // table data : dirty entries and new entries
     encodeEntries(vecField, table->dirtyEntries, buffer);
     encodeEntries(vecField, table->newEntries, buffer);
@@ -290,9 +290,9 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
         uint8_t status = *((uint8_t*)&buffer[offset]);
         offset++;
         entry->setStatus(status);
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx", idx)
-                                  << LOG_KV("id", entry->getID())
-                                  << LOG_KV("status", (uint32_t)entry->getStatus());
+        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx in entries", idx)
+                                  << LOG_KV("_id_", entry->getID())
+                                  << LOG_KV("_status_", (uint32_t)entry->getStatus());
         for (const auto& key : vecField)
         {
             if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
@@ -350,8 +350,12 @@ DecodeBlockResult BinLogHandler::decodeBlock(
         uint32_t tableSize = decodeTable(buffer, offset, data);
 
         // entries
-        std::vector<std::string> vecField = data->info->fields;
+        std::vector<std::string> vecField;
         vecField.push_back(data->info->key);
+        for (const auto& field : data->info->fields)
+        {
+            vecField.push_back(field);
+        }
         uint32_t dirtySize = decodeEntries(buffer, offset, vecField, data->dirtyEntries);
         uint32_t newSize = decodeEntries(buffer, offset, vecField, data->newEntries);
         BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block") << LOG_KV("idx", i)
