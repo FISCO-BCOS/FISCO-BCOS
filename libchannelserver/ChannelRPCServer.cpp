@@ -592,28 +592,41 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 {
     try
     {
-        CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("topic", toTopic)
+        CHANNEL_LOG(DEBUG) << LOG_DESC("receive node request") << LOG_KV("topic", toTopic)
                            << LOG_KV("content", content);
+
+        if (getSessionByTopic(toTopic).empty())
+        {
+            CHANNEL_LOG(DEBUG) << LOG_DESC("no SDK follow topic") << LOG_KV("topic", toTopic)
+                               << LOG_DESC("just return");
+            return;
+        }
         dev::channel::TopicVerifyChannelMessage::Ptr channelMessage =
             std::make_shared<TopicVerifyChannelMessage>();
         channelMessage->setData(content);
         std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
         channelMessage->encode(*buffer);
-        CHANNEL_LOG(DEBUG) << "async push channel message" << LOG_KV("seq", channelMessage->seq())
+        CHANNEL_LOG(DEBUG) << LOG_DESC("async push channel message")
+                           << LOG_KV("seq", channelMessage->seq())
                            << LOG_KV("type", channelMessage->type())
                            << LOG_KV("datalen", channelMessage->length());
+
         asyncPushChannelMessage(toTopic, channelMessage,
-            std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
-                dev::channel::ChannelSession::Ptr)>());
+            [channelMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr,
+                dev::channel::ChannelSession::Ptr) {
+                CHANNEL_LOG(DEBUG)
+                    << LOG_DESC("async push channel message response")
+                    << LOG_KV("seq", channelMessage->seq()) << " errcode:" << e.errorCode();
+            });
     }
     catch (ChannelException& e)
     {
-        CHANNEL_LOG(ERROR) << "async push channel message failed: "
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
                            << boost::diagnostic_information(e);
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "async push channel message failed: "
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
                            << boost::diagnostic_information(e);
     }
 }
@@ -964,7 +977,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                     try
                     {
-                        m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        if (m_callback)
+                        {
+                            m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        }
                     }
                     catch (exception& e)
                     {
@@ -977,7 +993,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 try
                 {
-                    m_callback(e, message, m_currentSession);
+                    if (m_callback)
+                    {
+                        m_callback(e, message, m_currentSession);
+                    }
                 }
                 catch (exception& e)
                 {
