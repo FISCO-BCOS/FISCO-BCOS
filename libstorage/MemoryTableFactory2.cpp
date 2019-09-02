@@ -300,6 +300,12 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
     }
 
     // Write m_ID to SYS_CURRENT_STATE
+    Entry::Ptr idEntry = std::make_shared<Entry>();
+    idEntry->setID(1);
+    idEntry->setNum(_blockNumber);
+    idEntry->setStatus(0);
+    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
     TableData::Ptr currentState;
     if (currentStateIdx < 0)
     {
@@ -307,20 +313,15 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         currentState->info->name = SYS_CURRENT_STATE;
         currentState->info->key = SYS_KEY;
         currentState->info->fields = std::vector<std::string>{"value"};
+        idEntry->setForce(true);
+        currentState->newEntries->addEntry(idEntry);
         datas.push_back(currentState);
     }
     else
     {
         currentState = datas[currentStateIdx];
+        currentState->dirtyEntries->addEntry(idEntry);
     }
-    Entry::Ptr idEntry = std::make_shared<Entry>();
-    idEntry->setID(1);
-    idEntry->setNum(_blockNumber);
-    idEntry->setStatus(0);
-    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
-    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
-    idEntry->setForce(true);
-    currentState->newEntries->addEntry(idEntry);
 
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
