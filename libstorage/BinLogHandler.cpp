@@ -102,16 +102,12 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get missing blocks")
                              << LOG_KV("current database num", _currentNum);
     std::shared_ptr<BlockDateMap> binLogData = std::make_shared<BlockDateMap>();
-    if (_currentNum < 0)
-    {
-        _currentNum = 0;
-    }
     fs::path path(m_path);
     if (fs::is_directory(path))
     {
         try
         {
-            bool dataLoss = true;
+            bool incompleteData = true;
             typedef std::vector<fs::path> vec;
             vec v;
             // descending sort, read from first
@@ -125,19 +121,20 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
                 {
                     BINLOG_HANDLER_LOG(INFO)
                         << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
+                    readBinLog(it->string(), _currentNum, *binLogData);
                     if (_currentNum >= std::stoll(it->filename().string()))
                     {
-                        dataLoss = false;
-                        readBinLog(it->string(), _currentNum, *binLogData);
+                        incompleteData = false;
                         break;
                     }
                 }
             }
             else
             {
-                dataLoss = false;
+                incompleteData = false;
             }
-            if (dataLoss)
+            // the minimum block height written is 0, but the input may be less than 0
+            if (incompleteData && _currentNum >= 0)
             {
                 BOOST_THROW_EXCEPTION(
                     dev::StorageError() << errinfo_comment(
