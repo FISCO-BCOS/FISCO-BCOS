@@ -102,7 +102,10 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get missing blocks")
                              << LOG_KV("current database num", _currentNum);
     std::shared_ptr<BlockDateMap> binLogData = std::make_shared<BlockDateMap>();
-
+    if (_currentNum < 0)
+    {
+        _currentNum = 0;
+    }
     fs::path path(m_path);
     if (fs::is_directory(path))
     {
@@ -113,19 +116,19 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
             vec v;
             // descending sort, read from first
             std::copy(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(v));
-            std::sort(v.begin(), v.end(), [](fs::path const& a, fs::path const& b) {
-                return std::stoll(a.filename().string()) >= std::stoll(b.filename().string());
-            });
             if (v.size() > 0)
             {
+                std::sort(v.begin(), v.end(), [](fs::path const& a, fs::path const& b) {
+                    return std::stoll(a.filename().string()) >= std::stoll(b.filename().string());
+                });
                 for (vec::const_iterator it(v.begin()), it_end(v.end()); it != it_end; ++it)
                 {
                     BINLOG_HANDLER_LOG(INFO)
                         << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
-                    readBinLog(it->string(), _currentNum, *binLogData);
                     if (_currentNum >= std::stoll(it->filename().string()))
                     {
                         dataLoss = false;
+                        readBinLog(it->string(), _currentNum, *binLogData);
                         break;
                     }
                 }
