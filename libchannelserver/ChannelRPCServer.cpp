@@ -240,8 +240,8 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     std::string content =
         std::to_string(_groupID) + "," + boost::lexical_cast<std::string>(_blockNumber);
     Json::Value response;
-    response["GroupID"] = _groupID;
-    response["BlockNumber"] = _blockNumber;
+    response["groupID"] = _groupID;
+    response["blockNumber"] = _blockNumber;
     Json::FastWriter writer;
     auto resp = writer.write(response);
     for (auto session : activedSessions)
@@ -526,17 +526,17 @@ void dev::ChannelRPCServer::onClientHandshake(
             return;
         }
 
-        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("MinimumSupport", 1).asInt());
-        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("MaximumSupport", 1).asInt());
-        auto clientType = value.get("ClientType", "Unknow Client Type").asString();
+        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("minimumSupport", 1).asInt());
+        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("maximumSupport", 1).asInt());
+        auto clientType = value.get("clientType", "Unknow Client Type").asString();
         if (session->maximumProtocolVersion() < minimumProtocol ||
             session->minimumProtocolVersion() > maximumProtocol)
         {  // If the scope does not intersect, disconnect
             CHANNEL_LOG(WARNING) << "onClientHandshake failed, unsupported protocol"
-                                 << LOG_KV("ClientType", clientType)
+                                 << LOG_KV("clientType", clientType)
                                  << LOG_KV("endpoint", session->host())
-                                 << LOG_KV("SDKMinSupport", value.get("MinimumSupport", 1).asInt())
-                                 << LOG_KV("SDKMaxSupport", value.get("MaximumSupport", 1).asInt());
+                                 << LOG_KV("SDKMinSupport", value.get("minimumSupport", 1).asInt())
+                                 << LOG_KV("SDKMaxSupport", value.get("maximumSupport", 1).asInt());
             session->disconnectByQuit();
             onDisconnect(dev::channel::ChannelException(-1, "Unsupport protocol"), session);
             return;
@@ -547,14 +547,14 @@ void dev::ChannelRPCServer::onClientHandshake(
                                         session->maximumProtocolVersion());
 
         Json::Value response;
-        response["Protocol"] = static_cast<int>(session->protocolVersion());
-        response["NodeVersion"] = g_BCOSConfig.supportedVersion();
+        response["protocol"] = static_cast<int>(session->protocolVersion());
+        response["nodeVersion"] = g_BCOSConfig.supportedVersion();
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["Protocol"])
-                          << LOG_KV("ClientType", clientType) << LOG_KV("endpoint", session->host())
+        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["protocol"])
+                          << LOG_KV("clientType", clientType) << LOG_KV("endpoint", session->host())
                           << session->port();
     }
     catch (std::exception& e)
@@ -570,7 +570,7 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     if (session->protocolVersion() == ProtocolVersion::v2)
     {
         Json::Value response;
-        response["HeartBeat"] = 1;
+        response["heartBeat"] = 1;
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
