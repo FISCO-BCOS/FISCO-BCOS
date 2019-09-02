@@ -153,6 +153,8 @@ void DBInitializer::recoverFromBinaryLog(
         num = boost::lexical_cast<int64_t>(currentNumber.c_str());
     }
     auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num);
+    DBInitializer_LOG(INFO) << LOG_DESC("recover from") << LOG_KV("blockNumber", num);
+
     if (blocksData->size() > 0)
     {
         for (size_t i = 1; i <= blocksData->size(); ++i)
@@ -160,7 +162,8 @@ void DBInitializer::recoverFromBinaryLog(
             auto blockData = blocksData->at(num + i);
             if (blockData.empty())
             {
-                DBInitializer_LOG(FATAL) << LOG_DESC("recoverFromBinaryLog failed");
+                DBInitializer_LOG(FATAL)
+                    << LOG_DESC("recoverFromBinaryLog failed") << LOG_KV("blockNumber", num + 1);
             }
             // FIXME: delete _hash_ field and try to delete hash parameter of storage
             // FIXME: use h256() for now
@@ -187,7 +190,7 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
     m_tableFactoryFactory = tableFactoryFactory;
     if (m_param->mutableStorageParam().binaryLog)
     {
-        auto path = m_param->mutableStorageParam().path + "/BinaryLogs";
+        auto path = m_param->baseDir() + "/BinaryLogs";
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
         // recover

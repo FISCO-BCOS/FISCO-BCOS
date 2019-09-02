@@ -73,12 +73,13 @@ public:
 
     void insertGenesisBlock(std::shared_ptr<FakeBlock> _fakeBlock)
     {
+#if 0
         if (m_fakeStorage[SYS_CURRENT_STATE].find(SYS_KEY_CURRENT_NUMBER) !=
             m_fakeStorage[SYS_CURRENT_STATE].end())
         {
             return;
         }
-
+#endif
         Entry::Ptr entry = std::make_shared<Entry>();
         entry->setField("value", "0");
         m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER] = entry;
