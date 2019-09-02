@@ -142,18 +142,15 @@ void DBInitializer::initLevelDBStorage()
 void DBInitializer::recoverFromBinaryLog(
     std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
 {
-    int64_t num = 0;
+    int64_t num = -1;
     auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), num);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
-    if (tb)
+    auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+    if (entries->size() > 0)
     {
-        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
-        if (entries->size() > 0)
-        {
-            auto entry = entries->get(0);
-            std::string currentNumber = entry->getField(SYS_VALUE);
-            num = boost::lexical_cast<int64_t>(currentNumber.c_str());
-        }
+        auto entry = entries->get(0);
+        std::string currentNumber = entry->getField(SYS_VALUE);
+        num = boost::lexical_cast<int64_t>(currentNumber.c_str());
     }
     auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num);
     if (blocksData->size() > 0)
@@ -163,9 +160,7 @@ void DBInitializer::recoverFromBinaryLog(
             auto blockData = blocksData->at(num + i);
             if (blockData.empty())
             {
-                DBInitializer_LOG(ERROR) << LOG_DESC("recoverFromBinaryLog failed");
-                BOOST_THROW_EXCEPTION(
-                    StorageError() << errinfo_comment("recoverFromBinaryLog failed"));
+                DBInitializer_LOG(FATAL) << LOG_DESC("recoverFromBinaryLog failed");
             }
             // FIXME: delete _hash_ field and try to delete hash parameter of storage
             // FIXME: use h256() for now
