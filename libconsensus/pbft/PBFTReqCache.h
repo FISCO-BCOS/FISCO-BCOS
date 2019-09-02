@@ -108,9 +108,9 @@ public:
     inline void addRawPrepare(PrepareReq const& req)
     {
         m_rawPrepareCache = req;
-        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
-                                << LOG_KV("reqIdx", req.idx)
-                                << LOG_KV("hash", req.block_hash.abridged());
+        PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
+                               << LOG_KV("reqIdx", req.idx)
+                               << LOG_KV("hash", req.block_hash.abridged());
         m_prepareCache = PrepareReq();
     }
 
@@ -262,7 +262,6 @@ public:
     {
         return m_recvViewChangeReq;
     }
-    void getCacheConsensusStatus(Json::Value& statusArray) const;
 
 private:
     /// remove invalid requests cached in cache according to current block
@@ -313,37 +312,6 @@ private:
         if (it == cache.end())
             return false;
         return (it->second.find(key)) != (it->second.end());
-    }
-
-    /// get the status of specified cache into the json object
-    /// (maily for prepareCache, m_committedPrepareCache, m_futurePrepareCache and rawPrepareCache)
-    template <typename T>
-    void getCacheStatus(Json::Value& jsonArray, std::string const& key, T const& cache) const
-    {
-        Json::Value cacheStatus;
-        cacheStatus[key + "_blockHash"] = "0x" + toHex(cache.block_hash);
-        cacheStatus[key + "_height"] = cache.height;
-        cacheStatus[key + "_idx"] = toString(cache.idx);
-        cacheStatus[key + "_view"] = toString(cache.view);
-        jsonArray.append(cacheStatus);
-    }
-
-    template <typename T>
-    void getCollectedCacheStatus(
-        Json::Value& cacheJsonArray, std::string const& key, T const& cache) const
-    {
-        Json::Value tmp_array(Json::arrayValue);
-        Json::Value tmp_obj;
-        for (auto i : cache)
-        {
-            Json::Value entry;
-            entry[key + "_key"] = toJS(i.first);
-            entry[key + "_collectedSize"] = std::to_string(i.second.size());
-            tmp_array.append(entry);
-        }
-        tmp_obj[key + "_cachedSize"] = toString(cache.size());
-        tmp_obj["info"] = tmp_array;
-        cacheJsonArray.append(tmp_obj);
     }
 
 private:

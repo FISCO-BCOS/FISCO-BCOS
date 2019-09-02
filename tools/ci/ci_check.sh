@@ -13,7 +13,7 @@ LOG_INFO()
     echo -e "\033[32m ${content}\033[0m"
 }
 pip install requests
-bash build_chain.sh -l "127.0.0.1:4" -e ../build/bin/fisco-bcos -v 2.0.0
+bash build_chain.sh -l "127.0.0.1:4" -e ../build/bin/fisco-bcos -v 2.0.1
 cd nodes/127.0.0.1
 bash start_all.sh
 sleep 1

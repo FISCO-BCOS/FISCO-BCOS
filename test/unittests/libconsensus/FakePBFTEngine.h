@@ -73,9 +73,7 @@ public:
     int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
     void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
 
-    VIEWTYPE const& toView() const { return m_toView; }
     void setToView(VIEWTYPE const& view) { m_toView = view; }
-    VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
     {
