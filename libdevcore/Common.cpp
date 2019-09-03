@@ -144,9 +144,9 @@ TimeRecorder::~TimeRecorder()
 std::string newSeq()
 {
     static std::atomic<size_t> seq;
-    seq = seq.fetch_add(1) + 1;
+    size_t seqTmp = seq.fetch_add(1) + 1;
     std::stringstream ss;
-    ss << std::setfill('0') << std::setw(32) << seq;
+    ss << std::setfill('0') << std::setw(32) << seqTmp;
     return ss.str();
 }
 

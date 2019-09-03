@@ -790,7 +790,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    CHANNEL_LOG(DEBUG) << "SDK channel2 request type:" << message->type();
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK channel2 request") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     if (message->dataSize() < 1)
     {
