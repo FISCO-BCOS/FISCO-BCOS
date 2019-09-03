@@ -240,8 +240,8 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     std::string content =
         std::to_string(_groupID) + "," + boost::lexical_cast<std::string>(_blockNumber);
     Json::Value response;
-    response["GroupID"] = _groupID;
-    response["BlockNumber"] = _blockNumber;
+    response["groupID"] = _groupID;
+    response["blockNumber"] = _blockNumber;
     Json::FastWriter writer;
     auto resp = writer.write(response);
     for (auto session : activedSessions)
@@ -517,6 +517,7 @@ void dev::ChannelRPCServer::onClientHandshake(
 {
     try
     {
+        CHANNEL_LOG(DEBUG) << LOG_DESC("on client handshake") << LOG_KV("seq", message->seq());
         std::string data(message->data(), message->data() + message->dataSize());
         Json::Value value;
         Json::Reader jsonReader;
@@ -526,17 +527,17 @@ void dev::ChannelRPCServer::onClientHandshake(
             return;
         }
 
-        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("MinimumSupport", 1).asInt());
-        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("MaximumSupport", 1).asInt());
-        auto clientType = value.get("ClientType", "Unknow Client Type").asString();
+        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("minimumSupport", 1).asInt());
+        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("maximumSupport", 1).asInt());
+        auto clientType = value.get("clientType", "Unknow Client Type").asString();
         if (session->maximumProtocolVersion() < minimumProtocol ||
             session->minimumProtocolVersion() > maximumProtocol)
         {  // If the scope does not intersect, disconnect
             CHANNEL_LOG(WARNING) << "onClientHandshake failed, unsupported protocol"
-                                 << LOG_KV("ClientType", clientType)
+                                 << LOG_KV("clientType", clientType)
                                  << LOG_KV("endpoint", session->host())
-                                 << LOG_KV("SDKMinSupport", value.get("MinimumSupport", 1).asInt())
-                                 << LOG_KV("SDKMaxSupport", value.get("MaximumSupport", 1).asInt());
+                                 << LOG_KV("SDKMinSupport", value.get("minimumSupport", 1).asInt())
+                                 << LOG_KV("SDKMaxSupport", value.get("maximumSupport", 1).asInt());
             session->disconnectByQuit();
             onDisconnect(dev::channel::ChannelException(-1, "Unsupport protocol"), session);
             return;
@@ -547,14 +548,14 @@ void dev::ChannelRPCServer::onClientHandshake(
                                         session->maximumProtocolVersion());
 
         Json::Value response;
-        response["Protocol"] = static_cast<int>(session->protocolVersion());
-        response["NodeVersion"] = g_BCOSConfig.supportedVersion();
+        response["protocol"] = static_cast<int>(session->protocolVersion());
+        response["nodeVersion"] = g_BCOSConfig.supportedVersion();
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["Protocol"])
-                          << LOG_KV("ClientType", clientType) << LOG_KV("endpoint", session->host())
+        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["protocol"])
+                          << LOG_KV("clientType", clientType) << LOG_KV("endpoint", session->host())
                           << session->port();
     }
     catch (std::exception& e)
@@ -570,7 +571,7 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     if (session->protocolVersion() == ProtocolVersion::v2)
     {
         Json::Value response;
-        response["HeartBeat"] = 1;
+        response["heartBeat"] = 1;
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
@@ -592,13 +593,13 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 {
     try
     {
-        CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("topic", toTopic)
+        CHANNEL_LOG(DEBUG) << LOG_DESC("receive node request") << LOG_KV("topic", toTopic)
                            << LOG_KV("content", content);
 
         if (getSessionByTopic(toTopic).empty())
         {
-            CHANNEL_LOG(DEBUG) << "no SDK follow topic" << LOG_KV("topic", toTopic)
-                               << "just return";
+            CHANNEL_LOG(DEBUG) << LOG_DESC("no SDK follow topic") << LOG_KV("topic", toTopic)
+                               << LOG_DESC("just return");
             return;
         }
         dev::channel::TopicVerifyChannelMessage::Ptr channelMessage =
@@ -606,26 +607,36 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
         channelMessage->setData(content);
         std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
         channelMessage->encode(*buffer);
-        CHANNEL_LOG(DEBUG) << "async push channel message" << LOG_KV("seq", channelMessage->seq())
+        CHANNEL_LOG(DEBUG) << LOG_DESC("async push channel message")
+                           << LOG_KV("seq", channelMessage->seq())
                            << LOG_KV("type", channelMessage->type())
                            << LOG_KV("datalen", channelMessage->length());
 
         asyncPushChannelMessage(toTopic, channelMessage,
             [channelMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr,
                 dev::channel::ChannelSession::Ptr) {
-                CHANNEL_LOG(DEBUG)
-                    << "async push channel message response" << LOG_KV("seq", channelMessage->seq())
-                    << " errcode:" << e.errorCode();
+                if (!e.errorCode())
+                {
+                    CHANNEL_LOG(DEBUG) << LOG_DESC("push channel message response")
+                                       << LOG_KV("seq", channelMessage->seq());
+                }
+                else
+                {
+                    CHANNEL_LOG(ERROR)
+                        << LOG_DESC("push channel message response")
+                        << LOG_KV("seq", channelMessage->seq()) << LOG_KV("errcode", e.errorCode())
+                        << LOG_KV("errmsg", e.what());
+                }
             });
     }
     catch (ChannelException& e)
     {
-        CHANNEL_LOG(ERROR) << "async push channel message failed: "
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
                            << boost::diagnostic_information(e);
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "async push channel message failed: "
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
                            << boost::diagnostic_information(e);
     }
 }
@@ -748,7 +759,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 void dev::ChannelRPCServer::onClientTopicRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    // CHANNEL_LOG(DEBUG) << "receive SDK topic message";
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK topic message") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     std::string body(message->data(), message->data() + message->dataSize());
 
@@ -977,7 +989,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                     try
                     {
-                        m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        if (m_callback)
+                        {
+                            m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        }
                     }
                     catch (exception& e)
                     {
@@ -990,7 +1005,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 try
                 {
-                    m_callback(e, message, m_currentSession);
+                    if (m_callback)
+                    {
+                        m_callback(e, message, m_currentSession);
+                    }
                 }
                 catch (exception& e)
                 {
