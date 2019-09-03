@@ -22,8 +22,7 @@
 #include "DagTransferPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;

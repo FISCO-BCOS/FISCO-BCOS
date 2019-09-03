@@ -9,7 +9,7 @@
 SHELL_FOLDER=$(cd $(dirname $0);pwd)
 check_script=${SHELL_FOLDER}/run-clang-format.py
 commit_limit=6
-file_limit=30
+file_limit=35
 insert_limit=250
 delete_limit=500
 

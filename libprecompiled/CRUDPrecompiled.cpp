@@ -20,9 +20,9 @@
  */
 
 #include "CRUDPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/StorageException.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
@@ -60,7 +60,8 @@ void CRUDPrecompiled::checkLengthValidate(
     {
         STORAGE_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
                            << " greater than " << max_length;
-        BOOST_THROW_EXCEPTION(StorageException(throw_exception, std::string("size of value of key greater than")+std::to_string(max_length)));
+        BOOST_THROW_EXCEPTION(StorageException(throw_exception,
+            std::string("size of value of key greater than") + std::to_string(max_length)));
     }
 }
 

@@ -20,8 +20,8 @@
  */
 #include "SystemConfigPrecompiled.h"
 
-#include "libstorage/EntriesPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
