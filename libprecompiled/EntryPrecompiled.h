@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include "Table.h"
 #include "libblockverifier/Precompiled.h"
+#include "libstorage/Table.h"
 
 namespace dev
 {
