@@ -20,9 +20,9 @@
  */
 
 #include "CRUDPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/StorageException.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
