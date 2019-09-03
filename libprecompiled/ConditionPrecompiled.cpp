@@ -19,7 +19,7 @@
  *  @date 20180921
  */
 #include "ConditionPrecompiled.h"
-#include "Common.h"
+#include "libstorage/Common.h"
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
