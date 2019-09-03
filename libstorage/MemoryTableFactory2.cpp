@@ -307,7 +307,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
     idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
     idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
     TableData::Ptr currentState;
-    if (currentStateIdx < 0)
+    if (_blockNumber == 0 || currentStateIdx == -1)
     {
         currentState = std::make_shared<TableData>();
         currentState->info->name = SYS_CURRENT_STATE;
