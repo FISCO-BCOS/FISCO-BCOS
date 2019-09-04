@@ -174,28 +174,38 @@ void DBInitializer::recoverFromBinaryLog(
 
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
-    auto cachedStorage = std::make_shared<CachedStorage>();
-    cachedStorage->setBackend(_backend);
+    auto backendStorage = _backend;
+    if (m_param->mutableStorageParam().CachedStorage)
+    {
+        auto cachedStorage = std::make_shared<CachedStorage>();
+        cachedStorage->setBackend(_backend);
 
-    cachedStorage->setMaxCapacity(
-        m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
-    cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+        cachedStorage->setMaxCapacity(
+            m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
+        cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+        cachedStorage->init();
+        backendStorage = cachedStorage;
+        DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
+                                << LOG_KV("maxCapacity", m_param->mutableStorageParam().maxCapacity)
+                                << LOG_KV("maxForwardBlock",
+                                       m_param->mutableStorageParam().maxForwardBlock);
+    }
 
-    cachedStorage->init();
     auto binaryLogStorage = make_shared<BinaryLogStorage>();
-    binaryLogStorage->setBackend(cachedStorage);
+    binaryLogStorage->setBackend(backendStorage);
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(binaryLogStorage);
     m_tableFactoryFactory = tableFactoryFactory;
+
     if (m_param->mutableStorageParam().binaryLog)
     {
         auto path = m_param->baseDir() + "/BinaryLogs";
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
-        // recover
-        recoverFromBinaryLog(binaryLogger, cachedStorage);
+        recoverFromBinaryLog(binaryLogger, backendStorage);
         binaryLogStorage->setBinaryLogger(binaryLogger);
+        DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
     }
     m_storage = binaryLogStorage;
 }

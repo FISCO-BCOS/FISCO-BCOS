@@ -332,18 +332,18 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             touchMRU(requestData->info->name, key, change);
                         }
                     });
-
-                // TODO: check if necessery
+#if 0
+                // MemoryTable2 already sort
                 tbb::parallel_sort(commitData->dirtyEntries->begin(),
                     commitData->dirtyEntries->end(), EntryLessNoLock(requestData->info));
-
+#endif
                 commitData->newEntries->shallowFrom(requestData->newEntries);
 
                 TIME_RECORD("Sort new entries");
-                // tbb::parallel_sort(commitData->newEntries->begin(),
-                // commitData->newEntries->end(),
-                //     EntryLessNoLock(requestData->info));
-
+#if 0
+                tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
+                    EntryLessNoLock(requestData->info));
+#endif
                 (*commitDatas)[idx] = commitData;
             }
         });
