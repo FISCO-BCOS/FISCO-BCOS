@@ -62,6 +62,7 @@ Usage:
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
+    -B <Enable Binary log>              Default off. If set -B, enable binary log
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -529,6 +530,8 @@ function generate_group_ini()
     type=${storage_type}
     ; set true to turn on binary log
     binary_log=false
+    ; set fasle to disable CachedStorage
+    cached_storage=true
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10
