@@ -35,9 +35,9 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.0.0"
+default_version="2.0.1"
 macOS=""
-download_timeout=360
+download_timeout=60
 
 help() {
     echo $1
