@@ -517,6 +517,7 @@ void dev::ChannelRPCServer::onClientHandshake(
 {
     try
     {
+        CHANNEL_LOG(DEBUG) << LOG_DESC("on client handshake") << LOG_KV("seq", message->seq());
         std::string data(message->data(), message->data() + message->dataSize());
         Json::Value value;
         Json::Reader jsonReader;
@@ -614,9 +615,18 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
         asyncPushChannelMessage(toTopic, channelMessage,
             [channelMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr,
                 dev::channel::ChannelSession::Ptr) {
-                CHANNEL_LOG(DEBUG)
-                    << LOG_DESC("async push channel message response")
-                    << LOG_KV("seq", channelMessage->seq()) << " errcode:" << e.errorCode();
+                if (!e.errorCode())
+                {
+                    CHANNEL_LOG(DEBUG) << LOG_DESC("push channel message response")
+                                       << LOG_KV("seq", channelMessage->seq());
+                }
+                else
+                {
+                    CHANNEL_LOG(ERROR)
+                        << LOG_DESC("push channel message response")
+                        << LOG_KV("seq", channelMessage->seq()) << LOG_KV("errcode", e.errorCode())
+                        << LOG_KV("errmsg", e.what());
+                }
             });
     }
     catch (ChannelException& e)
@@ -749,7 +759,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 void dev::ChannelRPCServer::onClientTopicRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    // CHANNEL_LOG(DEBUG) << "receive SDK topic message";
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK topic message") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     std::string body(message->data(), message->data() + message->dataSize());
 
@@ -791,7 +802,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    CHANNEL_LOG(DEBUG) << "SDK channel2 request type:" << message->type();
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK channel2 request") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     if (message->dataSize() < 1)
     {
