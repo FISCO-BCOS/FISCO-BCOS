@@ -19,7 +19,6 @@
 #
 # (c) 2016-2018 FISCO-BCOS contributors.
 #------------------------------------------------------------------------------
-language: cpp
 branches:
   only:
       - /.*/
@@ -31,13 +30,28 @@ env:
 matrix:
     fast_finish: true
     include:
-        - os: linux
+        - language: python
+          python: 3.6
+          dist: xenial
+          before_cache:
+          cache:
+          addons:
+          before_install:
+          install:
+          script: |
+            bash ./tools/ci/security_audit.sh
+          webhooks:
+
+        - language: cpp
+          os: linux
           dist: xenial
           sudo: required
           env: 
             - CACHE_NAME=ubuntu16
             - ZIP_SUFFIX=ubuntu-xenial
-        - os: osx
+
+        - language: cpp
+          os: osx
           osx_image: xcode10.2
           env: 
             - CACHE_NAME=osx
@@ -63,15 +77,19 @@ addons:
   homebrew:
     packages:
     - openssl
-    - clang-format
     - ccache
 install: |
     if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then 
       bash tools/ci/check-commit.sh; 
     fi
 script: |
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
-    make -j2 && cd ../tools && bash ci/ci_check.sh
+    if [[ $TRAVIS_OS_NAME == linux ]]; then
+      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake .. && \
+      make -j2 && cd ../tools && bash ci/ci_check.sh
+    else
+      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
+      make -j2 && cd ../tools && bash ci/ci_check.sh
+    fi
 after_success:
     # if [ $TRAVIS_OS_NAME == linux ]; then
     #   cd $TRAVIS_BUILD_DIR && bash <(curl -s https://codecov.io/bash)

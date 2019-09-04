@@ -348,6 +348,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
         TIME_RECORD("Sort data");
         tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
+        tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
+            EntryLessNoLock(m_tableInfo));
         tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
             EntryLessNoLock(m_tableInfo));
         TIME_RECORD("Submmit data");
