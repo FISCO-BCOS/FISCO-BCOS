@@ -159,15 +159,18 @@ void DBInitializer::recoverFromBinaryLog(
     {
         for (size_t i = 1; i <= blocksData->size(); ++i)
         {
-            auto blockData = blocksData->at(num + i);
-            if (blockData.empty())
+            auto blockDataIter = blocksData->find(num + i);
+            if (blockDataIter == blocksData->end() || blockDataIter->second.empty())
             {
                 DBInitializer_LOG(FATAL)
-                    << LOG_DESC("recoverFromBinaryLog failed") << LOG_KV("blockNumber", num + 1);
+                    << LOG_DESC("recoverFromBinaryLog failed") << LOG_KV("blockNumber", num + i);
             }
-            // FIXME: delete _hash_ field and try to delete hash parameter of storage
-            // FIXME: use h256() for now
-            _storage->commit(h256(), num + i, blockData);
+            else
+            {
+                // FIXME: delete _hash_ field and try to delete hash parameter of storage
+                // FIXME: use h256() for now
+                _storage->commit(h256(), num + i, blockDataIter->second);
+            }
         }
     }
 }

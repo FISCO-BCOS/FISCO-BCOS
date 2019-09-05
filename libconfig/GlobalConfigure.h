@@ -70,6 +70,15 @@ public:
         std::string dataKey;
     } diskEncryption;
 
+    struct Binary
+    {
+        std::string version;
+        std::string buildTime;
+        std::string buildInfo;
+        std::string gitBranch;
+        std::string gitCommitHash;
+    } binaryInfo;
+
     /// default block time
     const unsigned c_intervalBlockTime = 1000;
     /// omit empty block or not
