@@ -145,8 +145,8 @@ public:
         m_callbackSetter = callbackSetter;
     };
 
-    void setEventFilterCallback(std::function<bool(const std::string&, uint32_t,
-            std::function<int32_t(
+    void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
+            std::function<bool(
                 const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
             std::function<bool()>)>
             _callback)
@@ -208,8 +208,8 @@ private:
         std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
         m_callbackSetter;
 
-    std::function<bool(const std::string&, uint32_t,
-        std::function<int32_t(
+    std::function<int32_t(const std::string&, uint32_t,
+        std::function<bool(
             const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
         std::function<bool()>)>
         m_eventFilterCallBack;

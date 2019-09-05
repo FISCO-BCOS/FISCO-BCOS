@@ -152,18 +152,19 @@ int32_t EventLogFilterManager::addEventLogFilterByRequest(const EventLogFilterPa
         }
         else
         {
-            // request startBlock is bigger than current block number, permited or not ???
-            if (params->getFromBlock() > blockNumber)
-            {
-                responseCode = ResponseCode::INVALID_REQUEST_RANGE;
-                break;
-            }
-
             nextBlockToProcess = params->getFromBlock();
         }
 
+        // toBlock is smaller than nextBlockToProcess
+        if (params->getToBlock() < nextBlockToProcess)
+        {
+            responseCode = ResponseCode::INVALID_REQUEST_RANGE;
+            break;
+        }
+
         // check block range valid be| startBlock  < ------ range -------- >  blockNumber |
-        if (getMaxBlockRange() > 0 && (blockNumber - nextBlockToProcess + 1 > getMaxBlockRange()))
+        if (getMaxBlockRange() > 0 && (blockNumber >= nextBlockToProcess) &&
+            (blockNumber - nextBlockToProcess + 1 > getMaxBlockRange()))
         {  // request invalid block range
             responseCode = ResponseCode::INVALID_REQUEST_RANGE;
             break;
