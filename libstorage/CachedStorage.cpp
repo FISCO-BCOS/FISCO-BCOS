@@ -129,12 +129,12 @@ CachedStorage::~CachedStorage()
     }
 }
 
-Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr CachedStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     auto out = std::make_shared<Entries>();
 
-    auto result = selectNoCondition(hash, num, tableInfo, key, condition);
+    auto result = selectNoCondition(num, tableInfo, key, condition);
 
     Cache::Ptr caches = std::get<1>(result);
     for (auto entry : *(caches->entries()))
@@ -151,7 +151,7 @@ Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableI
     return out;
 }
 
-std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNoCondition(h256 hash,
+std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNoCondition(
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
@@ -165,7 +165,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
         {
             auto conditionKey = std::make_shared<Condition>();
             conditionKey->EQ(tableInfo->key, key);
-            auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
+            auto backendData = m_backend->select(num, tableInfo, key, conditionKey);
 
             CACHED_STORAGE_LOG(TRACE) << tableInfo->name << ": " << key << " miss the cache";
 
@@ -178,6 +178,10 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
                 totalCapacity += it->capacity();
             }
             touchMRU(tableInfo->name, key, totalCapacity);
+        }
+        else
+        {
+            CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
         }
     }
     else
@@ -236,7 +240,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         auto conditionKey = std::make_shared<Condition>();
                                         conditionKey->EQ(requestData->info->key, key);
                                         auto backendData = m_backend->select(
-                                            hash, num, requestData->info, key, conditionKey);
+                                            num, requestData->info, key, conditionKey);
 
                                         CACHED_STORAGE_LOG(DEBUG)
                                             << requestData->info->name << "-" << key
@@ -387,7 +391,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                         auto conditionKey = std::make_shared<Condition>();
                         conditionKey->EQ(commitData->info->key, key);
                         auto backendData =
-                            m_backend->select(hash, num, commitData->info, key, conditionKey);
+                            m_backend->select(num, commitData->info, key, conditionKey);
 
                         CACHED_STORAGE_LOG(TRACE) << commitData->info->name << "-" << key
                                                   << " miss the cache while commit new entries";

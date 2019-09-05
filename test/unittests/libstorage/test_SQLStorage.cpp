@@ -152,8 +152,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries =
-        sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    Entries::Ptr entries = sqlStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -167,14 +166,14 @@ BOOST_AUTO_TEST_CASE(select_condition)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
+    Entries::Ptr entries = sqlStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1");
     tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
+    entries = sqlStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -197,7 +196,7 @@ BOOST_AUTO_TEST_CASE(commit)
     std::string key("LiSi");
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    entries = sqlStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -220,7 +219,7 @@ BOOST_AUTO_TEST_CASE(exception)
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(sqlStorage->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->select(num, table, key, std::make_shared<Condition>()), boost::exception);
 #endif
 }
 

@@ -37,10 +37,9 @@ public:
 
     virtual ~MemoryStorage2(){};
 
-    Entries::Ptr select(dev::h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition) override
+    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override
     {
-        (void)hash;
         (void)num;
 
         tbb::mutex::scoped_lock lock(m_mutex);

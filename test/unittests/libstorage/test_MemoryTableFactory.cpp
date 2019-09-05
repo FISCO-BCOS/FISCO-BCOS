@@ -41,7 +41,7 @@ public:
 
 
     virtual Entries::Ptr select(
-        h256, int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
+        int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;

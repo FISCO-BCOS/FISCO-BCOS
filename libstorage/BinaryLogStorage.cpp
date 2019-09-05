@@ -35,14 +35,14 @@ BinaryLogStorage::~BinaryLogStorage()
     stop();
 }
 
-Entries::Ptr BinaryLogStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr BinaryLogStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     if (m_backend)
     {
         STORAGE_LOG(DEBUG) << LOG_DESC("BinLog select from backend") << LOG_KV("key", key);
 
-        return m_backend->select(hash, num, tableInfo, key, condition);
+        return m_backend->select(num, tableInfo, key, condition);
     }
     STORAGE_LOG(FATAL) << "No backend storage, go die!";
     BOOST_THROW_EXCEPTION(StorageException(-1, std::string("There is not a backend storage!")));
