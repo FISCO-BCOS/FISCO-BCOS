@@ -51,7 +51,9 @@ namespace ledger
 class DBInitializer
 {
 public:
-    DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
+    DBInitializer(std::shared_ptr<LedgerParamInterface> param, dev::GROUP_ID _groupID)
+      : m_groupID(_groupID), m_param(param)
+    {}
     /// create storage DB(must be storage)
     ///  must be open before init
     virtual void initStorageDB();
@@ -90,6 +92,7 @@ public:
     virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
 
 protected:
+    dev::GROUP_ID m_groupID = 0;
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
