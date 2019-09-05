@@ -23,7 +23,6 @@
 #include "Common.h"
 #include "JsonHelper.h"
 #include "libledger/LedgerManager.h"  // for LedgerManager
-#include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -317,14 +316,13 @@ Json::Value Rpc::getClientVersion()
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
         Json::Value version;
 
-        version["FISCO-BCOS Version"] = FISCO_BCOS_PROJECT_VERSION;
+        version["FISCO-BCOS Version"] = g_BCOSConfig.binaryInfo.version;
         version["Supported Version"] = g_BCOSConfig.supportedVersion();
         version["Chain Id"] = toString(g_BCOSConfig.chainId());
-        version["Build Time"] = DEV_QUOTED(FISCO_BCOS_BUILD_TIME);
-        version["Build Type"] = std::string(DEV_QUOTED(FISCO_BCOS_BUILD_PLATFORM)) + "/" +
-                                std::string(DEV_QUOTED(FISCO_BCOS_BUILD_TYPE));
-        version["Git Branch"] = DEV_QUOTED(FISCO_BCOS_BUILD_BRANCH);
-        version["Git Commit Hash"] = DEV_QUOTED(FISCO_BCOS_COMMIT_HASH);
+        version["Build Time"] = g_BCOSConfig.binaryInfo.buildTime;
+        version["Build Type"] = g_BCOSConfig.binaryInfo.buildInfo;
+        version["Git Branch"] = g_BCOSConfig.binaryInfo.gitBranch;
+        version["Git Commit Hash"] = g_BCOSConfig.binaryInfo.gitCommitHash;
 
         return version;
     }
