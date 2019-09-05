@@ -1118,13 +1118,10 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     {
         errorCode = e.GetCode();
         errorMessage = boost::diagnostic_information(e);
-
-        throw e;
     }
     catch (dev::eth::TransactionRefused& e)
     {
         errorCode = (int)dev::executive::TransactionException::TransactionRefused;
-
         errorMessage = boost::diagnostic_information(e);
     }
     catch (std::exception& e)
