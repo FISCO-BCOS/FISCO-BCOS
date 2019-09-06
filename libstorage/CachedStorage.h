@@ -123,6 +123,11 @@ public:
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     void startClearThread();
+    void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
+    dev::GROUP_ID groupID() const { return m_groupID; }
+
+protected:
+    dev::GROUP_ID m_groupID = 0;
 
 private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
