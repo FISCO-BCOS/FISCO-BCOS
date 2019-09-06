@@ -257,7 +257,7 @@ public:
         boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
         initIniConfig(_configPath);
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain
         initBlockChain(m_genesisParam);
         /// intit blockVerifier
