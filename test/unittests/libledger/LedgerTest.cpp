@@ -48,7 +48,7 @@ public:
     bool initLedger(const std::string& _configPath) override
     {
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, 1);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
@@ -205,7 +205,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =
-        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam());
+        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam(), groupId);
     /// init storageDB
     BOOST_CHECK(dbInitializer->storage() == nullptr);
     dbInitializer->initStorageDB();
