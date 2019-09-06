@@ -31,7 +31,6 @@
 #include <arpa/inet.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
 #include <climits>
@@ -43,6 +42,23 @@ namespace dev
 {
 namespace channel
 {
+enum ChannelMessageType
+{
+    CHANNEL_RPC_REQUEST = 0x12,        // type for rpc request
+    CLIENT_HEARTBEAT = 0x13,           // type for heart beat for sdk
+    CLIENT_HANDSHAKE = 0x14,           // type for hand shake
+    CLIENT_REGISTER_EVENT_LOG = 0x15,  // type for event log filter register request and response
+    AMOP_REQUEST = 0x30,               // type for request from sdk
+    AMOP_RESPONSE = 0x31,              // type for response to sdk
+    AMOP_CLIENT_TOPICS = 0x32,         // type for topic request
+    AMOP_MULBROADCAST = 0x35,          // type for mult broadcast
+    REQUEST_TOPICCERT = 0x37,          // type request verify
+    UPDATE_TOPIICSTATUS = 0x38,        // type for update status
+    TRANSACTION_NOTIFY = 0x1000,       // type for  transaction notify
+    BLOCK_NOTIFY = 0x1001,             // type for  block notify
+    EVENT_LOG_PUSH = 0x1002            // type for event log push
+};
+
 class ChannelMessage : public Message
 {
 public:
@@ -131,8 +147,8 @@ public:
 
     virtual std::string topic()
     {
-        if (!(m_type == dev::AMOP_REQUEST || m_type == dev::AMOP_RESPONSE ||
-                m_type == dev::TRANSACTION_NOTIFY || m_type == dev::CLIENT_REGISTER_EVENT_LOG))
+        if (!(m_type == AMOP_REQUEST || m_type == AMOP_RESPONSE || m_type == TRANSACTION_NOTIFY ||
+                m_type == CLIENT_REGISTER_EVENT_LOG))
         {
             throw(ChannelException(-1, "type: " + boost::lexical_cast<std::string>(m_type) +
                                            " Not ChannelMessage, ChannelMessage type must be 0x30, "
@@ -203,7 +219,7 @@ public:
         }
         m_data->insert(
             m_data->end(), (byte*)content.c_str(), (byte*)content.c_str() + content.length());
-        m_type = dev::REQUEST_TOPICCERT;
+        m_type = REQUEST_TOPICCERT;
         m_seq = dev::newSeq();
     }
 
