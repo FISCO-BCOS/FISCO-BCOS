@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
     param->mutableStorageParam().path = dbName;
 
     // init DB initializer
-    std::shared_ptr<DBInitializer> dbInitializer = std::make_shared<DBInitializer>(param);
+    std::shared_ptr<DBInitializer> dbInitializer = std::make_shared<DBInitializer>(param, 1);
 
     // init for disk encryption
     // enable disk encryption

@@ -182,7 +182,7 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
     {
         auto cachedStorage = std::make_shared<CachedStorage>();
         cachedStorage->setBackend(_backend);
-
+        cachedStorage->setGroupID(m_groupID);
         cachedStorage->setMaxCapacity(
             m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
         cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);

@@ -51,8 +51,8 @@ Entries::Ptr BinaryLogStorage::select(h256 hash, int64_t num, TableInfo::Ptr tab
 
 size_t BinaryLogStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    CACHED_STORAGE_LOG(INFO) << "BinaryLogStorage commit: " << datas.size() << " hash: " << hash
-                             << " num: " << num;
+    STORAGE_LOG(INFO) << "BinaryLogStorage commit: " << datas.size() << " hash: " << hash
+                      << " num: " << num;
 
     if (m_binaryLogger)
     {
