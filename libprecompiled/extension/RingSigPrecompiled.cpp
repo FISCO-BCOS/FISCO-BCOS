@@ -58,7 +58,7 @@ bytes RingSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addre
 
         try
         {
-            result = RingSigApi::LinkableRingSig::ringsig_verify(signature, message, paramInfo);
+            result = RingSigApi::LinkableRingSig::ring_verify(signature, message, paramInfo);
         }
         catch (std::string& errorMsg)
         {
