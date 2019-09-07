@@ -128,17 +128,18 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
-#if 0
-        auto callback = _tx.rpcCallback();
-        if (callback)
+        if (g_BCOSConfig.version() < V2_1_0)
         {
-            dev::eth::LocalisedTransactionReceipt::Ptr receipt =
-                std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                    executive::TransactionException::TxPoolIsFull);
+            auto callback = _tx.rpcCallback();
+            if (callback)
+            {
+                dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+                    std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                        executive::TransactionException::TxPoolIsFull);
 
-            m_callbackPool.enqueue([callback, receipt] { callback(receipt, bytes()); });
+                m_callbackPool->enqueue([callback, receipt] { callback(receipt, bytes()); });
+            }
         }
-#endif
 
         return ImportResult::TransactionPoolIsFull;
     }

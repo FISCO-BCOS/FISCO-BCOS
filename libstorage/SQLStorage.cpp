@@ -29,7 +29,6 @@
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/TopicInfo.h>
 
 using namespace dev;
 using namespace std;
@@ -299,7 +298,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
         {
             dev::channel::TopicChannelMessage::Ptr request =
                 std::make_shared<dev::channel::TopicChannelMessage>();
-            request->setType(AMOP_REQUEST);
+            request->setType(channel::AMOP_REQUEST);
             request->setSeq(dev::newSeq());
 
             std::stringstream ssOut;
