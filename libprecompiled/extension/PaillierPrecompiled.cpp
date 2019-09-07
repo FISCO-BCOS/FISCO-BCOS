@@ -49,13 +49,13 @@ bytes PaillierPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addr
 
     dev::eth::ContractABI abi;
     bytes out;
-    std::string result;
 
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])
     {
         // paillierAdd(string,string)
         std::string cipher1, cipher2;
         abi.abiOut(data, cipher1, cipher2);
+        std::string result;
         try
         {
             result = m_callPaillier->paillierAdd(cipher1, cipher2);

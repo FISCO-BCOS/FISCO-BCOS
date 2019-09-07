@@ -58,7 +58,7 @@ bytes GroupSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addr
 
         try
         {
-            result = GroupSigApi::groupsig_verify(signature, message, gpkInfo, paramInfo);
+            result = GroupSigApi::group_verify(signature, message, gpkInfo, paramInfo);
         }
         catch (std::string& errorMsg)
         {

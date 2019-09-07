@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file PaillierPrecompiled.h
+/** @file test_PaillierPrecompiled.cpp
  *  @author shawnhe
  *  @date 20190813
  */
