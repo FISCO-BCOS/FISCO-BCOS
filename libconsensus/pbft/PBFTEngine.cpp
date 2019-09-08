@@ -989,7 +989,10 @@ void PBFTEngine::checkAndSave()
                     << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                     << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
                 m_reqCache->delCache(m_reqCache->prepareCache().block_hash);
-                m_reqCache->removeInvalidFutureCache(m_highestBlock);
+                m_reqCache->removeInvalidFutureCache(
+                    m_reqCache->prepareCache().pBlock->blockHeader());
+                // remove invalid viewchange of current block - 1
+                m_reqCache->delInvalidViewChange(m_reqCache->prepareCache().pBlock->blockHeader());
             }
             else
             {
@@ -1038,10 +1041,10 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
             m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
                 m_timeManager.m_changeCycle);
         }
-        /// remove invalid future block
-        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
         m_highestBlock = block.blockHeader();
+        /// remove invalid future block
+        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
             m_view = m_toView = 0;
