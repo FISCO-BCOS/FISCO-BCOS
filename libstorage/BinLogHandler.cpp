@@ -61,7 +61,7 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     bytes buffer;
     encodeBlock(num, datas, buffer);
 
-    if (m_writtenBytesLength == 0 || m_writtenBytesLength + buffer.size() > BINLOG_FILE_MAX_SIZE)
+    if (m_writtenBytesLength == 0 || m_writtenBytesLength + buffer.size() > m_binarylogSize)
     {  // check if need to create a new file, in the case of first write or capacity limitation
         if (m_writtenBytesLength > 0 && m_outBinaryFile.is_open())
         {  // close the file which has been opened

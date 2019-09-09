@@ -185,8 +185,8 @@ void DBInitializer::recoverFromBinaryLog(
                 // FIXME: delete _hash_ field and try to delete hash parameter of storage
                 // FIXME: use h256() for now
                 _storage->commit(hash, num + i, blockData);
-                DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs succeed")
-                                        << LOG_KV("blockNumber", num + i);
+                DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
+                                         << LOG_KV("blockNumber", num + i);
             }
         }
     }
@@ -223,6 +223,7 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
         auto path = m_param->baseDir() + "/BinaryLogs";
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
+        binaryLogger->setBinaryLogSize(g_BCOSConfig.c_binaryLogSize);
         recoverFromBinaryLog(binaryLogger, backendStorage);
         binaryLogStorage->setBinaryLogger(binaryLogger);
         DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
