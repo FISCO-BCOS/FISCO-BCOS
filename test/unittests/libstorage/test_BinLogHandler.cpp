@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(testTableData)
 
     BOOST_CHECK(binLogHandler->writeBlocktoBinLog(0, oirDatas) == true);
     BOOST_CHECK(binLogHandler->writeBlocktoBinLog(1, oirDatas) == true);
-    std::shared_ptr<BlockDateMap> binLogData = binLogHandler->getMissingBlocksFromBinLog(0);
+    std::shared_ptr<BlockDataMap> binLogData = binLogHandler->getMissingBlocksFromBinLog(0);
     BOOST_CHECK((*binLogData)[1].size() == 1);
     BOOST_CHECK((*binLogData)[1][0]->info->name == "t_test");
     BOOST_CHECK((*binLogData)[1][0]->info->key == "key");

@@ -52,7 +52,7 @@ void BinLogHandler::setBinLogStoragePath(const std::string& path)
     // called during chain initialization
     m_path = path + "/";
     // If the directory exists, the function does nothing
-    fs::create_directory(m_path);
+    fs::create_directories(m_path);
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("set binLog storage path") << LOG_KV("path", m_path);
 }
 
@@ -68,22 +68,12 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
             m_outBinaryFile.close();
         }
 
-        std::string filePath = m_path + std::to_string(num) + ".binlog";
-        m_outBinaryFile.open(filePath, std::ios::out | std::ios::binary);
-        if (m_outBinaryFile && m_outBinaryFile.is_open())
+        BINLOG_HANDLER_LOG(INFO) << LOG_DESC("try to open new binary file!")
+                                 << LOG_KV("file written length", m_writtenBytesLength)
+                                 << LOG_KV("buffer size", buffer.size());
+        // open binary file and write version
+        if (!initNewBinaryFile(num))
         {
-            BINLOG_HANDLER_LOG(INFO)
-                << LOG_DESC("open binary file successful!") << LOG_KV("fileName", filePath)
-                << LOG_KV("buffer size", buffer.size())
-                << LOG_KV("writtenBytesLength", m_writtenBytesLength);
-            m_writtenBytesLength = 0;
-            // write version
-            uint32_t version = htonl(BINLOG_VERSION);
-            m_outBinaryFile.write((char*)&version, sizeof(uint32_t));
-        }
-        else
-        {
-            BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("open binary file fail!");
             return false;
         }
     }
@@ -97,11 +87,11 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     return true;
 }
 
-std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t _currentNum)
+std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t _currentNum)
 {
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get missing blocks")
                              << LOG_KV("current database num", _currentNum);
-    std::shared_ptr<BlockDateMap> binLogData = std::make_shared<BlockDateMap>();
+    std::shared_ptr<BlockDataMap> binLogData = std::make_shared<BlockDataMap>();
     fs::path path(m_path);
     if (fs::is_directory(path))
     {
@@ -121,6 +111,14 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
                 {
                     BINLOG_HANDLER_LOG(INFO)
                         << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
+                    if (getFirstBlockNumInBinLog(it->string()) !=
+                        std::stoll(it->filename().string()))
+                    {
+                        BOOST_THROW_EXCEPTION(dev::StorageError() << errinfo_comment(
+                                                  "the first block num in binlog is not equal to "
+                                                  "file name! file name:" +
+                                                  it->filename().string()));
+                    }
                     readBinLog(it->string(), _currentNum, *binLogData);
                     if (_currentNum >= std::stoll(it->filename().string()))
                     {
@@ -150,6 +148,26 @@ std::shared_ptr<BlockDateMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
     }
 
     return binLogData;
+}
+
+bool BinLogHandler::initNewBinaryFile(int64_t num)
+{
+    std::string filePath = m_path + std::to_string(num) + ".binlog";
+    m_outBinaryFile.open(filePath, std::ios::out | std::ios::binary);
+    if (!m_outBinaryFile || !m_outBinaryFile.is_open())
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("open binary file fail!");
+        return false;
+    }
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("open binary file success!")
+                             << LOG_KV("file path", filePath);
+
+    // write version
+    uint32_t version = htonl(BINLOG_VERSION);
+    m_outBinaryFile.write((char*)&version, sizeof(uint32_t));
+    m_writtenBytesLength = sizeof(uint32_t);
+
+    return true;
 }
 
 void BinLogHandler::writeUINT32(bytes& buffer, uint32_t ui)
@@ -406,7 +424,7 @@ bool BinLogHandler::getBinLogContext(BinLogContext& binlog)
 }
 
 bool BinLogHandler::getBlockData(
-    BinLogContext& binlog, int64_t currentNum, BlockDateMap& blocksData)
+    BinLogContext& binlog, int64_t currentNum, BlockDataMap& blocksData)
 {
     while (binlog.offset < binlog.length)
     {
@@ -456,7 +474,7 @@ bool BinLogHandler::getBlockData(
 }
 
 bool BinLogHandler::readBinLog(
-    const std::string& filePath, int64_t currentNum, BlockDateMap& blocksData)
+    const std::string& filePath, int64_t currentNum, BlockDataMap& blocksData)
 {
     BinLogContext binlog(filePath);
     if (!binlog.file.is_open() || !getBinLogContext(binlog))
@@ -472,4 +490,25 @@ bool BinLogHandler::readBinLog(
         ret = getBlockData(binlog, currentNum, blocksData);
     }
     return ret;
+}
+
+int64_t BinLogHandler::getFirstBlockNumInBinLog(const std::string& filePath)
+{
+    BinLogContext binlog(filePath);
+    if (!binlog.file.is_open() || !getBinLogContext(binlog))
+    {
+        return -1;
+    }
+    uint32_t blockLen = 0;
+    uint64_t blockNum = 0;
+    if (binlog.file.read(reinterpret_cast<char*>(&blockLen), sizeof(uint32_t)).gcount() !=
+            sizeof(uint32_t) ||
+        binlog.file.read(reinterpret_cast<char*>(&blockNum), sizeof(uint64_t)).gcount() !=
+            sizeof(uint64_t))
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("read binLog error!");
+        return -1;
+    }
+    blockNum = NTOHLL(blockNum);
+    return blockNum;
 }
