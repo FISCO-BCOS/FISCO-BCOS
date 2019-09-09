@@ -40,7 +40,7 @@ namespace storage
                        (((uint64_t)ntohl((x)&0xFFFFFFFFUL)) << 32) | ntohl((uint32_t)((x) >> 32)))
 #endif
 
-typedef std::map<int64_t, std::vector<TableData::Ptr>> BlockDateMap;
+typedef std::map<int64_t, std::vector<TableData::Ptr>> BlockDataMap;
 
 enum DecodeBlockResult
 {
@@ -85,9 +85,12 @@ public:
     /// get block data that has not yet been written to the database
     /// @param _currentNum : [in] block heigth in database
     /// @return : missing data of each binlog block
-    std::shared_ptr<BlockDateMap> getMissingBlocksFromBinLog(int64_t _currentNum);
+    std::shared_ptr<BlockDataMap> getMissingBlocksFromBinLog(int64_t _currentNum);
 
 private:
+    /// open binary file and write version
+    bool initNewBinaryFile(int64_t num);
+
     /// write data interface
     /// @param buffer : [in/out] data buffer
     /// @param ui/str : [in] data to write
@@ -126,9 +129,12 @@ private:
     DecodeBlockResult decodeBlock(
         int64_t currentNum, const bytes& buffer, int64_t& num, std::vector<TableData::Ptr>& datas);
     bool getBinLogContext(BinLogContext& binlog);
-    bool getBlockData(BinLogContext& binlog, int64_t currentNum, BlockDateMap& blocksData);
+    bool getBlockData(BinLogContext& binlog, int64_t currentNum, BlockDataMap& blocksData);
     /// convert "filePath" contents to "blocksData" records with block height less than "currentNum"
-    bool readBinLog(const std::string& filePath, int64_t currentNum, BlockDateMap& blocksData);
+    bool readBinLog(const std::string& filePath, int64_t currentNum, BlockDataMap& blocksData);
+    /// getFirstBlockNumInBinLog
+    /// @return -1: get fail
+    int64_t getFirstBlockNumInBinLog(const std::string& filePath);
 
     uint32_t m_writtenBytesLength = 0;  // length already written
     std::fstream m_outBinaryFile;       // the file being written
