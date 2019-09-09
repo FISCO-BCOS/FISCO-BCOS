@@ -167,9 +167,23 @@ void DBInitializer::recoverFromBinaryLog(
             }
             else
             {
+                const std::vector<TableData::Ptr>& blockData = blockDataIter->second;
+                h256 hash = h256();
+                // get the hash used by commit function
+                for (size_t j = 0; j < blockData.size(); j++)
+                {
+                    TableData::Ptr data = blockData[j];
+                    if (data->info->name == SYS_NUMBER_2_HASH)
+                    {
+                        Entries::Ptr newEntries = data->newEntries;
+                        Entry::Ptr entry = newEntries->get(0);
+                        hash = h256(entry->getField("value"));
+                        break;
+                    }
+                }
                 // FIXME: delete _hash_ field and try to delete hash parameter of storage
                 // FIXME: use h256() for now
-                _storage->commit(h256(), num + i, blockDataIter->second);
+                _storage->commit(hash, num + i, blockData);
             }
         }
     }
