@@ -79,7 +79,8 @@ public:
         m_decryptHandler = decryptHandler;
     }
 
-    void closeDB() { m_db.reset(); }
+    void closeDB();
+    void flush();
 
 protected:
     void checkStatus(rocksdb::Status const& status, std::string const& path = "");

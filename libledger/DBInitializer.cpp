@@ -152,8 +152,9 @@ void DBInitializer::recoverFromBinaryLog(
         std::string currentNumber = entry->getField(SYS_VALUE);
         num = boost::lexical_cast<int64_t>(currentNumber.c_str());
     }
+    // getMissingBlocksFromBinLog return (num,latest]
     auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num);
-    DBInitializer_LOG(INFO) << LOG_DESC("recover from") << LOG_KV("blockNumber", num);
+    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs") << LOG_KV("blockNumber", num);
 
     if (blocksData->size() > 0)
     {
@@ -184,6 +185,8 @@ void DBInitializer::recoverFromBinaryLog(
                 // FIXME: delete _hash_ field and try to delete hash parameter of storage
                 // FIXME: use h256() for now
                 _storage->commit(hash, num + i, blockData);
+                DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs succeed")
+                                        << LOG_KV("blockNumber", num + i);
             }
         }
     }
