@@ -87,6 +87,8 @@ public:
     /// @return : missing data of each binlog block
     std::shared_ptr<BlockDataMap> getMissingBlocksFromBinLog(int64_t _currentNum);
 
+    void setBinaryLogSize(uint64_t _binarylogSize) { m_binarylogSize = _binarylogSize; }
+
 private:
     /// open binary file and write version
     bool initNewBinaryFile(int64_t num);
@@ -140,8 +142,8 @@ private:
     std::fstream m_outBinaryFile;       // the file being written
     std::string m_path;                 // storage path of binlog
 
-    const uint32_t BINLOG_FILE_MAX_SIZE = 256 * 1024 * 1024;  // the max size of binlog file
-    const uint32_t BINLOG_VERSION = 1;                        // binlog version
+    uint32_t m_binarylogSize = 128 * 1024 * 1024;  // the max size of binlog file
+    const uint32_t BINLOG_VERSION = 1;             // binlog version
 };
 }  // namespace storage
 }  // namespace dev

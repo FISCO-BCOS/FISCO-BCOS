@@ -29,6 +29,19 @@ namespace dev
 {
 namespace db
 {
+void BasicRocksDB::flush()
+{
+    if (m_db)
+    {
+        FlushOptions flushOption;
+        flushOption.wait = false;
+        m_db->Flush(flushOption);
+    }
+}
+void BasicRocksDB::closeDB()
+{
+    m_db.reset();
+}
 /**
  * @brief: open rocksDB
  *
