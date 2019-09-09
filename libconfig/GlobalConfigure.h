@@ -85,9 +85,9 @@ public:
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
-
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
+    const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
 
     std::atomic_bool shouldExit;
 
