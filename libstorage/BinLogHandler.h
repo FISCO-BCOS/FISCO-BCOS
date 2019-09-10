@@ -139,7 +139,7 @@ private:
     int64_t getFirstBlockNumInBinLog(const std::string& filePath);
 
     uint32_t m_writtenBytesLength = 0;  // length already written
-    std::fstream m_outBinaryFile;       // the file being written
+    int m_fd;                           // the file being written
     std::string m_path;                 // storage path of binlog
 
     uint32_t m_binarylogSize = 128 * 1024 * 1024;  // the max size of binlog file

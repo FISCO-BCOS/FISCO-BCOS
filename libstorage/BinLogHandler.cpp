@@ -41,10 +41,7 @@ BinLogHandler::BinLogHandler(const std::string& path)
 
 BinLogHandler::~BinLogHandler()
 {
-    if (m_outBinaryFile.is_open())
-    {
-        m_outBinaryFile.close();
-    }
+    close(m_fd);
 }
 
 void BinLogHandler::setBinLogStoragePath(const std::string& path)
@@ -59,13 +56,14 @@ void BinLogHandler::setBinLogStoragePath(const std::string& path)
 bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     bytes buffer;
+    auto start = utcTimeUs();
     encodeBlock(num, datas, buffer);
-
+    auto end1 = utcTimeUs();
     if (m_writtenBytesLength == 0 || m_writtenBytesLength + buffer.size() > m_binarylogSize)
     {  // check if need to create a new file, in the case of first write or capacity limitation
-        if (m_writtenBytesLength > 0 && m_outBinaryFile.is_open())
+        if (m_writtenBytesLength > 0)
         {  // close the file which has been opened
-            m_outBinaryFile.close();
+            close(m_fd);
         }
 
         BINLOG_HANDLER_LOG(INFO) << LOG_DESC("try to open new binary file!")
@@ -78,11 +76,17 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
         }
     }
     // write block buffer, include block length, block buffer and CRC32
-    m_outBinaryFile.write((char*)&buffer[0], buffer.size());
-    m_outBinaryFile.flush();
+    if (write(m_fd, (char*)&buffer[0], buffer.size()) == -1)
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("write binary file fail!");
+        return false;
+    }
     m_writtenBytesLength += buffer.size();
-    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("binlog binary current size")
-                             << LOG_KV("size", m_writtenBytesLength);
+    auto end2 = utcTimeUs();
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("write block to binlog end")
+                             << LOG_KV("encode + CRC32 cost", end1 - start)
+                             << LOG_KV("write cost", end2 - end1)
+                             << LOG_KV("binlog written size", m_writtenBytesLength);
 
     return true;
 }
@@ -153,18 +157,22 @@ std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
 bool BinLogHandler::initNewBinaryFile(int64_t num)
 {
     std::string filePath = m_path + std::to_string(num) + ".binlog";
-    m_outBinaryFile.open(filePath, std::ios::out | std::ios::binary);
-    if (!m_outBinaryFile || !m_outBinaryFile.is_open())
+    m_fd = open(filePath.c_str(), O_CREAT | O_WRONLY, 0644);
+    if (m_fd == -1)
     {
         BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("open binary file fail!");
         return false;
     }
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("open binary file success!")
-                             << LOG_KV("file path", filePath);
+                             << LOG_KV("file path", filePath) << LOG_KV("fd", m_fd);
 
     // write version
     uint32_t version = htonl(BINLOG_VERSION);
-    m_outBinaryFile.write((char*)&version, sizeof(uint32_t));
+    if (write(m_fd, (char*)&version, sizeof(uint32_t)) == -1)
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("write binary file fail!");
+        return false;
+    }
     m_writtenBytesLength = sizeof(uint32_t);
 
     return true;
@@ -270,6 +278,7 @@ void BinLogHandler::encodeTable(TableData::Ptr table, bytes& buffer)
 void BinLogHandler::encodeBlock(
     int64_t num, const std::vector<TableData::Ptr>& datas, bytes& buffer)
 {
+    auto start = utcTimeUs();
     // block heigth
     writeUINT64(buffer, num);
 
@@ -279,7 +288,7 @@ void BinLogHandler::encodeBlock(
     {
         encodeTable(datas[i], buffer);
     }
-
+    auto end1 = utcTimeUs();
     // CRC32
     boost::crc_32_type result;
     result.process_block((char*)&buffer[0], (char*)&buffer[0] + buffer.size());
@@ -290,9 +299,11 @@ void BinLogHandler::encodeBlock(
     // insert length
     uint32_t length = htonl(buffer.size());
     buffer.insert(buffer.begin(), (byte*)&length, (byte*)&length + 4);
-    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("block binary data length include header and CRC32")
-                             << LOG_KV("num", num) << LOG_KV("size", buffer.size())
-                             << LOG_KV("CRC32", crc32);
+    auto end2 = utcTimeUs();
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("encode block end") << LOG_KV("num", num)
+                             << LOG_KV("block binary data length", buffer.size())
+                             << LOG_KV("encode cost", end1 - start)
+                             << LOG_KV("CRC32 cost", end2 - end1);
 }
 
 uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
