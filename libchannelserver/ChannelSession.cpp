@@ -68,18 +68,18 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 
         if (callback->_error.errorCode() != 0)
         {
-            CHANNEL_SESSION_LOG(ERROR) << LOG_DESC("asyncSendMessage error")
+            CHANNEL_SESSION_LOG(ERROR) << LOG_DESC("asyncSendMessage callback error")
                                        << LOG_KV("errorCode", callback->_error.errorCode())
                                        << LOG_KV("what", callback->_error.what());
-            throw callback->_error;
+            BOOST_THROW_EXCEPTION(callback->_error);
         }
 
         return callback->_response;
     }
     catch (std::exception& e)
     {
-        CHANNEL_SESSION_LOG(ERROR) << LOG_DESC("asyncSendMessage error")
-                                   << LOG_KV("what", boost::diagnostic_information(e));
+        CHANNEL_SESSION_LOG(ERROR)
+            << LOG_DESC("asyncSendMessage error") << LOG_KV("what", e.what());
     }
 
     return Message::Ptr();

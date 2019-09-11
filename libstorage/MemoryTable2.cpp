@@ -43,10 +43,11 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 
 void prepareExit(const std::string& _key)
-{  // wait to exit
+{
+    STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2 prepare to exit") << LOG_KV("key", _key);
     raise(SIGTERM);
     while (!g_BCOSConfig.shouldExit.load())
-    {
+    {  // wait to exit
         std::this_thread::yield();
     }
     BOOST_THROW_EXCEPTION(
@@ -137,8 +138,8 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
-                           << LOG_KV("msg", boost::diagnostic_information(e));
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed")
+                           << LOG_KV("what", e.what());
         m_remoteDB->stop();
         prepareExit(key);
     }
