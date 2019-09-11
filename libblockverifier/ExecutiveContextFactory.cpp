@@ -94,8 +94,7 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
 
         auto condition = std::make_shared<dev::storage::Condition>();
         condition->EQ("key", key);
-        auto values =
-            m_stateStorage->select(blockInfo.hash, blockInfo.number, tableInfo, key, condition);
+        auto values = m_stateStorage->select(blockInfo.number, tableInfo, key, condition);
         if (!values || values->size() != 1)
         {
             EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Select error");

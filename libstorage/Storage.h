@@ -35,8 +35,8 @@ public:
 
     virtual ~Storage(){};
 
-    virtual Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr) = 0;
+    virtual Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr) = 0;
     virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
     // Dicide if CachedStorage can commit modified part of Entries
     virtual bool onlyDirty() { return false; };

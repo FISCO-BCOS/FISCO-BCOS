@@ -49,7 +49,7 @@ class SQLBasicAccess
 public:
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
-    virtual int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
+    virtual int Select(int64_t num, const std::string& table, const std::string& key,
         Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values);
     virtual int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas);
 
