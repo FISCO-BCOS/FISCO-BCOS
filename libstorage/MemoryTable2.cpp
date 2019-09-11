@@ -24,6 +24,7 @@
 #include "Table.h"
 #include <arpa/inet.h>
 #include <json/json.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -35,7 +36,6 @@
 #include <csignal>
 #include <thread>
 #include <vector>
-#include <libconfig/GlobalConfigure.h>
 
 using namespace std;
 using namespace dev;
