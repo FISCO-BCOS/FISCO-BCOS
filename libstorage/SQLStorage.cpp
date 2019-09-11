@@ -36,8 +36,8 @@ using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
 
-Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr SQLStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -51,8 +51,8 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         {
             requestJson["op"] = "select2";
         }
-
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: remove params blockhash
+        requestJson["params"]["blockHash"] = h256().hex();
         requestJson["params"]["num"] = num;
         requestJson["params"]["table"] = tableInfo->name;
         requestJson["params"]["key"] = key;
@@ -384,7 +384,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
             std::cout << "The sqlstorage doesn't work well,"
-                      << "the program will exit with abnormal status" << std::endl;
+                      << "the fisco-bcos will exit." << std::endl;
 
             m_fatalHandler(e);
 
