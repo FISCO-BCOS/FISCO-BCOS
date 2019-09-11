@@ -29,14 +29,10 @@
 using namespace dev::storage;
 using namespace std;
 
-int SQLBasicAccess::Select(h256, int64_t, const std::string& _table, const std::string&,
+int SQLBasicAccess::Select(int64_t, const std::string& _table, const std::string&,
     Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values)
 {
     std::string sql = this->BuildQuerySql(_table, condition);
-#if 0
-    SQLBasicAccess_LOG(DEBUG) << "hash:" << hash.hex() << " num:" << num << " table:" << _table
-                              << " key:" << key << " query sql:" << sql;
-#endif
     Connection_T conn = m_connPool->GetConnection();
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;

@@ -217,7 +217,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = levelDB->select(h, num, tableInfo, key);
+    Entries::Ptr entries = levelDB->select(num, tableInfo, key);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -241,7 +241,7 @@ BOOST_AUTO_TEST_CASE(commit)
     std::string key("LiSi");
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = levelDB->select(h, num, tableInfo, key);
+    entries = levelDB->select(num, tableInfo, key);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(exception)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    BOOST_CHECK_THROW(levelDB->select(h, num, tableInfo, key), boost::exception);
+    BOOST_CHECK_THROW(levelDB->select(num, tableInfo, key), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
