@@ -35,6 +35,7 @@
 #include <csignal>
 #include <thread>
 #include <vector>
+#include <libconfig/GlobalConfigure.h>
 
 using namespace std;
 using namespace dev;
@@ -61,7 +62,17 @@ void MemoryTable2::proccessLimit(
     const Condition::Ptr& condition, const Entries::Ptr& entries, const Entries::Ptr& resultEntries)
 {
     int begin = condition->getOffset();
-    int end = begin + condition->getCount();
+    int end = 0;
+
+    if (g_BCOSConfig.version() < V2_1_0)
+    {
+        end = begin + condition->getCount();
+    }
+    else
+    {
+        end = (int)std::min((size_t)INT_MAX, (size_t)begin + (size_t)condition->getCount());
+    }
+
     int size = entries->size();
     if (begin >= size)
     {
