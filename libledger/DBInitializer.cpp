@@ -192,7 +192,7 @@ void DBInitializer::recoverFromBinaryLog(
                     }
                     // FIXME: delete _hash_ field and try to delete hash parameter of storage
                     // FIXME: use h256() for now
-                    _storage->commit(hash, num + i, blockData);
+                    _storage->commit(num + i, blockData);
                     DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
                                              << LOG_KV("blockNumber", num + i);
                 }

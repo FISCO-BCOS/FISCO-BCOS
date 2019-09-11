@@ -84,11 +84,10 @@ public:
         return entries;
     }
 
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
         (void)datas;
 
-        BOOST_CHECK(hash == h256());
         BOOST_CHECK(num == commitNum);
 
         BOOST_CHECK(datas.size() == 1);
@@ -161,9 +160,8 @@ public:
         return entries;
     }
 
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
-        BOOST_CHECK(hash == h256());
         BOOST_CHECK(num == commitNum);
 
         BOOST_CHECK(datas.size() == 100);
@@ -311,7 +309,7 @@ BOOST_AUTO_TEST_CASE(commit_single_data)
 
     BOOST_TEST(cachedStorage->syncNum() == 0);
     mockStorage->commitNum = 50;
-    size_t c = cachedStorage->commit(h, num, datas);
+    size_t c = cachedStorage->commit(num, datas);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     BOOST_TEST(cachedStorage->syncNum() == 50);
@@ -360,7 +358,7 @@ BOOST_AUTO_TEST_CASE(commit_multi_data)
 
     BOOST_TEST(cachedStorage->syncNum() == 0);
     mockStorage->commitNum = 50;
-    size_t c = cachedStorage->commit(h, num, datas);
+    size_t c = cachedStorage->commit(num, datas);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     BOOST_TEST(cachedStorage->syncNum() == 50);
@@ -455,7 +453,7 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 
     BOOST_TEST(cachedStorage->syncNum() == 0);
     mockStorage->commitNum = 50;
-    size_t c = cachedStorage->commit(h, num, datas);
+    size_t c = cachedStorage->commit(num, datas);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     BOOST_TEST(cachedStorage->syncNum() == 50);
@@ -519,7 +517,7 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
     std::vector<dev::storage::TableData::Ptr> datas;
     datas.push_back(tableData);
 
-    cachedStorage->commit(dev::h256(), 0, datas);
+    cachedStorage->commit(0, datas);
 
     auto result =
         cachedStorage->selectNoCondition(0, tableData->info, "node", std::make_shared<Condition>());
@@ -561,7 +559,7 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 
     std::vector<dev::storage::TableData::Ptr> datas;
     datas.push_back(data);
-    cachedStorage->commit(dev::h256(0), 99, datas);
+    cachedStorage->commit(99, datas);
 
     for (size_t i = 0; i < 100; ++i)
     {
@@ -628,7 +626,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 
     std::vector<TableData::Ptr> datas = {newUserData, newTXData};
 
-    auto c = cachedStorage->commit(dev::h256(0), 1, datas);
+    auto c = cachedStorage->commit(1, datas);
 
     BOOST_TEST(c == 20000);
 
@@ -668,7 +666,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
         blockDatas.push_back(updateUserData);
         blockDatas.push_back(newTxData);
 
-        cachedStorage->commit(dev::h256(0), i + 2, blockDatas);
+        cachedStorage->commit(i + 2, blockDatas);
     }
 
     tbb::parallel_for(
@@ -701,7 +699,7 @@ public:
         return Entries::Ptr();
     }
 
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
         tbb::mutex::scoped_lock lock(m_mutex);
 
@@ -738,7 +736,6 @@ public:
             }
         }
 
-        m_hash = hash;
         m_num = num;
         m_datas = datas;
 
@@ -799,7 +796,7 @@ BOOST_AUTO_TEST_CASE(commitCheck)
 
     std::vector<TableData::Ptr> datas = {newUserData, newTXData};
 
-    cachedStorage->commit(dev::h256(0), 1, datas);
+    cachedStorage->commit(1, datas);
 
     for (size_t idx = 0; idx < 100; ++idx)
     {
@@ -830,7 +827,7 @@ BOOST_AUTO_TEST_CASE(commitCheck)
 
         std::vector<TableData::Ptr> datas = {newUserData, newTXData};
 
-        cachedStorage->commit(dev::h256(0), idx + 1, datas);
+        cachedStorage->commit(idx + 1, datas);
     }
 }
 
@@ -849,7 +846,7 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->entries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(AMOP->commit(h, num, datas, blockHash), boost::exception);
+    BOOST_CHECK_THROW(AMOP->commit(num, datas, blockHash), boost::exception);
     std::string table("e");
     std::string key("Exception");
 

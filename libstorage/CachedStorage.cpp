@@ -192,10 +192,9 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     return std::make_tuple(std::get<0>(result), caches);
 }
 
-size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
-                             << " num: " << num;
+    CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " num: " << num;
 
     tbb::atomic<size_t> total = 0;
 
@@ -430,7 +429,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         TIME_RECORD("Submit commit task");
         // new task write to backend
         Task::Ptr task = std::make_shared<Task>();
-        task->hash = hash;
+        // TODO: check if task hash be used
+        task->hash = h256();
         task->num = num;
         task->datas = commitDatas;
 
@@ -689,7 +689,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
     {
-        m_backend->commit(task->hash, task->num, *(task->datas));
+        m_backend->commit(task->num, *(task->datas));
 
         setSyncNum(task->num);
 

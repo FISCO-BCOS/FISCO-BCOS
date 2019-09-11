@@ -42,14 +42,14 @@ public:
 
     Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
 
     void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
 
 private:
     size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
-        TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
+        TableData::Ptr tableData, int64_t num, size_t from, size_t to);
     std::shared_ptr<dev::db::BasicLevelDB> m_db;
     dev::SharedMutex m_remoteDBMutex;
 };
