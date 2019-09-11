@@ -211,15 +211,15 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
                                        m_param->mutableStorageParam().maxForwardBlock);
     }
 
-    auto binaryLogStorage = make_shared<BinaryLogStorage>();
-    binaryLogStorage->setBackend(backendStorage);
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(binaryLogStorage);
-    m_tableFactoryFactory = tableFactoryFactory;
-
     if (m_param->mutableStorageParam().binaryLog)
     {
+        auto binaryLogStorage = make_shared<BinaryLogStorage>();
+        binaryLogStorage->setBackend(backendStorage);
+
+        tableFactoryFactory->setStorage(binaryLogStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
         auto path = m_param->baseDir() + "/BinaryLogs";
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
@@ -227,8 +227,14 @@ void DBInitializer::initTableFactory2(Storage::Ptr _backend)
         recoverFromBinaryLog(binaryLogger, backendStorage);
         binaryLogStorage->setBinaryLogger(binaryLogger);
         DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
+        m_storage = binaryLogStorage;
     }
-    m_storage = binaryLogStorage;
+    else
+    {
+        tableFactoryFactory->setStorage(backendStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
+        m_storage = backendStorage;
+    }
 }
 
 void DBInitializer::initSQLStorage()
