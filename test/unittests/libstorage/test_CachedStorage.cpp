@@ -40,12 +40,9 @@ namespace test_CachedStorage
 class MockStorage : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
-        (void)hash;
-        (void)num;
-
         if (commited)
         {
             BOOST_TEST(false);
@@ -150,10 +147,9 @@ public:
         }
     }
 
-    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
-        (void)hash;
         (void)num;
         (void)condition;
 
@@ -270,7 +266,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
     Entries::Ptr entries =
-        cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+        cachedStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -285,7 +281,7 @@ BOOST_AUTO_TEST_CASE(select_condition)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = cachedStorage->select(h, num, tableInfo, "LiSi", condition);
+    Entries::Ptr entries = cachedStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 
     // query from cache
@@ -295,7 +291,7 @@ BOOST_AUTO_TEST_CASE(select_condition)
 
     tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = cachedStorage->select(h, num, tableInfo, "LiSi", condition);
+    entries = cachedStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -327,7 +323,7 @@ BOOST_AUTO_TEST_CASE(commit_single_data)
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
     tableInfo->key = "Name";
-    entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    entries = cachedStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 2u);
 
     for (size_t i = 0; i < entries->size(); ++i)
@@ -376,7 +372,7 @@ BOOST_AUTO_TEST_CASE(commit_multi_data)
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
     tableInfo->key = "Name";
-    entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    entries = cachedStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 2u);
 
     for (size_t i = 0; i < entries->size(); ++i)
@@ -472,7 +468,7 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 	std::string key("LiSi");
 	auto tableInfo = std::make_shared<TableInfo>();
 	tableInfo->name = table;
-	entries = cachedStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+	entries = cachedStorage->select(num, tableInfo, key, std::make_shared<Condition>());
 	BOOST_CHECK_EQUAL(entries->size(), 2u);
 
 	for (size_t i = 0; i < entries->size(); ++i)
@@ -525,8 +521,8 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 
     cachedStorage->commit(dev::h256(), 0, datas);
 
-    auto result = cachedStorage->selectNoCondition(
-        dev::h256(), 0, tableData->info, "node", std::make_shared<Condition>());
+    auto result =
+        cachedStorage->selectNoCondition(0, tableData->info, "node", std::make_shared<Condition>());
     auto cache = std::get<1>(result);
 
     ssize_t currentID = -1;
@@ -569,8 +565,8 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
 
     for (size_t i = 0; i < 100; ++i)
     {
-        auto result = cachedStorage->selectNoCondition(
-            dev::h256(0), 0, tableInfo, "1", dev::storage::Condition::Ptr());
+        auto result =
+            cachedStorage->selectNoCondition(0, tableInfo, "1", dev::storage::Condition::Ptr());
         Cache::Ptr caches = std::get<1>(result);
         BOOST_TEST(caches->key() == "1");
         BOOST_TEST(caches->num() == 99);
@@ -649,7 +645,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
             tbb::blocked_range<size_t>(0, 10000), [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t j = range.begin(); j < range.end(); ++j)
                 {
-                    auto data = cachedStorage->select(dev::h256(0), i + 2, userTable,
+                    auto data = cachedStorage->select(i + 2, userTable,
                         boost::lexical_cast<std::string>(j), std::make_shared<Condition>());
                     BOOST_TEST(data->size() == 1);
 
@@ -679,7 +675,7 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 		tbb::blocked_range<size_t>(0, 10000), [&](const tbb::blocked_range<size_t>& range) {
 			for (size_t i = range.begin(); i < range.end(); ++i)
 			{
-				auto data = cachedStorage->select(dev::h256(0), 1002, userTable,
+				auto data = cachedStorage->select(1002, userTable,
 					boost::lexical_cast<std::string>(i), std::make_shared<Condition>());
 				BOOST_TEST(data->size() == 1);
 
@@ -696,11 +692,9 @@ BOOST_AUTO_TEST_CASE(dirtyAndNew)
 class CommitCheckMock : public Storage
 {
 public:
-    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
-        (void)hash;
-        (void)num;
         (void)tableInfo;
         (void)key;
         (void)condition;
@@ -815,7 +809,7 @@ BOOST_AUTO_TEST_CASE(commitCheck)
         Entries::Ptr newTX = std::make_shared<Entries>();
         for (auto i = 0; i < 100; ++i)
         {
-            auto entries = cachedStorage->select(dev::h256(0), idx + 1, userTable,
+            auto entries = cachedStorage->select(idx + 1, userTable,
                 boost::lexical_cast<std::string>(i), std::make_shared<Condition>());
 
             auto entry = entries->get(0);
@@ -859,7 +853,7 @@ BOOST_AUTO_TEST_CASE(exception)
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(AMOP->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+    BOOST_CHECK_THROW(AMOP->select(num, table, key, std::make_shared<Condition>()), boost::exception);
 #endif
 }
 

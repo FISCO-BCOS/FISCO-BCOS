@@ -33,11 +33,11 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
-Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
-    const std::string& _key, Condition::Ptr _condition)
+Entries::Ptr ZdbStorage::select(
+    int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key, Condition::Ptr _condition)
 {
     std::vector<std::map<std::string, std::string> > values;
-    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, values);
+    int ret = m_sqlBasicAcc->Select(_num, _tableInfo->name, _key, _condition, values);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret

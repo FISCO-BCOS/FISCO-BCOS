@@ -47,7 +47,7 @@ public:
     RocksDBStorage(bool _disableWAL = false) : m_disableWAL(_disableWAL) {}
     virtual ~RocksDBStorage(){};
 
-    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
