@@ -47,7 +47,7 @@ using namespace dev::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(
-    h256, int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
+    int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     try
     {
