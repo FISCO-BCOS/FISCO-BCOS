@@ -91,17 +91,97 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     return true;
 }
 
-std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t _currentNum)
+int64_t BinLogHandler::getLastBlockNum()
+{
+    fs::path path(m_path);
+    if (!fs::is_directory(path))
+    {
+        return -1;
+    }
+
+    typedef std::vector<fs::path> vec;
+    vec v;
+    // get binlog list
+    std::copy(fs::directory_iterator(path), fs::directory_iterator(), back_inserter(v));
+    if (v.size() == 0)
+    {
+        return -1;
+    }
+    // descending sort
+    std::sort(v.begin(), v.end(), [](fs::path const& a, fs::path const& b) {
+        return std::stoll(a.filename().string()) >= std::stoll(b.filename().string());
+    });
+
+    // read First binlog
+    uint32_t blockLen = 0;
+    uint64_t blockNum = 0;
+    vec::const_iterator it = v.begin();
+    try
+    {
+        if (getFirstBlockNumInBinLog(it->string()) != std::stoll(it->filename().string()))
+        {
+            BOOST_THROW_EXCEPTION(
+                dev::StorageError() << errinfo_comment(
+                    "the first block num in binlog is not equal to file name! file name:" +
+                    it->filename().string()));
+        }
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
+    }
+
+    BinLogContext binlog(it->string());
+    if (!binlog.file.is_open() || !getBinLogContext(binlog))
+    {
+        return -1;
+    }
+
+    while (binlog.offset < binlog.length)
+    {
+        if (!readFile(binlog.file, &blockLen, sizeof(uint32_t)))
+        {
+            BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("read binLog error!");
+            return -1;
+        }
+        blockLen = ntohl(blockLen);
+        if (binlog.offset + sizeof(uint32_t) + blockLen > binlog.length)
+        {
+            break;
+        }
+        if (!readFile(binlog.file, &blockNum, sizeof(uint64_t)))
+        {
+            BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("read binLog error!");
+            break;
+        }
+        blockNum = NTOHLL(blockNum);
+        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("get last block num") << LOG_KV("num", blockNum)
+                                  << LOG_KV("offset", binlog.offset) << LOG_KV("length", blockLen);
+        binlog.offset += (sizeof(uint32_t) + blockLen);
+        binlog.file.seekg(binlog.offset, std::ios::beg);
+    }
+
+    BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get last block num") << LOG_KV("num", blockNum);
+    return blockNum;
+}
+
+std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(
+    int64_t startNum, int64_t endNum)
 {
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("get missing blocks")
-                             << LOG_KV("current database num", _currentNum);
+                             << LOG_KV("start block num", startNum)
+                             << LOG_KV("start block num", endNum);
     std::shared_ptr<BlockDataMap> binLogData = std::make_shared<BlockDataMap>();
+    if (startNum >= endNum)
+    {
+        return binLogData;
+    }
     fs::path path(m_path);
     if (fs::is_directory(path))
     {
         try
         {
-            bool incompleteData = true;
             typedef std::vector<fs::path> vec;
             vec v;
             // descending sort, read from first
@@ -115,33 +195,24 @@ std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(int64_t 
                 {
                     BINLOG_HANDLER_LOG(INFO)
                         << LOG_DESC("binlog log path") << LOG_KV("path", it->string());
-                    if (getFirstBlockNumInBinLog(it->string()) !=
-                        std::stoll(it->filename().string()))
+                    int64_t num = getFirstBlockNumInBinLog(it->string());
+                    if (num != std::stoll(it->filename().string()))
                     {
                         BOOST_THROW_EXCEPTION(dev::StorageError() << errinfo_comment(
                                                   "the first block num in binlog is not equal to "
                                                   "file name! file name:" +
                                                   it->filename().string()));
                     }
-                    readBinLog(it->string(), _currentNum, *binLogData);
-                    if (_currentNum >= std::stoll(it->filename().string()))
+                    if (endNum < num)
                     {
-                        incompleteData = false;
+                        continue;
+                    }
+                    readBinLog(it->string(), startNum, endNum, *binLogData);
+                    if (startNum >= std::stoll(it->filename().string()))
+                    {
                         break;
                     }
                 }
-            }
-            else
-            {
-                incompleteData = false;
-            }
-            // the minimum block height written is 0, but the input may be less than 0
-            if (incompleteData && _currentNum >= 0)
-            {
-                BOOST_THROW_EXCEPTION(
-                    dev::StorageError() << errinfo_comment(
-                        "the database block height is less than the binlog record's minimum block "
-                        "height"));
             }
         }
         catch (std::exception& e)
@@ -361,16 +432,22 @@ uint32_t BinLogHandler::decodeTable(const bytes& buffer, uint32_t& offset, Table
     return offset - preOffset;
 }
 
-DecodeBlockResult BinLogHandler::decodeBlock(
-    int64_t currentNum, const bytes& buffer, int64_t& binLogNum, std::vector<TableData::Ptr>& datas)
+DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startNum, int64_t endNum,
+    int64_t& binLogNum, std::vector<TableData::Ptr>& datas)
 {
     uint32_t offset = 0;
     binLogNum = readUINT64(buffer, offset);
-    if (binLogNum <= currentNum)
+    if (binLogNum <= startNum)
     {
-        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("decode block, the block height has been written!")
-                                  << LOG_KV("block height", binLogNum);
-        return DecodeBlockResult::WrittenBlock;
+        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("decode block, less than specified range!")
+                                  << LOG_KV("num", binLogNum);
+        return DecodeBlockResult::LessThanSpecifiedRange;
+    }
+    if (binLogNum > endNum)
+    {
+        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("decode block, greater than specified range!")
+                                  << LOG_KV("num", binLogNum);
+        return DecodeBlockResult::GreaterThanSpecifiedRange;
     }
     uint32_t dataSize = readUINT32(buffer, offset);
     for (uint32_t i = 0; i < dataSize; i++)
@@ -435,7 +512,7 @@ bool BinLogHandler::getBinLogContext(BinLogContext& binlog)
 }
 
 bool BinLogHandler::getBlockData(
-    BinLogContext& binlog, int64_t currentNum, BlockDataMap& blocksData)
+    BinLogContext& binlog, int64_t startNum, int64_t endNum, BlockDataMap& blocksData)
 {
     while (binlog.offset < binlog.length)
     {
@@ -471,10 +548,14 @@ bool BinLogHandler::getBlockData(
         binlog.offset += blockLen;
         int64_t num;
         std::vector<TableData::Ptr> datas;
-        DecodeBlockResult decodeRet = decodeBlock(currentNum, buffer, num, datas);
+        DecodeBlockResult decodeRet = decodeBlock(buffer, startNum, endNum, num, datas);
         if (DecodeBlockResult::Success == decodeRet)
         {
             blocksData[num] = datas;
+        }
+        else if (DecodeBlockResult::GreaterThanSpecifiedRange == decodeRet)
+        {
+            break;
         }
         else if (DecodeBlockResult::BlockDataLengthError == decodeRet)
         {
@@ -485,7 +566,7 @@ bool BinLogHandler::getBlockData(
 }
 
 bool BinLogHandler::readBinLog(
-    const std::string& filePath, int64_t currentNum, BlockDataMap& blocksData)
+    const std::string& filePath, int64_t startNum, int64_t endNum, BlockDataMap& blocksData)
 {
     BinLogContext binlog(filePath);
     if (!binlog.file.is_open() || !getBinLogContext(binlog))
@@ -498,7 +579,7 @@ bool BinLogHandler::readBinLog(
     bool ret = false;
     if (binlog.version == BINLOG_VERSION)
     {
-        ret = getBlockData(binlog, currentNum, blocksData);
+        ret = getBlockData(binlog, startNum, endNum, blocksData);
     }
     return ret;
 }
@@ -522,4 +603,9 @@ int64_t BinLogHandler::getFirstBlockNumInBinLog(const std::string& filePath)
     }
     blockNum = NTOHLL(blockNum);
     return blockNum;
+}
+
+bool BinLogHandler::readFile(std::ifstream& file, void* buffer, uint32_t size)
+{
+    return (file.read(reinterpret_cast<char*>(buffer), size).gcount() == size);
 }
