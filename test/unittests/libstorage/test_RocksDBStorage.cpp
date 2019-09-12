@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = rocksDB->commit(h, num, datas);
+    size_t c = rocksDB->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
@@ -288,7 +288,7 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(rocksDB->commit(h, num, datas), boost::exception);
+    BOOST_CHECK_THROW(rocksDB->commit(num, datas), boost::exception);
     std::string table("e");
     std::string key("Exception");
 

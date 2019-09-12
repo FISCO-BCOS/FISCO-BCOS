@@ -49,10 +49,9 @@ Entries::Ptr BinaryLogStorage::select(
     return nullptr;
 }
 
-size_t BinaryLogStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t BinaryLogStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    STORAGE_LOG(INFO) << "BinaryLogStorage commit: " << datas.size() << " hash: " << hash
-                      << " num: " << num;
+    STORAGE_LOG(INFO) << "BinaryLogStorage commit: " << datas.size() << " num: " << num;
 
     if (m_binaryLogger)
     {
@@ -70,7 +69,7 @@ size_t BinaryLogStorage::commit(h256 hash, int64_t num, const std::vector<TableD
 
     if (m_backend)
     {
-        return m_backend->commit(hash, num, datas);
+        return m_backend->commit(num, datas);
     }
     STORAGE_LOG(FATAL) << "No backend storage, go die!";
     BOOST_THROW_EXCEPTION(StorageException(-1, std::string("There is not a backend storage!")));

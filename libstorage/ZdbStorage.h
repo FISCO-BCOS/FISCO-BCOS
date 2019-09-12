@@ -42,7 +42,7 @@ public:
 
     Entries::Ptr select(int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key,
         Condition::Ptr _condition = nullptr) override;
-    size_t commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
+    size_t commit(int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
     bool onlyCommitDirty() override { return true; }
 
     virtual void setFatalHandler(std::function<void(std::exception&)> fatalHandler)
