@@ -142,51 +142,60 @@ void DBInitializer::initLevelDBStorage()
 void DBInitializer::recoverFromBinaryLog(
     std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
 {
-    int64_t num = -1;
-    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), num);
+    int64_t startNum = -1;
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), startNum);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
     auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
     if (entries->size() > 0)
     {
         auto entry = entries->get(0);
         std::string currentNumber = entry->getField(SYS_VALUE);
-        num = boost::lexical_cast<int64_t>(currentNumber.c_str());
+        startNum = boost::lexical_cast<int64_t>(currentNumber);
     }
-    // getMissingBlocksFromBinLog return (num,latest]
-    auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num);
-    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs") << LOG_KV("blockNumber", num);
-
-    if (blocksData->size() > 0)
+    // getMissingBlocksFromBinLog from (startNum,lastBlockNum]
+    int64_t lastBlockNum = _binaryLogger->getLastBlockNum();
+    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs") << LOG_KV("startNum", startNum)
+                            << LOG_KV("endNum", lastBlockNum);
+    if (startNum >= lastBlockNum)
     {
-        for (size_t i = 1; i <= blocksData->size(); ++i)
+        return;
+    }
+    int64_t interval = 100;
+    for (int64_t num = startNum; num <= lastBlockNum; num += interval)
+    {
+        auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num, num + interval);
+        if (blocksData->size() > 0)
         {
-            auto blockDataIter = blocksData->find(num + i);
-            if (blockDataIter == blocksData->end() || blockDataIter->second.empty())
+            for (size_t i = 1; i <= blocksData->size(); ++i)
             {
-                DBInitializer_LOG(FATAL)
-                    << LOG_DESC("recoverFromBinaryLog failed") << LOG_KV("blockNumber", num + i);
-            }
-            else
-            {
-                const std::vector<TableData::Ptr>& blockData = blockDataIter->second;
-                h256 hash = h256();
-                // get the hash used by commit function
-                for (size_t j = 0; j < blockData.size(); j++)
+                auto blockDataIter = blocksData->find(num + i);
+                if (blockDataIter == blocksData->end() || blockDataIter->second.empty())
                 {
-                    TableData::Ptr data = blockData[j];
-                    if (data->info->name == SYS_NUMBER_2_HASH)
-                    {
-                        Entries::Ptr newEntries = data->newEntries;
-                        Entry::Ptr entry = newEntries->get(0);
-                        hash = h256(entry->getField("value"));
-                        break;
-                    }
+                    DBInitializer_LOG(FATAL) << LOG_DESC("recoverFromBinaryLog failed")
+                                             << LOG_KV("blockNumber", num + i);
                 }
-                // FIXME: delete _hash_ field and try to delete hash parameter of storage
-                // FIXME: use h256() for now
-                _storage->commit(hash, num + i, blockData);
-                DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
-                                         << LOG_KV("blockNumber", num + i);
+                else
+                {
+                    const std::vector<TableData::Ptr>& blockData = blockDataIter->second;
+                    h256 hash = h256();
+                    // get the hash used by commit function
+                    for (size_t j = 0; j < blockData.size(); j++)
+                    {
+                        TableData::Ptr data = blockData[j];
+                        if (data->info->name == SYS_NUMBER_2_HASH)
+                        {
+                            Entries::Ptr newEntries = data->newEntries;
+                            Entry::Ptr entry = newEntries->get(0);
+                            hash = h256(entry->getField("value"));
+                            break;
+                        }
+                    }
+                    // FIXME: delete _hash_ field and try to delete hash parameter of storage
+                    // FIXME: use h256() for now
+                    _storage->commit(hash, num + i, blockData);
+                    DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
+                                             << LOG_KV("blockNumber", num + i);
+                }
             }
         }
     }
