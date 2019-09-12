@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = zdbStorage->commit(h, num, datas);
+    size_t c = zdbStorage->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
 }
 
