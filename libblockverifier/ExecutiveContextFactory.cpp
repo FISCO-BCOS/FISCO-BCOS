@@ -37,7 +37,7 @@ using namespace dev::executive;
 using namespace dev::precompiled;
 
 void ExecutiveContextFactory::initExecutiveContext(
-    BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
+    BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context)
 {
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
