@@ -110,7 +110,7 @@ Entries::Ptr RocksDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t RocksDBStorage::commit(h256, int64_t num, const vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
 {
     try
     {

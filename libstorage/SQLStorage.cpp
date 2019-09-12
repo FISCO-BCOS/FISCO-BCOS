@@ -194,7 +194,7 @@ Entries::Ptr SQLStorage::select(
     return Entries::Ptr();
 }
 
-size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
@@ -210,7 +210,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         Json::Value requestJson;
 
         requestJson["op"] = "commit";
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: check if this param used
+        requestJson["params"]["blockHash"] = h256().hex();
         requestJson["params"]["num"] = num;
 
         for (auto it : datas)

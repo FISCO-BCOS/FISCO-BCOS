@@ -97,7 +97,7 @@ Entries::Ptr LevelDBStorage::select(
 }
 
 size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
-    TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to)
+    TableData::Ptr tableData, int64_t num, size_t from, size_t to)
 {
     // commit table data of given range, thread safe
     // range to commit: [from, to)
@@ -125,7 +125,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
             {
                 value[fieldIt.first] = fieldIt.second;
             }
-            value["_hash_"] = hash.hex();
+            // value["_hash_"] = hash.hex();
             value[NUM_FIELD] = num;
             value[STATUS] = dataIt->second->get(i)->getStatus();
             entry["values"].append(value);
@@ -148,7 +148,7 @@ size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWrit
 }
 
 static const size_t c_commitTableDataRangeEachThread = 128;  // 128 is good after testing
-size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t LevelDBStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
@@ -178,8 +178,7 @@ size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
                     {
                         size_t from = c_commitTableDataRangeEachThread * j;
                         size_t to = std::min(c_commitTableDataRangeEachThread * (j + 1), totalSize);
-                        size_t threadTotal =
-                            commitTableDataRange(batch, tableData, hash, num, from, to);
+                        size_t threadTotal = commitTableDataRange(batch, tableData, num, from, to);
                         total += threadTotal;
                     }
                 });

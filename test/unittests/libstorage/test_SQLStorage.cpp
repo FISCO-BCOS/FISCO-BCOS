@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = sqlStorage->commit(h, num, datas);
+    size_t c = sqlStorage->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->entries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(sqlStorage->commit(h, num, datas, blockHash), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->commit(num, datas, blockHash), boost::exception);
     std::string table("e");
     std::string key("Exception");
 

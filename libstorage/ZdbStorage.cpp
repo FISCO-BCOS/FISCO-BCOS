@@ -81,9 +81,9 @@ void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
     m_sqlBasicAcc = _sqlBasicAcc;
 }
 
-size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
+size_t ZdbStorage::commit(int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    int32_t rowCount = m_sqlBasicAcc->Commit(_hash, (int32_t)_num, _datas);
+    int32_t rowCount = m_sqlBasicAcc->Commit(h256(), (int32_t)_num, _datas);
     if (rowCount < 0)
     {
         ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
