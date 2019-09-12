@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(commit)
     {
         datas.push_back(tableData);
     }
-    size_t c = levelDB->commit(h, num, datas);
+    size_t c = levelDB->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
@@ -250,7 +250,7 @@ BOOST_AUTO_TEST_CASE(exception)
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("Exception"), entries));
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(levelDB->commit(h, num, datas), boost::exception);
+    BOOST_CHECK_THROW(levelDB->commit(num, datas), boost::exception);
     std::string table("e");
     std::string key("Exception");
 

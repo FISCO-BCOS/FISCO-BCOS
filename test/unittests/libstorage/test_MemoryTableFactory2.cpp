@@ -46,7 +46,7 @@ public:
         return entries;
     }
 
-    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
+    size_t commit(int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
 };
 
 struct MemoryTableFactoryFixture2

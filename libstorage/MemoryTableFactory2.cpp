@@ -261,7 +261,7 @@ void MemoryTableFactory2::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -327,7 +327,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas);
+        stateStorage()->commit(_blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();

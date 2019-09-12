@@ -63,7 +63,7 @@ public:
 
         return std::make_shared<Entries>();
     }
-    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
