@@ -450,7 +450,7 @@ private:
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
-                throw std::invalid_argument("Invalid key.");
+                BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid key."));
             }
         }
     }

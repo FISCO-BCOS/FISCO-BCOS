@@ -1130,7 +1130,8 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         {
             CHANNEL_LOG(ERROR) << "no SDK follow topic" << LOG_KV("topic", topic);
 
-            throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
+            BOOST_THROW_EXCEPTION(
+                ChannelException(103, "send failed, no node follow topic:" + topic));
         }
 
         dev::channel::TopicChannelMessage::Ptr response;
@@ -1147,17 +1148,15 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
         if (!response)
         {
-            throw dev::channel::ChannelException(99, "send fail, all retry failed");
+            BOOST_THROW_EXCEPTION(ChannelException(99, "send fail, all retry failed"));
         }
 
         return response;
     }
     catch (dev::channel::ChannelException& e)
     {
-        CHANNEL_LOG(ERROR) << "pushChannelMessage error"
-                           << LOG_KV("what", boost::diagnostic_information(e));
-
-        throw e;
+        CHANNEL_LOG(ERROR) << "pushChannelMessage error" << LOG_KV("what", e.what());
+        BOOST_THROW_EXCEPTION(e);
     }
 
     return dev::channel::TopicChannelMessage::Ptr();

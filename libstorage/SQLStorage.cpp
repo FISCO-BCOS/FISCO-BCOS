@@ -110,8 +110,8 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         {
             STORAGE_EXTERNAL_LOG(ERROR) << "Remote database return error:" << code;
 
-            throw StorageException(
-                -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
+            BOOST_THROW_EXCEPTION(StorageException(
+                -1, "Remote database return error:" + boost::lexical_cast<std::string>(code)));
         }
 
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -187,7 +187,8 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
     {
         STORAGE_EXTERNAL_LOG(ERROR) << "Query database error:" << e.what();
 
-        throw StorageException(-1, std::string("Query database error:") + e.what());
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, std::string("Query database error:") + e.what()));
     }
 
     return Entries::Ptr();
@@ -265,8 +266,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         {
             STORAGE_EXTERNAL_LOG(ERROR) << "Remote database return error:" << code;
 
-            throw StorageException(
-                -1, "Remote database return error:" + boost::lexical_cast<std::string>(code));
+            BOOST_THROW_EXCEPTION(StorageException(
+                -1, "Remote database return error:" + boost::lexical_cast<std::string>(code)));
         }
 
         int count = responseJson["result"]["count"].asInt();
@@ -277,7 +278,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
     {
         STORAGE_EXTERNAL_LOG(ERROR) << "Commit data to database error:" << e.what();
 
-        throw StorageException(-1, std::string("Commit data to database error:") + e.what());
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, std::string("Commit data to database error:") + e.what()));
     }
 
     return 0;
@@ -290,7 +292,7 @@ bool SQLStorage::onlyDirty()
 
 Json::Value SQLStorage::requestDB(const Json::Value& value)
 {
-    int retry = 0;
+    int retry = 1;
 
     while (true)
     {
@@ -317,9 +319,9 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             {
                 STORAGE_EXTERNAL_LOG(ERROR) << "requestDB error:" << response->result();
 
-                throw StorageException(
-                    -1, "Remote database return error:" +
-                            boost::lexical_cast<std::string>(response->result()));
+                BOOST_THROW_EXCEPTION(
+                    StorageException(-1, "Remote database return error:" +
+                                             boost::lexical_cast<std::string>(response->result())));
             }
 
             // resolving topic
@@ -330,7 +332,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             std::string jsonStr(response->data(), response->data() + response->dataSize());
             ssIn << jsonStr;
 
-            STORAGE_EXTERNAL_LOG(TRACE) << "AMOPDB Response:" << ssIn.str();
+            STORAGE_EXTERNAL_LOG(TRACE) << "amdb-proxy Response:" << ssIn.str();
 
             Json::Value responseJson;
             ssIn >> responseJson;
@@ -338,37 +340,39 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             auto codeValue = responseJson["code"];
             if (!codeValue.isInt())
             {
-                throw StorageException(-1, "undefined amdb error code");
+                BOOST_THROW_EXCEPTION(StorageException(-1, "undefined amdb error code"));
             }
 
             int code = codeValue.asInt();
             if (code == 1)
             {
-                throw StorageException(
-                    1, "amdb sql error:" + boost::lexical_cast<std::string>(code));
+                BOOST_THROW_EXCEPTION(StorageException(
+                    1, "amdb sql error:" + boost::lexical_cast<std::string>(code)));
             }
             if (code != 0 && code != 1)
             {
-                throw StorageException(
-                    -1, "amdb code error:" + boost::lexical_cast<std::string>(code));
+                BOOST_THROW_EXCEPTION(StorageException(
+                    -1, "amdb code error:" + boost::lexical_cast<std::string>(code)));
             }
 
             return responseJson;
         }
         catch (dev::channel::ChannelException& e)
         {
-            STORAGE_EXTERNAL_LOG(ERROR) << "AMDB error: " << e.what();
+            STORAGE_EXTERNAL_LOG(ERROR)
+                << "ChannelException error: " << boost::diagnostic_information(e);
             STORAGE_EXTERNAL_LOG(ERROR) << "Retrying..." << LOG_KV("count", retry);
         }
         catch (StorageException& e)
         {
             if (e.errorCode() == -1)
             {
-                STORAGE_EXTERNAL_LOG(ERROR) << "AMDB error: " << e.what();
+                STORAGE_EXTERNAL_LOG(ERROR) << "AMDB-proxy error: " << e.what();
                 STORAGE_EXTERNAL_LOG(ERROR) << "Retrying..." << LOG_KV("count", retry);
             }
             else
             {
+                STORAGE_EXTERNAL_LOG(ERROR) << "unknow AMDB-proxy error: " << e.what();
                 BOOST_THROW_EXCEPTION(e);
             }
         }
