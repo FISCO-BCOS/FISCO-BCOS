@@ -106,7 +106,7 @@ public:
     virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(int64_t num,
         TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition = nullptr);
 
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
     bool onlyDirty() override;
 
     void setBackend(Storage::Ptr backend);
