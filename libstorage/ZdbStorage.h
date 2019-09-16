@@ -62,6 +62,7 @@ private:
 
 
 private:
+    std::string getCommonFileds();
     void createSysTables();
     void createSysConsensus();
     void createAccessTables();

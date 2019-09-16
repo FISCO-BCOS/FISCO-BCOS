@@ -72,10 +72,6 @@ public:
         return true;
     }
 
-    void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
-    void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
-    void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
-
     bool checkAuthority(Address const& _origin) const override
     {
         if (m_tableInfo->authorizedAddress.empty())
@@ -144,10 +140,6 @@ private:
 
     void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
         const Entries::Ptr& resultEntries);
-
-    Storage::Ptr m_remoteDB;
-    h256 m_blockHash;
-    int m_blockNum = 0;
 
     bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
