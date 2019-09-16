@@ -52,7 +52,7 @@ Entries::Ptr SQLStorage::select(
             requestJson["op"] = "select2";
         }
         // TODO: remove params blockhash
-        requestJson["params"]["blockHash"] = h256().hex();
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
         requestJson["params"]["table"] = tableInfo->name;
         requestJson["params"]["key"] = key;
@@ -211,7 +211,7 @@ size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 
         requestJson["op"] = "commit";
         // TODO: check if this param used
-        requestJson["params"]["blockHash"] = h256().hex();
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
 
         for (auto it : datas)
