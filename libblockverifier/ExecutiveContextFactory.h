@@ -52,7 +52,7 @@ public:
     virtual ~ExecutiveContextFactory(){};
 
     virtual void initExecutiveContext(
-        BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context);
+        BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context);
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 
