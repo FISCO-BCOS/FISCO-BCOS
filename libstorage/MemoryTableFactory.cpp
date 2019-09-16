@@ -45,7 +45,7 @@ const std::vector<string> MemoryTableFactory::c_sysNonChangeLogTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
+MemoryTableFactory::MemoryTableFactory() {}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -173,16 +173,6 @@ size_t MemoryTableFactory::savepoint()
 {
     auto& changeLog = getChangeLog();
     return changeLog.size();
-}
-
-void MemoryTableFactory::setBlockHash(h256 blockHash)
-{
-    m_blockHash = blockHash;
-}
-
-void MemoryTableFactory::setBlockNum(int64_t blockNum)
-{
-    m_blockNum = blockNum;
 }
 
 h256 MemoryTableFactory::hash()

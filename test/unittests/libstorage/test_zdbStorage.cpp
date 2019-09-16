@@ -64,9 +64,9 @@ public:
         }
         return 0;
     }
-    int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    int Commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
-        std::cout << "hash:" << hash.hex() << ", num:" << num << std::endl;
+        std::cout << "num:" << num << std::endl;
         return datas.size();
     }
     void ExecuteSql(const std::string& _sql) override { printf("sql:%s\n", _sql.c_str()); }
