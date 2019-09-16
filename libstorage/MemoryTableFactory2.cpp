@@ -192,16 +192,6 @@ void MemoryTableFactory2::commit()
     getChangeLog().clear();
 }
 
-void MemoryTableFactory2::setBlockHash(h256 blockHash)
-{
-    m_blockHash = blockHash;
-}
-
-void MemoryTableFactory2::setBlockNum(int64_t blockNum)
-{
-    m_blockNum = blockNum;
-}
-
 h256 MemoryTableFactory2::hash()
 {
     std::vector<std::pair<std::string, Table::Ptr> > tables;
