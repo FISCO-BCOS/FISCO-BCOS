@@ -53,11 +53,6 @@ public:
         const std::string& valueField, bool authorityFlag = true,
         Address const& _origin = Address(), bool isPara = true) override;
 
-    virtual Storage::Ptr stateStorage() { return m_stateStorage; }
-    virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
-
-    void setBlockHash(h256 blockHash);
-    void setBlockNum(int64_t blockNum);
     virtual uint64_t ID() { return m_ID; };
     virtual h256 hash() override;
     virtual size_t savepoint() override;
@@ -69,7 +64,6 @@ private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
-    Storage::Ptr m_stateStorage;
     h256 m_blockHash;
     int m_blockNum;
     uint64_t m_ID = 1;

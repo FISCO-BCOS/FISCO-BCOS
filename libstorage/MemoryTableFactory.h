@@ -52,12 +52,6 @@ public:
         const std::string& valueField, bool authorityFlag = true,
         Address const& _origin = Address(), bool isPara = true) override;
 
-    virtual Storage::Ptr stateStorage() { return m_stateStorage; }
-    virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
-
-    void setBlockHash(h256 blockHash);
-    void setBlockNum(int64_t blockNum);
-
     virtual h256 hash() override;
     virtual size_t savepoint() override;
     virtual void rollback(size_t _savepoint) override;
@@ -68,9 +62,6 @@ public:
 private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
-    Storage::Ptr m_stateStorage;
-    h256 m_blockHash;
-    int m_blockNum;
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
     // boost::thread_specific_ptr<std::vector<Change> > s_changeLog;
