@@ -26,7 +26,6 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
-#include <libdevcore/easylog.h>
 #include <stdlib.h>
 #include <string>
 

@@ -21,7 +21,7 @@
  * @date: 2018
  */
 #include "sm2.h"
-#include <libdevcore/easylog.h>
+
 #define SM3_DIGEST_LENGTH 32
 using namespace std;
 

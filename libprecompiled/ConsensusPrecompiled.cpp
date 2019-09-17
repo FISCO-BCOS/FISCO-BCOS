@@ -22,7 +22,6 @@
 #include "ConsensusPrecompiled.h"
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>

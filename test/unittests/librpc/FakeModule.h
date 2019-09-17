@@ -28,7 +28,6 @@
 #include <libconsensus/ConsensusInterface.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/TopicInfo.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>

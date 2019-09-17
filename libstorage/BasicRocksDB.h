@@ -22,7 +22,6 @@
 
 #pragma once
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>

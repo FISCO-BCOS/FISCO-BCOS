@@ -26,7 +26,6 @@
 #include "Transaction.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 
 namespace dev
 {

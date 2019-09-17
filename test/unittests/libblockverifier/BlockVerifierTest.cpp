@@ -20,10 +20,10 @@
  * @author:
  * @date 2018-09-21
  */
+
 #include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>

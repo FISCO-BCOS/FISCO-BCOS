@@ -31,7 +31,6 @@
 #include <libdevcore/RLP.h>
 #include <libdevcore/TrieDB.h>
 #include <libdevcore/TrieHash.h>
-#include <libdevcore/easylog.h>
 using namespace std;
 using namespace dev;
 using namespace dev::eth;

@@ -23,8 +23,8 @@
 #pragma once
 
 #include "BlockChainInterface.h"
+
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -135,8 +135,6 @@ private:
 
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
-    const std::string c_genesisHash =
-        "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
 
     dev::h512s getNodeListByType(int64_t num, std::string const& type);
