@@ -27,7 +27,6 @@
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>

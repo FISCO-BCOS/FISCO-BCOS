@@ -28,10 +28,10 @@
 
 #include "ChannelException.h"
 #include "Message.h"
+
 #include <arpa/inet.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
 #include <climits>
 #include <queue>

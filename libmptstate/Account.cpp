@@ -21,7 +21,6 @@
 
 #include "Account.h"
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ChainOperationParams.h>
 #include <libethcore/Precompiled.h>
 

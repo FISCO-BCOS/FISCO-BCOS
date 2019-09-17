@@ -23,7 +23,6 @@
 #include "EVMC.h"
 #include "VMFactory.h"
 
-#include <libdevcore/easylog.h>
 
 namespace dev
 {

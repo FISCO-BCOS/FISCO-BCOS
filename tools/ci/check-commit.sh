@@ -67,10 +67,10 @@ function check_PR_limit() {
         fi
     fi
     local files=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $1}')
-    if [ ${file_limit} -lt ${files} ]; then
-        LOG_ERROR "modify ${files} files, limit is ${file_limit}"
-        exit 1
-    fi
+    # if [ ${file_limit} -lt ${files} ]; then
+    #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
+    #     exit 1
+    # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
     local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')

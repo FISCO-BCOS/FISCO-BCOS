@@ -21,9 +21,9 @@
  * @date 2018-10-09
  */
 #include "ParamParse.h"
+
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>

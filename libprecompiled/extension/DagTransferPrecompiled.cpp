@@ -20,7 +20,6 @@
  *  @date 20190111
  */
 #include "DagTransferPrecompiled.h"
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 

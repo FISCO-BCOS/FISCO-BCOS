@@ -21,7 +21,6 @@
 #include "CNSPrecompiled.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>

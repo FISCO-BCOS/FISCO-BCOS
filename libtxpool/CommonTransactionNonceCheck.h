@@ -21,10 +21,10 @@
  * @date: 2018-11-08
  */
 #pragma once
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/Guards.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>

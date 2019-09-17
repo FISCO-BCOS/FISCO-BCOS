@@ -22,7 +22,6 @@
 
 #include "EncryptedLevelDB.h"
 #include "libconfig/GlobalConfigure.h"
-#include <libdevcore/easylog.h>
 
 using namespace std;
 using namespace dev;
