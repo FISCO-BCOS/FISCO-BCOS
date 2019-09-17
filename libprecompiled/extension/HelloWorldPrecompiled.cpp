@@ -20,7 +20,6 @@
  */
 #include "HelloWorldPrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 

@@ -29,7 +29,6 @@
 
 #include "Common.h"
 #include "Table.h"
-#include <libdevcore/easylog.h>
 #include <tbb/pipeline.h>
 #include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>

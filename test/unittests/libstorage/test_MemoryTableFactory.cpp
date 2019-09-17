@@ -17,7 +17,6 @@
 
 #include "Common.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>

@@ -21,13 +21,12 @@
  * @date 2018-09-10
  */
 
+
 #include <libdevcore/TopicInfo.h>
-#include <libdevcore/easylog.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <stdlib.h>
 
-INITIALIZE_EASYLOGGINGPP
 
 using namespace std;
 using namespace dev;

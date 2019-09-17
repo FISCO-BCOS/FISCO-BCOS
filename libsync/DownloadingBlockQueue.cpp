@@ -22,7 +22,6 @@
 
 #include "DownloadingBlockQueue.h"
 #include "Common.h"
-#include <libdevcore/easylog.h>
 
 using namespace std;
 using namespace dev;

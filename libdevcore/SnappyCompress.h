@@ -22,7 +22,6 @@
  */
 #pragma once
 #include "Common.h"
-#include "easylog.h"
 #include "snappy.h"
 
 namespace dev

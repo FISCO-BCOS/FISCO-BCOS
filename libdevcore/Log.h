@@ -27,6 +27,11 @@
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
+// BCOS log format
+#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
+#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
+
 namespace dev
 {
 extern std::string const FileLogger;
@@ -44,9 +49,6 @@ enum LogLevel
     DEBUG = boost::log::trivial::debug,
     TRACE = boost::log::trivial::trace
 };
-
-#define INITIALIZE_EASYLOGGINGPP \
-    void Empty() {}
 
 #define LOG(level)                        \
     BOOST_LOG_SEV(dev::FileLoggerHandler, \

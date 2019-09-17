@@ -29,7 +29,6 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
-#include <libdevcore/easylog.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>

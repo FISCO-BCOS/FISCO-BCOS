@@ -24,7 +24,6 @@
 #include "StorageException.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>

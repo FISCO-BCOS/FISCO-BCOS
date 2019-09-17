@@ -21,7 +21,6 @@
  */
 #pragma once
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <memory>
 #include <set>
 #include <string>
