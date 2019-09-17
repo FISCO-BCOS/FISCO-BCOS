@@ -71,15 +71,24 @@ public:
         std::string dataKey;
     } diskEncryption;
 
+    struct Binary
+    {
+        std::string version;
+        std::string buildTime;
+        std::string buildInfo;
+        std::string gitBranch;
+        std::string gitCommitHash;
+    } binaryInfo;
+
     /// default block time
     const unsigned c_intervalBlockTime = 1000;
     /// omit empty block or not
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
-
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
+    const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
 
     std::atomic_bool shouldExit;
 

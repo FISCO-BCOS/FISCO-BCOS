@@ -71,14 +71,12 @@ bool Ledger::initLedger(const std::string& _configFilePath)
         return false;
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
-    m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+    m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
     // m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
-    /// set group ID for storage
-    m_dbInitializer->storage()->setGroupID(m_groupId);
     /// init the DB
     bool ret = initBlockChain(genesisParam);
     if (!ret)
@@ -341,6 +339,8 @@ void Ledger::initDBConfig(ptree const& pt)
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        m_param->mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
+        m_param->mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
         if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
         {
             m_param->mutableStorageParam().type = "RocksDB";

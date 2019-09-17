@@ -23,6 +23,8 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include "libstorage/BinLogHandler.h"
+#include "libstorage/BinaryLogStorage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -31,7 +33,6 @@
 #include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libsecurity/EncryptedStorage.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
@@ -41,20 +42,19 @@
 #include <libstorage/SQLStorage.h>
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <boost/lexical_cast.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
+using namespace dev::ledger;
 using namespace dev::eth;
 using namespace dev::mptstate;
 using namespace dev::executive;
 using namespace dev::storagestate;
 
-namespace dev
-{
-namespace ledger
-{
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
@@ -139,37 +139,111 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
+void DBInitializer::recoverFromBinaryLog(
+    std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
+{
+    int64_t startNum = -1;
+    auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), startNum);
+    Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
+    auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+    if (entries->size() > 0)
+    {
+        auto entry = entries->get(0);
+        std::string currentNumber = entry->getField(SYS_VALUE);
+        startNum = boost::lexical_cast<int64_t>(currentNumber);
+    }
+    // getMissingBlocksFromBinLog from (startNum,lastBlockNum]
+    int64_t lastBlockNum = _binaryLogger->getLastBlockNum();
+    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs") << LOG_KV("startNum", startNum)
+                            << LOG_KV("endNum", lastBlockNum);
+    if (startNum >= lastBlockNum)
+    {
+        return;
+    }
+    int64_t interval = 100;
+    for (int64_t num = startNum; num <= lastBlockNum; num += interval)
+    {
+        auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num, num + interval);
+        if (blocksData->size() > 0)
+        {
+            for (size_t i = 1; i <= blocksData->size(); ++i)
+            {
+                auto blockDataIter = blocksData->find(num + i);
+                if (blockDataIter == blocksData->end() || blockDataIter->second.empty())
+                {
+                    DBInitializer_LOG(FATAL) << LOG_DESC("recoverFromBinaryLog failed")
+                                             << LOG_KV("blockNumber", num + i);
+                }
+                else
+                {
+                    const std::vector<TableData::Ptr>& blockData = blockDataIter->second;
+                    h256 hash = h256();
+                    // get the hash used by commit function
+                    for (size_t j = 0; j < blockData.size(); j++)
+                    {
+                        TableData::Ptr data = blockData[j];
+                        if (data->info->name == SYS_NUMBER_2_HASH)
+                        {
+                            Entries::Ptr newEntries = data->newEntries;
+                            Entry::Ptr entry = newEntries->get(0);
+                            hash = h256(entry->getField("value"));
+                            break;
+                        }
+                    }
+                    // FIXME: delete _hash_ field and try to delete hash parameter of storage
+                    // FIXME: use h256() for now
+                    _storage->commit(hash, num + i, blockData);
+                    DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
+                                             << LOG_KV("blockNumber", num + i);
+                }
+            }
+        }
+    }
+}
+
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
-    auto cachedStorage = std::make_shared<CachedStorage>();
-#if 0
-    if (g_BCOSConfig.diskEncryption.enable)
+    auto backendStorage = _backend;
+    if (m_param->mutableStorageParam().CachedStorage)
     {
-        auto encryptedStorage = std::make_shared<EncryptedStorage>();
-        encryptedStorage->setBackend(_backend);
+        auto cachedStorage = std::make_shared<CachedStorage>();
+        cachedStorage->setBackend(_backend);
+        cachedStorage->setGroupID(m_groupID);
+        cachedStorage->setMaxCapacity(
+            m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
+        cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+        cachedStorage->init();
+        backendStorage = cachedStorage;
+        DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
+                                << LOG_KV("maxCapacity", m_param->mutableStorageParam().maxCapacity)
+                                << LOG_KV("maxForwardBlock",
+                                       m_param->mutableStorageParam().maxForwardBlock);
+    }
 
-        encryptedStorage->setDataKey(asBytes(g_BCOSConfig.diskEncryption.dataKey));
-        cachedStorage->setBackend(encryptedStorage);
+
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    if (m_param->mutableStorageParam().binaryLog)
+    {
+        auto binaryLogStorage = make_shared<BinaryLogStorage>();
+        binaryLogStorage->setBackend(backendStorage);
+
+        tableFactoryFactory->setStorage(binaryLogStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
+        auto path = m_param->baseDir() + "/BinaryLogs";
+        boost::filesystem::create_directories(path);
+        auto binaryLogger = make_shared<BinLogHandler>(path);
+        binaryLogger->setBinaryLogSize(g_BCOSConfig.c_binaryLogSize);
+        recoverFromBinaryLog(binaryLogger, backendStorage);
+        binaryLogStorage->setBinaryLogger(binaryLogger);
+        DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
+        m_storage = binaryLogStorage;
     }
     else
     {
-#endif
-    cachedStorage->setBackend(_backend);
-#if 0
+        tableFactoryFactory->setStorage(backendStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
+        m_storage = backendStorage;
     }
-#endif
-
-    cachedStorage->setMaxCapacity(
-        m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
-    cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
-
-    cachedStorage->init();
-
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(cachedStorage);
-
-    m_storage = cachedStorage;
-    m_tableFactoryFactory = tableFactoryFactory;
 }
 
 void DBInitializer::initSQLStorage()
@@ -264,7 +338,8 @@ void DBInitializer::initRocksDBStorage()
     {
         std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
         // create and init rocksDBStorage
-        std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
+        std::shared_ptr<RocksDBStorage> rocksdbStorage =
+            std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
         rocksdbStorage->setDB(rocksDB);
         // init TableFactory2
         initTableFactory2(rocksdbStorage);
@@ -371,6 +446,3 @@ void DBInitializer::createMptState(dev::h256 const& genesisHash)
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
     DBInitializer_LOG(DEBUG) << LOG_DESC("createMptState SUCC");
 }
-
-}  // namespace ledger
-}  // namespace dev

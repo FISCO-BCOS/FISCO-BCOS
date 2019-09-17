@@ -98,8 +98,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
         if (m_remoteDB)
         {
             // query remoteDB anyway
-            Entries::Ptr dbEntries =
-                m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key, condition);
+            Entries::Ptr dbEntries = m_remoteDB->select(m_blockNum, m_tableInfo, key, condition);
             if (!dbEntries)
             {
                 return entries;
@@ -178,7 +177,7 @@ int MemoryTable2::update(
 
             for (auto& it : *(entry))
             {
-                //_id_ always got initialized value 0 from Entry::Entry()
+                // _id_ always got initialized value 0 from Entry::Entry()
                 // no need to update _id_ while updating entry
                 if (it.first != ID_FIELD && it.first != m_tableInfo->key)
                 {
@@ -362,6 +361,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
         TIME_RECORD("Sort data");
         tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
+        tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
+            EntryLessNoLock(m_tableInfo));
+        tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
+            EntryLessNoLock(m_tableInfo));
         TIME_RECORD("Submmit data");
         bytes allData;
         for (size_t i = 0; i < tempEntries.size(); ++i)

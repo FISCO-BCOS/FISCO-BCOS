@@ -19,9 +19,9 @@
  *  @date 20180921
  */
 #include "TableFactoryPrecompiled.h"
-#include "StorageException.h"
-#include "Table.h"
 #include "TablePrecompiled.h"
+#include "libstorage/StorageException.h"
+#include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/easylog.h>

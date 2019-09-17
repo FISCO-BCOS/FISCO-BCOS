@@ -39,6 +39,8 @@ public:
         tableFactory->setStateStorage(m_stroage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
+        // TODO: check if need handle exception
+        tableFactory->init();
 
         return tableFactory;
     }

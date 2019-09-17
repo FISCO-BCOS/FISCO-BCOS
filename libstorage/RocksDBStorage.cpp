@@ -47,7 +47,7 @@ using namespace dev::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(
-    h256, int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
+    int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     try
     {
@@ -110,13 +110,12 @@ Entries::Ptr RocksDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(h256, int64_t num, const vector<TableData::Ptr>& datas)
 {
     try
     {
         auto start_time = utcTime();
 
-        auto hex = hash.hex();
         WriteBatch batch;
         tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
             [&](const tbb::blocked_range<size_t>& range) {
@@ -145,8 +144,16 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
+        // by default sync is false, if true, must enable WAL
         options.sync = false;
+        // by default WAL is enable
+        options.disableWAL = m_disableWAL;
+
         m_db->Write(options, batch);
+        if (m_disableWAL)
+        {  // if disableWAL must manually flush
+            m_db->flush();
+        }
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")

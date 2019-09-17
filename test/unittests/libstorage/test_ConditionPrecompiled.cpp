@@ -19,7 +19,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/ConditionPrecompiled.h>
+#include <libprecompiled/ConditionPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;

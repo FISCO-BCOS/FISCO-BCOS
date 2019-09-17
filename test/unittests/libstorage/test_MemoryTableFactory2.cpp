@@ -40,7 +40,7 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    Entries::Ptr select(h256, int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
+    Entries::Ptr select(int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
@@ -240,6 +240,12 @@ BOOST_AUTO_TEST_CASE(setBlockHash)
 BOOST_AUTO_TEST_CASE(setBlockNum)
 {
     memoryDBFactory->setBlockNum(2);
+}
+
+BOOST_AUTO_TEST_CASE(init)
+{
+    memoryDBFactory->init();
+    BOOST_TEST(memoryDBFactory->ID() == 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

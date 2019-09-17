@@ -109,12 +109,6 @@ void BlockChainImp::setStateFactory(StateFactoryInterface::Ptr _stateFactory)
 
 shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory(int64_t num)
 {
-#if 0
-    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory>();
-    memoryTableFactory->setStateStorage(m_stateStorage);
-#endif
-
     auto memoryTableFactory = m_tableFactoryFactory->newTableFactory(dev::h256(), num);
     return memoryTableFactory;
 }
@@ -126,7 +120,6 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
     {
         return nullptr;
     }
-    string blockHash = "";
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
     if (tb)
     {
@@ -137,13 +130,9 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
             return getBlock(blockHash);
         }
-        else
-        {
-            // BLOCKCHAIN_LOG(ERROR) << "Can't find blocknumber" << LOG_KV()
-        }
     }
 
-    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find block") << LOG_KV("height", _i);
+    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[getBlock]Can't find block") << LOG_KV("number", _i);
     return nullptr;
 }
 
@@ -513,14 +502,17 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
-        if (tb)
-        {
-            Entry::Ptr entry = std::make_shared<Entry>();
-            bytes out;
-            block->encode(out);
-            entry->setField(SYS_VALUE, toHexPrefixed(out));
-            tb->insert(block->blockHeader().hash().hex(), entry);
-        }
+        auto entry = std::make_shared<Entry>();
+        bytes out;
+        block->encode(out);
+        entry->setField(SYS_VALUE, toHexPrefixed(out));
+        tb->insert(block->blockHeader().hash().hex(), entry);
+
+        tb = mtb->openTable(SYS_CURRENT_STATE, false);
+        entry = tb->newEntry();
+        entry->setField(SYS_VALUE, "0");
+        entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+        tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
 
         mtb->commitDB(block->blockHeader().hash(), block->blockHeader().number());
         {
@@ -900,17 +892,9 @@ void BlockChainImp::writeNumber(const Block& block, std::shared_ptr<ExecutiveCon
     Table::Ptr tb = context->getMemoryTableFactory()->openTable(SYS_CURRENT_STATE, false);
     if (tb)
     {
-        auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
         auto entry = tb->newEntry();
         entry->setField(SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-        if (entries->size() > 0)
-        {
-            tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
-        }
-        else
-        {
-            tb->insert(SYS_KEY_CURRENT_NUMBER, entry);
-        }
+        tb->update(SYS_KEY_CURRENT_NUMBER, entry, tb->newCondition());
     }
     else
     {

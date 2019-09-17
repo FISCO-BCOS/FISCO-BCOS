@@ -88,7 +88,8 @@ struct StorageParam
 {
     std::string type;
     std::string path;
-
+    bool binaryLog = false;
+    bool CachedStorage = true;
     // for amop storage
     std::string topic;
     size_t timeout;

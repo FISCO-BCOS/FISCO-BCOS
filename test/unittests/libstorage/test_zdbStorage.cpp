@@ -36,10 +36,10 @@ namespace test_zdbStorage
 class MockSQLBasicAccess : public dev::storage::SQLBasicAccess
 {
 public:
-    int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
+    int Select(int64_t num, const std::string& table, const std::string& key,
         Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values) override
     {
-        std::cout << "hash: " << hash.hex() << ", num:" << num << ", key: " << key << std::endl;
+        std::cout << ", num:" << num << ", key: " << key << std::endl;
         if (key == "_empty_key_" || !condition)
         {
             values.resize(0);
@@ -117,8 +117,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries =
-        zdbStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    Entries::Ptr entries = zdbStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -134,7 +133,7 @@ BOOST_AUTO_TEST_CASE(select_condition)
     tableInfo->name = table;
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1000000");
-    Entries::Ptr entries = zdbStorage->select(h, num, tableInfo, "darrenyin", condition);
+    Entries::Ptr entries = zdbStorage->select(num, tableInfo, "darrenyin", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 

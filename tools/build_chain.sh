@@ -35,7 +35,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.1.0"
+default_version="2.2.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=60
@@ -62,6 +62,7 @@ Usage:
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
+    -B <Enable Binary log>              Default off. If set -B, enable binary log
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -521,6 +522,10 @@ function generate_group_ini()
 [storage]
     ; storage db type, rocksdb / mysql / external, rocksdb is recommended
     type=${storage_type}
+    ; set true to turn on binary log
+    binary_log=false
+    ; set fasle to disable CachedStorage
+    cached_storage=true
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10

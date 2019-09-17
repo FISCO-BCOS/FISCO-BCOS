@@ -22,7 +22,6 @@
 #include "Common.h"
 #include "MemoryTable2.h"
 #include "StorageException.h"
-#include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
@@ -55,6 +54,21 @@ MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
 }
 
+
+void MemoryTableFactory2::init()
+{
+    auto table = openTable(SYS_CURRENT_STATE);
+    auto condition = table->newCondition();
+    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
+    // get id from backend
+    auto out = table->select(SYS_KEY_CURRENT_ID, condition);
+    if (out->size() > 0)
+    {
+        auto entry = out->get(0);
+        auto numStr = entry->getField(SYS_VALUE);
+        m_ID = boost::lexical_cast<size_t>(numStr);
+    }
+}
 
 Table::Ptr MemoryTableFactory2::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -269,6 +283,45 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
             return lhs->info->name < rhs->info->name;
         });
+    ssize_t currentStateIdx = -1;
+    for (size_t i = 0; i < datas.size(); ++i)
+    {
+        auto tableData = datas[i];
+        if (currentStateIdx < 0 && tableData->info->name == SYS_CURRENT_STATE)
+        {
+            currentStateIdx = i;
+        }
+        for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
+             ++entry)
+        {
+            (*entry)->setID(++m_ID);
+        }
+    }
+
+    // Write m_ID to SYS_CURRENT_STATE
+    Entry::Ptr idEntry = std::make_shared<Entry>();
+    idEntry->setID(1);
+    idEntry->setNum(_blockNumber);
+    idEntry->setStatus(0);
+    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
+    TableData::Ptr currentState;
+    if (_blockNumber == 0 || currentStateIdx == -1)
+    {
+        currentState = std::make_shared<TableData>();
+        currentState->info->name = SYS_CURRENT_STATE;
+        currentState->info->key = SYS_KEY;
+        currentState->info->fields = std::vector<std::string>{"value"};
+        idEntry->setForce(true);
+        currentState->newEntries->addEntry(idEntry);
+        datas.push_back(currentState);
+    }
+    else
+    {
+        currentState = datas[currentStateIdx];
+        currentState->dirtyEntries->addEntry(idEntry);
+    }
+
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

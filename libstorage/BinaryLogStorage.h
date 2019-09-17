@@ -12,46 +12,45 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2020 fisco-dev contributors.
  */
-/** @file SealerPrecompiled.h
- *  @author ancelmo
- *  @date 20180921
+/** @file BinaryLogStorage.h
+ *  @author xingqiangbai
+ *  @date 20190823
  */
+
 #pragma once
 
 #include "Storage.h"
-#include "StorageException.h"
-#include "Table.h"
-#include <json/json.h>
-#include <leveldb/db.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
 
 namespace dev
 {
 namespace storage
 {
-class LevelDBStorage : public Storage
+class BinLogHandler;
+class BinaryLogStorage : public Storage
 {
 public:
-    typedef std::shared_ptr<LevelDBStorage> Ptr;
+    typedef std::shared_ptr<BinaryLogStorage> Ptr;
+    BinaryLogStorage();
 
-    virtual ~LevelDBStorage(){};
+    virtual ~BinaryLogStorage();
 
     Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    bool onlyDirty() override;
 
-    void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
+    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
+
+    void setBackend(Storage::Ptr backend) { m_backend = backend; }
+    virtual void setBinaryLogger(std::shared_ptr<BinLogHandler> _logger)
+    {
+        m_binaryLogger = _logger;
+    }
+    void stop() override;
 
 private:
-    size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
-        TableData::Ptr tableData, h256 hash, int64_t num, size_t from, size_t to);
-    std::shared_ptr<dev::db::BasicLevelDB> m_db;
-    dev::SharedMutex m_remoteDBMutex;
+    Storage::Ptr m_backend;
+    std::shared_ptr<BinLogHandler> m_binaryLogger = nullptr;
 };
 
 }  // namespace storage

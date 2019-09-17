@@ -40,8 +40,8 @@ public:
     ZdbStorage();
     virtual ~ZdbStorage(){};
 
-    Entries::Ptr select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
-        const std::string& _key, Condition::Ptr _condition = nullptr) override;
+    Entries::Ptr select(int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key,
+        Condition::Ptr _condition = nullptr) override;
     size_t commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
     bool onlyDirty() override;
 
