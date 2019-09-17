@@ -24,7 +24,6 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>

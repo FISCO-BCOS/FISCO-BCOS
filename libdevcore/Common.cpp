@@ -23,8 +23,10 @@
  */
 #include "Common.h"
 #include "Exceptions.h"
-#include "easylog.h"
 #include <csignal>
+#ifdef __APPLE__
+#include <pthread.h>
+#endif
 
 using namespace std;
 
@@ -151,3 +153,12 @@ std::string newSeq()
 }
 
 }  // namespace dev
+
+void dev::pthread_setThreadName(std::string const& _n)
+{
+#if defined(__GLIBC__)
+    pthread_setname_np(pthread_self(), _n.c_str());
+#elif defined(__APPLE__)
+    pthread_setname_np(_n.c_str());
+#endif
+}

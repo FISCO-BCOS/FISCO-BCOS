@@ -25,7 +25,6 @@
 #include "libchannelserver/ChannelRPCServer.h"
 #include "libchannelserver/ChannelServer.h"
 #include "libdevcore/Common.h"                    // for byte
-#include "libdevcore/Log.h"                       // for LOG
 #include "libeventfilter/EventLogFilterParams.h"  // for eventfilter
 #include "libinitializer/Common.h"
 #include "libledger/LedgerManager.h"

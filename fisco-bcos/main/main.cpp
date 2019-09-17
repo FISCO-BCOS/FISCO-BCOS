@@ -31,7 +31,7 @@
 #include <memory>
 
 #if FISCO_EASYLOG
-INITIALIZE_EASYLOGGINGPP
+
 #endif
 
 using namespace std;

@@ -23,7 +23,6 @@
 
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>

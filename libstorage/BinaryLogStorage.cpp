@@ -23,7 +23,6 @@
 #include "BinLogHandler.h"
 #include "StorageException.h"
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::storage;

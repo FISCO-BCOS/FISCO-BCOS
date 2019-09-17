@@ -24,7 +24,7 @@
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
-#include <libdevcore/easylog.h>
+
 #include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>

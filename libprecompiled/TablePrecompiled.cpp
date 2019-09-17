@@ -25,7 +25,6 @@
 #include "libstorage/StorageException.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;

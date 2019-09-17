@@ -25,7 +25,6 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>

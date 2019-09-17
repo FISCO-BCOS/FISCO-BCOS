@@ -22,9 +22,9 @@
  */
 
 #include "BlockChainImp.h"
+
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>

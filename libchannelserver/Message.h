@@ -23,9 +23,9 @@
 
 #pragma once
 
+
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
 #include <queue>

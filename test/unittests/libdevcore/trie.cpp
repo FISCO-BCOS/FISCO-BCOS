@@ -21,7 +21,6 @@
 #include <libdevcore/MemoryDB.h>
 #include <libdevcore/TrieDB.h>
 #include <libdevcore/TrieHash.h>
-#include <libdevcore/easylog.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
