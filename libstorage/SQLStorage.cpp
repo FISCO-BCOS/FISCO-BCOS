@@ -22,7 +22,6 @@
 #include "StorageException.h"
 
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/easylog.h>
 
 #include "Common.h"
 #include "SQLStorage.h"

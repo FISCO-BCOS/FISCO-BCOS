@@ -20,7 +20,6 @@
  */
 #include "ConditionPrecompiled.h"
 #include "libstorage/Common.h"
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 

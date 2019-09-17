@@ -32,10 +32,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 
 namespace fs = boost::filesystem;
 using namespace dev;

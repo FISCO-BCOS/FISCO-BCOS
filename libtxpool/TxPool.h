@@ -26,7 +26,6 @@
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/ThreadPool.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -167,8 +166,7 @@ protected:
     ImportResult import(dev::eth::Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// verify transcation
-    virtual ImportResult verify(
-        Transaction& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
+    virtual ImportResult verify(Transaction& trans, IfDropped _ik = IfDropped::Ignore);
     /// check nonce
     virtual bool isBlockLimitOrNonceOk(dev::eth::Transaction const& _ts, bool _needinsert) const;
     /// interface for filter check

@@ -24,7 +24,6 @@
 #include "StorageException.h"
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 
 
 using namespace std;

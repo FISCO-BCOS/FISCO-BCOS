@@ -20,7 +20,6 @@
  */
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
