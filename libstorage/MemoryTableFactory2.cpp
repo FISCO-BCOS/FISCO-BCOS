@@ -295,19 +295,18 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
     idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
     idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
     TableData::Ptr currentState;
-    if (_blockNumber == 0 || currentStateIdx == -1)
+    if (currentStateIdx == -1)
     {
-        currentState = std::make_shared<TableData>();
-        currentState->info->name = SYS_CURRENT_STATE;
-        currentState->info->key = SYS_KEY;
-        currentState->info->fields = std::vector<std::string>{"value"};
+        STORAGE_LOG(FATAL) << "Can't find current state table";
+    }
+    currentState = datas[currentStateIdx];
+    if (_blockNumber == 0)
+    {
         idEntry->setForce(true);
         currentState->newEntries->addEntry(idEntry);
-        datas.push_back(currentState);
     }
     else
     {
-        currentState = datas[currentStateIdx];
         currentState->dirtyEntries->addEntry(idEntry);
     }
 

@@ -102,7 +102,7 @@ check_binarylog()
     bash stop_all.sh
     rm -rf node0/data/ node*/log
     rm -rf node1/data/block
-    bash start_all.sh && sleep 5
+    bash start_all.sh && sleep 6
     check_reports 1 4 "sync block failed!" "==============check sync block is ok"
     bash stop_all.sh
 }

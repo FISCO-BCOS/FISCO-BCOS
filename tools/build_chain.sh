@@ -15,10 +15,12 @@ output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
 storage_type=rocksdb
+supported_storage=(rocksdb mysql external scalable)
 conf_path="conf"
 bin_path=
 make_tar=
 debug_log="false"
+binary_log="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -128,8 +130,8 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     e) bin_path=$OPTARG;;
     m) state_type=mpt;;
     s) storage_type=$OPTARG
-        if [ -z "${storage_type}" ];then
-            LOG_WARN "${storage_type} is not supported storage."
+        if ! echo "${supported_storage[*]}" | grep -i "${storage_type}" &>/dev/null; then
+            LOG_WARN "${storage_type} is not supported. Please set one of ${supported_storage[*]}"
             exit 1;
         fi
     ;;
@@ -153,6 +155,10 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     h) help;;
     esac
 done
+if [ "${storage_type}" == "scalable" ]; then
+    echo "use scalable storage, so turn on binary log"
+    binary_log="true"
+fi
 }
 
 print_result()
@@ -520,10 +526,12 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ; storage db type, rocksdb / mysql / external, rocksdb is recommended
+    ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended
     type=${storage_type}
     ; set true to turn on binary log
-    binary_log=false
+    binary_log=${binary_log}
+    ; scroll_threshold=scroll_threshold_multiple*1000, only for scalable
+    scroll_threshold_multiple=2
     ; set fasle to disable CachedStorage
     cached_storage=true
     ; max cache memeory, MB

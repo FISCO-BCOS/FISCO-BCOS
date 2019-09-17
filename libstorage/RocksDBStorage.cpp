@@ -83,7 +83,8 @@ Entries::Ptr RocksDBStorage::select(
                 entry->setNum(it->at(NUM_FIELD));
                 entry->setStatus(it->at(STATUS));
 
-                if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
+                if (entry->getStatus() == Entry::Status::NORMAL &&
+                    (!condition || condition->process(entry)))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
