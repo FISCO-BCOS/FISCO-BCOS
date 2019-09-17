@@ -27,7 +27,6 @@
 #include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/concurrent_queue.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Exceptions.h>
 

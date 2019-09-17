@@ -20,7 +20,7 @@
  */
 
 #include "ExecutiveContext.h"
-#include <libdevcore/easylog.h>
+
 #include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/ExecutionResult.h>

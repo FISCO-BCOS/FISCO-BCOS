@@ -26,7 +26,6 @@
 #include <json/json.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
 #include <tbb/parallel_sort.h>

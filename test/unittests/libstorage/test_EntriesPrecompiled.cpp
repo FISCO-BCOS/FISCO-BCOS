@@ -17,7 +17,6 @@
 
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>

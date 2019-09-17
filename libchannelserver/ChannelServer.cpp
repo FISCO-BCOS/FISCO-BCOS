@@ -23,7 +23,6 @@
 
 #include "ChannelServer.h"
 
-#include <libdevcore/easylog.h>
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>

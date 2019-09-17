@@ -25,7 +25,6 @@
 #include "libstorage/StorageException.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 

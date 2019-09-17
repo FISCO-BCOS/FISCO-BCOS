@@ -23,7 +23,6 @@
 #pragma once
 
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>

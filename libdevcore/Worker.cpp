@@ -20,7 +20,6 @@
  */
 #include "Worker.h"
 #include "Common.h"
-#include "easylog.h"
 #include <pthread.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

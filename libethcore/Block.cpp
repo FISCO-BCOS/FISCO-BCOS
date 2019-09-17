@@ -25,7 +25,6 @@
 #include "TxsParallelParser.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 
 namespace dev

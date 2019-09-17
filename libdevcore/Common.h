@@ -59,6 +59,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
+#include "Log.h"
 #include "secure_vector.h"
 #include "vector_ref.h"
 
@@ -422,4 +423,6 @@ private:
 };
 
 std::string newSeq();
+void pthread_setThreadName(std::string const& _n);
+
 }  // namespace dev
