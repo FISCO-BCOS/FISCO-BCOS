@@ -79,6 +79,14 @@ enum PrecompiledError : int
 
 void getErrorCodeOut(bytes& out, int const& result);
 
+void logError(const std::string& precompiled_name, const std::string& op, const std::string& msg);
+
+void logError(const std::string& precompiled_name, const std::string& op, const std::string& key,
+    const std::string& value);
+
+void throwException(const std::string& msg);
+
+char* string_to_char(std::string& params);
 
 }  // namespace precompiled
 }  // namespace dev

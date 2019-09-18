@@ -60,6 +60,13 @@ addons:
     # - ninja-build
     - libomp-dev
     - openssl
+    - curl
+    - build-essential
+    - libssl-dev
+    - zlib1g-dev
+    - autoconf
+    - automake
+    - libtool
   homebrew:
     packages:
     - openssl

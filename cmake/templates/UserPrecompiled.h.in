@@ -28,4 +28,8 @@ void dev::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(dev::b
     // Address should in [0x5001,0xffff]
     // context->setAddress2Precompiled(Address(0x5001), std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
     context->setAddress2Precompiled(Address(0x5002), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
+
+    #ifdef FISCO_WEDPR_EXTENSION
+    context->setAddress2Precompiled(Address(0x5018), std::make_shared<dev::precompiled::WedprPrecompiled>());   
+    #endif
 }
