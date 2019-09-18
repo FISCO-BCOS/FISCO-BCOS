@@ -65,6 +65,7 @@ include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
+include(ProjectProtoBuf)
 
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")

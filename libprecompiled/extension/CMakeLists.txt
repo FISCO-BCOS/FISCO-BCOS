@@ -8,3 +8,7 @@ foreach(header ${HEADERS})
 endforeach()
 string (REPLACE ";" "\n" USER_PRECOMPILED_HEADER "${USER_PRECOMPILED_HEADER}")
 configure_file(${FISCO_BCOS_CMAKE_DIR}/templates/UserPrecompiled.h.in ${CMAKE_BINARY_DIR}/include/UserPrecompiled.h @ONLY)
+
+if (WEDPR_EXTENSION)
+  add_subdirectory(wedpr-generated)
+endif()
