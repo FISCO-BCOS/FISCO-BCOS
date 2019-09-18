@@ -24,7 +24,6 @@
 
 #if 0
 contract WedprPrecompiled {
-
 ​    function hidden_asset_verify_issued_credit(bytes issue_argument_pb) public;
 
 ​    function hidden_asset_verify_fulfilled_credit(bytes fulfill_argument_pb) public;
@@ -32,7 +31,6 @@ contract WedprPrecompiled {
 ​    function hidden_asset_verify_transfer_credit(bytes transfer_request_pb) public;
 
 ​    function hidden_asset_verify_split_credit(bytes split_request_pb) public;
-
 }
 #endif
 
@@ -45,12 +43,12 @@ class WedprPrecompiled : public dev::blockverifier::Precompiled
 public:
     typedef std::shared_ptr<WedprPrecompiled> Ptr;
     WedprPrecompiled();
-    virtual ~WedprPrecompiled(){};
+    ~WedprPrecompiled(){};
 
-    virtual std::string toString() override;
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _param, Address const& _origin = Address()) override;
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
+        Address const& _origin = Address()) override;
 };
 
 }  // namespace precompiled
