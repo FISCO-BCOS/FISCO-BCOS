@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
 /** @file WedprPrecompiled.cpp
  *  @author caryliao
@@ -23,7 +23,6 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
-#include <json/json.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -96,24 +95,28 @@ bytes WedprPrecompiled::call(
     {
         std::string issue_argument_pb;
         abi.abiOut(data, issue_argument_pb);
+        // TODO call rust lib
     }
     // hidden_asset_verify_fulfilled_credit(bytes fulfill_argument_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT])
     {
         std::string fulfill_argument_pb;
         abi.abiOut(data, fulfill_argument_pb);
+        // TODO call rust lib
     }
     // hidden_asset_verify_transfer_credit(bytes transfer_request_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         std::string transfer_request_pb;
         abi.abiOut(data, transfer_request_pb);
+        // TODO call rust lib
     }
     // hidden_asset_verify_split_credit(bytes split_request_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT])
     {
         std::string split_request_pb;
         abi.abiOut(data, split_request_pb);
+        // TODO call rust lib
     }
     else
     {
