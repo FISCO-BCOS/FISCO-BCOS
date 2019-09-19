@@ -111,6 +111,7 @@ void PBFTSealer::attempIncreaseTimeoutTx()
     // 1. m_lastTimeoutTx or m_maxNoTimeoutTx is large enough, return directly
     if (m_lastTimeoutTx >= m_pbftEngine->maxBlockTransactions())
     {
+        m_lastTimeoutTx = m_pbftEngine->maxBlockTransactions();
         return;
     }
     if (m_maxNoTimeoutTx == m_pbftEngine->maxBlockTransactions())
@@ -141,6 +142,12 @@ void PBFTSealer::attempIncreaseTimeoutTx()
 /// decrease maxBlockCanSeal to half when timeout
 void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
 {
+    // fix the case that maxBlockTransactions of pbftEngine has been decreased through sysconfig
+    // precompile while the  m_maxBlockCanSeal remain high
+    if (maxBlockCanSeal() >= m_pbftEngine->maxBlockTransactions())
+    {
+        m_maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
+    }
     /// is syncing, modify the latest block number
     if (m_blockSync->isSyncing())
     {
@@ -173,6 +180,10 @@ void PBFTSealer::onTimeout(uint64_t const& sealingTxNumber)
 void PBFTSealer::onCommitBlock(
     uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)
 {
+    if (maxBlockCanSeal() >= m_pbftEngine->maxBlockTransactions())
+    {
+        m_maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
+    }
     /// if is syncing or timeout, return directly
     if (m_blockSync->isSyncing() || changeCycle > 0)
     {
@@ -201,6 +212,7 @@ void PBFTSealer::onCommitBlock(
     /// maxBlockTransactions, increase maxBlockCanSeal
     if (maxBlockCanSeal() >= m_pbftEngine->maxBlockTransactions())
     {
+        m_maxBlockCanSeal = m_pbftEngine->maxBlockTransactions();
         return;
     }
     // if m_lastTimeoutTx is no large than to m_maxNoTimeoutTx, try to increase m_TimeoutTx
