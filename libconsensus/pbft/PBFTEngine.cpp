@@ -24,11 +24,8 @@
 #include "PBFTEngine.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libstorage/MemoryTableFactory2.h>
-#include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -254,14 +251,14 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     catch (DatabaseError const& e)
     {
         PBFTENGINE_LOG(ERROR) << LOG_BADGE("DatabaseError")
-                              << LOG_DESC("store backupMsg to leveldb failed")
+                              << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
     catch (std::exception const& e)
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to leveldb failed")
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));

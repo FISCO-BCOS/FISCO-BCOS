@@ -106,11 +106,14 @@ public:
     }
     bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override
     {
-        return m_nodeIPEndpoint;
+        return bi::tcp::endpoint(m_nodeIPEndpoint.host.empty() ?
+                                     bi::address::from_string("0.0.0.0") :
+                                     bi::address::from_string(m_nodeIPEndpoint.host),
+            m_nodeIPEndpoint.port.empty() ? 0 : std::stoi(m_nodeIPEndpoint.port));
     }
     void setRemoteEndpoint(const bi::tcp::endpoint& end)
     {
-        m_nodeIPEndpoint = NodeIPEndpoint(end.address(), 0, end.port());
+        m_nodeIPEndpoint = NodeIPEndpoint(end.address(), end.port());
     }
 
     bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }

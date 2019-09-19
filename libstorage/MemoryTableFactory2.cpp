@@ -265,6 +265,10 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
             datas.push_back(tableData);
         }
     }
+    tbb::parallel_sort(datas.begin(), datas.end(),
+        [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
+            return lhs->info->name < rhs->info->name;
+        });
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

@@ -36,7 +36,7 @@ ExternalProject_Add(rocksdb
     LOG_UPDATE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS <SOURCE_DIR>/ibrocksdb.a
+    BUILD_BYPRODUCTS <SOURCE_DIR>/librocksdb.a
 )
 
 ExternalProject_Get_Property(rocksdb SOURCE_DIR)

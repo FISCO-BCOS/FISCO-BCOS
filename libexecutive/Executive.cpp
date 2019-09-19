@@ -51,7 +51,7 @@ void Executive::accrueSubState(SubState& _parentContext)
 void Executive::initialize(Transaction const& _transaction)
 {
     m_t = _transaction;
-    m_baseGasRequired = m_t.baseGasRequired(DefaultSchedule);
+    m_baseGasRequired = m_t.baseGasRequired(g_BCOSConfig.evmSchedule());
 
     verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
@@ -69,7 +69,7 @@ void Executive::initialize(Transaction const& _transaction)
 void Executive::verifyTransaction(
     ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&)
 {
-    eth::EVMSchedule const& schedule = DefaultSchedule;
+    eth::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
 
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     // The gas limit is dynamic, not fixed.
@@ -78,6 +78,10 @@ void Executive::verifyTransaction(
         _t.baseGasRequired(schedule) > (bigint)txGasLimit)
     {
         m_excepted = TransactionException::OutOfGasIntrinsic;
+        m_exceptionReason
+            << LOG_KV("reason",
+                   "The gas required by deploying this contract is more than tx_gas_limit")
+            << LOG_KV("limit", txGasLimit) << LOG_KV("require", _t.baseGasRequired(schedule));
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
     }
@@ -92,6 +96,10 @@ bool Executive::execute()
         if (txGasLimit < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
+            m_exceptionReason
+                << LOG_KV("reason",
+                       "The gas required by deploying this contract is more than tx_gas_limit")
+                << LOG_KV("limit", txGasLimit) << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
@@ -102,6 +110,10 @@ bool Executive::execute()
         if (m_t.gas() < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
+            m_exceptionReason
+                << LOG_KV("reason",
+                       "The gas required by deploying this contract is more than sender given")
+                << LOG_KV("given", m_t.gas()) << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
@@ -352,7 +364,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                     m_res->depositSize = out.size();
                 }
                 if (out.size() > m_ext->evmSchedule().maxCodeSize)
+                {
+                    m_exceptionReason << LOG_KV("reason", "Code is too long")
+                                      << LOG_KV("size_limit", m_ext->evmSchedule().maxCodeSize)
+                                      << LOG_KV("size", out.size());
                     BOOST_THROW_EXCEPTION(OutOfGas());
+                }
                 else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
                     if (m_res)
@@ -362,7 +379,10 @@ bool Executive::go(OnOpFunc const& _onOp)
                 else
                 {
                     if (m_ext->evmSchedule().exceptionalFailedCodeDeposit)
+                    {
+                        m_exceptionReason << LOG_KV("reason", "exceptionalFailedCodeDeposit");
                         BOOST_THROW_EXCEPTION(OutOfGas());
+                    }
                     else
                     {
                         if (m_res)
@@ -497,4 +517,15 @@ void Executive::revert()
     m_s->rollback(m_savepoint);
     auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
     memoryTableFactory->rollback(m_tableFactorySavepoint);
+}
+
+
+void Executive::loggingException()
+{
+    if (m_excepted != TransactionException::None)
+    {
+        LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
+                   << LOG_KV("hash", m_t.hasZeroSignature() ? m_t.sha3().abridged() : "call")
+                   << m_exceptionReason.str();
+    }
 }

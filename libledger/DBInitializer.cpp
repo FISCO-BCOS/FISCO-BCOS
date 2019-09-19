@@ -25,6 +25,7 @@
 #include "LedgerParam.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/table.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
@@ -181,7 +182,8 @@ void DBInitializer::initSQLStorage()
     sqlStorage->setChannelRPCServer(m_channelRPCServer);
     sqlStorage->setTopic(m_param->mutableStorageParam().topic);
     sqlStorage->setFatalHandler([](std::exception& e) {
-        LOG(ERROR) << "Access amdb failed exit:" << e.what();
+        DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
+                                 << "Access amdb failed exit:" << e.what();
         BOOST_THROW_EXCEPTION(e);
     });
     sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
@@ -307,7 +309,8 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler([](std::exception& e) {
-        LOG(ERROR) << "access mysql failed exit:" << e.what();
+        DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
+                                 << "access mysql failed exit:" << e.what();
         BOOST_THROW_EXCEPTION(e);
     });
 

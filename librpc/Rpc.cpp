@@ -22,6 +22,7 @@
 #include "Rpc.h"
 #include "Common.h"
 #include "JsonHelper.h"
+#include "libledger/LedgerManager.h"  // for LedgerManager
 #include <include/BuildInfo.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
@@ -55,12 +56,33 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::NoView, "Only pbft consensus supports the view property"},
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
-        "Don't send request to this node who doesn't belong to the group"}};
+        "Don't send request to this node who doesn't belong to the group"},
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
 {}
+
+std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
+{
+    if (!m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_ledgerManager;
+}
+
+std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
+{
+    if (!m_service)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
+    return m_service;
+}
 
 bool Rpc::isValidSystemConfig(std::string const& key)
 {
@@ -69,6 +91,11 @@ bool Rpc::isValidSystemConfig(std::string const& key)
 
 void Rpc::checkRequest(int _groupID)
 {
+    if (!m_service || !m_ledgerManager)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+            RPCMsg[RPCExceptionType::IncompleteInitialization]));
+    }
     auto blockchain = ledgerManager()->blockChain(_groupID);
     if (!blockchain)
     {
@@ -337,10 +364,8 @@ Json::Value Rpc::getPeers(int _groupID)
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
-
         checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
-
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
         {
@@ -350,9 +375,13 @@ Json::Value Rpc::getPeers(int _groupID)
             node["Agency"] = it->nodeInfo.agencyName;
             node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
-
-            for (std::string topic : it->topics)
-                node["Topic"].append(topic);
+            for (auto topic : it->topics)
+            {
+                if (topic.topicStatus == dev::TopicStatus::VERIFYI_SUCCESS_STATUS)
+                {
+                    node["Topic"].append(topic.topic);
+                }
+            }
             response.append(node);
         }
 
@@ -416,7 +445,6 @@ Json::Value Rpc::getGroupPeers(int _groupID)
         {
             response.append((*it).hex());
         }
-
         return response;
     }
     catch (JsonRpcException& e)
@@ -601,6 +629,12 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         h256 blockHash = blockchain->numberHash(number);
+        // get blockHash failed
+        if (blockHash == h256())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
         return toJS(blockHash);
     }
     catch (JsonRpcException& e)
@@ -998,10 +1032,12 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
-            tx.setRpcCallback(
-                [transactionCallback](LocalisedTransactionReceipt::Ptr receipt, bytes input) {
-                    Json::Value response;
-
+            auto clientProtocolversion = (*m_transactionCallbackVersion)();
+            tx.setRpcCallback([transactionCallback, clientProtocolversion](
+                                  LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+                Json::Value response;
+                if (clientProtocolversion > 0)
+                {  // FIXME: If made protocol modify, please modify upside if
                     response["transactionHash"] = toJS(receipt->hash());
                     response["transactionIndex"] = toJS(receipt->transactionIndex());
                     response["blockNumber"] = toJS(receipt->blockNumber());
@@ -1028,11 +1064,11 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                         response["input"] = toJS(input);
                     }
                     response["output"] = toJS(receipt->outputBytes());
+                }
 
-                    auto receiptContent = response.toStyledString();
-
-                    transactionCallback(receiptContent);
-                });
+                auto receiptContent = response.toStyledString();
+                transactionCallback(receiptContent);
+            });
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
@@ -1040,6 +1076,9 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
     catch (JsonRpcException& e)
     {
+        RPC_LOG(WARNING) << LOG_BADGE("sendRawTransaction") << LOG_DESC("response")
+                         << LOG_KV("groupID", _groupID) << LOG_KV("errorCode", e.GetCode())
+                         << LOG_KV("errorMessage", e.GetMessage());
         throw e;
     }
     catch (std::exception& e)

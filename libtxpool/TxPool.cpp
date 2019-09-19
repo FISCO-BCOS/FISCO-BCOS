@@ -128,14 +128,17 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
-        auto callback = _tx.rpcCallback();
-        if (callback)
+        if (g_BCOSConfig.version() < V2_1_0)
         {
-            dev::eth::LocalisedTransactionReceipt::Ptr receipt =
-                std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                    executive::TransactionException::TxPoolIsFull);
+            auto callback = _tx.rpcCallback();
+            if (callback)
+            {
+                dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+                    std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                        executive::TransactionException::TxPoolIsFull);
 
-            m_callbackPool.enqueue([callback, receipt] { callback(receipt, bytes()); });
+                m_callbackPool->enqueue([callback, receipt] { callback(receipt, bytes()); });
+            }
         }
 
         return ImportResult::TransactionPoolIsFull;
@@ -287,9 +290,9 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     {
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-        auto tx = m_blockChain->getLocalisedTxByHash(_txHash);
+        bytes input = p_tx->second->data();
         TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
-        m_callbackPool.enqueue([callback, tx] { callback.call(callback.pReceipt, tx.data()); });
+        m_callbackPool->enqueue([callback, input] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);

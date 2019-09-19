@@ -7,7 +7,9 @@
 #pragma once
 
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/TopicInfo.h>
 #include <libnetwork/Common.h>
+#include <libp2p/P2PMessage.h>
 
 namespace dev
 {
@@ -32,9 +34,10 @@ struct P2PSessionInfo
 {
     dev::network::NodeInfo nodeInfo;
     dev::network::NodeIPEndpoint nodeIPEndpoint;
-    std::set<std::string> topics;
+    std::set<dev::TopicItem> topics;
     P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
-        dev::network::NodeIPEndpoint const& _nodeIPEndpoint, std::set<std::string> const& _topics)
+        dev::network::NodeIPEndpoint const& _nodeIPEndpoint,
+        std::set<dev::TopicItem> const& _topics)
     {
         nodeInfo = _nodeInfo;
         nodeIPEndpoint = _nodeIPEndpoint;

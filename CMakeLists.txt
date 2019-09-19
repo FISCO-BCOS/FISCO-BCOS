@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.4)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
-project(FISCO-BCOS VERSION "2.0.1")
+project(FISCO-BCOS VERSION "2.1.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -93,6 +93,7 @@ add_subdirectory(libledger)
 add_subdirectory(librpc)
 add_subdirectory(libinitializer)
 add_subdirectory(libsecurity)
+add_subdirectory(libeventfilter)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
 

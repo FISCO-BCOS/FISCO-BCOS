@@ -44,6 +44,12 @@ namespace dev
 {
 namespace channel
 {
+enum class ProtocolVersion : uint32_t
+{
+    v1 = 1,
+    v2 = 2
+};
+
 class ChannelSession : public std::enable_shared_from_this<ChannelSession>
 {
 public:
@@ -81,12 +87,12 @@ public:
     virtual bool enableSSL() { return _enableSSL; }
     virtual void setEnableSSL(bool ssl) { _enableSSL = ssl; }
 
-    virtual std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > sslSocket()
+    virtual std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> sslSocket()
     {
         return _sslSocket;
     };
     virtual void setSSLSocket(
-        std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > socket);
+        std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> socket);
 
     virtual void setIOService(std::shared_ptr<boost::asio::io_service> IOService)
     {
@@ -98,7 +104,8 @@ public:
         dev::ReadGuard l(x_topics);
         return *m_topics;
     };
-    void setTopics(std::shared_ptr<std::set<std::string> > topics)
+
+    void setTopics(std::shared_ptr<std::set<std::string>> topics)
     {
         dev::WriteGuard l(x_topics);
         m_topics = topics;
@@ -116,6 +123,15 @@ public:
     void setIdleTime(size_t idleTime) { _idleTime = idleTime; }
 
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
+
+    ProtocolVersion protocolVersion() { return m_channelProtocol; }
+    ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
+    ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
+    ProtocolVersion setProtocolVersion(ProtocolVersion _channelProtocol)
+    {
+        return m_channelProtocol = _channelProtocol;
+    }
+    std::string clientType() { return m_clientType; }
 
 private:
     void startRead();
@@ -190,20 +206,23 @@ private:
     byte _recvBuffer[1024];
     bytes _recvProtocolBuffer;
 
-    std::queue<std::shared_ptr<bytes> > _sendBufferList;
+    std::queue<std::shared_ptr<bytes>> _sendBufferList;
     bool _writing = false;
 
     std::shared_ptr<boost::asio::deadline_timer> _idleTimer;
     std::recursive_mutex _mutex;
 
     std::shared_ptr<boost::asio::io_service> _ioService;
-    std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket> > _sslSocket;
+    std::shared_ptr<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>> _sslSocket;
 
     mutable SharedMutex x_topics;
-    std::shared_ptr<std::set<std::string> > m_topics;
+    std::shared_ptr<std::set<std::string>> m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
-
+    ProtocolVersion m_channelProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_minimumProtocol = ProtocolVersion::v1;
+    ProtocolVersion m_maximumProtocol = ProtocolVersion::v2;
+    std::string m_clientType;
     size_t _idleTime = 30000;
 };
 

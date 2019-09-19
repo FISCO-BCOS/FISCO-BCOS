@@ -75,11 +75,32 @@ public:
         m_allowAccept = true;
         m_acceptorInfo.second(e);
     }
+#if 0
     void asyncConnect(std::shared_ptr<SocketFace> socket, const bi::tcp::endpoint endpoint,
         Handler_Type handler, boost::system::error_code = boost::system::error_code()) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();
+        fakeSocket->setRemoteEndpoint(endpoint);
+        if (endpoint.port() == ERROR_SOCKET_PORT)
+        {
+            handler(boost::asio::error::operation_aborted);
+        }
+        else
+        {
+            boost::system::error_code ec;
+            handler(ec);
+        }
+    }
+#endif
+    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+        const bi::tcp::resolver::protocol_type& _protocol = bi::tcp::tcp::v4()) override
+    {
+        (void)_protocol;
+        auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
+        fakeSocket->open();
+        auto endpoint = bi::tcp::endpoint(bi::address::from_string(socket->nodeIPEndpoint().host),
+            std::stoi(socket->nodeIPEndpoint().port));
         fakeSocket->setRemoteEndpoint(endpoint);
         if (endpoint.port() == ERROR_SOCKET_PORT)
         {
@@ -124,7 +145,8 @@ public:
         ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
         (void)type;
-        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
+        bi::tcp::endpoint endpoint(bi::address::from_string(socket->nodeIPEndpoint().host),
+            std::stoi(socket->nodeIPEndpoint().port));
         if (endpoint.port() == ERROR_SOCKET_PORT)
         {
             handler(boost::asio::error::operation_aborted);
@@ -149,8 +171,9 @@ public:
         auto x509_store_ctx = X509_STORE_CTX_new();
         X509_STORE_CTX_init(x509_store_ctx, store, x509, NULL);
         // X509_STORE_CTX_set_cert(x509_store_ctx, x509);
-        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
-        if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
+        auto endpoint = socket->nodeIPEndpoint();
+
+        if (endpoint.port != std::to_string(EMPTY_CERT_SOCKET_PORT))
         {
 #if OPENSSL_VERSION_NUMBER < 0x1010007fL
             x509_store_ctx->current_cert = x509;

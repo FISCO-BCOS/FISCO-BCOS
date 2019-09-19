@@ -25,6 +25,7 @@
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
+#include <libdevcore/TopicInfo.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -272,10 +273,11 @@ public:
         service->clearSessionInfo();
         for (size_t i = 0; i < m_sealerList.size(); i++)
         {
-            NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303, 30303);
+            NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303);
             dev::network::NodeInfo node_info;
             node_info.nodeID = m_sealerList[i];
-            P2PSessionInfo info(node_info, m_endpoint, std::set<std::string>());
+            std::set<dev::TopicItem> topicList;
+            P2PSessionInfo info(node_info, m_endpoint, topicList);
             service->appendSessionInfo(info);
         }
     }

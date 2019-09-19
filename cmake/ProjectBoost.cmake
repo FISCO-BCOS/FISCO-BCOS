@@ -1,6 +1,4 @@
 #------------------------------------------------------------------------------
-# install boost_1_63_0.tar.gz (located in deps/src/boost_1_63_0.tgz)
-# ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
 # FISCO-BCOS is free software: you can redistribute it and/or modify
@@ -40,7 +38,8 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a 
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
         ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
-        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a)
+        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a 
+        ${BOOST_LIB_PREFIX}serialization.a)
 
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps

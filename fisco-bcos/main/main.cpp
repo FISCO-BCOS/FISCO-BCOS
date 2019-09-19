@@ -22,7 +22,7 @@
  */
 #include "ExitHandler.h"
 #include <include/BuildInfo.h>
-#include <libdevcore/easylog.h>
+#include <libdevcore/FileSignal.h>
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
 #include <clocale>
@@ -105,10 +105,29 @@ string initCommandLine(int argc, const char* argv[])
     return configPath;
 }
 
+void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
+{
+    std::string moreGroupSignal = configPath + ".append_group";
+    dev::FileSignal::callIfFileExist(moreGroupSignal, [&]() {
+        cout << "Start more group" << endl;
+        initializer->ledgerInitializer()->startMoreLedger();
+    });
+
+    std::string resetCalSignal = configPath + ".reset_certificate_whitelist";
+    dev::FileSignal::callIfFileExist(resetCalSignal, [&]() {
+        cout << "Reset certificate whitelist(CAL)" << endl;
+        initializer->p2pInitializer()->resetWhitelist(configPath);
+    });
+}
+
 int main(int argc, const char* argv[])
 {
     /// set LC_ALL
     setDefaultOrCLocale();
+    std::set_terminate([]() {
+        std::cerr << "terminate handler called" << endl;
+        abort();
+    });
     /// init params
     string configPath = initCommandLine(argc, argv);
     char buffer[40];
@@ -140,6 +159,7 @@ int main(int argc, const char* argv[])
 
     while (!exitHandler.shouldExit())
     {
+        checkAndCall(configPath, initialize);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         LogInitializer::logRotateByTime();
     }

@@ -29,14 +29,9 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
-#include <libdevcore/OverlayDB.h>
 #include <libdevcore/easylog.h>
-#include <libprecompiled/Common.h>
-#include <libsync/SyncInterface.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
 using namespace boost::property_tree;
@@ -100,7 +95,8 @@ bool Ledger::initLedger(const std::string& _configFilePath)
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockChain->setStateFactory(m_dbInitializer->stateFactory());
     /// init blockVerifier, txPool, sync and consensus
-    return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory());
+    return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
+            initEventLogFilterManager());
 }
 
 /**
@@ -121,6 +117,8 @@ void Ledger::initGenesisConfig(std::string const& configPath)
         initConsensusConfig(pt);
         /// init params related to tx
         initTxConfig(pt);
+        /// init event log filter config
+        initEventLogFilterManagerConfig(pt);
         /// use UTCTime directly as timeStamp in case of the clock differences between machines
         m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
         Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
@@ -411,6 +409,21 @@ void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
                       << LOG_KV("txGasLimit", m_param->mutableTxParam().txGasLimit);
 }
 
+void Ledger::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)
+{
+    m_param->mutableEventLogFilterManagerParams().maxBlockRange =
+        pt.get<int64_t>("event_filter.max_block_range", MAX_BLOCK_RANGE_EVENT_FILTER);
+
+    m_param->mutableEventLogFilterManagerParams().maxBlockPerProcess =
+        pt.get<int64_t>("event_filter.max_block_per_process", MAX_BLOCK_PER_PROCESS);
+
+    Ledger_LOG(DEBUG) << LOG_BADGE("max_block_range")
+                      << LOG_KV("maxBlockRange",
+                             m_param->mutableEventLogFilterManagerParams().maxBlockRange)
+                      << LOG_KV("maxBlockPerProcess",
+                             m_param->mutableEventLogFilterManagerParams().maxBlockPerProcess);
+}
+
 /// init mark of this group
 void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
 {
@@ -618,6 +631,25 @@ bool Ledger::initSync()
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
+    return true;
+}
+
+// init EventLogFilterManager
+bool Ledger::initEventLogFilterManager()
+{
+    if (!m_blockChain)
+    {
+        Ledger_LOG(ERROR) << LOG_BADGE("initEventLogFilterManager")
+                          << LOG_DESC("blockChain not exist.");
+        return false;
+    }
+
+    m_eventLogFilterManger = std::make_shared<event::EventLogFilterManager>(m_blockChain,
+        m_param->mutableEventLogFilterManagerParams().maxBlockRange,
+        m_param->mutableEventLogFilterManagerParams().maxBlockPerProcess);
+
+    Ledger_LOG(DEBUG) << LOG_BADGE("initEventLogFilterManager")
+                      << LOG_DESC("initEventLogFilterManager SUCC");
     return true;
 }
 }  // namespace ledger

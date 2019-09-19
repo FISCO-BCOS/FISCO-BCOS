@@ -26,30 +26,54 @@
 
 #pragma once
 
-#include "ChannelException.h"
-#include "ChannelMessage.h"
-#include "ChannelServer.h"
-#include "ChannelSession.h"
-#include "libdevcore/ThreadPool.h"
+#include "ChannelMessage.h"  // for TopicChannelM...
+#include "ChannelSession.h"  // for ChannelSessio...
+#include "Message.h"         // for Message, Mess...
+#include "libethcore/Common.h"
+#include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
-#include <libdevcore/FixedHash.h>
-#include <libethcore/Common.h>
-#include <libp2p/Service.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <boost/asio.hpp>
-#include <queue>
-#include <string>
+#include <boost/asio/io_service.hpp>  // for io_service
+#include <atomic>                     // for atomic
+#include <map>                        // for map
+#include <mutex>                      // for mutex
+#include <set>                        // for set
+#include <string>                     // for string
 #include <thread>
+#include <utility>  // for swap, move
+#include <vector>   // for vector
+namespace boost
+{
+namespace asio
+{
+namespace ssl
+{
+class context;
+}
+}  // namespace asio
+}  // namespace boost
+
+namespace Json
+{
+class Value;
+}  // namespace Json
 
 namespace dev
 {
+namespace channel
+{
+class ChannelException;
+class ChannelServer;
+}  // namespace channel
+namespace network
+{
+class NetworkException;
+}
 namespace p2p
 {
 class P2PInterface;
-}
+class P2PMessage;
+class P2PSession;
+}  // namespace p2p
 
 class ChannelRPCServer : public jsonrpc::AbstractServerConnector,
                          public std::enable_shared_from_this<ChannelRPCServer>
@@ -82,15 +106,7 @@ public:
 
     virtual void onClientRequest(dev::channel::ChannelSession::Ptr session,
         dev::channel::ChannelException e, dev::channel::Message::Ptr message);
-
-    virtual void onClientEthereumRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
-
-    virtual void onClientTopicRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
-
-    virtual void onClientChannelRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+    virtual void blockNotify(int16_t _groupID, int64_t _blockNumber);
 
     void setListenAddr(const std::string& listenAddr);
 
@@ -111,24 +127,54 @@ public:
     void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
 
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
-        std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
+        std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
+            dev::channel::ChannelSession::Ptr)>
+            callback);
+
+    void asyncPushChannelMessageHandler(const std::string& toTopic, const std::string& content);
 
     void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
 
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message, size_t timeout);
 
-    virtual std::string newSeq();
-
-    void setCallbackSetter(
-        std::function<void(std::function<void(const std::string& receiptContext)>*)> callbackSetter)
+    void setCallbackSetter(std::function<void(
+            std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+            callbackSetter)
     {
         m_callbackSetter = callbackSetter;
+    };
+
+    void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
+            std::function<bool(
+                const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+            std::function<bool()>)>
+            _callback)
+    {
+        m_eventFilterCallBack = _callback;
     };
 
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
 private:
+    virtual void onClientRPCRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientTopicRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientChannelRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientEventLogRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientHandshake(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientHeartbeat(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
     dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
         dev::channel::Message::Ptr message,
         const std::set<dev::channel::ChannelSession::Ptr>& exclude);
@@ -136,6 +182,8 @@ private:
     void updateHostTopics();
 
     std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
+
+    void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
 
     bool _running = false;
 
@@ -152,15 +200,21 @@ private:
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
 
-    // boost::atomic_int m_seq;
-    std::atomic<size_t> m_seq;
-
     int _sessionCount = 1;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
-    std::function<void(std::function<void(const std::string& receiptContext)>*)> m_callbackSetter;
-    std::vector<dev::eth::Handler<int64_t> > m_handlers;
+    std::function<void(
+        std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+        m_callbackSetter;
+
+    std::function<int32_t(const std::string&, uint32_t,
+        std::function<bool(
+            const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+        std::function<bool()>)>
+        m_eventFilterCallBack;
+
+    std::vector<dev::eth::Handler<int64_t>> m_handlers;
 };
 
 }  // namespace dev

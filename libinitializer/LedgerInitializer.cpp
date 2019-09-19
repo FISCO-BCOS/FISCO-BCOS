@@ -32,66 +32,16 @@ using namespace dev::initializer;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    namespace fs = boost::filesystem;
     INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initConfig");
+
     m_groupDataDir = _pt.get<string>("group.group_data_path", "data/");
-    auto groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
-    assert(m_p2pService);
+    m_groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
     m_ledgerManager = make_shared<LedgerManager>();
-    map<GROUP_ID, h512s> groudID2NodeList;
-    bool succ = true;
-    try
-    {
-        LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_KV("groupConfigPath", groupConfigPath);
-        fs::path path(groupConfigPath);
-        if (fs::is_directory(path))
-        {
-            fs::directory_iterator endIter;
-            for (fs::directory_iterator iter(path); iter != endIter; iter++)
-            {
-                if (fs::extension(*iter) == ".genesis")
-                {
-                    boost::property_tree::ptree pt;
-                    boost::property_tree::read_ini(iter->path().string(), pt);
-                    auto groupID = pt.get<int>("group.id", 0);
-                    if (groupID <= 0 || groupID > maxGroupID)
-                    {
-                        INITIALIZER_LOG(ERROR)
-                            << LOG_BADGE("LedgerInitializer") << LOG_DESC("groupID invalid")
-                            << LOG_KV("groupID", groupID)
-                            << LOG_KV("configFile", iter->path().string());
-                        continue;
-                    }
-                    succ = initLedger(groupID, m_groupDataDir, iter->path().string());
-                    if (!succ)
-                    {
-                        INITIALIZER_LOG(ERROR)
-                            << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup failed")
-                            << LOG_KV("configFile", iter->path().string());
-                        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer")
-                                     << LOG_DESC("initSingleGroup failed")
-                                     << LOG_KV("configFile", iter->path().string()) << endl;
-                        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
-                    }
-                    groudID2NodeList[groupID] = m_ledgerManager->getParamByGroupId(groupID)
-                                                    ->mutableConsensusParam()
-                                                    .sealerList;
-                    LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
-                              << LOG_KV("groupID", groupID);
-                }
-            }
-        }
-        m_p2pService->setGroupID2NodeList(groudID2NodeList);
-    }
-    catch (exception& e)
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
-                               << LOG_DESC("parse group config faield")
-                               << LOG_KV("EINFO", boost::diagnostic_information(e));
-        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config faield")
-                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
-        BOOST_THROW_EXCEPTION(e);
-    }
+    assert(m_p2pService);
+    assert(m_groupConfigPath.length() != 0);
+
+    initLedgers();
+
     /// stop the node if there is no group
     if (m_ledgerManager->getGroupList().size() == 0)
     {
@@ -103,8 +53,104 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
 }
 
+vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
+{
+    vector<dev::GROUP_ID> newGroupIDList;
+    try
+    {
+        newGroupIDList = foreachLedgerConfigure(
+            m_groupConfigPath, [&](dev::GROUP_ID const& _groupID, const string& _configFileName) {
+                // skip existing group
+                if (m_ledgerManager->isLedgerExist(_groupID))
+                {
+                    return false;
+                }
+
+                bool succ = initLedger(_groupID, m_groupDataDir, _configFileName);
+                if (!succ)
+                {
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_BADGE("LedgerInitializer") << LOG_DESC("initSingleGroup failed")
+                        << LOG_KV("configFile", _configFileName);
+                    ERROR_OUTPUT << LOG_BADGE("LedgerInitializer")
+                                 << LOG_DESC("initSingleGroup failed")
+                                 << LOG_KV("configFile", _configFileName) << endl;
+                    BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
+                    return false;
+                }
+                h512s sealerList = m_ledgerManager->getParamByGroupId(_groupID)
+                                       ->mutableConsensusParam()
+                                       .sealerList;
+                m_p2pService->setNodeListByGroupID(_groupID, sealerList);
+                LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
+                          << LOG_KV("groupID", _groupID);
+                return true;
+            });
+    }
+    catch (exception& e)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
+                               << LOG_DESC("parse group config faield")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config faield")
+                     << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
+        BOOST_THROW_EXCEPTION(e);
+    }
+    return newGroupIDList;
+}
+
+vector<dev::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
+    const string& _groupConfigPath, function<bool(dev::GROUP_ID const&, const string&)> _f)
+{
+    namespace fs = boost::filesystem;
+    LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_KV("groupConfigPath", _groupConfigPath);
+    fs::path path(_groupConfigPath);
+    vector<dev::GROUP_ID> reachList;
+    if (fs::is_directory(path))
+    {
+        fs::directory_iterator endIter;
+        for (fs::directory_iterator iter(path); iter != endIter; iter++)
+        {
+            if (fs::extension(*iter) == ".genesis")
+            {
+                // parse group id
+                boost::property_tree::ptree pt;
+                boost::property_tree::read_ini(iter->path().string(), pt);
+                auto groupID = pt.get<int>("group.id", 0);
+
+                // check groupID format
+                if (groupID <= 0 || groupID > maxGroupID)
+                {
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_BADGE("LedgerInitializer") << LOG_DESC("groupID invalid")
+                        << LOG_KV("groupID", groupID)
+                        << LOG_KV("configFile", iter->path().string());
+                    continue;
+                }
+
+                if (_f(groupID, iter->path().string()))
+                {
+                    reachList.emplace_back(groupID);
+                }
+            }
+        }
+    }
+    return reachList;
+}
+
+void LedgerInitializer::startMoreLedger()
+{
+    assert(m_groupConfigPath.length() != 0);
+    vector<dev::GROUP_ID> newGroupIDList = initLedgers();
+
+    for (auto groupID : newGroupIDList)
+    {
+        m_ledgerManager->startByGroupID(groupID);
+    }
+}
+
 bool LedgerInitializer::initLedger(
-    dev::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& configFileName)
+    dev::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& _configFileName)
 {
     if (m_ledgerManager->isLedgerExist(_groupId))
     {
@@ -116,7 +162,7 @@ bool LedgerInitializer::initLedger(
         std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir);
     INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
     ledger->setChannelRPCServer(m_channelRPCServer);
-    bool succ = ledger->initLedger(configFileName);
+    bool succ = ledger->initLedger(_configFileName);
     if (!succ)
         return false;
     m_ledgerManager->insertLedger(_groupId, ledger);

@@ -21,6 +21,7 @@
  * @date: 2018-10-25
  */
 
+#include <libdevcore/TopicInfo.h>
 #include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
@@ -112,15 +113,27 @@ public:
 
     bool isConnected(NodeID const&) const override { return true; };
 
-    std::vector<std::string> topics() override { return std::vector<std::string>(); };
+    std::set<std::string> topics() override { return std::set<std::string>(); };
 
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
     void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
 
-    void setTopics(std::shared_ptr<std::vector<std::string>>) override{};
+    void setTopics(std::shared_ptr<std::set<std::string>>) override{};
 
     std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return nullptr; };
+
+    void setCallbackFuncForTopicVerify(CallbackFuncForTopicVerify) override{};
+
+    CallbackFuncForTopicVerify callbackFuncForTopicVerify() override
+    {
+        return CallbackFuncForTopicVerify();
+    }
+
+    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
+    {
+        return nullptr;
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
