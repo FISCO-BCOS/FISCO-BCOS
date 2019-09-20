@@ -314,7 +314,6 @@ void BinLogHandler::encodeEntries(
             {
                 value = fieldIt->second;
             }
-            // BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
             writeString(buffer, value);
         }
     }
@@ -365,7 +364,6 @@ void BinLogHandler::encodeBlock(
     boost::crc_32_type result;
     result.process_block((char*)&buffer[0], (char*)&buffer[0] + buffer.size());
     uint32_t crc32 = result.checksum();
-    // BINLOG_HANDLER_LOG(DEBUG) << LOG_KV("CRC32", crc32);
     writeUINT32(buffer, crc32);
 
     // insert length
@@ -403,7 +401,6 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
             std::string value;
             readString(buffer, value, offset);
             entry->setField(key, value);
-            // BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
         }
         entries->addEntry(entry);
     }
@@ -462,12 +459,8 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
         }
         decodeEntries(buffer, offset, vecField, data->dirtyEntries);
         decodeEntries(buffer, offset, vecField, data->newEntries);
-
         datas.push_back(data);
     }
-    BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block end")
-                              << LOG_KV("buffer size", buffer.size())
-                              << LOG_KV("buffer used index", offset);
 
     if (buffer.size() == offset + 4)
     {  // The remaining 4 bytes is CRC32
