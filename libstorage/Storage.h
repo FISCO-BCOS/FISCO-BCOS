@@ -44,6 +44,14 @@ public:
     virtual void stop() {}
 };
 
+class StorageFactory : public std::enable_shared_from_this<StorageFactory>
+{
+public:
+    typedef std::shared_ptr<StorageFactory> Ptr;
+    virtual ~StorageFactory(){};
+    virtual Storage::Ptr getStorage(const std::string& _dbName) = 0;
+};
+
 }  // namespace storage
 
 }  // namespace dev
