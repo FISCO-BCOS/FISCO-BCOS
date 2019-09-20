@@ -16,7 +16,7 @@ commit_limit=6
 file_limit=35
 insert_limit=250
 delete_limit=500
-new_file_header_length=20
+new_file_header_length=35
 skip_check_words="sync code"
 
 LOG_ERROR() {
