@@ -46,7 +46,7 @@ public:
     void setArchiveStorage(Storage::Ptr _archive, int64_t _dbIndex)
     {
         m_archive = _archive;
-        m_archiveDBIndex = _dbIndex;
+        m_archiveDBName = _dbIndex;
     }
     void setStorageFactory(StorageFactory::Ptr _storageFactory)
     {
@@ -65,10 +65,13 @@ private:
         std::vector<TableData::Ptr>& stateData, std::vector<TableData::Ptr>& archiveData);
     void writeRemoteBlockNumber(
         const std::vector<TableData::Ptr>& datas, int64_t _blockNumber, int64_t _remoteNumber);
+    TableData::Ptr getNumberToDBNameData(int64_t _blockNumber);
+    std::string getDBNameOfArchivedBlock(int64_t _blockNumber);
+    int64_t getBlockNumberByHash(std::string _hash);
     Storage::Ptr m_remote = nullptr;
     Storage::Ptr m_state = nullptr;
     Storage::Ptr m_archive = nullptr;
-    int64_t m_archiveDBIndex = -1;
+    int64_t m_archiveDBName = -1;  ///< also the start block of DB
     std::mutex m_archiveMutex;
     StorageFactory::Ptr m_storageFactory = nullptr;
     const int64_t m_scrollThreshold;

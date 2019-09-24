@@ -34,6 +34,8 @@ using namespace dev;
 using namespace dev::storage;
 
 const char* const SYS_REMOTE_BLOCK_NUMBER = "remote_block_number";
+const char* const TABLE_BLOCK_TO_DB_NAME = "_extra_block_to_dbname_";
+const char* const DB_NAME = "dbName";
 
 ScalableStorage::ScalableStorage(int64_t _scrollThreshold)
   : m_scrollThreshold(_scrollThreshold), m_remoteBlockNumber(-1)
@@ -52,7 +54,7 @@ void ScalableStorage::init()
     if (entries && entries->size() > 0)
     {
         auto entry = entries->get(0);
-        std::string remoteNumber = entry->getField(SYS_VALUE);
+        string remoteNumber = entry->getField(SYS_VALUE);
         m_remoteBlockNumber = lexical_cast<int64_t>(remoteNumber);
     }
 }
@@ -63,39 +65,75 @@ int64_t ScalableStorage::setRemoteBlockNumber(int64_t _blockNumber)
     {
         return m_remoteBlockNumber.load();
     }
-    int64_t newNumber = _blockNumber - _blockNumber % m_scrollThreshold;
+    if (_blockNumber < m_scrollThreshold * 2)
+    {
+        return 0;
+    }
+    int64_t newNumber = _blockNumber / m_scrollThreshold * m_scrollThreshold;
     m_remoteBlockNumber.store(newNumber);
     return newNumber;
 }
 
-bool ScalableStorage::isStateData(const std::string& _tableName)
+bool ScalableStorage::isStateData(const string& _tableName)
 {
     return m_archiveTables.end() ==
            find(m_archiveTables.begin(), m_archiveTables.end(), _tableName);
 }
 
-Entries::Ptr ScalableStorage::selectFromArchive(
-    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+string ScalableStorage::getDBNameOfArchivedBlock(int64_t _blockNumber)
 {
-    int64_t dbIndex = num / m_scrollThreshold;
-    assert(dbIndex >= 0);
-    Guard l(m_archiveMutex);
-    SCALABLE_STORAGE_LOG(DEBUG) << "select from archive DB" << LOG_KV("dbIndex", dbIndex)
-                                << LOG_KV("currentIndex", m_archiveDBIndex);
-    if (dbIndex == m_archiveDBIndex)
+    auto tableInfo = std::make_shared<storage::TableInfo>();
+    tableInfo->name = TABLE_BLOCK_TO_DB_NAME;
+    tableInfo->key = "number";
+    auto entries = m_state->select(_blockNumber, tableInfo, to_string(_blockNumber), nullptr);
+    if (!entries)
     {
-        return m_archive->select(num, tableInfo, key, condition);
+        SCALABLE_STORAGE_LOG(FATAL)
+            << "Can't archived block's dbName" << LOG_KV("blockNumber", _blockNumber);
+    }
+    return entries->get(0)->getField(DB_NAME);
+}
+
+Entries::Ptr ScalableStorage::selectFromArchive(
+    int64_t num, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
+{
+    Guard l(m_archiveMutex);
+    if (num < m_archiveDBName)
+    {
+        auto dbName = lexical_cast<int64_t>(getDBNameOfArchivedBlock(num));
+        auto dataStorage = m_storageFactory->getStorage(to_string(dbName));
+        SCALABLE_STORAGE_LOG(DEBUG)
+            << "select from archive DB" << LOG_KV("currentDBName", m_archiveDBName)
+            << LOG_KV("dbName", dbName) << LOG_KV("key", key);
+        return dataStorage->select(num, tableInfo, key, condition);
     }
     else
     {
-        auto dataStorage = m_storageFactory->getStorage(to_string(dbIndex));
-        return dataStorage->select(num, tableInfo, key, condition);
+        SCALABLE_STORAGE_LOG(DEBUG)
+            << "select from current DB" << LOG_KV("currentDBName", m_archiveDBName)
+            << LOG_KV("key", key);
+        return m_archive->select(num, tableInfo, key, condition);
     }
     return nullptr;
 }
 
+int64_t ScalableStorage::getBlockNumberByHash(std::string _blockHash)
+{
+    TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = SYS_HASH_2_BLOCK;
+    auto entries = m_state->select(0, tableInfo, _blockHash, nullptr);
+    if (entries && entries->size() > 0)
+    {
+        auto entry = entries->get(0);
+        string remoteNumber = entry->getField(SYS_VALUE);
+        return lexical_cast<int64_t>(remoteNumber);
+    }
+    SCALABLE_STORAGE_LOG(FATAL) << "Can't find block number by hash!" << LOG_KV("hash", _blockHash);
+    return 0;
+}
+
 Entries::Ptr ScalableStorage::select(
-    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
+    int64_t num, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     if (isStateData(tableInfo->name))
     {
@@ -114,12 +152,12 @@ Entries::Ptr ScalableStorage::select(
             return selectFromArchive(num, tableInfo, key, condition);
         }
     }
-    SCALABLE_STORAGE_LOG(FATAL) << "No backend storage, please check!";
+    SCALABLE_STORAGE_LOG(FATAL) << "Can't find data or remote storage died, please check!";
     return nullptr;
 }
 
-void ScalableStorage::separateData(const std::vector<TableData::Ptr>& datas,
-    std::vector<TableData::Ptr>& stateData, std::vector<TableData::Ptr>& archiveData)
+void ScalableStorage::separateData(const vector<TableData::Ptr>& datas,
+    vector<TableData::Ptr>& stateData, vector<TableData::Ptr>& archiveData)
 {
     for (auto const& tableData : datas)
     {
@@ -135,8 +173,9 @@ void ScalableStorage::separateData(const std::vector<TableData::Ptr>& datas,
 }
 
 void ScalableStorage::writeRemoteBlockNumber(
-    const std::vector<TableData::Ptr>& datas, int64_t _blockNumber, int64_t _remoteNumber)
+    const vector<TableData::Ptr>& datas, int64_t _blockNumber, int64_t _remoteNumber)
 {
+    // insert remote block number
     auto currentState = find_if(datas.begin(), datas.end(), [](TableData::Ptr tableData) -> bool {
         return tableData->info->name == SYS_CURRENT_STATE;
     });
@@ -144,31 +183,49 @@ void ScalableStorage::writeRemoteBlockNumber(
     idEntry->setNum(_blockNumber);
     idEntry->setStatus(0);
     idEntry->setField(SYS_KEY, SYS_REMOTE_BLOCK_NUMBER);
-    idEntry->setField(SYS_VALUE, boost::lexical_cast<std::string>(_remoteNumber));
+    idEntry->setField(SYS_VALUE, to_string(_remoteNumber));
     (*currentState)->newEntries->addEntry(idEntry);
 }
 
+TableData::Ptr ScalableStorage::getNumberToDBNameData(int64_t _blockNumber)
+{
+    // prepare block number dbName map
+    auto tableData = std::make_shared<storage::TableData>();
+    auto tableInfo = std::make_shared<storage::TableInfo>();
+    tableInfo->name = TABLE_BLOCK_TO_DB_NAME;
+    tableInfo->key = "number";
+    tableData->info = tableInfo;
+    tableData->newEntries = std::make_shared<Entries>();
+    Entry::Ptr dbNameEntry = std::make_shared<Entry>();
+    dbNameEntry->setNum(_blockNumber);
+    dbNameEntry->setStatus(0);
+    dbNameEntry->setField("number", to_string(_blockNumber));
+    dbNameEntry->setField(DB_NAME, to_string(m_archiveDBName));
+    tableData->newEntries->addEntry(dbNameEntry);
+    return tableData;
+}
 
-size_t ScalableStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t ScalableStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
 {
     SCALABLE_STORAGE_LOG(DEBUG) << "ScalableStorage commit" << LOG_KV("size", datas.size())
-                                << LOG_KV("block", num) << LOG_KV("dbIndex", m_archiveDBIndex);
-    std::vector<TableData::Ptr> archiveData;
+                                << LOG_KV("block", num) << LOG_KV("dbName", m_archiveDBName);
+    vector<TableData::Ptr> archiveData;
     archiveData.reserve(m_archiveTables.size());
-    std::vector<TableData::Ptr> stateData;
-    stateData.reserve(datas.size() - m_archiveTables.size());
+    vector<TableData::Ptr> stateData;
+    stateData.reserve(datas.size() - m_archiveTables.size() + 1);
     separateData(datas, stateData, archiveData);
     size_t size = 0;
     writeRemoteBlockNumber(stateData, num, m_remoteBlockNumber);
+    stateData.push_back(getNumberToDBNameData(num));
     size += m_archive->commit(num, archiveData);
     size += m_state->commit(num, stateData);
     if ((num + 1) % m_scrollThreshold == 0)
     {
         Guard l(m_archiveMutex);
-        m_archiveDBIndex += 1;
-        m_archive = m_storageFactory->getStorage(to_string(m_archiveDBIndex));
+        m_archiveDBName = num + 1;
+        m_archive = m_storageFactory->getStorage(to_string(m_archiveDBName));
         SCALABLE_STORAGE_LOG(DEBUG)
-            << "create new Storage" << LOG_KV("block", num) << LOG_KV("dbIndex", m_archiveDBIndex);
+            << "create new Storage" << LOG_KV("block", num) << LOG_KV("dbIndex", m_archiveDBName);
     }
     return size;
 }
