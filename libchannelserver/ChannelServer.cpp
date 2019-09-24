@@ -82,7 +82,8 @@ void dev::channel::ChannelServer::onAccept(
 {
     if (!error)
     {
-        auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint();
+        boost::system::error_code ec;
+        auto remoteEndpoint = session->sslSocket()->lowest_layer().remote_endpoint(ec);
         CHANNEL_LOG(TRACE) << LOG_DESC("Receive new connection")
                            << LOG_KV("from", remoteEndpoint.address().to_string()) << ":"
                            << remoteEndpoint.port();

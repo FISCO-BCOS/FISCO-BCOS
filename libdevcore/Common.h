@@ -420,4 +420,6 @@ private:
     static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point>>
         m_record;
 };
+
+std::string newSeq();
 }  // namespace dev

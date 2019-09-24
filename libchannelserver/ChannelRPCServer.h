@@ -26,10 +26,11 @@
 
 #pragma once
 
-#include "ChannelMessage.h"            // for TopicChannelM...
-#include "ChannelSession.h"            // for ChannelSessio...
-#include "libchannelserver/Message.h"  // for Message, Mess...
+#include "ChannelMessage.h"  // for TopicChannelM...
+#include "ChannelSession.h"  // for ChannelSessio...
+#include "Message.h"         // for Message, Mess...
 #include "libethcore/Common.h"
+#include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
@@ -51,6 +52,10 @@ class context;
 }  // namespace asio
 }  // namespace boost
 
+namespace Json
+{
+class Value;
+}  // namespace Json
 
 namespace dev
 {
@@ -122,20 +127,31 @@ public:
     void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
 
     void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
-        std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
+        std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
+            dev::channel::ChannelSession::Ptr)>
+            callback);
+
+    void asyncPushChannelMessageHandler(const std::string& toTopic, const std::string& content);
 
     void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
 
     virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
         dev::channel::TopicChannelMessage::Ptr message, size_t timeout);
 
-    virtual std::string newSeq();
-
     void setCallbackSetter(std::function<void(
             std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
             callbackSetter)
     {
         m_callbackSetter = callbackSetter;
+    };
+
+    void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
+            std::function<bool(
+                const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+            std::function<bool()>)>
+            _callback)
+    {
+        m_eventFilterCallBack = _callback;
     };
 
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
@@ -148,6 +164,9 @@ private:
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
     virtual void onClientChannelRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientEventLogRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
     virtual void onClientHandshake(
@@ -164,6 +183,8 @@ private:
 
     std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
+    void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
+
     bool _running = false;
 
     std::string _listenAddr;
@@ -179,9 +200,6 @@ private:
     std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
 
-    // boost::atomic_int m_seq;
-    std::atomic<size_t> m_seq;
-
     int _sessionCount = 1;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -189,7 +207,14 @@ private:
     std::function<void(
         std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
         m_callbackSetter;
-    std::vector<dev::eth::Handler<int64_t> > m_handlers;
+
+    std::function<int32_t(const std::string&, uint32_t,
+        std::function<bool(
+            const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+        std::function<bool()>)>
+        m_eventFilterCallBack;
+
+    std::vector<dev::eth::Handler<int64_t>> m_handlers;
 };
 
 }  // namespace dev

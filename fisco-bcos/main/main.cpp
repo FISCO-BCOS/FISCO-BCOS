@@ -124,6 +124,10 @@ int main(int argc, const char* argv[])
 {
     /// set LC_ALL
     setDefaultOrCLocale();
+    std::set_terminate([]() {
+        std::cerr << "terminate handler called" << endl;
+        abort();
+    });
     /// init params
     string configPath = initCommandLine(argc, argv);
     char buffer[40];

@@ -177,9 +177,9 @@ std::string SQLBasicAccess::BuildCreateTableSql(
 
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << tablename << "`(\n";
-    ss << " `_id_` int unsigned auto_increment,\n";
+    ss << " `_id_` BIGINT unsigned auto_increment,\n";
     ss << " `_hash_` varchar(128) not null,\n";
-    ss << " `_num_` int not null,\n";
+    ss << " `_num_` BIGINT not null,\n";
     ss << " `_status_` int not null,\n";
     ss << "`" << keyfield << "` varchar(255) default '',\n";
 
@@ -194,7 +194,7 @@ std::string SQLBasicAccess::BuildCreateTableSql(
         ss << "`" << *it << "` mediumtext,\n";
     }
     ss << " PRIMARY KEY( `_id_` ),\n";
-    ss << " KEY(`" << keyfield << "`),\n";
+    ss << " KEY(`" << keyfield << "`(191)),\n";
     ss << " KEY(`_num_`)\n";
     ss << ")ENGINE=InnoDB default charset=utf8mb4;";
 

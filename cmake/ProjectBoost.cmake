@@ -1,6 +1,4 @@
 #------------------------------------------------------------------------------
-# install boost_1_63_0.tar.gz (located in deps/src/boost_1_63_0.tgz)
-# ------------------------------------------------------------------------------
 # This file is part of FISCO-BCOS.
 #
 # FISCO-BCOS is free software: you can redistribute it and/or modify

@@ -56,6 +56,7 @@ public:
         {
             m_storage->stop();
         }
+        DBInitializer_LOG(INFO) << LOG_DESC("storage stopped");
     };
     virtual void initState(dev::h256 const& genesisHash)
     {

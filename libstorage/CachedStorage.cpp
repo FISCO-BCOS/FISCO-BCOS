@@ -558,7 +558,7 @@ void CachedStorage::init()
 
 void CachedStorage::stop()
 {
-    STORAGE_LOG(INFO) << "Stoping flushStorage thread";
+    STORAGE_LOG(INFO) << "Stopping flushStorage thread";
     m_taskThreadPool->stop();
     m_running->store(false);
 
@@ -574,6 +574,7 @@ void CachedStorage::stop()
             m_clearThread->detach();
         }
     }
+    STORAGE_LOG(INFO) << "flushStorage thread stopped.";
 }
 
 void CachedStorage::clear()

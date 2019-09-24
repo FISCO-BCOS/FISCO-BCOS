@@ -34,11 +34,9 @@
 #include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
-#include "libp2p/P2PMessage.h"
-#include "libp2p/P2PMessageFactory.h"  // for P2PMessageFac...
-#include "libp2p/P2PSession.h"         // for P2PSession
+#include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
+#include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
-#include <libdevcore/TopicInfo.h>
 #include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
@@ -167,7 +165,8 @@ void ChannelRPCServer::onConnect(
 {
     if (e.errorCode() == 0)
     {
-        CHANNEL_LOG(INFO) << "channel new connect";
+        CHANNEL_LOG(INFO) << "channel new connect, host=" << session->host() << ":"
+                          << session->port();
 
         auto sessionID = ++_sessionCount;
         {
@@ -236,14 +235,14 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     }
     std::shared_ptr<dev::channel::TopicChannelMessage> message =
         std::make_shared<dev::channel::TopicChannelMessage>();
-    message->setType(0x1001);
+    message->setType(BLOCK_NOTIFY);
     message->setSeq(std::string(32, '0'));
     message->setResult(0);
     std::string content =
         std::to_string(_groupID) + "," + boost::lexical_cast<std::string>(_blockNumber);
     Json::Value response;
-    response["GroupID"] = _groupID;
-    response["BlockNumber"] = _blockNumber;
+    response["groupID"] = _groupID;
+    response["blockNumber"] = _blockNumber;
     Json::FastWriter writer;
     auto resp = writer.write(response);
     for (auto session : activedSessions)
@@ -277,22 +276,28 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
 
         switch (message->type())
         {
-        case 0x12:
+        case CHANNEL_RPC_REQUEST:
             onClientRPCRequest(session, message);
             break;
-        case 0x13:
+        case CLIENT_HEARTBEAT:
             onClientHeartbeat(session, message);
             break;
-        case 0x14:
+        case CLIENT_HANDSHAKE:
             onClientHandshake(session, message);
             break;
-        case 0x30:
-        case 0x31:
-        case 0x35:
+        case CLIENT_REGISTER_EVENT_LOG:
+            onClientEventLogRequest(session, message);
+            break;
+        case AMOP_REQUEST:
+        case AMOP_RESPONSE:
+        case AMOP_MULBROADCAST:
             onClientChannelRequest(session, message);
             break;
-        case 0x32:
+        case AMOP_CLIENT_TOPICS:
             onClientTopicRequest(session, message);
+            break;
+        case UPDATE_TOPIICSTATUS:
+            onClientUpdateTopicStatusRequest(message);
             break;
         default:
             CHANNEL_LOG(ERROR) << "unknown client message" << LOG_KV("type", message->type());
@@ -305,6 +310,62 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
                              << LOG_KV("what", e.what());
 
         onDisconnect(dev::channel::ChannelException(), session);
+    }
+}
+
+
+void dev::ChannelRPCServer::onClientUpdateTopicStatusRequest(
+    dev::channel::Message::Ptr channelMessage)
+{
+    try
+    {
+        std::string content(
+            channelMessage->data(), channelMessage->data() + channelMessage->dataSize());
+        Json::Value root;
+        Json::Reader jsonReader;
+        if (!jsonReader.parse(content, root))
+        {
+            CHANNEL_LOG(ERROR) << "parse to json failed" << LOG_KV("content:", content);
+            return;
+        }
+
+        if (!root.isMember("checkResult") || !root["checkResult"].isInt())
+        {
+            CHANNEL_LOG(ERROR) << "json value have no check_result or check_result is not int";
+            return;
+        }
+        int32_t checkResult = root["checkResult"].asInt();
+        if (!root.isMember("nodeId") || !root["nodeId"].isString())
+        {
+            CHANNEL_LOG(ERROR) << "json value have no nodeId or nodeId is not string";
+            return;
+        }
+        NodeID nodeid(root["nodeId"].asString());
+
+        if (!root.isMember("topic") || !root["topic"].isString())
+        {
+            CHANNEL_LOG(ERROR) << "json value have no topic or topic is not string";
+            return;
+        }
+        std::string topic = root["topic"].asString();
+
+        CHANNEL_LOG(TRACE) << "Receive sdk request 0x38(update topic status):"
+                           << LOG_KV("topic", topic) << LOG_KV("nodeId", root["nodeId"].asString())
+                           << LOG_KV("checkResult", checkResult);
+        dev::p2p::P2PSession::Ptr session = m_service->getP2PSessionByNodeId(nodeid);
+        if (session)
+        {
+            session->updateTopicStatus(
+                topic, checkResult == 0 ? dev::VERIFYI_SUCCESS_STATUS : dev::VERIFYI_FAILED_STATUS);
+        }
+    }
+    catch (ChannelException& e)
+    {
+        CHANNEL_LOG(ERROR) << "update topic status failed: " << boost::diagnostic_information(e);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "update topic status failed: " << boost::diagnostic_information(e);
     }
 }
 
@@ -339,7 +400,7 @@ void dev::ChannelRPCServer::onClientRPCRequest(
                         if (server && session)
                         {
                             auto channelMessage = server->messageFactory()->buildMessage();
-                            channelMessage->setType(0x1000);
+                            channelMessage->setType(TRANSACTION_NOTIFY);
                             channelMessage->setSeq(seq);
                             channelMessage->setResult(0);
                             channelMessage->setData(
@@ -372,28 +433,112 @@ void dev::ChannelRPCServer::onClientRPCRequest(
     }
 }
 
+void dev::ChannelRPCServer::onClientEventLogRequest(
+    dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
+{
+    try
+    {
+        auto seq = message->seq();
+        uint8_t topicLen = *((uint8_t*)message->data());
+        // skip topic field
+        std::string data(message->data() + topicLen, message->data() + message->dataSize());
+
+        auto sessionRef = std::weak_ptr<dev::channel::ChannelSession>(session);
+        auto serverRef = std::weak_ptr<dev::channel::ChannelServer>(_server);
+        auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
+
+        auto respCallback = [serverRef, sessionRef](const std::string& _filterID, int32_t _result,
+                                const Json::Value& _logs) {
+            auto server = serverRef.lock();
+            auto session = sessionRef.lock();
+
+            if (server && session && session->actived())
+            {
+                Json::Value jsonResp;
+                jsonResp["result"] = _result;
+                jsonResp["filterID"] = _filterID;
+                jsonResp["logs"] = _logs;
+
+                Json::FastWriter writer;
+                auto resp = writer.write(jsonResp);
+
+                auto channelMessage = server->messageFactory()->buildMessage();
+                channelMessage->setType(EVENT_LOG_PUSH);
+                channelMessage->setResult(0);
+                channelMessage->setSeq(std::string(32, '0'));
+                channelMessage->setData((const byte*)resp.c_str(), resp.size());
+
+                CHANNEL_LOG(TRACE) << LOG_BADGE("EVENT") << LOG_DESC("response callback")
+                                   << LOG_KV("filterID", _filterID) << LOG_KV("result", _result)
+                                   << LOG_KV("resp", resp);
+
+                session->asyncSendMessage(channelMessage,
+                    std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
+
+                return true;
+            }
+
+            return false;
+        };
+
+        auto activeCallback = [serverRef, sessionRef]() {
+            auto server = serverRef.lock();
+            auto session = sessionRef.lock();
+            return server && session && session->actived();
+        };
+
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback);
+
+        CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
+                           << LOG_KV("request", data);
+
+        // send event register request back
+        Json::Value response;
+        response["result"] = ret;
+        Json::FastWriter writer;
+        auto resp = writer.write(response);
+
+        std::shared_ptr<dev::channel::TopicChannelMessage> message =
+            std::make_shared<dev::channel::TopicChannelMessage>();
+        message->setType(CLIENT_REGISTER_EVENT_LOG);
+        message->setSeq(seq);
+        message->setResult(0);
+        message->setTopicData(std::string(""), (const byte*)resp.data(), resp.size());
+
+        session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "onClientEventLogRequest" << boost::diagnostic_information(e);
+    }
+}
+
 void dev::ChannelRPCServer::onClientHandshake(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
     try
     {
+        CHANNEL_LOG(DEBUG) << LOG_DESC("on client handshake") << LOG_KV("seq", message->seq());
         std::string data(message->data(), message->data() + message->dataSize());
-        std::stringstream ss;
-        ss << data;
-
         Json::Value value;
-        ss >> value;
-        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("MinimumSupport", 1).asInt());
-        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("MaximumSupport", 1).asInt());
-        auto clientType = value.get("ClientType", "Unknow Client Type").asString();
+        Json::Reader jsonReader;
+        if (!jsonReader.parse(data, value))
+        {
+            CHANNEL_LOG(ERROR) << "parse to json failed" << LOG_KV(" data ", data);
+            return;
+        }
+
+        auto minimumProtocol = static_cast<ProtocolVersion>(value.get("minimumSupport", 1).asInt());
+        auto maximumProtocol = static_cast<ProtocolVersion>(value.get("maximumSupport", 1).asInt());
+        auto clientType = value.get("clientType", "Unknow Client Type").asString();
         if (session->maximumProtocolVersion() < minimumProtocol ||
             session->minimumProtocolVersion() > maximumProtocol)
         {  // If the scope does not intersect, disconnect
             CHANNEL_LOG(WARNING) << "onClientHandshake failed, unsupported protocol"
-                                 << LOG_KV("ClientType", clientType)
+                                 << LOG_KV("clientType", clientType)
                                  << LOG_KV("endpoint", session->host())
-                                 << LOG_KV("SDKMinSupport", value.get("MinimumSupport", 1).asInt())
-                                 << LOG_KV("SDKMaxSupport", value.get("MaximumSupport", 1).asInt());
+                                 << LOG_KV("SDKMinSupport", value.get("minimumSupport", 1).asInt())
+                                 << LOG_KV("SDKMaxSupport", value.get("maximumSupport", 1).asInt());
             session->disconnectByQuit();
             onDisconnect(dev::channel::ChannelException(-1, "Unsupport protocol"), session);
             return;
@@ -404,14 +549,14 @@ void dev::ChannelRPCServer::onClientHandshake(
                                         session->maximumProtocolVersion());
 
         Json::Value response;
-        response["Protocol"] = static_cast<int>(session->protocolVersion());
-        response["NodeVersion"] = g_BCOSConfig.supportedVersion();
+        response["protocol"] = static_cast<int>(session->protocolVersion());
+        response["nodeVersion"] = g_BCOSConfig.supportedVersion();
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["Protocol"])
-                          << LOG_KV("ClientType", clientType) << LOG_KV("endpoint", session->host())
+        CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["protocol"])
+                          << LOG_KV("clientType", clientType) << LOG_KV("endpoint", session->host())
                           << session->port();
     }
     catch (std::exception& e)
@@ -427,7 +572,7 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     if (session->protocolVersion() == ProtocolVersion::v2)
     {
         Json::Value response;
-        response["HeartBeat"] = 1;
+        response["heartBeat"] = 1;
         Json::FastWriter writer;
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
@@ -441,6 +586,59 @@ void dev::ChannelRPCServer::onClientHeartbeat(
             message->setData((const byte*)data.data(), data.size());
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
+    }
+}
+
+void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
+    const std::string& toTopic, const std::string& content)
+{
+    try
+    {
+        CHANNEL_LOG(DEBUG) << LOG_DESC("receive node request") << LOG_KV("topic", toTopic)
+                           << LOG_KV("content", content);
+
+        if (getSessionByTopic(toTopic).empty())
+        {
+            CHANNEL_LOG(DEBUG) << LOG_DESC("no SDK follow topic") << LOG_KV("topic", toTopic)
+                               << LOG_DESC("just return");
+            return;
+        }
+        dev::channel::TopicVerifyChannelMessage::Ptr channelMessage =
+            std::make_shared<TopicVerifyChannelMessage>();
+        channelMessage->setData(content);
+        std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
+        channelMessage->encode(*buffer);
+        CHANNEL_LOG(DEBUG) << LOG_DESC("async push channel message")
+                           << LOG_KV("seq", channelMessage->seq())
+                           << LOG_KV("type", channelMessage->type())
+                           << LOG_KV("datalen", channelMessage->length());
+
+        asyncPushChannelMessage(toTopic, channelMessage,
+            [channelMessage](dev::channel::ChannelException e, dev::channel::Message::Ptr,
+                dev::channel::ChannelSession::Ptr) {
+                if (!e.errorCode())
+                {
+                    CHANNEL_LOG(DEBUG) << LOG_DESC("push channel message response")
+                                       << LOG_KV("seq", channelMessage->seq());
+                }
+                else
+                {
+                    CHANNEL_LOG(ERROR)
+                        << LOG_DESC("push channel message response")
+                        << LOG_KV("seq", channelMessage->seq()) << LOG_KV("errcode", e.errorCode())
+                        << LOG_KV("errmsg", e.what());
+                }
+            });
+    }
+    catch (ChannelException& e)
+    {
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
+                           << boost::diagnostic_information(e);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << LOG_DESC("async push channel message failed:")
+                           << boost::diagnostic_information(e);
     }
 }
 
@@ -475,7 +673,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 
         CHANNEL_LOG(DEBUG) << "onNodeChannelRequest target" << LOG_KV("topic", topic);
 
-        if (channelMessage->type() == 0x30)
+        if (channelMessage->type() == AMOP_REQUEST)
         {
             try
             {
@@ -483,15 +681,15 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 auto p2pMessage = msg;
                 auto service = m_service;
                 asyncPushChannelMessage(topic, channelMessage,
-                    [nodeID, channelMessage, service, p2pMessage](
-                        dev::channel::ChannelException e, dev::channel::Message::Ptr response) {
+                    [nodeID, channelMessage, service, p2pMessage](dev::channel::ChannelException e,
+                        dev::channel::Message::Ptr response, dev::channel::ChannelSession::Ptr) {
                         if (e.errorCode())
                         {
                             CHANNEL_LOG(ERROR) << "Push channel message failed"
                                                << LOG_KV("what", boost::diagnostic_information(e));
 
                             channelMessage->setResult(e.errorCode());
-                            channelMessage->setType(0x31);
+                            channelMessage->setType(AMOP_RESPONSE);
 
                             auto buffer = std::make_shared<bytes>();
                             channelMessage->encode(*buffer);
@@ -506,7 +704,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 
                             return;
                         }
-
                         CHANNEL_LOG(TRACE)
                             << "Receive sdk response" << LOG_KV("seq", response->seq());
                         auto buffer = std::make_shared<bytes>();
@@ -527,7 +724,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                                    << LOG_KV("what", boost::diagnostic_information(e));
 
                 channelMessage->setResult(REMOTE_CLIENT_PEER_UNAVAILABLE);
-                channelMessage->setType(0x31);
+                channelMessage->setType(AMOP_RESPONSE);
 
                 auto buffer = std::make_shared<bytes>();
                 channelMessage->encode(*buffer);
@@ -541,7 +738,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                     s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
         }
-        else if (channelMessage->type() == 0x35)
+        else if (channelMessage->type() == AMOP_MULBROADCAST)
         {
             try
             {
@@ -563,7 +760,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 void dev::ChannelRPCServer::onClientTopicRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    // CHANNEL_LOG(DEBUG) << "receive SDK topic message";
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK topic message") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     std::string body(message->data(), message->data() + message->dataSize());
 
@@ -573,31 +771,22 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 
     try
     {
-        std::stringstream ss;
-        ss << body;
-
         Json::Value root;
-        ss >> root;
-
-        std::shared_ptr<std::map<std::string, TopicStatus> > topics =
-            std::make_shared<std::map<std::string, TopicStatus> >();
+        Json::Reader jsonReader;
+        if (!jsonReader.parse(body, root))
+        {
+            CHANNEL_LOG(ERROR) << "parse to json failed" << LOG_KV("content:", body);
+            return;
+        }
+        std::shared_ptr<std::set<std::string> > topics = std::make_shared<std::set<std::string> >();
         Json::Value topicsValue = root;
         if (!topicsValue.empty())
         {
-            bool versionGt2 = (g_BCOSConfig.version() > dev::VERSION::V2_0_0);
             for (size_t i = 0; i < topicsValue.size(); ++i)
             {
                 std::string topic = topicsValue[(int)i].asString();
                 CHANNEL_LOG(TRACE) << "onClientTopicRequest insert" << LOG_KV("topic", topic);
-                if (topic.substr(0, topicNeedCertPrefix.size()) == topicNeedCertPrefix &&
-                    versionGt2)
-                {
-                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYING_STATUS));
-                }
-                else
-                {
-                    topics->insert(std::make_pair(topic, TopicStatus::VERIFYI_SUCCESS_STATUS));
-                }
+                topics->insert(topic);
             }
         }
         session->setTopics(topics);
@@ -614,7 +803,8 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
-    CHANNEL_LOG(DEBUG) << "SDK channel2 request type:" << message->type();
+    CHANNEL_LOG(DEBUG) << LOG_DESC("SDK channel2 request") << LOG_KV("type", message->type())
+                       << LOG_KV("seq", message->seq());
 
     if (message->dataSize() < 1)
     {
@@ -627,7 +817,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
     CHANNEL_LOG(DEBUG) << "target topic:" << topic;
 
-    if (message->type() == 0x30)
+    if (message->type() == AMOP_REQUEST)
     {
         try
         {
@@ -654,13 +844,16 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                         CHANNEL_LOG(WARNING)
                             << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
-                        message->setType(0x31);
+                        message->setType(AMOP_RESPONSE);
                         message->setResult(REMOTE_PEER_UNAVAILABLE);
                         message->clearData();
 
                         session->asyncSendMessage(
                             message, dev::channel::ChannelSession::CallbackType(), 0);
 
+                        CHANNEL_LOG(DEBUG)
+                            << "channel2 send response"
+                            << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
                         return;
                     }
 
@@ -675,14 +868,14 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
-            message->setType(0x31);
+            message->setType(AMOP_RESPONSE);
             message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
     }
-    else if (message->type() == 0x35)
+    else if (message->type() == AMOP_MULBROADCAST)
     {
         // client multicast message
         try
@@ -701,7 +894,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
             m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
 
-            message->setType(0x31);
+            message->setType(AMOP_RESPONSE);
             message->setResult(0);
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         }
@@ -709,7 +902,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             CHANNEL_LOG(ERROR) << "send error" << LOG_KV("what", boost::diagnostic_information(e));
 
-            message->setType(0x31);
+            message->setType(AMOP_RESPONSE);
             message->setResult(REMOTE_PEER_UNAVAILABLE);
             message->clearData();
 
@@ -754,7 +947,9 @@ void ChannelRPCServer::setChannelServer(std::shared_ptr<dev::channel::ChannelSer
 
 void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     dev::channel::Message::Ptr message,
-    std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback)
+    std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
+        dev::channel::ChannelSession::Ptr)>
+        callback)
 {
     try
     {
@@ -765,9 +960,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
             Callback(std::string topic, dev::channel::Message::Ptr message,
                 ChannelRPCServer::Ptr server,
-                std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
+                std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
+                    dev::channel::ChannelSession::Ptr)>
                     callback)
-              : _topic(topic), _message(message), _server(server), _callback(callback){};
+              : m_topic(topic), m_message(message), m_server(server), m_callback(callback){};
 
             void onResponse(dev::channel::ChannelException e, dev::channel::Message::Ptr message)
             {
@@ -779,7 +975,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                             << "onResponse error" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
 
-                        _exclude.insert(_currentSession);
+                        m_exclude.insert(m_currentSession);
 
                         sendMessage();
 
@@ -794,7 +990,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                     try
                     {
-                        _callback(ex, dev::channel::Message::Ptr());
+                        if (m_callback)
+                        {
+                            m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        }
                     }
                     catch (exception& e)
                     {
@@ -807,7 +1006,10 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
 
                 try
                 {
-                    _callback(e, message);
+                    if (m_callback)
+                    {
+                        m_callback(e, message, m_currentSession);
+                    }
                 }
                 catch (exception& e)
                 {
@@ -819,18 +1021,18 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
             void sendMessage()
             {
                 std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
-                    _server->getSessionByTopic(_topic);
+                    m_server->getSessionByTopic(m_topic);
 
                 if (activedSessions.empty())
                 {
                     CHANNEL_LOG(ERROR)
-                        << "sendMessage failed: no session use topic" << LOG_KV("topic", _topic);
-                    throw dev::channel::ChannelException(104, "no session use topic:" + _topic);
+                        << "sendMessage failed: no session use topic" << LOG_KV("topic", m_topic);
+                    throw dev::channel::ChannelException(104, "no session use topic:" + m_topic);
                 }
 
                 for (auto sessionIt = activedSessions.begin(); sessionIt != activedSessions.end();)
                 {
-                    if (_exclude.find(*sessionIt) != _exclude.end())
+                    if (m_exclude.find(*sessionIt) != m_exclude.end())
                     {
                         sessionIt = activedSessions.erase(sessionIt);
                     }
@@ -851,29 +1053,31 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 boost::uniform_int<int> index(0, activedSessions.size() - 1);
 
                 auto ri = index(rng);
-                CHANNEL_LOG(TRACE) << "random node" << ri;
+                CHANNEL_LOG(TRACE)
+                    << "random node" << ri << " active session size:" << activedSessions.size();
 
                 auto session = activedSessions[ri];
 
                 std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> fp =
                     std::bind(&Callback::onResponse, shared_from_this(), std::placeholders::_1,
                         std::placeholders::_2);
-                session->asyncSendMessage(_message, fp, 5000);
+                session->asyncSendMessage(m_message, fp, 5000);
 
                 CHANNEL_LOG(INFO) << "Push channel message success"
-                                  << LOG_KV("seq", _message->seq().substr(0, c_seqAbridgedLen))
+                                  << LOG_KV("seq", m_message->seq().substr(0, c_seqAbridgedLen))
                                   << LOG_KV("session", session->host()) << ":" << session->port();
-                _currentSession = session;
+                m_currentSession = session;
             }
 
         private:
-            std::string _topic;
-            dev::channel::Message::Ptr _message;
-            ChannelRPCServer::Ptr _server;
-            dev::channel::ChannelSession::Ptr _currentSession;
-            std::set<dev::channel::ChannelSession::Ptr> _exclude;
-            std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
-                _callback;
+            std::string m_topic;
+            dev::channel::Message::Ptr m_message;
+            ChannelRPCServer::Ptr m_server;
+            dev::channel::ChannelSession::Ptr m_currentSession;
+            std::set<dev::channel::ChannelSession::Ptr> m_exclude;
+            std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
+                dev::channel::ChannelSession::Ptr)>
+                m_callback;
         };
 
         Callback::Ptr pushCallback =
@@ -882,7 +1086,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     }
     catch (dev::channel::ChannelException& ex)
     {
-        callback(ex, dev::channel::Message::Ptr());
+        callback(ex, dev::channel::Message::Ptr(), dev::channel::ChannelSession::Ptr());
     }
     catch (exception& e)
     {
@@ -927,7 +1131,8 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
         {
             CHANNEL_LOG(ERROR) << "no SDK follow topic" << LOG_KV("topic", topic);
 
-            throw dev::channel::ChannelException(103, "send failed, no node follow topic:" + topic);
+            BOOST_THROW_EXCEPTION(
+                ChannelException(103, "send failed, no node follow topic:" + topic));
         }
 
         dev::channel::TopicChannelMessage::Ptr response;
@@ -944,43 +1149,30 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
 
         if (!response)
         {
-            throw dev::channel::ChannelException(99, "send fail, all retry failed");
+            BOOST_THROW_EXCEPTION(ChannelException(99, "send fail, all retry failed"));
         }
 
         return response;
     }
     catch (dev::channel::ChannelException& e)
     {
-        CHANNEL_LOG(ERROR) << "pushChannelMessage error"
-                           << LOG_KV("what", boost::diagnostic_information(e));
-
-        throw e;
+        CHANNEL_LOG(ERROR) << "pushChannelMessage error" << LOG_KV("what", e.what());
+        BOOST_THROW_EXCEPTION(e);
     }
 
     return dev::channel::TopicChannelMessage::Ptr();
 }
 
-std::string ChannelRPCServer::newSeq()
-{
-    auto seq = m_seq.fetch_add(1) + 1;
-    std::stringstream ss;
-    ss << std::setfill('0') << std::setw(32) << seq;
-    return ss.str();
-}
-
 void ChannelRPCServer::updateHostTopics()
 {
-    auto allTopics = std::make_shared<std::vector<dev::TopicItem> >();
+    auto allTopics = std::make_shared<std::set<std::string> >();
     std::lock_guard<std::mutex> lock(_sessionMutex);
     for (auto& it : _sessions)
     {
         auto topics = it.second->topics();
         for (auto topic : topics)
         {
-            dev::TopicItem item;
-            item.topic = topic.first;
-            item.topicStatus = topic.second;
-            allTopics->push_back(std::move(item));
+            allTopics->insert(topic);
         }
     }
     m_service->setTopics(allTopics);
@@ -1001,7 +1193,7 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
         auto topics = it.second->topics();
         auto topicIt = topics.find(topic);
-        if (topicIt != topics.end() && topicIt->second == TopicStatus::VERIFYI_SUCCESS_STATUS)
+        if (topicIt != topics.end())
         {
             activedSessions.push_back(it.second);
         }

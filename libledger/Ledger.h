@@ -30,14 +30,21 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
+#include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
+
 #define Ledger_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
 namespace dev
 {
+namespace event
+{
+class EventLogFilterManager;
+}
+
 namespace ledger
 {
 class Ledger : public LedgerInterface
@@ -85,15 +92,21 @@ public:
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();
+        m_eventLogFilterManger->start();
     }
 
     /// stop all modules(consensus, sync)
     void stopAll() override
     {
         assert(m_sync && m_sealer);
-        Ledger_LOG(INFO) << LOG_DESC("stopAll...") << std::endl;
+        Ledger_LOG(INFO) << LOG_DESC("stop sealer") << LOG_KV("groupID", groupId());
         m_sealer->stop();
+        Ledger_LOG(INFO) << LOG_DESC("sealer stopped. stop sync") << LOG_KV("groupID", groupId());
         m_sync->stop();
+        Ledger_LOG(INFO) << LOG_DESC("ledger stopped") << LOG_KV("groupID", groupId());
+        m_eventLogFilterManger->stop();
+        Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
+                         << LOG_KV("groupID", groupId());
     }
 
     virtual ~Ledger(){};
@@ -126,6 +139,11 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
+    std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() override
+    {
+        return m_eventLogFilterManger;
+    }
+
 protected:
     /// load genesis config of group
     void initGenesisConfig(std::string const& configPath) override;
@@ -137,6 +155,8 @@ protected:
     virtual bool consensusInitFactory();
     /// init the blockSync
     virtual bool initSync();
+    // init EventLogFilterManager
+    virtual bool initEventLogFilterManager();
 
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
@@ -160,6 +180,8 @@ private:
 
     void initTxConfig(boost::property_tree::ptree const& pt);
 
+    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 
@@ -172,6 +194,7 @@ protected:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
     std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
+    std::shared_ptr<dev::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

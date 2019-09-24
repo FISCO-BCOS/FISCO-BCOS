@@ -1,29 +1,24 @@
 include(ExternalProject)
 
-if (APPLE)
-    set(MYSQL_CLIENT_URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-macos10.12-x86_64.tar.gz)
-    set(MYSQL_CLIENT_SHA256 c97d76936c6caf063778395e7ca15862770a1ab77c1731269408a8d5c0eb4b93)
-else()
-    set(MYSQL_CLIENT_URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-linux-glibc2.12-x86_64.tar.gz)
-    set(MYSQL_CLIENT_SHA256 149102915ea1f1144edb0de399c3392a55773448f96b150ec1568f700c00c929)
-endif()
-
 ExternalProject_Add(MySQLClient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME mysql-connector-c-6.1.11.tar.gz
+    DOWNLOAD_NAME mysql-connector-c-6.1.11-src.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     BUILD_IN_SOURCE 1
-    URL ${MYSQL_CLIENT_URL}
-    URL_HASH SHA256=${MYSQL_CLIENT_SHA256}
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND bash -c "cp lib/libmysqlclient.a ${CMAKE_SOURCE_DIR}/deps/lib/"
+    LOG_CONFIGURE 1
+    LOG_BUILD 1
+    LOG_INSTALL 1
+    URL https://downloads.mysql.com/archives/get/file/mysql-connector-c-6.1.11-src.tar.gz
+    URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
+    #please make sure MYSQL_TCP_PORT is set and not equal to 3306
+    CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a
 )
 ExternalProject_Get_Property(MySQLClient SOURCE_DIR)
 
+
 set(MYSQL_CLIENT_LIB ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a)
-set(configure_command ./configure --with-mysql=${SOURCE_DIR}/bin/mysql_config --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
+set(ZDB_CONFIGURE_COMMAND ./configure --with-mysql=${SOURCE_DIR}/scripts/mysql_config --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
 
 ExternalProject_Add(libzdb DEPENDS MySQLClient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -35,7 +30,7 @@ ExternalProject_Add(libzdb DEPENDS MySQLClient
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ${configure_command} 
+    CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
     BUILD_COMMAND make
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libzdb.a
