@@ -24,13 +24,20 @@
 
 #if 0
 contract WedprPrecompiled {
-​    function hidden_asset_verify_issued_credit(bytes issue_argument_pb) public;
+    function hiddenAssetVerifyIssuedCredit(bytes issueArgumentPb) 
+    public returns(string currentCredit, string creditStorage);
 
-​    function hidden_asset_verify_fulfilled_credit(bytes fulfill_argument_pb) public;
+    function hiddenAssetVerifyFulfilledCredit(bytes fulfillArgumentPb) 
+    public returns(string currentCredit, string creditStorage);
 
-​    function hidden_asset_verify_transfer_credit(bytes transfer_request_pb) public;
+    function hiddenAssetVerifyTransferCredit(bytes transferRequestPb) 
+    public returns(string spentCurrentCredit, string spentCreditStorage, 
+                  string newCurrentCredit, string newCreditStorage);
 
-​    function hidden_asset_verify_split_credit(bytes split_request_pb) public;
+    function hiddenAssetVerifySplitCredit(bytes splitRequestPb) 
+    public returns(string spentCurrentCredit, string spentCreditStorage, 
+                  string newCurrentCredit1, string newCreditStorage1,
+                  string newCurrentCredit2, string newCreditStorage2);
 }
 #endif
 

@@ -20,9 +20,11 @@
  */
 
 #include "WedprPrecompiled.h"
+#include "libprecompiled/Common.h"
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
+#include "wedpr-generated/asset_hiding/asset_hiding.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -34,16 +36,15 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-const string API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT =
-    "hidden_asset_verify_issued_credit(bytes issue_argument_pb)";
-const string API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT =
-    "hidden_asset_verify_fulfilled_credit(bytes fulfill_argument_pb)";
-const string API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT =
-    "hidden_asset_verify_transfer_credit(bytes transfer_request_pb)";
-const string API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT =
-    "hidden_asset_verify_split_credit(bytes split_request_pb)";
+const string API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT = "hiddenAssetVerifyIssuedCredit(bytes)";
+const string API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT = "hiddenAssetVerifyFulfilledCredit(bytes)";
+const string API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT = "hiddenAssetVerifyTransferCredit(bytes)";
+const string API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT = "hiddenAssetVerifySplitCredit(bytes)";
+const string VERFIY_FAILED = "verfiy failed";
+const int SUCCESS = 0;
+const int FAILURE = -1;
 
-const string CONTRACT_NAME = "WedprPrecompiled";
+const string PRECOMPILED_NAME = "WedprPrecompiled";
 
 WedprPrecompiled::WedprPrecompiled()
 {
@@ -59,28 +60,13 @@ WedprPrecompiled::WedprPrecompiled()
 
 std::string WedprPrecompiled::toString()
 {
-    return CONTRACT_NAME;
-}
-
-void logError(const std::string& _op, const std::string& _msg)
-{
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE(CONTRACT_NAME) << LOG_DESC(_op) << ": " << LOG_DESC(_msg);
-}
-
-void logError(const std::string& _op, const std::string& _key, const std::string& _value)
-{
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE(CONTRACT_NAME) << LOG_DESC(_op) << LOG_KV(_key, _value);
-}
-
-void throwException(const std::string& msg)
-{
-    BOOST_THROW_EXCEPTION(dev::eth::TransactionRefused() << errinfo_comment(msg));
+    return PRECOMPILED_NAME;
 }
 
 bytes WedprPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE(CONTRACT_NAME) << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE(PRECOMPILED_NAME) << LOG_DESC("call")
                            << LOG_KV("param", toHex(param)) << LOG_KV("origin", origin)
                            << LOG_KV("context", context->txGasLimit());
 
@@ -90,38 +76,92 @@ bytes WedprPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    // hidden_asset_verify_issued_credit(bytes issue_argument_pb)
+    // hiddenAssetVerifyIssuedCredit(bytes issue_argument_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT])
     {
+        // parse parameter
         std::string issue_argument_pb;
         abi.abiOut(data, issue_argument_pb);
-        // TODO call rust lib
+
+        // verify issued credit
+        if (verify_issued_credit(string_to_char(issue_argument_pb)) == FAILURE)
+        {
+            logError(PRECOMPILED_NAME, "verify_issued_credit", VERFIY_FAILED);
+            throwException(VERFIY_FAILED);
+        }
+
+        std::string current_credit;
+        std::string credit_storage;
+
+        // return current_credit and credit_storage
+        out = abi.abiIn("", current_credit, credit_storage);
     }
-    // hidden_asset_verify_fulfilled_credit(bytes fulfill_argument_pb)
+    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT])
     {
         std::string fulfill_argument_pb;
         abi.abiOut(data, fulfill_argument_pb);
-        // TODO call rust lib
+
+        if (verify_fulfilled_credit(string_to_char(fulfill_argument_pb)) == FAILURE)
+        {
+            logError(PRECOMPILED_NAME, "verify_fulfilled_credit", VERFIY_FAILED);
+            throwException(VERFIY_FAILED);
+        }
+
+        std::string current_credit;
+        std::string credit_storage;
+
+        // return current_credit and credit_storage
+        out = abi.abiIn("", current_credit, credit_storage);
     }
-    // hidden_asset_verify_transfer_credit(bytes transfer_request_pb)
+    // hiddenAssetVerifyTransferCredit(bytes transfer_request_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         std::string transfer_request_pb;
         abi.abiOut(data, transfer_request_pb);
-        // TODO call rust lib
+
+        if (verify_transfer_credit(string_to_char(transfer_request_pb)) == FAILURE)
+        {
+            logError(PRECOMPILED_NAME, "verify_transfer_credit", VERFIY_FAILED);
+            throwException(VERFIY_FAILED);
+        }
+
+        std::string spent_current_credit;
+        std::string spent_credit_storage;
+        std::string new_current_credit;
+        std::string new_credit_storage;
+
+        // return current_credit and credit_storage
+        out = abi.abiIn(
+            "", spent_current_credit, spent_credit_storage, new_current_credit, new_credit_storage);
     }
-    // hidden_asset_verify_split_credit(bytes split_request_pb)
+    // hiddenAssetVerifySplitCredit(bytes split_request_pb)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT])
     {
         std::string split_request_pb;
         abi.abiOut(data, split_request_pb);
-        // TODO call rust lib
+
+        if (verify_split_credit(string_to_char(split_request_pb)) == FAILURE)
+        {
+            logError(PRECOMPILED_NAME, "verify_split_credit", VERFIY_FAILED);
+            throwException(VERFIY_FAILED);
+        }
+
+        std::string spent_current_credit;
+        std::string spent_credit_storage;
+        std::string new_current_credit1;
+        std::string new_credit_storage1;
+        std::string new_current_credit2;
+        std::string new_credit_storage2;
+
+        // return current_credit and credit_storage
+        out = abi.abiIn("", spent_current_credit, spent_credit_storage, new_current_credit1,
+            new_credit_storage1, new_current_credit2, new_credit_storage2);
     }
     else
     {
         // unknown function call
-        logError("unknown func", "func", std::to_string(func));
+        logError(PRECOMPILED_NAME, "unknown func", "func", std::to_string(func));
         throwException("unknown func");
     }
     return out;
