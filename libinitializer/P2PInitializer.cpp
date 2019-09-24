@@ -202,7 +202,7 @@ PeerWhitelist::Ptr P2PInitializer::parseWhitelistFromPropertyTree(
                 try
                 {
                     std::string nodeID = boost::to_upper_copy(it.second.data());
-                    INITIALIZER_LOG(TRACE) << LOG_BADGE("P2PInitializer")
+                    INITIALIZER_LOG(DEBUG) << LOG_BADGE("P2PInitializer")
                                            << LOG_DESC("get certificate accepted by nodeID")
                                            << LOG_KV("nodeID", nodeID);
 

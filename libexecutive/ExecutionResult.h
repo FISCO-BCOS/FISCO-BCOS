@@ -67,6 +67,7 @@ enum class TransactionException : uint32_t
     CallAddressError = 26,
     GasOverflow = 27,
     TxPoolIsFull = 28,
+    TransactionRefused = 29,
 };
 
 enum class CodeDeposit

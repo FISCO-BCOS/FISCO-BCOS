@@ -33,6 +33,8 @@ namespace ledger
 {
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
+#define MAX_BLOCK_RANGE_EVENT_FILTER (0)
+#define MAX_BLOCK_PER_PROCESS (3)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
@@ -75,6 +77,12 @@ struct GenesisParam
     std::string genesisMark;
     std::string nodeListMark;
     uint64_t timeStamp;
+};
+
+struct EventLogFilterManagerParams
+{
+    int64_t maxBlockRange;
+    int64_t maxBlockPerProcess;
 };
 struct StorageParam
 {
@@ -122,6 +130,10 @@ public:
     StorageParam& mutableStorageParam() override { return m_storageParam; }
     StateParam& mutableStateParam() override { return m_stateParam; }
     TxParam& mutableTxParam() override { return m_txParam; }
+    EventLogFilterManagerParams& mutableEventLogFilterManagerParams() override
+    {
+        return m_eventLogFilterParams;
+    }
 
 private:
     TxPoolParam m_txPoolParam;
@@ -133,6 +145,7 @@ private:
     StorageParam m_storageParam;
     StateParam m_stateParam;
     TxParam m_txParam;
+    EventLogFilterManagerParams m_eventLogFilterParams;
 };
 }  // namespace ledger
 }  // namespace dev

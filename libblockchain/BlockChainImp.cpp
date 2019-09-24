@@ -356,7 +356,11 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             if (g_BCOSConfig.version() <= RC2_VERSION)
             {
                 std::string strNumber = entry->getField(NUM_FIELD);
-                number = lexical_cast<int64_t>(strNumber);
+                if (!strNumber.empty())
+                {
+                    // Bugfix: rc2 leveldb has NUM_FIELD field but rc2 amdb is not
+                    number = lexical_cast<int64_t>(strNumber);
+                }
             }
         }
     }

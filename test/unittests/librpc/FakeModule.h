@@ -62,12 +62,12 @@ public:
         NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30310);
         dev::network::NodeInfo node_info;
         node_info.nodeID = nodeID;
-        std::vector<dev::TopicItem> topicList;
+        std::set<dev::TopicItem> topicList;
         P2PSessionInfo info(node_info, m_endpoint, topicList);
         TopicItem item;
         item.topic = "Topic1";
         item.topicStatus = TopicStatus::VERIFYI_SUCCESS_STATUS;
-        topicList.push_back(std::move(item));
+        topicList.insert(std::move(item));
         m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topicList));
         h512s nodeList;
         nodeList.push_back(
@@ -529,6 +529,12 @@ public:
         GenesisBlockParam initParam = {
             "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
+    }
+
+    std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() override
+    {
+        // just for compile, do nothing
+        return nullptr;
     }
     virtual void initBlockVerifier() { m_blockVerifier = std::make_shared<MockBlockVerifier>(); }
     virtual void initTxPool() { m_txPool = std::make_shared<MockTxPool>(); }

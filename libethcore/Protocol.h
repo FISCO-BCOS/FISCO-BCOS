@@ -57,6 +57,12 @@ enum ExtraIndex
     ExtraIndexNum
 };
 
+// check if groupID valid groupID
+inline bool validGroupID(int _groupID)
+{
+    return _groupID > 0 && _groupID <= maxGroupID;
+}
+
 inline PROTOCOL_ID getGroupProtoclID(GROUP_ID groupID, MODULE_ID moduleID)
 {
     if (groupID < 0)

@@ -335,7 +335,7 @@ void Session::drop(DisconnectReason _reason)
                 {
                     SESSION_LOG(WARNING)
                         << "[drop] timeout, force close the socket"
-                        << LOG_KV("remote endpoint", socket->ref().remote_endpoint());
+                        << LOG_KV("remote endpoint", socket->nodeIPEndpoint().name());
                     socket->close();
                 }
             });
@@ -354,7 +354,7 @@ void Session::drop(DisconnectReason _reason)
                     if (socket->ref().is_open())
                     {
                         SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
-                                             << LOG_KV("endpoint", socket->ref().remote_endpoint());
+                                             << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
                         socket->close();
                     }
                 });

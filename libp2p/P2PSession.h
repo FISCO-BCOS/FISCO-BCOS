@@ -39,7 +39,7 @@ class P2PSession : public std::enable_shared_from_this<P2PSession>
 public:
     typedef std::shared_ptr<P2PSession> Ptr;
 
-    P2PSession() { m_topics = std::make_shared<std::vector<dev::TopicItem>>(); }
+    P2PSession() { m_topics = std::make_shared<std::set<dev::TopicItem>>(); }
 
     virtual ~P2PSession(){};
 
@@ -59,7 +59,7 @@ public:
     virtual dev::network::NodeInfo const& nodeInfo() const& { return m_nodeInfo; }
     /// virtual void setNodeID(NodeID nodeID) { m_nodeID = nodeID; }
 
-    virtual std::vector<dev::TopicItem> topics()
+    virtual std::set<dev::TopicItem> topics()
     {
         std::lock_guard<std::mutex> lock(x_topic);
         return *m_topics;
@@ -70,7 +70,7 @@ public:
 
     virtual void onTopicMessage(std::shared_ptr<P2PMessage> message);
 
-    virtual void setTopics(uint32_t seq, std::shared_ptr<std::vector<dev::TopicItem>> topics)
+    virtual void setTopics(uint32_t seq, std::shared_ptr<std::set<dev::TopicItem>> topics)
     {
         std::lock_guard<std::mutex> lock(x_topic);
         m_topicSeq = seq;
@@ -78,7 +78,16 @@ public:
     }
 
     void parseTopicList(const std::vector<std::string>& topics,
-        std::shared_ptr<std::vector<dev::TopicItem>>& topicList, uint32_t& topicSeq);
+        const std::set<dev::TopicItem>& originTopicList,
+        std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq);
+
+    void requestCertTopic(const std::string& topic, const std::string& topicForCert);
+    void updateTopicStatus(const std::string& topic, dev::TopicStatus topicStatus);
+    std::string getTopicForCertRoute(
+        const std::string& topic, const std::vector<std::string>& topics);
+    void requestCertTopic(
+        const std::set<dev::TopicItem>& topiclist, const std::vector<std::string>& topics);
+
 
 private:
     dev::network::SessionFace::Ptr m_session;
@@ -87,11 +96,13 @@ private:
 
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;
-    std::shared_ptr<std::vector<dev::TopicItem>> m_topics;
+    std::shared_ptr<std::set<dev::TopicItem>> m_topics;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
     const uint32_t HEARTBEAT_INTERVEL = 5000;
+
+    std::vector<std::string> getTopicNameList(const std::set<dev::TopicItem>& topiclist);
 };
 
 }  // namespace p2p

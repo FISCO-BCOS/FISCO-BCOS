@@ -22,7 +22,6 @@
 #include "P2PSession.h"
 #include "P2PMessage.h"
 #include "Service.h"
-#include "libchannelserver/ChannelMessage.h"
 #include "libconfig/GlobalConfigure.h"
 #include "libnetwork/ASIOInterface.h"
 #include <json/json.h>
@@ -34,7 +33,6 @@
 
 using namespace dev;
 using namespace dev::p2p;
-using namespace dev::channel;
 
 void P2PSession::start()
 {
@@ -144,9 +142,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                                        << LOG_KV("message", e.what());
                                     return;
                                 }
-
                                 std::vector<std::string> topics;
-
                                 auto p2pResponse = std::dynamic_pointer_cast<P2PMessage>(response);
                                 std::string s((const char*)p2pResponse->buffer()->data(),
                                     p2pResponse->buffer()->size());
@@ -158,10 +154,13 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList =
-                                        std::make_shared<std::vector<dev::TopicItem>>();
-                                    session->parseTopicList(topics, topicList, topicSeq);
+                                    auto topicList = std::make_shared<std::set<dev::TopicItem>>();
+                                    auto orignTopicList = session->topics();
+
+                                    session->parseTopicList(
+                                        topics, orignTopicList, topicList, topicSeq);
                                     session->setTopics(topicSeq, topicList);
+                                    session->requestCertTopic(*topicList, topics);
                                 }
                             }
                             catch (std::exception& e)
@@ -171,13 +170,19 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                             }
                         });
                 }
+                // for retry for amop verify
+                else
+                {
+                    auto topicList = topics();
+                    auto topicNameList = getTopicNameList(topicList);
+                    requestCertTopic(topicList, topicNameList);
+                }
                 break;
             }
             case AMOPPacketType::RequestTopics:
             {
                 auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(
                     service->p2pMessageFactory()->buildMessage());
-
                 responseTopics->setProtocolID(-((PROTOCOL_ID)dev::eth::ProtocolID::Topic));
                 responseTopics->setPacketType(AMOPPacketType::SendTopics);
                 std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
@@ -185,29 +190,21 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                 auto service = m_service.lock();
                 if (service)
                 {
-                    bool versionGt2 = g_BCOSConfig.version() > dev::VERSION::V2_0_0;
                     std::string s = boost::lexical_cast<std::string>(service->topicSeq());
                     for (auto& it : service->topics())
                     {
                         s.append("\t");
-                        s.append(it.topic);
-                        if (versionGt2)
-                        {
-                            s.append("\t");
-                            s.append(boost::lexical_cast<std::string>(it.topicStatus));
-                        }
+                        s.append(it);
                     }
                     buffer->assign(s.begin(), s.end());
-
                     responseTopics->setBuffer(buffer);
                     responseTopics->setSeq(message->seq());
-
                     m_session->asyncSendMessage(
                         responseTopics, dev::network::Options(), CallbackFunc());
                 }
-
                 break;
             }
+
             default:
             {
                 SESSION_LOG(ERROR) << LOG_DESC("Unknown topic packet type")
@@ -223,11 +220,39 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
     }
 }
 
+
+void P2PSession::requestCertTopic(
+    const std::set<dev::TopicItem>& topicList, const std::vector<std::string>& topics)
+{
+    for (auto topicIt : topicList)
+    {
+        if (topicIt.topicStatus == TopicStatus::VERIFYING_STATUS)
+        {
+            std::string topicForCert = getTopicForCertRoute(topicIt.topic, topics);
+            if (!topicForCert.empty())
+            {
+                requestCertTopic(topicIt.topic, topicForCert);
+            }
+        }
+    }
+}
+
+
+std::vector<std::string> P2PSession::getTopicNameList(const std::set<dev::TopicItem>& topiclist)
+{
+    std::vector<std::string> topicNameList;
+    for (auto& topicInfo : topiclist)
+    {
+        topicNameList.push_back(topicInfo.topic);
+    }
+    return topicNameList;
+}
+
 void P2PSession::parseTopicList(const std::vector<std::string>& topics,
-    std::shared_ptr<std::vector<dev::TopicItem>>& topicList, uint32_t& topicSeq)
+    const std::set<dev::TopicItem>& originTopicList,
+    std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq)
 {
     dev::TopicItem item;
-    bool versionLe2 = g_BCOSConfig.version() <= dev::VERSION::V2_0_0;
     for (uint32_t i = 0; i < topics.size(); ++i)
     {
         if (i == 0)
@@ -236,24 +261,81 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
         }
         else
         {
-            if (versionLe2)
+            item.topic = topics[i];
+            item.topicStatus = dev::VERIFYI_SUCCESS_STATUS;
+            if (item.topic.find(topicNeedVerifyPrefix) == 0)
             {
-                item.topic = topics[i];
-                item.topicStatus = dev::VERIFYI_SUCCESS_STATUS;
-                topicList->push_back(std::move(item));
-            }
-            else
-            {
-                if (i % 2 == 1)
+                // if originTopicList has the topic status is set to status item
+                bool hasFound = false;
+                for (auto& it : originTopicList)
                 {
-                    item.topic = topics[i];
+                    if (it.topic == item.topic)
+                    {
+                        hasFound = true;
+                        item.topicStatus = it.topicStatus;
+                        break;
+                    }
                 }
-                else
+                if (!hasFound)
                 {
-                    item.topicStatus = (dev::TopicStatus)boost::lexical_cast<uint32_t>(topics[i]);
-                    topicList->push_back(std::move(item));
+                    item.topicStatus = dev::VERIFYING_STATUS;
                 }
             }
+            topicList->insert(std::move(item));
         }
     }
+}
+
+void P2PSession::requestCertTopic(const std::string& topic, const std::string& topicForCert)
+{
+    auto service = m_service.lock();
+    if (service)
+    {
+        std::string toTopic = dev::pushChannelPrefix;
+        toTopic.append(topic);
+        Json::Value jsonValue;
+        jsonValue["topic"] = topic;
+        jsonValue["topicForCert"] = topicForCert;
+        jsonValue["nodeId"] = this->nodeID().hex();
+        Json::FastWriter writer;
+        auto value = writer.write(jsonValue);
+        CallbackFuncForTopicVerify callBack = service->callbackFuncForTopicVerify();
+        callBack(toTopic, value);
+    }
+}
+
+
+std::string P2PSession::getTopicForCertRoute(
+    const std::string& topic, const std::vector<std::string>& topics)
+{
+    std::string topicPrefix = dev::verifyChannelPrefix;
+    topicPrefix.append(topic);
+    for (auto& topicIt : topics)
+    {
+        if (topicIt.find(topicPrefix) == 0)
+        {
+            SESSION_LOG(DEBUG) << "topic:" << topic << " topic for route:" << topicIt;
+            return topicIt;
+        }
+    }
+    return std::string();
+}
+void P2PSession::updateTopicStatus(const std::string& topic, dev::TopicStatus topicStatus)
+{
+    std::lock_guard<std::mutex> lock(x_topic);
+    auto topics = *m_topics;
+    auto topics2Set = std::make_shared<std::set<dev::TopicItem>>();
+    for (auto it : topics)
+    {
+        if (it.topic == topic && (it.topicStatus == dev::VERIFYING_STATUS))
+        {
+            it.topicStatus = topicStatus;
+            SESSION_LOG(DEBUG)
+                << "set topic:" << topic << " listen[" << this->nodeID() << "]"
+                << " to " << topicStatus
+                << "[0 VERIFYING_STATUS 1 VERIFYI_SUCCESS_STATUS 2 VERIFYI_FAILED_STATUS]";
+        }
+        topics2Set->insert(std::move(it));
+    }
+    m_topics = topics2Set;
 }

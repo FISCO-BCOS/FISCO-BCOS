@@ -34,6 +34,7 @@ namespace rpc
 enum RPCExceptionType : int
 {
     Success = 0,
+    IncompleteInitialization = -40010,
     InvalidRequest = -40009,
     InvalidSystemConfig = -40008,
     NoView = -40007,

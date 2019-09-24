@@ -42,6 +42,9 @@ public:
 
 public:
     TopicItem() : topicStatus(VERIFYING_STATUS) {}
+    bool operator<(const TopicItem& item) const { return this->topic < item.topic; }
 };
-const std::string topicNeedCertPrefix = "needcert_";
+const std::string topicNeedVerifyPrefix = "#!$TopicNeedVerify_";
+const std::string verifyChannelPrefix = "#!$VerifyChannel_";
+const std::string pushChannelPrefix = "#!$PushChannel_";
 }  // namespace dev

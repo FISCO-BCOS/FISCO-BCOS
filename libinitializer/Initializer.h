@@ -39,25 +39,7 @@ class Initializer : public InitializerInterface, public std::enable_shared_from_
 public:
     typedef std::shared_ptr<Initializer> Ptr;
 
-    virtual ~Initializer()
-    {
-        /// modify the destructure order to ensure that the log is destructed at last
-        /// stop the ledger
-        if (m_ledgerInitializer)
-        {
-            m_ledgerInitializer->stopAll();
-        }
-        /// stop rpc
-        if (m_rpcInitializer)
-        {
-            m_rpcInitializer->stop();
-        }
-        /// stop p2p
-        if (m_p2pInitializer)
-        {
-            m_p2pInitializer->stop();
-        }
-    }
+    virtual ~Initializer();
     void init(std::string const& _path);
 
     SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }

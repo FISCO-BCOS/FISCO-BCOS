@@ -50,11 +50,10 @@ void PBFTEngine::start()
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
 {
-    Guard l(m_mutex);
-    resetConfig();
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
+    reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
     PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
@@ -121,6 +120,7 @@ void PBFTEngine::resetConfig()
     updateMaxBlockTransactions();
     auto node_idx = MAXIDX;
     m_accountType = NodeAccountType::ObserverAccount;
+    size_t nodeNum = 0;
     updateConsensusNodeList();
     {
         ReadGuard l(m_sealerListMutex);
@@ -133,15 +133,20 @@ void PBFTEngine::resetConfig()
                 break;
             }
         }
-        m_nodeNum = m_sealerList.size();
+        nodeNum = m_sealerList.size();
     }
-    if (m_nodeNum < 1)
+    if (nodeNum < 1)
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC(
             "Must set at least one pbft sealer, current number of sealers is zero");
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(
             EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
+    }
+    // update m_nodeNum
+    if (m_nodeNum != nodeNum)
+    {
+        m_nodeNum = nodeNum;
     }
     m_f = (m_nodeNum - 1) / 3;
     m_cfgErr = (node_idx == MAXIDX);
@@ -557,7 +562,10 @@ bool PBFTEngine::checkBlock(Block const& block)
     {
         return false;
     }
-    resetConfig();
+    {
+        Guard l(m_mutex);
+        resetConfig();
+    }
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
@@ -1025,11 +1033,6 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
-        if (m_onCommitBlock)
-        {
-            m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
-                m_timeManager.m_changeCycle);
-        }
         /// remove invalid future block
         m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
@@ -1045,6 +1048,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
         resetConfig();
+        if (m_onCommitBlock)
+        {
+            m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
+                m_timeManager.m_changeCycle);
+        }
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("sealerIdx", m_highestBlock.sealer())
@@ -1354,7 +1362,7 @@ void PBFTEngine::checkAndChangeView()
 
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcTime();
-        m_view = m_toView;
+        m_view = m_toView.load();
         m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view);
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -1561,17 +1569,14 @@ const std::string PBFTEngine::consensusStatus()
     /// get other informations related to PBFT
     statusObj["connectedNodes"] = IDXTYPE(m_connectedNode);
     /// get the current view
-    statusObj["currentView"] = m_view;
+    statusObj["currentView"] = VIEWTYPE(m_view);
     /// get toView
-    statusObj["toView"] = m_toView;
+    statusObj["toView"] = VIEWTYPE(m_toView);
     /// get leader failed or not
     statusObj["leaderFailed"] = bool(m_leaderFailed);
     status.append(statusObj);
     /// get view of node id
     getAllNodesViewStatus(status);
-
-    /// get cache-related informations
-    m_reqCache->getCacheConsensusStatus(status);
 
     Json::FastWriter fastWriter;
     std::string status_str = fastWriter.write(status);
