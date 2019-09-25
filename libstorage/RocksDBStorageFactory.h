@@ -43,6 +43,8 @@ private:
     bool m_disableWAL = false;
     const std::string m_DBPath;
     rocksdb::Options m_options;
+    std::recursive_mutex x_cache;
+    std::pair<std::string, Storage::Ptr> m_cache;
     std::function<void(std::string const&, std::string&)> m_encryptHandler = nullptr;
     std::function<void(std::string&)> m_decryptHandler = nullptr;
 };
