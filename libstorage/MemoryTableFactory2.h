@@ -64,8 +64,6 @@ private:
     storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
-    h256 m_blockHash;
-    int m_blockNum;
     uint64_t m_ID = 1;
     // this map can't be changed, hash() need ordered data
     tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;

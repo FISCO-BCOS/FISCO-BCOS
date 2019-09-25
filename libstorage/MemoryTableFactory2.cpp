@@ -40,7 +40,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
+MemoryTableFactory2::MemoryTableFactory2()
 {
     m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
