@@ -38,7 +38,7 @@ compatibility_version=""
 default_version="2.1.0"
 macOS=""
 x86_64_arch="true"
-download_timeout=90
+download_timeout=60
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
 help() {
@@ -157,7 +157,7 @@ done
 print_result()
 {
 echo "================================================================"
-[ -z ${docker_mode} ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
+[ -z ${docker_mode} ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
@@ -206,18 +206,6 @@ check_and_install_tassl()
     fi
 }
 
-getname() {
-    local name="$1"
-    if [ -z "$name" ]; then
-        return 0
-    fi
-    [[ "$name" =~ ^.*/$ ]] && {
-        name="${name%/*}"
-    }
-    name="${name##*/}"
-    echo "$name"
-}
-
 check_name() {
     local name="$1"
     local value="$2"
@@ -247,7 +235,7 @@ dir_must_not_exists() {
 
 gen_chain_cert() {
     local path="${1}"
-    name=$(getname "$path")
+    name=$(basename "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -262,7 +250,7 @@ gen_chain_cert() {
 gen_agency_cert() {
     local chain="${1}"
     local agencypath="${2}"
-    name=$(getname "$agencypath")
+    name=$(basename "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/ca.key"
@@ -283,29 +271,31 @@ gen_agency_cert() {
 }
 
 gen_cert_secp256k1() {
-    capath="$1"
+    agpath="$1"
     certpath="$2"
     name="$3"
     type="$4"
     openssl ecparam -out $certpath/${type}.param -name secp256k1
     openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
     openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
-    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
-        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
-    openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
-    rm -f $certpath/${type}.csr
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $agpath/cert.cnf -out $certpath/${type}.csr
+    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $agpath/agency.key -CA $agpath/agency.crt\
+        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $agpath/cert.cnf
+    # openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
+    cat ${agpath}/agency.crt >> $certpath/${type}.crt
+    rm -f $certpath/${type}.csr $certpath/${type}.pubkey $certpath/${type}.param
 }
 
-gen_node_cert() {
+gen_cert() {
     if [ "" == "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
         exit_with_clean "openssl don't support secp256k1, please upgrade openssl!"
     fi
 
     agpath="${1}"
-    agency=$(getname "$agpath")
+    agency=$(basename "$agpath")
     ndpath="${2}"
-    node=$(getname "$ndpath")
+    local cert_name="${3}"
+    node=$(basename "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
@@ -314,11 +304,11 @@ gen_node_cert() {
 
     mkdir -p $ndpath
 
-    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
+    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
     openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
-    cp $agpath/ca.crt $agpath/agency.crt $ndpath
+    cp $agpath/ca.crt $ndpath
     cd $ndpath
 }
 
@@ -335,7 +325,7 @@ EOF
 
 gen_chain_cert_gm() {
     local path="${1}"
-    name=$(getname "$path")
+    name=$(basename "$path")
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
@@ -360,7 +350,7 @@ gen_chain_cert_gm() {
 gen_agency_cert_gm() {
     local chain="${1}"
     local agencypath="${2}"
-    name=$(getname "$agencypath")
+    name=$(basename "$agencypath")
 
     dir_must_exists "$chain"
     file_must_exists "$chain/gmca.key"
@@ -397,9 +387,9 @@ gen_node_cert_gm() {
     fi
 
     agpath="${1}"
-    agency=$(getname "$agpath")
+    agency=$(basename "$agpath")
     ndpath="${2}"
-    node=$(getname "$ndpath")
+    node=$(basename "$ndpath")
     dir_must_exists "$agpath"
     file_must_exists "$agpath/gmagency.key"
     check_name agency "$agency"
@@ -535,7 +525,7 @@ function generate_group_ini()
     max_capacity=32
     max_forward_block=10
     ; only for external
-    max_retry=100
+    max_retry=60
     topic=DB
     ; only for mysql
     db_ip=127.0.0.1
@@ -589,9 +579,20 @@ EOF
 generate_script_template()
 {
     local filepath=$1
+    mkdir -p $(dirname $filepath)
     cat << EOF > "${filepath}"
 #!/bin/bash
 SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
+
+LOG_ERROR() {
+    content=\${1}
+    echo -e "\033[31m[ERROR] \${content}\033[0m"
+}
+
+LOG_INFO() {
+    content=\${1}
+    echo -e "\033[32m[INFO] \${content}\033[0m"
+}
 
 EOF
     chmod +x ${filepath}
@@ -795,11 +796,12 @@ done
 echo "  Exceed maximum number of retries. Please try again to stop \${node}"
 exit 1
 EOF
-    generate_script_template "$output/load_new_groups.sh"
-    cat << EOF >> "$output/load_new_groups.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-cd \${SHELL_FOLDER}
-node=\$(basename \${SHELL_FOLDER})
+    generate_script_template "$output/scripts/load_new_groups.sh"
+    cat << EOF >> "$output/scripts/load_new_groups.sh"
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo "\${node} is trying to load new groups. Check log for more information."
@@ -809,11 +811,61 @@ else
     echo "\${node} is not running, use start.sh to start all group directlly."
 fi
 EOF
-    generate_script_template "$output/reset_certificate_whitelist.sh"
-    cat << EOF >> "$output/reset_certificate_whitelist.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
-cd \${SHELL_FOLDER}
-node=\$(basename \${SHELL_FOLDER})
+    generate_script_template "$output/scripts/reload_whitelist.sh"
+    cat << EOF >> "$output/scripts/reload_whitelist.sh"
+check_cal_line()
+{
+    line=\$1;
+    if [[ \$line =~ cal.[0-9]*=[0-9A-Fa-f]{128,128}\$ ]]; then
+        echo "true";
+    else
+        echo "false";
+    fi
+}
+
+check_cal_lines() 
+{
+    # print Illegal line
+    config_file=\$1
+    error="false"
+    for line in \$(grep -v "^[ ]*[;]" \$config_file | grep "cal\."); do
+        if [[ "true" != \$(check_cal_line \$line) ]]; then
+            LOG_ERROR "Illigal whitelist line: \$line"
+            error="true"
+        fi
+    done 
+
+    if [[ "true" == \$error ]]; then
+        LOG_ERROR "[certificate_whitelist] reload error for illigal lines"
+        exit 1
+    fi
+}
+
+check_duplicate_key()
+{
+    config_file=\$1;  
+    dup_key=\$(grep -v '^[ ]*[;]' \$config_file |grep "cal\."|awk -F"=" '{print \$1}'|awk '{print \$1}' |sort |uniq -d)
+
+    if [[ "" != \$dup_key ]]; then
+        LOG_ERROR "[certificate_whitelist] has duplicate keys:"
+        LOG_ERROR "\$dup_key"
+        exit 1
+    fi
+}
+
+check_whitelist()
+{
+    config_file=\$1
+    check_cal_lines \$config_file
+    check_duplicate_key \$config_file
+}
+
+check_whitelist \${SHELL_FOLDER}/../config.ini
+
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo "\${node} is trying to reset certificate whitelist. Check log for more information."
@@ -1084,9 +1136,8 @@ for line in ${ip_array[*]};do
         
         while :
         do
-            gen_node_cert ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} >${logfile} 2>&1
+            gen_cert ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} "node" >${logfile} 2>&1
             mkdir -p ${conf_path}/
-            rm node.param node.private node.pubkey agency.crt
             mv *.* ${conf_path}/
 
             #private key should not start with 00
@@ -1116,7 +1167,6 @@ for line in ${ip_array[*]};do
             fi
             break;
         done
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> ${node_dir}/${conf_path}/node.crt
 
         if [ -n "$guomi_mode" ]; then
             cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
@@ -1128,9 +1178,9 @@ for line in ${ip_array[*]};do
         fi
 
         if [ -n "$guomi_mode" ]; then
-            nodeid=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
         else
-            nodeid=$(openssl ec -in "${node_dir}/${conf_path}/node.key" -text 2> /dev/null | perl -ne '$. > 6 and $. < 12 and ~s/[\n:\s]//g and print' | perl -ne 'print substr($_, 2)."\n"')
+            nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
 
         if [ -n "$guomi_mode" ]; then
@@ -1161,9 +1211,12 @@ for line in ${ip_array[*]};do
     done
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d ${sdk_path} ];then
-        gen_node_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}">${logfile} 2>&1
-        cat ${output_dir}/cert/${agency_array[${server_count}]}/agency.crt >> node.crt
-        rm node.param node.private node.pubkey node.nodeid agency.crt
+        gen_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}" "sdk" >${logfile} 2>&1
+        # FIXME: delete the below unbelievable ugliest operation in future
+        cp sdk.crt node.crt
+        cp sdk.key node.key
+        # FIXME: delete the upside unbelievable ugliest operation in future
+        rm node.nodeid
         cp ${output_dir}/cert/ca.crt ${sdk_path}/
         cd ${output_dir}
     fi
@@ -1209,6 +1262,7 @@ for line in ${ip_array[*]};do
     ((++server_count))
 done 
 rm ${logfile}
+if [ -f "${output_dir}/${bcos_bin_name}" ];then rm ${output_dir}/${bcos_bin_name};fi 
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in $(seq 0 ${#groups_count[@]});do

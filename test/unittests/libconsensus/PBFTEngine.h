@@ -74,7 +74,7 @@ static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public c
 
     dev::network::NodeInfo node_info;
     node_info.nodeID = node_id;
-    std::vector<dev::TopicItem> topicList;
+    std::set<dev::TopicItem> topicList;
     P2PSessionInfo info(node_info, m_endpoint, topicList);
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();

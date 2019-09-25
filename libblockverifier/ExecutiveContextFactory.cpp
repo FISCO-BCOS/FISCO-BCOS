@@ -38,14 +38,6 @@ using namespace dev::precompiled;
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
 {
-#if 0
-    // DBFactoryPrecompiled
-    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory>();
-    memoryTableFactory->setStateStorage(m_stateStorage);
-    memoryTableFactory->setBlockHash(blockInfo.hash);
-    memoryTableFactory->setBlockNum(blockInfo.number);
-#endif
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
@@ -136,5 +128,6 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
     {
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Failed")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(e);
     }
 }

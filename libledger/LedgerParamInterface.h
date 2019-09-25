@@ -42,6 +42,8 @@ struct AMDBParam;
 struct StorageParam;
 struct StateParam;
 struct TxParam;
+struct EventLogFilterManagerParams;
+
 class LedgerParamInterface
 {
 public:
@@ -57,6 +59,7 @@ public:
     virtual StorageParam& mutableStorageParam() = 0;
     virtual StateParam& mutableStateParam() = 0;
     virtual TxParam& mutableTxParam() = 0;
+    virtual EventLogFilterManagerParams& mutableEventLogFilterManagerParams() = 0;
 };
 }  // namespace ledger
 }  // namespace dev

@@ -74,9 +74,7 @@ public:
     int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
     void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
 
-    VIEWTYPE const& toView() const { return m_toView; }
     void setToView(VIEWTYPE const& view) { m_toView = view; }
-    VIEWTYPE const& view() const { return m_view; }
 
     bool isDiskSpaceEnough(std::string const& path) override
     {
@@ -278,7 +276,7 @@ public:
             NodeIPEndpoint m_endpoint(bi::address::from_string("127.0.0.1"), 30303);
             dev::network::NodeInfo node_info;
             node_info.nodeID = m_sealerList[i];
-            std::vector<dev::TopicItem> topicList;
+            std::set<dev::TopicItem> topicList;
             P2PSessionInfo info(node_info, m_endpoint, topicList);
             service->appendSessionInfo(info);
         }

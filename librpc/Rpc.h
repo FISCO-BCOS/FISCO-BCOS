@@ -26,8 +26,9 @@
 #include "libp2p/Common.h"
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
 #include <json/value.h>            // for Value
-#include <boost/thread/tss.hpp>    // for thread_specific_ptr
-#include <string>                  // for string
+#include <libethcore/Transaction.h>
+#include <boost/thread/tss.hpp>  // for thread_specific_ptr
+#include <string>                // for string
 
 namespace dev
 {
@@ -106,17 +107,26 @@ public:
         m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
+    void setLedgerManager(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager)
+    {
+        m_ledgerManager = _ledgerManager;
+    }
+    void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
 protected:
-    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
+    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
+    std::shared_ptr<dev::p2p::P2PInterface> service();
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
-    std::shared_ptr<dev::p2p::P2PInterface> service() { return m_service; }
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+
+    std::string buildReceipt(uint32_t clientProtocolVersion, int errorCode,
+        const std::string& errorMessage, const bytes& input,
+        dev::eth::LocalisedTransactionReceipt::Ptr receipt);
 
     /// transaction callback related
     std::function<std::function<void>()> setTransactionCallbackFactory();

@@ -137,7 +137,7 @@ private:
                     << LOG_BADGE("MemoryTable") << LOG_DESC("field not exist")
                     << LOG_KV("table name", m_tableInfo->name) << LOG_KV("field", it.first);
 
-                throw std::invalid_argument("Invalid key.");
+                BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid key."));
             }
         }
     }

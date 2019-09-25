@@ -414,7 +414,17 @@ private:
         if (condition->getOffset() >= 0 && condition->getCount() >= 0)
         {
             int begin = condition->getOffset();
-            int end = begin + condition->getCount();
+            int end = 0;
+
+            if (g_BCOSConfig.version() < V2_1_0)
+            {
+                end = begin + condition->getCount();
+            }
+            else
+            {
+                end = (int)std::min((size_t)INT_MAX, (size_t)begin + (size_t)condition->getCount());
+            }
+
             std::vector<size_t> limitedIndex;
             int size = indexes.size();
             if (begin >= size)
@@ -440,7 +450,7 @@ private:
             if (m_tableInfo->fields.end() ==
                 find(m_tableInfo->fields.begin(), m_tableInfo->fields.end(), it.first))
             {
-                throw std::invalid_argument("Invalid key.");
+                BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid key."));
             }
         }
     }
