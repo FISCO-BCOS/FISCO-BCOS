@@ -24,7 +24,7 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
-#include "wedpr-generated/asset_hiding/asset_hiding.h"
+#include "wedpr-generated/asset_hiding/ffi_hidden_asset.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -84,14 +84,15 @@ bytes WedprPrecompiled::call(
         abi.abiOut(data, issue_argument_pb);
 
         // verify issued credit
-        if (verify_issued_credit(string_to_char(issue_argument_pb)) == FAILURE)
+        char* issue_argument_pb_char = string_to_char(issue_argument_pb);
+        if (verify_issued_credit(issue_argument_pb_char) == FAILURE)
         {
             logError(PRECOMPILED_NAME, "verify_issued_credit", VERFIY_FAILED);
             throwException(VERFIY_FAILED);
         }
 
-        std::string current_credit;
-        std::string credit_storage;
+        std::string current_credit = get_current_credit_by_issue_argument(issue_argument_pb_char);
+        std::string credit_storage = get_storage_credit_by_issue_argument(issue_argument_pb_char);
 
         // return current_credit and credit_storage
         out = abi.abiIn("", current_credit, credit_storage);
@@ -102,14 +103,17 @@ bytes WedprPrecompiled::call(
         std::string fulfill_argument_pb;
         abi.abiOut(data, fulfill_argument_pb);
 
-        if (verify_fulfilled_credit(string_to_char(fulfill_argument_pb)) == FAILURE)
+        char* fulfill_argument_pb_char = string_to_char(fulfill_argument_pb);
+        if (verify_fulfilled_credit(fulfill_argument_pb_char) == FAILURE)
         {
             logError(PRECOMPILED_NAME, "verify_fulfilled_credit", VERFIY_FAILED);
             throwException(VERFIY_FAILED);
         }
 
-        std::string current_credit;
-        std::string credit_storage;
+        std::string current_credit =
+            get_current_credit_by_fulfill_argument(fulfill_argument_pb_char);
+        std::string credit_storage =
+            get_credit_storage_by_fulfill_argument(fulfill_argument_pb_char);
 
         // return current_credit and credit_storage
         out = abi.abiIn("", current_credit, credit_storage);
@@ -120,16 +124,21 @@ bytes WedprPrecompiled::call(
         std::string transfer_request_pb;
         abi.abiOut(data, transfer_request_pb);
 
-        if (verify_transfer_credit(string_to_char(transfer_request_pb)) == FAILURE)
+        char* transfer_request_pb_char = string_to_char(transfer_request_pb);
+        if (verify_transfer_credit(transfer_request_pb_char) == FAILURE)
         {
             logError(PRECOMPILED_NAME, "verify_transfer_credit", VERFIY_FAILED);
             throwException(VERFIY_FAILED);
         }
 
-        std::string spent_current_credit;
-        std::string spent_credit_storage;
-        std::string new_current_credit;
-        std::string new_credit_storage;
+        std::string spent_current_credit =
+            get_spent_current_credit_by_transfer_request(transfer_request_pb_char);
+        std::string spent_credit_storage =
+            get_spent_credit_storage_by_transfer_request(transfer_request_pb_char);
+        std::string new_current_credit =
+            get_new_current_credit_by_transfer_request(transfer_request_pb_char);
+        std::string new_credit_storage =
+            get_new_credit_storage_by_transfer_request(transfer_request_pb_char);
 
         // return current_credit and credit_storage
         out = abi.abiIn(
@@ -141,18 +150,25 @@ bytes WedprPrecompiled::call(
         std::string split_request_pb;
         abi.abiOut(data, split_request_pb);
 
-        if (verify_split_credit(string_to_char(split_request_pb)) == FAILURE)
+        char* split_request_pb_char = string_to_char(split_request_pb);
+        if (verify_split_credit(split_request_pb_char) == FAILURE)
         {
             logError(PRECOMPILED_NAME, "verify_split_credit", VERFIY_FAILED);
             throwException(VERFIY_FAILED);
         }
 
-        std::string spent_current_credit;
-        std::string spent_credit_storage;
-        std::string new_current_credit1;
-        std::string new_credit_storage1;
-        std::string new_current_credit2;
-        std::string new_credit_storage2;
+        std::string spent_current_credit =
+            get_spent_current_credit_by_split_request(split_request_pb_char);
+        std::string spent_credit_storage =
+            get_spent_credit_storage_by_split_request(split_request_pb_char);
+        std::string new_current_credit1 =
+            get_new_current_credit1_by_split_request(split_request_pb_char);
+        std::string new_credit_storage1 =
+            get_new_credit_storage1_by_split_request(split_request_pb_char);
+        std::string new_current_credit2 =
+            get_new_current_credit2_by_split_request(split_request_pb_char);
+        std::string new_credit_storage2 =
+            get_new_credit_storage2_by_split_request(split_request_pb_char);
 
         // return current_credit and credit_storage
         out = abi.abiIn("", spent_current_credit, spent_credit_storage, new_current_credit1,
