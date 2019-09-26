@@ -149,18 +149,6 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// check timestamp
     /// init genesis configuration
     boost::property_tree::ptree pt;
-#if 0
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with invalid timestamp
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with valid timestamp
-    pt.put("group.timestamp", 1553520855);
-    pt.put("state.type", "storage");
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
-#endif
     /// check groupMark
     fakeLedger.initMark();
     std::string mark =

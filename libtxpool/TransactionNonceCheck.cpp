@@ -81,6 +81,11 @@ void TransactionNonceCheck::getNonceAndUpdateCache(
                 << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size())
                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
         }
+        else
+        {
+            NONCECHECKER_LOG(TRACE)
+                << LOG_DESC("Can't get block") << LOG_KV("blockNumber", blockNumber);
+        }
     }
     else
     {
