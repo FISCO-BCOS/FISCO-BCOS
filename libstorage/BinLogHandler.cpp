@@ -298,9 +298,9 @@ void BinLogHandler::encodeEntries(
         auto entry = entries->get(idx);
         writeUINT64(buffer, entry->getID());
         uint8_t status = entry->getStatus();
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx", idx)
+        /*BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx", idx)
                                   << LOG_KV("id", entry->getID())
-                                  << LOG_KV("status", (uint32_t)status);
+                                  << LOG_KV("status", (uint32_t)status);*/
         buffer.insert(buffer.end(), (byte*)&status, (byte*)&status + 1);
         for (const auto& key : vecField)
         {
@@ -314,7 +314,7 @@ void BinLogHandler::encodeEntries(
             {
                 value = fieldIt->second;
             }
-            BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
+            // BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
             writeString(buffer, value);
         }
     }
@@ -340,7 +340,8 @@ void BinLogHandler::encodeTable(TableData::Ptr table, bytes& buffer)
         }
     }
     writeString(buffer, ss.str());
-    BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" << ss.str();
+    // BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" <<
+    // ss.str();
     // table data : dirty entries and new entries
     encodeEntries(vecField, table->dirtyEntries, buffer);
     encodeEntries(vecField, table->newEntries, buffer);
@@ -364,7 +365,7 @@ void BinLogHandler::encodeBlock(
     boost::crc_32_type result;
     result.process_block((char*)&buffer[0], (char*)&buffer[0] + buffer.size());
     uint32_t crc32 = result.checksum();
-    BINLOG_HANDLER_LOG(DEBUG) << LOG_KV("CRC32", crc32);
+    // BINLOG_HANDLER_LOG(DEBUG) << LOG_KV("CRC32", crc32);
     writeUINT32(buffer, crc32);
 
     // insert length
@@ -373,7 +374,7 @@ void BinLogHandler::encodeBlock(
     auto end2 = utcTimeUs();
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("encode block end") << LOG_KV("num", num)
                              << LOG_KV("block binary data length", buffer.size())
-                             << LOG_KV("encode cost", end1 - start)
+                             << LOG_KV("CRC32", crc32) << LOG_KV("encode cost", end1 - start)
                              << LOG_KV("CRC32 cost", end2 - end1);
 }
 
@@ -390,9 +391,9 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
         uint8_t status = *((uint8_t*)&buffer[offset]);
         offset++;
         entry->setStatus(status);
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx in entries", idx)
+        /*BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx in entries", idx)
                                   << LOG_KV("_id_", entry->getID())
-                                  << LOG_KV("_status_", (uint32_t)entry->getStatus());
+                                  << LOG_KV("_status_", (uint32_t)entry->getStatus());*/
         for (const auto& key : vecField)
         {
             if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
@@ -405,7 +406,7 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
             {
                 entry->setField(key, value);
             }
-            BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
+            // BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
         }
         entries->addEntry(entry);
     }
@@ -453,7 +454,7 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
     for (uint32_t i = 0; i < dataSize; i++)
     {
         TableData::Ptr data = std::make_shared<TableData>();
-        uint32_t tableSize = decodeTable(buffer, offset, data);
+        decodeTable(buffer, offset, data);
 
         // entries
         std::vector<std::string> vecField;
@@ -462,12 +463,8 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
         {
             vecField.push_back(field);
         }
-        uint32_t dirtySize = decodeEntries(buffer, offset, vecField, data->dirtyEntries);
-        uint32_t newSize = decodeEntries(buffer, offset, vecField, data->newEntries);
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block") << LOG_KV("idx", i)
-                                  << LOG_KV("tableInfo buffer size", tableSize)
-                                  << LOG_KV("dirtyEntries buffer size", dirtySize)
-                                  << LOG_KV("newEntries buffer size", newSize);
+        decodeEntries(buffer, offset, vecField, data->dirtyEntries);
+        decodeEntries(buffer, offset, vecField, data->newEntries);
 
         datas.push_back(data);
     }
@@ -481,7 +478,7 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
     }
     else
     {
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block, block data size error!");
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("decode block, block data size error!");
         return DecodeBlockResult::BlockDataLengthError;
     }
 }
@@ -526,9 +523,8 @@ bool BinLogHandler::getBlockData(
             return false;
         }
         blockLen = ntohl(blockLen);
-        BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("decode block")
-                                  << LOG_KV("block index", binlog.offset)
-                                  << LOG_KV("block data length", blockLen);
+        BINLOG_HANDLER_LOG(INFO) << LOG_DESC("decode block") << LOG_KV("block index", binlog.offset)
+                                 << LOG_KV("block data length", blockLen);
         binlog.offset += sizeof(uint32_t);
         if (binlog.offset + blockLen > binlog.length)
         {

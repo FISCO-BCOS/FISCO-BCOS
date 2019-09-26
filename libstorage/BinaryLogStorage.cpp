@@ -40,7 +40,7 @@ Entries::Ptr BinaryLogStorage::select(
 {
     if (m_backend)
     {
-        STORAGE_LOG(DEBUG) << LOG_DESC("BinLog select from backend") << LOG_KV("key", key);
+        // STORAGE_LOG(DEBUG) << LOG_DESC("BinLog select from backend") << LOG_KV("key", key);
 
         return m_backend->select(num, tableInfo, key, condition);
     }
