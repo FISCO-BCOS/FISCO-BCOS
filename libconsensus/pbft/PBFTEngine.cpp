@@ -53,7 +53,12 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
-    reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+    auto block = m_blockChain->getBlockByNumber(m_blockChain->number());
+    if (!block)
+    {
+        PBFTENGINE_LOG(FATAL) << "can't latest block";
+    }
+    reportBlock(*block);
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
     PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";

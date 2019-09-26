@@ -22,6 +22,8 @@
 
 #include "BasicRocksDB.h"
 #include <libdevcore/Exceptions.h>
+#include <boost/filesystem.hpp>
+
 using namespace dev;
 using namespace rocksdb;
 
@@ -53,7 +55,8 @@ void BasicRocksDB::closeDB()
  */
 std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const std::string& dbname)
 {
-    ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler");
+    ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler") << LOG_KV("path", dbname);
+    boost::filesystem::create_directories(dbname);
     DB* db = nullptr;
     auto status = DB::Open(options, dbname, &db);
     checkStatus(status, dbname);

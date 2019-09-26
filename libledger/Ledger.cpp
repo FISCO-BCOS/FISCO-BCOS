@@ -348,15 +348,17 @@ void Ledger::initDBConfig(ptree const& pt)
         }
     }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
-    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
-
+    m_param->mutableStorageParam().maxCapacity = pt.get<uint>("storage.max_capacity", 32);
+    auto scrollThresholdMultiple = pt.get<uint>("storage.scroll_threshold_multiple", 2);
+    m_param->mutableStorageParam().scrollThreshold =
+        scrollThresholdMultiple ? scrollThresholdMultiple * g_BCOSConfig.c_blockLimit : 2000;
     if (m_param->mutableStorageParam().maxCapacity < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
                               << errinfo_comment("Please set storage.max_capacity to positive !"));
     }
 
-    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 10);
+    m_param->mutableStorageParam().maxForwardBlock = pt.get<uint>("storage.max_forward_block", 10);
     if (m_param->mutableStorageParam().maxForwardBlock < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
@@ -367,7 +369,7 @@ void Ledger::initDBConfig(ptree const& pt)
     {
         m_param->mutableStorageParam().maxRetry = 100;
     }
-    /// set state db related param
+    // FIXME: below will make mpt impossible, maybe a bug
     m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
 
     // read db config from config eg:mysqlip mysqlport and so on
