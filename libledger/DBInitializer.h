@@ -25,7 +25,6 @@
 #include "LedgerParamInterface.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>
@@ -88,19 +87,12 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
-    // open and init rocksDB
-    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
-
 protected:
     dev::GROUP_ID m_groupID = 0;
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
-
-    // set handler to rocksDB
-    template <typename T>
-    void setHandlerForDB(std::shared_ptr<T> rocksDB);
 
     void unsupportedFeatures(std::string const& desc);
 
@@ -109,8 +101,14 @@ private:
     // below use MemoryTableFactory2
     void initSQLStorage();
     void initTableFactory2(dev::storage::Storage::Ptr _backend);
+    std::function<void(std::string&)> getDecryptHandler();
+    std::function<void(std::string const&, std::string&)> getEncryptHandler();
     void initRocksDBStorage();
-
+    dev::storage::Storage::Ptr createRocksDBStorage(const std::string& _dbPath);
+    dev::storage::Storage::Ptr createSQLStorage(
+        std::function<void(std::exception& e)> _fatalHandler);
+    void initScalableStorage();
+    int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 

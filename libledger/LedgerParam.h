@@ -97,6 +97,7 @@ struct StorageParam
     // MB
     int maxCapacity;
 
+    int64_t scrollThreshold = 2000;
     // for zdb storage
     std::string dbType;
     std::string dbIP;

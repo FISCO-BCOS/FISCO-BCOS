@@ -231,7 +231,20 @@ void P2PSession::requestCertTopic(
             std::string topicForCert = getTopicForCertRoute(topicIt.topic, topics);
             if (!topicForCert.empty())
             {
-                requestCertTopic(topicIt.topic, topicForCert);
+                std::string toTopic = dev::pushChannelPrefix;
+                toTopic.append(topicIt.topic);
+                Json::Value jsonValue;
+                jsonValue["topic"] = topicIt.topic;
+                jsonValue["topicForCert"] = topicForCert;
+                jsonValue["nodeId"] = this->nodeID().hex();
+                Json::FastWriter writer;
+                auto value = writer.write(jsonValue);
+                auto service = m_service.lock();
+                if (service)
+                {
+                    CallbackFuncForTopicVerify callBack = service->callbackFuncForTopicVerify();
+                    callBack(toTopic, value);
+                }
             }
         }
     }
@@ -285,25 +298,6 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
         }
     }
 }
-
-void P2PSession::requestCertTopic(const std::string& topic, const std::string& topicForCert)
-{
-    auto service = m_service.lock();
-    if (service)
-    {
-        std::string toTopic = dev::pushChannelPrefix;
-        toTopic.append(topic);
-        Json::Value jsonValue;
-        jsonValue["topic"] = topic;
-        jsonValue["topicForCert"] = topicForCert;
-        jsonValue["nodeId"] = this->nodeID().hex();
-        Json::FastWriter writer;
-        auto value = writer.write(jsonValue);
-        CallbackFuncForTopicVerify callBack = service->callbackFuncForTopicVerify();
-        callBack(toTopic, value);
-    }
-}
-
 
 std::string P2PSession::getTopicForCertRoute(
     const std::string& topic, const std::vector<std::string>& topics)

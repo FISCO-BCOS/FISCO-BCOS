@@ -110,6 +110,11 @@ BOOST_AUTO_TEST_CASE(open_Table)
     condition->EQ("key", "balance");
     condition->LE("value", "504");
     table->select("balance", condition);
+    table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
@@ -219,7 +224,11 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
         entries = table->select(key, table->newCondition());
         BOOST_TEST(entries->size() == size0);
     });
-
+    table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
