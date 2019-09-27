@@ -369,8 +369,6 @@ void Ledger::initDBConfig(ptree const& pt)
     {
         m_param->mutableStorageParam().maxRetry = 100;
     }
-    // FIXME: below will make mpt impossible, maybe a bug
-    m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
 
     // read db config from config eg:mysqlip mysqlport and so on
     m_param->mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
@@ -384,6 +382,7 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
+                      << LOG_KV("stateType", m_param->mutableStateParam().type)
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
                       << LOG_KV("baseDir", m_param->baseDir())
