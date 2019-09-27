@@ -238,14 +238,6 @@ protected:
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
 
-private:
-    bool blockExists(h256 const& blockHash)
-    {
-        if (m_blockChain->getBlockByHash(blockHash) == nullptr)
-            return false;
-        return true;
-    }
-
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
     /// p2p service handler
