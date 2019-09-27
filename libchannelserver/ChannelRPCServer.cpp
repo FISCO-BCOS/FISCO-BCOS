@@ -165,7 +165,8 @@ void ChannelRPCServer::onConnect(
 {
     if (e.errorCode() == 0)
     {
-        CHANNEL_LOG(INFO) << "channel new connect";
+        CHANNEL_LOG(INFO) << "channel new connect, host=" << session->host() << ":"
+                          << session->port();
 
         auto sessionID = ++_sessionCount;
         {
