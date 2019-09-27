@@ -1121,18 +1121,18 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
         uint32_t index = 0;
         for (const auto& merkleItem : merkleList)
         {
-            response["txproof"][index]["left"] = Json::arrayValue;
-            response["txproof"][index]["right"] = Json::arrayValue;
+            response["txProof"][index]["left"] = Json::arrayValue;
+            response["txProof"][index]["right"] = Json::arrayValue;
             const auto& left = merkleItem.first;
             for (const auto& item : left)
             {
-                response["txproof"][index]["left"].append(item);
+                response["txProof"][index]["left"].append(item);
             }
 
             const auto& right = merkleItem.second;
             for (const auto& item : right)
             {
-                response["txproof"][index]["right"].append(item);
+                response["txProof"][index]["right"].append(item);
             }
             ++index;
         }
@@ -1199,18 +1199,18 @@ Json::Value Rpc::getReceiptByHashWithProof(int _groupID, const std::string& _tra
         uint32_t index = 0;
         for (const auto& merkleItem : merkleList)
         {
-            response["receiptproof"][index]["left"] = Json::arrayValue;
-            response["receiptproof"][index]["right"] = Json::arrayValue;
+            response["receiptProof"][index]["left"] = Json::arrayValue;
+            response["receiptProof"][index]["right"] = Json::arrayValue;
             const auto& left = merkleItem.first;
             for (const auto& item : left)
             {
-                response["receiptproof"][index]["left"].append(item);
+                response["receiptProof"][index]["left"].append(item);
             }
 
             const auto& right = merkleItem.second;
             for (const auto& item : right)
             {
-                response["receiptproof"][index]["right"].append(item);
+                response["receiptProof"][index]["right"].append(item);
             }
             ++index;
         }
