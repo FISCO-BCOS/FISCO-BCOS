@@ -134,6 +134,26 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
+
+    std::pair<LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const&) override
+    {
+        return std::make_pair(LocalisedTransaction(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+
+
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const& _txHash) override
+    {
+        (void)_txHash;
+        return std::make_pair(
+            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+
     CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
