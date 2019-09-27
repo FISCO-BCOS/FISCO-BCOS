@@ -113,30 +113,31 @@ shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory(int64_t num)
     return memoryTableFactory;
 }
 
-std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _i)
+std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
 {
     /// the future block
-    if (_i > number())
+    if (_blockNumber > number())
     {
         return nullptr;
     }
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_NUMBER_2_HASH);
+    Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_NUMBER_2_HASH);
     if (tb)
     {
-        auto entries = tb->select(lexical_cast<std::string>(_i), tb->newCondition());
+        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
-            return getBlock(blockHash);
+            return getBlock(blockHash, _blockNumber);
         }
     }
 
-    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[getBlock]Can't find block") << LOG_KV("number", _i);
+    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[getBlock]Can't find block")
+                          << LOG_KV("number", _blockNumber);
     return nullptr;
 }
 
-std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
+std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -153,7 +154,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage");
         string strBlock = "";
-        Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
         if (tb)
@@ -296,7 +297,7 @@ int64_t BlockChainImp::obtainNumber()
         {
             auto entry = entries->get(0);
             std::string currentNumber = entry->getField(SYS_VALUE);
-            num = lexical_cast<int64_t>(currentNumber.c_str());
+            num = lexical_cast<int64_t>(currentNumber);
         }
     }
     return num;
@@ -313,7 +314,7 @@ void BlockChainImp::getNonces(
         return;
     }
     BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
-    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_BLOCK_2_NONCES);
+    Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_BLOCK_2_NONCES);
     if (tb)
     {
         auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
@@ -411,9 +412,9 @@ h256 BlockChainImp::numberHash(int64_t _i)
     return h256(numberHash);
 }
 
-std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash)
+std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int64_t _blockNumber)
 {
-    auto block = getBlock(_blockHash);
+    auto block = getBlock(_blockHash, _blockNumber);
     if (bool(block))
     {
         return block;
@@ -680,7 +681,9 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         auto values = tb->select(key, tb->newCondition());
         if (!values || values->size() != 1)
         {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error");
+            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+                                  << LOG_KV("key", key);
+            // FIXME: throw exception here, or fatal error
             return ret;
         }
 
@@ -688,6 +691,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         if (!value)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer");
+            // FIXME: throw exception here, or fatal error
             return ret;
         }
 
@@ -736,7 +740,8 @@ std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
     }
     else
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockByNumber]Can't find block, return nullptr");
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockByNumber]Can't find block, return nullptr")
+                              << LOG_KV("blockNumber", _i);
         return nullptr;
     }
 }

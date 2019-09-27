@@ -86,7 +86,8 @@ public:
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override;
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t _blockNumber = -1) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
@@ -113,8 +114,8 @@ public:
     }
 
 private:
-    std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
-    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
+    std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
+    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash);
     int64_t obtainNumber();
