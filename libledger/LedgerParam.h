@@ -86,7 +86,7 @@ struct EventLogFilterManagerParams
 };
 struct StorageParam
 {
-    std::string type;
+    std::string type = "storage";
     std::string path;
     bool binaryLog = false;
     bool CachedStorage = true;
