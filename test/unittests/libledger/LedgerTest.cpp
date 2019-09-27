@@ -30,6 +30,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::ledger;
 
@@ -173,9 +174,9 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
     BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
-
+    param->mutableStateParam().type = "storage";
     /// modify state to storage(the default option)
     fakeLedger.initDBConfig(pt);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -186,7 +187,6 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     {
         fakeLedger.getParam()->mutableStorageParam().type = "LevelDB";
     }
-
     BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
