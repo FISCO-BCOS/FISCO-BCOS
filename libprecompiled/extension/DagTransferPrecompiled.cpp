@@ -38,7 +38,7 @@ contract DagTransfer{
     function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
-const std::string DAG_TRANSFER = "_dag_transfer_";
+const std::string DAG_TRANSFER = storage::USER_TABLE_PREFIX + "dag_transfer";
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
