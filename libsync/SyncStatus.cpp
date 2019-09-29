@@ -79,6 +79,16 @@ NodeIDs SyncMasterStatus::peers()
     return nodeIds;
 }
 
+// get all the peers maintained in SyncStatus
+std::set<NodeID> SyncMasterStatus::peersSet()
+{
+    std::set<NodeID> nodeIdSet;
+    ReadGuard l(x_peerStatus);
+    for (auto& peer : m_peersStatus)
+        nodeIdSet.insert(peer.first);
+    return nodeIdSet;
+}
+
 std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 {
     ReadGuard l(x_peerStatus);
@@ -90,6 +100,29 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
         return nullptr;
     }
     return peer->second;
+}
+
+/**
+ * @brief : filter the nodes that the txs should be sent to from a given node list
+ *
+ * @param nodes: the complete set that the given tx should be sent to
+ * @param _allow : the filter function,
+ *  if the function return true, then chose to broadcast transaction to the corresponding node
+ *  if the function return false, then ignore the corresponding node
+ * @return NodeIDs : the filtered node list that the txs should be sent to
+ */
+NodeIDs SyncMasterStatus::filterPeers(
+    NodeIDs const& peers, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
+{
+    NodeIDs chosen;
+    for (auto const& peer : peers)
+    {
+        if (_allow(m_peersStatus[peer]))
+        {
+            chosen.push_back(peer);
+        }
+    }
+    return chosen;
 }
 
 void SyncMasterStatus::foreachPeer(

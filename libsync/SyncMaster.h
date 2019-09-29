@@ -78,8 +78,8 @@ public:
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
-        m_syncTrans = std::make_shared<SyncTransaction>(
-            _service, _txPool, m_txQueue, _protocolId, _nodeId, m_syncStatus);
+        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
+            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -114,7 +114,6 @@ public:
     };
 
     void noteNewTransactions() { m_syncTrans->noteNewTransactions(); }
-
 
     void noteNewBlocks()
     {
@@ -151,6 +150,12 @@ public:
 
     bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
         dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
+
+    void registerTxsReceiversFilter(
+        std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
+    {
+        m_syncTrans->registerTxsReceiversFilter(_handler);
+    }
 
 private:
     /// p2p service handler

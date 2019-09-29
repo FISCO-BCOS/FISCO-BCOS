@@ -598,11 +598,8 @@ void SyncMaster::maintainPeersConnection()
         return true;
     });
 
-// If myself is not in group, no need to maintain transactions(send transactions to peers)
-#if 0
-    // TODO: notify m_needMaintainTransactions to SyncTrans
-    m_needMaintainTransactions = hasMyself;
-#endif
+    // If myself is not in group, no need to maintain transactions(send transactions to peers)
+    m_syncTrans->updateNeedMaintainTransactions(hasMyself);
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
     m_needSendStatus = hasMyself;

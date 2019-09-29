@@ -23,6 +23,7 @@
 #pragma once
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
+#include "SyncMsgEngine.h"
 #include "SyncStatus.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -46,21 +47,24 @@ public:
     SyncTransaction(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<DownloadingTxsQueue> _txsQueue, PROTOCOL_ID const& _protocolId,
-        NodeID const& _nodeId, std::shared_ptr<SyncMasterStatus> _syncStatus)
-      : Worker("Sync-" + std::to_string(_protocolId), 0),
+        NodeID const& _nodeId, std::shared_ptr<SyncMasterStatus> _syncStatus,
+        std::shared_ptr<SyncMsgEngine> _msgEngine, unsigned _idleWaitMs = 200)
+      : Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_txQueue(_txsQueue),
         m_protocolId(_protocolId),
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
-        m_syncStatus(_syncStatus)
+        m_syncStatus(_syncStatus),
+        m_msgEngine(_msgEngine)
     {
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
         /// set thread name
         std::string threadName = "SyncTrans-" + std::to_string(m_groupId);
         setName(threadName);
+        m_msgEngine->onNotifySyncTrans([&]() { m_signalled.notify_all(); });
     }
 
     virtual ~SyncTransaction() { stop(); };
@@ -82,11 +86,18 @@ public:
     NodeID nodeId() { return m_nodeId; }
     std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
 
-    void printSendedTxsInfo()
+    void registerTxsReceiversFilter(
+        std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler)
     {
-        SYNC_LOG(DEBUG) << LOG_DESC("CONS: printSendedTxsInfo")
-                        << LOG_KV("sendedTxsCount", m_sendedTxsCount)
-                        << LOG_KV("sendedTxsBytes", m_sendedTxsBytes);
+        fp_txsReceiversFilter = _handler;
+    }
+
+    void updateNeedMaintainTransactions(bool const& _needMaintainTxs)
+    {
+        if (_needMaintainTxs != m_needMaintainTransactions)
+        {
+            m_needMaintainTransactions = _needMaintainTxs;
+        }
     }
 
 private:
@@ -104,6 +115,8 @@ private:
 
     /// Block queue and peers
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
+    /// Message handler of p2p
+    std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -114,15 +127,12 @@ private:
 
     // sync state
     std::atomic_bool m_newTransactions = {false};
-    bool m_needMaintainTransactions = true;
+    std::atomic_bool m_needMaintainTransactions = {true};
 
     // settings
     dev::eth::Handler<> m_tqReady;
 
-    std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_broadCastNodesFilter = nullptr;
-
-    std::atomic<uint64_t> m_sendedTxsCount = {0};
-    std::atomic<uint64_t> m_sendedTxsBytes = {0};
+    std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_txsReceiversFilter = nullptr;
 
 public:
     void maintainTransactions();

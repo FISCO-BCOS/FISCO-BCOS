@@ -202,6 +202,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
     }
     RLP const& rlps = _packet.rlp();
     m_txQueue->push(rlps.data(), _packet.nodeId);
+    if (m_onNotifySyncTrans)
+    {
+        m_onNotifySyncTrans();
+    }
     SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
                            << LOG_KV("packetSize(B)", rlps.data().size());
 }

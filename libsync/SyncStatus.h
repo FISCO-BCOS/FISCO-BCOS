@@ -115,6 +115,11 @@ public:
     void deletePeer(NodeID const& _id);
 
     NodeIDs peers();
+    std::set<NodeID> peersSet();
+
+    // filter the nodes that the txs should be sent to from a given node list
+    NodeIDs filterPeers(
+        NodeIDs const& peers, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
