@@ -395,14 +395,15 @@ void DBInitializer::initScalableStorage()
             BOOST_THROW_EXCEPTION(e);
         });
         scalableStorage->setRemoteStorage(remoteStorage);
-        auto rocksDBStorageFactory =
-            make_shared<RocksDBStorageFactory>(m_param->mutableStorageParam().path);
+        std::string blocksDBPath = m_param->mutableStorageParam().path + "/blocksDB";
+        auto rocksDBStorageFactory = make_shared<RocksDBStorageFactory>(blocksDBPath);
         rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
         scalableStorage->setStorageFactory(rocksDBStorageFactory);
         int64_t blockNumber = getBlockNumberFromStorage(stateStorage);
         blockNumber = blockNumber > 0 ? blockNumber + 1 : 0;
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
+        setRemoteBlockNumber(scalableStorage, blocksDBPath);
         scalableStorage->init();
         // init TableFactory2
         initTableFactory2(scalableStorage);
@@ -412,6 +413,51 @@ void DBInitializer::initScalableStorage()
         DBInitializer_LOG(ERROR) << LOG_DESC("initScalableStorage failed")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initScalableStorage failed"));
+    }
+}
+
+void DBInitializer::setRemoteBlockNumber(
+    std::shared_ptr<ScalableStorage> scalableStorage, const std::string& blocksDBPath)
+{
+    boost::filesystem::path targetPath(blocksDBPath);
+    std::vector<std::string> filenames;
+    boost::filesystem::directory_iterator endIter;
+    for (boost::filesystem::directory_iterator iter(targetPath); iter != endIter; iter++)
+    {
+        if (boost::filesystem::is_directory(*iter))
+        {
+            filenames.push_back(iter->path().filename().string());
+        }
+    }
+    try
+    {
+        std::sort(
+            filenames.begin(), filenames.end(), [](std::string const& a, std::string const& b) {
+                return std::stoll(a) >= std::stoll(b);
+            });
+
+        int64_t remoteBlockNumber = 0;
+        for (size_t i = 0; i < filenames.size(); i++)
+        {
+            remoteBlockNumber = std::stoll(filenames[i]);
+            if (i == filenames.size() - 1)
+            {
+                break;
+            }
+            if (scalableStorage->getDBNameOfArchivedBlock(std::stoll(filenames[i]) - 1) !=
+                filenames[i + 1])
+            {
+                break;
+            }
+        }
+        DBInitializer_LOG(INFO) << LOG_DESC("scalableStorage setRemoteBlockNumber")
+                                << LOG_KV("number", remoteBlockNumber);
+        scalableStorage->setRemoteBlockNumber(remoteBlockNumber);
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
     }
 }
 

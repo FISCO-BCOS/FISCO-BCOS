@@ -23,6 +23,7 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
+#include "libstorage/ScalableStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/OverlayDB.h>
@@ -115,6 +116,9 @@ private:
     void initZdbStorage();
     void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
         dev::storage::Storage::Ptr _storage);
+
+    void setRemoteBlockNumber(std::shared_ptr<dev::storage::ScalableStorage> scalableStorage,
+        const std::string& blocksDBPath);
 
 private:
     std::shared_ptr<LedgerParamInterface> m_param;
