@@ -59,7 +59,7 @@ void SyncTransaction::doWork()
 
     auto maintainTransactions_time_cost = 0;
 
-    // TODO: update m_needMaintainTransactions according to the type of the node
+    // only maintain transactions for the nodes inner the group
     if (m_needMaintainTransactions && m_newTransactions)
     {
         maintainTransactions();
@@ -80,10 +80,10 @@ void SyncTransaction::workLoop()
     {
         doWork();
         // no new transactions and the size of transactions need to be broadcasted is zero
-        if (!m_newTransactions && m_txQueue->bufferSize() == 0)
+        if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {
             std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(1));
+            m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
         }
     }
 }
@@ -103,15 +103,33 @@ void SyncTransaction::maintainTransactions()
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
+
+    NodeIDs selectedPeers;
+    // only broadcastTransactions to the consensus nodes
+    if (fp_txsReceiversFilter)
+    {
+        selectedPeers = fp_txsReceiversFilter(m_syncStatus->peersSet());
+    }
+    else
+    {
+        selectedPeers = m_syncStatus->peers();
+    }
+
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
-    // TODO: only broadcastTransactions to the consensus nodes
+
     for (size_t i = 0; i < ts.size(); ++i)
     {
         auto const& t = ts[i];
         NodeIDs peers;
-        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
 
-        peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
+        // TODO: add redundancy when receive transactions from P2P
+        if (m_txPool->isTransactionKnownBySomeone(t.sha3()))
+        {
+            m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+            continue;
+        }
+
+        peers = m_syncStatus->filterPeers(selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
             bool isSealer = _p->isSealer;
             return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);

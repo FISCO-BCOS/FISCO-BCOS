@@ -69,6 +69,7 @@ public:
     bool isFarSyncing() const;
 
     void onNotifyWorker(std::function<void()> const& _f) { m_onNotifyWorker = _f; }
+    void onNotifySyncTrans(std::function<void()> const& _f) { m_onNotifySyncTrans = _f; }
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
@@ -96,6 +97,7 @@ private:
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
     std::function<void()> m_onNotifyWorker = nullptr;
+    std::function<void()> m_onNotifySyncTrans = nullptr;
 };
 
 class DownloadBlocksContainer
