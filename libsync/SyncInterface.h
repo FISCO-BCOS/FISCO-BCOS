@@ -28,9 +28,10 @@ namespace dev
 namespace sync
 {
 struct SyncStatus;
-class SyncInterface
+class SyncInterface : public std::enable_shared_from_this<SyncInterface>
 {
 public:
+    using Ptr = std::shared_ptr<SyncInterface>;
     SyncInterface(){};
     virtual ~SyncInterface(){};
     /// start blockSync
