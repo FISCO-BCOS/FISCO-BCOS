@@ -828,7 +828,6 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
     return LocalisedTransaction(Transaction(), h256(0), -1, -1);
 }
 
-
 std::pair<LocalisedTransaction,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
