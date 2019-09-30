@@ -15,7 +15,7 @@ coverage:
         threshold: 0.5
         paths: "!test/"
       default:
-        target: 78
+        target: 77
         threshold: 0.5
     patch:
       default:
