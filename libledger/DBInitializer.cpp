@@ -392,6 +392,7 @@ void DBInitializer::initScalableStorage()
         auto remoteStorage = createSQLStorage([](std::exception& e) {
             DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
                                      << "Access amdb failed exit:" << e.what();
+            raise(SIGTERM);
             BOOST_THROW_EXCEPTION(e);
         });
         scalableStorage->setRemoteStorage(remoteStorage);
@@ -404,7 +405,6 @@ void DBInitializer::initScalableStorage()
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
         setRemoteBlockNumber(scalableStorage, blocksDBPath);
-        scalableStorage->init();
         // init TableFactory2
         initTableFactory2(scalableStorage);
     }
@@ -495,6 +495,7 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setFatalHandler([](std::exception& e) {
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                                  << "access mysql failed exit:" << e.what();
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(e);
     });
 
