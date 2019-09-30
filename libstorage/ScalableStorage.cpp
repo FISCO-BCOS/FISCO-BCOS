@@ -33,7 +33,6 @@ using namespace boost;
 using namespace dev;
 using namespace dev::storage;
 
-const char* const SYS_REMOTE_BLOCK_NUMBER = "remote_block_number";
 const char* const TABLE_BLOCK_TO_DB_NAME = "_extra_block_to_dbname_";
 const char* const DB_NAME = "dbName";
 
@@ -46,32 +45,15 @@ ScalableStorage::~ScalableStorage()
     stop();
 }
 
-void ScalableStorage::init()
-{
-    TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
-    tableInfo->name = SYS_CURRENT_STATE;
-    auto entries = m_state->select(0, tableInfo, SYS_REMOTE_BLOCK_NUMBER, nullptr);
-    if (entries && entries->size() > 0)
-    {
-        auto entry = entries->get(0);
-        string remoteNumber = entry->getField(SYS_VALUE);
-        m_remoteBlockNumber = lexical_cast<int64_t>(remoteNumber);
-    }
-}
-
 int64_t ScalableStorage::setRemoteBlockNumber(int64_t _blockNumber)
 {
     if (_blockNumber <= m_remoteBlockNumber.load())
     {
         return m_remoteBlockNumber.load();
     }
-    if (_blockNumber < m_scrollThreshold * 2)
-    {
-        return 0;
-    }
-    int64_t newNumber = _blockNumber / m_scrollThreshold * m_scrollThreshold;
-    m_remoteBlockNumber.store(newNumber);
-    return newNumber;
+    m_remoteBlockNumber.store(_blockNumber);
+    SCALABLE_STORAGE_LOG(DEBUG) << LOG_KV("remoteNumber", _blockNumber);
+    return m_remoteBlockNumber.load();
 }
 
 bool ScalableStorage::isStateData(const string& _tableName)
@@ -111,7 +93,7 @@ Entries::Ptr ScalableStorage::selectFromArchive(
     {
         SCALABLE_STORAGE_LOG(DEBUG)
             << "select from current DB" << LOG_KV("currentDBName", m_archiveDBName)
-            << LOG_KV("key", key);
+            << LOG_KV("key", key) << LOG_KV("number", num);
         return m_archive->select(num, tableInfo, key, condition);
     }
     return nullptr;
@@ -143,8 +125,8 @@ Entries::Ptr ScalableStorage::select(
     {
         if (num < m_remoteBlockNumber.load() && m_remote)
         {
-            SCALABLE_STORAGE_LOG(DEBUG)
-                << "select from remote" << LOG_KV("table", tableInfo->name) << LOG_KV("key", key);
+            SCALABLE_STORAGE_LOG(DEBUG) << "select from remote" << LOG_KV("table", tableInfo->name)
+                                        << LOG_KV("key", key) << LOG_KV("number", num);
             return m_remote->select(num, tableInfo, key, condition);
         }
         else if (m_archive)
@@ -170,21 +152,6 @@ void ScalableStorage::separateData(const vector<TableData::Ptr>& datas,
             archiveData.emplace_back(tableData);
         }
     }
-}
-
-void ScalableStorage::writeRemoteBlockNumber(
-    const vector<TableData::Ptr>& datas, int64_t _blockNumber, int64_t _remoteNumber)
-{
-    // insert remote block number
-    auto currentState = find_if(datas.begin(), datas.end(), [](TableData::Ptr tableData) -> bool {
-        return tableData->info->name == SYS_CURRENT_STATE;
-    });
-    Entry::Ptr idEntry = std::make_shared<Entry>();
-    idEntry->setNum(_blockNumber);
-    idEntry->setStatus(0);
-    idEntry->setField(SYS_KEY, SYS_REMOTE_BLOCK_NUMBER);
-    idEntry->setField(SYS_VALUE, to_string(_remoteNumber));
-    (*currentState)->newEntries->addEntry(idEntry);
 }
 
 TableData::Ptr ScalableStorage::getNumberToDBNameData(int64_t _blockNumber)
@@ -215,7 +182,6 @@ size_t ScalableStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
     stateData.reserve(datas.size() - m_archiveTables.size() + 1);
     separateData(datas, stateData, archiveData);
     size_t size = 0;
-    writeRemoteBlockNumber(stateData, num, m_remoteBlockNumber);
     stateData.push_back(getNumberToDBNameData(num));
     size += m_archive->commit(num, archiveData);
     size += m_state->commit(num, stateData);
