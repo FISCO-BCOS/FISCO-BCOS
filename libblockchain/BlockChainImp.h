@@ -113,6 +113,16 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+
+    std::pair<dev::eth::LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const& _txHash) override;
+
+
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const& _txHash) override;
+
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
@@ -133,6 +143,17 @@ private:
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
+
+    void parseMerkleMap(const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+        std::map<std::string, std::string>& child2Parent);
+
+    void getMerkleProof(dev::h256 const& _txHash,
+        const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+        const std::map<std::string, std::string>& child2Parent,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
+
+    dev::h256 getHashNeed2Proof(uint32_t index, const dev::bytes& data);
+
 
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
@@ -161,6 +182,17 @@ private:
     int64_t m_blockNumber = -1;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+
+    std::pair<dev::eth::LocalisedTransaction, std::map<std::string, std::vector<std::string>>>
+        transactionWithProof;
+    std::mutex transactionWithProofMutex;
+
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::map<std::string, std::vector<std::string>>>
+        receiptWithProof = std::make_pair(
+            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+            std::map<std::string, std::vector<std::string>>());
+    std::mutex receiptWithProofMutex;
 };
 }  // namespace blockchain
 }  // namespace dev

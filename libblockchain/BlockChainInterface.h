@@ -83,6 +83,15 @@ public:
     virtual void getNonces(
         std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) = 0;
 
+    virtual std::pair<dev::eth::LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const& _txHash) = 0;
+
+
+    virtual std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const& _txHash) = 0;
+
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.
     /// Returns an error in the rest of the cases.
