@@ -153,7 +153,12 @@ bytes getTrieTree256(
     }
     HexMap hexMap;
     for (auto i = _s.rbegin(); i != _s.rend(); ++i)
-        hexMap[asNibbles(bytesConstRef(&i->first))] = i->second;
+    {
+        bytes bytesData = i->first;
+        dev::h256 hValue = sha3(i->second);
+        bytesData.insert(bytesData.end(), hValue.begin(), hValue.end());
+        hexMap[asNibbles(bytesConstRef(&i->first))] = bytesData;
+    }
 
     /*just one element*/
     if (std::next(hexMap.begin()) == hexMap.end())
