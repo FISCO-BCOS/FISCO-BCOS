@@ -55,7 +55,6 @@ public:
     int64_t setRemoteBlockNumber(int64_t _blockNumber);
     int64_t getRemoteBlockNumber() { return m_remoteBlockNumber.load(); }
     void stop() override;
-    void init();
     std::string getDBNameOfArchivedBlock(int64_t _blockNumber);
 
 private:
@@ -64,8 +63,6 @@ private:
         Condition::Ptr condition = nullptr);
     void separateData(const std::vector<TableData::Ptr>& datas,
         std::vector<TableData::Ptr>& stateData, std::vector<TableData::Ptr>& archiveData);
-    void writeRemoteBlockNumber(
-        const std::vector<TableData::Ptr>& datas, int64_t _blockNumber, int64_t _remoteNumber);
     TableData::Ptr getNumberToDBNameData(int64_t _blockNumber);
     int64_t getBlockNumberByHash(std::string _hash);
     Storage::Ptr m_remote = nullptr;

@@ -147,7 +147,9 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
 
     if (bool(cachedBlock.first))
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache hit, read from cache");
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache hit, read from cache")
+                              << LOG_KV("blockNumber", _blockNumber)
+                              << LOG_KV("hash", _blockHash.abridged());
         return cachedBlock.first;
     }
     else
