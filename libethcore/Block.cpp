@@ -203,7 +203,6 @@ std::map<std::string, std::vector<std::string>> Block::calTransactionRootV2_2_0(
     return merklePath;
 }
 
-
 std::map<std::string, std::vector<std::string>> Block::calReceiptRootV2_2_0(
     bool update, bool calForce) const
 {
@@ -216,11 +215,11 @@ std::map<std::string, std::vector<std::string>> Block::calReceiptRootV2_2_0(
         BytesMap mapCache;
         for (size_t i = 0; i < m_transactionReceipts.size(); i++)
         {
-            RLPStream s;
-            s << i;
             bytes tranReceipts_data;
             m_transactionReceipts[i].encode(tranReceipts_data);
             txReceipts.appendRaw(tranReceipts_data);
+            RLPStream s;
+            s << i;
             mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
         }
         txReceipts.swapOut(m_tReceiptsCache);
