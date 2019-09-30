@@ -3,7 +3,7 @@
 set -e
 
 scan_code_script="cobra/cobra.py -f json -o /tmp/report.json -t "
-ignore_files=(tools/ EventLogFilterTest cmake LedgerTest.cpp FakeModule.h SyncMasterTest.cpp verifierMain.cpp consensus_main.cpp sync_main.cpp ExecuteResultTest.cpp trie.cpp CommonJS.cpp EthCoreCommonJS.cpp HostTest.cpp PeerWhitelist.cpp Common.cpp test_Service.cpp FakeSyncToolsSet.h)
+ignore_files=(tools/ EventLogFilterTest cmake LedgerTest.cpp FakeModule.h SyncMasterTest.cpp verifierMain.cpp consensus_main.cpp sync_main.cpp ExecuteResultTest.cpp trie.cpp CommonJS.cpp EthCoreCommonJS.cpp HostTest.cpp PeerWhitelist.cpp Common.cpp test_Service.cpp FakeSyncToolsSet.h BlockChainImp.h)
 
 LOG_ERROR() {
     content=${1}

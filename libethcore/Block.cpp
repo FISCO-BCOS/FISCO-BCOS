@@ -28,6 +28,11 @@
 #include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 
+
+#define BLOCK_LOG(LEVEL)    \
+    LOG(LEVEL) << "[Block]" \
+               << "[line:" << __LINE__ << "]"
+
 namespace dev
 {
 namespace eth
@@ -165,6 +170,19 @@ void Block::calTransactionRoot(bool update) const
     }
 }
 
+std::map<std::string, std::vector<std::string>> Block::calTransactionRootV2_2_0(
+    bool update, bool calForce) const
+{
+    (void)update;
+    (void)calForce;
+    return std::map<std::string, std::vector<std::string>>();
+}
+
+std::map<std::string, std::vector<std::string>> Block::calReceiptRootV2_2_0(
+    bool update, bool calForce) const
+{
+    return calTransactionRootV2_2_0(update, calForce);
+}
 void Block::calTransactionRootRC2(bool update) const
 {
     WriteGuard l(x_txsCache);
