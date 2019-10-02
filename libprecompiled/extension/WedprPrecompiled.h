@@ -30,7 +30,7 @@ contract WedprPrecompiled {
     function hiddenAssetVerifyFulfilledCredit(bytes fulfillArgumentPb) 
     public returns(string currentCredit, string creditStorage);
 
-    function hiddenAssetVerifyTransferCredit(bytes transferRequestPb) 
+    function hiddenAssetVerifyTransferredCredit(bytes transferRequestPb) 
     public returns(string spentCurrentCredit, string spentCreditStorage, 
                   string newCurrentCredit, string newCreditStorage);
 

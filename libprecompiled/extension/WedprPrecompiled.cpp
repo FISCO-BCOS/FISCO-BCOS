@@ -38,7 +38,7 @@ using namespace dev::precompiled;
 
 const string API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT = "hiddenAssetVerifyIssuedCredit(bytes)";
 const string API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT = "hiddenAssetVerifyFulfilledCredit(bytes)";
-const string API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT = "hiddenAssetVerifyTransferCredit(bytes)";
+const string API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT = "hiddenAssetVerifyTransferredCredit(bytes)";
 const string API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT = "hiddenAssetVerifySplitCredit(bytes)";
 const string VERFIY_FAILED = "verfiy failed";
 const int SUCCESS = 0;
@@ -98,7 +98,7 @@ bytes WedprPrecompiled::call(
         out = abi.abiIn("", current_credit, credit_storage);
     }
     // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT])
+    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         std::string fulfill_argument_pb;
         abi.abiOut(data, fulfill_argument_pb);
@@ -118,14 +118,14 @@ bytes WedprPrecompiled::call(
         // return current_credit and credit_storage
         out = abi.abiIn("", current_credit, credit_storage);
     }
-    // hiddenAssetVerifyTransferCredit(bytes transfer_request_pb)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
+    // hiddenAssetVerifyTransferredCredit(bytes transfer_request_pb)
+    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT])
     {
         std::string transfer_request_pb;
         abi.abiOut(data, transfer_request_pb);
 
         char* transfer_request_pb_char = string_to_char(transfer_request_pb);
-        if (verify_transfer_credit(transfer_request_pb_char) != SUCCESS)
+        if (verify_transferred_credit(transfer_request_pb_char) != SUCCESS)
         {
             logError(PRECOMPILED_NAME, "verify_transfer_credit", VERFIY_FAILED);
             throwException("verify_transfer_credit failed");
