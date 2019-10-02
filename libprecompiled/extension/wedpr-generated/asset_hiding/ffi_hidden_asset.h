@@ -39,6 +39,6 @@ int8_t verify_issued_credit(char* issue_argument_pb);
 
 int8_t verify_split_credit(char* split_request_pb);
 
-int8_t verify_transfer_credit(char* transfer_request_pb);
+int8_t verify_transferred_credit(char* transfer_request_pb);
 
 }  // extern "C"
