@@ -30,10 +30,6 @@
 #include <iostream>
 #include <memory>
 
-#if FISCO_EASYLOG
-
-#endif
-
 using namespace std;
 using namespace dev::initializer;
 
