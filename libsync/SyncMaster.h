@@ -23,6 +23,7 @@
 #pragma once
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
+#include "GossipBlockStatus.h"
 #include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
@@ -157,6 +158,7 @@ public:
 
     bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
         dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
+    void sendBlockStatus(int64_t const& _gossipPeersNumber);
 
     void registerTxsReceiversFilter(
         std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override

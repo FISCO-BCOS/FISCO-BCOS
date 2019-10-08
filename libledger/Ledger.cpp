@@ -184,7 +184,7 @@ void Ledger::initTxPoolConfig(ptree const& pt)
     {
         m_param->mutableTxPoolParam().txPoolLimit =
             pt.get<int64_t>("tx_pool.limit", SYNC_TX_POOL_SIZE_DEFAULT);
-        if (m_param->mutableTxPoolParam().txPoolLimit < 0)
+        if (m_param->mutableTxPoolParam().txPoolLimit <= 0)
         {
             BOOST_THROW_EXCEPTION(
                 ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
@@ -204,7 +204,7 @@ void Ledger::initTxPoolConfig(ptree const& pt)
 void Ledger::initConsensusIniConfig(ptree const& pt)
 {
     m_param->mutableConsensusParam().maxTTL = pt.get<int8_t>("consensus.ttl", MAXTTL);
-    if (m_param->mutableConsensusParam().maxTTL < 0)
+    if (m_param->mutableConsensusParam().maxTTL <= 0)
     {
         BOOST_THROW_EXCEPTION(
             ForbidNegativeValue() << errinfo_comment("Please set consensus.ttl to positive !"));
@@ -215,8 +215,9 @@ void Ledger::initConsensusIniConfig(ptree const& pt)
         pt.get<signed>("consensus.min_block_generation_time", 500);
     if (m_param->mutableConsensusParam().minBlockGenTime < 0)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.min_block_generation_time to positive !"));
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment(
+                "Please set consensus.min_block_generation_time to positive or zero!"));
     }
 
     /// enable dynamic block size
@@ -254,7 +255,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxTransactions =
         pt.get<int64_t>("consensus.max_trans_num", 1000);
-    if (m_param->mutableConsensusParam().maxTransactions < 0)
+    if (m_param->mutableConsensusParam().maxTransactions <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.max_trans_num to positive !"));
@@ -262,7 +263,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().minElectTime =
         pt.get<int64_t>("consensus.min_elect_time", 1000);
-    if (m_param->mutableConsensusParam().minElectTime < 0)
+    if (m_param->mutableConsensusParam().minElectTime <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.min_elect_time to positive !"));
@@ -270,7 +271,7 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
     m_param->mutableConsensusParam().maxElectTime =
         pt.get<int64_t>("consensus.max_elect_time", 2000);
-    if (m_param->mutableConsensusParam().maxElectTime < 0)
+    if (m_param->mutableConsensusParam().maxElectTime <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.max_elect_time to positive !"));
@@ -306,28 +307,42 @@ void Ledger::initConsensusConfig(ptree const& pt)
     m_param->mutableGenesisParam().nodeListMark = nodeListMark.str();
 }
 
-/// init sync related configurations
-/// 1. idleWaitMs: default is 30ms
+// init sync related configurations
+// 1. idleWaitMs: default is 200ms
+// 2. gossipInterval: default is 3000ms
+// 3. gossipPeers: default is 3
 void Ledger::initSyncConfig(ptree const& pt)
 {
-    try
+    // init idleWaitMs for syncMaster
+    m_param->mutableSyncParam().idleWaitMs =
+        pt.get<signed>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+    if (m_param->mutableSyncParam().idleWaitMs <= 0)
     {
-        m_param->mutableSyncParam().idleWaitMs =
-            pt.get<signed>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
-        if (m_param->mutableSyncParam().idleWaitMs < 0)
-        {
-            BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                                  << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
-        }
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
+    }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
 
-        Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                          << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
-    }
-    catch (std::exception& e)
+    // set gossipInterval for syncMaster, default is 3s
+    m_param->mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 3000);
+    if (m_param->mutableSyncParam().gossipInterval <= 0)
     {
-        m_param->mutableSyncParam().idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
-        Ledger_LOG(WARNING) << LOG_BADGE("initSyncConfig") << LOG_DESC("idleWaitMs invalid");
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set sync.gossip_interval_ms to positive !"));
     }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                      << LOG_KV("gossipInterval", m_param->mutableSyncParam().gossipInterval);
+
+    // set the number of gossip peers for syncMaster, default is 3
+    m_param->mutableSyncParam().gossipPeers = pt.get<int64_t>("sync.gossip_peers_number", 3);
+    if (m_param->mutableSyncParam().gossipPeers <= 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set sync.gossip_peers_number to positive !"));
+    }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                      << LOG_KV("gossipPeers", m_param->mutableSyncParam().gossipPeers);
 }
 
 /// init db related configurations:
@@ -351,14 +366,14 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
     m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
 
-    if (m_param->mutableStorageParam().maxCapacity < 0)
+    if (m_param->mutableStorageParam().maxCapacity <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
                               << errinfo_comment("Please set storage.max_capacity to positive !"));
     }
 
     m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 10);
-    if (m_param->mutableStorageParam().maxForwardBlock < 0)
+    if (m_param->mutableStorageParam().maxForwardBlock <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set storage.max_forward_block to positive !"));
@@ -399,7 +414,7 @@ void Ledger::initDBConfig(ptree const& pt)
 void Ledger::initTxConfig(boost::property_tree::ptree const& pt)
 {
     m_param->mutableTxParam().txGasLimit = pt.get<int64_t>("tx.gas_limit", 300000000);
-    if (m_param->mutableTxParam().txGasLimit < 0)
+    if (m_param->mutableTxParam().txGasLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(
             ForbidNegativeValue() << errinfo_comment("Please set tx.gas_limit to positive !"));
@@ -620,7 +635,9 @@ bool Ledger::consensusInitFactory()
 bool Ledger::initSync()
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initSync")
-                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs)
+                      << LOG_KV("gossipInterval", m_param->mutableSyncParam().gossipInterval)
+                      << LOG_KV("gossipPeers", m_param->mutableSyncParam().gossipPeers);
     if (!m_txPool || !m_blockChain || !m_blockVerifier)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("#initSync Failed");
@@ -628,8 +645,10 @@ bool Ledger::initSync()
     }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
-    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+    auto syncMaster =
+        std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
+            protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+    m_sync = syncMaster;
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

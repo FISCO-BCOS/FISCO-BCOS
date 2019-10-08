@@ -166,6 +166,32 @@ void SyncMasterStatus::foreachPeerRandom(
     }
 }
 
+void SyncMasterStatus::forRandomPeers(
+    int64_t const& _neighborSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f)
+{
+    std::srand(std::time(0));
+    int64_t peersSize = m_peersStatus.size();
+    int64_t selectedSize = _neighborSize > peersSize ? peersSize : _neighborSize;
+
+    NodeIDs nodeIds;
+    ReadGuard l(x_peerStatus);
+    for (auto& peer : m_peersStatus)
+    {
+        nodeIds.emplace_back(peer.first);
+    }
+    NodeID selectedNode;
+    for (auto i = 0; i < selectedSize; i++)
+    {
+        int64_t randomValue = std::rand() % peersSize;
+        swap(nodeIds[i], nodeIds[randomValue]);
+    }
+    // call _f for the selected nodes
+    for (int i = 0; i < selectedSize; i++)
+    {
+        _f(m_peersStatus[nodeIds[i]]);
+    }
+}
+
 // TODO: return reference
 NodeIDs SyncMasterStatus::randomSelection(
     unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)

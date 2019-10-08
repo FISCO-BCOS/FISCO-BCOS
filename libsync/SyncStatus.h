@@ -126,6 +126,10 @@ public:
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
     void foreachPeerRandom(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
+    // select neighborSize peers
+    // call _f for each selected peers
+    void forRandomPeers(int64_t const& _neighborSize,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f);
 
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
