@@ -217,15 +217,32 @@ void SyncMaster::maintainBlocks()
     int64_t number = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(number);
 
-    // broadcast status
-    broadcastSyncStatus(number, currentHash);
+    if (m_syncTreeRouter)
+    {
+        // sendSyncStatus by tree
+        sendSyncStatusByTree(number, currentHash);
+    }
+    else
+    {
+        // broadcast status
+        broadcastSyncStatus(number, currentHash);
+    }
 }
 
 
-void SyncMaster::broadcastSyncStatus(BlockNumber const& blockNumber, h256 const& currentHash)
+void SyncMaster::sendSyncStatusByTree(BlockNumber const& _blockNumber, h256 const& _currentHash)
+{
+    dev::h512s selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
+    for (auto const& nodeId : selectedNodes)
+    {
+        sendSyncStatusByNodeId(_blockNumber, _currentHash, nodeId);
+    }
+}
+
+void SyncMaster::broadcastSyncStatus(BlockNumber const& _blockNumber, h256 const& _currentHash)
 {
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        return sendSyncStatusByNodeId(_blockNumber, _currentHash, _p->nodeId);
     });
 }
 

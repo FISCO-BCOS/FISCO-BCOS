@@ -152,7 +152,7 @@ public:
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
 
 protected:
-    virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
+    // virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
     /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
@@ -224,7 +224,7 @@ protected:
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P();
+    virtual void updateNodeListInP2P(dev::h512s const& _nodeList);
 
     /// set the max number of transactions in a block
     virtual void updateMaxBlockTransactions()
@@ -237,6 +237,9 @@ protected:
         ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
+
+    virtual void resetConfig();
+    virtual dev::h512s consensusList() const { return sealerList(); }
 
 private:
     bool blockExists(h256 const& blockHash)

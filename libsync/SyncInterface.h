@@ -65,6 +65,9 @@ public:
     virtual void registerTxsReceiversFilter(
         std::function<dev::p2p::NodeIDs(std::set<dev::network::NodeID> const&)>)
     {}
+
+    virtual void updateNodeListInfo(dev::h512s const&) {}
+    virtual void updateConsensusNodeInfo(dev::h512s const&) {}
 };
 
 }  // namespace sync
