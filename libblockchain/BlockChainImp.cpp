@@ -827,36 +827,70 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
     return LocalisedTransaction(Transaction(), h256(0), -1, -1);
 }
 
+
+bool BlockChainImp::getBlockAndIndexByTxHash(const dev::h256& _txHash,
+    std::pair<std::shared_ptr<dev::eth::Block>, std::string>& blockInfoWithTxIndex)
+{
+    Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
+    if (!tb)
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("open table failed ") << LOG_KV("_txHash", _txHash.hex());
+        return false;
+    }
+    auto entries = tb->select(_txHash.hex(), tb->newCondition());
+    if (entries->size() == 0)
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("record not exist int tx_hash_2_block")
+                              << LOG_KV("_txHash", _txHash.hex());
+        return false;
+    }
+    auto entry = entries->get(0);
+    auto blockNumber = entry->getField(SYS_VALUE);
+    auto txIndex = entry->getField("index");
+    std::shared_ptr<Block> blockInfo = getBlockByNumber(lexical_cast<int64_t>(blockNumber));
+    if (!blockInfo)
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("open table failed ") << LOG_KV("_txHash", _txHash.hex());
+        return false;
+    }
+    blockInfoWithTxIndex = std::make_pair(blockInfo, txIndex);
+    return true;
+}
+
 std::pair<LocalisedTransaction,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 {
     std::lock_guard<std::mutex> lock(transactionWithProofMutex);
+    dev::eth::LocalisedTransaction tx;
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
-    auto tx = this->getLocalisedTxByHash(_txHash);
-    if (tx.blockNumber() < 0)
+    std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
+    if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
-        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("error blocknumber ")
-                              << LOG_KV("blockNumber", tx.blockNumber());
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
+                              << LOG_KV("_txHash", _txHash.hex());
         return std::make_pair(tx, merkleProof);
     }
+
+    auto txIndex = blockInfoWithTxIndex.second;
+    auto blockInfo = blockInfoWithTxIndex.first;
+    const std::vector<Transaction>& txs = blockInfo->transactions();
+    if (txs.size() <= lexical_cast<uint>(txIndex))
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
+        return std::make_pair(tx, merkleProof);
+    }
+    tx = LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], blockInfo->headerHash(),
+        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
+
     std::map<std::string, std::vector<std::string>> parent2ChildList;
-    if (transactionWithProof.first.blockHash() == tx.blockHash())
+    if (transactionWithProof.first.blockNumber() == tx.blockNumber())
     {
         parent2ChildList = transactionWithProof.second;
     }
     else
     {
-        // get block info by block number
-        std::shared_ptr<Block> block = getBlockByNumber(tx.blockNumber());
-        if (!block)
-        {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("failed to get block info")
-                                  << LOG_KV("blockNumber", tx.blockNumber());
-            return std::make_pair(tx, merkleProof);
-        }
-        // calc transaction and return node path
-        parent2ChildList = block->calTransactionRootV2_2_0(true, true);
+        parent2ChildList = blockInfo->calTransactionRootV2_2_0(true, true);
         transactionWithProof = std::make_pair(tx, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
@@ -872,17 +906,33 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 
 dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& data)
 {
-    (void)index;
-    (void)data;
-    return dev::h256();
+    RLPStream s;
+    s << index;
+    bytes bytesHash;
+    bytesHash.insert(bytesHash.end(), s.out().begin(), s.out().end());
+    dev::h256 dataHash = sha3(data);
+    bytesHash.insert(bytesHash.end(), dataHash.begin(), dataHash.end());
+    dev::h256 hashWithIndex = sha3(bytesHash);
+    BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
+                          << " bytesHash:" << toHex(bytesHash)
+                          << " hashWithIndex:" << hashWithIndex.hex();
+    return hashWithIndex;
 }
 
 void BlockChainImp::parseMerkleMap(
     const std::map<std::string, std::vector<std::string>>& parent2ChildList,
     std::map<std::string, std::string>& child2Parent)
 {
-    (void)parent2ChildList;
-    (void)child2Parent;
+    for (const auto& item : parent2ChildList)
+    {
+        for (const auto& child : item.second)
+        {
+            if (!child.empty())
+            {
+                child2Parent[child] = item.first;
+            }
+        }
+    }
 }
 
 void BlockChainImp::getMerkleProof(dev::h256 const& _txHash,
@@ -954,12 +1004,37 @@ BlockChainImp::getTransactionReceiptByHashWithProof(dev::h256 const& _txHash)
 {
     std::lock_guard<std::mutex> lock(receiptWithProofMutex);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
-    // get receipt by hash
-    auto txReceipt = getLocalisedTxReceiptByHash(_txHash);
-    if (txReceipt.blockNumber() < 0)
+
+    std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
+    if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
-        return std::make_pair(txReceipt, merkleProof);
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
+                              << LOG_KV("_txHash", _txHash.hex());
+        return std::make_pair(
+            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+            merkleProof);
     }
+    auto txIndex = blockInfoWithTxIndex.second;
+    auto blockInfo = blockInfoWithTxIndex.first;
+
+    const TransactionReceipts& receipts = blockInfo->transactionReceipts();
+    const Transactions& txs = blockInfo->transactions();
+    if ((receipts.size() <= lexical_cast<uint>(txIndex)) ||
+        (txs.size() <= lexical_cast<uint>(txIndex)))
+    {
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
+        return std::make_pair(
+            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+            merkleProof);
+    }
+
+    const auto& receipt = receipts[lexical_cast<uint>(txIndex)];
+    const auto& tx = txs[lexical_cast<uint>(txIndex)];
+
+    LocalisedTransactionReceipt txReceipt(receipt, _txHash, blockInfo->headerHash(),
+        blockInfo->header().number(), tx.from(), tx.to(), lexical_cast<uint>(txIndex),
+        receipt.gasUsed(), receipt.contractAddress());
+
     std::map<std::string, std::vector<std::string>> parent2ChildList;
     if (receiptWithProof.first.blockNumber() == txReceipt.blockNumber())
     {
@@ -967,12 +1042,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(dev::h256 const& _txHash)
     }
     else
     {
-        std::shared_ptr<Block> block = getBlockByNumber(txReceipt.blockNumber());
-        if (!block)
-        {
-            return std::make_pair(txReceipt, merkleProof);
-        }
-        parent2ChildList = block->calReceiptRootV2_2_0(true, true);
+        parent2ChildList = blockInfo->calReceiptRootV2_2_0(true, true);
         receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
@@ -983,7 +1053,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(dev::h256 const& _txHash)
     dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt.transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
     this->getMerkleProof(hashWithIndex, parent2ChildList, child2Parent, merkleProof);
-    return std::make_pair(txReceipt, merkleProof);
+    return std::make_pair(std::move(txReceipt), std::move(merkleProof));
 }
 
 LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)

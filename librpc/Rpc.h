@@ -99,6 +99,13 @@ public:
     Json::Value call(int _groupID, const Json::Value& request) override;
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
+    // Get transaction with merkle proof by hash
+    Json::Value getTransactionByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+    // Get receipt with merkle proof by hash
+    Json::Value getReceiptByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
