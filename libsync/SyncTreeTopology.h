@@ -60,19 +60,17 @@ protected:
 
 private:
     bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;
-    ssize_t getNodeIndexByNodeId(
-        dev::h512s const& _findSet, dev::h512& _nodeId, SharedMutex& _mutex);
+    ssize_t getNodeIndexByNodeId(dev::h512s const& _findSet, dev::h512& _nodeId);
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex();
     bool locatedInGroup();
 
 protected:
-    mutable SharedMutex x_nodeList;
+    mutable Mutex m_mutex;
     // the nodeList include both the consensus nodes and the observer nodes
     dev::h512s m_nodeList;
     std::atomic<int64_t> m_nodeNum = {0};
 
-    mutable SharedMutex x_currentConsensusNodes;
     // the list of the current consensus nodes
     dev::h512s m_currentConsensusNodes;
     unsigned m_treeWidth;
