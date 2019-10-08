@@ -55,7 +55,7 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 200)
+        unsigned _idleWaitMs = 200, int64_t _gossipInterval = 1000, int64_t _gossipPeers = 3)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -86,6 +86,12 @@ public:
         m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
         // update the nodeInfo for syncTreeRouter
         updateNodeInfo();
+
+        // create thread to gossip block status
+        m_blockStatusGossipThread =
+            std::make_shared<GossipBlockStatus>(_protocolId, _gossipInterval, _gossipPeers);
+        m_blockStatusGossipThread->registerGossipHandler(
+            boost::bind(&SyncMaster::sendBlockStatus, this, _1));
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -243,6 +249,9 @@ private:
 
     // handler for find the tree router
     SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
+
+    // thread to gossip block status
+    GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
     dev::eth::Handler<int64_t> m_blockSubmitted;

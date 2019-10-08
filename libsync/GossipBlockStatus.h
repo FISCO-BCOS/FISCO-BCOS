@@ -36,7 +36,8 @@ public:
     using Ptr = std::shared_ptr<GossipBlockStatus>;
     GossipBlockStatus(dev::PROTOCOL_ID const& _protocolId, int64_t const& _gossipInterval,
         int64_t const& _gossipPeersNumber)
-      : Worker("gossip-" + std::to_string(_protocolId), _gossipInterval),
+      : Worker("gossip-" + std::to_string(dev::eth::getGroupAndProtocol(_protocolId).first),
+            _gossipInterval),
         m_gossipPeersNumber(_gossipPeersNumber)
     {}
     void registerGossipHandler(std::function<void(int64_t const&)> const& _gossipBlockStatusHandler)
