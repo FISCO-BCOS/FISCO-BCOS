@@ -51,11 +51,9 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
     return true;
 }
 
-bool TransactionNonceCheck::ok(Transaction const& _transaction, bool _needinsert)
+bool TransactionNonceCheck::ok(Transaction const& _transaction)
 {
-    if (!isBlockLimitOk(_transaction))
-        return false;
-    return isNonceOk(_transaction, _needinsert);
+    return isBlockLimitOk(_transaction) && isNonceOk(_transaction);
 }
 
 void TransactionNonceCheck::getNonceAndUpdateCache(

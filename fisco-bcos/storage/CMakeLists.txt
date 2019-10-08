@@ -22,6 +22,9 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-add_executable(leveldb-storage ${SRC_LIST} ${HEADERS})
-
+add_executable(leveldb-storage storage_main.cpp)
 target_link_libraries(leveldb-storage PUBLIC initializer)
+
+add_executable(binlog_reader binlog_reader.cpp)
+target_link_libraries(binlog_reader PUBLIC initializer)
+
