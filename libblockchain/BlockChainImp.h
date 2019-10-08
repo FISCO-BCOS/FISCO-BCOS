@@ -152,7 +152,8 @@ private:
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
 
     dev::h256 getHashNeed2Proof(uint32_t index, const dev::bytes& data);
-
+    bool getBlockAndIndexByTxHash(const dev::h256& _txHash,
+        std::pair<std::shared_ptr<dev::eth::Block>, std::string>& blockInfoWithTxIndex);
 
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;

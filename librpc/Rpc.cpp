@@ -1087,3 +1087,42 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
+
+// Get transaction with merkle proof by hash
+Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& _transactionHash)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
+        return Json::nullValue;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+// Get receipt with merkle proof by hash
+Json::Value Rpc::getReceiptByHashWithProof(int _groupID, const std::string& _transactionHash)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getReceiptByHashWithProof") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
+        return Json::nullValue;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
