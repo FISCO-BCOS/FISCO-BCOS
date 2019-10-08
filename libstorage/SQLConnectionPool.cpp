@@ -60,11 +60,12 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         }
         CATCH(SQLException)
         {
-            SQLConnectionPool_LOG(ERROR) << "init connection pool failed IP:" << _dbConfig.dbIP
-                                         << ":" << _dbConfig.dbPort << " please check";
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                << " error msg:" << Exception_frame.message;
             stringstream exitInfo;
             exitInfo << "init connection pool failed IP:" << _dbConfig.dbIP << ":"
-                     << _dbConfig.dbPort << " please check";
+                     << _dbConfig.dbPort << " error msg:" << Exception_frame.message;
             errorExitOut(exitInfo);
         }
         END_TRY;
@@ -201,11 +202,12 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             ConnectionPool_stop(_connectionPool);
             ConnectionPool_free(&_connectionPool);
             URL_free(&url);
-            SQLConnectionPool_LOG(ERROR) << "init connection pool failed url:" << _dbConfig.dbIP
-                                         << ":" << _dbConfig.dbPort << " please check";
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed url:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                << " error msg:" << Exception_frame.message;
             stringstream _exitInfo;
             _exitInfo << "init connection pool failed url:" << _dbConfig.dbIP << ":"
-                      << _dbConfig.dbPort << " please check";
+                      << _dbConfig.dbPort << " error msg:" << Exception_frame.message;
             errorExitOut(_exitInfo);
         }
 

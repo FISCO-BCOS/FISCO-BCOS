@@ -136,10 +136,10 @@ public:
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getTransactionByHashWithProofI);
 
-        this->bindAndAddMethod(jsonrpc::Procedure("getReceiptByHashWithProof",
+        this->bindAndAddMethod(jsonrpc::Procedure("getTransactionReceiptByHashWithProof",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getReceiptByHashWithProofI);
+            &dev::rpc::RpcFace::getTransactionReceiptByHashWithProofI);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -269,10 +269,10 @@ public:
     }
 
 
-    inline virtual void getReceiptByHashWithProofI(
+    inline virtual void getTransactionReceiptByHashWithProofI(
         const Json::Value& request, Json::Value& response)
     {
-        response = this->getReceiptByHashWithProof(
+        response = this->getTransactionReceiptByHashWithProof(
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
@@ -328,7 +328,8 @@ public:
     // Get merkle transaction with proof by hash
     virtual Json::Value getTransactionByHashWithProof(int param1, const std::string& param2) = 0;
     // Get receipt with merkle proof by hash
-    virtual Json::Value getReceiptByHashWithProof(int param1, const std::string& param2) = 0;
+    virtual Json::Value getTransactionReceiptByHashWithProof(
+        int param1, const std::string& param2) = 0;
 };
 
 }  // namespace rpc
