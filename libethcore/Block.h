@@ -29,6 +29,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/TrieHash.h>
+#include <libdevcore/TrieHash2.h>
 
 namespace dev
 {
