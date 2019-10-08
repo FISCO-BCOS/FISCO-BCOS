@@ -256,8 +256,6 @@ protected:
 
 protected:
     void initPBFTEnv(unsigned _view_timeout);
-    /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
-    void resetConfig() override;
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
     void backupMsg(std::string const& _key, PBFTMsg const& _msg);

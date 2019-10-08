@@ -93,7 +93,7 @@ void SyncTreeTopology::updateStartAndEndIndex()
     }
     int64_t slotSize = (m_nodeNum + consensusNodeSize - 1) / consensusNodeSize;
     // the consensus node
-    if (m_consIndex > 0)
+    if (m_consIndex >= 0)
     {
         m_startIndex = slotSize * m_consIndex.load();
     }
@@ -182,7 +182,7 @@ void SyncTreeTopology::selectParentNodes(
         return;
     }
     // push all other consensus node to the selectedNodeList if this node is the consensus node
-    if (m_consIndex > 0)
+    if (m_consIndex >= 0)
     {
         ReadGuard l(x_currentConsensusNodes);
         for (auto const& consNode : m_currentConsensusNodes)
@@ -221,4 +221,28 @@ void SyncTreeTopology::selectParentNodes(
 bool SyncTreeTopology::locatedInGroup()
 {
     return (m_consIndex != -1) || (m_nodeIndex != -1);
+}
+
+dev::h512s SyncTreeTopology::selectNodes(std::set<dev::h512> const& _peers)
+{
+    // the node doesn't locate in the group
+    if (!locatedInGroup())
+    {
+        return dev::h512s();
+    }
+
+    dev::h512s selectedNodeList;
+    // the node is the consensusNode, chose the childNode
+    if (m_consIndex >= 0)
+    {
+        recursiveSelectChildNodes(selectedNodeList, m_startIndex, _peers);
+    }
+    // the node is not the consensusNode
+    else
+    {
+        recursiveSelectChildNodes(selectedNodeList, m_nodeIndex + 1, _peers);
+    }
+    // find the parent nodes
+    selectParentNodes(selectedNodeList, _peers, m_nodeIndex);
+    return selectedNodeList;
 }

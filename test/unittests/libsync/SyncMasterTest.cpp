@@ -53,7 +53,9 @@ public:
         unsigned _idleWaitMs = 200)
       : SyncMaster(_service, _txPool, _blockChain, _blockVerifier, _protocolId, _nodeId,
             _genesisHash, _idleWaitMs)
-    {}
+    {
+        resetTreeRouter();
+    }
 
     /// start blockSync
     void start() override

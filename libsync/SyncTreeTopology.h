@@ -47,6 +47,8 @@ public:
     virtual void updateNodeListInfo(dev::h512s const& _nodeList);
     // update corresponding info when the consensus nodes changed
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
+    // select the nodes by tree topology
+    virtual dev::h512s selectNodes(std::set<dev::h512> const& _peers);
 
 protected:
     // select the child nodes by tree

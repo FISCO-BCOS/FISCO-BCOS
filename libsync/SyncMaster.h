@@ -28,6 +28,7 @@
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
 #include "SyncTransaction.h"
+#include "SyncTreeTopology.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -80,6 +81,10 @@ public:
         setName(threadName);
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
             _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+
+        m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
+        // update the nodeInfo for syncTreeRouter
+        updateNodeInfo();
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -146,7 +151,9 @@ public:
     void maintainTransactions() { m_syncTrans->maintainTransactions(); }
     void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
     void broadcastSyncStatus(
-        dev::eth::BlockNumber const& blockNumber, dev::h256 const& currentHash);
+        dev::eth::BlockNumber const& _blockNumber, dev::h256 const& _currentHash);
+
+    void sendSyncStatusByTree(dev::eth::BlockNumber const& _blockNumber, h256 const& _currentHash);
 
     bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
         dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
@@ -155,6 +162,33 @@ public:
         std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
     {
         m_syncTrans->registerTxsReceiversFilter(_handler);
+    }
+
+    void updateNodeListInfo(dev::h512s const& _nodeList) override
+    {
+        m_syncTreeRouter->updateNodeListInfo(_nodeList);
+    }
+
+    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
+    {
+        m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
+    }
+
+protected:
+    // for UT
+    void resetTreeRouter() { m_syncTreeRouter = nullptr; }
+
+private:
+    // init via blockchain when the sync thread started
+    void updateNodeInfo()
+    {
+        auto sealerList = m_blockChain->sealerList();
+        std::sort(sealerList.begin(), sealerList.end());
+        auto observerList = m_blockChain->observerList();
+        auto nodeList = sealerList + observerList;
+        std::sort(nodeList.begin(), nodeList.end());
+        updateNodeListInfo(nodeList);
+        updateConsensusNodeInfo(sealerList);
     }
 
 private:
@@ -204,6 +238,9 @@ private:
 
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;
+
+    // handler for find the tree router
+    SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
 
     // settings
     dev::eth::Handler<int64_t> m_blockSubmitted;
