@@ -52,7 +52,6 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 {
     boost::filesystem::create_directories("./RocksDB");
     rocksdb::Options options;
-    rocksdb::DB* db = nullptr;
     options.IncreaseParallelism();
     options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;
