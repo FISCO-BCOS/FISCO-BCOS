@@ -309,8 +309,9 @@ void Ledger::initConsensusConfig(ptree const& pt)
 
 // init sync related configurations
 // 1. idleWaitMs: default is 200ms
-// 2. gossipInterval: default is 1000ms
-// 3. gossipPeers: default is 3
+// 2. enableSendBlockStatusByTree: enable send block status by tree or not
+// 3. gossipInterval: default is 1000ms
+// 4. gossipPeers: default is 3
 void Ledger::initSyncConfig(ptree const& pt)
 {
     // init idleWaitMs for syncMaster
@@ -323,6 +324,12 @@ void Ledger::initSyncConfig(ptree const& pt)
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                       << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+
+    m_param->mutableSyncParam().enableSendBlockStatusByTree =
+        pt.get<bool>("sync.send_block_status_by_tree", true);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                      << LOG_KV("enableSendBlockStatusByTree",
+                             m_param->mutableSyncParam().enableSendBlockStatusByTree);
 
     // set gossipInterval for syncMaster, default is 3s
     m_param->mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
@@ -647,7 +654,8 @@ bool Ledger::initSync()
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
-        m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers);
+        m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
+        m_param->mutableSyncParam().enableSendBlockStatusByTree);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }
