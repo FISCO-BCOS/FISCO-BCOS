@@ -89,6 +89,7 @@ bool PBFTSealer::shouldSeal()
 }
 void PBFTSealer::start()
 {
+    initConsensusEngine();
     if (m_enableDynamicBlockSize)
     {
         m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1));

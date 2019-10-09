@@ -54,17 +54,17 @@ using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
+    using Ptr = std::shared_ptr<PBFTEngine>;
     virtual ~PBFTEngine() { stop(); }
     PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
+        dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _sealerList),
-        m_baseDir(_baseDir)
+            _keyPair, _sealerList)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
         m_service->registerHandlerByProtoclID(
@@ -78,6 +78,8 @@ public:
 
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
+
+        m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -215,11 +217,19 @@ protected:
 
     void getAllNodesViewStatus(Json::Value& status);
 
-    /// broadcast specified message to all-peers with cache-filter and specified filter
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<dev::network::NodeID> const& filter =
+    // broadcast given messages to all-peers with cache-filter and specified filter
+    virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
+        bytesConstRef _data, std::unordered_set<dev::network::NodeID> const& _filter,
+        unsigned const& _ttl,
+        std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
+
+    bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
+        std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
-        unsigned const& ttl = 0);
+        unsigned const& _ttl = 0)
+    {
+        return broadcastMsg(_packetType, _key, _data, _filter, _ttl, m_broacastTargetsFilter);
+    }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
@@ -254,7 +264,7 @@ protected:
     void checkAndSave();
     void checkAndChangeView();
 
-protected:
+
     void initPBFTEnv(unsigned _view_timeout);
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
@@ -589,6 +599,8 @@ protected:
     std::function<void(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
         m_onCommitBlock = nullptr;
+
+    std::function<ssize_t(dev::network::NodeID const&)> m_broacastTargetsFilter = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

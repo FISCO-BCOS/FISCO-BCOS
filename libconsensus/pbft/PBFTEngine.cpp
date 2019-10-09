@@ -405,7 +405,8 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
  * @param filter: the list that shouldn't be broadcasted to
  */
 bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
-    bytesConstRef data, std::unordered_set<h512> const& filter, unsigned const& ttl)
+    bytesConstRef data, std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
+    std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -413,8 +414,10 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
-        if (getIndexBySealer(session.nodeID()) < 0)
+        if (filterFunction(session.nodeID()) < 0)
+        {
             continue;
+        }
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID()))
         {

@@ -133,8 +133,18 @@ void ConsensusEngineBase::updateConsensusNodeList()
         std::stringstream s2;
         s2 << "[updateConsensusNodeList] Sealers:";
         {
-            WriteGuard l(m_sealerListMutex);
-            m_sealerList = m_blockChain->sealerList();
+            auto sealerList = m_blockChain->sealerList();
+            UpgradableGuard l(m_sealerListMutex);
+            if (sealerList != m_sealerList)
+            {
+                UpgradeGuard ul(l);
+                m_sealerList = sealerList;
+                m_sealerListUpdated = true;
+            }
+            else
+            {
+                m_sealerListUpdated = false;
+            }
             /// to make sure the index of all sealers are consistent
             std::sort(m_sealerList.begin(), m_sealerList.end());
             for (dev::h512 node : m_sealerList)

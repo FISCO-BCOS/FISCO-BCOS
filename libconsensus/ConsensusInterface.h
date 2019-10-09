@@ -30,6 +30,7 @@ namespace consensus
 class ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusInterface>;
     ConsensusInterface() = default;
     virtual ~ConsensusInterface(){};
 
