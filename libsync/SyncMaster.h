@@ -55,7 +55,8 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 200)
+        unsigned _idleWaitMs = 200, int64_t _gossipInterval = 1000, int64_t _gossipPeers = 3,
+        bool _enableSendBlockStatusByTree = true)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -66,7 +67,8 @@ public:
         m_protocolId(_protocolId),
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
-        m_genesisHash(_genesisHash)
+        m_genesisHash(_genesisHash),
+        m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree)
     {
         m_syncStatus =
             std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
@@ -83,9 +85,18 @@ public:
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
             _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
 
-        m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
-        // update the nodeInfo for syncTreeRouter
-        updateNodeInfo();
+        if (m_enableSendBlockStatusByTree)
+        {
+            m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
+            // update the nodeInfo for syncTreeRouter
+            updateNodeInfo();
+
+            // create thread to gossip block status
+            m_blockStatusGossipThread =
+                std::make_shared<GossipBlockStatus>(_protocolId, _gossipInterval, _gossipPeers);
+            m_blockStatusGossipThread->registerGossipHandler(
+                boost::bind(&SyncMaster::sendBlockStatus, this, _1));
+        }
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -168,11 +179,19 @@ public:
 
     void updateNodeListInfo(dev::h512s const& _nodeList) override
     {
+        if (!m_syncTreeRouter)
+        {
+            return;
+        }
         m_syncTreeRouter->updateNodeListInfo(_nodeList);
     }
 
     void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
     {
+        if (!m_syncTreeRouter)
+        {
+            return;
+        }
         m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
     }
 
@@ -217,6 +236,7 @@ private:
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+    bool m_enableSendBlockStatusByTree;
 
     int64_t m_maxRequestNumber = 0;
     uint64_t m_lastDownloadingRequestTime = 0;
@@ -243,6 +263,9 @@ private:
 
     // handler for find the tree router
     SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
+
+    // thread to gossip block status
+    GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
     dev::eth::Handler<int64_t> m_blockSubmitted;

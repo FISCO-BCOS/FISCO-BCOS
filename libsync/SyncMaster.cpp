@@ -103,11 +103,19 @@ void SyncMaster::start()
 {
     startWorking();
     m_syncTrans->start();
+    if (m_blockStatusGossipThread)
+    {
+        m_blockStatusGossipThread->start();
+    }
 }
 
 void SyncMaster::stop()
 {
     m_syncTrans->stop();
+    if (m_blockStatusGossipThread)
+    {
+        m_blockStatusGossipThread->stop();
+    }
     doneWorking();
     stopWorking();
     // will not restart worker, so terminate it

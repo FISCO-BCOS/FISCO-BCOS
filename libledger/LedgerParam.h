@@ -69,8 +69,10 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
-    // default block status gossip interval is 3s
-    int64_t gossipInterval = 3000;
+    // enable send block status by tree or not
+    bool enableSendBlockStatusByTree = true;
+    // default block status gossip interval is 1s
+    int64_t gossipInterval = 1000;
     // default gossip peers is 3
     int64_t gossipPeers = 3;
 };
