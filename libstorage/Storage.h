@@ -39,7 +39,7 @@ public:
         Condition::Ptr condition = nullptr) = 0;
     virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
     // Dicide if CachedStorage can commit modified part of Entries
-    virtual bool onlyDirty() { return false; };
+    virtual bool onlyCommitDirty() { return false; };
 
     virtual void stop() {}
 };

@@ -112,7 +112,7 @@ public:
         return 0;
     }
 
-    bool onlyDirty() override { return true; }
+    bool onlyCommitDirty() override { return true; }
 
     bool commited = false;
     int64_t commitNum = 50;
@@ -201,7 +201,7 @@ public:
         return 0;
     }
 
-    bool onlyDirty() override { return true; }
+    bool onlyCommitDirty() override { return true; }
 
     bool commited = false;
     int64_t commitNum = 50;
@@ -241,7 +241,7 @@ BOOST_FIXTURE_TEST_SUITE(CachedStorageTest, CachedStorageFixture)
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(cachedStorage->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(cachedStorage->onlyCommitDirty(), true);
 }
 
 BOOST_AUTO_TEST_CASE(setBackend)
@@ -744,8 +744,6 @@ public:
 
         return 0;
     }
-
-    bool onlyDirty() override { return false; }
 
     h256 m_hash;
     int64_t m_num = 0;
