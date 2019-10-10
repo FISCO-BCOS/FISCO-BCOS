@@ -95,12 +95,6 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
     return rowCount;
 }
 
-bool ZdbStorage::onlyDirty()
-{
-    return true;
-}
-
-
 /*
     init system tables;
 */

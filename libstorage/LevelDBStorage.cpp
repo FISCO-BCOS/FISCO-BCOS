@@ -223,11 +223,6 @@ size_t LevelDBStorage::commit(h256 hash, int64_t num, const std::vector<TableDat
     return 0;
 }
 
-bool LevelDBStorage::onlyDirty()
-{
-    return false;
-}
-
 void LevelDBStorage::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
 {
     m_db = db;

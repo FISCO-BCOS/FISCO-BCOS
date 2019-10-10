@@ -60,7 +60,7 @@ public:
         }
         return datas.size();
     }
-    bool onlyDirty() override { return false; }
+    bool onlyCommitDirty() override { return false; }
 
 private:
     std::map<std::string, TableData::Ptr> tableData;

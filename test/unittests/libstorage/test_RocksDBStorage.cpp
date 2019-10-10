@@ -237,12 +237,6 @@ struct RocksDBFixture
 
 BOOST_FIXTURE_TEST_SUITE(RocksDB, RocksDBFixture)
 
-
-BOOST_AUTO_TEST_CASE(onlyDirty)
-{
-    BOOST_CHECK_EQUAL(rocksDB->onlyDirty(), false);
-}
-
 BOOST_AUTO_TEST_CASE(empty_select)
 {
     h256 h(0x01);

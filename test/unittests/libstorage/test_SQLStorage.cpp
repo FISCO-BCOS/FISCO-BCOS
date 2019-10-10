@@ -140,7 +140,7 @@ BOOST_FIXTURE_TEST_SUITE(SQLStorageTest, SQLStorageFixture)
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(sqlStorage->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(sqlStorage->onlyCommitDirty(), true);
 }
 
 BOOST_AUTO_TEST_CASE(empty_select)

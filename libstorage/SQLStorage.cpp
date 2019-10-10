@@ -285,11 +285,6 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
     return 0;
 }
 
-bool SQLStorage::onlyDirty()
-{
-    return true;
-}
-
 Json::Value SQLStorage::requestDB(const Json::Value& value)
 {
     int retry = 1;

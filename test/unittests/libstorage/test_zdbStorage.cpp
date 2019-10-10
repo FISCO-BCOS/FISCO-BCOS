@@ -106,7 +106,7 @@ BOOST_FIXTURE_TEST_SUITE(ZdbStorageTest, zdbStorageFixture)
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(zdbStorage->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(zdbStorage->onlyCommitDirty(), true);
 }
 BOOST_AUTO_TEST_CASE(empty_select)
 {
