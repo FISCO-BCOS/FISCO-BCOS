@@ -402,10 +402,7 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
             }
             std::string value;
             readString(buffer, value, offset);
-            if (value != "")
-            {
-                entry->setField(key, value);
-            }
+            entry->setField(key, value);
             // BINLOG_HANDLER_LOG(TRACE) << "key:" << key << ", value:" << value;
         }
         entries->addEntry(entry);
