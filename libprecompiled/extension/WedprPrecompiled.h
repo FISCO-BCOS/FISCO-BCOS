@@ -45,6 +45,16 @@ namespace dev
 {
 namespace precompiled
 {
+extern const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
+extern const char WEDPR_VERFIY_FAILED[];
+extern const char WEDPR_PRECOMPILED[];
+
+extern const int WEDPR_SUCCESS;
+extern const int WEDPR_FAILURE;
+
 class WedprPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
