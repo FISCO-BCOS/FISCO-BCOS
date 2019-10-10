@@ -297,9 +297,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
                                     (*commitData->dirtyEntries)[i] = commitEntry;
-
-                                    if (m_backend && !m_backend->onlyDirty())
-                                    {
+                                    if (m_backend && !m_backend->onlyCommitDirty())
+                                    {  // Only for RocksDB
                                         tbb::spin_mutex::scoped_lock lock(addtionKeyMutex);
                                         auto inserted = addtionKey.insert(key).second;
 
@@ -343,8 +342,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 #endif
                 commitData->newEntries->shallowFrom(requestData->newEntries);
 
-                TIME_RECORD("Sort new entries");
 #if 0
+                TIME_RECORD("Sort new entries");
                 tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
                     EntryLessNoLock(requestData->info));
 #endif
@@ -491,11 +490,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         setSyncNum(num);
     }
     return total;
-}
-
-bool CachedStorage::onlyDirty()
-{
-    return true;
 }
 
 void CachedStorage::setBackend(Storage::Ptr backend)

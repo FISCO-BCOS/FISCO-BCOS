@@ -339,7 +339,8 @@ void DBInitializer::initRocksDBStorage()
         std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
         // create and init rocksDBStorage
         std::shared_ptr<RocksDBStorage> rocksdbStorage =
-            std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
+            std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog,
+                !m_param->mutableStorageParam().CachedStorage);
         rocksdbStorage->setDB(rocksDB);
         // init TableFactory2
         initTableFactory2(rocksdbStorage);

@@ -48,8 +48,6 @@ public:
     }
 
     size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
-
-    bool onlyDirty() override { return false; }
 };
 
 struct MemoryTableFactoryFixture

@@ -202,12 +202,6 @@ struct LevelDBFixture
 
 BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture)
 
-
-BOOST_AUTO_TEST_CASE(onlyDirty)
-{
-    BOOST_CHECK_EQUAL(levelDB->onlyDirty(), false);
-}
-
 BOOST_AUTO_TEST_CASE(empty_select)
 {
     h256 h(0x01);
