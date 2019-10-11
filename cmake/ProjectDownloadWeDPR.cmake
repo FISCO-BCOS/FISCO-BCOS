@@ -24,10 +24,10 @@ include(ExternalProject)
 
 if (APPLE)
     set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libffi_hidden_asset.tar.gz)
-    set(WEDPR_SHA256 6401912f1ad38528f6b9a10cf0fd502c1fbe1728116d0a5e8adea8b83c0c4849)
+    set(WEDPR_SHA256 1e82f07535721c020e6671ec72e6a382945b070bd82d992d8168b6d9c049262c)
 else()
     set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libffi_hidden_asset.tar.gz)
-    set(WEDPR_SHA256 6401912f1ad38528f6b9a10cf0fd502c1fbe1728116d0a5e8adea8b83c0c4849)
+    set(WEDPR_SHA256 1e82f07535721c020e6671ec72e6a382945b070bd82d992d8168b6d9c049262c)
 endif()
 
 ExternalProject_Add(WeDPR

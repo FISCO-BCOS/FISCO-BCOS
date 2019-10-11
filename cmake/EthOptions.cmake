@@ -70,7 +70,7 @@ macro(configure_project)
     endif()
 
     # WeDPR extension module
-    eth_default_option(WEDPR_EXTENSION ON)
+    eth_default_option(WEDPR_EXTENSION OFF)
     if(WEDPR_EXTENSION)
         add_definitions(-DFISCO_WEDPR_EXTENSION)
     endif()

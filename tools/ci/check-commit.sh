@@ -12,7 +12,7 @@ SHELL_FOLDER=$(
 )
 
 check_script=${SHELL_FOLDER}/run-clang-format.py
-commit_limit=6000
+commit_limit=6
 file_limit=30
 insert_limit=250
 delete_limit=500
