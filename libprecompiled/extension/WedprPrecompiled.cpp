@@ -30,21 +30,28 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
+namespace dev
+{
+namespace precompiled
+{
 using namespace dev;
 using namespace std;
 using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-const string API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT = "hiddenAssetVerifyIssuedCredit(bytes)";
-const string API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT = "hiddenAssetVerifyFulfilledCredit(bytes)";
-const string API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT = "hiddenAssetVerifyTransferCredit(bytes)";
-const string API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT = "hiddenAssetVerifySplitCredit(bytes)";
-const string VERFIY_FAILED = "verfiy failed";
-const int SUCCESS = 0;
-const int FAILURE = -1;
 
-const string PRECOMPILED_NAME = "WedprPrecompiled";
+const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[] = "hiddenAssetVerifyIssuedCredit(bytes)";
+const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[] = "hiddenAssetVerifyFulfilledCredit(bytes)";
+const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[] =
+    "hiddenAssetVerifyTransferredCredit(bytes)";
+const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredit(bytes)";
+const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
+
+const int WEDPR_SUCCESS = 0;
+const int WEDPR_FAILURE = -1;
+
+const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
 
 WedprPrecompiled::WedprPrecompiled()
 {
@@ -52,21 +59,21 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT);
     name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT] =
         getFuncSelector(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT);
-    name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT] =
-        getFuncSelector(API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT);
+    name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT] =
+        getFuncSelector(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT);
     name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT] =
         getFuncSelector(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT);
 }
 
 std::string WedprPrecompiled::toString()
 {
-    return PRECOMPILED_NAME;
+    return WEDPR_PRECOMPILED;
 }
 
 bytes WedprPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE(PRECOMPILED_NAME) << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE(WEDPR_PRECOMPILED) << LOG_DESC("call")
                            << LOG_KV("param", toHex(param)) << LOG_KV("origin", origin)
                            << LOG_KV("context", context->txGasLimit());
 
@@ -85,9 +92,9 @@ bytes WedprPrecompiled::call(
 
         // verify issued credit
         char* issue_argument_pb_char = string_to_char(issue_argument_pb);
-        if (verify_issued_credit(issue_argument_pb_char) != SUCCESS)
+        if (verify_issued_credit(issue_argument_pb_char) != WEDPR_SUCCESS)
         {
-            logError(PRECOMPILED_NAME, "verify_issued_credit", VERFIY_FAILED);
+            logError(WEDPR_PRECOMPILED, "verify_issued_credit", WEDPR_VERFIY_FAILED);
             throwException("verify_issued_credit failed");
         }
 
@@ -98,15 +105,14 @@ bytes WedprPrecompiled::call(
         out = abi.abiIn("", current_credit, credit_storage);
     }
     // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFER_CREDIT])
+    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         std::string fulfill_argument_pb;
         abi.abiOut(data, fulfill_argument_pb);
-
         char* fulfill_argument_pb_char = string_to_char(fulfill_argument_pb);
-        if (verify_fulfilled_credit(fulfill_argument_pb_char) != SUCCESS)
+        if (verify_fulfilled_credit(fulfill_argument_pb_char) != WEDPR_SUCCESS)
         {
-            logError(PRECOMPILED_NAME, "verify_fulfilled_credit", VERFIY_FAILED);
+            logError(WEDPR_PRECOMPILED, "verify_fulfilled_credit", WEDPR_VERFIY_FAILED);
             throwException("verify_fulfilled_credit failed");
         }
 
@@ -118,16 +124,16 @@ bytes WedprPrecompiled::call(
         // return current_credit and credit_storage
         out = abi.abiIn("", current_credit, credit_storage);
     }
-    // hiddenAssetVerifyTransferCredit(bytes transfer_request_pb)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
+    // hiddenAssetVerifyTransferredCredit(bytes transfer_request_pb)
+    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT])
     {
         std::string transfer_request_pb;
         abi.abiOut(data, transfer_request_pb);
 
         char* transfer_request_pb_char = string_to_char(transfer_request_pb);
-        if (verify_transfer_credit(transfer_request_pb_char) != SUCCESS)
+        if (verify_transferred_credit(transfer_request_pb_char) != WEDPR_SUCCESS)
         {
-            logError(PRECOMPILED_NAME, "verify_transfer_credit", VERFIY_FAILED);
+            logError(WEDPR_PRECOMPILED, "verify_transfer_credit", WEDPR_VERFIY_FAILED);
             throwException("verify_transfer_credit failed");
         }
 
@@ -151,9 +157,9 @@ bytes WedprPrecompiled::call(
         abi.abiOut(data, split_request_pb);
 
         char* split_request_pb_char = string_to_char(split_request_pb);
-        if (verify_split_credit(split_request_pb_char) != SUCCESS)
+        if (verify_split_credit(split_request_pb_char) != WEDPR_SUCCESS)
         {
-            logError(PRECOMPILED_NAME, "verify_split_credit", VERFIY_FAILED);
+            logError(WEDPR_PRECOMPILED, "verify_split_credit", WEDPR_VERFIY_FAILED);
             throwException("verify_split_credit failed");
         }
 
@@ -177,8 +183,11 @@ bytes WedprPrecompiled::call(
     else
     {
         // unknown function call
-        logError(PRECOMPILED_NAME, "unknown func", "func", std::to_string(func));
+        logError(WEDPR_PRECOMPILED, "unknown func", "func", std::to_string(func));
         throwException("unknown func");
     }
     return out;
 }
+
+}  // namespace precompiled
+}  // namespace dev

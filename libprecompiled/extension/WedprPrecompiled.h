@@ -30,7 +30,7 @@ contract WedprPrecompiled {
     function hiddenAssetVerifyFulfilledCredit(bytes fulfillArgumentPb) 
     public returns(string currentCredit, string creditStorage);
 
-    function hiddenAssetVerifyTransferCredit(bytes transferRequestPb) 
+    function hiddenAssetVerifyTransferredCredit(bytes transferRequestPb) 
     public returns(string spentCurrentCredit, string spentCreditStorage, 
                   string newCurrentCredit, string newCreditStorage);
 
@@ -45,6 +45,16 @@ namespace dev
 {
 namespace precompiled
 {
+extern const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[];
+extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
+extern const char WEDPR_VERFIY_FAILED[];
+extern const char WEDPR_PRECOMPILED[];
+
+extern const int WEDPR_SUCCESS;
+extern const int WEDPR_FAILURE;
+
 class WedprPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
