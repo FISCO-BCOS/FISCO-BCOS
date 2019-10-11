@@ -140,8 +140,9 @@ void ConsensusEngineBase::updateConsensusNodeList()
                 UpgradeGuard ul(l);
                 m_sealerList = sealerList;
                 m_sealerListUpdated = true;
+                m_lastSealerListUpdateNumber = m_blockChain->number();
             }
-            else
+            else if (m_blockChain->number() != m_lastSealerListUpdateNumber)
             {
                 m_sealerListUpdated = false;
             }
@@ -165,11 +166,11 @@ void ConsensusEngineBase::updateConsensusNodeList()
             dev::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
             std::sort(sealerList.begin(), sealerList.end());
-
-            // update the nodeList
-            m_blockSync->updateNodeListInfo(nodeList);
-            // update the consensus nodes when sealers or observers have been changed
-            m_blockSync->updateConsensusNodeInfo(consensusList());
+            if (m_blockSync->syncTreeRouterEnabled())
+            {
+                // update the nodeList
+                m_blockSync->updateNodeListInfo(nodeList);
+            }
 
             updateNodeListInP2P(nodeList);
             m_lastNodeList = s2.str();

@@ -82,6 +82,8 @@ protected:
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
 
+        // resetConfig to update m_sealersNum
+        m_pbftEngine->resetConfig();
         /// set thread name for PBFTSealer
         std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
         setName(threadName);

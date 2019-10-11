@@ -187,7 +187,7 @@ public:
 
     inline IDXTYPE getNextLeader() const { return (m_highestBlock.number() + 1) % m_nodeNum; }
 
-    inline std::pair<bool, IDXTYPE> getLeader() const
+    virtual std::pair<bool, IDXTYPE> getLeader() const
     {
         if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256 || m_nodeNum == 0)
         {

@@ -195,6 +195,8 @@ public:
         m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
     }
 
+    bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
+
 protected:
     // for UT
     void resetTreeRouter() { m_syncTreeRouter = nullptr; }
