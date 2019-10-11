@@ -165,7 +165,7 @@ protected:
      */
     ImportResult import(dev::eth::Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
-    /// verify transcation
+    /// verify transaction
     virtual ImportResult verify(Transaction& trans, IfDropped _ik = IfDropped::Ignore);
     /// interface for filter check
     virtual u256 filterCheck(const Transaction&) const { return u256(0); };

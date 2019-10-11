@@ -80,7 +80,7 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     else if (ImportResult::BlockLimitCheckFailed == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "BlockLimitCheckFailed,txBlockLimit=" + _tx.blockLimit().str() +
+                                  "BlockLimitCheckFailed, txBlockLimit=" + _tx.blockLimit().str() +
                                   ", txHash=" + toHex(_tx.sha3().abridged())));
     }
     else
@@ -432,7 +432,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
             if (false == m_txNonceCheck->isBlockLimitOk(*it))
             {
                 invalidBlockLimitTxs.push_back(it->sha3());
-                nonceKeyCache.push_back(m_txpoolNonceChecker->generateKey(*it));
+                nonceKeyCache.push_back(it->nonce());
                 continue;
             }
             if (!_avoid.count(it->sha3()))

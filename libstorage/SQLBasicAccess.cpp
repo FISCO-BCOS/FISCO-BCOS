@@ -344,23 +344,23 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     Connection_T conn = m_connPool->GetConnection();
     TRY
     {
-        for (auto it : datas)
+        for (auto tableDataPtr : datas)
         {
-            auto tableInfo = it->info;
-            std::string table_name = tableInfo->name;
-
-            if (table_name == "_sys_tables_")
+            if (tableDataPtr->info->name == SYS_TABLES)
             {
-                for (size_t i = 0; i < it->dirtyEntries->size(); ++i)
+                // FIXME: dirtyEntries should always empty, cause table struct can't be modified
+                for (size_t i = 0; i < tableDataPtr->dirtyEntries->size(); ++i)
                 {
-                    Entry::Ptr entry = it->dirtyEntries->get(i);
+                    SQLBasicAccess_LOG(FATAL)
+                        << SYS_TABLES << " dirtyEntries should always be empty";
+                    Entry::Ptr entry = tableDataPtr->dirtyEntries->get(i);
                     string sql = GetCreateTableSql(entry);
                     Connection_execute(conn, "%s", sql.c_str());
                 }
 
-                for (size_t i = 0; i < it->newEntries->size(); ++i)
+                for (size_t i = 0; i < tableDataPtr->newEntries->size(); ++i)
                 {
-                    Entry::Ptr entry = it->newEntries->get(i);
+                    Entry::Ptr entry = tableDataPtr->newEntries->get(i);
                     string sql = GetCreateTableSql(entry);
                     Connection_execute(conn, "%s", sql.c_str());
                 }
