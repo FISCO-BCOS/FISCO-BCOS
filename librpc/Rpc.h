@@ -17,6 +17,9 @@
  * @file Rpc.h
  * @author: caryliao
  * @date 2018-10-25
+ * @author:darrenyin
+ * @date  2019-09-20 add getTransactionByHashWithProof,getTransactionReceiptByHashWithProof for
+ * wecross
  */
 
 #pragma once
@@ -103,7 +106,7 @@ public:
     Json::Value getTransactionByHashWithProof(
         int _groupID, const std::string& _transactionHash) override;
     // Get receipt with merkle proof by hash
-    Json::Value getReceiptByHashWithProof(
+    Json::Value getTransactionReceiptByHashWithProof(
         int _groupID, const std::string& _transactionHash) override;
 
     void setCurrentTransactionCallback(

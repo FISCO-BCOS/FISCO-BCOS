@@ -90,7 +90,8 @@ public:
 
     virtual std::pair<dev::eth::LocalisedTransactionReceipt,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionReceiptByHashWithProof(dev::h256 const& _txHash) = 0;
+    getTransactionReceiptByHashWithProof(
+        dev::h256 const& _txHash, dev::eth::LocalisedTransaction& _transaction) = 0;
 
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.

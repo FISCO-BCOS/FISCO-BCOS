@@ -136,7 +136,7 @@ public:
     }
     std::pair<dev::eth::LocalisedTransactionReceipt,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionReceiptByHashWithProof(dev::h256 const&) override
+    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
     {
         return std::make_pair(
             LocalisedTransactionReceipt(dev::executive::TransactionException::None),

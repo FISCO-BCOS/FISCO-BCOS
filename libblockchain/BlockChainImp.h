@@ -121,7 +121,8 @@ public:
 
     std::pair<dev::eth::LocalisedTransactionReceipt,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionReceiptByHashWithProof(dev::h256 const& _txHash) override;
+    getTransactionReceiptByHashWithProof(
+        dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
 
 private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
