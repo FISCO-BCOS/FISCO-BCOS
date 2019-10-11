@@ -993,7 +993,8 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
 
 std::pair<dev::eth::LocalisedTransactionReceipt,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-BlockChainImp::getTransactionReceiptByHashWithProof(dev::h256 const& _txHash)
+BlockChainImp::getTransactionReceiptByHashWithProof(
+    dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction)
 {
     std::lock_guard<std::mutex> lock(receiptWithProofMutex);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
@@ -1022,11 +1023,12 @@ BlockChainImp::getTransactionReceiptByHashWithProof(dev::h256 const& _txHash)
     }
 
     const auto& receipt = receipts[lexical_cast<uint>(txIndex)];
-    const auto& tx = txs[lexical_cast<uint>(txIndex)];
+    transaction = LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], blockInfo->headerHash(),
+        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
 
     LocalisedTransactionReceipt txReceipt(receipt, _txHash, blockInfo->headerHash(),
-        blockInfo->header().number(), tx.from(), tx.to(), lexical_cast<uint>(txIndex),
-        receipt.gasUsed(), receipt.contractAddress());
+        blockInfo->header().number(), transaction.from(), transaction.to(),
+        lexical_cast<uint>(txIndex), receipt.gasUsed(), receipt.contractAddress());
 
     std::map<std::string, std::vector<std::string>> parent2ChildList;
     if (receiptWithProof.first.blockNumber() == txReceipt.blockNumber())

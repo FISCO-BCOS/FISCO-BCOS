@@ -1093,7 +1093,50 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
     {
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
-        return Json::nullValue;
+        checkRequest(_groupID);
+        Json::Value response;
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        h256 hash = jsToFixed<32>(_transactionHash);
+        auto tx = blockchain->getTransactionByHashWithProof(hash);
+
+        const auto& transaction = tx.first;
+        if (transaction.blockNumber() == INVALIDNUMBER)
+        {
+            return Json::nullValue;
+        }
+        response["transaction"]["blockHash"] = toJS(transaction.blockHash());
+        response["transaction"]["blockNumber"] = toJS(transaction.blockNumber());
+        response["transaction"]["from"] = toJS(transaction.from());
+        response["transaction"]["gas"] = toJS(transaction.gas());
+        response["transaction"]["gasPrice"] = toJS(transaction.gasPrice());
+        response["transaction"]["hash"] = toJS(hash);
+        response["transaction"]["input"] = toJS(transaction.data());
+        response["transaction"]["nonce"] = toJS(transaction.nonce());
+        response["transaction"]["to"] = toJS(transaction.to());
+        response["transaction"]["transactionIndex"] = toJS(transaction.transactionIndex());
+        response["transaction"]["value"] = toJS(transaction.value());
+
+
+        const auto& merkleList = tx.second;
+        uint32_t index = 0;
+        for (const auto& merkleItem : merkleList)
+        {
+            response["txProof"][index]["left"] = Json::arrayValue;
+            response["txProof"][index]["right"] = Json::arrayValue;
+            const auto& left = merkleItem.first;
+            for (const auto& item : left)
+            {
+                response["txProof"][index]["left"].append(item);
+            }
+
+            const auto& right = merkleItem.second;
+            for (const auto& item : right)
+            {
+                response["txProof"][index]["right"].append(item);
+            }
+            ++index;
+        }
+        return response;
     }
     catch (JsonRpcException& e)
     {
@@ -1106,13 +1149,71 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
     }
 }
 // Get receipt with merkle proof by hash
-Json::Value Rpc::getReceiptByHashWithProof(int _groupID, const std::string& _transactionHash)
+Json::Value Rpc::getTransactionReceiptByHashWithProof(
+    int _groupID, const std::string& _transactionHash)
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getReceiptByHashWithProof") << LOG_DESC("request")
+        RPC_LOG(INFO) << LOG_BADGE("getTransactionReceiptByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
-        return Json::nullValue;
+
+        checkRequest(_groupID);
+        h256 hash = jsToFixed<32>(_transactionHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        dev::eth::LocalisedTransaction transaction;
+        auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
+        const auto& txReceipt = receipt.first;
+        if (txReceipt.blockNumber() == INVALIDNUMBER || transaction.blockNumber() == INVALIDNUMBER)
+            return Json::nullValue;
+
+        Json::Value response;
+        response["transactionReceipt"]["transactionHash"] = _transactionHash;
+        response["transactionReceipt"]["root"] = toJS(txReceipt.stateRoot());
+        response["transactionReceipt"]["transactionIndex"] = toJS(txReceipt.transactionIndex());
+        response["transactionReceipt"]["blockNumber"] = toJS(txReceipt.blockNumber());
+        response["transactionReceipt"]["blockHash"] = toJS(txReceipt.blockHash());
+        response["transactionReceipt"]["from"] = toJS(txReceipt.from());
+        response["transactionReceipt"]["to"] = toJS(txReceipt.to());
+        response["transactionReceipt"]["gasUsed"] = toJS(txReceipt.gasUsed());
+        response["transactionReceipt"]["contractAddress"] = toJS(txReceipt.contractAddress());
+        response["transactionReceipt"]["logs"] = Json::Value(Json::arrayValue);
+        for (unsigned int i = 0; i < txReceipt.log().size(); ++i)
+        {
+            Json::Value log;
+            log["address"] = toJS(txReceipt.log()[i].address);
+            log["topics"] = Json::Value(Json::arrayValue);
+            for (unsigned int j = 0; j < txReceipt.log()[i].topics.size(); ++j)
+                log["topics"].append(toJS(txReceipt.log()[i].topics[j]));
+            log["data"] = toJS(txReceipt.log()[i].data);
+            response["transactionReceipt"]["logs"].append(log);
+        }
+        response["transactionReceipt"]["logsBloom"] = toJS(txReceipt.bloom());
+        response["transactionReceipt"]["status"] = toJS(txReceipt.status());
+        response["transactionReceipt"]["input"] = toJS(transaction.data());
+        response["transactionReceipt"]["output"] = toJS(txReceipt.outputBytes());
+
+
+        const auto& merkleList = receipt.second;
+        uint32_t index = 0;
+        for (const auto& merkleItem : merkleList)
+        {
+            response["receiptProof"][index]["left"] = Json::arrayValue;
+            response["receiptProof"][index]["right"] = Json::arrayValue;
+            const auto& left = merkleItem.first;
+            for (const auto& item : left)
+            {
+                response["receiptProof"][index]["left"].append(item);
+            }
+
+            const auto& right = merkleItem.second;
+            for (const auto& item : right)
+            {
+                response["receiptProof"][index]["right"].append(item);
+            }
+            ++index;
+        }
+
+        return response;
     }
     catch (JsonRpcException& e)
     {
