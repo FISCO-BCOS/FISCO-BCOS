@@ -28,3 +28,5 @@ target_link_libraries(leveldb-storage PUBLIC initializer)
 add_executable(binlog_reader binlog_reader.cpp)
 target_link_libraries(binlog_reader PUBLIC initializer)
 
+add_executable(rocksdb-storage rocksdb_main.cpp)
+target_link_libraries(rocksdb-storage PUBLIC initializer storage)

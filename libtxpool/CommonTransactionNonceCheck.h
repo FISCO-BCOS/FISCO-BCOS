@@ -39,11 +39,9 @@ public:
     CommonTransactionNonceCheck() {}
     virtual ~CommonTransactionNonceCheck() = default;
     virtual void delCache(dev::eth::NonceKeyType const& key);
-    virtual void delCache(dev::eth::Transactions const& _transcations);
-    virtual void insertCache(dev::eth::Transaction const& _transcation);
+    virtual void delCache(dev::eth::Transactions const& _transactions);
+    virtual void insertCache(dev::eth::Transaction const& _transaction);
     virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
-
-    dev::eth::NonceKeyType generateKey(dev::eth::Transaction const& _t) { return _t.nonce(); }
 
 protected:
     mutable SharedMutex m_lock;
