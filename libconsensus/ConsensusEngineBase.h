@@ -42,6 +42,7 @@ namespace consensus
 class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusEngineBase>;
     ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -251,6 +252,8 @@ private:
 
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
+    // record the sealer list has been updated or not
+    std::atomic_bool m_sealerListUpdated = {false};
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler

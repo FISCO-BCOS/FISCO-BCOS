@@ -61,6 +61,7 @@ struct GenesisBlockParam
 class BlockChainInterface
 {
 public:
+    using Ptr = std::shared_ptr<BlockChainInterface>;
     BlockChainInterface() = default;
     virtual ~BlockChainInterface(){};
     virtual int64_t number() = 0;

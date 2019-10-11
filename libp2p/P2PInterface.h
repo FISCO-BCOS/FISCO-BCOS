@@ -41,6 +41,7 @@ typedef std::function<void(const std::string&, const std::string&)> CallbackFunc
 class P2PInterface
 {
 public:
+    using Ptr = std::shared_ptr<P2PInterface>;
     virtual ~P2PInterface(){};
 
     virtual NodeID id() const = 0;
