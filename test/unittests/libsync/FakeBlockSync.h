@@ -60,6 +60,11 @@ public:
     void noteSealingBlockNumber(int64_t) override{};
 
     void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
+    bool syncTreeRouterEnabled() override { return m_syncTreeRouterEnabled; }
+    void setSyncTreeRouterEnabled(bool const& _syncTreeRouterEnabled)
+    {
+        m_syncTreeRouterEnabled = _syncTreeRouterEnabled;
+    }
 
 private:
     SyncStatus m_syncStatus;
@@ -67,6 +72,7 @@ private:
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
     std::string m_syncInfo;
+    bool m_syncTreeRouterEnabled = false;
 };
 }  // namespace test
 }  // namespace dev
