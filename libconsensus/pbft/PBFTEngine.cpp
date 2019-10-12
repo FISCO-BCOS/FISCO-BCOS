@@ -24,11 +24,8 @@
 #include "PBFTEngine.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libstorage/MemoryTableFactory2.h>
-#include <libstorage/Storage.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -254,14 +251,14 @@ void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
     catch (DatabaseError const& e)
     {
         PBFTENGINE_LOG(ERROR) << LOG_BADGE("DatabaseError")
-                              << LOG_DESC("store backupMsg to leveldb failed")
+                              << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
     }
     catch (std::exception const& e)
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to leveldb failed")
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
@@ -1036,11 +1033,6 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
     if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
     {
-        if (m_onCommitBlock)
-        {
-            m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
-                m_timeManager.m_changeCycle);
-        }
         /// remove invalid future block
         m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
@@ -1056,6 +1048,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
             m_reqCache->delInvalidViewChange(m_highestBlock);
         }
         resetConfig();
+        if (m_onCommitBlock)
+        {
+            m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
+                m_timeManager.m_changeCycle);
+        }
         m_reqCache->delCache(m_highestBlock.hash());
         PBFTENGINE_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("sealerIdx", m_highestBlock.sealer())

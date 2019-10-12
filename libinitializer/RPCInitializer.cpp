@@ -21,6 +21,16 @@
  */
 
 #include "RPCInitializer.h"
+#include "libblockchain/BlockChainInterface.h"
+#include "libchannelserver/ChannelRPCServer.h"
+#include "libchannelserver/ChannelServer.h"
+#include "libdevcore/Common.h"                    // for byte
+#include "libdevcore/Log.h"                       // for LOG
+#include "libeventfilter/EventLogFilterParams.h"  // for eventfilter
+#include "libinitializer/Common.h"
+#include "libledger/LedgerManager.h"
+#include "librpc/Rpc.h"  // for Rpc
+#include "librpc/SafeHttpServer.h"
 
 using namespace dev;
 using namespace dev::initializer;
@@ -57,9 +67,35 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     m_channelRPCServer->setChannelServer(server);
 
-    /// must startListening RPC here for initializing the first block need access AMDB through
-    /// network
-    m_channelRPCServer->StartListening();
+    // start channelServer before initialize ledger, because amdb-proxy depends on channel
+    auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
+    m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+    m_rpcForChannel.reset(rpcEntity, [](rpc::Rpc*) {});
+    m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+    try
+    {
+        if (!m_channelRPCHttpServer->StartListening())
+        {
+            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
+        }
+    }
+    catch (std::exception& e)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
+                               << LOG_KV("check channel_listen_port", listenPort)
+                               << LOG_KV("check listenIP", listenIP)
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+                     << LOG_KV("check channel_listen_port", listenPort)
+                     << LOG_KV("check listenIP", listenIP) << std::endl;
+        BOOST_THROW_EXCEPTION(
+            ListenPortIsUsed() << errinfo_comment(
+                "Please check channel_listenIP and channel_listen_port are valid"));
+    }
+    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                          << LOG_DESC("ChannelRPCHttpServer started.");
+    m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
+        rpcEntity, std::placeholders::_1, std::placeholders::_2));
 }
 
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
@@ -78,42 +114,32 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
     try
     {
-#if 0
-        m_channelRPCServer.reset(new ChannelRPCServer(), [](ChannelRPCServer* p) { (void)p; });
-        m_channelRPCServer->setListenAddr(listenIP);
-        m_channelRPCServer->setListenPort(listenPort);
-        m_channelRPCServer->setSSLContext(m_sslContext);
-        m_channelRPCServer->setService(m_p2pService);
+        // m_rpcForChannel is created in initChannelRPCServer, now complete m_rpcForChannel
+        m_rpcForChannel->setLedgerManager(m_ledgerManager);
+        m_rpcForChannel->setService(m_p2pService);
+        // event log filter callback
+        m_channelRPCServer->setEventFilterCallback(
+            [this](const std::string& _json, uint32_t _version,
+                std::function<bool(
+                    const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+                    _respCallback,
+                std::function<bool()> _activeCallback) -> int32_t {
+                auto params =
+                    dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
+                if (!params)
+                {  // json parser failed
+                    return dev::event::ResponseCode::INVALID_REQUEST;
+                }
 
-        auto ioService = std::make_shared<boost::asio::io_service>();
+                auto ledger = getLedgerManager()->ledger(params->getGroupID());
+                if (!ledger)
+                {
+                    return dev::event::ResponseCode::GROUP_NOT_EXIST;
+                }
 
-        auto server = std::make_shared<dev::channel::ChannelServer>();
-        server->setIOService(ioService);
-        server->setSSLContext(m_sslContext);
-        server->setEnableSSL(true);
-        server->setBind(listenIP, listenPort);
-        server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
-
-        m_channelRPCServer->setChannelServer(server);
-#endif
-
-        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
-        m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
-        m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
-        // TODO: StartListening() will throw exception, catch it and give more specific help
-        if (!m_channelRPCHttpServer->StartListening())
-        {
-            INITIALIZER_LOG(ERROR)
-                << LOG_BADGE("RPCInitializer") << LOG_KV("check channel_listen_port", listenPort);
-            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
-                         << LOG_KV("check channel_listen_port", listenPort) << std::endl;
-            BOOST_THROW_EXCEPTION(ListenPortIsUsed());
-        }
-        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
-                              << LOG_DESC("ChannelRPCHttpServer started.");
-
-        m_channelRPCServer->setCallbackSetter(
-            std::bind(&rpc::Rpc::setCurrentTransactionCallback, rpcEntity, std::placeholders::_1));
+                return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
+                    params, _version, _respCallback, _activeCallback);
+            });
 
         for (auto it : m_ledgerManager->getGroupList())
         {
@@ -122,30 +148,28 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
             auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
                 LOG(INFO) << "Push block notify: " << std::to_string(groupID) << "-" << number;
-                auto c = channelRPCServer.lock();
-
-                if (c)
+                auto channelRpcServer = channelRPCServer.lock();
+                if (channelRpcServer)
                 {
-                    std::string topic = "_block_notify_" + std::to_string(groupID);
-                    std::string content =
-                        std::to_string(groupID) + "," + boost::lexical_cast<std::string>(number);
-                    std::shared_ptr<dev::channel::TopicChannelMessage> message =
-                        std::make_shared<dev::channel::TopicChannelMessage>();
-                    message->setType(0x1001);
-                    message->setSeq(std::string(32, '0'));
-                    message->setResult(0);
-                    message->setTopic(topic);
-                    message->setData((const byte*)content.data(), content.size());
-                    c->asyncBroadcastChannelMessage(topic, message);
+                    channelRpcServer->blockNotify(groupID, number);
                 }
             });
 
             m_channelRPCServer->addHandler(handler);
         }
 
-        /// init httpListenPort
-        ///< Donot to set destructions, the ModularServer will destruct.
-        rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+        m_p2pService->setCallbackFuncForTopicVerify(
+            [channelRPCServerWeak](const std::string& _1, const std::string& _2) {
+                auto channelRPCServer = channelRPCServerWeak.lock();
+                if (channelRPCServer)
+                {
+                    channelRPCServer->asyncPushChannelMessageHandler(_1, _2);
+                }
+            });
+
+        // Don't to set destructor, the ModularServer will destruct.
+        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
         m_safeHttpServer.reset(
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);

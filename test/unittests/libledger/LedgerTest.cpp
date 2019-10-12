@@ -62,6 +62,7 @@ public:
         FakeLedger::initTxPool();
         /// init sync
         FakeLedger::initSync();
+        FakeLedger::initEventLogFilterManager();
         return true;
     }
 
@@ -89,6 +90,11 @@ public:
             return false;
         }
         ret = Ledger::consensusInitFactory();
+        if (!ret)
+        {
+            return false;
+        }
+        ret = Ledger::initEventLogFilterManager();
         return ret;
     }
 

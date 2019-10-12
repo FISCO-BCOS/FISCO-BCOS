@@ -20,9 +20,11 @@
  */
 #include "MemoryTable2.h"
 #include "Common.h"
+#include "StorageException.h"
 #include "Table.h"
 #include <arpa/inet.h>
 #include <json/json.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -35,17 +37,21 @@
 #include <thread>
 #include <vector>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-void prepareExit()
+void prepareExit(const std::string& _key)
 {
+    STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2 prepare to exit") << LOG_KV("key", _key);
     raise(SIGTERM);
     while (!g_BCOSConfig.shouldExit.load())
-    {
+    {  // wait to exit
         std::this_thread::yield();
     }
+    BOOST_THROW_EXCEPTION(
+        StorageException(-1, string("backend DB is dead. Prepare to exit.") + _key));
 }
 
 Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
@@ -57,7 +63,17 @@ void MemoryTable2::proccessLimit(
     const Condition::Ptr& condition, const Entries::Ptr& entries, const Entries::Ptr& resultEntries)
 {
     int begin = condition->getOffset();
-    int end = begin + condition->getCount();
+    int end = 0;
+
+    if (g_BCOSConfig.version() < V2_1_0)
+    {
+        end = begin + condition->getCount();
+    }
+    else
+    {
+        end = (int)std::min((size_t)INT_MAX, (size_t)begin + (size_t)condition->getCount());
+    }
+
     int size = entries->size();
     if (begin >= size)
     {
@@ -122,10 +138,10 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed for")
-                           << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed")
+                           << LOG_KV("what", e.what());
+        m_remoteDB->stop();
+        prepareExit(key);
     }
 
     return std::make_shared<Entries>();
@@ -187,8 +203,8 @@ int MemoryTable2::update(
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        m_remoteDB->stop();
+        prepareExit(key);
     }
 
     return 0;
@@ -279,12 +295,13 @@ int MemoryTable2::remove(
         return entries->size();
     }
     catch (std::exception& e)
-    {
+    {  // this catch is redundant, because selectNoLock already catch.
+        // TODO: make catch simple, remove catch in selectNoLock
         STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
                            << LOG_DESC("Access MemoryTable2 failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
-        // wait to exit
-        prepareExit();
+        m_remoteDB->stop();
+        prepareExit(key);
     }
 
     return 0;

@@ -85,6 +85,7 @@ public:
     virtual void init(std::string listenHost, uint16_t listenPort)
     {
         m_strand = std::make_shared<boost::asio::io_service::strand>(*m_ioService);
+        m_resolver = std::make_shared<bi::tcp::resolver>(*m_ioService);
         m_acceptor = std::make_shared<bi::tcp::acceptor>(
             *m_ioService, boost::asio::ip::tcp::endpoint(
                               boost::asio::ip::address::from_string(listenHost), listenPort));
@@ -119,13 +120,16 @@ public:
     {
         m_acceptor->async_accept(socket->ref(), m_strand->wrap(handler));
     }
-
+#if 0
     virtual void asyncConnect(std::shared_ptr<SocketFace> socket,
         const bi::tcp::endpoint peer_endpoint, Handler_Type handler,
         boost::system::error_code = boost::system::error_code())
     {
         socket->ref().async_connect(peer_endpoint, handler);
     }
+#endif
+    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+        const bi::tcp::resolver::protocol_type& _protocol = bi::tcp::tcp::v4());
 
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
@@ -229,6 +233,7 @@ protected:
     std::shared_ptr<ba::io_service> m_ioService;
     std::shared_ptr<ba::io_service::strand> m_strand;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
+    std::shared_ptr<bi::tcp::resolver> m_resolver;
     std::shared_ptr<ba::ssl::context> m_sslContext;
     int m_type = 0;
 };

@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <libethcore/EVMSchedule.h>
 #include <atomic>
 #include <string>
 namespace dev
@@ -30,7 +31,9 @@ enum VERSION : uint32_t
 {
     RC1_VERSION = 1,
     RC2_VERSION = 2,
-    RC3_VERSION = 3
+    RC3_VERSION = 3,
+    V2_0_0 = 0x02000000,
+    V2_1_0 = 0x02010000
 };
 class GlobalConfigure
 {
@@ -55,6 +58,9 @@ public:
         m_version = _versionNumber;
     }
     std::string const& supportedVersion() { return m_supportedVersion; }
+
+    void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
+    dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
     struct DiskEncryption
     {
@@ -82,6 +88,7 @@ private:
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
+    dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

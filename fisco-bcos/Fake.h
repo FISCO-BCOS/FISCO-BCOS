@@ -34,6 +34,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
+#include <libeventfilter/EventLogFilterManager.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerParam.h>
 #include <libsync/SyncInterface.h>
@@ -267,6 +268,8 @@ public:
         Ledger::initSync();
         /// init consensus
         Ledger::consensusInitFactory();
+        // init EventLogFilterManager
+        Ledger::initEventLogFilterManager();
         return true;
     }
 
@@ -281,6 +284,13 @@ public:
         m_blockChain = std::make_shared<FakeBlockChain>();
         return true;
     }
+
+    bool initEventLogFilterManager() override
+    {
+        m_eventLogFilterManger = std::make_shared<dev::event::EventLogFilterManager>(nullptr, 0, 0);
+        return true;
+    }
+
     GenesisBlockParam m_genesisParam;
     /// init the blockSync
     /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }

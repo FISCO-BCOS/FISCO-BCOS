@@ -186,7 +186,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash)
                 BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Write to cache");
                 auto blockPtr = m_blockCache.add(block);
                 auto addCache_time_cost = utcTime() - record_time;
-                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block from leveldb")
+                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block from db")
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
@@ -267,7 +267,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
                 auto blockRLP = std::make_shared<bytes>(fromHex(strBlock.c_str()));
                 auto blockRLP_time_cost = utcTime() - record_time;
 
-                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from leveldb")
+                BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
@@ -356,7 +356,11 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             if (g_BCOSConfig.version() <= RC2_VERSION)
             {
                 std::string strNumber = entry->getField(NUM_FIELD);
-                number = lexical_cast<int64_t>(strNumber);
+                if (!strNumber.empty())
+                {
+                    // Bugfix: rc2 leveldb has NUM_FIELD field but rc2 amdb is not
+                    number = lexical_cast<int64_t>(strNumber);
+                }
             }
         }
     }

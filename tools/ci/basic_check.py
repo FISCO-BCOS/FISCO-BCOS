@@ -33,7 +33,7 @@ class BasicCheck(object):
     """
     basic check include check sync and check consensus
     """
-    def __init__(self, rpc_port=8545, group = 1, node_num = 4, version = "2.0.1", rpc_ip = "127.0.0.1"):
+    def __init__(self, rpc_port=8545, group = 1, node_num = 4, version = "2.1.0", rpc_ip = "127.0.0.1"):
         self.rpc_port = rpc_port
         self.p2p_port = rpc_port + 1000
         self.channel_port = rpc_port + 2000
@@ -65,7 +65,6 @@ class BasicCheck(object):
         command = "bash nodes/" + self.rpc_ip + "/stop_all.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
     
     def stop_a_node(self, node_id):
         """
@@ -75,17 +74,15 @@ class BasicCheck(object):
         command = "bash nodes/" + self.rpc_ip + "/node" + str(node_id) + "/stop.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
     
     def start_a_node(self, node_id):
         """
         start the specified node
         """
         LOG_INFO("========= start node" + str(node_id))
-        command = "nohup bash ./nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh >/dev/null 2>&1"
+        command = "nohup bash ./nodes/" + self.rpc_ip + "/node" + str(node_id) + "/start.sh"
         status, ret = execute_command(command)
         LOG_INFO("status = " + str(status) + ", result = " + ret)
-        time.sleep(1)
 
     def stop_and_delete_data(self, node_id):
         """
@@ -95,7 +92,6 @@ class BasicCheck(object):
         self.stop_a_node(node_id)
         command = "rm -rf nodes/" + self.rpc_ip + "/node" + str(node_id) + "/data"
         execute_command(command)
-        time.sleep(1)
 
     def send_transaction(self, trans_num):
         """

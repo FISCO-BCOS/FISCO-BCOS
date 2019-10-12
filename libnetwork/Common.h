@@ -51,6 +51,7 @@ namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][Host]"
 #define SESSION_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][Session]"
+#define ASIO_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][ASIO]"
 
 namespace dev
 {
@@ -94,6 +95,7 @@ enum P2PExceptionType
     P2PExceptionTypeCnt,
     ConnectError,
     DuplicateSession,
+    NotInWhitelist,
     ALL,
 };
 
@@ -198,53 +200,48 @@ inline std::string reasonOf(DisconnectReason _r)
 }
 
 /**
- * @brief IPv4,UDP/TCP endpoints.
+ * @brief client end endpoint. Node will connect to NodeIPEndpoint.
  */
 struct NodeIPEndpoint
 {
-    /// Setting true causes isAllowed to return true for all addresses. (Used by test fixtures)
-
     NodeIPEndpoint() = default;
-    NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
-      : address(_addr), udpPort(_udp), tcpPort(_tcp)
+    NodeIPEndpoint(const std::string& _host, const std::string& _port) : host(_host), port(_port) {}
+    NodeIPEndpoint(const std::string& _host, uint16_t _port)
+      : host(_host), port(std::to_string(_port))
+    {}
+    NodeIPEndpoint(bi::address _addr, uint16_t _port)
+      : host(_addr.to_string()), port(std::to_string(_port))
     {}
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
     {
-        address = _nodeIPEndpoint.address;
-        udpPort = _nodeIPEndpoint.udpPort;
-        tcpPort = _nodeIPEndpoint.tcpPort;
         host = _nodeIPEndpoint.host;
+        port = _nodeIPEndpoint.port;
     }
-    operator bi::udp::endpoint() const { return bi::udp::endpoint(address, udpPort); }
-    operator bi::tcp::endpoint() const { return bi::tcp::endpoint(address, tcpPort); }
-
-    operator bool() const { return !address.is_unspecified() && udpPort > 0 && tcpPort > 0; }
 
     bool operator<(const NodeIPEndpoint& rhs) const
     {
-        if (address < rhs.address)
+        if (host + port < rhs.host + rhs.port)
         {
             return true;
         }
-        if ((address == rhs.address) && tcpPort < rhs.tcpPort)
-            return true;
         return false;
+    }
+
+    bool operator==(const NodeIPEndpoint& rhs) const
+    {
+        return (host + port == rhs.host + rhs.port);
     }
 
     std::string name() const
     {
         std::ostringstream os;
-        os << address.to_string() << ":" << tcpPort;
+        os << host << ":" << port;
         return os.str();
     }
-    bool isValid() { return (!address.to_string().empty()) && (tcpPort != 0); }
-    bi::address address;
-    uint16_t udpPort = 0;
-    uint16_t tcpPort = 0;
     std::string host;
+    // port may be a descriptive name or a numeric string corresponding to a port number
+    std::string port;
 };
 
 }  // namespace network
-/// Simple stream output for a NodeIPEndpoint.
-std::ostream& operator<<(std::ostream& _out, dev::network::NodeIPEndpoint const& _ep);
 }  // namespace dev

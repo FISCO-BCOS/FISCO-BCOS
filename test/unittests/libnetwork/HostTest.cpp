@@ -21,6 +21,7 @@
 
 #include "libnetwork/Host.h"
 #include "FakeASIOInterface.h"
+#include "libdevcore/ThreadPool.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
 #include "test/tools/libutils/Common.h"
@@ -142,7 +143,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
     {
     }
     auto socket = fakeAsioInterface->m_acceptorInfo.first;
-    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
+    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8888);
     socket->setNodeIPEndpoint(nodeIP);
     BOOST_CHECK(true == m_sessions.empty());
     boost::system::error_code ec;
@@ -155,8 +156,8 @@ BOOST_AUTO_TEST_CASE(Host_run)
     fakeAsioInterface->callAcceptHandler(boost::asio::error::operation_aborted);
     // accept failed, cert is empty
     socket = fakeAsioInterface->m_acceptorInfo.first;
-    nodeIP = NodeIPEndpoint(
-        boost::asio::ip::address::from_string("127.0.0.1"), 0, EMPTY_CERT_SOCKET_PORT);
+    nodeIP =
+        NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), EMPTY_CERT_SOCKET_PORT);
     socket->setNodeIPEndpoint(nodeIP);
     fakeAsioInterface->callAcceptHandler(ec);
     BOOST_CHECK(1u == m_sessions.size());
@@ -177,12 +178,11 @@ BOOST_AUTO_TEST_CASE(Host_run)
     this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(1u == m_sessions.size());
     // connect failed, operation_aborted
-    nodeIP =
-        NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, ERROR_SOCKET_PORT);
+    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), ERROR_SOCKET_PORT);
     m_host->asyncConnect(nodeIP, fp);
     BOOST_CHECK(1u == m_sessions.size());
     // connect success
-    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8890);
+    nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8890);
     m_host->asyncConnect(nodeIP, fp);
     this_thread::sleep_for(chrono::milliseconds(50));
     BOOST_CHECK(2u == m_sessions.size());

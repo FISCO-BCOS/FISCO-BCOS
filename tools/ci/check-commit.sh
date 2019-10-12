@@ -45,7 +45,7 @@ function check_codeFormat() {
     # Redirect output to stderr.
     exec 1>&2
     sum=0
-    for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | grep -v ".pb." | awk '{print $2}'); do
+    for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
         execute_cmd "$check_script $file"
         sum=$(expr ${sum} + $?)
     done
@@ -73,9 +73,8 @@ function check_PR_limit() {
     fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
     local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
-    local protobuf_insertions=$(git diff --numstat HEAD^ | grep ".pb." | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
-    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - protobuf_insertions))
+    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions))
     if [ ${insert_limit} -lt ${valid_insertions} ]; then
         LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
         exit 1

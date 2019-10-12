@@ -70,8 +70,7 @@ public:
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
-        m_protocolId(_protocolId),
-        m_callbackPool("txPoolCallback-" + std::to_string(_protocolId), 2)
+        m_protocolId(_protocolId)
     {
         assert(m_service && m_blockChain);
         if (m_protocolId == 0)
@@ -79,6 +78,8 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>();
+        m_callbackPool =
+            std::make_shared<dev::ThreadPool>("txPoolCallback-" + std::to_string(_protocolId), 2);
     }
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
@@ -152,6 +153,8 @@ public:
         return m_txsQueue.size() >= m_limit;
     }
 
+    dev::ThreadPool::Ptr callbackPool() { return m_callbackPool; }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -216,7 +219,7 @@ private:
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
-    dev::ThreadPool m_callbackPool;
+    dev::ThreadPool::Ptr m_callbackPool;
 };
 }  // namespace txpool
 }  // namespace dev

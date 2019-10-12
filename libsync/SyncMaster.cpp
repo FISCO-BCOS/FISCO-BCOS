@@ -118,6 +118,7 @@ void SyncMaster::stop()
     stopWorking();
     // will not restart worker, so terminate it
     terminate();
+    SYNC_LOG(INFO) << LOG_DESC("SyncMaster stopped");
 }
 
 void SyncMaster::doWork()
@@ -158,7 +159,6 @@ void SyncMaster::doWork()
         // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
         if (m_needMaintainTransactions && m_newTransactions)
         {
-            m_newTransactions = false;
             maintainTransactions();
         }
         maintainTransactions_time_cost = utcTime() - record_time;
@@ -203,7 +203,7 @@ void SyncMaster::workLoop()
     while (workerState() == WorkerState::Started)
     {
         doWork();
-        if (idleWaitMs())
+        if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -227,8 +227,7 @@ bool SyncMaster::isSyncing() const
 // is my number is far smaller than max block number of this block chain
 bool SyncMaster::isFarSyncing() const
 {
-    int64_t currentNumber = m_blockChain->number();
-    return m_syncStatus->knownHighestNumber - currentNumber > 10;
+    return m_msgEngine->isFarSyncing();
 }
 
 void SyncMaster::maintainTransactions()
@@ -237,6 +236,11 @@ void SyncMaster::maintainTransactions()
 
     auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
     auto txSize = ts.size();
+    if (txSize == 0)
+    {
+        m_newTransactions = false;
+        return;
+    }
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
@@ -253,10 +257,10 @@ void SyncMaster::maintainTransactions()
             bool isSealer = _p->isSealer;
             return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
-        if (0 == peers.size())
-            return;
         UpgradeGuard ul(l);
         m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+        if (0 == peers.size())
+            continue;
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
@@ -478,11 +482,12 @@ bool SyncMaster::maintainDownloadingQueue()
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
-    while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
+    while (isWorking() && topBlock != nullptr &&
+           topBlock->header().number() <= (m_blockChain->number() + 1))
     {
         try
         {
-            if (isNextBlock(topBlock))
+            if (isWorking() && isNextBlock(topBlock))
             {
                 auto record_time = utcTime();
                 auto parentBlock =

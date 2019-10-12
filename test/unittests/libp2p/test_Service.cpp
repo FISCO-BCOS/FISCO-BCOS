@@ -20,6 +20,7 @@
  */
 
 #include "../libnetwork/FakeASIOInterface.h"
+#include "libdevcore/ThreadPool.h"
 #include "libnetwork/Host.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
@@ -97,7 +98,7 @@ BOOST_FIXTURE_TEST_SUITE(Service, ServiceFixture)
 
 BOOST_AUTO_TEST_CASE(Service_run)
 {
-    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0, 8888);
+    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8888);
     m_nodes[nodeIP] = NodeID(
         "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
         "f4746846c0db2604adebf9c70c7f418d4d5a61");
