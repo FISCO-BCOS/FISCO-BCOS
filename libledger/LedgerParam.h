@@ -55,6 +55,11 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+
+    // group size for RPBFT, default is 10
+    int64_t groupSize = 10;
+    // rotating interval, default is 10
+    int64_t rotatingInterval = 10;
 };
 
 struct AMDBParam

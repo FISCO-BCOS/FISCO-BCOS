@@ -100,6 +100,19 @@ public:
         }
     }
 
+    virtual void noteForwardRemainTxs(dev::h512 const& _targetNodeId)
+    {
+        Guard l(m_fastForwardMutex);
+        m_needForwardRemainTxs = true;
+        auto retIter =
+            std::find(m_fastForwardedNodes.begin(), m_fastForwardedNodes.end(), _targetNodeId);
+        if (retIter == m_fastForwardedNodes.end())
+        {
+            m_fastForwardedNodes.push_back(_targetNodeId);
+        }
+        m_signalled.notify_all();
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -127,15 +140,22 @@ private:
 
     // sync state
     std::atomic_bool m_newTransactions = {false};
-    std::atomic_bool m_needMaintainTransactions = {true};
+    std::atomic_bool m_needMaintainTransactions = {false};
 
     // settings
     dev::eth::Handler<> m_tqReady;
 
     std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_txsReceiversFilter = nullptr;
 
+    mutable Mutex m_fastForwardMutex;
+    std::atomic_bool m_needForwardRemainTxs = {false};
+    dev::h512s m_fastForwardedNodes;
+
 public:
     void maintainTransactions();
+    void forwardRemainingTxs();
+    void sendTransactions(dev::eth::Transactions const& _ts, bool const& _fastForwardRemainTxs,
+        int64_t const& _startIndex);
     void maintainDownloadingTransactions();
 };
 

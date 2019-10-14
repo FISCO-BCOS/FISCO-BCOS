@@ -1473,6 +1473,11 @@ void PBFTEngine::workLoop()
     {
         try
         {
+            if (!locatedInChosedConsensensusNodes())
+            {
+                waitSignal();
+                continue;
+            }
             std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
@@ -1486,15 +1491,11 @@ void PBFTEngine::workLoop()
             /// to avoid of cpu problem
             else if (m_reqCache->futurePrepareCacheSize() == 0)
             {
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(5));
+                waitSignal();
             }
-            if (nodeIdx() != MAXIDX)
-            {
-                checkTimeout();
-                handleFutureBlock();
-                collectGarbage();
-            }
+            checkTimeout();
+            handleFutureBlock();
+            collectGarbage();
         }
         catch (std::exception& _e)
         {
@@ -1503,6 +1504,11 @@ void PBFTEngine::workLoop()
     }
 }
 
+void PBFTEngine::waitSignal()
+{
+    std::unique_lock<std::mutex> l(x_signalled);
+    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+}
 
 /// handle the prepareReq cached in the futurePrepareCache
 void PBFTEngine::handleFutureBlock()

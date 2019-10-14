@@ -49,12 +49,7 @@ IDXTYPE RotatingPBFTEngine::VRFSelection() const
 
 bool RotatingPBFTEngine::locatedInChosedConsensensusNodes() const
 {
-    ReadGuard l(x_chosedConsensusNodes);
-    if (m_chosedConsensusNodes.count(m_keyPair.pub()))
-    {
-        return true;
-    }
-    return false;
+    return m_locatedInConsensusNodes;
 }
 
 void RotatingPBFTEngine::resetConfig()
@@ -71,6 +66,7 @@ void RotatingPBFTEngine::resetConfig()
     {
         updateConsensusInfoForTreeRouter();
     }
+    resetLocatedInConsensusNodes();
 }
 
 void RotatingPBFTEngine::resetChosedConsensusNodes()
@@ -84,6 +80,11 @@ void RotatingPBFTEngine::resetChosedConsensusNodes()
         m_sealersNum = m_sealerList.size();
     }
     assert(m_sealersNum != 0);
+    // the rotatingInterval or groupSize hasn't been set
+    if (m_rotatingInterval == -1 || m_groupSize == -1)
+    {
+        return;
+    }
     // first set up
     auto blockNumber = m_blockChain->number();
     if (m_startNodeIdx == -1)
@@ -118,6 +119,11 @@ void RotatingPBFTEngine::resetChosedConsensusNodes()
 
 void RotatingPBFTEngine::chooseConsensusNodes()
 {
+    // the rotatingInterval or groupSize hasn't been set
+    if (m_rotatingInterval == -1 || m_groupSize == -1)
+    {
+        return;
+    }
     auto blockNumber = m_blockChain->number();
     // don't need to switch the consensus node for not reach the rotatingInterval
     if (blockNumber - m_rotatingRound * m_rotatingInterval < m_rotatingInterval)
@@ -127,12 +133,13 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     // remove one consensus Node
     NodeID chosedOutNodeId;
     WriteGuard l(x_chosedConsensusNodes);
-    if (!getNodeIDByIndex(chosedOutNodeId, m_startNodeIdx))
+    auto chosedOutIdx = m_startNodeIdx.load();
+    if (!getNodeIDByIndex(chosedOutNodeId, chosedOutIdx))
     {
         RPBFTENGINE_LOG(FATAL) << LOG_DESC("chooseConsensusNodes:chosed out node is not a sealer")
                                << LOG_KV("rotatingInterval", m_rotatingInterval)
                                << LOG_KV("blockNumber", blockNumber)
-                               << LOG_KV("chosedOutNodeIdx", m_startNodeIdx)
+                               << LOG_KV("chosedOutNodeIdx", chosedOutIdx)
                                << LOG_KV("chosedOutNode", chosedOutNodeId.abridged())
                                << LOG_KV("rotatingRound", m_rotatingRound)
                                << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes.size())
@@ -148,7 +155,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     if (!getNodeIDByIndex(chosedInNodeId, chosedInNodeIdx))
     {
         RPBFTENGINE_LOG(FATAL) << LOG_DESC("chooseConsensusNodes: chosed out node is not a sealer")
-                               << LOG_KV("chosedOutNodeIdx", m_startNodeIdx)
+                               << LOG_KV("chosedOutNodeIdx", chosedOutIdx)
                                << LOG_KV("rotatingInterval", m_rotatingInterval)
                                << LOG_KV("blockNumber", blockNumber)
                                << LOG_KV("chosedInNodeIdx", chosedInNodeIdx)
@@ -158,9 +165,20 @@ void RotatingPBFTEngine::chooseConsensusNodes()
                                << LOG_KV("nodeId", m_keyPair.pub().abridged());
     }
     m_chosedConsensusNodes.insert(chosedInNodeId);
+
+    // noteNewTransaction to send the remaining transactions to the inserted consensus nodes
+    if ((m_idx == chosedOutIdx) && (chosedOutIdx != chosedInNodeIdx))
+    {
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("noteForwardRemainTxs after the node rotating out")
+                               << LOG_KV("idx", m_idx) << LOG_KV("chosedOutIdx", chosedOutIdx)
+                               << LOG_KV("chosedInNodeIdx", chosedInNodeIdx)
+                               << LOG_KV("rotatingRound", m_rotatingRound);
+        m_blockSync->noteForwardRemainTxs(chosedInNodeId);
+    }
+
     m_leaderFailed = false;
     RPBFTENGINE_LOG(INFO) << LOG_DESC("chooseConsensusNodes") << LOG_KV("blockNumber", blockNumber)
-                          << LOG_KV("chosedOutIdx", m_startNodeIdx)
+                          << LOG_KV("chosedOutIdx", chosedOutIdx)
                           << LOG_KV("chosedInIdx", chosedInNodeIdx)
                           << LOG_KV("rotatingRound", m_rotatingRound)
                           << LOG_KV("sealersNum", m_sealersNum)
@@ -179,4 +197,31 @@ void RotatingPBFTEngine::updateConsensusInfoForTreeRouter()
     m_blockSync->updateConsensusNodeInfo(chosedConsensusNodes);
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusInfoForTreeRouter")
                            << LOG_KV("chosedConsensusNodes", chosedConsensusNodes.size());
+}
+
+ssize_t RotatingPBFTEngine::filterBroadcastTargets(dev::network::NodeID const& _nodeId)
+{
+    // the node should be a sealer
+    if (-1 == getIndexBySealer(_nodeId))
+    {
+        return -1;
+    }
+    // the node should be located in the chosed consensus node list
+    if (!m_chosedConsensusNodes.count(_nodeId))
+    {
+        return -1;
+    }
+    return 0;
+}
+
+// reset m_locatedInConsensusNodes
+void RotatingPBFTEngine::resetLocatedInConsensusNodes()
+{
+    ReadGuard l(x_chosedConsensusNodes);
+    if (m_chosedConsensusNodes.count(m_keyPair.pub()))
+    {
+        m_locatedInConsensusNodes = true;
+        return;
+    }
+    m_locatedInConsensusNodes = false;
 }
