@@ -22,7 +22,6 @@
  */
 #pragma once
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <libdevcore/easylog.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
 

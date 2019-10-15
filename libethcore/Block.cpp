@@ -25,8 +25,12 @@
 #include "TxsParallelParser.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
+
+
+#define BLOCK_LOG(LEVEL)    \
+    LOG(LEVEL) << "[Block]" \
+               << "[line:" << __LINE__ << "]"
 
 namespace dev
 {
@@ -135,6 +139,11 @@ void Block::encodeRC2(bytes& _out) const
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 void Block::calTransactionRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        calTransactionRootV2_2_0(update);
+        return;
+    }
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         calTransactionRootRC2(update);
@@ -165,6 +174,65 @@ void Block::calTransactionRoot(bool update) const
     }
 }
 
+
+std::map<std::string, std::vector<std::string>> Block::calTransactionRootV2_2_0(
+    bool update, bool calForce) const
+{
+    std::map<std::string, std::vector<std::string>> merklePath;
+    WriteGuard l(x_txsCache);
+    if (m_txsCache == bytes() || calForce)
+    {
+        BytesMap txsMapCache;
+        for (size_t i = 0; i < m_transactions.size(); i++)
+        {
+            RLPStream s;
+            s << i;
+            bytes trans_data;
+            m_transactions[i].encode(trans_data);
+            txsMapCache.insert(std::make_pair(s.out(), trans_data));
+        }
+        m_txsCache = TxsParallelParser::encode(m_transactions);
+        m_transRootCache = dev::getHash256(txsMapCache, merklePath);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setTransactionsRoot(m_transRootCache);
+    }
+
+    return merklePath;
+}
+
+std::map<std::string, std::vector<std::string>> Block::calReceiptRootV2_2_0(
+    bool update, bool calForce) const
+{
+    std::map<std::string, std::vector<std::string>> merklePath;
+    WriteGuard l(x_txReceiptsCache);
+    if (m_tReceiptsCache == bytes() || calForce)
+    {
+        RLPStream txReceipts;
+        txReceipts.appendList(m_transactionReceipts.size());
+        BytesMap mapCache;
+        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        {
+            bytes tranReceipts_data;
+            m_transactionReceipts[i].encode(tranReceipts_data);
+            txReceipts.appendRaw(tranReceipts_data);
+            RLPStream s;
+            s << i;
+            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+        }
+        txReceipts.swapOut(m_tReceiptsCache);
+        m_receiptRootCache = dev::getHash256(mapCache, merklePath);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setReceiptsRoot(m_receiptRootCache);
+    }
+
+    return merklePath;
+}
+
+
 void Block::calTransactionRootRC2(bool update) const
 {
     WriteGuard l(x_txsCache);
@@ -182,6 +250,11 @@ void Block::calTransactionRootRC2(bool update) const
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
 void Block::calReceiptRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        calReceiptRootV2_2_0(update);
+        return;
+    }
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         calReceiptRootRC2(update);

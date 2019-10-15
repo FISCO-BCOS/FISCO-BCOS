@@ -24,7 +24,6 @@
 #include "StorageException.h"
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 
 
 using namespace std;
@@ -33,11 +32,11 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
-Entries::Ptr ZdbStorage::select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
-    const std::string& _key, Condition::Ptr _condition)
+Entries::Ptr ZdbStorage::select(
+    int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key, Condition::Ptr _condition)
 {
     std::vector<std::map<std::string, std::string> > values;
-    int ret = m_sqlBasicAcc->Select(_hash, _num, _tableInfo->name, _key, _condition, values);
+    int ret = m_sqlBasicAcc->Select(_num, _tableInfo->name, _key, _condition, values);
     if (ret < 0)
     {
         ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -81,9 +80,9 @@ void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
     m_sqlBasicAcc = _sqlBasicAcc;
 }
 
-size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas)
+size_t ZdbStorage::commit(int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    int32_t rowCount = m_sqlBasicAcc->Commit(_hash, (int32_t)_num, _datas);
+    int32_t rowCount = m_sqlBasicAcc->Commit((int32_t)_num, _datas);
     if (rowCount < 0)
     {
         ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
@@ -94,12 +93,6 @@ size_t ZdbStorage::commit(h256 _hash, int64_t _num, const std::vector<TableData:
     }
     return rowCount;
 }
-
-bool ZdbStorage::onlyDirty()
-{
-    return true;
-}
-
 
 /*
     init system tables;
@@ -118,14 +111,25 @@ void ZdbStorage::initSysTables()
     createSysBlock2NoncesTables();
     insertSysTables();
 }
+
+std::string ZdbStorage::getCommonFileds()
+{
+    string commonFields(
+        " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n"
+        " `_num_` BIGINT(11) DEFAULT '0',\n"
+        " `_status_` int(11) DEFAULT '0',\n");
+    if (g_BCOSConfig.version() <= V2_1_0)
+    {
+        commonFields += "`_hash_` varchar(128) DEFAULT NULL,\n";
+    }
+    return commonFields;
+}
+
 void ZdbStorage::createSysTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_tables_` (\n";
-    ss << " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT '',\n";
-    ss << " `_num_` BIGINT(11) DEFAULT '0',\n";
-    ss << " `_status_` int(11) DEFAULT '0',\n";
+    ss << getCommonFileds();
     ss << "`table_name` varchar(128) DEFAULT '',\n";
     ss << "`key_field` varchar(1024) DEFAULT '',\n";
     ss << " `value_field` varchar(1024) DEFAULT '',\n";
@@ -139,10 +143,7 @@ void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_cns_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`name` varchar(128) DEFAULT NULL,\n";
     ss << "`version` varchar(128) DEFAULT NULL,\n";
     ss << "`address` varchar(256) DEFAULT NULL,\n";
@@ -157,10 +158,7 @@ void ZdbStorage::createAccessTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_table_access_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << " `table_name` varchar(128) DEFAULT NULL,\n";
     ss << "`address` varchar(128) DEFAULT NULL,\n";
     ss << " `enable_num` varchar(256) DEFAULT NULL,\n";
@@ -174,10 +172,7 @@ void ZdbStorage::createCurrentStateTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_current_state_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`key` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
     ss << "PRIMARY KEY (`_id_`),\n";
@@ -191,10 +186,7 @@ void ZdbStorage::createNumber2HashTables()
     stringstream ss;
 
     ss << "CREATE TABLE IF NOT EXISTS `_sys_number_2_hash_` (\n";
-    ss << " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << " `_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << " `_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << " `_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << " `number` varchar(128) DEFAULT NULL,\n";
     ss << " `value` longtext,\n";
     ss << " PRIMARY KEY (`_id_`),\n";
@@ -207,10 +199,7 @@ void ZdbStorage::createTxHash2BlockTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_tx_hash_2_block_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
     ss << "`index` varchar(256) DEFAULT NULL,\n";
@@ -224,10 +213,7 @@ void ZdbStorage::createHash2BlockTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_hash_2_block_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << " `_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << " `_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
     ss << " PRIMARY KEY (`_id_`),\n";
@@ -240,10 +226,7 @@ void ZdbStorage::createCnsTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_consensus_` (\n";
-    ss << " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << " `_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`name` varchar(128) DEFAULT 'node',\n";
     ss << "`type` varchar(128) DEFAULT NULL,\n";
     ss << "`node_id` varchar(256) DEFAULT NULL,\n";
@@ -259,10 +242,7 @@ void ZdbStorage::createSysConfigTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_config_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`key` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
     ss << "`enable_num` varchar(256) DEFAULT NULL,\n";
@@ -276,10 +256,7 @@ void ZdbStorage::createSysBlock2NoncesTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `_sys_block_2_nonces_` (\n";
-    ss << "`_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n";
-    ss << "`_hash_` varchar(128) DEFAULT NULL,\n";
-    ss << "`_num_` BIGINT(11) DEFAULT NULL,\n";
-    ss << "`_status_` int(11) DEFAULT NULL,\n";
+    ss << getCommonFileds();
     ss << "`number` varchar(128) DEFAULT NULL,\n";
     ss << " `value` longtext,\n";
     ss << "PRIMARY KEY (`_id_`),";

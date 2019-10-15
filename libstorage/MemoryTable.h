@@ -26,7 +26,6 @@
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
@@ -261,10 +260,6 @@ public:
         return true;
     }
 
-    void setStateStorage(Storage::Ptr amopDB) override { m_remoteDB = amopDB; }
-    void setBlockHash(h256 blockHash) override { m_blockHash = blockHash; }
-    void setBlockNum(int blockNum) override { m_blockNum = blockNum; }
-
     bool checkAuthority(Address const& _origin) const override
     {
         if (m_tableInfo->authorizedAddress.empty())
@@ -385,7 +380,7 @@ private:
             // These code is fast with no rollback
             if (m_remoteDB && needSelect)
             {
-                entries = m_remoteDB->select(m_blockHash, m_blockNum, m_tableInfo, key);
+                entries = m_remoteDB->select(m_blockNum, m_tableInfo, key);
                 // Multiple insertion is ok in concurrent_unordered_map, the second insert will be
                 // dropped.
                 m_cache.insert(std::make_pair(key, entries));
@@ -455,10 +450,7 @@ private:
         }
     }
 
-    Storage::Ptr m_remoteDB;
     CacheType m_cache;
-    h256 m_blockHash;
-    int m_blockNum = 0;
     std::function<void(Table::Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
 };

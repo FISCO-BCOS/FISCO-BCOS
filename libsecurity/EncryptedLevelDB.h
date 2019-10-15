@@ -25,7 +25,6 @@
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
 #include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/AES.h>
 #include <string>
 

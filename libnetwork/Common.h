@@ -41,7 +41,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Protocol.h>
 #include <chrono>

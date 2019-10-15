@@ -243,14 +243,6 @@ protected:
 
     virtual dev::h512s consensusList() const { return sealerList(); }
 
-private:
-    bool blockExists(h256 const& blockHash)
-    {
-        if (m_blockChain->getBlockByHash(blockHash) == nullptr)
-            return false;
-        return true;
-    }
-
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
     // record the sealer list has been updated or not

@@ -26,7 +26,6 @@
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/ThreadPool.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -77,7 +76,7 @@ public:
             BOOST_THROW_EXCEPTION(InvalidProtocolID() << errinfo_comment("ProtocolID must be > 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
-        m_commonNonceCheck = std::make_shared<CommonTransactionNonceCheck>();
+        m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
         m_callbackPool =
             std::make_shared<dev::ThreadPool>("txPoolCallback-" + std::to_string(_protocolId), 2);
     }
@@ -166,11 +165,8 @@ protected:
      */
     ImportResult import(dev::eth::Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
-    /// verify transcation
-    virtual ImportResult verify(
-        Transaction& trans, IfDropped _ik = IfDropped::Ignore, bool _needinsert = false);
-    /// check nonce
-    virtual bool isBlockLimitOrNonceOk(dev::eth::Transaction const& _ts, bool _needinsert) const;
+    /// verify transaction
+    virtual ImportResult verify(Transaction& trans, IfDropped _ik = IfDropped::Ignore);
     /// interface for filter check
     virtual u256 filterCheck(const Transaction&) const { return u256(0); };
     void clear();
@@ -188,9 +184,9 @@ private:
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction const& tx)
     {
-        if (!m_commonNonceCheck->isNonceOk(tx, true))
+        if (!m_txpoolNonceChecker->isNonceOk(tx, true))
         {
-            TXPOOL_LOG(WARNING) << LOG_DESC("txPoolNonceCheck: check TxPool Nonce failed");
+            TXPOOL_LOG(WARNING) << LOG_DESC("txPool Nonce Check failed");
             return false;
         }
         return true;
@@ -202,7 +198,7 @@ private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     std::shared_ptr<TransactionNonceCheck> m_txNonceCheck;
     /// nonce check for txpool
-    std::shared_ptr<CommonTransactionNonceCheck> m_commonNonceCheck;
+    std::shared_ptr<CommonTransactionNonceCheck> m_txpoolNonceChecker;
     /// Max number of pending transactions
     uint64_t m_limit;
     mutable SharedMutex m_lock;

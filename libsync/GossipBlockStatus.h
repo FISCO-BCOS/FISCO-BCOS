@@ -21,7 +21,6 @@
  */
 #pragma once
 #include <libdevcore/Worker.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 
 #define GOSSIP_LOG(_OBV) LOG(_OBV) << LOG_BADGE("GossipBlockStatus")

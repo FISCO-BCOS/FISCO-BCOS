@@ -21,8 +21,8 @@
 
 #include "ParallelConfigPrecompiled.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/EntriesPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace std;

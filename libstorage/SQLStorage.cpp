@@ -22,7 +22,6 @@
 #include "StorageException.h"
 
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/easylog.h>
 
 #include "Common.h"
 #include "SQLStorage.h"
@@ -36,8 +35,8 @@ using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
 
-Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr SQLStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -51,8 +50,8 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         {
             requestJson["op"] = "select2";
         }
-
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: remove params blockhash
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
         requestJson["params"]["table"] = tableInfo->name;
         requestJson["params"]["key"] = key;
@@ -194,7 +193,7 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
     return Entries::Ptr();
 }
 
-size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
@@ -210,7 +209,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         Json::Value requestJson;
 
         requestJson["op"] = "commit";
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: check if this param used
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
 
         for (auto it : datas)
@@ -283,11 +283,6 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
     }
 
     return 0;
-}
-
-bool SQLStorage::onlyDirty()
-{
-    return true;
 }
 
 Json::Value SQLStorage::requestDB(const Json::Value& value)
@@ -384,7 +379,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
             std::cout << "The sqlstorage doesn't work well,"
-                      << "the program will exit with abnormal status" << std::endl;
+                      << "the fisco-bcos will exit." << std::endl;
 
             m_fatalHandler(e);
 

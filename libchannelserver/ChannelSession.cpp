@@ -24,7 +24,6 @@
 #include "ChannelSession.h"
 #include "ChannelException.h"
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iostream>

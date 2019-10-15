@@ -17,10 +17,9 @@
 
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/EntryPrecompiled.h>
+#include <libprecompiled/EntriesPrecompiled.h>
+#include <libprecompiled/EntryPrecompiled.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 

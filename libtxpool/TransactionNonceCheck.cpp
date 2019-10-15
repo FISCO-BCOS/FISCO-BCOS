@@ -51,11 +51,9 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
     return true;
 }
 
-bool TransactionNonceCheck::ok(Transaction const& _transaction, bool _needinsert)
+bool TransactionNonceCheck::ok(Transaction const& _transaction)
 {
-    if (!isBlockLimitOk(_transaction))
-        return false;
-    return isNonceOk(_transaction, _needinsert);
+    return isBlockLimitOk(_transaction) && isNonceOk(_transaction);
 }
 
 void TransactionNonceCheck::getNonceAndUpdateCache(
@@ -80,6 +78,11 @@ void TransactionNonceCheck::getNonceAndUpdateCache(
                 << LOG_DESC("updateCache: getNonceAndUpdateCache block cache hit ")
                 << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size())
                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
+        }
+        else
+        {
+            NONCECHECKER_LOG(TRACE)
+                << LOG_DESC("Can't get block") << LOG_KV("blockNumber", blockNumber);
         }
     }
     else

@@ -30,7 +30,6 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
-#include <libdevcore/easylog.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -72,14 +71,12 @@ bool Ledger::initLedger(const std::string& _configFilePath)
         return false;
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
-    m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+    m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
     // m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
-    /// set group ID for storage
-    m_dbInitializer->storage()->setGroupID(m_groupId);
     /// init the DB
     bool ret = initBlockChain(genesisParam);
     if (!ret)
@@ -384,6 +381,8 @@ void Ledger::initDBConfig(ptree const& pt)
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        m_param->mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
+        m_param->mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
         if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
         {
             m_param->mutableStorageParam().type = "RocksDB";
@@ -392,16 +391,18 @@ void Ledger::initDBConfig(ptree const& pt)
         }
     }
     m_param->mutableStorageParam().path = m_param->baseDir() + "/block";
-    m_param->mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 256);
-
-    if (m_param->mutableStorageParam().maxCapacity <= 0)
+    m_param->mutableStorageParam().maxCapacity = pt.get<uint>("storage.max_capacity", 32);
+    auto scrollThresholdMultiple = pt.get<uint>("storage.scroll_threshold_multiple", 2);
+    m_param->mutableStorageParam().scrollThreshold =
+        scrollThresholdMultiple ? scrollThresholdMultiple * g_BCOSConfig.c_blockLimit : 2000;
+    if (m_param->mutableStorageParam().maxCapacity < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
                               << errinfo_comment("Please set storage.max_capacity to positive !"));
     }
 
-    m_param->mutableStorageParam().maxForwardBlock = pt.get<int>("storage.max_forward_block", 10);
-    if (m_param->mutableStorageParam().maxForwardBlock <= 0)
+    m_param->mutableStorageParam().maxForwardBlock = pt.get<uint>("storage.max_forward_block", 10);
+    if (m_param->mutableStorageParam().maxForwardBlock < 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set storage.max_forward_block to positive !"));
@@ -411,8 +412,6 @@ void Ledger::initDBConfig(ptree const& pt)
     {
         m_param->mutableStorageParam().maxRetry = 100;
     }
-    /// set state db related param
-    m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
 
     // read db config from config eg:mysqlip mysqlport and so on
     m_param->mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
@@ -426,6 +425,7 @@ void Ledger::initDBConfig(ptree const& pt)
     m_param->mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
     Ledger_LOG(DEBUG) << LOG_BADGE("initDBConfig")
+                      << LOG_KV("stateType", m_param->mutableStateParam().type)
                       << LOG_KV("storageDB", m_param->mutableStorageParam().type)
                       << LOG_KV("storagePath", m_param->mutableStorageParam().path)
                       << LOG_KV("baseDir", m_param->baseDir())

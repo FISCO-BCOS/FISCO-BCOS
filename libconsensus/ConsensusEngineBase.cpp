@@ -104,10 +104,12 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     }
 
     /// check the existence of the parent block (Must exist)
-    if (!blockExists(block.blockHeader().parentHash()))
+    if (!m_blockChain->getBlockByHash(
+            block.blockHeader().parentHash(), block.blockHeader().number() - 1))
     {
-        ENGINE_LOG(DEBUG) << LOG_DESC("checkBlockValid: Parent doesn't exist")
-                          << LOG_KV("hash", block_hash.abridged());
+        ENGINE_LOG(ERROR) << LOG_DESC("checkBlockValid: Parent doesn't exist")
+                          << LOG_KV("hash", block_hash.abridged())
+                          << LOG_KV("number", block.blockHeader().number());
         BOOST_THROW_EXCEPTION(ParentNoneExist() << errinfo_comment("Parent Block Doesn't Exist"));
     }
     if (block.blockHeader().number() > 1)

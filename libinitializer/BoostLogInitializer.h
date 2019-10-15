@@ -22,7 +22,6 @@
  */
 #pragma once
 #include "Common.h"
-#include <libdevcore/easylog.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>

@@ -40,8 +40,6 @@
 #ifdef __INTEL_COMPILER
 #pragma warning(disable : 3682)  // call through incomplete class
 #endif
-#define DEV_QUOTED_HELPER(s) #s
-#define DEV_QUOTED(s) DEV_QUOTED_HELPER(s)
 
 #include <sys/time.h>
 #include <chrono>
@@ -59,6 +57,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
+#include "Log.h"
 #include "secure_vector.h"
 #include "vector_ref.h"
 
@@ -422,4 +421,6 @@ private:
 };
 
 std::string newSeq();
+void pthread_setThreadName(std::string const& _n);
+
 }  // namespace dev

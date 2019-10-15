@@ -23,9 +23,9 @@
 
 #include "Fake.h"
 #include "SyncParamParse.h"
+
 #include <fisco-bcos/Fake.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>

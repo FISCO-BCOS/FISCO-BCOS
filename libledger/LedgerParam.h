@@ -97,9 +97,10 @@ struct EventLogFilterManagerParams
 };
 struct StorageParam
 {
-    std::string type;
+    std::string type = "storage";
     std::string path;
-
+    bool binaryLog = false;
+    bool CachedStorage = true;
     // for amop storage
     std::string topic;
     size_t timeout;
@@ -107,6 +108,7 @@ struct StorageParam
     // MB
     int maxCapacity;
 
+    int64_t scrollThreshold = 2000;
     // for zdb storage
     std::string dbType;
     std::string dbIP;

@@ -22,7 +22,7 @@
 #include "MemoryDB.h"
 #include "Common.h"
 #include "CommonData.h"
-#include "easylog.h"
+
 using namespace std;
 using namespace dev;
 
