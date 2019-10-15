@@ -29,7 +29,7 @@
 using namespace dev::storage;
 using namespace std;
 
-bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
+bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
     {
@@ -145,7 +145,7 @@ int SQLConnectionPool::GetTotalConnections()
     return ConnectionPool_size(m_connectionPool);
 }
 
-void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
+void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
     {

@@ -32,7 +32,7 @@ namespace dev
 {
 namespace storage
 {
-struct ZDBConfig
+struct ConnectionPoolConfig
 {
     std::string dbType;
     std::string dbIP;
@@ -54,7 +54,7 @@ public:
 
     SQLConnectionPool(){};
     ~SQLConnectionPool();
-    bool InitConnectionPool(const ZDBConfig& _dbConfig);
+    bool InitConnectionPool(const ConnectionPoolConfig& _dbConfig);
     Connection_T GetConnection();
     int ReturnConnection(const Connection_T& _connection);
     int BeginTransaction(const Connection_T& _connection);
@@ -66,7 +66,7 @@ public:
 
     int GetTotalConnections();
 
-    void createDataBase(const ZDBConfig& _dbConfig);
+    void createDataBase(const ConnectionPoolConfig& _dbConfig);
 
 private:
     ConnectionPool_T m_connectionPool;
