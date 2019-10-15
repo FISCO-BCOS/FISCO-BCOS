@@ -19,9 +19,8 @@
  *  @date 20180921
  */
 #include "EntryPrecompiled.h"
-#include "Table.h"
+#include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 

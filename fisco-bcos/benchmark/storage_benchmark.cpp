@@ -18,6 +18,7 @@
  * @author: xingqiangbai
  * @date 2018-11-14
  */
+
 #include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include "rocksdb/db.h"
@@ -25,7 +26,6 @@
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
@@ -41,7 +41,6 @@
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/from_stream.hpp>
 
-INITIALIZE_EASYLOGGINGPP
 
 using namespace std;
 using namespace dev;
@@ -53,7 +52,6 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
 {
     boost::filesystem::create_directories("./RocksDB");
     rocksdb::Options options;
-    rocksdb::DB* db = nullptr;
     options.IncreaseParallelism();
     options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;

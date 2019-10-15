@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "Table.h"
+#include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 
 namespace dev

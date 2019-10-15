@@ -36,10 +36,10 @@ namespace test_zdbStorage
 class MockSQLBasicAccess : public dev::storage::SQLBasicAccess
 {
 public:
-    int Select(h256 hash, int64_t num, const std::string& table, const std::string& key,
+    int Select(int64_t num, const std::string& table, const std::string& key,
         Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values) override
     {
-        std::cout << "hash: " << hash.hex() << ", num:" << num << ", key: " << key << std::endl;
+        std::cout << ", num:" << num << ", key: " << key << std::endl;
         if (key == "_empty_key_" || !condition)
         {
             values.resize(0);
@@ -64,9 +64,9 @@ public:
         }
         return 0;
     }
-    int Commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override
+    int Commit(int64_t num, const std::vector<TableData::Ptr>& datas) override
     {
-        std::cout << "hash:" << hash.hex() << ", num:" << num << std::endl;
+        std::cout << "num:" << num << std::endl;
         return datas.size();
     }
     void ExecuteSql(const std::string& _sql) override { printf("sql:%s\n", _sql.c_str()); }
@@ -106,7 +106,7 @@ BOOST_FIXTURE_TEST_SUITE(ZdbStorageTest, zdbStorageFixture)
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(zdbStorage->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(zdbStorage->onlyCommitDirty(), true);
 }
 BOOST_AUTO_TEST_CASE(empty_select)
 {
@@ -117,8 +117,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries =
-        zdbStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    Entries::Ptr entries = zdbStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -134,7 +133,7 @@ BOOST_AUTO_TEST_CASE(select_condition)
     tableInfo->name = table;
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1000000");
-    Entries::Ptr entries = zdbStorage->select(h, num, tableInfo, "darrenyin", condition);
+    Entries::Ptr entries = zdbStorage->select(num, tableInfo, "darrenyin", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -151,7 +150,7 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = zdbStorage->commit(h, num, datas);
+    size_t c = zdbStorage->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
 }
 

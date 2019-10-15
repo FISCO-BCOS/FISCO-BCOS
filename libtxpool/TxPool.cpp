@@ -47,42 +47,48 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "ImportResult::TransactionNonceCheckFail, txHash: " + toHex(_tx.sha3())));
+                "TransactionNonceCheckFail, txHash=" + toHex(_tx.sha3().abridged())));
     }
     else if (ImportResult::TransactionPoolIsFull == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "ImportResult::TransactionPoolIsFull, txHash: " + toHex(_tx.sha3())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionPoolIsFull, txHash=" + toHex(_tx.sha3().abridged())));
     }
     else if (ImportResult::TxPoolNonceCheckFail == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "ImportResult::TxPoolNonceCheckFail, txHash: " + toHex(_tx.sha3())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TxPoolNonceCheckFail, txHash=" + toHex(_tx.sha3().abridged())));
     }
     else if (ImportResult::AlreadyKnown == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "ImportResult::TransactionAlreadyKown, txHash: " + toHex(_tx.sha3())));
+                "TransactionAlreadyKown, txHash=" + toHex(_tx.sha3().abridged())));
     }
     else if (ImportResult::AlreadyInChain == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "ImportResult::TransactionAlreadyInChain, txHash: " + toHex(_tx.sha3())));
+                "TransactionAlreadyInChain, txHash=" + toHex(_tx.sha3().abridged())));
     }
     else if (ImportResult::InvalidChainIdOrGroupId == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "ImportResult::InvalidChainIdOrGroupId, txHash: " + toHex(_tx.sha3())));
+                "InvalidChainIdOrGroupId, txHash=" + toHex(_tx.sha3().abridged())));
+    }
+    else if (ImportResult::BlockLimitCheckFailed == ret)
+    {
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "BlockLimitCheckFailed, txBlockLimit=" + _tx.blockLimit().str() +
+                                  ", txHash=" + toHex(_tx.sha3().abridged())));
     }
     else
+    {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "ImportResult::TransactionSubmitFailed, txHash: " + toHex(_tx.sha3())));
+                "TransactionSubmitFailed, txHash=" + toHex(_tx.sha3().abridged())));
+    }
 }
 
 /**
@@ -150,7 +156,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
         UpgradeGuard ul(l);
         if (insert(_tx))
         {
-            m_commonNonceCheck->insertCache(_tx);
+            m_txpoolNonceChecker->insertCache(_tx);
             m_onReady();
         }
     }
@@ -209,7 +215,7 @@ bool TxPool::txExists(dev::h256 const& txHash)
  * @param _drop_policy : Import transaction policy
  * @return ImportResult : import result
  */
-ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _needinsert)
+ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
@@ -227,8 +233,14 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
         return ImportResult::AlreadyInChain;
     }
     /// check nonce
-    if (false == isBlockLimitOrNonceOk(trans, _needinsert))
+    if (trans.nonce() == Invalid256 || (!m_txNonceCheck->isNonceOk(trans, false)))
+    {
         return ImportResult::TransactionNonceCheckFail;
+    }
+    if (false == m_txNonceCheck->isBlockLimitOk(trans))
+    {
+        return ImportResult::BlockLimitCheckFailed;
+    }
     try
     {
         /// check transaction signature here when everything is ok
@@ -242,7 +254,9 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     /// nonce related to txpool must be checked at the last, since this will insert nonce of the
     /// valid transaction into the txpool nonce cache
     if (false == txPoolNonceCheck(trans))
+    {
         return ImportResult::TxPoolNonceCheckFail;
+    }
     /// check chainId and groupId
     if (false == trans.checkChainIdAndGroupId(u256(g_BCOSConfig.chainId()), u256(m_groupId)))
     {
@@ -250,22 +264,6 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
     }
     /// TODO: filter check
     return ImportResult::Success;
-}
-
-/**
- * @brief: check the nonce
- * @param _tx : the transaction to be checked
- * @param _needInsert : insert transaction nonce to cache after checked
- * @return true : valid nonce
- * @return false : invalid nonce
- */
-bool TxPool::isBlockLimitOrNonceOk(Transaction const& _tx, bool _needInsert) const
-{
-    if (_tx.nonce() == Invalid256 || (!m_txNonceCheck->ok(_tx, _needInsert)))
-    {
-        return false;
-    }
-    return true;
 }
 
 struct TxCallback
@@ -389,7 +387,7 @@ bool TxPool::handleBadBlock(Block const&)
 {
     /// bool ret = dropTransactions(block, false);
     /// remove the nonce check related to txpool
-    /// m_commonNonceCheck->delCache(block.transactions());
+    /// m_txpoolNonceChecker->delCache(block.transactions());
     return true;
 }
 /// drop a block when it has been committed successfully
@@ -401,7 +399,7 @@ bool TxPool::dropBlockTrans(Block const& block)
     /// remove the information of known transactions from map
     removeBlockKnowTrans(block);
     /// remove the nonce check related to txpool
-    m_commonNonceCheck->delCache(block.transactions());
+    m_txpoolNonceChecker->delCache(block.transactions());
     return ret;
 }
 
@@ -434,7 +432,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
             if (false == m_txNonceCheck->isBlockLimitOk(*it))
             {
                 invalidBlockLimitTxs.push_back(it->sha3());
-                nonceKeyCache.push_back(m_commonNonceCheck->generateKey(*it));
+                nonceKeyCache.push_back(it->nonce());
                 continue;
             }
             if (!_avoid.count(it->sha3()))
@@ -458,7 +456,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         if (nonceKeyCache.size() > 0)
         {
             for (auto key : nonceKeyCache)
-                m_commonNonceCheck->delCache(key);
+                m_txpoolNonceChecker->delCache(key);
         }
     }
 

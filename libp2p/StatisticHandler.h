@@ -22,7 +22,6 @@
  * */
 #pragma once
 #include <libdevcore/Guards.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/P2PMessage.h>
 

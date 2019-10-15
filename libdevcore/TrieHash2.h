@@ -1,4 +1,4 @@
-/*
+/**
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,24 +12,31 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
+ *
+ * @brief: calc trie hash with merkle tree
+ *
+ * @file: TrieHash2.h
+ * @author: darrenyin
+ * @date 2019-09-24
  */
-/**
- * @brief : override append function of easylogging++
- * @file: easylog.h
- * @author: yujiechen
- * @date: 2017
- */
-
 #pragma once
-#include "Log.h"
-#include <string>
+
+#include <libdevcore/FixedHash.h>
+#include <vector>
+
 namespace dev
 {
-void pthread_setThreadName(std::string const& _n);
-}  // namespace dev
+enum trieHashNodeType
+{
+    typeDefault = 0,
+    typeLeafNode = 1,
+    typeAllNodeHaveCommonPrefix = 2,
+    typeIntermediateNode = 3,
+};
 
-// BCOS log format
-#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
-#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
-#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
+bytes getTrieTree256(
+    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
+h256 getHash256(
+    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
+}  // namespace dev

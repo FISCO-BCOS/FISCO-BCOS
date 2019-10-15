@@ -202,12 +202,6 @@ struct LevelDBFixture
 
 BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture)
 
-
-BOOST_AUTO_TEST_CASE(onlyDirty)
-{
-    BOOST_CHECK_EQUAL(levelDB->onlyDirty(), false);
-}
-
 BOOST_AUTO_TEST_CASE(empty_select)
 {
     h256 h(0x01);
@@ -217,7 +211,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = levelDB->select(h, num, tableInfo, key);
+    Entries::Ptr entries = levelDB->select(num, tableInfo, key);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -235,13 +229,13 @@ BOOST_AUTO_TEST_CASE(commit)
     {
         datas.push_back(tableData);
     }
-    size_t c = levelDB->commit(h, num, datas);
+    size_t c = levelDB->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = levelDB->select(h, num, tableInfo, key);
+    entries = levelDB->select(num, tableInfo, key);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -256,13 +250,13 @@ BOOST_AUTO_TEST_CASE(exception)
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("Exception"), entries));
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(levelDB->commit(h, num, datas), boost::exception);
+    BOOST_CHECK_THROW(levelDB->commit(num, datas), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    BOOST_CHECK_THROW(levelDB->select(h, num, tableInfo, key), boost::exception);
+    BOOST_CHECK_THROW(levelDB->select(num, tableInfo, key), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -95,7 +95,8 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t = -1) override
     {
         ReadGuard l(x_blockChain);
         if (m_blockHash.count(_blockHash))
@@ -133,7 +134,21 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
-
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
+    {
+        return std::make_pair(
+            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    std::pair<LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const&) override
+    {
+        return std::make_pair(LocalisedTransaction(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
     CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
@@ -257,7 +272,7 @@ public:
         boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
         initIniConfig(_configPath);
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain
         initBlockChain(m_genesisParam);
         /// intit blockVerifier

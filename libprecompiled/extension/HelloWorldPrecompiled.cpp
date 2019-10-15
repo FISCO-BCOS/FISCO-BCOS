@@ -20,10 +20,8 @@
  */
 #include "HelloWorldPrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -39,7 +37,7 @@ contract HelloWorld {
 
 
 // HelloWorldPrecompiled table name
-const std::string HELLO_WORLD_TABLE_NAME = "_ext_hello_world_";
+const std::string HELLO_WORLD_TABLE_NAME = storage::USER_TABLE_PREFIX + "hello_world";
 // key field
 const std::string HELLOWORLD_KEY_FIELD = "key";
 const std::string HELLOWORLD_KEY_FIELD_NAME = "hello_key";

@@ -13,10 +13,10 @@ SHELL_FOLDER=$(
 
 check_script=${SHELL_FOLDER}/run-clang-format.py
 commit_limit=6
-file_limit=30
+file_limit=35
 insert_limit=250
 delete_limit=500
-new_file_header_length=20
+new_file_header_length=35
 skip_check_words="sync code"
 
 LOG_ERROR() {
@@ -67,10 +67,10 @@ function check_PR_limit() {
         fi
     fi
     local files=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $1}')
-    if [ ${file_limit} -lt ${files} ]; then
-        LOG_ERROR "modify ${files} files, limit is ${file_limit}"
-        exit 1
-    fi
+    # if [ ${file_limit} -lt ${files} ]; then
+    #     LOG_ERROR "modify ${files} files, limit is ${file_limit}"
+    #     exit 1
+    # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
     local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')

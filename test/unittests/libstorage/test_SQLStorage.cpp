@@ -140,7 +140,7 @@ BOOST_FIXTURE_TEST_SUITE(SQLStorageTest, SQLStorageFixture)
 
 BOOST_AUTO_TEST_CASE(onlyDirty)
 {
-    BOOST_CHECK_EQUAL(sqlStorage->onlyDirty(), true);
+    BOOST_CHECK_EQUAL(sqlStorage->onlyCommitDirty(), true);
 }
 
 BOOST_AUTO_TEST_CASE(empty_select)
@@ -152,8 +152,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries =
-        sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    Entries::Ptr entries = sqlStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -167,14 +166,14 @@ BOOST_AUTO_TEST_CASE(select_condition)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
+    Entries::Ptr entries = sqlStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 
     condition = std::make_shared<Condition>();
     condition->EQ("id", "1");
     tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = sqlStorage->select(h, num, tableInfo, "LiSi", condition);
+    entries = sqlStorage->select(num, tableInfo, "LiSi", condition);
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -191,13 +190,13 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = sqlStorage->commit(h, num, datas);
+    size_t c = sqlStorage->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = sqlStorage->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    entries = sqlStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -216,11 +215,11 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->entries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(sqlStorage->commit(h, num, datas, blockHash), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->commit(num, datas, blockHash), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
-    BOOST_CHECK_THROW(sqlStorage->select(h, num, table, key, std::make_shared<Condition>()), boost::exception);
+    BOOST_CHECK_THROW(sqlStorage->select(num, table, key, std::make_shared<Condition>()), boost::exception);
 #endif
 }
 

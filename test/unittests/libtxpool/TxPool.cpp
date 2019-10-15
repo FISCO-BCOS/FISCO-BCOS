@@ -136,6 +136,27 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     pool_test.m_txPool->setMaxBlockLimit(100);
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == 100);
 }
+
+BOOST_AUTO_TEST_CASE(BlockLimitCheck)
+{
+    TxPoolFixture pool_test(5, 5);
+    /// test out of limit, clear the queue
+    Transactions trans =
+        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+            ->transactions();
+    bytes trans_data;
+    trans[0].encode(trans_data);
+    Transaction tx(trans_data, CheckTransaction::Everything);
+    tx.setNonce(u256(tx.nonce() + u256(10)));
+    tx.setBlockLimit(pool_test.m_blockChain->number() + u256(10000));
+    Signature sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
+    tx.updateSignature(SignatureStruct(sig));
+    tx.encode(trans_data);
+    pool_test.m_txPool->setTxPoolLimit(5);
+    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
+    BOOST_CHECK(result == ImportResult::BlockLimitCheckFailed);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

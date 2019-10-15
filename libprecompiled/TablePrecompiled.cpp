@@ -22,10 +22,9 @@
 #include "ConditionPrecompiled.h"
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
-#include "StorageException.h"
-#include "Table.h"
+#include "libstorage/StorageException.h"
+#include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;

@@ -158,6 +158,12 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     BOOST_TEST(entries->size() == 1u);
     BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
 
+    table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
+
     memoryTableFactory->commitDB(h256(0x122), 998);
 
     LOG(INFO) << "Remove the sealer node";
@@ -167,6 +173,11 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
+    table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x123), 999);
 
     table = memoryTableFactory->openTable(SYS_CONSENSUS);
@@ -191,7 +202,11 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     entries = table->select(PRI_KEY, condition);
     BOOST_TEST(entries->size() == 1u);
-
+    table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x124), 1000);
 }
 
@@ -208,7 +223,11 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
-
+    auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x1), 1);
 
     std::string nodeID2(
@@ -221,27 +240,39 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
-
+    table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x2), 2);
 
-    for (size_t i = 3; i < 10300; ++i)
+    for (size_t i = 3; i < 1030; ++i)
     {
         in = abi.abiIn("addSealer(string)", nodeID2);
         out = consensusPrecompiled->call(context, bytesConstRef(&in));
         count = 0;
         abi.abiOut(bytesConstRef(&out), count);
         BOOST_TEST(count == 1u);
-
+        auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+        auto entry = table->newEntry();
+        entry->setField(SYS_VALUE, "0");
+        entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+        table->insert(SYS_KEY_CURRENT_NUMBER, entry);
         memoryTableFactory->commitDB(h256(i), i);
     }
 
-    for (size_t i = 10300; i < 20300; ++i)
+    for (size_t i = 1030; i < 2030; ++i)
     {
         in = abi.abiIn("remove(string)", nodeID2);
         out = consensusPrecompiled->call(context, bytesConstRef(&in));
         count = 0;
         abi.abiOut(bytesConstRef(&out), count);
-
+        auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+        auto entry = table->newEntry();
+        entry->setField(SYS_VALUE, "0");
+        entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+        table->insert(SYS_KEY_CURRENT_NUMBER, entry);
         memoryTableFactory->commitDB(h256(i), i);
     }
 }

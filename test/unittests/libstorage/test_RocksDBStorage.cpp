@@ -237,12 +237,6 @@ struct RocksDBFixture
 
 BOOST_FIXTURE_TEST_SUITE(RocksDB, RocksDBFixture)
 
-
-BOOST_AUTO_TEST_CASE(onlyDirty)
-{
-    BOOST_CHECK_EQUAL(rocksDB->onlyDirty(), false);
-}
-
 BOOST_AUTO_TEST_CASE(empty_select)
 {
     h256 h(0x01);
@@ -252,7 +246,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    Entries::Ptr entries = rocksDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    Entries::Ptr entries = rocksDB->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
@@ -269,14 +263,14 @@ BOOST_AUTO_TEST_CASE(commit)
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    size_t c = rocksDB->commit(h, num, datas);
+    size_t c = rocksDB->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);
     std::string table("t_test");
     std::string key("LiSi");
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
-    entries = rocksDB->select(h, num, tableInfo, key, std::make_shared<Condition>());
+    entries = rocksDB->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
 }
 
@@ -294,14 +288,14 @@ BOOST_AUTO_TEST_CASE(exception)
     entries->get(0)->setField("Name", "Exception");
     tableData->newEntries = entries;
     datas.push_back(tableData);
-    BOOST_CHECK_THROW(rocksDB->commit(h, num, datas), boost::exception);
+    BOOST_CHECK_THROW(rocksDB->commit(num, datas), boost::exception);
     std::string table("e");
     std::string key("Exception");
 
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
     BOOST_CHECK_THROW(
-        rocksDB->select(h, num, tableInfo, key, std::make_shared<Condition>()), boost::exception);
+        rocksDB->select(num, tableInfo, key, std::make_shared<Condition>()), boost::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

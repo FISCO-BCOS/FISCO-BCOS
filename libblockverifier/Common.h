@@ -21,10 +21,10 @@
 
 #pragma once
 
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <memory>
 
 #define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKVERIFIER")

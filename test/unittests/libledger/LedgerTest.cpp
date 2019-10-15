@@ -30,6 +30,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
+
 using namespace dev;
 using namespace dev::ledger;
 
@@ -48,7 +49,7 @@ public:
     bool initLedger(const std::string& _configPath) override
     {
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, 1);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
@@ -149,18 +150,6 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// check timestamp
     /// init genesis configuration
     boost::property_tree::ptree pt;
-#if 0
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with invalid timestamp
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with valid timestamp
-    pt.put("group.timestamp", 1553520855);
-    pt.put("state.type", "storage");
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
-#endif
     /// check groupMark
     fakeLedger.initMark();
     std::string mark =
@@ -185,9 +174,9 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
     BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
-
+    param->mutableStateParam().type = "storage";
     /// modify state to storage(the default option)
     fakeLedger.initDBConfig(pt);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -198,14 +187,13 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     {
         fakeLedger.getParam()->mutableStorageParam().type = "LevelDB";
     }
-
     BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =
-        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam());
+        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam(), groupId);
     /// init storageDB
     BOOST_CHECK(dbInitializer->storage() == nullptr);
     dbInitializer->initStorageDB();

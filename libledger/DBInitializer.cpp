@@ -23,6 +23,10 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include "libstorage/BinLogHandler.h"
+#include "libstorage/BinaryLogStorage.h"
+#include "libstorage/RocksDBStorageFactory.h"
+#include "libstorage/ScalableStorage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -31,7 +35,6 @@
 #include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
-#include <libsecurity/EncryptedStorage.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
@@ -41,20 +44,19 @@
 #include <libstorage/SQLStorage.h>
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <boost/lexical_cast.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace dev::blockverifier;
 using namespace dev::db;
+using namespace dev::ledger;
 using namespace dev::eth;
 using namespace dev::mptstate;
 using namespace dev::executive;
 using namespace dev::storagestate;
 
-namespace dev
-{
-namespace ledger
-{
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
@@ -74,6 +76,10 @@ void DBInitializer::initStorageDB()
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         initRocksDBStorage();
+    }
+    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable"))
+    {
+        initScalableStorage();
     }
     else
     {
@@ -139,74 +145,149 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
+int64_t DBInitializer::getBlockNumberFromStorage(Storage::Ptr _storage)
+{
+    int64_t startNum = -1;
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    tableFactoryFactory->setStorage(_storage);
+    auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), startNum);
+    Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
+    auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
+    if (entries->size() > 0)
+    {
+        auto entry = entries->get(0);
+        std::string currentNumber = entry->getField(SYS_VALUE);
+        startNum = boost::lexical_cast<int64_t>(currentNumber);
+    }
+    return startNum;
+}
+void DBInitializer::recoverFromBinaryLog(
+    std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
+{
+    int64_t startNum = getBlockNumberFromStorage(_storage);
+    // getMissingBlocksFromBinLog from (startNum,lastBlockNum]
+    int64_t lastBlockNum = _binaryLogger->getLastBlockNum();
+    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs") << LOG_KV("startNum", startNum)
+                            << LOG_KV("endNum", lastBlockNum);
+    if (startNum >= lastBlockNum)
+    {
+        return;
+    }
+    int64_t interval = 100;
+    for (int64_t num = startNum; num <= lastBlockNum; num += interval)
+    {
+        auto blocksData = _binaryLogger->getMissingBlocksFromBinLog(num, num + interval);
+        if (blocksData->size() > 0)
+        {
+            for (size_t i = 1; i <= blocksData->size(); ++i)
+            {
+                auto blockDataIter = blocksData->find(num + i);
+                if (blockDataIter == blocksData->end() || blockDataIter->second.empty())
+                {
+                    DBInitializer_LOG(FATAL) << LOG_DESC("recoverFromBinaryLog failed")
+                                             << LOG_KV("blockNumber", num + i);
+                }
+                else
+                {
+                    const std::vector<TableData::Ptr>& blockData = blockDataIter->second;
+                    h256 hash = h256();
+                    // get the hash used by commit function
+                    for (size_t j = 0; j < blockData.size(); j++)
+                    {
+                        TableData::Ptr data = blockData[j];
+                        if (data->info->name == SYS_NUMBER_2_HASH)
+                        {
+                            Entries::Ptr newEntries = data->newEntries;
+                            Entry::Ptr entry = newEntries->get(0);
+                            hash = h256(entry->getField("value"));
+                            break;
+                        }
+                    }
+                    // FIXME: delete _hash_ field and try to delete hash parameter of storage
+                    // FIXME: use h256() for now
+                    _storage->commit(num + i, blockData);
+                    DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
+                                             << LOG_KV("blockNumber", num + i);
+                }
+            }
+        }
+    }
+}
+
 void DBInitializer::initTableFactory2(Storage::Ptr _backend)
 {
-    auto cachedStorage = std::make_shared<CachedStorage>();
-#if 0
-    if (g_BCOSConfig.diskEncryption.enable)
+    auto backendStorage = _backend;
+    if (m_param->mutableStorageParam().CachedStorage)
     {
-        auto encryptedStorage = std::make_shared<EncryptedStorage>();
-        encryptedStorage->setBackend(_backend);
+        auto cachedStorage = std::make_shared<CachedStorage>();
+        cachedStorage->setBackend(_backend);
+        cachedStorage->setGroupID(m_groupID);
+        cachedStorage->setMaxCapacity(
+            m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
+        cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
+        cachedStorage->init();
+        backendStorage = cachedStorage;
+        DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
+                                << LOG_KV("maxCapacity", m_param->mutableStorageParam().maxCapacity)
+                                << LOG_KV("maxForwardBlock",
+                                       m_param->mutableStorageParam().maxForwardBlock);
+    }
 
-        encryptedStorage->setDataKey(asBytes(g_BCOSConfig.diskEncryption.dataKey));
-        cachedStorage->setBackend(encryptedStorage);
+    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    if (m_param->mutableStorageParam().binaryLog)
+    {
+        auto binaryLogStorage = make_shared<BinaryLogStorage>();
+        binaryLogStorage->setBackend(backendStorage);
+
+        tableFactoryFactory->setStorage(binaryLogStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
+        auto path = m_param->baseDir() + "/BinaryLogs";
+        boost::filesystem::create_directories(path);
+        auto binaryLogger = make_shared<BinLogHandler>(path);
+        binaryLogger->setBinaryLogSize(g_BCOSConfig.c_binaryLogSize);
+        recoverFromBinaryLog(binaryLogger, backendStorage);
+        binaryLogStorage->setBinaryLogger(binaryLogger);
+        DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
+        m_storage = binaryLogStorage;
     }
     else
     {
-#endif
-    cachedStorage->setBackend(_backend);
-#if 0
+        tableFactoryFactory->setStorage(backendStorage);
+        m_tableFactoryFactory = tableFactoryFactory;
+        m_storage = backendStorage;
     }
-#endif
-
-    cachedStorage->setMaxCapacity(
-        m_param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
-    cachedStorage->setMaxForwardBlock(m_param->mutableStorageParam().maxForwardBlock);
-
-    cachedStorage->init();
-
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    tableFactoryFactory->setStorage(cachedStorage);
-
-    m_storage = cachedStorage;
-    m_tableFactoryFactory = tableFactoryFactory;
 }
 
+dev::storage::Storage::Ptr DBInitializer::createSQLStorage(
+    std::function<void(std::exception& e)> _fatalHandler)
+{
+    auto sqlStorage = std::make_shared<SQLStorage>();
+    sqlStorage->setChannelRPCServer(m_channelRPCServer);
+    sqlStorage->setTopic(m_param->mutableStorageParam().topic);
+    sqlStorage->setFatalHandler(_fatalHandler);
+    sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
+    return sqlStorage;
+}
 void DBInitializer::initSQLStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initSQLStorage");
 
     unsupportedFeatures("SQLStorage(External)");
-
-    auto sqlStorage = std::make_shared<SQLStorage>();
-    sqlStorage->setChannelRPCServer(m_channelRPCServer);
-    sqlStorage->setTopic(m_param->mutableStorageParam().topic);
-    sqlStorage->setFatalHandler([](std::exception& e) {
+    auto sqlStorage = createSQLStorage([](std::exception& e) {
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
                                  << "Access amdb failed exit:" << e.what();
         BOOST_THROW_EXCEPTION(e);
     });
-    sqlStorage->setMaxRetry(m_param->mutableStorageParam().maxRetry);
     initTableFactory2(sqlStorage);
 }
 
-template <typename T>
-void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
+std::function<void(std::string const&, std::string&)> DBInitializer::getEncryptHandler()
 {
-    assert(rocksDB);
-    if (!g_BCOSConfig.diskEncryption.enable)
-    {
-        return;
-    }
-    DBInitializer_LOG(DEBUG) << LOG_DESC(
-        "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
     // get dataKey according to ciperDataKey from keyCenter
-    dev::bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
-    rocksDB->setEncryptHandler([=](std::string const& data, std::string& encData) {
+    return [=](std::string const& data, std::string& encData) {
         try
         {
-            bytesConstRef dataRef = bytesConstRef((const unsigned char*)data.data(), data.size());
-            encData = asString(aesCBCEncrypt(dataRef, ref(dataKey)));
+            encData = aesCBCEncrypt(data, g_BCOSConfig.diskEncryption.dataKey);
         }
         catch (const std::exception& e)
         {
@@ -215,14 +296,15 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
             ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
             BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
         }
-    });
+    };
+}
 
-    rocksDB->setDecryptHandler([=](std::string& data) {
+std::function<void(std::string&)> DBInitializer::getDecryptHandler()
+{
+    return [=](std::string& data) {
         try
         {
-            bytes deData = aesCBCDecrypt(
-                bytesConstRef{(const unsigned char*)data.c_str(), data.length()}, ref(dataKey));
-            data = asString(deData);
+            data = aesCBCDecrypt(data, g_BCOSConfig.diskEncryption.dataKey);
         }
         catch (const std::exception& e)
         {
@@ -230,13 +312,11 @@ void DBInitializer::setHandlerForDB(std::shared_ptr<T> rocksDB)
             ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
             BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
         }
-    });
+    };
 }
 
-std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
+rocksdb::Options getRocksDBOptions()
 {
-    m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
-    boost::filesystem::create_directories(m_param->mutableStorageParam().path);
     /// open and init the rocksDB
     rocksdb::Options options;
 
@@ -248,13 +328,29 @@ std::shared_ptr<dev::db::BasicRocksDB> DBInitializer::initBasicRocksDB()
     options.create_if_missing = true;
     options.max_open_files = 200;
     options.compression = rocksdb::kSnappyCompression;
+    return options;
+}
+
+Storage::Ptr DBInitializer::createRocksDBStorage(const std::string& _dbPath)
+{
+    boost::filesystem::create_directories(_dbPath);
+
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
-
-    // any exception will cause initBasicRocksDB failed, and the program will be stopped
-    rocksDB->Open(options, m_param->mutableStorageParam().path);
-
-    setHandlerForDB(rocksDB);
-    return rocksDB;
+    auto options = getRocksDBOptions();
+    // any exception will cause the program to be stopped
+    rocksDB->Open(options, _dbPath);
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        DBInitializer_LOG(INFO) << LOG_DESC(
+            "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
+        rocksDB->setEncryptHandler(getEncryptHandler());
+        rocksDB->setDecryptHandler(getDecryptHandler());
+    }
+    // create and init rocksDBStorage
+    std::shared_ptr<RocksDBStorage> rocksdbStorage =
+        std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog);
+    rocksdbStorage->setDB(rocksDB);
+    return rocksdbStorage;
 }
 
 void DBInitializer::initRocksDBStorage()
@@ -262,10 +358,9 @@ void DBInitializer::initRocksDBStorage()
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
     try
     {
-        std::shared_ptr<dev::db::BasicRocksDB> rocksDB = initBasicRocksDB();
-        // create and init rocksDBStorage
-        std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
-        rocksdbStorage->setDB(rocksDB);
+        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
+        auto rocksdbStorage = createRocksDBStorage(m_param->mutableStorageParam().path);
+
         // init TableFactory2
         initTableFactory2(rocksdbStorage);
     }
@@ -274,6 +369,95 @@ void DBInitializer::initRocksDBStorage()
         DBInitializer_LOG(ERROR) << LOG_DESC("initRocksDBStorage failed")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment("initRocksDBStorage failed"));
+    }
+}
+
+void DBInitializer::initScalableStorage()
+{
+    DBInitializer_LOG(INFO) << LOG_BADGE("initScalableStorage");
+    if (!m_param->mutableStorageParam().binaryLog)
+    {
+        DBInitializer_LOG(ERROR) << LOG_DESC(
+            "Invalid config, Scalable Storage require binary_log=true");
+        BOOST_THROW_EXCEPTION(
+            invalid_argument("Invalid config, Scalable Storage require binary_log=true"));
+    }
+    try
+    {
+        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
+        auto stateStorage = createRocksDBStorage(m_param->mutableStorageParam().path + "/state");
+        auto scalableStorage =
+            std::make_shared<ScalableStorage>(m_param->mutableStorageParam().scrollThreshold);
+        scalableStorage->setStateStorage(stateStorage);
+        auto remoteStorage = createSQLStorage([](std::exception& e) {
+            DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
+                                     << "Access amdb failed exit:" << e.what();
+            raise(SIGTERM);
+            BOOST_THROW_EXCEPTION(e);
+        });
+        scalableStorage->setRemoteStorage(remoteStorage);
+        std::string blocksDBPath = m_param->mutableStorageParam().path + "/blocksDB";
+        auto rocksDBStorageFactory = make_shared<RocksDBStorageFactory>(blocksDBPath);
+        rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
+        scalableStorage->setStorageFactory(rocksDBStorageFactory);
+        int64_t blockNumber = getBlockNumberFromStorage(stateStorage);
+        blockNumber = blockNumber > 0 ? blockNumber + 1 : 0;
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
+        scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
+        setRemoteBlockNumber(scalableStorage, blocksDBPath);
+        // init TableFactory2
+        initTableFactory2(scalableStorage);
+    }
+    catch (std::exception& e)
+    {
+        DBInitializer_LOG(ERROR) << LOG_DESC("initScalableStorage failed")
+                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initScalableStorage failed"));
+    }
+}
+
+void DBInitializer::setRemoteBlockNumber(
+    std::shared_ptr<ScalableStorage> scalableStorage, const std::string& blocksDBPath)
+{
+    boost::filesystem::path targetPath(blocksDBPath);
+    std::vector<std::string> filenames;
+    boost::filesystem::directory_iterator endIter;
+    for (boost::filesystem::directory_iterator iter(targetPath); iter != endIter; iter++)
+    {
+        if (boost::filesystem::is_directory(*iter))
+        {
+            filenames.push_back(iter->path().filename().string());
+        }
+    }
+    try
+    {
+        std::sort(
+            filenames.begin(), filenames.end(), [](std::string const& a, std::string const& b) {
+                return std::stoll(a) >= std::stoll(b);
+            });
+
+        int64_t remoteBlockNumber = 0;
+        for (size_t i = 0; i < filenames.size(); i++)
+        {
+            remoteBlockNumber = std::stoll(filenames[i]);
+            if (i == filenames.size() - 1)
+            {
+                break;
+            }
+            if (scalableStorage->getDBNameOfArchivedBlock(std::stoll(filenames[i]) - 1) !=
+                filenames[i + 1])
+            {
+                break;
+            }
+        }
+        DBInitializer_LOG(INFO) << LOG_DESC("scalableStorage setRemoteBlockNumber")
+                                << LOG_KV("number", remoteBlockNumber);
+        scalableStorage->setRemoteBlockNumber(remoteBlockNumber);
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
     }
 }
 
@@ -311,6 +495,7 @@ void DBInitializer::initZdbStorage()
     zdbStorage->setFatalHandler([](std::exception& e) {
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                                  << "access mysql failed exit:" << e.what();
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(e);
     });
 
@@ -371,6 +556,3 @@ void DBInitializer::createMptState(dev::h256 const& genesisHash)
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
     DBInitializer_LOG(DEBUG) << LOG_DESC("createMptState SUCC");
 }
-
-}  // namespace ledger
-}  // namespace dev
