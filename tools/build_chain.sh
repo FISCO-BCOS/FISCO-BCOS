@@ -441,6 +441,7 @@ generate_config_ini()
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
     ;enable_compress=true
+    ;enable_statistic=false
     ; nodes to connect
     $ip_list
 

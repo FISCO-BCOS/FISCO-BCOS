@@ -183,6 +183,12 @@ void SyncTransaction::sendTransactions(
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
 
+        // update sended txs information
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateSendedTxsInfo(txsSize, msg->length());
+        }
+
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
                         << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)

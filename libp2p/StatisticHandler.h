@@ -33,6 +33,7 @@ namespace p2p
 class StatisticHandler
 {
 public:
+    using Ptr = std::shared_ptr<StatisticHandler>;
     StatisticHandler() = default;
     virtual ~StatisticHandler() {}
 

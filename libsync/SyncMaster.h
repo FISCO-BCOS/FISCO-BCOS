@@ -82,8 +82,18 @@ public:
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
+
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
             _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+
+        m_statisticHandler = m_service->statisticHandler();
+        m_syncTrans->setStatisticHandler(m_statisticHandler);
+
+        // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
+        m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_service->statisticHandler());
+
+        m_txQueue->setStatisticHandler(m_statisticHandler);
+
 
         if (m_enableSendBlockStatusByTree)
         {
@@ -266,6 +276,9 @@ private:
 
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;
+
+    // statisticHandler
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
     // handler for find the tree router
     SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;

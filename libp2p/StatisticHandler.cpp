@@ -155,7 +155,35 @@ void StatisticHandler::printSyncStatisticInfo()
                         << LOG_KV("downloadTxsBytes", m_downloadTxsBytes);
 }
 
-void StatisticHandler::printConsStatisticInfo() {}
+void StatisticHandler::printConsStatisticInfo()
+{
+    // print consensus-network-in information
+    {
+        ReadGuard l(x_consInPacketsInfo);
+        for (auto const& it : m_consInPacketsInfo)
+        {
+            STATISTIC_LOG(INFO) << LOG_DESC("Consensus: network-in")
+                                << LOG_KV("packetType", std::to_string(it.first))
+                                << LOG_KV("packetCount", it.second.first)
+                                << LOG_KV("packetSize", it.second.second);
+        }
+        STATISTIC_LOG(INFO) << LOG_DESC("Consensus: network-in")
+                            << LOG_KV("totalInPacketBytes", m_totalConsInPacketBytes);
+    }
+    // print consensus-network-out information
+    {
+        ReadGuard l(x_consOutPacketsInfo);
+        for (auto const& it : m_consOutPacketsInfo)
+        {
+            STATISTIC_LOG(INFO) << LOG_DESC("Consensus: network-out")
+                                << LOG_KV("packetType", std::to_string(it.first))
+                                << LOG_KV("packetCount", it.second.first)
+                                << LOG_KV("packetSize", it.second.second);
+        }
+        STATISTIC_LOG(INFO) << LOG_DESC("Consensus: network-out")
+                            << LOG_KV("totalOutPacketBytes", m_totalConsOutPacketBytes);
+    }
+}
 
 void StatisticHandler::printStatistics()
 {

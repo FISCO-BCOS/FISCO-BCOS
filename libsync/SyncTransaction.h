@@ -113,6 +113,11 @@ public:
         m_signalled.notify_all();
     }
 
+    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -150,6 +155,8 @@ private:
     mutable Mutex m_fastForwardMutex;
     std::atomic_bool m_needForwardRemainTxs = {false};
     dev::h512s m_fastForwardedNodes;
+
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
 public:
     void maintainTransactions();

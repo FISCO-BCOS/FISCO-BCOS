@@ -37,6 +37,7 @@
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
+#include <libp2p/StatisticHandler.h>
 
 #include <libsync/SyncStatus.h>
 
@@ -80,6 +81,8 @@ public:
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
 
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
+        // set statisticHandler
+        m_statisticHandler = m_service->statisticHandler();
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -616,6 +619,7 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     std::atomic<uint64_t> m_sealingNumber = {0};
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler;
 };
 }  // namespace consensus
 }  // namespace dev
