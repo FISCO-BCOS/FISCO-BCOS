@@ -66,6 +66,11 @@ void SyncTransaction::doWork()
     }
     maintainTransactions_time_cost = utcTime() - record_time;
 
+    if (m_needForwardRemainTxs)
+    {
+        forwardRemainingTxs();
+    }
+
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
                     << LOG_KV("maintainDownloadingTransactionsTimeCost",
@@ -90,8 +95,6 @@ void SyncTransaction::workLoop()
 
 void SyncTransaction::maintainTransactions()
 {
-    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
-
     auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
     auto txSize = ts.size();
     if (txSize == 0)
@@ -99,38 +102,58 @@ void SyncTransaction::maintainTransactions()
         m_newTransactions = false;
         return;
     }
+    sendTransactions(ts, false, 0);
+}
+
+void SyncTransaction::sendTransactions(
+    Transactions const& _ts, bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
+{
+    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
-                    << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
+                    << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
+                    << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts.size())
+                    << LOG_KV("totalTxs", pendingSize);
 
     NodeIDs selectedPeers;
-    // only broadcastTransactions to the consensus nodes
-    if (fp_txsReceiversFilter)
+    // fastforward remaining transactions
+    if (_fastForwardRemainTxs)
     {
-        selectedPeers = fp_txsReceiversFilter(m_syncStatus->peersSet());
+        selectedPeers = m_fastForwardedNodes;
     }
     else
     {
-        selectedPeers = m_syncStatus->peers();
+        // only broadcastTransactions to the consensus nodes
+        if (fp_txsReceiversFilter)
+        {
+            selectedPeers = fp_txsReceiversFilter(m_syncStatus->peersSet());
+        }
+        else
+        {
+            selectedPeers = m_syncStatus->peers();
+        }
     }
 
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
 
-    for (size_t i = 0; i < ts.size(); ++i)
+    auto endIndex =
+        std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts.size() - 1));
+    for (ssize_t i = _startIndex; i <= endIndex; ++i)
     {
-        auto const& t = ts[i];
+        auto const& t = _ts[i];
         NodeIDs peers;
 
         // TODO: add redundancy when receive transactions from P2P
-        if (m_txPool->isTransactionKnownBySomeone(t.sha3()))
+        if (m_txPool->isTransactionKnownBySomeone(t.sha3()) && !_fastForwardRemainTxs)
         {
             m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
             continue;
         }
 
         peers = m_syncStatus->filterPeers(selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
+            bool unsent =
+                !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId) || _fastForwardRemainTxs;
             bool isSealer = _p->isSealer;
             return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
@@ -152,7 +175,7 @@ void SyncTransaction::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(ts[i].rlp(WithSignature));
+            txRLPs.emplace_back(_ts[i].rlp(WithSignature));
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);
@@ -162,10 +185,32 @@ void SyncTransaction::maintainTransactions()
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
+                        << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
+                        << LOG_KV("startIndex", _startIndex)
                         << LOG_KV("toNodeId", _p->nodeId.abridged())
                         << LOG_KV("messageSize(B)", msg->buffer()->size());
         return true;
     });
+}
+
+void SyncTransaction::forwardRemainingTxs()
+{
+    Guard l(m_fastForwardMutex);
+    int64_t currentTxsSize = m_txPool->pendingSize();
+    // no need to forward remaining transactions if the txpool is empty
+    if (currentTxsSize == 0)
+    {
+        return;
+    }
+    auto ts = m_txPool->topTransactions(currentTxsSize);
+    int64_t startIndex = 0;
+    while (startIndex < currentTxsSize)
+    {
+        sendTransactions(ts, m_needForwardRemainTxs, startIndex);
+        startIndex += c_maxSendTransactions;
+    }
+    m_needForwardRemainTxs = false;
+    m_fastForwardedNodes.clear();
 }
 
 void SyncTransaction::maintainDownloadingTransactions()

@@ -117,7 +117,7 @@ NodeIDs SyncMasterStatus::filterPeers(
     NodeIDs chosen;
     for (auto const& peer : peers)
     {
-        if (_allow(m_peersStatus[peer]))
+        if (m_peersStatus.count(peer) && _allow(m_peersStatus[peer]))
         {
             chosen.push_back(peer);
         }

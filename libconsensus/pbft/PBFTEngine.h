@@ -200,8 +200,10 @@ public:
 
     VIEWTYPE view() const override { return m_view; }
     VIEWTYPE toView() const override { return m_toView; }
+    bool shouldRecvTxs() const override { return m_blockSync->isFarSyncing(); }
 
 protected:
+    virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();
@@ -567,6 +569,7 @@ protected:
         m_viewMap[idx] = view;
     }
 
+    void waitSignal();
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};

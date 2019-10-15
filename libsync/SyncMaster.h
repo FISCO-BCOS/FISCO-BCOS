@@ -196,6 +196,10 @@ public:
     }
 
     bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
+    void noteForwardRemainTxs(dev::h512 const& _targetNodeId) override
+    {
+        m_syncTrans->noteForwardRemainTxs(_targetNodeId);
+    }
 
 protected:
     // for UT

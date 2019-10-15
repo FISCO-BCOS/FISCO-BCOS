@@ -172,6 +172,7 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
     // case1: eight sealers with two groups(every group with four members), rotating interval is 10
     auto fixture = std::make_shared<RotatingPBFTEngineFixture>(8);
     fixture->rotatingPBFT()->setSealersNum(8);
+    fixture->rotatingPBFT()->resetConfig();
     int64_t rotatingInterval = 10;
     for (auto groupSize = 4; groupSize < 10; groupSize++)
     {
