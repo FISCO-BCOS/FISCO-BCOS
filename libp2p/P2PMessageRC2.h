@@ -51,6 +51,8 @@ public:
     virtual void setVersion(VERSION_TYPE const& _version) { setField(m_version, _version); }
     virtual VERSION_TYPE version() const { return m_version; }
 
+    uint32_t deliveredLength() override { return m_deliveredLength; }
+
 protected:
     virtual void encode(std::shared_ptr<bytes> encodeBuffer);
 
@@ -60,6 +62,8 @@ private:
     /// compress the data to be sended
     bool compress(std::shared_ptr<bytes>);
     std::shared_ptr<dev::bytes> m_cache;
+    // the packet length delivered by the network
+    uint32_t m_deliveredLength = 0;
 };
 }  // namespace p2p
 }  // namespace dev

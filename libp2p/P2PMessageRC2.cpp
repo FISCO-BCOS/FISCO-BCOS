@@ -45,6 +45,7 @@ void P2PMessageRC2::encode(bytes& buffer)
         }
     }
     buffer = *m_cache;
+    m_deliveredLength = buffer.size();
 }
 
 /**
@@ -100,6 +101,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     {
         return dev::network::PACKET_INCOMPLETE;
     }
+    m_deliveredLength = size;
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
