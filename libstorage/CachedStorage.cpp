@@ -427,8 +427,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         TIME_RECORD("Submit commit task");
         // new task write to backend
         Task::Ptr task = std::make_shared<Task>();
-        // TODO: check if task hash be used
-        task->hash = h256();
         task->num = num;
         task->datas = commitDatas;
 

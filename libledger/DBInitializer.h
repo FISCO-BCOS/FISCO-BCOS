@@ -44,7 +44,8 @@ class BasicRocksDB;
 namespace storage
 {
 class BinLogHandler;
-}
+struct ConnectionPoolConfig;
+}  // namespace storage
 
 namespace ledger
 {
@@ -101,17 +102,20 @@ private:
     void initLevelDBStorage();
     // below use MemoryTableFactory2
     void initSQLStorage();
-    void initTableFactory2(dev::storage::Storage::Ptr _backend);
+    void initTableFactory2(
+        dev::storage::Storage::Ptr _backend, bool _enableCache, bool _enableBinlog);
     std::function<void(std::string&)> getDecryptHandler();
     std::function<void(std::string const&, std::string&)> getEncryptHandler();
     void initRocksDBStorage();
-    dev::storage::Storage::Ptr createRocksDBStorage(const std::string& _dbPath);
+    dev::storage::Storage::Ptr createRocksDBStorage(const std::string& _dbPath, bool _enableCache);
     dev::storage::Storage::Ptr createSQLStorage(
         std::function<void(std::exception& e)> _fatalHandler);
     void initScalableStorage();
     int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
+    dev::storage::Storage::Ptr createZdbStorage(const storage::ConnectionPoolConfig& _zdbConfig,
+        std::function<void(std::exception& e)> _fatalHandler);
 
     void initZdbStorage();
     void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
@@ -120,7 +124,6 @@ private:
     void setRemoteBlockNumber(std::shared_ptr<dev::storage::ScalableStorage> scalableStorage,
         const std::string& blocksDBPath);
 
-private:
     std::shared_ptr<LedgerParamInterface> m_param;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;

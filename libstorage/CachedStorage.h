@@ -81,7 +81,6 @@ class Task
 public:
     typedef std::shared_ptr<Task> Ptr;
 
-    h256 hash;
     int64_t num = 0;
     std::shared_ptr<std::vector<TableData::Ptr> > datas;
 };
