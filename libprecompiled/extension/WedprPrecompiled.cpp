@@ -170,22 +170,97 @@ bytes WedprPrecompiled::call(
 
 bytes WedprPrecompiled::verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    return abi.abiIn("", "", "");
+    // parse parameter
+    std::string issue_argument_pb;
+    abi.abiOut(data, issue_argument_pb);
+
+    // verify issued credit
+    char* issue_argument_pb_char = string_to_char(issue_argument_pb);
+    if (verify_issued_credit(issue_argument_pb_char) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_issued_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_issued_credit failed");
+    }
+
+    std::string current_credit = get_current_credit_by_issue_argument(issue_argument_pb_char);
+    std::string credit_storage = get_storage_credit_by_issue_argument(issue_argument_pb_char);
+
+    // return current_credit and credit_storage
+    return abi.abiIn("", current_credit, credit_storage);
 }
 
 bytes WedprPrecompiled::verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    return abi.abiIn("", "", "");
+    std::string fulfill_argument_pb;
+    abi.abiOut(data, fulfill_argument_pb);
+    char* fulfill_argument_pb_char = string_to_char(fulfill_argument_pb);
+    if (verify_fulfilled_credit(fulfill_argument_pb_char) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_fulfilled_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_fulfilled_credit failed");
+    }
+
+    std::string current_credit = get_current_credit_by_fulfill_argument(fulfill_argument_pb_char);
+    std::string credit_storage = get_credit_storage_by_fulfill_argument(fulfill_argument_pb_char);
+
+    // return current_credit and credit_storage
+    return abi.abiIn("", current_credit, credit_storage);
 }
 
 bytes WedprPrecompiled::verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    return abi.abiIn("", "", "");
+    std::string transfer_request_pb;
+    abi.abiOut(data, transfer_request_pb);
+
+    char* transfer_request_pb_char = string_to_char(transfer_request_pb);
+    if (verify_transferred_credit(transfer_request_pb_char) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_transfer_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_transfer_credit failed");
+    }
+
+    std::string spent_current_credit =
+        get_spent_current_credit_by_transfer_request(transfer_request_pb_char);
+    std::string spent_credit_storage =
+        get_spent_credit_storage_by_transfer_request(transfer_request_pb_char);
+    std::string new_current_credit =
+        get_new_current_credit_by_transfer_request(transfer_request_pb_char);
+    std::string new_credit_storage =
+        get_new_credit_storage_by_transfer_request(transfer_request_pb_char);
+
+    // return current_credit and credit_storage
+    return abi.abiIn(
+        "", spent_current_credit, spent_credit_storage, new_current_credit, new_credit_storage);
 }
 
 bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    return abi.abiIn("", "", "");
+    std::string split_request_pb;
+    abi.abiOut(data, split_request_pb);
+
+    char* split_request_pb_char = string_to_char(split_request_pb);
+    if (verify_split_credit(split_request_pb_char) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_split_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_split_credit failed");
+    }
+
+    std::string spent_current_credit =
+        get_spent_current_credit_by_split_request(split_request_pb_char);
+    std::string spent_credit_storage =
+        get_spent_credit_storage_by_split_request(split_request_pb_char);
+    std::string new_current_credit1 =
+        get_new_current_credit1_by_split_request(split_request_pb_char);
+    std::string new_credit_storage1 =
+        get_new_credit_storage1_by_split_request(split_request_pb_char);
+    std::string new_current_credit2 =
+        get_new_current_credit2_by_split_request(split_request_pb_char);
+    std::string new_credit_storage2 =
+        get_new_credit_storage2_by_split_request(split_request_pb_char);
+
+    // return current_credit and credit_storage
+    return abi.abiIn("", spent_current_credit, spent_credit_storage, new_current_credit1,
+        new_credit_storage1, new_current_credit2, new_credit_storage2);
 }
 
 bytes WedprPrecompiled::verifyVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
