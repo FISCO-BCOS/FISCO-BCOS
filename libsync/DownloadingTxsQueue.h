@@ -26,6 +26,7 @@
 #include <libdevcore/Guards.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
+#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -62,10 +63,17 @@ public:
         return m_buffer->size();
     }
 
+    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
+
 private:
     NodeID m_nodeId;
     std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
     mutable SharedMutex x_buffer;
+
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 };
 
 }  // namespace sync

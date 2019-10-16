@@ -386,6 +386,12 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
         {
             m_service->asyncSendMessageByNodeID(
                 session.nodeID(), transDataToMessage(data, packetType, ttl), nullptr);
+
+            // update the network-out statistic information
+            if (m_statisticHandler)
+            {
+                m_statisticHandler->updateConsOutPacketsInfo(packetType, 1, data.size());
+            }
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
                                   << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
@@ -444,6 +450,12 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
         nodeIdList, transDataToMessage(data, packetType, ttl));
+
+    // update the network-out statistic information
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(packetType, nodeIdList.size(), data.size());
+    }
     return true;
 }
 
@@ -745,6 +757,12 @@ void PBFTEngine::onRecvPBFTMessage(
         m_msgQueue.push(pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
         m_signalled.notify_all();
+
+        // update the network-in statistic information
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateConsInPacketsInfo(pbft_msg.packet_id, message->length());
+        }
     }
     else
     {
@@ -1029,6 +1047,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("next", m_consensusBlockNumber)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("nodeIdx", nodeIdx());
+        // print the statistic information after commit each block
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->printStatistics();
+        }
     }
 }
 

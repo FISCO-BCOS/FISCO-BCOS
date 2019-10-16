@@ -122,13 +122,31 @@ public:
         removeInvalidSignCache(req.block_hash, req.view);
         removeInvalidCommitCache(req.block_hash, req.view);
     }
+
     /// add specified signReq to the sign-cache
-    inline void addSignReq(SignReq const& req) { m_signCache[req.block_hash][req.sig.hex()] = req; }
+    inline void addSignReq(SignReq const& req)
+    {
+        auto signature = req.sig.hex();
+        // determine existence: in case of assign overhead
+        if (m_signCache.count(req.block_hash) && m_signCache[req.block_hash].count(signature))
+        {
+            return;
+        }
+        m_signCache[req.block_hash][signature] = req;
+    }
+
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(CommitReq const& req)
     {
-        m_commitCache[req.block_hash][req.sig.hex()] = req;
+        auto signature = req.sig.hex();
+        // determine existence: in case of assign overhead
+        if (m_commitCache.count(req.block_hash) && m_commitCache[req.block_hash].count(signature))
+        {
+            return;
+        }
+        m_commitCache[req.block_hash][signature] = req;
     }
+
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(ViewChangeReq const& req)
     {

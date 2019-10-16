@@ -30,6 +30,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
@@ -140,6 +141,11 @@ public:
         size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
+
+    void setStatHandlerForDownloadingBlockQueue(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_downloadingBlockQueue.setStatHandler(_statisticHandler);
+    }
 
 public:
     h256 genesisHash;
