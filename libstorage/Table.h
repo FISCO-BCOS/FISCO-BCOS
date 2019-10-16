@@ -395,6 +395,7 @@ public:
 
     virtual TableFactory::Ptr newTableFactory(dev::h256 const& hash, int64_t number) = 0;
 };
+TableInfo::Ptr getSysTableInfo(const std::string& tableName);
 
 }  // namespace storage
 }  // namespace dev

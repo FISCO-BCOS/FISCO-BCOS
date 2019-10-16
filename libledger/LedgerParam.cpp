@@ -40,7 +40,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
 {
     try
     {
-        LedgerParam_LOG(INFO) << LOG_BADGE("initGenesisConfig")
+        LedgerParam_LOG(INFO) << LOG_BADGE("parseGenesisConfig")
                               << LOG_DESC("initConsensusConfig/initStorageConfig/initTxConfig")
                               << LOG_KV("configFile", _genesisFile);
         ptree pt;
@@ -50,7 +50,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         initEventLogFilterManagerConfig(pt);
         /// use UTCTime directly as timeStamp in case of the clock differences between machines
         mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
-        LedgerParam_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
+        LedgerParam_LOG(DEBUG) << LOG_BADGE("parseGenesisConfig")
                                << LOG_KV("timestamp", mutableGenesisParam().timeStamp);
         mutableStateParam().type = pt.get<std::string>("state.type", "storage");
         // Compatibility with previous versions RC2/RC1
@@ -63,7 +63,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
     {
         std::string error_info = "init genesis config failed for " + toString(m_groupID) +
                                  " failed, error_msg: " + boost::diagnostic_information(e);
-        LedgerParam_LOG(ERROR) << LOG_DESC("initGenesisConfig Failed")
+        LedgerParam_LOG(ERROR) << LOG_DESC("parseGenesisConfig Failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }

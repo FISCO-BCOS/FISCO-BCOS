@@ -262,64 +262,6 @@ void MemoryTableFactory::commitDB(h256 const&, int64_t _blockNumber)
                        << LOG_KV("totalTimeCost", utcTime() - start_time);
 }
 
-storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
-{
-    auto tableInfo = make_shared<storage::TableInfo>();
-    tableInfo->name = tableName;
-    if (tableName == SYS_CONSENSUS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
-    }
-    else if (tableName == SYS_TABLES)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"key_field", "value_field"};
-    }
-    else if (tableName == SYS_ACCESS_TABLE)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"address", "enable_num"};
-    }
-    else if (tableName == SYS_CURRENT_STATE)
-    {
-        tableInfo->key = SYS_KEY;
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_NUMBER_2_HASH)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_TX_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value", "index"};
-    }
-    else if (tableName == SYS_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_CNS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = std::vector<std::string>{"version", "address", "abi"};
-    }
-    else if (tableName == SYS_CONFIG)
-    {
-        tableInfo->key = "key";
-        tableInfo->fields = std::vector<std::string>{"value", "enable_num"};
-    }
-    else if (tableName == SYS_BLOCK_2_NONCES)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{SYS_VALUE};
-    }
-    return tableInfo;
-}
-
-
 void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
     typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);

@@ -102,6 +102,5 @@ inline bool isHashField(const std::string& _key)
     }
     return false;
 }
-
 }  // namespace storage
 }  // namespace dev

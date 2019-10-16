@@ -59,7 +59,6 @@ public:
     std::vector<Change>& getChangeLog();
 
 private:
-    storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     // this map can't be changed, hash() need ordered data
     std::map<std::string, Table::Ptr> m_name2Table;
