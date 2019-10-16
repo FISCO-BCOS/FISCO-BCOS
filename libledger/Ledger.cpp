@@ -305,7 +305,8 @@ void Ledger::initConsensusConfig(ptree const& pt)
     m_param->mutableGenesisParam().nodeListMark = nodeListMark.str();
 
     // init configurations for RPBFT
-    m_param->mutableConsensusParam().groupSize = pt.get<int64_t>("consensus.group_size", 10);
+    m_param->mutableConsensusParam().groupSize =
+        pt.get<int64_t>("consensus.group_size", m_param->mutableConsensusParam().sealerList.size());
     if (m_param->mutableConsensusParam().groupSize <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
@@ -481,12 +482,20 @@ void Ledger::initGenesisMark(GenesisBlockParam& genesisParam)
     s << m_param->mutableStateParam().type << "-";
     s << m_param->mutableConsensusParam().maxTransactions << "-";
     s << m_param->mutableTxParam().txGasLimit;
+    // init groupSize and rotatingInterval for RPBFT
+    if (isRotatingPBFTEnabled())
+    {
+        s << "-" << m_param->mutableConsensusParam().groupSize << "-";
+        s << m_param->mutableConsensusParam().rotatingInterval;
+    }
     m_param->mutableGenesisParam().genesisMark = s.str();
     genesisParam = GenesisBlockParam{m_param->mutableGenesisParam().genesisMark,
         m_param->mutableConsensusParam().sealerList, m_param->mutableConsensusParam().observerList,
         m_param->mutableConsensusParam().consensusType, m_param->mutableStorageParam().type,
         m_param->mutableStateParam().type, m_param->mutableConsensusParam().maxTransactions,
-        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp};
+        m_param->mutableTxParam().txGasLimit, m_param->mutableGenesisParam().timeStamp,
+        m_param->mutableConsensusParam().groupSize,
+        m_param->mutableConsensusParam().rotatingInterval};
     Ledger_LOG(DEBUG) << LOG_BADGE("initMark")
                       << LOG_KV("genesisMark", m_param->mutableGenesisParam().genesisMark);
 }
@@ -565,6 +574,12 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
+bool Ledger::isRotatingPBFTEnabled()
+{
+    return (dev::stringCmpIgnoreCase(
+                m_param->mutableConsensusParam().consensusType, "rotating_pbft") == 0);
+}
+
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
@@ -572,8 +587,7 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") ==
-        0)
+    if (isRotatingPBFTEnabled())
     {
         return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
@@ -633,8 +647,7 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 // init rotating-pbft engine
 void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") !=
-        0)
+    if (!isRotatingPBFTEnabled())
     {
         return;
     }
@@ -687,8 +700,7 @@ bool Ledger::consensusInitFactory()
     }
 
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 &&
-        dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") !=
-            0)
+        !isRotatingPBFTEnabled())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
                           << LOG_KV("UnsupportConsensusType",

@@ -89,9 +89,12 @@ protected:
     virtual void chooseConsensusNodes();
     virtual void updateConsensusInfoForTreeRouter();
     virtual void resetLocatedInConsensusNodes();
-    IDXTYPE minValidNodes() const override { return m_groupSize - m_f; }
+    IDXTYPE minValidNodes() const override { return std::min(m_groupSize, m_sealersNum) - m_f; }
 
     virtual ssize_t filterBroadcastTargets(dev::network::NodeID const& _nodeId);
+
+    virtual bool updateGroupSize();
+    virtual bool updateRotatingInterval();
 
 protected:
     // configured group size
@@ -106,7 +109,14 @@ protected:
     std::atomic<int64_t> m_startNodeIdx = {-1};
     std::atomic<int64_t> m_rotatingRound = {0};
     std::atomic<int64_t> m_sealersNum = {0};
+
     std::atomic_bool m_locatedInConsensusNodes = {true};
+
+    std::atomic_bool m_chosedConsNodeChanged = {false};
+
+    // used to record the rotatingIntervalEnableNumber changed or not
+    dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
+    bool m_rotatingIntervalUpdated = false;
 };
 }  // namespace consensus
 }  // namespace dev

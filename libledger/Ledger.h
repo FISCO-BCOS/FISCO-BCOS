@@ -187,6 +187,8 @@ private:
 
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
 
+    bool isRotatingPBFTEnabled();
+
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 

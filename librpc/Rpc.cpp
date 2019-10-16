@@ -31,6 +31,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
@@ -40,6 +41,7 @@ using namespace jsonrpc;
 using namespace dev::rpc;
 using namespace dev::sync;
 using namespace dev::ledger;
+using namespace dev::precompiled;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
@@ -84,7 +86,8 @@ std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
 
 bool Rpc::isValidSystemConfig(std::string const& key)
 {
-    return (key == "tx_count_limit" || key == "tx_gas_limit");
+    return (key == SYSTEM_KEY_TX_COUNT_LIMIT || key == SYSTEM_KEY_TX_GAS_LIMIT ||
+            key == SYSTEM_KEY_RPBFT_ROTATING_INTERVAL || key == SYSTEM_KEY_RPBFT_EPOCH_SIZE);
 }
 
 void Rpc::checkRequest(int _groupID)
