@@ -414,7 +414,7 @@ void DBInitializer::initScalableStorage()
         blockNumber = blockNumber > 0 ? blockNumber + 1 : 0;
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
-        setRemoteBlockNumber(scalableStorage, blocksDBPath);
+        setRemoteBlockNumber(scalableStorage, blocksDBPath, blockNumber);
         // init TableFactory2
         initTableFactory2(scalableStorage, m_param->mutableStorageParam().CachedStorage,
             m_param->mutableStorageParam().binaryLog);
@@ -427,8 +427,8 @@ void DBInitializer::initScalableStorage()
     }
 }
 
-void DBInitializer::setRemoteBlockNumber(
-    std::shared_ptr<ScalableStorage> scalableStorage, const std::string& blocksDBPath)
+void DBInitializer::setRemoteBlockNumber(std::shared_ptr<ScalableStorage> scalableStorage,
+    const std::string& blocksDBPath, int64_t curBlockNumber)
 {
     boost::filesystem::path targetPath(blocksDBPath);
     std::vector<std::string> filenames;
@@ -447,9 +447,14 @@ void DBInitializer::setRemoteBlockNumber(
                 return std::stoll(a) >= std::stoll(b);
             });
 
-        int64_t remoteBlockNumber = 0;
+        int64_t remoteBlockNumber = curBlockNumber;
         for (size_t i = 0; i < filenames.size(); i++)
         {
+            if (i == 0 && scalableStorage->getDBNameOfArchivedBlock(curBlockNumber) != filenames[0])
+            {
+                // handling when the highest block database is deleted
+                break;
+            }
             remoteBlockNumber = std::stoll(filenames[i]);
             if (i == filenames.size() - 1)
             {

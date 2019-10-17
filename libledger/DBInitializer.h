@@ -122,7 +122,7 @@ private:
         dev::storage::Storage::Ptr _storage);
 
     void setRemoteBlockNumber(std::shared_ptr<dev::storage::ScalableStorage> scalableStorage,
-        const std::string& blocksDBPath);
+        const std::string& blocksDBPath, int64_t curBlockNumber);
 
     std::shared_ptr<LedgerParamInterface> m_param;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
