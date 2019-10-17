@@ -285,6 +285,61 @@ size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
     return 0;
 }
 
+TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo)
+{
+    try
+    {
+        STORAGE_EXTERNAL_LOG(INFO) << LOG_DESC("Query AMOPDB data call selectTableDataByNum")
+                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num);
+        Json::Value requestJson;
+        requestJson["op"] = "selectbynum";
+        requestJson["params"]["tableNum"] = tableInfo->name;
+        requestJson["params"]["num"] = num;
+
+        Json::Value responseJson = requestDB(requestJson);
+        int code = responseJson["code"].asInt();
+        std::string message = responseJson["message"].asString();
+        if (code != 0)
+        {
+            STORAGE_EXTERNAL_LOG(ERROR) << LOG_KV("Remote database return error code", code)
+                                        << LOG_KV("error message", message);
+            BOOST_THROW_EXCEPTION(StorageException(-1, "Remote database return error:" + message));
+        }
+
+        TableData::Ptr tableData = std::make_shared<TableData>();
+        tableData->info = tableInfo;
+        for (Json::ArrayIndex i = 0; i < responseJson["result"].size(); ++i)
+        {
+            Json::Value line = responseJson["result"][i];
+            Entry::Ptr entry = std::make_shared<Entry>();
+            for (auto key : line.getMemberNames())
+            {
+                entry->setField(key, line.get(key, "").asString());
+            }
+            entry->setID(line.get(ID_FIELD, "").asString());
+            entry->setNum(line.get(NUM_FIELD, "").asString());
+            entry->setStatus(line.get(STATUS, "").asString());
+
+            if (entry->getStatus() == 0)
+            {
+                entry->setDirty(false);
+                tableData->dirtyEntries->addEntry(entry);
+            }
+        }
+        tableData->dirtyEntries->setDirty(false);
+        return tableData;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_EXTERNAL_LOG(ERROR) << "Query database error:" << e.what();
+
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, std::string("Query database error:") + e.what()));
+    }
+
+    return TableData::Ptr();
+}
+
 Json::Value SQLStorage::requestDB(const Json::Value& value)
 {
     int retry = 1;
