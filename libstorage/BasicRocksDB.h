@@ -36,7 +36,7 @@
 
 namespace dev
 {
-namespace db
+namespace storage
 {
 class BasicRocksDB
 {
@@ -90,5 +90,6 @@ protected:
     EncHookFunction m_encryptHandler = nullptr;
     DecHookFunction m_decryptHandler = nullptr;
 };
-}  // namespace db
+rocksdb::Options getRocksDBOptions();
+}  // namespace storage
 }  // namespace dev

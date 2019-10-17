@@ -23,9 +23,14 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
+#include "libblockchain/BlockChainInterface.h"
+#include "libethcore/Protocol.h"
 #include <libdevcore/FixedHash.h>
+#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
+
+#define LedgerParam_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LedgerParam")
 
 namespace dev
 {
@@ -136,8 +141,29 @@ public:
     {
         return m_eventLogFilterParams;
     }
+    blockchain::GenesisBlockParam& mutableGenesisBlockParam() override
+    {
+        return m_genesisBlockParam;
+    }
+#if 0
+    void parseGenesisConfig(const std::string& _genesisFile);
+    void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath);
+    void init(const std::string& _configFilePath, const std::string& _dataPath);
+    const dev::GROUP_ID& groupId() const { return m_groupID; }
 
 private:
+    blockchain::GenesisBlockParam initGenesisMark();
+    void initStorageConfig(boost::property_tree::ptree const& pt);
+    void initCommonConfig(boost::property_tree::ptree const& pt);
+    void initTxPoolConfig(boost::property_tree::ptree const& pt);
+    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
+    void initConsensusConfig(boost::property_tree::ptree const& pt);
+    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
+    void initSyncConfig(boost::property_tree::ptree const& pt);
+    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+#endif
+private:
+    // dev::GROUP_ID m_groupID;
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     SyncParam m_syncParam;
@@ -148,6 +174,7 @@ private:
     StateParam m_stateParam;
     TxParam m_txParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
+    dev::blockchain::GenesisBlockParam m_genesisBlockParam;
 };
 }  // namespace ledger
 }  // namespace dev

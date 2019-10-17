@@ -75,7 +75,13 @@ public:
         if (_baseDir == "")
             prefix = "./group" + std::to_string(_groupId);
         m_param->setBaseDir(prefix);
-        // m_keyPair = _keyPair;
+        assert(m_service);
+    }
+
+    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
+        dev::KeyPair const& _keyPair)
+      : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
+    {
         assert(m_service);
     }
 
@@ -111,6 +117,7 @@ public:
 
     virtual ~Ledger(){};
 
+    // bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams);
     bool initLedger(const std::string& _configFilePath = "config.ini") override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }

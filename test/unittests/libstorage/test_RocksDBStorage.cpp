@@ -33,7 +33,6 @@ using namespace dev;
 using namespace std;
 using namespace dev::storage;
 using namespace rocksdb;
-using namespace dev::db;
 namespace rocksdb
 {
 Status ReadRecordFromWriteBatch(Slice* input, char* tag, uint32_t* column_family, Slice* key,
