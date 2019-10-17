@@ -9,7 +9,7 @@ char* aggregate_decrypted_part_sum(char* param_pb, char* request_pb, char* count
 
 char* aggregate_vote_sum_response(char* param_pb, char* request_pb, char* vote_sum_pb);
 
-char* counting_candidates_result(char* param_pb, char* vote_sum_pb, char* counting_result_sum_pb);
+char* count_candidates_result(char* param_pb, char* vote_sum_pb, char* count_result_sum_pb);
 
 char* get_blank_ballot_from_vote_storage(char* vote_storage_pb);
 

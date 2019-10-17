@@ -38,7 +38,7 @@ extern const char API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[];
 extern const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
-extern const char API_ANONYMOUS_VOTING_COUNTS_CANDIDATES_RESULT[];
+extern const char API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT[];
 
 extern const char WEDPR_VERFIY_FAILED[];
 extern const char WEDPR_PRECOMPILED[];
@@ -67,7 +67,7 @@ public:
     bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data);
-    bytes countingCandidatesResult(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes countCandidatesResult(dev::eth::ContractABI& abi, bytesConstRef& data);
 };
 
 }  // namespace precompiled
