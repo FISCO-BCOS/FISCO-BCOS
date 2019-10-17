@@ -1,7 +1,7 @@
 
 file(GLOB_RECURSE SRC_LIST "*.cpp")
 file(GLOB_RECURSE HEADERS "*.h")
-set(WEDPR_LIB_DIR "${CMAKE_SOURCE_DIR}/deps/lib/libffi_hidden_asset.so")
+set(WEDPR_LIB_DIR "/Users/asher//WeDPR/target/debug/libffi_hidden_asset.dylib" "/Users/asher//WeDPR/target/debug/libffi_anonymous_voting.dylib")
 
 if(NOT WEDPR_EXTENSION)
     set(REMOVE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/extension/WedprPrecompiled.h)
