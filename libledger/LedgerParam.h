@@ -145,7 +145,6 @@ public:
     {
         return m_genesisBlockParam;
     }
-#if 0
     void parseGenesisConfig(const std::string& _genesisFile);
     void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath);
     void init(const std::string& _configFilePath, const std::string& _dataPath);
@@ -161,9 +160,9 @@ private:
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
-#endif
+
 private:
-    // dev::GROUP_ID m_groupID;
+    dev::GROUP_ID m_groupID;
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     SyncParam m_syncParam;
