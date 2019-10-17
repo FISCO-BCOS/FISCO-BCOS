@@ -20,35 +20,27 @@
  */
 #pragma once
 #include <libblockverifier/ExecutiveContext.h>
+#include <libethcore/ABI.h>
 #include <libprecompiled/Common.h>
-
-#if 0
-contract WedprPrecompiled {
-    function hiddenAssetVerifyIssuedCredit(bytes issueArgumentPb) 
-    public returns(string currentCredit, string creditStorage);
-
-    function hiddenAssetVerifyFulfilledCredit(bytes fulfillArgumentPb) 
-    public returns(string currentCredit, string creditStorage);
-
-    function hiddenAssetVerifyTransferredCredit(bytes transferRequestPb) 
-    public returns(string spentCurrentCredit, string spentCreditStorage, 
-                  string newCurrentCredit, string newCreditStorage);
-
-    function hiddenAssetVerifySplitCredit(bytes splitRequestPb) 
-    public returns(string spentCurrentCredit, string spentCreditStorage, 
-                  string newCurrentCredit1, string newCreditStorage1,
-                  string newCurrentCredit2, string newCreditStorage2);
-}
-#endif
 
 namespace dev
 {
 namespace precompiled
 {
+// hidden asset
 extern const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[];
 extern const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[];
 extern const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[];
 extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
+
+// anonymous voting
+extern const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[];
+extern const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
+extern const char API_ANONYMOUS_VOTING_COUNTS_CANDIDATES_RESULT[];
+
 extern const char WEDPR_VERFIY_FAILED[];
 extern const char WEDPR_PRECOMPILED[];
 
@@ -66,6 +58,18 @@ public:
 
     bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
         Address const& _origin = Address()) override;
+
+    bytes verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+
+    bytes verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyUnBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes countingCandidatesResult(dev::eth::ContractABI& abi, bytesConstRef& data);
 };
 
 }  // namespace precompiled
