@@ -36,13 +36,9 @@
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
 {
-namespace db
-{
-class BasicRocksDB;
-}
-
 namespace storage
 {
+class BasicRocksDB;
 class BinLogHandler;
 struct ConnectionPoolConfig;
 }  // namespace storage

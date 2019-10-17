@@ -28,7 +28,7 @@
 
 using namespace dev;
 using namespace dev::ledger;
-using namespace dev::db;
+using namespace dev::storage;
 using namespace rocksdb;
 
 namespace dev

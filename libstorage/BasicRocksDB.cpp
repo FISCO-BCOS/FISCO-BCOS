@@ -25,12 +25,25 @@
 #include <boost/filesystem.hpp>
 
 using namespace dev;
+using namespace dev::storage;
 using namespace rocksdb;
 
-namespace dev
+rocksdb::Options dev::storage::getRocksDBOptions()
 {
-namespace db
-{
+    /// open and init the rocksDB
+    rocksdb::Options options;
+
+    // set Parallelism to the hardware concurrency
+    // This option will increase much memory
+    // options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+
+    // options.OptimizeLevelStyleCompaction();  // This option will increase much memory too
+    options.create_if_missing = true;
+    options.max_open_files = 200;
+    options.compression = rocksdb::kSnappyCompression;
+    return options;
+}
+
 void BasicRocksDB::flush()
 {
     if (m_db)
@@ -158,6 +171,3 @@ Status BasicRocksDB::Write(WriteOptions const& options, WriteBatch& batch)
     checkStatus(status);
     return status;
 }
-
-}  // namespace db
-}  // namespace dev

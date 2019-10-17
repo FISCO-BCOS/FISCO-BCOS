@@ -28,7 +28,6 @@
 using namespace std;
 using namespace dev;
 using namespace dev::storage;
-using namespace dev::db;
 
 Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName)
 {

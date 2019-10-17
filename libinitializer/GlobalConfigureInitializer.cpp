@@ -157,3 +157,13 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("chainId", g_BCOSConfig.chainId());
 }
+
+void dev::version()
+{
+    std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
+    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
+    std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
+              << FISCO_BCOS_BUILD_TYPE << std::endl;
+    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
+    std::cout << "Git Commit Hash    : " << FISCO_BCOS_COMMIT_HASH << std::endl;
+}

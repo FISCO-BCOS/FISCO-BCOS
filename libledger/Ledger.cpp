@@ -68,6 +68,17 @@ bool Ledger::initLedger(const std::string& _configFilePath)
     initIniConfig(iniConfigFileName);
     if (!m_param)
         return false;
+#if 0
+}
+
+bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
+{
+    if (!_ledgerParams)
+    {
+        return false;
+    }
+    m_param = _ledgerParams;
+#endif
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
@@ -77,6 +88,7 @@ bool Ledger::initLedger(const std::string& _configFilePath)
         return false;
     m_dbInitializer->initStorageDB();
     /// init the DB
+    // bool ret = initBlockChain(m_param->mutableGenesisBlockParam());
     bool ret = initBlockChain(genesisParam);
     if (!ret)
         return false;

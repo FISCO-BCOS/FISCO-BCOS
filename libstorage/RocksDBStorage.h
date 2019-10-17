@@ -33,13 +33,10 @@ class DB;
 }
 namespace dev
 {
-namespace db
-{
-class BasicRocksDB;
-}
-
 namespace storage
 {
+class BasicRocksDB;
+
 class RocksDBStorage : public Storage
 {
 public:
@@ -53,7 +50,7 @@ public:
         Condition::Ptr condition) override;
     size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
 
-    void setDB(std::shared_ptr<dev::db::BasicRocksDB> db) { m_db = db; }
+    void setDB(std::shared_ptr<BasicRocksDB> db) { m_db = db; }
 
 private:
     bool m_disableWAL = false;
@@ -68,7 +65,7 @@ private:
             key2value,
         TableInfo::Ptr tableInfo, Entries::Ptr entries);
 
-    std::shared_ptr<dev::db::BasicRocksDB> m_db;
+    std::shared_ptr<BasicRocksDB> m_db;
     tbb::spin_mutex m_writeBatchMutex;
 };
 
