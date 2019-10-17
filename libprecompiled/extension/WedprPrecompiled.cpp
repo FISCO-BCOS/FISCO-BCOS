@@ -50,7 +50,6 @@ const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredi
 // anonymous voting
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyBoundedVoteRequest(bytes,bytes)";
-// anonymous voting
 const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyUnBoundedVoteRequest(bytes,bytes)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
