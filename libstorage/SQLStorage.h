@@ -41,6 +41,7 @@ public:
     Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override;
     size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    TableData::Ptr selectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo);
     bool onlyCommitDirty() override { return true; }
 
     virtual void setTopic(const std::string& topic);
