@@ -5,7 +5,7 @@
 
 extern "C" {
 
-char* aggregate_decrypted_part_sum(char* param_pb, char* request_pb, char* counting_result_sum_pb);
+char* aggregate_decrypted_part_sum(char* param_pb, char* request_pb, char* count_result_sum_pb);
 
 char* aggregate_vote_sum_response(char* param_pb, char* request_pb, char* vote_sum_pb);
 
@@ -19,9 +19,10 @@ char* get_decrypted_result_part_storage_from_decrypted_result_part_request(char*
 
 char* get_vote_storage_from_vote_request(char* request_pb);
 
+int8_t verify_bounded_vote_request(char* param_pb, char* request_pb);
+
 int8_t verify_count_request(
     char* param_pb, char* encrypted_vote_sum_pb, char* counter_share_string, char* request_pb);
 
-int8_t verify_vote_request(char* param_pb, char* request_pb);
-
+int8_t verify_unbounded_vote_request(char* param_pb, char* request_pb);
 }  // extern "C"
