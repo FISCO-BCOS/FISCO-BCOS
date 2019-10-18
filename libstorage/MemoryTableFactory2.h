@@ -61,7 +61,6 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 
 private:
-    storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
     uint64_t m_ID = 1;

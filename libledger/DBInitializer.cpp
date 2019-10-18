@@ -145,7 +145,7 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-int64_t DBInitializer::getBlockNumberFromStorage(Storage::Ptr _storage)
+int64_t dev::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 {
     int64_t startNum = -1;
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
@@ -161,6 +161,7 @@ int64_t DBInitializer::getBlockNumberFromStorage(Storage::Ptr _storage)
     }
     return startNum;
 }
+
 void DBInitializer::recoverFromBinaryLog(
     std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
 {
@@ -284,7 +285,7 @@ void DBInitializer::initSQLStorage()
         m_param->mutableStorageParam().binaryLog);
 }
 
-std::function<void(std::string const&, std::string&)> DBInitializer::getEncryptHandler()
+std::function<void(std::string const&, std::string&)> dev::ledger::getEncryptHandler()
 {
     // get dataKey according to ciperDataKey from keyCenter
     return [=](std::string const& data, std::string& encData) {
@@ -302,7 +303,7 @@ std::function<void(std::string const&, std::string&)> DBInitializer::getEncryptH
     };
 }
 
-std::function<void(std::string&)> DBInitializer::getDecryptHandler()
+std::function<void(std::string&)> dev::ledger::getDecryptHandler()
 {
     return [=](std::string& data) {
         try
@@ -318,8 +319,8 @@ std::function<void(std::string&)> DBInitializer::getDecryptHandler()
     };
 }
 
-Storage::Ptr DBInitializer::createRocksDBStorage(
-    const std::string& _dbPath, bool _enableCache = true)
+Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,
+    bool _enableEncryption = false, bool _disableWAL = false, bool _enableCache = true)
 {
     boost::filesystem::create_directories(_dbPath);
 
@@ -327,7 +328,7 @@ Storage::Ptr DBInitializer::createRocksDBStorage(
     auto options = getRocksDBOptions();
     // any exception will cause the program to be stopped
     rocksDB->Open(options, _dbPath);
-    if (g_BCOSConfig.diskEncryption.enable)
+    if (_enableEncryption)
     {
         DBInitializer_LOG(INFO) << LOG_DESC(
             "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
@@ -336,7 +337,7 @@ Storage::Ptr DBInitializer::createRocksDBStorage(
     }
     // create and init rocksDBStorage
     std::shared_ptr<RocksDBStorage> rocksdbStorage =
-        std::make_shared<RocksDBStorage>(m_param->mutableStorageParam().binaryLog, !_enableCache);
+        std::make_shared<RocksDBStorage>(_disableWAL, !_enableCache);
     rocksdbStorage->setDB(rocksDB);
     return rocksdbStorage;
 }
@@ -347,7 +348,9 @@ void DBInitializer::initRocksDBStorage()
     try
     {
         // m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
-        auto rocksdbStorage = createRocksDBStorage(m_param->mutableStorageParam().path);
+        auto rocksdbStorage = createRocksDBStorage(m_param->mutableStorageParam().path,
+            g_BCOSConfig.diskEncryption.enable, m_param->mutableStorageParam().binaryLog,
+            m_param->mutableStorageParam().CachedStorage);
 
         // init TableFactory2
         initTableFactory2(rocksdbStorage, m_param->mutableStorageParam().CachedStorage,
@@ -375,6 +378,7 @@ void DBInitializer::initScalableStorage()
     {
         // m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/Scalable";
         auto stateStorage = createRocksDBStorage(m_param->mutableStorageParam().path + "/state",
+            g_BCOSConfig.diskEncryption.enable, m_param->mutableStorageParam().binaryLog,
             m_param->mutableStorageParam().CachedStorage);
         auto scalableStorage =
             std::make_shared<ScalableStorage>(m_param->mutableStorageParam().scrollThreshold);

@@ -139,8 +139,6 @@ public:
     }
 
 protected:
-    /// load genesis config of group
-    // void initGenesisConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();

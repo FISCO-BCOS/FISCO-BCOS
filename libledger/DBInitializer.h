@@ -100,14 +100,10 @@ private:
     void initSQLStorage();
     void initTableFactory2(
         dev::storage::Storage::Ptr _backend, bool _enableCache, bool _enableBinlog);
-    std::function<void(std::string&)> getDecryptHandler();
-    std::function<void(std::string const&, std::string&)> getEncryptHandler();
     void initRocksDBStorage();
-    dev::storage::Storage::Ptr createRocksDBStorage(const std::string& _dbPath, bool _enableCache);
     dev::storage::Storage::Ptr createSQLStorage(
         std::function<void(std::exception& e)> _fatalHandler);
     void initScalableStorage();
-    int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
     dev::storage::Storage::Ptr createZdbStorage(const storage::ConnectionPoolConfig& _zdbConfig,
@@ -128,5 +124,10 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 };
+int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
+std::function<void(std::string&)> getDecryptHandler();
+std::function<void(std::string const&, std::string&)> getEncryptHandler();
+dev::storage::Storage::Ptr createRocksDBStorage(
+    const std::string& _dbPath, bool _enableEncryption, bool _disableWAL, bool _enableCache);
 }  // namespace ledger
 }  // namespace dev
