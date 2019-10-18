@@ -50,7 +50,9 @@ public:
       : RotatingPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList),
         m_fakedBlockChain(std::dynamic_pointer_cast<FakeBlockChain>(m_blockChain))
-    {}
+    {
+        m_rotatingIntervalEnableNumber = 0;
+    }
     // override the virtual function
     std::pair<bool, IDXTYPE> getLeader() const override { return RotatingPBFTEngine::getLeader(); }
 
@@ -72,6 +74,9 @@ public:
     }
 
     IDXTYPE minValidNodes() const override { return RotatingPBFTEngine::minValidNodes(); }
+    bool updateGroupSize() override { return false; }
+    bool updateRotatingInterval() override { return false; }
+
     int64_t groupSize() { return m_groupSize; }
     int64_t rotatingInterval() { return m_rotatingInterval; }
     std::set<dev::h512> chosedConsensusNodes() { return m_chosedConsensusNodes; }
