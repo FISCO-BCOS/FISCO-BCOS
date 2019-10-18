@@ -657,13 +657,6 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateDecryptedPartSum)
         "dHRlbhIuEixXUE01ZE9BWG5GYk9zbXJPL0Y1L3g4T0I5Q3F4WTY5RTNLSmRJM2RWYkU0PRI2CgREb2dlEi4SLFZMQk"
         "5qc1pNVktOWi9VR1FObmRMQVM1NVJ4aGE3YjJGSGNHTEhpNzhOR009EjcKBUJ1bm55Ei4SLDhyR3F3US96SlMzSzg4"
         "dWRIM3FIOGlRWjNkWWxaendYVHM0SW9nVitad0E9");
-
-    // std::string errorSystemParameters = "123";
-    // std::string errorDecryptedRequest = "123";
-    // std::string errorDecryptedResultPartStorage = "123";
-    // param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM, errorSystemParameters,
-    // errorDecryptedRequest, errorDecryptedResultPartStorage);
-    // BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
 BOOST_AUTO_TEST_CASE(anonymousVotingCountCandidatesResult)
@@ -714,13 +707,6 @@ BOOST_AUTO_TEST_CASE(anonymousVotingCountCandidatesResult)
     BOOST_TEST(countResult ==
                "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnV"
                "ubnkQDA==");
-
-    // std::string errorSystemParameters = "123";
-    // std::string errorVoteStorage = "123";
-    // std::string errorVoteSumTotal = "123";
-    // param = abi.abiIn(API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT, errorSystemParameters,
-    // errorVoteStorage, errorVoteSumTotal); BOOST_CHECK_THROW(wedprPrecompiled->call(context,
-    // bytesConstRef(&param)), boost::exception);
 }
 
 BOOST_AUTO_TEST_CASE(unKnownFunc)
