@@ -159,18 +159,11 @@ bool LedgerInitializer::initLedger(
         return false;
     }
     INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
-    std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir);
-    ledger->setChannelRPCServer(m_channelRPCServer);
-    bool succ = ledger->initLedger(_configFileName);
-#if 0
-    m_ledgerManager->insertLedger(_groupId, ledger);
     auto ledger = std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair);
     ledger->setChannelRPCServer(m_channelRPCServer);
     auto ledgerParams = std::make_shared<LedgerParam>();
     ledgerParams->init(_configFileName, _dataDir);
     bool succ = ledger->initLedger(ledgerParams);
-#endif
     if (!succ)
         return false;
     m_ledgerManager->insertLedger(_groupId, ledger);

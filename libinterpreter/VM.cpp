@@ -23,9 +23,8 @@
 #include "VM.h"
 #include "interpreter.h"
 
+#include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/Hash.h"
-
-#include <include/BuildInfo.h>
 
 namespace
 {
@@ -115,7 +114,8 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
 {
     // TODO: Allow creating multiple instances with different configurations.
     static evmc_instance s_instance{
-        EVMC_ABI_VERSION, "interpreter", FISCO_BCOS_PROJECT_VERSION, ::destroy, ::execute,
+        EVMC_ABI_VERSION, "interpreter", dev::g_BCOSConfig.binaryInfo.version.c_str(), ::destroy,
+        ::execute,
         nullptr,  // set_tracer
         nullptr,  // set_option
     };

@@ -67,10 +67,10 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
-    m_genesisBlockParam = initGenesisMark();
+    m_genesisBlockParam = generateGenesisMark();
 }
 
-blockchain::GenesisBlockParam LedgerParam::initGenesisMark()
+blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
 {
     std::stringstream s;
     s << int(m_groupID) << "-";
@@ -83,12 +83,10 @@ blockchain::GenesisBlockParam LedgerParam::initGenesisMark()
     s << mutableStateParam().type << "-";
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
-    mutableGenesisParam().genesisMark = s.str();
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark")
-                           << LOG_KV("genesisMark", mutableGenesisParam().genesisMark);
-    return blockchain::GenesisBlockParam{mutableGenesisParam().genesisMark,
-        mutableConsensusParam().sealerList, mutableConsensusParam().observerList,
-        mutableConsensusParam().consensusType, mutableStorageParam().type, mutableStateParam().type,
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", s.str());
+    return blockchain::GenesisBlockParam{s.str(), mutableConsensusParam().sealerList,
+        mutableConsensusParam().observerList, mutableConsensusParam().consensusType,
+        mutableStorageParam().type, mutableStateParam().type,
         mutableConsensusParam().maxTransactions, mutableTxParam().txGasLimit,
         mutableGenesisParam().timeStamp};
 }
@@ -124,10 +122,6 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
 {
-#ifndef FISCO_EASYLOG
-    BOOST_LOG_SCOPED_THREAD_ATTR(
-        "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupID)));
-#endif
     LedgerParam_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
                           << LOG_KV("baseDir", baseDir());
     /// The file group.X.genesis is required, otherwise the program terminates.
@@ -222,7 +216,68 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
 /// 2. maxTransNum: max number of transactions can be sealed into a block
 /// 3. intervalBlockTime: average block generation period
 /// 4. sealer.${idx}: define the node id of every sealer related to the group
-void LedgerParam::initConsensusConfig(ptree const&) {}
+void LedgerParam::initConsensusConfig(ptree const& pt)
+{
+    mutableConsensusParam().consensusType = pt.get<std::string>("consensus.consensus_type", "pbft");
+
+    mutableConsensusParam().maxTransactions = pt.get<int64_t>("consensus.max_trans_num", 1000);
+    if (mutableConsensusParam().maxTransactions < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.max_trans_num to positive !"));
+    }
+
+    mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
+    if (mutableConsensusParam().minElectTime < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.min_elect_time to positive !"));
+    }
+
+    mutableConsensusParam().maxElectTime = pt.get<int64_t>("consensus.max_elect_time", 2000);
+    if (mutableConsensusParam().maxElectTime < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.max_elect_time to positive !"));
+    }
+    mutableTxParam().txGasLimit = pt.get<int64_t>("tx.gas_limit", 300000000);
+    if (mutableTxParam().txGasLimit < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set tx.gas_limit to positive !"));
+    }
+
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
+                           << LOG_KV("type", mutableConsensusParam().consensusType)
+                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
+                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
+    std::stringstream nodeListMark;
+    try
+    {
+        for (auto it : pt.get_child("consensus"))
+        {
+            if (it.first.find("node.") == 0)
+            {
+                std::string data = it.second.data();
+                boost::to_lower(data);
+                LedgerParam_LOG(INFO)
+                    << LOG_BADGE("initConsensusConfig") << LOG_KV("it.first", data);
+                // Uniform lowercase nodeID
+                dev::h512 nodeID(data);
+                mutableConsensusParam().sealerList.push_back(nodeID);
+                // The full output node ID is required.
+                nodeListMark << data << ",";
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        LedgerParam_LOG(ERROR) << LOG_BADGE("initConsensusConfig")
+                               << LOG_DESC("Parse consensus section failed")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+    }
+    mutableGenesisParam().nodeListMark = nodeListMark.str();
+}
 
 void LedgerParam::initSyncConfig(ptree const& pt)
 {
@@ -246,7 +301,74 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     }
 }
 
-void LedgerParam::initStorageConfig(ptree const&) {}
+void LedgerParam::initStorageConfig(ptree const& pt)
+{
+    if (g_BCOSConfig.version() > RC2_VERSION)
+    {
+        mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+        mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+        mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
+        mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
+        if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
+        {
+            mutableStorageParam().type = "RocksDB";
+            LedgerParam_LOG(WARNING) << "LevelDB is deprecated! RocksDB is recommended.";
+        }
+    }
+    mutableStorageParam().path = baseDir() + "/block";
+    if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "RocksDB"))
+    {
+        mutableStorageParam().path += "/RocksDB";
+    }
+    else if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "Scalable"))
+    {
+        mutableStorageParam().path += "/Scalable";
+    }
+    mutableStorageParam().maxCapacity = pt.get<uint>("storage.max_capacity", 32);
+    auto scrollThresholdMultiple = pt.get<uint>("storage.scroll_threshold_multiple", 2);
+    mutableStorageParam().scrollThreshold =
+        scrollThresholdMultiple > 0 ? scrollThresholdMultiple * g_BCOSConfig.c_blockLimit : 2000;
+    if (mutableStorageParam().maxCapacity < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
+                              << errinfo_comment("Please set storage.max_capacity to positive !"));
+    }
+
+    mutableStorageParam().maxForwardBlock = pt.get<uint>("storage.max_forward_block", 10);
+    if (mutableStorageParam().maxForwardBlock < 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set storage.max_forward_block to positive !"));
+    }
+
+    if (mutableStorageParam().maxRetry <= 0)
+    {
+        mutableStorageParam().maxRetry = 100;
+    }
+
+    mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
+    mutableStorageParam().dbIP = pt.get<std::string>("storage.db_ip", "127.0.0.1");
+    mutableStorageParam().dbPort = pt.get<int>("storage.db_port", 3306);
+    mutableStorageParam().dbUsername = pt.get<std::string>("storage.db_username", "");
+    mutableStorageParam().dbPasswd = pt.get<std::string>("storage.db_passwd", "");
+    mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
+    mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
+    mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
+    mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
+
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initStorageConfig")
+                           << LOG_KV("stateType", mutableStateParam().type)
+                           << LOG_KV("storageDB", mutableStorageParam().type)
+                           << LOG_KV("storagePath", mutableStorageParam().path)
+                           << LOG_KV("baseDir", baseDir())
+                           << LOG_KV("dbtype", mutableStorageParam().dbType)
+                           << LOG_KV("dbip", mutableStorageParam().dbIP)
+                           << LOG_KV("dbport", mutableStorageParam().dbPort)
+                           << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
+                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
+                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections);
+}
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)
 {
