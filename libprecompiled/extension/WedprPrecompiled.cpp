@@ -48,8 +48,11 @@ const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[] =
 const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredit(bytes)";
 
 // anonymous voting
-const char API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST[] =
-    "anonymousVotingVerifyVoteRequest(bytes,bytes)";
+const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
+    "anonymousVotingVerifyBoundedVoteRequest(bytes,bytes)";
+// anonymous voting
+const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
+    "anonymousVotingVerifyUnboundedVoteRequest(bytes,bytes)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
     "anonymousVotingAggregateVoteSumResponse(bytes,bytes,bytes)";
 const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[] =
@@ -58,7 +61,6 @@ const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[] =
     "anonymousVotingAggregateDecryptedPartSum(bytes,bytes,bytes)";
 const char API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT[] =
     "anonymousVotingCountCandidatesResult(bytes,bytes,bytes)";
-
 
 const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
 
@@ -80,8 +82,10 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT);
 
     // anonymous voting
-    name2Selector[API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST] =
-        getFuncSelector(API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST);
+    name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST] =
+        getFuncSelector(API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST);
+    name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST] =
+        getFuncSelector(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE] =
         getFuncSelector(API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE);
     name2Selector[API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST] =
@@ -131,9 +135,14 @@ bytes WedprPrecompiled::call(
         out = verifySplitCredit(abi, data);
     }
     // anonymousVotingVerifyVoteRequest(bytes systemParameters, bytes voteRequest)
-    else if (func == name2Selector[API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST])
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST])
     {
-        out = verifyVoteRequest(abi, data);
+        out = verifyBoundedVoteRequest(abi, data);
+    }
+    // anonymousVotingVerifyVoteRequest(bytes systemParameters, bytes voteRequest)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST])
+    {
+        out = verifyUnboundedVoteRequest(abi, data);
     }
     // anonymousVotingAggregateVoteSumResponse(bytes systemParameters, bytes voteRequest, bytes
     // voteStorage)
@@ -263,7 +272,7 @@ bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConst
         new_credit_storage1, new_current_credit2, new_credit_storage2);
 }
 
-bytes WedprPrecompiled::verifyVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
+bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
     std::string voteRequest;
@@ -271,7 +280,24 @@ bytes WedprPrecompiled::verifyVoteRequest(dev::eth::ContractABI& abi, bytesConst
 
     char* systemParametersChar = string_to_char(systemParameters);
     char* voteRequestChar = string_to_char(voteRequest);
-    if (verify_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
+    if (verify_bounded_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
+        throwException("verify_vote_request failed");
+    }
+
+    return abi.abiIn("", WEDPR_SUCCESS);
+}
+
+bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    std::string systemParameters;
+    std::string voteRequest;
+    abi.abiOut(data, systemParameters, voteRequest);
+
+    char* systemParametersChar = string_to_char(systemParameters);
+    char* voteRequestChar = string_to_char(voteRequest);
+    if (verify_unbounded_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
         throwException("verify_vote_request failed");

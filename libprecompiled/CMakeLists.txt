@@ -1,8 +1,10 @@
 
 file(GLOB_RECURSE SRC_LIST "*.cpp")
 file(GLOB_RECURSE HEADERS "*.h")
-set(WEDPR_HIDDEN_ASSET_DIR "${CMAKE_SOURCE_DIR}/deps/lib/libffi_hidden_asset.so")
-set(WEDPR_ANONYMOUS_VOTING_DIR "${CMAKE_SOURCE_DIR}/deps/lib/libffi_anonymous_voting.so")
+# set(WEDPR_HIDDEN_ASSET_DIR "${CMAKE_SOURCE_DIR}/deps/lib/libffi_hidden_asset.so")
+# set(WEDPR_ANONYMOUS_VOTING_DIR "${CMAKE_SOURCE_DIR}/deps/lib/libffi_anonymous_voting.so")
+set(WEDPR_HIDDEN_ASSET_DIR "/Users/asher/WeDPR/target/debug/libffi_hidden_asset.dylib")
+set(WEDPR_ANONYMOUS_VOTING_DIR "/Users/asher/WeDPR/target/debug/libffi_anonymous_voting.dylib")
 
 if(NOT WEDPR_EXTENSION)
     set(REMOVE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/extension/WedprPrecompiled.h)
