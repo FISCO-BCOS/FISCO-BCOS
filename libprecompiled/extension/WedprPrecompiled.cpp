@@ -156,8 +156,8 @@ bytes WedprPrecompiled::call(
     {
         out = verifyCountRequest(abi, data);
     }
-    // anonymousVotingAggregateDecryptedPartSum(bytes systemParameters, bytes decryptRequest, bytes
-    // decryptedResultPartStorage)
+    // anonymousVotingAggregateDecryptedPartSum(bytes systemParameters, bytes decryptedRequest,
+    // bytes decryptedResultPartStorage)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM])
     {
         out = aggregateDecryptedPartSum(abi, data);
@@ -350,19 +350,18 @@ bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesCons
 bytes WedprPrecompiled::aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
-    std::string decryptRequest;
+    std::string decryptedRequest;
     std::string decryptedResultPartStorage;
-    abi.abiOut(data, systemParameters, decryptRequest, decryptedResultPartStorage);
-
+    abi.abiOut(data, systemParameters, decryptedRequest, decryptedResultPartStorage);
     char* systemParametersChar = string_to_char(systemParameters);
-    char* decryptRequestChar = string_to_char(decryptRequest);
+    char* decryptedRequestChar = string_to_char(decryptedRequest);
     char* decryptedResultPartStorageChar = string_to_char(decryptedResultPartStorage);
 
-    std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptRequestChar);
+    std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
     std::string decryptedResultPartStoragePart =
-        get_decrypted_result_part_storage_from_decrypted_result_part_request(decryptRequestChar);
+        get_decrypted_result_part_storage_from_decrypted_result_part_request(decryptedRequestChar);
     std::string decryptedResultPartStorageSum = aggregate_decrypted_part_sum(
-        systemParametersChar, decryptRequestChar, decryptedResultPartStorageChar);
+        systemParametersChar, decryptedRequestChar, decryptedResultPartStorageChar);
 
     return abi.abiIn("", counterId, decryptedResultPartStoragePart, decryptedResultPartStorageSum);
 }
