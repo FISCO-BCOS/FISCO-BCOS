@@ -48,7 +48,9 @@ public:
         m_ledgerManager = std::make_shared<LedgerManager>();
         std::shared_ptr<LedgerInterface> ledger =
             std::make_shared<FakeLedger>(m_service, groupId, m_keyPair, "", configurationPath);
-        ledger->initLedger(configurationPath);
+        auto ledgerParams = std::make_shared<LedgerParam>();
+        ledgerParams->init(configurationPath);
+        ledger->initLedger(ledgerParams);
         m_ledgerManager->insertLedger(groupId, ledger);
         rpc = std::make_shared<Rpc>(m_ledgerManager, m_service);
     }

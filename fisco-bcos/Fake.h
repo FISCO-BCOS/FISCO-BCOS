@@ -261,16 +261,13 @@ class FakeLedger : public Ledger
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir)
-      : Ledger(service, _groupId, _keyPair, _baseDir)
+        dev::KeyPair const& _keyPair, std::string const&)
+      : Ledger(service, _groupId, _keyPair)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger(const std::string& _configPath) override
+    bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override
     {
-        initGenesisConfig(_configPath);
-        std::string iniConfigFileName = _configPath;
-        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
-        initIniConfig(_configPath);
+        m_param = _ledgerParams;
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain

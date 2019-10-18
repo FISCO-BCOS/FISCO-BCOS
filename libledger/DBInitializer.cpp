@@ -346,7 +346,7 @@ void DBInitializer::initRocksDBStorage()
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
     try
     {
-        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
+        // m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/RocksDB";
         auto rocksdbStorage = createRocksDBStorage(m_param->mutableStorageParam().path);
 
         // init TableFactory2
@@ -373,7 +373,7 @@ void DBInitializer::initScalableStorage()
     }
     try
     {
-        m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/Scalable";
+        // m_param->mutableStorageParam().path = m_param->mutableStorageParam().path + "/Scalable";
         auto stateStorage = createRocksDBStorage(m_param->mutableStorageParam().path + "/state",
             m_param->mutableStorageParam().CachedStorage);
         auto scalableStorage =

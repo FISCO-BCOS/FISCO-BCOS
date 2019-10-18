@@ -79,7 +79,6 @@ struct SyncParam
 /// modification 2019.03.20: add timeStamp field to GenesisParam
 struct GenesisParam
 {
-    std::string genesisMark;
     std::string nodeListMark;
     uint64_t timeStamp;
 };
@@ -92,7 +91,7 @@ struct EventLogFilterManagerParams
 struct StorageParam
 {
     std::string type = "storage";
-    std::string path;
+    std::string path = "data/";
     bool binaryLog = false;
     bool CachedStorage = true;
     // for amop storage
@@ -146,14 +145,14 @@ public:
         return m_genesisBlockParam;
     }
     void parseGenesisConfig(const std::string& _genesisFile);
-    void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath);
-    void init(const std::string& _configFilePath, const std::string& _dataPath);
+    void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath = "data/");
+    void init(const std::string& _configFilePath, const std::string& _dataPath = "data/");
     const dev::GROUP_ID& groupId() const { return m_groupID; }
 
+    blockchain::GenesisBlockParam generateGenesisMark();
+
 private:
-    blockchain::GenesisBlockParam initGenesisMark();
     void initStorageConfig(boost::property_tree::ptree const& pt);
-    void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);
     void initTxExecuteConfig(boost::property_tree::ptree const& pt);
     void initConsensusConfig(boost::property_tree::ptree const& pt);
