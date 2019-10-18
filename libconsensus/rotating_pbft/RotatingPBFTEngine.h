@@ -102,10 +102,6 @@ protected:
     // the interval(measured by block number) to adjust the sealers
     std::atomic<int64_t> m_rotatingInterval = {-1};
 
-    // the chosed consensus node list
-    mutable SharedMutex x_chosedConsensusNodes;
-    std::set<dev::h512> m_chosedConsensusNodes;
-
     std::atomic<int64_t> m_startNodeIdx = {-1};
     std::atomic<int64_t> m_rotatingRound = {0};
     std::atomic<int64_t> m_sealersNum = {0};

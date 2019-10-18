@@ -798,6 +798,60 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
         }
     }
 }
+
+void checkSendTime(FakeConsensus<FakePBFTEngine>& _fakePBFT, size_t const& _sendTime)
+{
+    for (size_t i = 0; i < _fakePBFT.m_sealerList.size(); i++)
+    {
+        compareAsyncSendTime(_fakePBFT, _fakePBFT.m_sealerList[i], _sendTime);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testForwardMsg)
+{
+    FakeConsensus<FakePBFTEngine> fake_pbft(10, ProtocolID::PBFT);
+
+    /// handleViewChangeMsg
+    ViewChangeReq viewchange_req;
+    PBFTMsgPacket viewchange_packet;
+    IDXTYPE nodeIdxSource = 1;
+    /// handle the viewchange request received from 2nd sealer
+    fakeValidViewchange(fake_pbft, viewchange_req, 0, true);
+    FakePBFTMsgPacket(viewchange_packet, viewchange_req, ViewChangeReqPacket, nodeIdxSource,
+        fake_pbft.m_sealerList[nodeIdxSource]);
+
+    /// case1: PBFTMsgPacket without forwardNodes, don't send to any nodes
+    fake_pbft.consensus()->forwardPBFTMsgByForwardNodes("key1", viewchange_packet);
+    checkSendTime(fake_pbft, 0);
+
+    /// case2: PBFTMsgPacket with forwardNodes, and all the forwardNodes exist in the peers
+    viewchange_packet.forwardNodes = fake_pbft.m_sealerList;
+    fake_pbft.consensus()->forwardPBFTMsgByForwardNodes("key2", viewchange_packet);
+    // forward message to the forwardNodes
+    checkSendTime(fake_pbft, 1);
+    // check the left forwardNodes is empty
+    BOOST_CHECK(fake_pbft.consensus()->m_forwardNodes == dev::h512s());
+    // send with repeated key
+    fake_pbft.consensus()->forwardPBFTMsgByForwardNodes("key2", viewchange_packet);
+    // don't send message for repeated key
+    checkSendTime(fake_pbft, 1);
+
+    /// case3: PBFTMsgPacket with forwardNodes, and part of the forwardNodes exist in the peers
+    dev::h512 appendedNode = dev::KeyPair::create().pub();
+    viewchange_packet.forwardNodes.push_back(appendedNode);
+    fake_pbft.consensus()->forwardPBFTMsgByForwardNodes("key3", viewchange_packet);
+    // forward the message the peers
+    checkSendTime(fake_pbft, 2);
+    // check the left forwardNodes
+    dev::h512s appendedNodes;
+    appendedNodes.push_back(appendedNode);
+    BOOST_CHECK(fake_pbft.consensus()->m_forwardNodes == appendedNodes);
+
+    /// case4: PBFTMsgPacket with forwardNodes, and all the forwardNodes not exist in the peers
+    viewchange_packet.forwardNodes = dev::h512s();
+    fake_pbft.consensus()->forwardPBFTMsgByForwardNodes("key4", viewchange_packet);
+    checkSendTime(fake_pbft, 2);
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

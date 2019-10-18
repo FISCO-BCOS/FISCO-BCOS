@@ -248,6 +248,11 @@ protected:
     // record the sealer list has been updated or not
     std::atomic_bool m_sealerListUpdated = {true};
     int64_t m_lastSealerListUpdateNumber = 0;
+
+    // the chosed consensus node list
+    mutable SharedMutex x_chosedConsensusNodes;
+    std::set<dev::h512> m_chosedConsensusNodes;
+
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler

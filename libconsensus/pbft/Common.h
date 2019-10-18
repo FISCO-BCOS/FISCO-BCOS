@@ -21,6 +21,7 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include <libconfig/GlobalConfigure.h>
 #include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
@@ -63,9 +64,17 @@ struct PBFTMsgPacket
     u256 timestamp;
     /// endpoint
     std::string endpoint;
+    // the node that disconnected from this node, but the packet should reach
+    dev::h512s forwardNodes;
+
     /// default constructor
     PBFTMsgPacket()
-      : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))
+      : node_idx(0),
+        node_id(h512(0)),
+        packet_id(0),
+        ttl(MAXTTL),
+        timestamp(u256(utcTime())),
+        forwardNodes(dev::h512s())
     {}
     virtual ~PBFTMsgPacket() = default;
     bool operator==(PBFTMsgPacket const& msg)
@@ -98,7 +107,15 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
+    void streamRLPFields(RLPStream& s) const
+    {
+        s << packet_id << ttl << data;
+        // only support ttl-optimization after release-2.2.0
+        if (g_BCOSConfig.version() > V2_2_0)
+        {
+            s.appendVector(forwardNodes);
+        }
+    }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -121,6 +138,10 @@ struct PBFTMsgPacket
             packet_id = rlp[field = 0].toInt<uint8_t>();
             ttl = rlp[field = 1].toInt<uint8_t>();
             data = rlp[field = 2].toBytes();
+            if (g_BCOSConfig.version() > V2_2_0)
+            {
+                forwardNodes = rlp[field = 3].toVector<dev::h512>();
+            }
         }
         catch (Exception const& e)
         {

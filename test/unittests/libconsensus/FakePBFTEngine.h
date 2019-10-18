@@ -249,6 +249,23 @@ public:
 
     bool notifyNextLeaderSeal() { return m_notifyNextLeaderSeal; }
     IDXTYPE getNextLeader() const { return PBFTEngine::getNextLeader(); }
+
+    // forward the PBFT message according to the forwardNodes field recorded by pbftMsgPacket
+    void forwardPBFTMsgByForwardNodes(std::string const& _key, PBFTMsgPacket const& _pbftMsgPacket)
+    {
+        return PBFTEngine::forwardPBFTMsgByForwardNodes(_key, _pbftMsgPacket);
+    }
+
+    /// set default ttl to 1 to in case of forward-broadcast
+    bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+        std::string const& key, bytesConstRef data, unsigned const& ttl,
+        dev::h512s const& forwardNodes)
+    {
+        m_forwardNodes = forwardNodes;
+        return PBFTEngine::sendMsg(nodeId, packetType, key, data, ttl, forwardNodes);
+    }
+
+    dev::h512s m_forwardNodes = dev::h512s();
 };
 
 template <typename T>

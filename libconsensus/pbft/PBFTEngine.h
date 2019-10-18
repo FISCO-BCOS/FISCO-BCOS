@@ -52,6 +52,7 @@ enum CheckResult
     FUTURE = 2
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
+
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
@@ -205,6 +206,8 @@ public:
     VIEWTYPE toView() const override { return m_toView; }
     bool shouldRecvTxs() const override { return m_blockSync->isFarSyncing(); }
 
+    void resetConfig() override;
+
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -222,12 +225,17 @@ protected:
 
     void getAllNodesViewStatus(Json::Value& status);
 
-    // broadcast given messages to all-peers with cache-filter and specified filter
+    // case1: _forwardNodes is empty, broadcast given PBFT message to all-peers, the nodeID of
+    //        disconnected nodes is set to the forwardNodes field of PBFTMsgPacket
+    // case2: _forwardNodes is not empty, send the PBFT message to all-peers, the peers will forward
+    //        the message to the nodes recorded in forwardNodes field of PBFTMsgPacket when receive
+    //        it
     virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
         bytesConstRef _data, std::unordered_set<dev::network::NodeID> const& _filter,
         unsigned const& _ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
 
+    // called by the consensus nodes broadcast the given PBFT message directly to all-peers
     bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
         std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
@@ -236,9 +244,30 @@ protected:
         return broadcastMsg(_packetType, _key, _data, _filter, _ttl, m_broacastTargetsFilter);
     }
 
+    // should forward the message or not
+    virtual bool shouldForwardMsg(
+        bool const& _validMsg, std::string const& _key, PBFTMsg const& _pbftMsg);
+
+    // forward the PBFT message according to the forwardNodes field recorded by pbftMsgPacket
+    void forwardPBFTMsgByForwardNodes(std::string const& _key, PBFTMsgPacket const& _pbftMsgPacket);
+
+    // forward the PBFT message to all peers
+    void forwardPBFTMsgToAllPeers(
+        std::string const& _key, PBFTMsg const& _pbftMsg, PBFTMsgPacket const& _pbftMsgPacket);
+
+    // get the disconnected consensus nodes, and set the nodeID into the forwardNodes field
+    void getForwardNodes(dev::h512s& _forwardNodes, dev::p2p::P2PSessionInfos const& _sessions);
+
+    // compatibility related:
+    // before 2.3.0: the PBFTMsgPacket doesn't exist forwardNodes field, forward the message to all
+    // peers since 2.3.0: forward the PBFTMsg according to the forwardNodes field
+    virtual bool shouldSetForwardNodes();
+
+
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-        std::string const& key, bytesConstRef data, unsigned const& ttl = 1);
+        std::string const& key, bytesConstRef data, unsigned const& ttl = 1,
+        h512s const& forwardNodes = dev::h512s());
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -333,7 +362,8 @@ protected:
 
     /// trans data into message
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
-        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
+        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl,
+        dev::h512s const& forwardNodes = dev::h512s())
     {
         dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
             m_service->p2pMessageFactory()->buildMessage());
@@ -346,6 +376,8 @@ protected:
             packet.ttl = maxTTL;
         else
             packet.ttl = ttl;
+        // set forwardNodes to packet
+        packet.forwardNodes = forwardNodes;
         packet.encode(ret_data);
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
         message->setBuffer(p_data);
@@ -353,10 +385,11 @@ protected:
         return message;
     }
 
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
+        PACKET_TYPE const& _packetType, unsigned const& _ttl,
+        dev::h512s const& _forwardNodes = dev::h512s())
     {
-        return transDataToMessage(data, packetType, m_protocolId, ttl);
+        return transDataToMessage(_data, _packetType, m_protocolId, _ttl, _forwardNodes);
     }
 
     /**
