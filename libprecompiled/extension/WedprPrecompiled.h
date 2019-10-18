@@ -34,7 +34,8 @@ extern const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[];
 extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
 
 // anonymous voting
-extern const char API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[];
 extern const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
@@ -63,7 +64,8 @@ public:
     bytes verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
 
-    bytes verifyVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data);
