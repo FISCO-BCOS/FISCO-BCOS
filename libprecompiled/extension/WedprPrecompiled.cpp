@@ -114,22 +114,22 @@ bytes WedprPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    // hiddenAssetVerifyIssuedCredit(bytes issue_argument_pb)
+    // hiddenAssetVerifyIssuedCredit(bytes issueArgument)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT])
     {
         out = verifyIssuedCredit(abi, data);
     }
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    // hiddenAssetVerifyFulfilledCredit(bytes fulfillArgument)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         out = verifyFulfilledCredit(abi, data);
     }
-    // hiddenAssetVerifyTransferredCredit(bytes transfer_request_pb)
+    // hiddenAssetVerifyTransferredCredit(bytes transferRequest)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT])
     {
         out = verifyTransferredCredit(abi, data);
     }
-    // hiddenAssetVerifySplitCredit(bytes split_request_pb)
+    // hiddenAssetVerifySplitCredit(bytes splitRequest)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT])
     {
         out = verifySplitCredit(abi, data);
@@ -180,96 +180,85 @@ bytes WedprPrecompiled::call(
 bytes WedprPrecompiled::verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     // parse parameter
-    std::string issue_argument_pb;
-    abi.abiOut(data, issue_argument_pb);
+    std::string issueArgument;
+    abi.abiOut(data, issueArgument);
 
     // verify issued credit
-    char* issue_argument_pb_char = string_to_char(issue_argument_pb);
-    if (verify_issued_credit(issue_argument_pb_char) != WEDPR_SUCCESS)
+    char* issueArgumentChar = stringToChar(issueArgument);
+    if (verify_issued_credit(issueArgumentChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_issued_credit", WEDPR_VERFIY_FAILED);
         throwException("verify_issued_credit failed");
     }
 
-    std::string current_credit = get_current_credit_by_issue_argument(issue_argument_pb_char);
-    std::string credit_storage = get_storage_credit_by_issue_argument(issue_argument_pb_char);
+    std::string currentCredit = get_current_credit_by_issue_argument(issueArgumentChar);
+    std::string creditStorage = get_storage_credit_by_issue_argument(issueArgumentChar);
 
-    // return current_credit and credit_storage
-    return abi.abiIn("", current_credit, credit_storage);
+    return abi.abiIn("", currentCredit, creditStorage);
 }
 
 bytes WedprPrecompiled::verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string fulfill_argument_pb;
-    abi.abiOut(data, fulfill_argument_pb);
-    char* fulfill_argument_pb_char = string_to_char(fulfill_argument_pb);
-    if (verify_fulfilled_credit(fulfill_argument_pb_char) != WEDPR_SUCCESS)
+    std::string fulfillArgument;
+    abi.abiOut(data, fulfillArgument);
+    char* fulfillArgumentChar = stringToChar(fulfillArgument);
+    if (verify_fulfilled_credit(fulfillArgumentChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_fulfilled_credit", WEDPR_VERFIY_FAILED);
         throwException("verify_fulfilled_credit failed");
     }
 
-    std::string current_credit = get_current_credit_by_fulfill_argument(fulfill_argument_pb_char);
-    std::string credit_storage = get_credit_storage_by_fulfill_argument(fulfill_argument_pb_char);
+    std::string currentCredit = get_current_credit_by_fulfill_argument(fulfillArgumentChar);
+    std::string creditStorage = get_credit_storage_by_fulfill_argument(fulfillArgumentChar);
 
-    // return current_credit and credit_storage
-    return abi.abiIn("", current_credit, credit_storage);
+    return abi.abiIn("", currentCredit, creditStorage);
 }
 
 bytes WedprPrecompiled::verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string transfer_request_pb;
-    abi.abiOut(data, transfer_request_pb);
+    std::string transferRequest;
+    abi.abiOut(data, transferRequest);
 
-    char* transfer_request_pb_char = string_to_char(transfer_request_pb);
-    if (verify_transferred_credit(transfer_request_pb_char) != WEDPR_SUCCESS)
+    char* transferRequestChar = stringToChar(transferRequest);
+    if (verify_transferred_credit(transferRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_transfer_credit", WEDPR_VERFIY_FAILED);
         throwException("verify_transfer_credit failed");
     }
 
-    std::string spent_current_credit =
-        get_spent_current_credit_by_transfer_request(transfer_request_pb_char);
-    std::string spent_credit_storage =
-        get_spent_credit_storage_by_transfer_request(transfer_request_pb_char);
-    std::string new_current_credit =
-        get_new_current_credit_by_transfer_request(transfer_request_pb_char);
-    std::string new_credit_storage =
-        get_new_credit_storage_by_transfer_request(transfer_request_pb_char);
+    std::string spentCurrentCredit =
+        get_spent_current_credit_by_transfer_request(transferRequestChar);
+    std::string spentCreditStorage =
+        get_spent_credit_storage_by_transfer_request(transferRequestChar);
+    std::string newCurrentCredit = get_new_current_credit_by_transfer_request(transferRequestChar);
+    std::string newCreditStorage = get_new_credit_storage_by_transfer_request(transferRequestChar);
 
-    // return current_credit and credit_storage
     return abi.abiIn(
-        "", spent_current_credit, spent_credit_storage, new_current_credit, new_credit_storage);
+        "", spentCurrentCredit, spentCreditStorage, newCurrentCredit, newCreditStorage);
 }
 
 bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string split_request_pb;
-    abi.abiOut(data, split_request_pb);
+    std::string splitRequest;
+    abi.abiOut(data, splitRequest);
 
-    char* split_request_pb_char = string_to_char(split_request_pb);
-    if (verify_split_credit(split_request_pb_char) != WEDPR_SUCCESS)
+    char* splitRequestChar = stringToChar(splitRequest);
+    if (verify_split_credit(splitRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_split_credit", WEDPR_VERFIY_FAILED);
         throwException("verify_split_credit failed");
     }
 
-    std::string spent_current_credit =
-        get_spent_current_credit_by_split_request(split_request_pb_char);
-    std::string spent_credit_storage =
-        get_spent_credit_storage_by_split_request(split_request_pb_char);
-    std::string new_current_credit1 =
-        get_new_current_credit1_by_split_request(split_request_pb_char);
-    std::string new_credit_storage1 =
-        get_new_credit_storage1_by_split_request(split_request_pb_char);
-    std::string new_current_credit2 =
-        get_new_current_credit2_by_split_request(split_request_pb_char);
-    std::string new_credit_storage2 =
-        get_new_credit_storage2_by_split_request(split_request_pb_char);
+    std::string spentCurrentCredit = get_spent_current_credit_by_split_request(splitRequestChar);
+    std::string spentCreditStorage = get_spent_credit_storage_by_split_request(splitRequestChar);
+    std::string newCurrentCredit1 = get_new_current_credit1_by_split_request(splitRequestChar);
+    std::string newCreditStorage1 = get_new_credit_storage1_by_split_request(splitRequestChar);
+    std::string newCurrentCredit2 = get_new_current_credit2_by_split_request(splitRequestChar);
+    std::string newCreditStorage2 = get_new_credit_storage2_by_split_request(splitRequestChar);
 
-    // return current_credit and credit_storage
-    return abi.abiIn("", spent_current_credit, spent_credit_storage, new_current_credit1,
-        new_credit_storage1, new_current_credit2, new_credit_storage2);
+    // return currentCredit and creditStorage
+    return abi.abiIn("", spentCurrentCredit, spentCreditStorage, newCurrentCredit1,
+        newCreditStorage1, newCurrentCredit2, newCreditStorage2);
 }
 
 bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
@@ -278,8 +267,8 @@ bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, byt
     std::string voteRequest;
     abi.abiOut(data, systemParameters, voteRequest);
 
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* voteRequestChar = string_to_char(voteRequest);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteRequestChar = stringToChar(voteRequest);
     if (verify_bounded_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
@@ -295,8 +284,8 @@ bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, b
     std::string voteRequest;
     abi.abiOut(data, systemParameters, voteRequest);
 
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* voteRequestChar = string_to_char(voteRequest);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteRequestChar = stringToChar(voteRequest);
     if (verify_unbounded_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
@@ -313,9 +302,9 @@ bytes WedprPrecompiled::aggregateVoteSumResponse(dev::eth::ContractABI& abi, byt
     std::string voteStorage;
     abi.abiOut(data, systemParameters, voteRequest, voteStorage);
 
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* voteRequestChar = string_to_char(voteRequest);
-    char* voteStorageChar = string_to_char(voteStorage);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteRequestChar = stringToChar(voteRequest);
+    char* voteStorageChar = stringToChar(voteStorage);
 
     char* voteStoragePartChar = get_vote_storage_from_vote_request(voteRequestChar);
     std::string blankBallot = get_blank_ballot_from_vote_storage(voteStoragePartChar);
@@ -334,10 +323,10 @@ bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesCons
     std::string decryptedRequest;
     abi.abiOut(data, systemParameters, voteStorage, hPointShare, decryptedRequest);
 
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* voteStorageChar = string_to_char(voteStorage);
-    char* hPointShareChar = string_to_char(hPointShare);
-    char* decryptedRequestChar = string_to_char(decryptedRequest);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteStorageChar = stringToChar(voteStorage);
+    char* hPointShareChar = stringToChar(hPointShare);
+    char* decryptedRequestChar = stringToChar(decryptedRequest);
     if (verify_count_request(systemParametersChar, voteStorageChar, hPointShareChar,
             decryptedRequestChar) != WEDPR_SUCCESS)
     {
@@ -353,9 +342,9 @@ bytes WedprPrecompiled::aggregateDecryptedPartSum(dev::eth::ContractABI& abi, by
     std::string decryptedRequest;
     std::string decryptedResultPartStorage;
     abi.abiOut(data, systemParameters, decryptedRequest, decryptedResultPartStorage);
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* decryptedRequestChar = string_to_char(decryptedRequest);
-    char* decryptedResultPartStorageChar = string_to_char(decryptedResultPartStorage);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* decryptedRequestChar = stringToChar(decryptedRequest);
+    char* decryptedResultPartStorageChar = stringToChar(decryptedResultPartStorage);
 
     std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
     std::string decryptedResultPartStoragePart =
@@ -372,9 +361,9 @@ bytes WedprPrecompiled::countCandidatesResult(dev::eth::ContractABI& abi, bytesC
     std::string voteSumTotal;
     abi.abiOut(data, systemParameters, voteStorage, voteSumTotal);
 
-    char* systemParametersChar = string_to_char(systemParameters);
-    char* voteStorageChar = string_to_char(voteStorage);
-    char* voteSumTotalChar = string_to_char(voteSumTotal);
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteStorageChar = stringToChar(voteStorage);
+    char* voteSumTotalChar = stringToChar(voteSumTotal);
     std::string countResult =
         count_candidates_result(systemParametersChar, voteStorageChar, voteSumTotalChar);
 

@@ -86,7 +86,7 @@ void logError(const std::string& precompiled_name, const std::string& op, const 
 
 void throwException(const std::string& msg);
 
-char* string_to_char(std::string& params);
+char* stringToChar(std::string& params);
 
 }  // namespace precompiled
 }  // namespace dev

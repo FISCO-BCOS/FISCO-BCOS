@@ -60,7 +60,7 @@ void dev::precompiled::throwException(const std::string& msg)
     BOOST_THROW_EXCEPTION(dev::eth::TransactionRefused() << errinfo_comment(msg));
 }
 
-char* dev::precompiled::string_to_char(std::string& params)
+char* dev::precompiled::stringToChar(std::string& params)
 {
     return const_cast<char*>(params.data());
 }
