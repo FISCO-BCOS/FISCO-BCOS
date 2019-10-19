@@ -19,7 +19,6 @@ target_link_libraries(precompiled PRIVATE blockverifier ethcore pthread m)
 
 if(WEDPR_EXTENSION)
     target_link_libraries(precompiled PUBLIC storage devcore JsonCpp ${WEDPR_HIDDEN_ASSET_DIR} ${WEDPR_ANONYMOUS_VOTING_DIR})
-  # target_link_libraries(precompiled PUBLIC storage devcore JsonCpp "/mnt/d/dev/rust/rust_learning/WeDPR/target/release/libffi_hidden_asset.a")
 else()
     target_link_libraries(precompiled PUBLIC storage devcore JsonCpp)
 endif()
