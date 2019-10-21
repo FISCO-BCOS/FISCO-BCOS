@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyIssuedCredit)
         "IkgKLDlCZkpUYWo0aC9PaWNzbk0wY0dBY2U4Y01JUXJVdG1kZlpFWldhQ1hJUW89EhhwYVlMS3kvZFFJMm9RWWs5VE"
         "FZVmN3PT0SLHRMbVBuK1ZMWEsrTW5NZ3Q4L0Rsei9DNEc4bmMydVROdnlwUWdXRHcyeVk9GgIIZA==";
     bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT, issueArgument);
-    // hiddenAssetVerifyIssuedCredit(bytes issueArgument)
+    // hiddenAssetVerifyIssuedCredit(string issueArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string currentCredit;
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyFulfilledCredit)
         "RWVvSDRTNUdBTkh0NjlLNlNMRS9Pc2QxWFZLTHdNPXxPUG5nc05OUUhtbzN1YkpBbnVMY0NpcnkxT2VzOXFDUTlMZW"
         "8vRzJDamdNPXw1ZDllYjU3Mw==";
     bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT, fulfillArgument);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfillArgument)
+    // hiddenAssetVerifyFulfilledCredit(string fulfillArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string currentCredit;
@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyTransferredCredit)
         "alhTMmxkbW9ubTFJMXpkRmpPaTNRbz18Z3Jma3VsQTU1RHJPT1IrdE9PdDBKTEs5UlM1WnVGREFQZ3ZVeHEvd1lRUT"
         "18VllWVGQ3QU9SU3Bic0o3RzJ2Y1VTbUZrMnVKeFZTWmgzWGo0eE5YcG1Bbz18NWQ5ZWI1NzMiCHRyYW5zZmVy";
     bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT, transferRequest);
-    // hiddenAssetVerifyTransferredCredit(bytes transferRequest)
+    // hiddenAssetVerifyTransferredCredit(string transferRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string spentCurrentCredit;
@@ -261,7 +261,7 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifySplitCredit)
         "U5QW1LUE5tbHdla1dwSUNlQjRxanlCNysrNVMwMTRmQjF3NEx6Si9uRFFBTUZCSAosQXNlQmFxd2gwNk5CS0VhaDFY"
         "VUZWbEQ2Zm83OURBUzlwYm9vcTE0djJpbz0SGGhTWVdFcWlBVHVhN1hIZ2JQUGhhVGc9PRoFc3BsaXQ=";
     bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT, splitRequest);
-    // hiddenAssetVerifySplitCredit(bytes splitRequest)
+    // hiddenAssetVerifySplitCredit(string splitRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string spentCurrentCredit;
@@ -355,7 +355,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyBoundedVoteRequest)
         "NVNOOCtYSEJjWUtDbHBlWmdNPQ==";
     bytes param =
         abi.abiIn(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
-    // anonymousVotingVerifyBoundedVoteRequest(bytes systemParameters, bytes voteRequest)
+    // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     u256 result;
@@ -413,7 +413,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyUnboundedVoteRequest)
         "RudTlOWGNyT0ZLK2JyenVHZlp6aXpUVFYwQTdnaz0=";
     bytes param = abi.abiIn(
         API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
-    //  anonymousVotingVerifyUnboundedVoteRequest(bytes systemParameters, bytes voteRequest)
+    //  anonymousVotingVerifyUnboundedVoteRequest(string systemParameters, string voteRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     u256 result;
@@ -491,7 +491,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateVoteSumResponse)
         "ZpWDRyN1RFPQ==";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE, systemParameters,
         voteRequest, voteStorage);
-    // anonymousVotingAggregateVoteSumResponse(bytes systemParameters, bytes voteRequest, bytes
+    // anonymousVotingAggregateVoteSumResponse(string systemParameters, string voteRequest, string
     // voteStorage)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
@@ -600,8 +600,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyCountRequest)
         "t1ZWdWY1N0TUxBZWtnZFBZUlNuUlVtNjFOdFdVd1k9";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST, systemParameters,
         voteStorage, hPointShare, decryptedRequest);
-    // anonymousVotingVerifyCountRequest(bytes systemParameters, bytes voteStorage, string
-    // hPointShare, bytes decryptedRequest)
+    // anonymousVotingVerifyCountRequest(string systemParameters, string voteStorage, string
+    // hPointShare, string decryptedRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     u256 result;
@@ -664,8 +664,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateDecryptedPartSum)
         "hoR3M9EjcKBUJ1bm55Ei4SLHlHSzhUK2Z5dm8wb2xzbHpSZ29hRVJWV3lqa3RJbWd5Q29tQjRJQjZGZ0U9";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM, systemParameters,
         decryptedRequest, decryptedResultPartStorage);
-    // anonymousVotingAggregateDecryptedPartSum(bytes systemParameters, bytes decryptRequest, bytes
-    // decryptedResultPartStorage)
+    // anonymousVotingAggregateDecryptedPartSum(string systemParameters, string decryptRequest,
+    // string decryptedResultPartStorage)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string counterId;
@@ -758,7 +758,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingCountCandidatesResult)
         "R1BobkZCUTR4T2RBdVBFejgyeVRYODVpaFZEU009";
     bytes param = abi.abiIn(
         API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT, systemParameters, voteStorage, voteSumTotal);
-    // anonymousVotingCountCandidatesResult(bytes systemParameters, bytes voteStorage, bytes
+    // anonymousVotingCountCandidatesResult(string systemParameters, string voteStorage, string
     // voteSumTotal)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 

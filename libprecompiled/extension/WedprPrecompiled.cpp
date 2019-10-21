@@ -49,18 +49,18 @@ const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredi
 
 // anonymous voting
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
-    "anonymousVotingVerifyBoundedVoteRequest(bytes,bytes)";
+    "anonymousVotingVerifyBoundedVoteRequest(string,string)";
 // anonymous voting
 const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
-    "anonymousVotingVerifyUnboundedVoteRequest(bytes,bytes)";
+    "anonymousVotingVerifyUnboundedVoteRequest(string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
-    "anonymousVotingAggregateVoteSumResponse(bytes,bytes,bytes)";
+    "anonymousVotingAggregateVoteSumResponse(string,string,string)";
 const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[] =
-    "anonymousVotingVerifyCountRequest(bytes,bytes,string,bytes)";
+    "anonymousVotingVerifyCountRequest(string,string,string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[] =
-    "anonymousVotingAggregateDecryptedPartSum(bytes,bytes,bytes)";
+    "anonymousVotingAggregateDecryptedPartSum(string,string,string)";
 const char API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT[] =
-    "anonymousVotingCountCandidatesResult(bytes,bytes,bytes)";
+    "anonymousVotingCountCandidatesResult(string,string,string)";
 
 const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
 
@@ -114,55 +114,55 @@ bytes WedprPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    // hiddenAssetVerifyIssuedCredit(bytes issueArgument)
+    // hiddenAssetVerifyIssuedCredit(string issueArgument)
     if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT])
     {
         out = verifyIssuedCredit(abi, data);
     }
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfillArgument)
+    // hiddenAssetVerifyFulfilledCredit(string fulfillArgument)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
     {
         out = verifyFulfilledCredit(abi, data);
     }
-    // hiddenAssetVerifyTransferredCredit(bytes transferRequest)
+    // hiddenAssetVerifyTransferredCredit(string transferRequest)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT])
     {
         out = verifyTransferredCredit(abi, data);
     }
-    // hiddenAssetVerifySplitCredit(bytes splitRequest)
+    // hiddenAssetVerifySplitCredit(string splitRequest)
     else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT])
     {
         out = verifySplitCredit(abi, data);
     }
-    // anonymousVotingVerifyVoteRequest(bytes systemParameters, bytes voteRequest)
+    // anonymousVotingVerifyVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST])
     {
         out = verifyBoundedVoteRequest(abi, data);
     }
-    // anonymousVotingVerifyVoteRequest(bytes systemParameters, bytes voteRequest)
+    // anonymousVotingVerifyVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST])
     {
         out = verifyUnboundedVoteRequest(abi, data);
     }
-    // anonymousVotingAggregateVoteSumResponse(bytes systemParameters, bytes voteRequest, bytes
+    // anonymousVotingAggregateVoteSumResponse(string systemParameters, string voteRequest, string
     // voteStorage)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE])
     {
         out = aggregateVoteSumResponse(abi, data);
     }
-    // anonymousVotingVerifyCountRequest(bytes systemParameters, bytes voteStorage, string
-    // hPointShare, bytes decryptedRequest)
+    // anonymousVotingVerifyCountRequest(string systemParameters, string voteStorage, string
+    // hPointShare, string decryptedRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST])
     {
         out = verifyCountRequest(abi, data);
     }
-    // anonymousVotingAggregateDecryptedPartSum(bytes systemParameters, bytes decryptedRequest,
-    // bytes decryptedResultPartStorage)
+    // anonymousVotingAggregateDecryptedPartSum(string systemParameters, string decryptedRequest,
+    // string decryptedResultPartStorage)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM])
     {
         out = aggregateDecryptedPartSum(abi, data);
     }
-    // anonymousVotingCountsCandidatesResult(bytes systemParameters, bytes voteStorage, bytes
+    // anonymousVotingCountsCandidatesResult(string systemParameters, string voteStorage, string
     // voteSumTotal)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT])
     {
@@ -256,7 +256,6 @@ bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConst
     std::string newCurrentCredit2 = get_new_current_credit2_by_split_request(splitRequestChar);
     std::string newCreditStorage2 = get_new_credit_storage2_by_split_request(splitRequestChar);
 
-    // return currentCredit and creditStorage
     return abi.abiIn("", spentCurrentCredit, spentCreditStorage, newCurrentCredit1,
         newCreditStorage1, newCurrentCredit2, newCreditStorage2);
 }
