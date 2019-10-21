@@ -179,7 +179,6 @@ Entries::Ptr SQLStorage::select(
                 }
             }
         }
-        entries->setDirty(false);
         return entries;
     }
     catch (std::exception& e)
@@ -326,7 +325,7 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
                 tableData->dirtyEntries->addEntry(entry);
             }
         }
-        tableData->dirtyEntries->setDirty(false);
+        tableData->newEntries = std::make_shared<Entries>();
         return tableData;
     }
     catch (std::exception& e)

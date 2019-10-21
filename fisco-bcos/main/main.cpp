@@ -26,7 +26,6 @@
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
 #include <clocale>
-#include <ctime>
 #include <iostream>
 #include <memory>
 
@@ -58,10 +57,7 @@ int main(int argc, const char* argv[])
     });
     /// init params
     string configPath = initCommandLine(argc, argv);
-    char buffer[40];
-    auto currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
     // get datetime and output welcome info
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
     ExitHandler exitHandler;
     signal(SIGTERM, &ExitHandler::exitHandler);
     signal(SIGABRT, &ExitHandler::exitHandler);
@@ -70,7 +66,7 @@ int main(int argc, const char* argv[])
     auto initialize = std::make_shared<Initializer>();
     try
     {
-        std::cout << "[" << buffer << "] ";
+        std::cout << "[" << getCurrentDateTime() << "] ";
         std::cout << "Initializing..." << std::endl;
         initialize->init(configPath);
     }
@@ -80,9 +76,7 @@ int main(int argc, const char* argv[])
         return -1;
     }
     dev::version();
-    currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
-    std::cout << "[" << buffer << "] ";
+    std::cout << "[" << getCurrentDateTime() << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;
 
     while (!exitHandler.shouldExit())
@@ -92,9 +86,7 @@ int main(int argc, const char* argv[])
         LogInitializer::logRotateByTime();
     }
     initialize.reset();
-    currentTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
-    std::cout << "[" << buffer << "] ";
+    std::cout << "[" << getCurrentDateTime() << "] ";
     std::cout << "FISCO-BCOS program exit normally." << std::endl;
 
     return 0;

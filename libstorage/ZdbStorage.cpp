@@ -128,7 +128,7 @@ std::string ZdbStorage::getCommonFileds()
 void ZdbStorage::createSysTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_tables_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_TABLES << "` (\n";
     ss << getCommonFileds();
     ss << "`table_name` varchar(128) DEFAULT '',\n";
     ss << "`key_field` varchar(1024) DEFAULT '',\n";
@@ -142,7 +142,7 @@ void ZdbStorage::createSysTables()
 void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_cns_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CNS << "` (\n";
     ss << getCommonFileds();
     ss << "`name` varchar(128) DEFAULT NULL,\n";
     ss << "`version` varchar(128) DEFAULT NULL,\n";
@@ -157,7 +157,7 @@ void ZdbStorage::createSysConsensus()
 void ZdbStorage::createAccessTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_table_access_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_ACCESS_TABLE << "` (\n";
     ss << getCommonFileds();
     ss << " `table_name` varchar(128) DEFAULT NULL,\n";
     ss << "`address` varchar(128) DEFAULT NULL,\n";
@@ -171,7 +171,7 @@ void ZdbStorage::createAccessTables()
 void ZdbStorage::createCurrentStateTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_current_state_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CURRENT_STATE << "` (\n";
     ss << getCommonFileds();
     ss << "`key` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
@@ -185,7 +185,7 @@ void ZdbStorage::createNumber2HashTables()
 {
     stringstream ss;
 
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_number_2_hash_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_NUMBER_2_HASH << "` (\n";
     ss << getCommonFileds();
     ss << " `number` varchar(128) DEFAULT NULL,\n";
     ss << " `value` longtext,\n";
@@ -198,7 +198,7 @@ void ZdbStorage::createNumber2HashTables()
 void ZdbStorage::createTxHash2BlockTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_tx_hash_2_block_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_TX_HASH_2_BLOCK << "` (\n";
     ss << getCommonFileds();
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
@@ -212,7 +212,7 @@ void ZdbStorage::createTxHash2BlockTables()
 void ZdbStorage::createHash2BlockTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_hash_2_block_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_HASH_2_BLOCK << "` (\n";
     ss << getCommonFileds();
     ss << "`hash` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
@@ -225,7 +225,7 @@ void ZdbStorage::createHash2BlockTables()
 void ZdbStorage::createCnsTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_consensus_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONSENSUS << "` (\n";
     ss << getCommonFileds();
     ss << "`name` varchar(128) DEFAULT 'node',\n";
     ss << "`type` varchar(128) DEFAULT NULL,\n";
@@ -241,7 +241,7 @@ void ZdbStorage::createCnsTables()
 void ZdbStorage::createSysConfigTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_config_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONFIG << "` (\n";
     ss << getCommonFileds();
     ss << "`key` varchar(128) DEFAULT NULL,\n";
     ss << "`value` longtext,\n";
@@ -255,7 +255,7 @@ void ZdbStorage::createSysConfigTables()
 void ZdbStorage::createSysBlock2NoncesTables()
 {
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `_sys_block_2_nonces_` (\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_BLOCK_2_NONCES << "` (\n";
     ss << getCommonFileds();
     ss << "`number` varchar(128) DEFAULT NULL,\n";
     ss << " `value` longtext,\n";
@@ -268,19 +268,18 @@ void ZdbStorage::createSysBlock2NoncesTables()
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
-    ss << "insert ignore into  `_sys_tables_` ( `table_name` , `key_field`, "
-          "`value_field`)values "
-          "\n";
-    ss << "	('_sys_tables_', 'table_name','key_field,value_field'),\n";
-    ss << "	('_sys_consensus_', 'name','type,node_id,enable_num'),\n";
-    ss << "	('_sys_table_access_', 'table_name','address,enable_num'),\n";
-    ss << "	('_sys_current_state_', 'key','value'),\n";
-    ss << "	('_sys_number_2_hash_', 'number','value'),\n";
-    ss << "	('_sys_tx_hash_2_block_', 'hash','value,index'),\n";
-    ss << "	('_sys_hash_2_block_', 'hash','value'),\n";
-    ss << "	('_sys_cns_', 'name','version,address,abi'),\n";
-    ss << "	('_sys_config_', 'key','value,enable_num'),\n";
-    ss << "	('_sys_block_2_nonces_', 'number','value');";
+    ss << "insert ignore into  `" << SYS_TABLES
+       << "` ( `table_name` , `key_field`, `value_field`)values \n";
+    ss << "	('" << SYS_TABLES << "', 'table_name','key_field,value_field'),\n";
+    ss << "	('" << SYS_CONSENSUS << "', 'name','type,node_id,enable_num'),\n";
+    ss << "	('" << SYS_ACCESS_TABLE << "', 'table_name','address,enable_num'),\n";
+    ss << "	('" << SYS_CURRENT_STATE << "', 'key','value'),\n";
+    ss << "	('" << SYS_NUMBER_2_HASH << "', 'number','value'),\n";
+    ss << "	('" << SYS_TX_HASH_2_BLOCK << "', 'hash','value,index'),\n";
+    ss << "	('" << SYS_HASH_2_BLOCK << "', 'hash','value'),\n";
+    ss << "	('" << SYS_CNS << "', 'name','version,address,abi'),\n";
+    ss << "	('" << SYS_CONFIG << "', 'key','value,enable_num'),\n";
+    ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value');";
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
