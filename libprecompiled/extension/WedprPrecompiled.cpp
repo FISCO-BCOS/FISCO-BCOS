@@ -41,11 +41,11 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 
 // hidden asset
-const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[] = "hiddenAssetVerifyIssuedCredit(bytes)";
-const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[] = "hiddenAssetVerifyFulfilledCredit(bytes)";
+const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[] = "hiddenAssetVerifyIssuedCredit(string)";
+const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[] = "hiddenAssetVerifyFulfilledCredit(string)";
 const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[] =
-    "hiddenAssetVerifyTransferredCredit(bytes)";
-const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredit(bytes)";
+    "hiddenAssetVerifyTransferredCredit(string)";
+const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredit(string)";
 
 // anonymous voting
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
