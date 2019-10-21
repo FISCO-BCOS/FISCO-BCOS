@@ -82,25 +82,25 @@ BOOST_FIXTURE_TEST_SUITE(WedprPrecompiled, WedprPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(hiddenAssetVerifyIssuedCredit)
 {
     dev::eth::ContractABI abi;
-    std::string issue_argument_pb =
+    std::string issueArgument =
         "CtUCCrQBClhCSElnNjFCMXA5SU4zSmk2aHJOYnNGbnV0YUVUNDMyNnBOREVaVTUvdmFNR0NhdTFydE4ydFByRG01Sz"
         "hCUElYR011VUd5U1hFRkNPcFVNc1ZwWHZydXM9ElhvY2xoSU9JQ0VyV2FJbUErZ1dPdHcyV1BqNUZKSUxiNnd6RGZR"
         "amxObTF4d2hpUytBYjA5YnZYM25BMktQOC9UY1JpMFJTcFFYUUxiNGFia2NoWWJPQT09Egg1ZDllYTI4MhpICiw5Qm"
         "ZKVGFqNGgvT2ljc25NMGNHQWNlOGNNSVFyVXRtZGZaRVpXYUNYSVFvPRIYcGFZTEt5L2RRSTJvUVlrOVRBWVZjdz09"
         "IkgKLDlCZkpUYWo0aC9PaWNzbk0wY0dBY2U4Y01JUXJVdG1kZlpFWldhQ1hJUW89EhhwYVlMS3kvZFFJMm9RWWs5VE"
         "FZVmN3PT0SLHRMbVBuK1ZMWEsrTW5NZ3Q4L0Rsei9DNEc4bmMydVROdnlwUWdXRHcyeVk9GgIIZA==";
-    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT, issue_argument_pb);
-    // hiddenAssetVerifyIssuedCredit(bytes issue_argument_pb)
+    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT, issueArgument);
+    // hiddenAssetVerifyIssuedCredit(bytes issueArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
-    std::string current_credit;
-    std::string credit_storage;
+    std::string currentCredit;
+    std::string creditStorage;
 
-    abi.abiOut(&out, current_credit, credit_storage);
-    BOOST_TEST(current_credit ==
+    abi.abiOut(&out, currentCredit, creditStorage);
+    BOOST_TEST(currentCredit ==
                "Ciw5QmZKVGFqNGgvT2ljc25NMGNHQWNlOGNNSVFyVXRtZGZaRVpXYUNYSVFvPRIYcGFZTEt5L2RRSTJvUVl"
                "rOVRBWVZjdz09");
-    BOOST_TEST(credit_storage ==
+    BOOST_TEST(creditStorage ==
                "CrQBClhCSElnNjFCMXA5SU4zSmk2aHJOYnNGbnV0YUVUNDMyNnBOREVaVTUvdmFNR0NhdTFydE4ydFByRG0"
                "1SzhCUElYR011VUd5U1hFRkNPcFVNc1ZwWHZydXM9ElhvY2xoSU9JQ0VyV2FJbUErZ1dPdHcyV1BqNUZKSU"
                "xiNnd6RGZRamxObTF4d2hpUytBYjA5YnZYM25BMktQOC9UY1JpMFJTcFFYUUxiNGFia2NoWWJPQT09Egg1Z"
@@ -108,15 +108,15 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyIssuedCredit)
                "L2RRSTJvUVlrOVRBWVZjdz09IkgKLDlCZkpUYWo0aC9PaWNzbk0wY0dBY2U4Y01JUXJVdG1kZlpFWldhQ1h"
                "JUW89EhhwYVlMS3kvZFFJMm9RWWs5VEFZVmN3PT0=");
 
-    std::string error_issue_argument_pb = "123";
-    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT, error_issue_argument_pb);
+    std::string errorIssueArgument = "123";
+    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT, errorIssueArgument);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
 BOOST_AUTO_TEST_CASE(hiddenAssetVerifyFulfilledCredit)
 {
     dev::eth::ContractABI abi;
-    std::string fulfill_argument_pb =
+    std::string fulfillArgument =
         "CtUCCrQBClhCQTlST1dVWkViL3YvcGxmM3c0UXhpVzk5OWZGU0MxWHNDYVdJVENzYlNmV3paSE5vZ0ZIVjdDbFpDWl"
         "BkakF2eGZHc1VhbEhWOHBWQkRDVmd2c2xvNVE9ElgwRGRZcmk3cHVPSnBwaVF3VlQ2Y0w3WGUxcGgydXpuV3BPWHZR"
         "SGVYWklGeWZUdkdvUXUzSlFxSFkvV1NncXlRTjlDaWNHbi9OeXFnS3ltZUdDb0tldz09Egg1ZDllYjU3MxpICix5S2"
@@ -125,18 +125,18 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyFulfilledCredit)
         "hBaXlRPT0SjwErM3gzTDZDWFR2Qm1OeFFZM2drV1hRaXJHM21aMm1ocjE3cmxYZkh0dHdZPXwrM3NiRUkwdGd4MVFP"
         "RWVvSDRTNUdBTkh0NjlLNlNMRS9Pc2QxWFZLTHdNPXxPUG5nc05OUUhtbzN1YkpBbnVMY0NpcnkxT2VzOXFDUTlMZW"
         "8vRzJDamdNPXw1ZDllYjU3Mw==";
-    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT, fulfill_argument_pb);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT, fulfillArgument);
+    // hiddenAssetVerifyFulfilledCredit(bytes fulfillArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
-    std::string current_credit;
-    std::string credit_storage;
+    std::string currentCredit;
+    std::string creditStorage;
 
-    abi.abiOut(&out, current_credit, credit_storage);
-    BOOST_TEST(current_credit ==
+    abi.abiOut(&out, currentCredit, creditStorage);
+    BOOST_TEST(currentCredit ==
                "Cix5S2tQMGFnK2RSWnd3dXZEdUtxalVES3FQWnhGSEtObjJ1NkRxNEUwekUwPRIYQ0Q4alNKQUhSL0dENXB"
                "pYnlLQVlVUT09");
-    BOOST_TEST(credit_storage ==
+    BOOST_TEST(creditStorage ==
                "CrQBClhCQTlST1dVWkViL3YvcGxmM3c0UXhpVzk5OWZGU0MxWHNDYVdJVENzYlNmV3paSE5vZ0ZIVjdDbFp"
                "DWlBkakF2eGZHc1VhbEhWOHBWQkRDVmd2c2xvNVE9ElgwRGRZcmk3cHVPSnBwaVF3VlQ2Y0w3WGUxcGgydX"
                "puV3BPWHZRSGVYWklGeWZUdkdvUXUzSlFxSFkvV1NncXlRTjlDaWNHbi9OeXFnS3ltZUdDb0tldz09Egg1Z"
@@ -144,15 +144,15 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyFulfilledCredit)
                "QUhSL0dENXBpYnlLQVlVUT09IkgKLGNNai9Jc2pDYldBVXVLR0dyVlZLamF5eDRtQU9QRnZnUDJUeFVkc0s"
                "4aDg9EhhJL253RklTYVQ5U2liWm1BL2hBaXlRPT0=");
 
-    std::string error_fulfill_argument_pb = "123";
-    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT, error_fulfill_argument_pb);
+    std::string errorFulfillArgument = "123";
+    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT, errorFulfillArgument);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
 BOOST_AUTO_TEST_CASE(hiddenAssetVerifyTransferredCredit)
 {
     dev::eth::ContractABI abi;
-    std::string transfer_request_pb =
+    std::string transferRequest =
         "CtUCCrQBClhCQTlST1dVWkViL3YvcGxmM3c0UXhpVzk5OWZGU0MxWHNDYVdJVENzYlNmV3paSE5vZ0ZIVjdDbFpDWl"
         "BkakF2eGZHc1VhbEhWOHBWQkRDVmd2c2xvNVE9ElgwRGRZcmk3cHVPSnBwaVF3VlQ2Y0w3WGUxcGgydXpuV3BPWHZR"
         "SGVYWklGeWZUdkdvUXUzSlFxSFkvV1NncXlRTjlDaWNHbi9OeXFnS3ltZUdDb0tldz09Egg1ZDllYjU3MxpICixjTW"
@@ -169,31 +169,30 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyTransferredCredit)
         "9zNUVjcm5GeGk4NUVCcmp5SjVaQS9JMDRoRXRlMVRmajBmaEd6TzdaZ2M9Oo8BUUljVC9Fb21VWFBzeUdYaFZIYVZI"
         "alhTMmxkbW9ubTFJMXpkRmpPaTNRbz18Z3Jma3VsQTU1RHJPT1IrdE9PdDBKTEs5UlM1WnVGREFQZ3ZVeHEvd1lRUT"
         "18VllWVGQ3QU9SU3Bic0o3RzJ2Y1VTbUZrMnVKeFZTWmgzWGo0eE5YcG1Bbz18NWQ5ZWI1NzMiCHRyYW5zZmVy";
-    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT, transfer_request_pb);
-    // hiddenAssetVerifyTransferredCredit(bytes transfer_request_pb)
+    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT, transferRequest);
+    // hiddenAssetVerifyTransferredCredit(bytes transferRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
-    std::string spent_current_credit;
-    std::string spent_credit_storage;
-    std::string new_current_credit;
-    std::string new_credit_storage;
+    std::string spentCurrentCredit;
+    std::string spentCreditStorage;
+    std::string newCurrentCredit;
+    std::string newCreditStorage;
 
-    abi.abiOut(
-        &out, spent_current_credit, spent_credit_storage, new_current_credit, new_credit_storage);
-    BOOST_TEST(spent_current_credit ==
+    abi.abiOut(&out, spentCurrentCredit, spentCreditStorage, newCurrentCredit, newCreditStorage);
+    BOOST_TEST(spentCurrentCredit ==
                "CixjTWovSXNqQ2JXQVV1S0dHclZWS2pheXg0bUFPUEZ2Z1AyVHhVZHNLOGg4PRIYSS9ud0ZJU2FUOVNpYlp"
                "tQS9oQWl5UT09");
-    BOOST_TEST(spent_credit_storage ==
+    BOOST_TEST(spentCreditStorage ==
                "CrQBClhCQTlST1dVWkViL3YvcGxmM3c0UXhpVzk5OWZGU0MxWHNDYVdJVENzYlNmV3paSE5vZ0ZIVjdDbFp"
                "DWlBkakF2eGZHc1VhbEhWOHBWQkRDVmd2c2xvNVE9ElgwRGRZcmk3cHVPSnBwaVF3VlQ2Y0w3WGUxcGgydX"
                "puV3BPWHZRSGVYWklGeWZUdkdvUXUzSlFxSFkvV1NncXlRTjlDaWNHbi9OeXFnS3ltZUdDb0tldz09Egg1Z"
                "DllYjU3MxpICixjTWovSXNqQ2JXQVV1S0dHclZWS2pheXg0bUFPUEZ2Z1AyVHhVZHNLOGg4PRIYSS9ud0ZJ"
                "U2FUOVNpYlptQS9oQWl5UT09IkgKLGNNai9Jc2pDYldBVXVLR0dyVlZLamF5eDRtQU9QRnZnUDJUeFVkc0s"
                "4aDg9EhhJL253RklTYVQ5U2liWm1BL2hBaXlRPT0=");
-    BOOST_TEST(new_current_credit ==
+    BOOST_TEST(newCurrentCredit ==
                "Cix5S2tQMGFnK2RSWnd3dXZEdUtxalVES3FQWnhGSEtObjJ1NkRxNEUwekUwPRIYQ0Q4alNKQUhSL0dENXB"
                "pYnlLQVlVUT09");
-    BOOST_TEST(new_credit_storage ==
+    BOOST_TEST(newCreditStorage ==
                "CrQBClhCQTlST1dVWkViL3YvcGxmM3c0UXhpVzk5OWZGU0MxWHNDYVdJVENzYlNmV3paSE5vZ0ZIVjdDbFp"
                "DWlBkakF2eGZHc1VhbEhWOHBWQkRDVmd2c2xvNVE9ElgwRGRZcmk3cHVPSnBwaVF3VlQ2Y0w3WGUxcGgydX"
                "puV3BPWHZRSGVYWklGeWZUdkdvUXUzSlFxSFkvV1NncXlRTjlDaWNHbi9OeXFnS3ltZUdDb0tldz09Egg1Z"
@@ -201,15 +200,15 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifyTransferredCredit)
                "QUhSL0dENXBpYnlLQVlVUT09IkgKLGNNai9Jc2pDYldBVXVLR0dyVlZLamF5eDRtQU9QRnZnUDJUeFVkc0s"
                "4aDg9EhhJL253RklTYVQ5U2liWm1BL2hBaXlRPT0=");
 
-    std::string error_transfer_request_pb = "123";
-    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT, error_transfer_request_pb);
+    std::string errorTransferRequest = "123";
+    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT, errorTransferRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
 BOOST_AUTO_TEST_CASE(hiddenAssetVerifySplitCredit)
 {
     dev::eth::ContractABI abi;
-    std::string split_request_pb =
+    std::string splitRequest =
         "CtUCCrQBClhCQ1VkT0FpbzNUNUZtOGtKY2ZVYm1GNEd0VDB6TERtU3ViRVI5cjBoc09UNExKc1FsKzdUZ1ZpaWR2Q2"
         "ZWMmxVRTFKQ0FSTXNsTERySDFCM3ZzbEpqOXM9ElhRd1JEdzN3dVBCT2F4a0c5eDVSR0RFclgxUVBMMExTSmJJV2RQ"
         "TkpRMGw1cFR3WEhOalM3YWZMemZJWFpweHk3NGhLVDdDTFBQTFFJblptMnFhU3JZZz09Egg1ZDllYjhkMhpICiwxaj"
@@ -261,43 +260,43 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifySplitCredit)
         "enJOamtmVjFPL3lxNVlVT2p2TkNSSUdDQTRScUdGS0tYbUU4VU1HbHduQnVnczkwK0xkeWRVeHArRDNXaktYa2U5OW"
         "U5QW1LUE5tbHdla1dwSUNlQjRxanlCNysrNVMwMTRmQjF3NEx6Si9uRFFBTUZCSAosQXNlQmFxd2gwNk5CS0VhaDFY"
         "VUZWbEQ2Zm83OURBUzlwYm9vcTE0djJpbz0SGGhTWVdFcWlBVHVhN1hIZ2JQUGhhVGc9PRoFc3BsaXQ=";
-    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT, split_request_pb);
-    // hiddenAssetVerifySplitCredit(bytes split_request_pb)
+    bytes param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT, splitRequest);
+    // hiddenAssetVerifySplitCredit(bytes splitRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
-    std::string spent_current_credit;
-    std::string spent_credit_storage;
-    std::string new_current_credit1;
-    std::string new_credit_storage1;
-    std::string new_current_credit2;
-    std::string new_credit_storage2;
+    std::string spentCurrentCredit;
+    std::string spentCreditStorage;
+    std::string newCurrentCredit1;
+    std::string newCreditStorage1;
+    std::string newCurrentCredit2;
+    std::string newCreditStorage2;
 
-    abi.abiOut(&out, spent_current_credit, spent_credit_storage, new_current_credit1,
-        new_credit_storage1, new_current_credit2, new_credit_storage2);
-    BOOST_TEST(spent_current_credit ==
+    abi.abiOut(&out, spentCurrentCredit, spentCreditStorage, newCurrentCredit1, newCreditStorage1,
+        newCurrentCredit2, newCreditStorage2);
+    BOOST_TEST(spentCurrentCredit ==
                "CiwxajcxbjZ0dWo0RFpyR1BMVmdrb1ZqaitEdTgwQ2lPbVlOMDQ3U29Rc1VnPRIYaUhicmdIQ3hSWU9zTnc"
                "vOUtFNFRJQT09");
-    BOOST_TEST(spent_credit_storage ==
+    BOOST_TEST(spentCreditStorage ==
                "CrQBClhCQ1VkT0FpbzNUNUZtOGtKY2ZVYm1GNEd0VDB6TERtU3ViRVI5cjBoc09UNExKc1FsKzdUZ1ZpaWR"
                "2Q2ZWMmxVRTFKQ0FSTXNsTERySDFCM3ZzbEpqOXM9ElhRd1JEdzN3dVBCT2F4a0c5eDVSR0RFclgxUVBMME"
                "xTSmJJV2RQTkpRMGw1cFR3WEhOalM3YWZMemZJWFpweHk3NGhLVDdDTFBQTFFJblptMnFhU3JZZz09Egg1Z"
                "DllYjhkMhpICiwxajcxbjZ0dWo0RFpyR1BMVmdrb1ZqaitEdTgwQ2lPbVlOMDQ3U29Rc1VnPRIYaUhicmdI"
                "Q3hSWU9zTncvOUtFNFRJQT09IkgKLDFqNzFuNnR1ajREWnJHUExWZ2tvVmpqK0R1ODBDaU9tWU4wNDdTb1F"
                "zVWc9EhhpSGJyZ0hDeFJZT3NOdy85S0U0VElBPT0=");
-    BOOST_TEST(new_current_credit1 ==
+    BOOST_TEST(newCurrentCredit1 ==
                "CixBc2VCYXF3aDA2TkJLRWFoMVhVRlZsRDZmbzc5REFTOXBib29xMTR2MmlvPRIYaFNZV0VxaUFUdWE3WEh"
                "nYlBQaGFUZz09");
-    BOOST_TEST(new_credit_storage1 ==
+    BOOST_TEST(newCreditStorage1 ==
                "CrQBClhCQ1VkT0FpbzNUNUZtOGtKY2ZVYm1GNEd0VDB6TERtU3ViRVI5cjBoc09UNExKc1FsKzdUZ1ZpaWR"
                "2Q2ZWMmxVRTFKQ0FSTXNsTERySDFCM3ZzbEpqOXM9ElhRd1JEdzN3dVBCT2F4a0c5eDVSR0RFclgxUVBMME"
                "xTSmJJV2RQTkpRMGw1cFR3WEhOalM3YWZMemZJWFpweHk3NGhLVDdDTFBQTFFJblptMnFhU3JZZz09Egg1Z"
                "DllYjhkMxpICixBc2VCYXF3aDA2TkJLRWFoMVhVRlZsRDZmbzc5REFTOXBib29xMTR2MmlvPRIYaFNZV0Vx"
                "aUFUdWE3WEhnYlBQaGFUZz09IkgKLDFqNzFuNnR1ajREWnJHUExWZ2tvVmpqK0R1ODBDaU9tWU4wNDdTb1F"
                "zVWc9EhhpSGJyZ0hDeFJZT3NOdy85S0U0VElBPT0=");
-    BOOST_TEST(new_current_credit2 ==
+    BOOST_TEST(newCurrentCredit2 ==
                "CiwySStvNUkyQldSMmV5ZlplNzd3elVqSnJYZUM3YkRNalVrZWNSTjYvQmdZPRIYRWsvZ2prUjZTQW1HbG5"
                "0V0NqeHh2Zz09");
-    BOOST_TEST(new_credit_storage2 ==
+    BOOST_TEST(newCreditStorage2 ==
                "CrQBClhCQ1VkT0FpbzNUNUZtOGtKY2ZVYm1GNEd0VDB6TERtU3ViRVI5cjBoc09UNExKc1FsKzdUZ1ZpaWR"
                "2Q2ZWMmxVRTFKQ0FSTXNsTERySDFCM3ZzbEpqOXM9ElhRd1JEdzN3dVBCT2F4a0c5eDVSR0RFclgxUVBMME"
                "xTSmJJV2RQTkpRMGw1cFR3WEhOalM3YWZMemZJWFpweHk3NGhLVDdDTFBQTFFJblptMnFhU3JZZz09Egg1Z"
@@ -305,12 +304,12 @@ BOOST_AUTO_TEST_CASE(hiddenAssetVerifySplitCredit)
                "UjZTQW1HbG50V0NqeHh2Zz09IkgKLDFqNzFuNnR1ajREWnJHUExWZ2tvVmpqK0R1ODBDaU9tWU4wNDdTb1F"
                "zVWc9EhhpSGJyZ0hDeFJZT3NOdy85S0U0VElBPT0=");
 
-    std::string error_split_request_pb = "123";
-    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT, error_split_request_pb);
+    std::string errorSplitRequest = "123";
+    param = abi.abiIn(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT, errorSplitRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
-BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteRequest)
+BOOST_AUTO_TEST_CASE(anonymousVotingVerifyBoundedVoteRequest)
 {
     dev::eth::ContractABI abi;
     std::string systemParameters =
@@ -355,8 +354,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteRequest)
         "1QTTkzeVNheWFydHBOdFJnTVpCdDNRQ1dHZS9UQVVuNDVlQzhPd0U9MixTQ2laSE5oVkJqWEoyWWdzUThIZzArcHB5"
         "NVNOOCtYSEJjWUtDbHBlWmdNPQ==";
     bytes param =
-        abi.abiIn(API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+        abi.abiIn(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
+    // anonymousVotingVerifyBoundedVoteRequest(bytes systemParameters, bytes voteRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     u256 result;
@@ -367,7 +366,65 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteRequest)
     std::string errorSystemParameters = "123";
     std::string errorVoteRequest = "123";
     param = abi.abiIn(
-        API_ANONYMOUS_VOTING_VERIFY_VOTE_REQUEST, errorSystemParameters, errorVoteRequest);
+        API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, errorSystemParameters, errorVoteRequest);
+    BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
+}
+
+BOOST_AUTO_TEST_CASE(anonymousVotingVerifyUnboundedVoteRequest)
+{
+    dev::eth::ContractABI abi;
+    std::string systemParameters =
+        "CixGaWxyOG1vc3dtMDZSQ1J2clZCVGF3YlhXMFNvS01xRjJNeXRRbk1FdVVjPRIGS2l0dGVuEgREb2dlEgVCdW5ueQ"
+        "==";
+    std::string voteRequest =
+        "CqgFCrQBClhDbjEzRjNJNVpYbHZQK3N6QWpHVklzSHFST3FuUGVDSXB3UVFUaFR0bkhzdUJ0eTdrVlRzM2dkTFBFcH"
+        "VnM1hGV1VOZmZxbER1THRadG9VallraUlWZz09ElhCQ1ozaHRSdlpOSVgvVkVacUZxenNFWk5pZnl4SVpMamM3ZXJB"
+        "cnFGTGM3UktpNWJWR1c5VU1xaDR1bHprODg1OGhlTVVOUUZwdlVwbEFzbC9KOXhIVEU9ElwKLHJ2UUtXcnB0bVYyRE"
+        "Y4NWZLbDhNNkpOcS9HMmFqYXhjT1hIQThZTnJzbHM9EixkR1RSL1FsUnQ5cUxwSnZydlRyeTZ3S09lc29LTmg5bnR3"
+        "OU9IYXU1b1c0PSJmCgZLaXR0ZW4SXAosN3NBOExzazZvUWxsc2lxaE9rZ2VHQms4TXdsblpSTnZBYVdHaW5WNDFFTT"
+        "0SLEdMb2d2SmtaeS9ZeVV3U3RKeVBYbFVaMHcrQ1JpUEk3ZGg0R0FRUVlxM2M9ImQKBERvZ2USXAosdGowb0ZWVHRi"
+        "Um1xS3dpVVJOM1VuWUtWSkJSdEdIS2VxY09BR0VFMmxCTT0SLDRGNFBVeVIvU0M3ZVVFQjRaWHljNk83dmo3Z2NKTH"
+        "Awa3lhcVNqK0lNblE9ImUKBUJ1bm55ElwKLHluWU50YmFhWTBaUHh0NmEvUHNrc05TVVMwaS81VFNyekxSd3FRVWor"
+        "eHM9EixVRGUvSkFTeUhsZWZGbWRaQUFaNjltblA1ZnZKWFVWRjVzSTNpMjFkWmhRPSpcCixBQUFBQUFBQUFBQUFBQU"
+        "FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPRIsQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+        "QUFBQUFBQT0SiwQKBktpdHRlbhKABAqKAQosbXBxYkR3dTRPanZSd1pCeHFVcXJTMmZmY0h4R3BSOTFLNG82ckNaSk"
+        "53QT0SLCszb2dVTlVzb1llelFGYTVKT0JBWXlBOVVVSFZOb0k2aWFFUnJ3K0YrZ2s9GixuVjZUWHpKWXNHbHlRT3Ur"
+        "bnVpWDIxVTArTnBLZFR2Rm80aEtOS2tlUUFJPRLwAgosVThydGd0dU8wMElGNXFYRis3L2kwaHFicXRjeFdUVlBoOX"
+        "BQTllhK1FnVT0SLDJyemVHZk9aNVU3VkVjQlBNUkpBMFovOXU5ZkJXUmNSUmlIZGtmZHJkQTg9GixHQnhUV2xaeWRY"
+        "Uy9EUXNZM0xqTXdZaEpERXJGTFdCNU0yN1NvMjA3TEF3PSIsaEZoVW81NjE5NTlHMGN0WWtTTFhCR2NxNUNBS2RZRi"
+        "9GZm5qUlF5Q3JBQT0qLFhPVWJIV1ZoNSs0NVg2T3RacU1BNms3b3FSMVlQS242TDZzNlBtN1JaZ3c9MixaNitOMTBG"
+        "Qnd6dUwxZW9HL3VBT1JPbGhMNjZ2UEtZMy9QakJOOS84akFNPTosSllQS3lzWmU4aGZFcGh4Zyt3VkNiYktscHRNTT"
+        "BZNERvRWFBVStlMFRRaz1CLEtDSjN0SXlUM2swWDBWTWZKRFFIVUlQa28vVGUxVnlUMEUzdlNrYjFCd3M9EokECgRE"
+        "b2dlEoAECooBCixxWWxQaUtpR2lpV2Q3OVUxQm9oZThpa0NWZzdxZW95bXI0SmRrejgrQVFFPRIsNE1DUTFPbW5BZG"
+        "xUb1Q5ck51SXRmbzZpaE1RR2R0R3luQjFFbWF5UTF3VT0aLFFUNmZIRkNuU0pGVmJBUE0yZ0dHeHc5SktXWEtmT1hS"
+        "cDJKT1VnbDN4Z1k9EvACCixoUHZrUTdzYndrRk9rdmY4T0ZOaEdERjR4OWo2TnRpQ01jN01IMHZLOUFzPRIsdHhtYX"
+        "NkdkZtRXh2alBRVERpSmU4bHRKdjFOaEo3bXdqZFNiU01BZHBnOD0aLElKOFFCc08wQjRnNmhPZDVkL04zMDI0VGI2"
+        "NjRMbnBrWFJ5THVUcmUvZzg9IixtbnMzb1pjVTVHaW1RWTNTam9WVVpocEFUcWYzMDJyU0M2MW5sQkgwU0FzPSoscz"
+        "REMTNBcEhRSElNNTNhS3BXNExLcTcvNldwbm9FQ0c2Uy9RMFZRczNnRT0yLDRwV0xldm5TRUZ6SGNzbkZZQmRnYlVh"
+        "eDlsRE8yWDVKOXVuRG5ZWTlSQXc9OixTa015UDQyQUgvS0djMEZzM0ppVmg0aTFtQytpRExhNTE4SEZsdFlnNndnPU"
+        "IsUUdZRlBRamNnVXduZkxsM3EreEJLRDFtZ3c1U0JGK0tZTHl4Rkhsb2p3QT0SigQKBUJ1bm55EoAECooBCix5Nkkx"
+        "bDc1Vm1GTDhJVDBvcGNTWmNtQ2tNamJiQXl6VzljaTZjelpSeXdZPRIsYU12eDlkVmlkbkh3TEhHMkl0UDJFWDMwaH"
+        "poaEI2dXJ1V1JVSlhCcFNRcz0aLE96V0ZtU21BOGZ5OHVobnB4ZjdQZXJ4bGhXSVJVQUdXdTdXNlN4R0hUQXc9EvAC"
+        "CixSRVZ1UkF4Y0ZuWjB6RXE0NHBGMzd4MVhHb2NoSGI3RlZ6U2dzMzdvQ3dVPRIsamtzM3FQK242YVBhM1VIWEVxdH"
+        "kwd0MwL0hFRFovWHFTenJKYStzU1dBVT0aLHdhY2wvbWY1bElxcGp6Yzhad05kWnhFU2RQUGJrUUw4M2xES3F4N2or"
+        "UTg9IixUSmlLUzd3UGFTdktiU0o1S2YycUNIUStwVmhVdm05Q2EzdlBZN0VXZGdRPSosam80bzVYN0Z3RDhyV2ovMW"
+        "p2cGFaY0dodlI4SGFqYWg1bC9oUGdXdGR3RT0yLDQ4NkpQVWtDbmh3VFZpRzQrVmNmYXBISDRnTWdSOFdHdzczU2Nl"
+        "ZEdhZ009OixSR1d1djRRdU84d1d6dzFNRnZUdHVqcmt3SVBPQUJnb2cvRTkxVkZzaHdvPUIsUk5kcG1adndna0FjYk"
+        "RudTlOWGNyT0ZLK2JyenVHZlp6aXpUVFYwQTdnaz0=";
+    bytes param = abi.abiIn(
+        API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
+    //  anonymousVotingVerifyUnboundedVoteRequest(bytes systemParameters, bytes voteRequest)
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+
+    u256 result;
+
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_SUCCESS);
+
+    std::string errorSystemParameters = "123";
+    std::string errorVoteRequest = "123";
+    param = abi.abiIn(
+        API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, errorSystemParameters, errorVoteRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
@@ -434,7 +491,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateVoteSumResponse)
         "ZpWDRyN1RFPQ==";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE, systemParameters,
         voteRequest, voteStorage);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    // anonymousVotingAggregateVoteSumResponse(bytes systemParameters, bytes voteRequest, bytes
+    // voteStorage)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string blankBallot;
@@ -542,7 +600,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyCountRequest)
         "t1ZWdWY1N0TUxBZWtnZFBZUlNuUlVtNjFOdFdVd1k9";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST, systemParameters,
         voteStorage, hPointShare, decryptedRequest);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    // anonymousVotingVerifyCountRequest(bytes systemParameters, bytes voteStorage, string
+    // hPointShare, bytes decryptedRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     u256 result;
@@ -605,7 +664,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateDecryptedPartSum)
         "hoR3M9EjcKBUJ1bm55Ei4SLHlHSzhUK2Z5dm8wb2xzbHpSZ29hRVJWV3lqa3RJbWd5Q29tQjRJQjZGZ0U9";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM, systemParameters,
         decryptedRequest, decryptedResultPartStorage);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    // anonymousVotingAggregateDecryptedPartSum(bytes systemParameters, bytes decryptRequest, bytes
+    // decryptedResultPartStorage)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string counterId;
@@ -698,7 +758,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingCountCandidatesResult)
         "R1BobkZCUTR4T2RBdVBFejgyeVRYODVpaFZEU009";
     bytes param = abi.abiIn(
         API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT, systemParameters, voteStorage, voteSumTotal);
-    // hiddenAssetVerifyFulfilledCredit(bytes fulfill_argument_pb)
+    // anonymousVotingCountCandidatesResult(bytes systemParameters, bytes voteStorage, bytes
+    // voteSumTotal)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string countResult;

@@ -25,4 +25,5 @@ int8_t verify_count_request(
     char* param_pb, char* encrypted_vote_sum_pb, char* counter_share_string, char* request_pb);
 
 int8_t verify_unbounded_vote_request(char* param_pb, char* request_pb);
+
 }  // extern "C"

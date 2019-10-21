@@ -23,21 +23,21 @@
 include(ExternalProject)
 
 if (APPLE)
-    set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libffi_hidden_asset.tar.gz)
-    set(WEDPR_SHA256 1e82f07535721c020e6671ec72e6a382945b070bd82d992d8168b6d9c049262c)
+    set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libwedpr-0.1.0.tar.gz)
+    set(WEDPR_SHA256 7d76c84e6620193ff2f3b337b7132def6a02fb8b7d061869e03db38ac1309873)
 else()
-    set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libffi_hidden_asset.tar.gz)
-    set(WEDPR_SHA256 1e82f07535721c020e6671ec72e6a382945b070bd82d992d8168b6d9c049262c)
+    set(WEDPR_URL https://github.com/fqliao/LargeFiles/raw/master/libs/libwedpr-0.1.0.tar.gz)
+    set(WEDPR_SHA256 7d76c84e6620193ff2f3b337b7132def6a02fb8b7d061869e03db38ac1309873)
 endif()
 
 ExternalProject_Add(WeDPR
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libffi_hidden_asset.tar.gz
+    DOWNLOAD_NAME libwedpr-0.1.0.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     BUILD_IN_SOURCE 1
     URL ${WEDPR_URL}
     URL_HASH SHA256=${WEDPR_SHA256}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
-    INSTALL_COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/deps/src/WeDPR/libffi_hidden_asset.so ${CMAKE_SOURCE_DIR}/deps/lib/"
+    INSTALL_COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/deps/src/WeDPR/* ${CMAKE_SOURCE_DIR}/deps/lib/"
 )
