@@ -37,7 +37,7 @@ contract HelloWorld {
 
 
 // HelloWorldPrecompiled table name
-const std::string HELLO_WORLD_TABLE_NAME = storage::USER_TABLE_PREFIX + "hello_world";
+const std::string HELLO_WORLD_TABLE_NAME = "hello_world";
 // key field
 const std::string HELLOWORLD_KEY_FIELD = "key";
 const std::string HELLOWORLD_KEY_FIELD_NAME = "hello_key";
@@ -72,12 +72,12 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
     bytes out;
     dev::eth::ContractABI abi;
 
-    Table::Ptr table = openTable(_context, HELLO_WORLD_TABLE_NAME);
+    Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
     if (!table)
     {
         // table is not exist, create it.
-        table = createTable(_context, HELLO_WORLD_TABLE_NAME, HELLOWORLD_KEY_FIELD,
-            HELLOWORLD_VALUE_FIELD, _origin);
+        table = createTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME),
+            HELLOWORLD_KEY_FIELD, HELLOWORLD_VALUE_FIELD, _origin);
         if (!table)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")

@@ -80,14 +80,14 @@ BOOST_AUTO_TEST_CASE(insert)
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    auto entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
+    auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // insert again with same item
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
+    entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // insert new item with same table name, but diffrent address
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(insert)
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
+    entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 2u);
 }
 
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(remove)
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-    auto entries = table->select(USER_TABLE_PREFIX + tableName, table->newCondition());
+    auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // remove
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(remove)
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     Condition::Ptr condition = table->newCondition();
     condition->EQ(STATUS, "1");
-    entries = table->select(USER_TABLE_PREFIX + tableName, condition);
+    entries = table->select(precompiled::getTableName(tableName), condition);
     BOOST_TEST(entries->size() == 0u);
 
     // remove not exist entry

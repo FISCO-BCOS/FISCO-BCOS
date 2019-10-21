@@ -53,7 +53,6 @@ static const std::string SYS_HASH_2_BLOCK = "_sys_hash_2_block_";
 static const std::string SYS_CNS = "_sys_cns_";
 static const std::string SYS_CONFIG = "_sys_config_";
 static const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
-static const std::string USER_TABLE_PREFIX = "_user_";
 static const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 
 #if 0
@@ -74,7 +73,6 @@ const char* const SYS_HASH_2_BLOCK = "_sys_hash_2_block_";
 const char* const SYS_CNS = "_sys_cns_";
 const char* const SYS_CONFIG = "_sys_config_";
 const char* const SYS_ACCESS_TABLE = "_sys_table_access_";
-const char* const USER_TABLE_PREFIX = "_user_";
 const char* const SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 #endif
 
@@ -85,14 +83,6 @@ const int CODE_TABLE_FILED_LENGTH_OVERFLOW = -50003;
 const int CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW = -50004;
 const int CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW = -50005;
 const int CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW = -50006;
-
-
-const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
-const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
-const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
-const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
-const int USER_TABLE_NAME_MAX_LENGTH = 64;
-const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
 inline bool isHashField(const std::string& _key)
 {

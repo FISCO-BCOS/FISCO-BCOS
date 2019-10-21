@@ -78,6 +78,15 @@ enum PrecompiledError : int
 };
 
 void getErrorCodeOut(bytes& out, int const& result);
+std::string getTableName(const std::string& _tableName);
+
+const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
+const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
+const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
+const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
+const int USER_TABLE_NAME_MAX_LENGTH = 64;
+const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
+const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
 
 }  // namespace precompiled

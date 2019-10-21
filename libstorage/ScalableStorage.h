@@ -57,8 +57,9 @@ public:
     void stop() override;
     std::string getDBNameOfArchivedBlock(int64_t _blockNumber);
 
-private:
     bool isStateData(const std::string& _tableName);
+
+private:
     Entries::Ptr selectFromArchive(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr);
     void separateData(const std::vector<TableData::Ptr>& datas,
