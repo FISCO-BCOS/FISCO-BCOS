@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #include "TablePrecompiled.h"
+#include "Common.h"
 #include "ConditionPrecompiled.h"
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
@@ -30,6 +31,7 @@
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 const char* const TABLE_METHOD_SLT_STR_ADD = "select(string,address)";
 const char* const TABLE_METHOD_INS_STR_ADD = "insert(string,address)";

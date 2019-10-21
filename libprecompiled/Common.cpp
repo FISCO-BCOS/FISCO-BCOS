@@ -22,6 +22,12 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
 
+using namespace dev;
+using namespace std;
+
+static const string USER_TABLE_PREFIX = "_user_";
+static const string USER_TABLE_PREFIX_SHORT = "u_";
+
 void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
     dev::eth::ContractABI abi;
@@ -39,4 +45,13 @@ void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
     {
         out = abi.abiIn("", u256(-result));
     }
+}
+
+std::string dev::precompiled::getTableName(const std::string& _tableName)
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        return USER_TABLE_PREFIX + _tableName;
+    }
+    return USER_TABLE_PREFIX_SHORT + _tableName;
 }

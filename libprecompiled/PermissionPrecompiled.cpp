@@ -178,6 +178,6 @@ void PermissionPrecompiled::addPrefixToUserTable(std::string& table_name)
     }
     else
     {
-        table_name = USER_TABLE_PREFIX + table_name;
+        table_name = precompiled::getTableName(table_name);
     }
 }

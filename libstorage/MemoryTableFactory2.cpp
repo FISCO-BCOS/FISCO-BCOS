@@ -69,11 +69,8 @@ void MemoryTableFactory2::init()
     }
 }
 
-Table::Ptr MemoryTableFactory2::openTable(
-    const std::string& tableName, bool authorityFlag, bool isPara)
+Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool authorityFlag, bool)
 {
-    (void)isPara;
-
     RecursiveGuard l(x_name2Table);
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())

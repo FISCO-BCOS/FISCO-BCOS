@@ -97,6 +97,11 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
     Address const& contractAddress, Address const& origin, bool needCreate)
 {
     string tableName = PARA_CONFIG_TABLE_PREFIX + contractAddress.hex() + "_";
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        tableName = PARA_CONFIG_TABLE_PREFIX_SHORT + contractAddress.hex();
+    }
+
     TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
         dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
     if (!tableFactoryPrecompiled)
