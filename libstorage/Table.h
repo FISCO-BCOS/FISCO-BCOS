@@ -110,7 +110,7 @@ public:
 
     virtual ssize_t capacity() const;
 
-    virtual void copyFrom(Entry::Ptr entry);
+    virtual void copyFrom(Entry::ConstPtr entry);
 
     virtual ssize_t refCount();
 
