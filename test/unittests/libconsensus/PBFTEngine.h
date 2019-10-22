@@ -107,13 +107,13 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft,
 {
     P2PMessage::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
     pbft->onRecvPBFTMessage(NetworkException(), session, message_ptr);
-    std::pair<bool, PBFTMsgPacket> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
+    std::pair<bool, PBFTMsgPacket::Ptr> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
     if (valid == true)
     {
         BOOST_CHECK(ret.first == true);
-        BOOST_CHECK(ret.second.packet_id == packetType);
+        BOOST_CHECK(ret.second->packet_id == packetType);
         T decoded_req;
-        decoded_req.decode(ref(ret.second.data));
+        decoded_req.decode(ref(ret.second->data));
         BOOST_CHECK(decoded_req == req);
     }
     else

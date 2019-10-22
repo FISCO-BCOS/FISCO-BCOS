@@ -63,6 +63,9 @@ struct PBFTMsgPacket
     u256 timestamp;
     /// endpoint
     std::string endpoint;
+
+    using Ptr = std::shared_ptr<PBFTMsgPacket>;
+
     /// default constructor
     PBFTMsgPacket()
       : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))

@@ -53,6 +53,8 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
+    // create PBFTMsgFactory
+    createPBFTMsgFactory();
     auto block = m_blockChain->getBlockByNumber(m_blockChain->number());
     if (!block)
     {
@@ -746,13 +748,13 @@ void PBFTEngine::onRecvPBFTMessage(
             "directly");
         return;
     }
-    PBFTMsgPacket pbft_msg;
-    bool valid = decodeToRequests(pbft_msg, message, session);
+    PBFTMsgPacket::Ptr pbft_msg = m_pbftMsgFactory->createPBFTMsgPacket();
+    bool valid = decodePBFTMsgPacket(pbft_msg, message, session);
     if (!valid)
     {
         return;
     }
-    if (pbft_msg.packet_id <= ViewChangeReqPacket)
+    if (pbft_msg->packet_id <= ViewChangeReqPacket)
     {
         m_msgQueue.push(pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
@@ -761,14 +763,15 @@ void PBFTEngine::onRecvPBFTMessage(
         // update the network-in statistic information
         if (m_statisticHandler)
         {
-            m_statisticHandler->updateConsInPacketsInfo(pbft_msg.packet_id, message->length());
+            m_statisticHandler->updateConsInPacketsInfo(pbft_msg->packet_id, message->length());
         }
     }
     else
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("onRecvPBFTMessage: illegal msg ")
-                              << LOG_KV("fromId", pbft_msg.packet_id)
-                              << LOG_KV("fromIp", pbft_msg.endpoint) << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("fromId", pbft_msg->packet_id)
+                              << LOG_KV("fromIp", pbft_msg->endpoint)
+                              << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
 }
@@ -1424,18 +1427,18 @@ void PBFTEngine::checkTimeout()
         m_onViewChange();
 }
 
-void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 {
     Guard l(m_mutex);
     PBFTMsg pbft_msg;
     std::string key;
     bool succ = false;
-    switch (pbftMsg.packet_id)
+    switch (pbftMsg->packet_id)
     {
     case PrepareReqPacket:
     {
         PrepareReq prepare_req;
-        succ = handlePrepareMsg(prepare_req, pbftMsg);
+        succ = handlePrepareMsg(prepare_req, *pbftMsg);
         key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
@@ -1443,7 +1446,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case SignReqPacket:
     {
         SignReq req;
-        succ = handleSignMsg(req, pbftMsg);
+        succ = handleSignMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1451,7 +1454,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case CommitReqPacket:
     {
         CommitReq req;
-        succ = handleCommitMsg(req, pbftMsg);
+        succ = handleCommitMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1459,7 +1462,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case ViewChangeReqPacket:
     {
         ViewChangeReq req;
-        succ = handleViewChangeMsg(req, pbftMsg);
+        succ = handleViewChangeMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1467,31 +1470,51 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     default:
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleMsg:  Err pbft message")
-                              << LOG_KV("from", pbftMsg.node_idx) << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("from", pbftMsg->node_idx) << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return;
     }
     }
 
-    if (pbftMsg.ttl == 1)
+    if (!needForwardMsg(succ, key, pbftMsg, pbft_msg))
     {
         return;
     }
-    bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
-                       (m_highestBlock.number() - pbft_msg.height < 10);
-    if (succ && key.size() > 0 && height_flag)
+    forwardMsg(key, pbftMsg, pbft_msg);
+}
+
+// should forward message or not
+bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
+    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    if (!_valid || _key.size() == 0)
     {
-        std::unordered_set<h512> filter;
-        filter.insert(pbftMsg.node_id);
-        /// get the origin gen node id of the request
-        h512 gen_node_id = getSealerByIndex(pbft_msg.idx);
-        if (gen_node_id != h512())
-        {
-            filter.insert(gen_node_id);
-        }
-        unsigned current_ttl = pbftMsg.ttl - 1;
-        broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter, current_ttl);
+        return false;
     }
+    // check ttl
+    if (_pbftMsgPacket->ttl == 1)
+    {
+        return false;
+    }
+    // check blockNumber
+    return (_pbftMsg.height > m_highestBlock.number() ||
+            (m_highestBlock.number() - _pbftMsg.height < 10));
+}
+
+// update ttl and forward the message
+void PBFTEngine::forwardMsg(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    std::unordered_set<h512> filter;
+    filter.insert(_pbftMsgPacket->node_id);
+    /// get the origin gen node id of the request
+    h512 genNodeId = getSealerByIndex(_pbftMsg.idx);
+    if (genNodeId != h512())
+    {
+        filter.insert(genNodeId);
+    }
+    unsigned current_ttl = _pbftMsgPacket->ttl - 1;
+    broadcastMsg(_pbftMsgPacket->packet_id, _key, ref(_pbftMsgPacket->data), filter, current_ttl);
 }
 
 /// start a new thread to handle the network-receivied message
@@ -1506,13 +1529,13 @@ void PBFTEngine::workLoop()
                 waitSignal();
                 continue;
             }
-            std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+            std::pair<bool, PBFTMsgPacket::Ptr> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
                 PBFTENGINE_LOG(TRACE)
                     << LOG_DESC("workLoop: handleMsg")
-                    << LOG_KV("type", std::to_string(ret.second.packet_id))
-                    << LOG_KV("fromIdx", ret.second.node_idx) << LOG_KV("nodeIdx", nodeIdx())
+                    << LOG_KV("type", std::to_string(ret.second->packet_id))
+                    << LOG_KV("fromIdx", ret.second->node_idx) << LOG_KV("nodeIdx", nodeIdx())
                     << LOG_KV("myNode", m_keyPair.pub().abridged());
                 handleMsg(ret.second);
             }
