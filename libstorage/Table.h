@@ -44,6 +44,8 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::vector<std::string> fields;
     std::vector<Address> authorizedAddress;
     std::vector<std::string> indices;
+
+    bool enableCache = true;
 };
 
 struct AccessOptions : public std::enable_shared_from_this<AccessOptions>

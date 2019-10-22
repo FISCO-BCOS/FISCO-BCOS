@@ -155,6 +155,34 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 {
     (void)condition;
 
+    if(!tableInfo->enableCache) {
+    	RWMutexScoped emptyScoped;
+    	auto cache = std::make_shared<Cache>();
+
+    	if (m_backend)
+		{
+			auto conditionKey = std::make_shared<Condition>();
+			conditionKey->EQ(tableInfo->key, key);
+			auto backendData = m_backend->select(num, tableInfo, key, conditionKey);
+
+			cache->setEntries(backendData);
+			cache->setEmpty(false);
+
+			size_t totalCapacity = 0;
+			for (auto it : *backendData)
+			{
+				totalCapacity += it->capacity();
+			}
+			touchMRU(tableInfo->name, key, totalCapacity);
+		}
+		else
+		{
+			CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
+		}
+
+    	return std::make_tuple(emptyScoped, cache);
+    }
+
     auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
 
@@ -208,6 +236,10 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
             {
                 auto requestData = datas[idx];
+                if(!requestData->info->enableCache) {
+                	continue;
+                }
+
                 auto commitData = std::make_shared<TableData>();
                 commitData->info = requestData->info;
                 commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
@@ -333,18 +365,8 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                             touchMRU(requestData->info->name, key, change);
                         }
                     });
-#if 0
-                // MemoryTable2 already sort
-                tbb::parallel_sort(commitData->dirtyEntries->begin(),
-                    commitData->dirtyEntries->end(), EntryLessNoLock(requestData->info));
-#endif
-                commitData->newEntries->shallowFrom(requestData->newEntries);
 
-#if 0
-                TIME_RECORD("Sort new entries");
-                tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
-                    EntryLessNoLock(requestData->info));
-#endif
+                commitData->newEntries->shallowFrom(requestData->newEntries);
                 (*commitDatas)[idx] = commitData;
             }
         });
