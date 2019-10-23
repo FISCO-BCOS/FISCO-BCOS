@@ -137,11 +137,17 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
                           << LOG_DESC("initBlockChain Failed for init storage failed");
         return false;
     }
+    auto currenrBlockNumber = getBlockNumberFromStorage(m_dbInitializer->storage());
+    bool shouldBuild = true;
+    if (currenrBlockNumber != -1)
+    {  // -1 means first init
+        shouldBuild = false;
+    }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
     m_blockChain = blockChain;
-    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam);
+    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam, shouldBuild);
     if (!ret)
     {
         /// It is a subsequent block without same extra data, so do reset.

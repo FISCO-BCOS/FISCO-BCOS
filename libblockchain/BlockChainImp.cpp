@@ -443,10 +443,16 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLPByHash(h256 const& _blockHash)
     }
 }
 
-bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
+bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild)
 {
+    BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
+                         << LOG_KV("shouldBuild", _shouldBuild);
     std::shared_ptr<Block> block = getBlockByNumber(0);
-    if (block == nullptr)
+    if (block == nullptr && !_shouldBuild)
+    {
+        BLOCKCHAIN_LOG(FATAL) << "Can't find the genesisi block";
+    }
+    else if (block == nullptr && _shouldBuild)
     {
         block = std::make_shared<Block>();
         /// modification 2019.3.20: set timestamp to block header
