@@ -292,7 +292,7 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
                                    << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num);
         Json::Value requestJson;
         requestJson["op"] = "selectbynum";
-        requestJson["params"]["tableNum"] = tableInfo->name;
+        requestJson["params"]["tableName"] = tableInfo->name;
         requestJson["params"]["num"] = num;
 
         Json::Value responseJson = requestDB(requestJson);
