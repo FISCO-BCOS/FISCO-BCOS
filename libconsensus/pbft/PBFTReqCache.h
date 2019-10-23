@@ -139,7 +139,7 @@ public:
     inline void addCommitReq(CommitReq const& req)
     {
         auto sigStr = req.sig.hex();
-        if (addCommitReq.count(req.block_hash) && addCommitReq[req.block_hash].count(sigStr))
+        if (m_commitCache.count(req.block_hash) && m_commitCache[req.block_hash].count(sigStr))
         {
             return;
         }
