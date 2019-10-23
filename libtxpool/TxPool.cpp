@@ -499,6 +499,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
+#if 0
             /// check block limit and nonce again when obtain transactions
             if (false == m_txNonceCheck->isBlockLimitOk(*it))
             {
@@ -506,6 +507,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
                 nonceKeyCache.push_back(it->nonce());
                 continue;
             }
+#endif
             if (!_avoid.count(it->sha3()))
             {
                 ret.push_back(*it);
