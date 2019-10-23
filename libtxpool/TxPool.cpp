@@ -301,7 +301,8 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
                           << LOG_KV("hash", tx_hash.abridged());
         return ImportResult::AlreadyInChain;
     }
-    /// check nonce
+/// check nonce
+#if 0
     if (trans.nonce() == Invalid256 || (!m_txNonceCheck->isNonceOk(trans, false)))
     {
         return ImportResult::TransactionNonceCheckFail;
@@ -310,6 +311,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
     {
         return ImportResult::BlockLimitCheckFailed;
     }
+#endif
     try
     {
         /// check transaction signature here when everything is ok

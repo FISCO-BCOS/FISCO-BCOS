@@ -129,7 +129,7 @@ public:
     inline void addSignReq(SignReq const& req)
     {
         auto sigStr = req.sig.hex();
-        if (m_signCache.count(req.block_hash) && m_signCache[sigStr].count())
+        if (m_signCache.count(req.block_hash) && m_signCache[req.block_hash].count(sigStr))
         {
             return;
         }
