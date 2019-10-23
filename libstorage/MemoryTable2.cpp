@@ -318,14 +318,16 @@ dev::h256 MemoryTable2::hash()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-    TIME_RECORD("MemoryTable2 Dump");
+    TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
     if (m_isDirty)
     {
+    	tbb::atomic<size_t> allSize;
+
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
 
-        auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
+        //auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
         tbb::parallel_for(m_dirty.range(),
             [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
@@ -334,7 +336,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     if (!it->second->deleted())
                     {
                         m_tableData->dirtyEntries->addEntry(it->second);
-                        tempEntries.push_back(it->second);
+                        allSize += it->second->capacity();
+                        //tempEntries.push_back(it->second);
                     }
                 }
             });
@@ -351,7 +354,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                                 if (!it->second->get(i)->deleted())
                                 {
                                     m_tableData->newEntries->addEntry(it->second->get(i));
-                                    tempEntries.push_back(it->second->get(i));
+                                    allSize += it->second->get(i)->capacity();
+                                    //tempEntries.push_back(it->second->get(i));
                                 }
                             }
                         });
@@ -359,16 +363,19 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             });
 
         TIME_RECORD("Sort data");
-        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
+        //tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
         tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
             EntryLessNoLock(m_tableInfo));
         tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
             EntryLessNoLock(m_tableInfo));
         TIME_RECORD("Submmit data");
+
         bytes allData;
-        for (size_t i = 0; i < tempEntries.size(); ++i)
+        allData.reserve(allSize);
+
+        for (size_t i = 0; i < m_tableData->dirtyEntries->size(); ++i)
         {
-            auto entry = tempEntries[i];
+            auto entry = (*m_tableData->dirtyEntries)[i];
             for (auto fieldIt : *(entry))
             {
                 if (isHashField(fieldIt.first))
@@ -380,6 +387,21 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             char status = (char)entry->getStatus();
             allData.insert(allData.end(), &status, &status + sizeof(status));
         }
+
+        for (size_t i = 0; i < m_tableData->newEntries->size(); ++i)
+                {
+                    auto entry = (*m_tableData->newEntries)[i];
+                    for (auto fieldIt : *(entry))
+                    {
+                        if (isHashField(fieldIt.first))
+                        {
+                            allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                            allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
+                        }
+                    }
+                    char status = (char)entry->getStatus();
+                    allData.insert(allData.end(), &status, &status + sizeof(status));
+                }
 
         if (allData.empty())
         {
