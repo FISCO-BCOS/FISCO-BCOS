@@ -32,6 +32,7 @@
 #include <tbb/pipeline.h>
 #include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
+#include <libdevcore/Common.h>
 
 using namespace dev::storage;
 using namespace std;
@@ -76,6 +77,20 @@ void Entry::setID(const std::string& id)
     m_dirty = true;
 }
 
+dev::bytesConstRef Entry::getFieldConst(const std::string& key) const {
+	RWMutexScoped lock(m_data->m_mutex, false);
+
+	auto it = m_data->m_fields.find(key);
+
+	if (it != m_data->m_fields.end())
+	{
+		return dev::bytesConstRef(it->second);
+	}
+
+	STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
+	return dev::bytesConstRef();
+}
+
 std::string Entry::getField(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
@@ -93,19 +108,6 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-#if 0
-    if (key == ID_FIELD)
-    {
-        return;
-    }
-
-    if (key == STATUS)
-    {
-        setStatus(value);
-        return;
-    }
-#endif
-
     auto lock = checkRef();
 
     auto it = m_data->m_fields.find(key);
@@ -124,6 +126,28 @@ void Entry::setField(const std::string& key, const std::string& value)
 
     assert(m_capacity >= 0);
     m_dirty = true;
+}
+
+void Entry::setField(const std::string& key, const byte* value, size_t size) {
+	auto lock = checkRef();
+
+	auto it = m_data->m_fields.find(key);
+
+	if (it != m_data->m_fields.end())
+	{
+		m_capacity -= (key.size() + it->second.size());
+		it->second.assign((char*)value, (char*)value + size);
+		m_capacity += (key.size() + size);
+	}
+	else
+	{
+		m_data->m_fields.emplace(key, std::string((char*)value, size));
+		//m_data->m_fields.insert(std::make_pair(key, std::string(value, size)));
+		m_capacity += (key.size() + size);
+	}
+
+	assert(m_capacity >= 0);
+	m_dirty = true;
 }
 
 size_t Entry::getTempIndex() const

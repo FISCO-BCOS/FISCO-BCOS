@@ -63,7 +63,7 @@ class BlockCache
 {
 public:
     BlockCache(){};
-    std::shared_ptr<dev::eth::Block> add(dev::eth::Block const& _block);
+    std::shared_ptr<dev::eth::Block> add(std::shared_ptr<dev::eth::Block> _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
 
 private:
@@ -91,7 +91,7 @@ public:
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
-    CommitResult commitBlock(dev::eth::Block& block,
+    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
