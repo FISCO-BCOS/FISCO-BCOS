@@ -56,7 +56,7 @@ jobs:
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-
       - compile:
-          options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
+          options: "-DBUILD_STATIC=OFF -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
@@ -296,7 +296,8 @@ workflows:
       - build_wedpr_test:
           filters:
             branches:
-              only: /wedpr.*/
+              only:
+                - /^pull.*/
             tags:
               ignore: /.*/
       - generate_coverage:
