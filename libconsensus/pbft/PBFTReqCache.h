@@ -106,11 +106,14 @@ public:
     /// reset the prepare-cache
     inline void addRawPrepare(PrepareReq const& req)
     {
+        auto startT = utcTime();
         m_rawPrepareCache = req;
+        // m_prepareCache = PrepareReq();
+        m_prepareCache.clear();
         PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
                                << LOG_KV("reqIdx", req.idx)
-                               << LOG_KV("hash", req.block_hash.abridged());
-        m_prepareCache = PrepareReq();
+                               << LOG_KV("hash", req.block_hash.abridged())
+                               << LOG_KV("time", utcTime() - startT);
     }
 
     /// add prepare request to prepare-cache
@@ -123,11 +126,24 @@ public:
         removeInvalidCommitCache(req.block_hash, req.view);
     }
     /// add specified signReq to the sign-cache
-    inline void addSignReq(SignReq const& req) { m_signCache[req.block_hash][req.sig.hex()] = req; }
+    inline void addSignReq(SignReq const& req)
+    {
+        auto sigStr = req.sig.hex();
+        if (m_signCache.count(req.block_hash) && m_signCache[sigStr].count())
+        {
+            return;
+        }
+        m_signCache[req.block_hash][sigStr] = req;
+    }
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(CommitReq const& req)
     {
-        m_commitCache[req.block_hash][req.sig.hex()] = req;
+        auto sigStr = req.sig.hex();
+        if (m_signCache.count(req.block_hash) && m_signCache[req.block_hash].count(sigStr))
+        {
+            return;
+        }
+        m_commitCache[req.block_hash][sigStr] = req;
     }
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(ViewChangeReq const& req)
