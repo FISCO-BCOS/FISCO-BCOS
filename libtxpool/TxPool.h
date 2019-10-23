@@ -82,6 +82,7 @@ public:
             std::make_shared<dev::ThreadPool>("txPoolCallback-" + std::to_string(_protocolId), 2);
         m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
         m_submitThread = std::make_shared<std::thread>();
+        m_totalTxsNum = m_blockChain->totalTransactionCount().first;
     }
     void start() override { startSubmitThread(); }
     void stop() override { stopSubmitThread(); }
@@ -169,6 +170,8 @@ public:
 
     dev::ThreadPool::Ptr callbackPool() { return m_callbackPool; }
 
+    uint64_t totalTransactionNum() override { return m_totalTxsNum; }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -240,6 +243,9 @@ private:
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;
     Mutex x_signalled;
+
+    // total txsNum
+    std::atomic<uint64_t> m_totalTxsNum = {0};
 };
 }  // namespace txpool
 }  // namespace dev

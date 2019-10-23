@@ -36,6 +36,7 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_txsCache->push(_tx);
+    m_totalTxsNum += 1;
     m_signalled.notify_all();
     return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
