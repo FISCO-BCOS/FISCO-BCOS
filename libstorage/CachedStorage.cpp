@@ -156,7 +156,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     (void)condition;
 
     if(!tableInfo->enableCache) {
-    	RWMutexScoped emptyScoped;
+    	std::shared_ptr<RWMutexScoped> emptyScoped;
     	auto cache = std::make_shared<Cache>();
 
     	if (m_backend)
