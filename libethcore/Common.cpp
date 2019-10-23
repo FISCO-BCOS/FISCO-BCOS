@@ -25,6 +25,7 @@
 #include <libdevcore/Base64.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcrypto/Hash.h>
+#include <boost/throw_exception.hpp>
 
 using namespace std;
 using namespace dev;
