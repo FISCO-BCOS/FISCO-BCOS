@@ -509,7 +509,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         auto entry = std::make_shared<Entry>();
         bytes out;
         block->encode(out);
-        entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setField(SYS_VALUE, out.data(), out.size());
         tb->insert(block->blockHeader().hash().hex(), entry);
 
         tb = mtb->openTable(SYS_CURRENT_STATE, false);
