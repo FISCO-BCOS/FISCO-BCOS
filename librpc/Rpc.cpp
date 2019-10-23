@@ -1024,14 +1024,16 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
         auto txPool = ledgerManager()->txPool(_groupID);
 
-        Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        Transaction::Ptr tx = std::make_shared<Transaction>(
+            jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
             auto clientProtocolversion = (*m_transactionCallbackVersion)();
-            tx.setRpcCallback([transactionCallback, clientProtocolversion](
-                                  LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+            tx->setRpcCallback([transactionCallback, clientProtocolversion](
+                                   LocalisedTransactionReceipt::Ptr receipt, bytes input) {
                 Json::Value response;
                 if (clientProtocolversion > 0)
                 {  // FIXME: If made protocol modify, please modify upside if

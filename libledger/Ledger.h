@@ -101,6 +101,7 @@ public:
         m_eventLogFilterManger->stop();
         Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
                          << LOG_KV("groupID", groupId());
+        m_txPool->stop();
     }
 
     virtual ~Ledger(){};
