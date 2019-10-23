@@ -30,9 +30,18 @@ using namespace dev;
 using namespace dev::storage;
 using namespace dev::db;
 
-Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName)
+void RocksDBStorageFactory::setDBOpitons(rocksdb::Options _options)
+{
+    m_options = _options;
+}
+
+Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName, bool _createIfMissing)
 {
     auto dbName = m_DBPath + "/" + _dbName;
+    if (!_createIfMissing && !boost::filesystem::exists(dbName))
+    {
+        return nullptr;
+    }
     boost::filesystem::create_directories(dbName);
 
     RecursiveGuard l(x_cache);

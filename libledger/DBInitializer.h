@@ -88,6 +88,7 @@ public:
     {
         m_channelRPCServer = channelRPCServer;
     }
+    int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 
 protected:
     dev::GROUP_ID m_groupID = 0;
@@ -111,7 +112,6 @@ private:
     dev::storage::Storage::Ptr createSQLStorage(
         std::function<void(std::exception& e)> _fatalHandler);
     void initScalableStorage();
-    int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
     dev::storage::Storage::Ptr createZdbStorage(const storage::ConnectionPoolConfig& _zdbConfig,
