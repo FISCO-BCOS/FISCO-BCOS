@@ -258,6 +258,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
         STORAGE_LOG(TRACE) << "Dumping table: " << dbIt.first;
+
         auto tableData = table->dump();
 
         if (tableData && (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0))

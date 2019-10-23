@@ -810,7 +810,7 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = "hash";
         tableInfo->fields = vector<string>{"value", "index"};
-        //tableInfo->enableCache = false;
+        tableInfo->enableCache = false;
     }
     else if (tableName == SYS_HASH_2_BLOCK)
     {

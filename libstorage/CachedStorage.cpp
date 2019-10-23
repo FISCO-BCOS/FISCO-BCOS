@@ -167,13 +167,6 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 
 			cache->setEntries(backendData);
 			cache->setEmpty(false);
-
-			size_t totalCapacity = 0;
-			for (auto it : *backendData)
-			{
-				totalCapacity += it->capacity();
-			}
-			touchMRU(tableInfo->name, key, totalCapacity);
 		}
 		else
 		{

@@ -1019,8 +1019,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 
-        checkRequest(_groupID);
-        checkTxReceive(_groupID);
+        //checkRequest(_groupID);
+        //checkTxReceive(_groupID);
 
         auto txPool = ledgerManager()->txPool(_groupID);
 
@@ -1069,7 +1069,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         }
         std::pair<h256, Address> ret = txPool->submit(tx);
 
-        return toJS(ret.first);
+        //return toJS(ret.first);
     }
     catch (JsonRpcException& e)
     {
