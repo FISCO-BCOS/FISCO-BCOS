@@ -40,12 +40,9 @@ namespace txpool
  */
 std::pair<h256, Address> TxPool::submit(Transaction& _tx)
 {
-#if 0
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
-#endif
         return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
-#if 0
     else if (ret == ImportResult::TransactionNonceCheckFail)
     {
         BOOST_THROW_EXCEPTION(
@@ -92,7 +89,6 @@ std::pair<h256, Address> TxPool::submit(Transaction& _tx)
             TransactionRefused() << errinfo_comment(
                 "TransactionSubmitFailed, txHash=" + toHex(_tx.sha3().abridged())));
     }
-#endif
 }
 
 /**
