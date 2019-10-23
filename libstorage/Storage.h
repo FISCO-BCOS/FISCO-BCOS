@@ -49,7 +49,7 @@ class StorageFactory : public std::enable_shared_from_this<StorageFactory>
 public:
     typedef std::shared_ptr<StorageFactory> Ptr;
     virtual ~StorageFactory(){};
-    virtual Storage::Ptr getStorage(const std::string& _dbName) = 0;
+    virtual Storage::Ptr getStorage(const std::string& _dbName, bool _createIfMissing = false) = 0;
 };
 
 }  // namespace storage

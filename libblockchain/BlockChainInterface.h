@@ -96,7 +96,8 @@ public:
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.
     /// Returns an error in the rest of the cases.
-    virtual bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) = 0;
+    virtual bool checkAndBuildGenesisBlock(
+        GenesisBlockParam& initParam, bool _shouldBuild = true) = 0;
     /// get sealer or observer nodes
     virtual dev::h512s sealerList() = 0;
     virtual dev::h512s observerList() = 0;

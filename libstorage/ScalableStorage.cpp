@@ -83,7 +83,14 @@ Entries::Ptr ScalableStorage::selectFromArchive(
     if (num < m_archiveDBName)
     {
         auto dbName = lexical_cast<int64_t>(getDBNameOfArchivedBlock(num));
-        auto dataStorage = m_storageFactory->getStorage(to_string(dbName));
+        auto dataStorage = m_storageFactory->getStorage(to_string(dbName), false);
+        if (!dataStorage)
+        {
+            SCALABLE_STORAGE_LOG(DEBUG)
+                << "archive DB not exists" << LOG_KV("currentDBName", m_archiveDBName)
+                << LOG_KV("dbName", dbName) << LOG_KV("key", key);
+            return std::make_shared<Entries>();
+        }
         SCALABLE_STORAGE_LOG(DEBUG)
             << "select from archive DB" << LOG_KV("currentDBName", m_archiveDBName)
             << LOG_KV("dbName", dbName) << LOG_KV("key", key);
@@ -189,7 +196,7 @@ size_t ScalableStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
     {
         Guard l(m_archiveMutex);
         m_archiveDBName = num + 1;
-        m_archive = m_storageFactory->getStorage(to_string(m_archiveDBName));
+        m_archive = m_storageFactory->getStorage(to_string(m_archiveDBName), true);
         SCALABLE_STORAGE_LOG(DEBUG)
             << "create new Storage" << LOG_KV("block", num) << LOG_KV("dbIndex", m_archiveDBName);
     }

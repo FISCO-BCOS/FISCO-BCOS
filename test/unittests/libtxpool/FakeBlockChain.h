@@ -234,7 +234,7 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
     dev::h512s sealerList() override { return m_sealerList; }
     dev::h512s observerList() override { return m_observerList; }
