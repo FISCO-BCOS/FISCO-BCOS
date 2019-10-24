@@ -408,7 +408,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 			m_hash = dev::sha256(bR);
     	}
     	else {
-    		m_hash = h256(0x123);
+    		std::string nothing = "nothing";
+    		m_hash = dev::sha256(bytesConstRef(nothing));
     	}
 
         m_isDirty = false;
