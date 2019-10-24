@@ -408,7 +408,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 			m_hash = dev::sha256(bR);
     	}
     	else {
-    		m_hash = dev::sha256();
+    		m_hash = dev::h256();
 
     		STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name >> " hash: " << m_hash.hex();
     	}
