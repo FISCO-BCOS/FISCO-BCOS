@@ -156,6 +156,7 @@ void TxsParallelParser::decode(
                         if (offset > maxOffset)
                             throwInvalidBlockFormat("offset > maxOffset");
 
+                        (*_txs)[i] = std::make_shared<Transaction>();
                         (*_txs)[i]->decode(txBytes.cropped(offset, size), _checkSig);
                         if (_withHash)
                         {
