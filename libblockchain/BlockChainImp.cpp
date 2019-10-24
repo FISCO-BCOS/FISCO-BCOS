@@ -132,7 +132,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
         }
     }
 
-    BLOCKCHAIN_LOG(WARN) << LOG_DESC("[getBlock]Can't find block")
+    BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
                           << LOG_KV("number", _blockNumber);
     return nullptr;
 }
