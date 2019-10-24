@@ -193,9 +193,10 @@ h256 MemoryTableFactory2::hash()
     std::vector<std::pair<std::string, Table::Ptr> > tables;
     for (auto it : m_name2Table)
     {
-    	if(it.second->tableInfo()->enableConsensus) {
-    		tables.push_back(std::make_pair(it.first, it.second));
-    	}
+        if (it.second->tableInfo()->enableConsensus)
+        {
+            tables.push_back(std::make_pair(it.first, it.second));
+        }
     }
 
     tbb::parallel_sort(tables.begin(), tables.end(),

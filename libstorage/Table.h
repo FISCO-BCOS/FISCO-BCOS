@@ -90,7 +90,7 @@ private:
 
 public:
     typedef std::shared_ptr<Entry> Ptr;
-	typedef std::shared_ptr<const Entry> ConstPtr;
+    typedef std::shared_ptr<const Entry> ConstPtr;
 
     enum Status
     {

@@ -133,7 +133,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
     }
 
     BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
-                          << LOG_KV("number", _blockNumber);
+                            << LOG_KV("number", _blockNumber);
     return nullptr;
 }
 
@@ -170,8 +170,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
                 auto getField_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                //use binary block
-                //auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                // use binary block
+                // auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
                 auto block = std::make_shared<Block>(strBlock, CheckTransaction::None);
 
                 auto constructBlock_time_cost = utcTime() - record_time;
@@ -1251,8 +1251,8 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         bytes out;
         block.encode(out);
 
-        //use binary block data
-        //entry->setField(SYS_VALUE, toHexPrefixed(out));
+        // use binary block data
+        // entry->setField(SYS_VALUE, toHexPrefixed(out));
         entry->setField(SYS_VALUE, out.data(), out.size());
 
         entry->setForce(true);
@@ -1283,7 +1283,8 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
     return true;
 }
 
-CommitResult BlockChainImp::commitBlock(std::shared_ptr<Block> block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(
+    std::shared_ptr<Block> block, std::shared_ptr<ExecutiveContext> context)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();

@@ -1543,8 +1543,8 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkAndSave]Commit block failed")
                               << LOG_KV("highestNum", m_highestBlock.number())
                               << LOG_KV("sealingNum", _sealing.block->blockHeader().number())
-                              << LOG_KV(
-                                     "sealingHash", _sealing.block->blockHeader().hash().abridged());
+                              << LOG_KV("sealingHash",
+                                     _sealing.block->blockHeader().hash().abridged());
         /// note blocksync to sync
         // m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         m_txPool->handleBadBlock(*(_sealing.block));

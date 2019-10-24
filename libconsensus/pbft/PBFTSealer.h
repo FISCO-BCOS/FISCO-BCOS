@@ -147,7 +147,8 @@ private:
                 return;
             }
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for viewchange")
-                                  << LOG_KV("sealingNumber", m_sealing.block->blockHeader().number())
+                                  << LOG_KV(
+                                         "sealingNumber", m_sealing.block->blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
         }
@@ -161,7 +162,8 @@ private:
         {
             WriteGuard l(x_sealing);
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
-                                  << LOG_KV("sealingNumber", m_sealing.block->blockHeader().number())
+                                  << LOG_KV(
+                                         "sealingNumber", m_sealing.block->blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock(filter, true);
         }
