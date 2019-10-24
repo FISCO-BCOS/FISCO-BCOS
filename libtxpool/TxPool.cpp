@@ -204,8 +204,7 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  */
 ImportResult TxPool::import(Transaction& _tx, IfDropped)
 {
-    m_totalTxsNum += 1;
-    _tx.setImportTime(u256(utcTime()));
+    m_totalTxsNum += 1 _tx.setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
