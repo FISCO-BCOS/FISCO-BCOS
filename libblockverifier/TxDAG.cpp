@@ -22,6 +22,7 @@
 
 #include "TxDAG.h"
 #include "Common.h"
+#include <tbb/parallel_for.h>
 #include <map>
 
 using namespace std;
@@ -40,14 +41,29 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _
     m_txs = make_shared<Transactions const>(_txs);
     m_dag.init(_txs.size());
 
+    // get criticals
+    std::vector<std::shared_ptr<std::vector<std::string>>> txsCriticals;
+    auto txsSize = _txs.size();
+    txsCriticals.resize(txsSize);
+    tbb::parallel_for(
+        tbb::blocked_range<uint64_t>(0, txsSize), [&](const tbb::blocked_range<uint64_t>& range) {
+            for (uint64_t i = range.begin(); i < range.end(); i++)
+            {
+                auto& tx = _txs[i];
+                txsCriticals[i] = _ctx->getTxCriticals(tx);
+            }
+        });
+
     CriticalField<string> latestCriticals;
 
-    for (ID id = 0; id < _txs.size(); ++id)
+    for (ID id = 0; id < txsSize; ++id)
     {
+#if 0
         auto& tx = _txs[id];
-
         // Is para transaction?
         auto criticals = _ctx->getTxCriticals(tx);
+#endif
+        auto criticals = txsCriticals[id];
         if (criticals)
         {
             // DAG transaction: Conflict with certain critical fields
@@ -59,8 +75,6 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _
                 ID pId = latestCriticals.get(c);
                 if (pId != INVALID_ID)
                 {
-                    DAG_LOG(TRACE)
-                        << LOG_DESC("Add edge") << LOG_KV("from", pId) << LOG_KV("to", id);
                     m_dag.addEdge(pId, id);  // add DAG edge
                 }
             }
@@ -103,27 +117,23 @@ int TxDAG::executeUnit()
 {
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit") << LOG_KV("exeCnt", m_exeCnt)
     //              << LOG_KV("total", m_txs->size());
-    ID id = m_dag.waitPop();
-    if (id == INVALID_ID)
-        return 0;
-
-
     int exeCnt = 0;
-    // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
-    // TODO catch execute exception
+    ID id = m_dag.waitPop();
     while (id != INVALID_ID)
     {
-        exeCnt += 1;
+        do
         {
-            Guard l(x_exeCnt);
-            m_exeCnt += 1;
-        }
-        f_executeTx((*m_txs)[id], id);
+            exeCnt += 1;
+            f_executeTx((*m_txs)[id], id);
+            id = m_dag.consume(id);
+        } while (id != INVALID_ID);
 
-        id = m_dag.consume(id);
-
-        // PARA_LOG(TRACE) << LOG_DESC("executeUnit finish") << LOG_KV("exeCnt", m_exeCnt)
-        //                << LOG_KV("total", m_txs->size());
+        id = m_dag.waitPop();
+    }
+    if (exeCnt > 0)
+    {
+        Guard l(x_exeCnt);
+        m_exeCnt += exeCnt;
     }
     return exeCnt;
 }
