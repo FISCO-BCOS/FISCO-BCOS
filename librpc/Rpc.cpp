@@ -1027,7 +1027,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 #if 0
         RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-        
         checkRequest(_groupID);
         checkTxReceive(_groupID);
 #endif

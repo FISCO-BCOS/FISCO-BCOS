@@ -345,7 +345,7 @@ public:
     bool getStartConsensus() { return m_startConsensus; }
 
     bool syncBlock() { return m_syncBlock; }
-    uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
+    uint64_t getSealingBlockNumber() { return m_sealing.block->blockHeader().number(); }
     Sealing const& sealing() const { return m_sealing; }
     void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
     bool shouldSeal() override { return Sealer::shouldSeal(); }

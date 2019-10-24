@@ -193,7 +193,10 @@ h256 MemoryTableFactory2::hash()
     std::vector<std::pair<std::string, Table::Ptr> > tables;
     for (auto it : m_name2Table)
     {
-        tables.push_back(std::make_pair(it.first, it.second));
+        if (it.second->tableInfo()->enableConsensus)
+        {
+            tables.push_back(std::make_pair(it.first, it.second));
+        }
     }
 
     tbb::parallel_sort(tables.begin(), tables.end(),
@@ -258,6 +261,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
         STORAGE_LOG(TRACE) << "Dumping table: " << dbIt.first;
+
         auto tableData = table->dump();
 
         if (tableData && (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0))

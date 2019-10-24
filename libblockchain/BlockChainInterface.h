@@ -75,8 +75,8 @@ public:
     virtual std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) = 0;
     virtual std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) = 0;
     virtual std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) = 0;
-    virtual CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
+    virtual CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual std::pair<int64_t, int64_t> totalFailedTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;

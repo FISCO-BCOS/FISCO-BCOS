@@ -331,10 +331,10 @@ struct PrepareReq : public PBFTMsg
         p_execContext = sealing.p_execContext;
         /// sealing.block.encode(block);
         timestamp = u256(utcTime());
-        block_hash = sealing.block.blockHeader().hash();
+        block_hash = sealing.block->blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        pBlock = std::make_shared<dev::eth::Block>(std::move(sealing.block));
+        pBlock = sealing.block;
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp << " , block_hash: " << block_hash.abridged();
     }

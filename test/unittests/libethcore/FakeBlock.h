@@ -47,21 +47,22 @@ public:
         FakeSigList(size);
         FakeTransaction(size);
         FakeTransactionReceipt(size);
-        m_block.setSigList(m_sigList);
-        m_block.setTransactions(m_transaction);
-        m_block.setBlockHeader(m_blockHeader);
-        m_block.setTransactionReceipts(m_transactionReceipt);
-        BOOST_CHECK(m_transaction == m_block.transactions());
-        BOOST_CHECK(m_sigList == m_block.sigList());
-        BOOST_CHECK(m_blockHeader = m_block.header());
-        m_block.encode(m_blockData);
+        m_block = std::make_shared<Block>();
+        m_block->setSigList(m_sigList);
+        m_block->setTransactions(m_transaction);
+        m_block->setBlockHeader(m_blockHeader);
+        m_block->setTransactionReceipts(m_transactionReceipt);
+        BOOST_CHECK(m_transaction == m_block->transactions());
+        BOOST_CHECK(m_sigList == m_block->sigList());
+        BOOST_CHECK(m_blockHeader = m_block->header());
+        m_block->encode(m_blockData);
     }
 
     /// for empty case test
     FakeBlock()
     {
-        m_block.setBlockHeader(m_blockHeader);
-        m_block.encode(m_blockData);
+        m_block->setBlockHeader(m_blockHeader);
+        m_block->encode(m_blockData);
     }
 
     /// fake invalid block data
@@ -194,14 +195,14 @@ public:
             TransactionReceipt(root, gasUsed, logEntries, status, outputBytes, address);
     }
 
-    Block& getBlock() { return m_block; }
+    std::shared_ptr<Block> getBlock() { return m_block; }
     BlockHeader& getBlockHeader() { return m_blockHeader; }
     bytes& getBlockHeaderData() { return m_blockHeaderData; }
     bytes& getBlockData() { return m_blockData; }
 
 public:
     Secret m_sec;
-    Block m_block;
+    std::shared_ptr<Block> m_block;
     BlockHeader m_blockHeader;
     Transactions m_transaction;
     Transaction m_singleTransaction;

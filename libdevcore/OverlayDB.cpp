@@ -16,9 +16,9 @@
 */
 
 #include "OverlayDB.h"
+#include "Log.h"
 #include "TrieCommon.h"
 #include "db.h"
-#include "Log.h"
 #include <thread>
 
 namespace dev

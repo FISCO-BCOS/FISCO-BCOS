@@ -51,7 +51,7 @@ using namespace dev::precompiled;
 
 using boost::lexical_cast;
 
-std::shared_ptr<Block> BlockCache::add(Block const& _block)
+std::shared_ptr<Block> BlockCache::add(std::shared_ptr<Block> _block)
 {
     {
         WriteGuard guard(m_sharedMutex);
@@ -70,8 +70,8 @@ std::shared_ptr<Block> BlockCache::add(Block const& _block)
             }
         }
 
-        auto blockHash = _block.blockHeader().hash();
-        auto block = std::make_shared<Block>(std::move(_block));
+        auto blockHash = _block->blockHeader().hash();
+        auto block = _block;
         m_blockCache.insert(std::make_pair(blockHash, block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
@@ -132,8 +132,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
         }
     }
 
-    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[getBlock]Can't find block")
-                          << LOG_KV("number", _blockNumber);
+    BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
+                            << LOG_KV("number", _blockNumber);
     return nullptr;
 }
 
@@ -155,7 +155,6 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
     else
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage");
-        string strBlock = "";
         Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -167,11 +166,14 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                strBlock = entry->getField(SYS_VALUE);
+                auto strBlock = entry->getFieldConst(SYS_VALUE);
                 auto getField_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                // use binary block
+                // auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                auto block = std::make_shared<Block>(strBlock, CheckTransaction::None);
+
                 auto constructBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -240,7 +242,6 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
     else
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Cache missed, read from storage");
-        string strBlock = "";
         Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -252,11 +253,11 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                strBlock = entry->getField(SYS_VALUE);
+                auto strBlock = entry->getFieldConst(SYS_VALUE);
                 auto getField_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
-                auto blockRLP = std::make_shared<bytes>(fromHex(strBlock.c_str()));
+                auto blockRLP = std::make_shared<bytes>(strBlock.begin(), strBlock.end());
                 auto blockRLP_time_cost = utcTime() - record_time;
 
                 BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
@@ -508,7 +509,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam)
         auto entry = std::make_shared<Entry>();
         bytes out;
         block->encode(out);
-        entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setField(SYS_VALUE, out.data(), out.size());
         tb->insert(block->blockHeader().hash().hex(), entry);
 
         tb = mtb->openTable(SYS_CURRENT_STATE, false);
@@ -1249,7 +1250,11 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         Entry::Ptr entry = std::make_shared<Entry>();
         bytes out;
         block.encode(out);
-        entry->setField(SYS_VALUE, toHexPrefixed(out));
+
+        // use binary block data
+        // entry->setField(SYS_VALUE, toHexPrefixed(out));
+        entry->setField(SYS_VALUE, out.data(), out.size());
+
         entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
@@ -1278,22 +1283,23 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
     return true;
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(
+    std::shared_ptr<Block> block, std::shared_ptr<ExecutiveContext> context)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    if (!isBlockShouldCommit(block.blockHeader().number()))
+    if (!isBlockShouldCommit(block->blockHeader().number()))
     {
         return CommitResult::ERROR_NUMBER;
     }
 
     h256 parentHash = numberHash(number());
-    if (block.blockHeader().parentHash() != numberHash(number()))
+    if (block->blockHeader().parentHash() != numberHash(number()))
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect parent hash")
                                 << LOG_KV("needParentHash", parentHash)
-                                << LOG_KV("committedParentHash", block.blockHeader().parentHash());
+                                << LOG_KV("committedParentHash", block->blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
 
@@ -1303,47 +1309,47 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
-            if (!isBlockShouldCommit(block.blockHeader().number()))
+            if (!isBlockShouldCommit(block->blockHeader().number()))
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
-            writeHash2Block(block, context);
+            writeHash2Block(*block, context);
             auto writeHash2Block_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeNumber2Hash(block, context);
+            writeNumber2Hash(*block, context);
             auto writeNumber2Hash_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeNumber(block, context);
+            writeNumber(*block, context);
             auto writeNumber_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeTotalTransactionCount(block, context);
+            writeTotalTransactionCount(*block, context);
             auto writeTotalTransactionCount_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeTxToBlock(block, context);
+            writeTxToBlock(*block, context);
             auto writeTxToBlock_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             try
             {
-                context->dbCommit(block);
+                context->dbCommit(*block);
             }
             catch (std::exception& e)
             {
                 BLOCKCHAIN_LOG(ERROR)
                     << LOG_DESC("Commit Block failed")
-                    << LOG_KV("number", block.blockHeader().number()) << LOG_KV("what", e.what());
+                    << LOG_KV("number", block->blockHeader().number()) << LOG_KV("what", e.what());
                 return CommitResult::ERROR_COMMITTING;
             }
             auto dbCommit_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             {
                 WriteGuard ll(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
+                m_blockNumber = block->blockHeader().number();
             }
             auto updateBlockNumber_time_cost = utcTime() - write_record_time;
 

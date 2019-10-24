@@ -72,11 +72,11 @@ public:
         // 2. Sealer calls reportNewBlock, and generate a new block with number of block (n+2)
         // 3. block (n+1) commit completed and trigger reportNewBlock again
         // 4. Sealer calls reportNewBlock, and generate a new block with number of block (n+2) again
-        if (m_sealing.block.isSealed() && shouldHandleBlock())
+        if (m_sealing.block->isSealed() && shouldHandleBlock())
         {
             PBFTSEALER_LOG(DEBUG)
                 << LOG_DESC("sealing block have already been sealed and should be handled")
-                << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                << LOG_KV("sealingNumber", m_sealing.block->blockHeader().number())
                 << LOG_KV("curNum", m_blockChain->number());
             return false;
         }
@@ -101,7 +101,7 @@ protected:
     // only the leader can generate the latest block
     bool shouldHandleBlock() override
     {
-        return m_sealing.block.blockHeader().number() == (m_blockChain->number() + 1) &&
+        return m_sealing.block->blockHeader().number() == (m_blockChain->number() + 1) &&
                (m_pbftEngine->getLeader().first &&
                    m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
@@ -109,7 +109,7 @@ protected:
     bool reachBlockIntervalTime() override
     {
         return m_pbftEngine->reachBlockIntervalTime() ||
-               (m_sealing.block.getTransactionSize() > 0 && m_pbftEngine->reachMinBlockGenTime());
+               (m_sealing.block->getTransactionSize() > 0 && m_pbftEngine->reachMinBlockGenTime());
     }
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
@@ -138,16 +138,17 @@ private:
         /// reset
         {
             WriteGuard l(x_sealing);
-            if (m_sealing.block.isSealed() && shouldHandleBlock())
+            if (m_sealing.block->isSealed() && shouldHandleBlock())
             {
                 PBFTSEALER_LOG(DEBUG)
                     << LOG_DESC("sealing block have already been sealed and should be handled")
-                    << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                    << LOG_KV("sealingNumber", m_sealing.block->blockHeader().number())
                     << LOG_KV("curNum", m_blockChain->number());
                 return;
             }
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for viewchange")
-                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV(
+                                         "sealingNumber", m_sealing.block->blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
         }
@@ -161,7 +162,8 @@ private:
         {
             WriteGuard l(x_sealing);
             PBFTSEALER_LOG(DEBUG) << LOG_DESC("resetSealingBlock for nextLeader")
-                                  << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                                  << LOG_KV(
+                                         "sealingNumber", m_sealing.block->blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock(filter, true);
         }

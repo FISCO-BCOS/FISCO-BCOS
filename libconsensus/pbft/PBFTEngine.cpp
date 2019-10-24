@@ -674,27 +674,27 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto record_time = utcTime();
     if (req.pBlock)
     {
-        sealing.block = *req.pBlock;
+        sealing.block = req.pBlock;
     }
     /// decode the network received prepare packet
     else
     {
         // without receipt, with transaction hash(parallel calc txs' hash)
-        sealing.block.decode(ref(req.block), CheckTransaction::None, false, true);
+        sealing.block->decode(ref(req.block), CheckTransaction::None, false, true);
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    m_sealingNumber = sealing.block.getTransactionSize();
+    m_sealingNumber = sealing.block->getTransactionSize();
 
     /// return directly if it's an empty block
-    if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
+    if (sealing.block->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
         sealing.p_execContext = nullptr;
         return;
     }
 
-    checkBlockValid(sealing.block);
+    checkBlockValid(*(sealing.block));
     auto check_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -702,28 +702,28 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
     if (req.idx != nodeIdx())
     {
-        notifySealing(sealing.block);
+        notifySealing(*(sealing.block));
     }
     auto notify_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
 
-    m_blockSync->noteSealingBlockNumber(sealing.block.header().number());
+    m_blockSync->noteSealingBlockNumber(sealing.block->header().number());
     auto noteSealing_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     /// ignore the signature verification of the transactions have already been verified in
     /// transation pool
     /// the transactions that has not been verified by the txpool should be verified
-    m_txPool->verifyAndSetSenderForBlock(sealing.block);
+    m_txPool->verifyAndSetSenderForBlock(*sealing.block);
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    sealing.p_execContext = executeBlock(sealing.block);
+    sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
-        << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block.header().number())
-        << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", sealing.block.header().hash().abridged())
+        << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block->header().number())
+        << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", sealing.block->header().hash().abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("decodeCost", decode_time_cost) << LOG_KV("checkCost", check_time_cost)
         << LOG_KV("notifyCost", notify_time_cost)
@@ -731,18 +731,18 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
         << LOG_KV("currentCycle", m_timeManager.m_changeCycle)
         << LOG_KV("verifyAndSetSenderCost", verifyAndSetSender_time_cost)
         << LOG_KV("execCost", exec_time_cost)
-        << LOG_KV("execPerTx", (float)exec_time_cost / (float)sealing.block.getTransactionSize())
+        << LOG_KV("execPerTx", (float)exec_time_cost / (float)sealing.block->getTransactionSize())
         << LOG_KV("totalCost", utcTime() - start_time);
 }
 
 /// check whether the block is empty
 bool PBFTEngine::needOmit(Sealing const& sealing)
 {
-    if (sealing.block.getTransactionSize() == 0 && m_omitEmptyBlock)
+    if (sealing.block->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("needOmit")
-                              << LOG_KV("blkNum", sealing.block.blockHeader().number())
-                              << LOG_KV("hash", sealing.block.blockHeader().hash().abridged())
+                              << LOG_KV("blkNum", sealing.block->blockHeader().number())
+                              << LOG_KV("hash", sealing.block->blockHeader().hash().abridged())
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return true;
@@ -845,7 +845,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
         execBlock(workingSealing, prepareReq, oss);
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
-            workingSealing.block.getTransactionSize() > 0)
+            workingSealing.block->getTransactionSize() > 0)
         {
             return false;
         }
@@ -969,7 +969,7 @@ void PBFTEngine::checkAndSave()
             auto genSig_time_cost = utcTime() - record_time;
             record_time = utcTime();
             /// callback block chain to commit block
-            CommitResult ret = m_blockChain->commitBlock((*p_block),
+            CommitResult ret = m_blockChain->commitBlock(p_block,
                 std::shared_ptr<ExecutiveContext>(m_reqCache->prepareCache().p_execContext));
             auto commitBlock_time_cost = utcTime() - record_time;
             record_time = utcTime();

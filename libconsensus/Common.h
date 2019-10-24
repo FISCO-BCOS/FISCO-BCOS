@@ -53,7 +53,9 @@ enum NodeAccountType
 };
 struct Sealing
 {
-    dev::eth::Block block;
+    Sealing() { block = std::make_shared<dev::eth::Block>(); }
+
+    std::shared_ptr<dev::eth::Block> block;
     /// hash set for filter fetched transactions
     h256Hash m_transactionSet;
     dev::blockverifier::ExecutiveContext::Ptr p_execContext;

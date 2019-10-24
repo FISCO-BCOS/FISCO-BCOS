@@ -44,6 +44,9 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::vector<std::string> fields;
     std::vector<Address> authorizedAddress;
     std::vector<std::string> indices;
+
+    bool enableConsensus = true;
+    bool enableCache = true;
 };
 
 struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
@@ -57,6 +60,34 @@ struct AccessOptions : public std::enable_shared_from_this<AccessOptions>
 
 class Entry : public std::enable_shared_from_this<Entry>
 {
+private:
+    typedef tbb::spin_rw_mutex RWMutex;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
+    struct EntryData
+    {
+        typedef std::shared_ptr<EntryData> Ptr;
+
+        EntryData(){};
+
+        ssize_t m_refCount = 0;
+        std::map<std::string, std::string> m_fields;
+        RWMutex m_mutex;
+    };
+
+    std::shared_ptr<RWMutexScoped> checkRef();
+
+    uint64_t m_ID = 0;
+    int m_status = 0;
+    size_t m_tempIndex = 0;
+    uint64_t m_num = 0;
+    bool m_dirty = false;
+    bool m_force = false;
+    bool m_deleted = false;
+    ssize_t m_capacity = 0;
+
+    EntryData::Ptr m_data;
+
 public:
     typedef std::shared_ptr<Entry> Ptr;
     typedef std::shared_ptr<const Entry> ConstPtr;
@@ -67,9 +98,6 @@ public:
         DELETED
     };
 
-    typedef tbb::spin_rw_mutex RWMutex;
-    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
-
     Entry();
     virtual ~Entry();
 
@@ -78,7 +106,10 @@ public:
     virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
+    virtual bytesConstRef getFieldConst(const std::string& key) const;
+
     virtual void setField(const std::string& key, const std::string& value);
+    virtual void setField(const std::string& key, const byte* value, size_t size);
 
     virtual size_t getTempIndex() const;
     virtual void setTempIndex(size_t index);
@@ -115,31 +146,6 @@ public:
     virtual ssize_t refCount();
 
     std::shared_ptr<RWMutexScoped> lock(bool write = false);
-
-private:
-    struct EntryData
-    {
-        typedef std::shared_ptr<EntryData> Ptr;
-
-        EntryData(){};
-
-        ssize_t m_refCount = 0;
-        std::map<std::string, std::string> m_fields;
-        RWMutex m_mutex;
-    };
-
-    std::shared_ptr<RWMutexScoped> checkRef();
-
-    uint64_t m_ID = 0;
-    int m_status = 0;
-    size_t m_tempIndex = 0;
-    uint64_t m_num = 0;
-    bool m_dirty = false;
-    bool m_force = false;
-    bool m_deleted = false;
-    ssize_t m_capacity = 0;
-
-    EntryData::Ptr m_data;
 };
 
 class EntryLessNoLock
@@ -337,10 +343,11 @@ public:
         m_recorder = _recorder;
     }
 
-    virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; };
+    virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; }
     virtual void setBlockHash(h256 const& _blockHash) { m_blockHash = _blockHash; }
     virtual void setBlockNum(int64_t _blockNum) { m_blockNum = _blockNum; }
-    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
+    virtual TableInfo::Ptr tableInfo() { return m_tableInfo; }
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; }
     virtual size_t cacheSize() { return 0; }
 
 protected:
