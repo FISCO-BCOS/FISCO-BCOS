@@ -606,7 +606,7 @@ bool PBFTEngine::checkBlock(Block const& block)
         return false;
     }
     /// check sign
-    for (auto sign : *sig_list)
+    for (auto& sign : *sig_list)
     {
         if (sign.first >= sealers.size())
         {

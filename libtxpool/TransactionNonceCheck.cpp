@@ -139,7 +139,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 for (auto i = prestartblk; i < m_startblk; i++)
                 {
                     auto nonce_vec = getNonceAndUpdateCache(i, false);
-                    for (auto nonce : *nonce_vec)
+                    for (auto& nonce : *nonce_vec)
                     {
                         m_cache.erase(nonce);
                     }
@@ -154,7 +154,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
                 auto nonce_vec = getNonceAndUpdateCache(i);
-                for (auto nonce : *nonce_vec)
+                for (auto& nonce : *nonce_vec)
                 {
                     m_cache.insert(nonce);
                 }

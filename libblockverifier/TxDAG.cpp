@@ -38,7 +38,7 @@ void TxDAG::init(
     DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("blockHeight", _blockHeight)
                    << LOG_KV("transactionNum", _txs->size());
 
-    m_txs = make_shared<Transactions>(*_txs);
+    m_txs = _txs;
     m_dag.init(_txs->size());
 
     CriticalField<string> latestCriticals;
