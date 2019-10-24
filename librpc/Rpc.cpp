@@ -762,7 +762,7 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
 
         auto transactions = block->transactions();
         unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions.size())
+        if (txIndex >= transactions->size())
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
@@ -1042,7 +1042,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             auto transactionCallback = *currentTransactionCallback;
             auto clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback([transactionCallback, clientProtocolversion](
-                                   LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+                                   LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
                 Json::Value response;
                 if (clientProtocolversion > 0)
                 {  // FIXME: If made protocol modify, please modify upside if
@@ -1173,7 +1173,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         dev::eth::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;
-        if (txReceipt.blockNumber() == INVALIDNUMBER || transaction.blockNumber() == INVALIDNUMBER)
+        if (txReceipt->blockNumber() == INVALIDNUMBER || transaction.blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
         Json::Value response;
@@ -1199,7 +1199,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         }
         response["transactionReceipt"]["logsBloom"] = toJS(txReceipt->bloom());
         response["transactionReceipt"]["status"] = toJS(txReceipt->status());
-        response["transactionReceipt"]["input"] = toJS(transaction->data());
+        response["transactionReceipt"]["input"] = toJS(transaction.data());
         response["transactionReceipt"]["output"] = toJS(txReceipt->outputBytes());
 
 

@@ -23,6 +23,7 @@
  */
 #include "TxPool.h"
 #include <libethcore/Exceptions.h>
+#include <libdevcore/Common.h>
 #include <tbb/parallel_for.h>
 
 using namespace std;
@@ -218,7 +219,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
                     std::make_shared<dev::eth::LocalisedTransactionReceipt>(
                         executive::TransactionException::TxPoolIsFull);
 
-                m_callbackPool->enqueue([callback, receipt] { callback(receipt, bytes()); });
+                m_callbackPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
             }
         }
 
@@ -365,10 +366,10 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
 
-    	//TODO
-        bytes input = (*(p_tx->second))->data();
+    	auto transaction = *(p_tx->second);
+        auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
         TxCallback callback{(*(p_tx->second))->rpcCallback(), pReceipt};
-        m_callbackPool->enqueue([callback, input] { callback.call(callback.pReceipt, input); });
+        m_callbackPool->enqueue([callback, input, transaction] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
