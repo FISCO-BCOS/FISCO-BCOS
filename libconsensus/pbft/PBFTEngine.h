@@ -29,6 +29,7 @@
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/concurrent_queue.h>
 #include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
@@ -78,6 +79,8 @@ public:
 
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
+
+        m_threadPool = std::make_shared<dev::ThreadPool>("pbftPool" + std::to_string(m_groupId), 1);
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -603,6 +606,9 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     std::atomic<uint64_t> m_sealingNumber = {0};
+
+    // the thread pool is used to execute the async-function
+    dev::ThreadPool::Ptr m_threadPool;
 };
 }  // namespace consensus
 }  // namespace dev
