@@ -342,10 +342,11 @@ public:
         m_recorder = _recorder;
     }
 
-    virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; };
+    virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; }
     virtual void setBlockHash(h256 const& _blockHash) { m_blockHash = _blockHash; }
     virtual void setBlockNum(int64_t _blockNum) { m_blockNum = _blockNum; }
-    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
+    virtual TableInfo::Ptr tableInfo() { return m_tableInfo; }
+    virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; }
     virtual size_t cacheSize() { return 0; }
 
 protected:
