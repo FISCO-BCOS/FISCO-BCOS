@@ -408,10 +408,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 			m_hash = dev::sha256(bR);
     	}
     	else {
-    		STORAGE_LOG(DEBUG) << "Ignore sort and hash for : " << m_tableInfo->name;
-
     		std::string nothing = "nothing";
     		m_hash = dev::sha256(bytesConstRef(nothing));
+
+    		STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name >> " hash: " << m_hash.hex();
     	}
 
         m_isDirty = false;

@@ -201,7 +201,8 @@ h256 MemoryTableFactory2::hash()
             const std::pair<std::string, Table::Ptr>& rhs) { return lhs.first < rhs.first; });
 
     bytes data;
-    data.resize(tables.size() * 32);
+    data.assign(tables.size() * 32, 0);
+    // data.resize(tables.size() * 32);
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (auto it = range.begin(); it != range.end(); ++it)
@@ -214,6 +215,10 @@ h256 MemoryTableFactory2::hash()
                 }
 
                 bytes tableHash = hash.asBytes();
+
+                if(tableHash.size() != 32) {
+                	STORAGE_LOG(FATAL) << "Hash length not equal to 32";
+                }
 
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
             }
