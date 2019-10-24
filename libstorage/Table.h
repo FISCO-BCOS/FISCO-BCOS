@@ -45,6 +45,7 @@ struct TableInfo : public std::enable_shared_from_this<TableInfo>
     std::vector<Address> authorizedAddress;
     std::vector<std::string> indices;
 
+    bool enableConsensus = true;
     bool enableCache = true;
 };
 

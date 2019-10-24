@@ -358,7 +358,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 }
             });
 
-    	if(m_tableInfo->enableCache) {
+    	if(m_tableInfo->enableConsensus) {
 			TIME_RECORD("Sort data");
 			tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
 				EntryLessNoLock(m_tableInfo));

@@ -834,13 +834,14 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = "hash";
         tableInfo->fields = vector<string>{"value", "index"};
+        tableInfo->enableConsensus = false;
         tableInfo->enableCache = false;
     }
     else if (tableName == SYS_HASH_2_BLOCK)
     {
         tableInfo->key = "hash";
         tableInfo->fields = vector<string>{"value"};
-        tableInfo->enableCache = false;
+        tableInfo->enableConsensus = false;
     }
     else if (tableName == SYS_CNS)
     {
