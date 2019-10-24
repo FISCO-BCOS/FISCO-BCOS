@@ -410,7 +410,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
     	else {
     		m_hash = dev::h256();
 
-    		STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name >> " hash: " << m_hash.hex();
+    		STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name << " hash: " << m_hash.hex();
     	}
 
         m_isDirty = false;
