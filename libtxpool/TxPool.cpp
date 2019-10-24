@@ -112,7 +112,12 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction& _tx)
 {
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
+    {
+        // only note block sync when submit transactions through RPC
+        m_onReady();
         return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+    }
+
     else if (ret == ImportResult::TransactionNonceCheckFail)
     {
         BOOST_THROW_EXCEPTION(
@@ -227,7 +232,6 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
         if (insert(_tx))
         {
             m_txpoolNonceChecker->insertCache(_tx);
-            m_onReady();
         }
     }
     return verify_ret;

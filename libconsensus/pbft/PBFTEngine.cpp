@@ -109,12 +109,11 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
     m_broadCastCache->clearAll();
     PrepareReq prepare_req(req, m_keyPair, m_view, nodeIdx());
-    m_threadPool->enqueue([=]() {
-        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-        prepare_req.encode(*prepare_data);
-        /// broadcast prepare message
-        broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
-    });
+
+    std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+    prepare_req.encode(*prepare_data);
+    /// broadcast prepare message
+    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
     handlePrepareMsg(prepare_req);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
@@ -279,11 +278,9 @@ bool PBFTEngine::generatePrepare(Block const& block)
     m_notifyNextLeaderSeal = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
     /// broadcast the generated preparePacket
-    m_threadPool->enqueue([=]() {
-        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-        prepare_req.encode(*prepare_data);
-        broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
-    });
+    std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+    prepare_req.encode(*prepare_data);
+    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
 
     if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
