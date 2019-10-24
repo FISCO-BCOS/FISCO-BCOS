@@ -840,6 +840,7 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = "hash";
         tableInfo->fields = vector<string>{"value"};
+        tableInfo->enableCache = false;
     }
     else if (tableName == SYS_CNS)
     {
