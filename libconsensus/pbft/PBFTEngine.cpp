@@ -109,10 +109,12 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
     m_broadCastCache->clearAll();
     PrepareReq prepare_req(req, m_keyPair, m_view, nodeIdx());
-    bytes prepare_data;
-    prepare_req.encode(prepare_data);
-    /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
+    m_threadPool->enqueue([=]() {
+        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+        prepare_req.encode(*prepare_data);
+        /// broadcast prepare message
+        broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
+    });
     handlePrepareMsg(prepare_req);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
@@ -276,29 +278,29 @@ bool PBFTEngine::generatePrepare(Block const& block)
     Guard l(m_mutex);
     m_notifyNextLeaderSeal = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
-    bytes prepare_data;
-    prepare_req.encode(prepare_data);
-
     /// broadcast the generated preparePacket
-    bool succ = broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(prepare_data));
-    if (succ)
+    m_threadPool->enqueue([=]() {
+        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+        prepare_req.encode(*prepare_data);
+        broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
+    });
+
+    if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
-        if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
-        {
-            m_leaderFailed = true;
-            changeViewForFastViewChange();
-            m_timeManager.m_changeCycle = 0;
-            return true;
-        }
-        handlePrepareMsg(prepare_req);
+        m_leaderFailed = true;
+        changeViewForFastViewChange();
+        m_timeManager.m_changeCycle = 0;
+        return true;
     }
+    handlePrepareMsg(prepare_req);
+
     /// reset the block according to broadcast result
     PBFTENGINE_LOG(INFO) << LOG_DESC("generateLocalPrepare")
                          << LOG_KV("hash", prepare_req.block_hash.abridged())
                          << LOG_KV("H", prepare_req.height) << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("myNode", m_keyPair.pub().abridged());
     m_signalled.notify_all();
-    return succ;
+    return true;
 }
 
 /**
@@ -875,10 +877,8 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     /// broadcast the re-generated signReq(add the signReq to cache)
-    if (!broadcastSignReq(sign_prepare))
-    {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC("broadcastSignReq failed") << LOG_KV("INFO", oss.str());
-    }
+    broadcastSignReq(sign_prepare);
+
     checkAndCommit();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
                          << LOG_KV("Timecost", 1000 * t.elapsed()) << LOG_KV("INFO", oss.str());
@@ -917,16 +917,20 @@ void PBFTEngine::checkAndCommit()
                                     m_reqCache->committedPrepareCache().block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache());
+        m_threadPool->enqueue(
+            [=]() { backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache()); });
+
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: broadcastCommitReq")
                               << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)
                               << LOG_KV("hash", m_reqCache->prepareCache().block_hash.abridged())
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
+
         if (!broadcastCommitReq(m_reqCache->prepareCache()))
         {
             PBFTENGINE_LOG(WARNING) << LOG_DESC("checkAndCommit: broadcastCommitReq failed");
         }
+
         m_timeManager.m_lastSignTime = utcTime();
         checkAndSave();
     }
@@ -1421,10 +1425,12 @@ void PBFTEngine::checkTimeout()
             m_timeManager.m_lastConsensusTime = utcTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+
             if (!broadcastViewChangeReq())
             {
                 return;
             }
+
             checkAndChangeView();
             PBFTENGINE_LOG(INFO) << LOG_DESC("checkTimeout Succ") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("nodeIdx", nodeIdx())

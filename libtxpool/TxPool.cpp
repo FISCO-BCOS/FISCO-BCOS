@@ -36,7 +36,6 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_txsCache->push(_tx);
-    m_totalTxsNum += 1;
     m_signalled.notify_all();
     return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
@@ -105,6 +104,7 @@ std::pair<h256, Address> TxPool::submitTransactions()
         m_signalled.wait_for(l, std::chrono::milliseconds(20));
         return std::make_pair(dev::h256(), dev::FixedHash<20>());
     }
+    m_totalTxsNum += 1;
     return submitTransactions(*_tx);
 }
 
@@ -289,7 +289,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
-    if (m_txsHash.find(tx_hash) != m_txsHash.end())
+    if (m_txsHash.count(tx_hash))
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already known tx")
                           << LOG_KV("hash", tx_hash.abridged());
@@ -376,7 +376,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
 bool TxPool::insert(Transaction const& _tx)
 {
     h256 tx_hash = _tx.sha3();
-    if (m_txsHash.find(tx_hash) != m_txsHash.end())
+    if (m_txsHash.count(tx_hash))
     {
         return false;
     }
@@ -395,7 +395,7 @@ bool TxPool::drop(h256 const& _txHash)
     /// drop transactions
     {
         UpgradableGuard l(m_lock);
-        if (m_txsHash.find(_txHash) == m_txsHash.end())
+        if (!m_txsHash.count(_txHash))
             return false;
         UpgradeGuard ul(l);
         if (m_dropped.size() < m_limit)
