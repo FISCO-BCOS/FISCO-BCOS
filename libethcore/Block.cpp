@@ -58,9 +58,9 @@ Block::Block(
 
 Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
-    m_transactions(_block.transactions()),
-    m_transactionReceipts(_block.transactionReceipts()),
-    m_sigList(_block.sigList()),
+    m_transactions(std::make_shared<Transactions>(*_block.transactions())),
+    m_transactionReceipts(std::make_shared<TransactionReceipts>(*_block.transactionReceipts())),
+    m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>> >(*_block.sigList())),
     m_txsCache(_block.m_txsCache),
     m_tReceiptsCache(_block.m_tReceiptsCache),
     m_transRootCache(_block.m_transRootCache),
@@ -71,11 +71,11 @@ Block& Block::operator=(Block const& _block)
 {
     m_blockHeader = _block.blockHeader();
     /// init transactions
-    m_transactions = _block.transactions();
+    m_transactions = std::make_shared<Transactions>(*_block.transactions());
     /// init transactionReceipts
-    m_transactionReceipts = _block.transactionReceipts();
+    m_transactionReceipts = std::make_shared<TransactionReceipts>(*_block.transactionReceipts());
     /// init sigList
-    m_sigList = _block.sigList();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>> >(*_block.sigList());
     m_txsCache = _block.m_txsCache;
     m_tReceiptsCache = _block.m_tReceiptsCache;
     m_transRootCache = _block.m_transRootCache;
