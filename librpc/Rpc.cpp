@@ -942,18 +942,25 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 {
     try
     {
+#if 0
         RPC_LOG(INFO) << LOG_BADGE("getTotalTransactionCount") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
         checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
 
-        Json::Value response;
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-        response["txSum"] = toJS(result.first);
-        response["blockNumber"] = toJS(result.second);
-        result = blockChain->totalFailedTransactionCount();
-        response["failedTxSum"] = toJS(result.first);
+#endif
+        Json::Value response;
+        auto txPool = ledgerManager()->txPool(_groupID);
+
+        auto ret = txPool->totalTransactionNum();
+        response["txSum"] = toJS(ret);
+#if 0
+            response["blockNumber"] = toJS(result.second);
+            result = blockChain->totalFailedTransactionCount();
+            response["failedTxSum"] = toJS(result.first);
+#endif
         return response;
     }
     catch (JsonRpcException& e)
@@ -1016,22 +1023,26 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
     try
     {
+// TODO: set checkRequest and checkTxReceive async
+#if 0
         RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-
-        //checkRequest(_groupID);
-        //checkTxReceive(_groupID);
+        checkRequest(_groupID);
+        checkTxReceive(_groupID);
+#endif
 
         auto txPool = ledgerManager()->txPool(_groupID);
 
-        Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        Transaction::Ptr tx = std::make_shared<Transaction>(
+            jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
             auto clientProtocolversion = (*m_transactionCallbackVersion)();
-            tx.setRpcCallback([transactionCallback, clientProtocolversion](
-                                  LocalisedTransactionReceipt::Ptr receipt, bytes input) {
+            tx->setRpcCallback([transactionCallback, clientProtocolversion](
+                                   LocalisedTransactionReceipt::Ptr receipt, bytes input) {
                 Json::Value response;
                 if (clientProtocolversion > 0)
                 {  // FIXME: If made protocol modify, please modify upside if

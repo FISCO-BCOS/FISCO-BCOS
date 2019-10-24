@@ -31,6 +31,7 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
+#include <tbb/concurrent_queue.h>
 
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -79,10 +80,19 @@ public:
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
         m_callbackPool =
             std::make_shared<dev::ThreadPool>("txPoolCallback-" + std::to_string(_protocolId), 2);
+        m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
+        m_submitThread = std::make_shared<std::thread>();
+        m_totalTxsNum = m_blockChain->totalTransactionCount().first;
     }
+    void start() override { startSubmitThread(); }
+    void stop() override { stopSubmitThread(); }
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
-    virtual ~TxPool() { clear(); }
+    virtual ~TxPool()
+    {
+        // stop the submit thread
+        clear();
+    }
 
     /**
      * @brief submit a transaction through RPC/web3sdk
@@ -90,7 +100,13 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address> : maps from transaction hash to contract address
      */
-    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override;
+    std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override;
+    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
+    {
+        return submitTransactions(_tx);
+    }
+    std::pair<h256, Address> submitTransactions();
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction& _tx);
 
     /**
      * @brief Remove transaction from the queue
@@ -154,6 +170,8 @@ public:
 
     dev::ThreadPool::Ptr callbackPool() { return m_callbackPool; }
 
+    uint64_t totalTransactionNum() override { return m_totalTxsNum; }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -174,6 +192,9 @@ protected:
     bool removeBlockKnowTrans(dev::eth::Block const& block);
 
 private:
+    void startSubmitThread();
+    void stopSubmitThread();
+
     dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(
         dev::eth::Transaction const& tx, dev::eth::TransactionReceipt const& receipt,
         dev::eth::Block const& block, unsigned index);
@@ -216,6 +237,15 @@ private:
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
     dev::ThreadPool::Ptr m_callbackPool;
+
+    std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
+    std::shared_ptr<std::thread> m_submitThread;
+    std::atomic_bool m_running = {false};
+    std::condition_variable m_signalled;
+    Mutex x_signalled;
+
+    // total txsNum
+    std::atomic<uint64_t> m_totalTxsNum = {0};
 };
 }  // namespace txpool
 }  // namespace dev

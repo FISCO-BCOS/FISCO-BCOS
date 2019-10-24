@@ -32,13 +32,83 @@ namespace dev
 {
 namespace txpool
 {
+// import transaction to the txPool
+std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
+{
+    m_txsCache->push(_tx);
+    m_totalTxsNum += 1;
+    m_signalled.notify_all();
+    return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+}
+
+void TxPool::startSubmitThread()
+{
+    TXPOOL_LOG(DEBUG) << LOG_DESC("startSubmitThread");
+    std::weak_ptr<TxPool> self(std::dynamic_pointer_cast<TxPool>(shared_from_this()));
+    m_running = true;
+    m_submitThread = std::make_shared<std::thread>([self] {
+        while (true)
+        {
+            auto txPool = self.lock();
+            if (txPool && txPool->m_running.load())
+            {
+                try
+                {
+                    txPool->submitTransactions();
+                }
+                catch (std::exception const& e)
+                {
+                    TXPOOL_LOG(ERROR) << LOG_DESC("submit transaction failed")
+                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+    });
+}
+
+void TxPool::stopSubmitThread()
+{
+    TXPOOL_LOG(DEBUG) << LOG_DESC("stopSubmitThread");
+    m_running.store(false);
+    if (m_submitThread)
+    {
+        if (m_submitThread->get_id() != std::this_thread::get_id())
+        {
+            m_submitThread->join();
+            m_submitThread.reset();
+        }
+        else
+        {
+            m_submitThread->detach();
+        }
+    }
+}
+
 /**
  * @brief submit a transaction through RPC/web3sdk
  *
  * @param _t : transaction
  * @return std::pair<h256, Address> : maps from transaction hash to contract address
  */
-std::pair<h256, Address> TxPool::submit(Transaction& _tx)
+std::pair<h256, Address> TxPool::submitTransactions()
+{
+    dev::eth::Transaction::Ptr _tx;
+    auto result = m_txsCache->try_pop(_tx);
+    if (!result)
+    {
+        // wait 20ms and return if empty
+        std::unique_lock<std::mutex> l(x_signalled);
+        m_signalled.wait_for(l, std::chrono::milliseconds(20));
+        return std::make_pair(dev::h256(), dev::FixedHash<20>());
+    }
+    return submitTransactions(*_tx);
+}
+
+std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction& _tx)
 {
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
@@ -232,7 +302,8 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
                           << LOG_KV("hash", tx_hash.abridged());
         return ImportResult::AlreadyInChain;
     }
-    /// check nonce
+/// check nonce
+#if 0
     if (trans.nonce() == Invalid256 || (!m_txNonceCheck->isNonceOk(trans, false)))
     {
         return ImportResult::TransactionNonceCheckFail;
@@ -241,6 +312,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
     {
         return ImportResult::BlockLimitCheckFailed;
     }
+#endif
     try
     {
         /// check transaction signature here when everything is ok
@@ -428,6 +500,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
+#if 0
             /// check block limit and nonce again when obtain transactions
             if (false == m_txNonceCheck->isBlockLimitOk(*it))
             {
@@ -435,6 +508,7 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
                 nonceKeyCache.push_back(it->nonce());
                 continue;
             }
+#endif
             if (!_avoid.count(it->sha3()))
             {
                 ret.push_back(*it);

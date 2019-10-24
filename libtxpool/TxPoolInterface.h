@@ -73,6 +73,10 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
+    virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction>)
+    {
+        return std::make_pair(h256(), Address());
+    }
     virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) = 0;
 
     /**
@@ -124,6 +128,10 @@ public:
     virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
 
     virtual bool isFull() { return false; }
+    virtual void start() {}
+    virtual void stop() {}
+
+    virtual uint64_t totalTransactionNum() { return 0; }
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
