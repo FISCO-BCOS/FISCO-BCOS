@@ -55,7 +55,8 @@ public:
 
     bool isBlockLimitOk(dev::eth::Transaction const& _trans);
 
-    std::shared_ptr<dev::txpool::NonceVec> getNonceAndUpdateCache(int64_t const& blockNumber, bool const& update = true);
+    std::shared_ptr<dev::txpool::NonceVec> getNonceAndUpdateCache(
+        int64_t const& blockNumber, bool const& update = true);
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;

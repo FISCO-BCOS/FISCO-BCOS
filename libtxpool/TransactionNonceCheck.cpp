@@ -59,7 +59,7 @@ bool TransactionNonceCheck::ok(Transaction const& _transaction)
 std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateCache(
     int64_t const& blockNumber, bool const& update)
 {
-	std::shared_ptr<NonceVec> nonceVec;
+    std::shared_ptr<NonceVec> nonceVec;
     if (m_blockNonceCache.count(blockNumber))
     {
         nonceVec = m_blockNonceCache[blockNumber];
@@ -88,7 +88,7 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
     }
     else
     {
-    	nonceVec = m_blockChain->getNonces(blockNumber);
+        nonceVec = m_blockChain->getNonces(blockNumber);
         NONCECHECKER_LOG(TRACE) << LOG_DESC("updateCache: getNonceAndUpdateCache cache miss ")
                                 << LOG_KV("blockNumber", blockNumber)
                                 << LOG_KV("nonceSize", nonceVec->size())

@@ -324,7 +324,7 @@ inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 class LocalisedTransaction : public Transaction
 {
 public:
-	typedef std::shared_ptr<LocalisedTransaction> Ptr;
+    typedef std::shared_ptr<LocalisedTransaction> Ptr;
 
     LocalisedTransaction() {}
     LocalisedTransaction(Transaction const& _t, h256 const& _blockHash, unsigned _transactionIndex,

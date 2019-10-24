@@ -84,10 +84,10 @@ bool SafeHttpServer::StartListening()
                     MHD_OPTION_END);
 #endif
                 this->daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_EPOLL_INTERNALLY, this->port,
-                                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
-                                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
-                                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
-                                    MHD_OPTION_END);
+                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
+                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
+                    MHD_OPTION_END);
             }
             catch (jsonrpc::JsonRpcException& ex)
             {

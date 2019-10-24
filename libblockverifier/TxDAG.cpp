@@ -32,7 +32,8 @@ using namespace dev::blockverifier;
 #define DAG_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("DAG")
 
 // Generate DAG according with given transactions
-void TxDAG::init(ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs, int64_t _blockHeight)
+void TxDAG::init(
+    ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs, int64_t _blockHeight)
 {
     DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("blockHeight", _blockHeight)
                    << LOG_KV("transactionNum", _txs->size());

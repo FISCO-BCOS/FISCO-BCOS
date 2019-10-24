@@ -37,7 +37,7 @@ namespace eth
 class TransactionReceipt
 {
 public:
-	typedef std::shared_ptr<TransactionReceipt> Ptr;
+    typedef std::shared_ptr<TransactionReceipt> Ptr;
 
     TransactionReceipt() : m_status(executive::TransactionException::None){};
     TransactionReceipt(bytesConstRef _rlp);

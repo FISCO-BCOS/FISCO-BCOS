@@ -404,6 +404,6 @@ std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvIn
     e.loggingException();
 
     return make_pair(
-        res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false), e.gasUsed(),
-                 e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
+        res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
+                 e.gasUsed(), e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
 }

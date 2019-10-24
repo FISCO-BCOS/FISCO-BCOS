@@ -58,7 +58,8 @@ public:
 
     /// param 1: the transaction limit
     /// param 2: the node id
-    virtual std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(uint64_t const&, dev::h512 const&)
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(
+        uint64_t const&, dev::h512 const&)
     {
         return std::make_shared<dev::eth::Transactions>();
     };

@@ -22,8 +22,8 @@
  * @date: 2018-09-23
  */
 #include "TxPool.h"
-#include <libethcore/Exceptions.h>
 #include <libdevcore/Common.h>
+#include <libethcore/Exceptions.h>
 #include <tbb/parallel_for.h>
 
 using namespace std;
@@ -127,8 +127,9 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
     }
     else if (ImportResult::TransactionPoolIsFull == ret)
     {
-        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "TransactionPoolIsFull, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(
+            TransactionRefused() << errinfo_comment(
+                "TransactionPoolIsFull, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::TxPoolNonceCheckFail == ret)
     {
@@ -219,7 +220,8 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
                     std::make_shared<dev::eth::LocalisedTransactionReceipt>(
                         executive::TransactionException::TxPoolIsFull);
 
-                m_callbackPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
+                m_callbackPool->enqueue(
+                    [callback, receipt] { callback(receipt, bytesConstRef()); });
             }
         }
 
@@ -366,10 +368,11 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
 
-    	auto transaction = *(p_tx->second);
+        auto transaction = *(p_tx->second);
         auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
         TxCallback callback{(*(p_tx->second))->rpcCallback(), pReceipt};
-        m_callbackPool->enqueue([callback, input, transaction] { callback.call(callback.pReceipt, input); });
+        m_callbackPool->enqueue(
+            [callback, input, transaction] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
     m_txsHash.erase(p_tx);
@@ -496,7 +499,8 @@ std::shared_ptr<dev::eth::Transactions> TxPool::topTransactions(uint64_t const& 
     return topTransactions(_limit, _avoid);
 }
 
-std::shared_ptr<Transactions> TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
+std::shared_ptr<Transactions> TxPool::topTransactions(
+    uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
@@ -555,7 +559,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(uint64_t const& _limit, h2
     return ret;
 }
 
-std::shared_ptr<Transactions> TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 const& _nodeId)
+std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
+    uint64_t const& _limit, dev::h512 const& _nodeId)
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();

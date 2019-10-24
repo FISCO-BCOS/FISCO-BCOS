@@ -112,8 +112,8 @@ inline void throwInvalidBlockFormat(const std::string& _reason)
 }
 
 // parallel decode transactions
-void TxsParallelParser::decode(
-    std::shared_ptr<Transactions> _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
+void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef _bytes,
+    CheckTransaction _checkSig, bool _withHash)
 {
     try
     {

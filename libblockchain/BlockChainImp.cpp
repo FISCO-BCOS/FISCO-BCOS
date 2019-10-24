@@ -306,14 +306,14 @@ int64_t BlockChainImp::obtainNumber()
     return num;
 }
 
-std::shared_ptr<std::vector<dev::eth::NonceKeyType> > BlockChainImp::getNonces(int64_t _blockNumber)
+std::shared_ptr<std::vector<dev::eth::NonceKeyType>> BlockChainImp::getNonces(int64_t _blockNumber)
 {
     if (_blockNumber > number())
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
-        return std::shared_ptr<std::vector<dev::eth::NonceKeyType> >();
+        return std::shared_ptr<std::vector<dev::eth::NonceKeyType>>();
     }
     BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_BLOCK_2_NONCES);
@@ -326,11 +326,12 @@ std::shared_ptr<std::vector<dev::eth::NonceKeyType> > BlockChainImp::getNonces(i
             std::string nonce_vector_str = entry->getField(SYS_VALUE);
             bytes ret = fromHex(nonce_vector_str);
             RLP rlp(ret);
-            return std::make_shared<std::vector<dev::eth::NonceKeyType>>(rlp.toVector<dev::eth::NonceKeyType>());
+            return std::make_shared<std::vector<dev::eth::NonceKeyType>>(
+                rlp.toVector<dev::eth::NonceKeyType>());
         }
     }
 
-    return std::shared_ptr<std::vector<dev::eth::NonceKeyType> >();
+    return std::shared_ptr<std::vector<dev::eth::NonceKeyType>>();
 }
 
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
@@ -819,7 +820,8 @@ LocalisedTransaction::Ptr BlockChainImp::getLocalisedTxByHash(dev::h256 const& _
             auto txs = pblock->transactions();
             if (txs->size() > lexical_cast<uint>(txIndex))
             {
-                return std::make_shared<LocalisedTransaction>(*((*txs)[lexical_cast<uint>(txIndex)]), pblock->headerHash(),
+                return std::make_shared<LocalisedTransaction>(
+                    *((*txs)[lexical_cast<uint>(txIndex)]), pblock->headerHash(),
                     lexical_cast<unsigned>(txIndex), pblock->blockHeader().number());
             }
         }
@@ -882,8 +884,9 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
         return std::make_pair(tx, merkleProof);
     }
-    tx = std::make_shared<LocalisedTransaction>(*((*txs)[lexical_cast<uint>(txIndex)]), blockInfo->headerHash(),
-        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
+    tx = std::make_shared<LocalisedTransaction>(*((*txs)[lexical_cast<uint>(txIndex)]),
+        blockInfo->headerHash(), lexical_cast<unsigned>(txIndex),
+        blockInfo->blockHeader().number());
 
     std::map<std::string, std::vector<std::string>> parent2ChildList;
     if (transactionWithProof.first->blockNumber() == tx->blockNumber())
@@ -1013,8 +1016,8 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
                               << LOG_KV("_txHash", _txHash.hex());
-        return std::make_pair(
-            std::make_shared<dev::eth::LocalisedTransactionReceipt>(executive::TransactionException::None),
+        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                  executive::TransactionException::None),
             merkleProof);
     }
     auto txIndex = blockInfoWithTxIndex.second;
@@ -1026,17 +1029,18 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         (txs->size() <= lexical_cast<uint>(txIndex)))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
-        return std::make_pair(
-            std::make_shared<dev::eth::LocalisedTransactionReceipt>(executive::TransactionException::None),
+        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                  executive::TransactionException::None),
             merkleProof);
     }
 
     auto receipt = (*receipts)[lexical_cast<uint>(txIndex)];
-    transaction = LocalisedTransaction(*((*txs)[lexical_cast<uint>(txIndex)]), blockInfo->headerHash(),
-        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
+    transaction =
+        LocalisedTransaction(*((*txs)[lexical_cast<uint>(txIndex)]), blockInfo->headerHash(),
+            lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
 
-    auto txReceipt = std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash, blockInfo->headerHash(),
-        blockInfo->header().number(), transaction.from(), transaction.to(),
+    auto txReceipt = std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash,
+        blockInfo->headerHash(), blockInfo->header().number(), transaction.from(), transaction.to(),
         lexical_cast<uint>(txIndex), receipt->gasUsed(), receipt->contractAddress());
 
     std::map<std::string, std::vector<std::string>> parent2ChildList;
@@ -1060,7 +1064,8 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     return std::make_pair(txReceipt, merkleProof);
 }
 
-LocalisedTransactionReceipt::Ptr BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
+LocalisedTransactionReceipt::Ptr BlockChainImp::getLocalisedTxReceiptByHash(
+    dev::h256 const& _txHash)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
@@ -1085,9 +1090,9 @@ LocalisedTransactionReceipt::Ptr BlockChainImp::getLocalisedTxReceiptByHash(dev:
                 auto tx = (*txs)[txIndex];
                 auto receipt = (*receipts)[txIndex];
 
-                return std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash, pblock->headerHash(),
-                    pblock->header().number(), tx->from(), tx->to(), txIndex, receipt->gasUsed(),
-                    receipt->contractAddress());
+                return std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash,
+                    pblock->headerHash(), pblock->header().number(), tx->from(), tx->to(), txIndex,
+                    receipt->gasUsed(), receipt->contractAddress());
             }
         }
     }

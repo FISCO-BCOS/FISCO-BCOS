@@ -83,7 +83,8 @@ public:
     dev::h256 numberHash(int64_t _i) override;
     dev::eth::Transaction::Ptr getTxByHash(dev::h256 const& _txHash) override;
     dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const& _txHash) override;
-    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const& _txHash) override;
+    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+        dev::h256 const& _txHash) override;
     virtual dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(
@@ -189,8 +190,8 @@ private:
 
     std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::map<std::string, std::vector<std::string>>>
-        receiptWithProof = std::make_pair(
-            std::make_shared<dev::eth::LocalisedTransactionReceipt>(executive::TransactionException::None),
+        receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                              executive::TransactionException::None),
             std::map<std::string, std::vector<std::string>>());
     std::mutex receiptWithProofMutex;
 };

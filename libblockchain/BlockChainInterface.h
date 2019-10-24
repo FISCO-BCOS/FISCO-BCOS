@@ -67,7 +67,8 @@ public:
     virtual dev::h256 numberHash(int64_t _i) = 0;
     virtual dev::eth::Transaction::Ptr getTxByHash(dev::h256 const& _txHash) = 0;
     virtual dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const& _txHash) = 0;
-    virtual dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
+    virtual dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+        dev::h256 const& _txHash) = 0;
     virtual dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(
@@ -80,7 +81,8 @@ public:
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual std::pair<int64_t, int64_t> totalFailedTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;
-    virtual std::shared_ptr<std::vector<dev::eth::NonceKeyType> > getNonces(int64_t _blockNumber) = 0;
+    virtual std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(
+        int64_t _blockNumber) = 0;
 
     virtual std::pair<dev::eth::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
