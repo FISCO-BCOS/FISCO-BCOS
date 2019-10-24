@@ -56,9 +56,9 @@ public:
 };
 struct transactionCompare
 {
-    bool operator()(dev::eth::Transaction const& _first, dev::eth::Transaction const& _second) const
+    bool operator()(dev::eth::Transaction::Ptr _first, dev::eth::Transaction::Ptr _second) const
     {
-        return _first.importTime() <= _second.importTime();
+        return _first->importTime() <= _second->importTime();
     }
 };
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -101,12 +101,9 @@ public:
      * @return std::pair<h256, Address> : maps from transaction hash to contract address
      */
     std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override;
-    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
-    {
-        return submitTransactions(_tx);
-    }
+
     std::pair<h256, Address> submitTransactions();
-    std::pair<h256, Address> submitTransactions(dev::eth::Transaction& _tx);
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx);
 
     /**
      * @brief Remove transaction from the queue
@@ -123,14 +120,14 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    dev::eth::Transactions topTransactions(uint64_t const& _limit) override;
-    dev::eth::Transactions topTransactions(
+    std::shared_ptr<dev::eth::Transactions> topTransactions(uint64_t const& _limit) override;
+    std::shared_ptr<dev::eth::Transactions> topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) override;
-    dev::eth::Transactions topTransactionsCondition(
+    std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(
         uint64_t const& _limit, dev::h512 const& _nodeId) override;
 
     /// get all transactions(maybe blocksync module need this interface)
-    dev::eth::Transactions pendingList() const override;
+    std::shared_ptr<dev::eth::Transactions> pendingList() const override;
     /// get current transaction num
     size_t pendingSize() override;
 
@@ -181,12 +178,12 @@ protected:
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
-    ImportResult import(dev::eth::Transaction& _tx, IfDropped _ik = IfDropped::Ignore) override;
+    ImportResult import(dev::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override;
     ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// verify transaction
-    virtual ImportResult verify(Transaction& trans, IfDropped _ik = IfDropped::Ignore);
+    virtual ImportResult verify(Transaction::Ptr trans, IfDropped _ik = IfDropped::Ignore);
     /// interface for filter check
-    virtual u256 filterCheck(const Transaction&) const { return u256(0); };
+    virtual u256 filterCheck(Transaction::Ptr) const { return u256(0); };
     void clear();
     bool dropTransactions(dev::eth::Block const& block, bool needNotify = false);
     bool removeBlockKnowTrans(dev::eth::Block const& block);
@@ -196,16 +193,16 @@ private:
     void stopSubmitThread();
 
     dev::eth::LocalisedTransactionReceipt::Ptr constructTransactionReceipt(
-        dev::eth::Transaction const& tx, dev::eth::TransactionReceipt const& receipt,
+        dev::eth::Transaction::Ptr tx, dev::eth::TransactionReceipt::Ptr receipt,
         dev::eth::Block const& block, unsigned index);
 
     bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
         dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
-    bool insert(dev::eth::Transaction const& _tx);
+    bool insert(dev::eth::Transaction::Ptr _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
-    bool inline txPoolNonceCheck(dev::eth::Transaction const& tx)
+    bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
     {
-        if (!m_txpoolNonceChecker->isNonceOk(tx, true))
+        if (!m_txpoolNonceChecker->isNonceOk(*tx, true))
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("txPool Nonce Check failed");
             return false;
@@ -227,7 +224,7 @@ private:
     PROTOCOL_ID m_protocolId;
     GROUP_ID m_groupId;
     /// transaction queue
-    using TransactionQueue = std::set<dev::eth::Transaction, transactionCompare>;
+    using TransactionQueue = std::set<dev::eth::Transaction::Ptr, transactionCompare>;
     TransactionQueue m_txsQueue;
     std::unordered_map<h256, TransactionQueue::iterator> m_txsHash;
     /// hash of dropped transactions

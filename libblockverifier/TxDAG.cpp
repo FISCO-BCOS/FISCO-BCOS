@@ -32,22 +32,22 @@ using namespace dev::blockverifier;
 #define DAG_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("DAG")
 
 // Generate DAG according with given transactions
-void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _blockHeight)
+void TxDAG::init(ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs, int64_t _blockHeight)
 {
     DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("blockHeight", _blockHeight)
-                   << LOG_KV("transactionNum", _txs.size());
+                   << LOG_KV("transactionNum", _txs->size());
 
-    m_txs = make_shared<Transactions const>(_txs);
-    m_dag.init(_txs.size());
+    m_txs = make_shared<Transactions>(*_txs);
+    m_dag.init(_txs->size());
 
     CriticalField<string> latestCriticals;
 
-    for (ID id = 0; id < _txs.size(); ++id)
+    for (ID id = 0; id < _txs->size(); ++id)
     {
-        auto& tx = _txs[id];
+        auto tx = (*_txs)[id];
 
         // Is para transaction?
-        auto criticals = _ctx->getTxCriticals(tx);
+        auto criticals = _ctx->getTxCriticals(*tx);
         if (criticals)
         {
             // DAG transaction: Conflict with certain critical fields
@@ -88,7 +88,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _
     // Generate DAG
     m_dag.generate();
 
-    m_totalParaTxs = _txs.size();
+    m_totalParaTxs = _txs->size();
 
     DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG") << LOG_KV("blockHeight", _blockHeight);
 }
@@ -118,7 +118,7 @@ int TxDAG::executeUnit()
             Guard l(x_exeCnt);
             m_exeCnt += 1;
         }
-        f_executeTx((*m_txs)[id], id);
+        f_executeTx(*((*m_txs)[id]), id);
 
         id = m_dag.consume(id);
 

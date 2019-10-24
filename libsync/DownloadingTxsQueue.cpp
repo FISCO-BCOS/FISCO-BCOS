@@ -59,7 +59,7 @@ void DownloadingTxsQueue::pop2TxPool(
     {
         auto maintainBuffer_start_time = utcTime();
         // decode
-        dev::eth::Transactions txs;
+        auto txs = std::make_shared<dev::eth::Transactions>();
         DownloadTxsShard const& txsShard = (*localBuffer)[i];
         // TODO drop by Txs Shard
 
@@ -78,10 +78,10 @@ void DownloadingTxsQueue::pop2TxPool(
         {
             RLP const& txsBytesRLP = RLP(ref(txsShard.txsBytes));
             unsigned txNum = txsBytesRLP.itemCount();
-            txs.resize(txNum);
+            txs->resize(txNum);
             for (unsigned j = 0; j < txNum; j++)
             {
-                txs[j].decode(txsBytesRLP[j]);
+                (*txs)[j]->decode(txsBytesRLP[j]);
             }
         }
 
@@ -90,11 +90,11 @@ void DownloadingTxsQueue::pop2TxPool(
 
         // parallel verify transaction before import
         tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
+            tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
                 for (size_t j = _r.begin(); j != _r.end(); ++j)
                 {
-                    if (!_txPool->txExists(txs[j].sha3()))
-                        txs[j].sender();
+                    if (!_txPool->txExists((*txs)[j]->sha3()))
+                        (*txs)[j]->sender();
                 }
             });
 
@@ -104,7 +104,7 @@ void DownloadingTxsQueue::pop2TxPool(
         // import into tx pool
         size_t successCnt = 0;
         std::vector<dev::h256> knownTxHash;
-        for (Transaction& tx : txs)
+        for (auto tx : *txs)
         {
             try
             {
@@ -118,7 +118,7 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_DESC("Import peer transaction into txPool DUPLICATED from peer")
                         << LOG_KV("reason", int(importResult))
                         << LOG_KV("txHash", fromPeer.abridged())
-                        << LOG_KV("peer", std::move(tx.sha3().abridged()));
+                        << LOG_KV("peer", tx->sha3().abridged());
                 }
                 else
                 {
@@ -127,14 +127,14 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_DESC("Import peer transaction into txPool FAILED from peer")
                         << LOG_KV("reason", int(importResult))
                         << LOG_KV("txHash", fromPeer.abridged())
-                        << LOG_KV("peer", move(tx.sha3().abridged()));
+                        << LOG_KV("peer", tx->sha3().abridged());
                 }
-                knownTxHash.push_back(tx.sha3());
+                knownTxHash.push_back(tx->sha3());
             }
             catch (std::exception& e)
             {
                 SYNC_LOG(WARNING) << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP recieved")
-                                  << LOG_KV("reason", e.what()) << LOG_KV("rlp", toHex(tx.rlp()));
+                                  << LOG_KV("reason", e.what()) << LOG_KV("rlp", toHex(tx->rlp()));
                 continue;
             }
         }
@@ -153,7 +153,7 @@ void DownloadingTxsQueue::pop2TxPool(
         record_time = utcTime();
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
-                        << LOG_KV("import", successCnt) << LOG_KV("rcv", txs.size())
+                        << LOG_KV("import", successCnt) << LOG_KV("rcv", txs->size())
                         << LOG_KV("txPool", pengdingSize) << LOG_KV("peer", fromPeer.abridged())
                         << LOG_KV("moveBufferTimeCost", moveBuffer_time_cost)
                         << LOG_KV("newBufferTimeCost", newBuffer_time_cost)

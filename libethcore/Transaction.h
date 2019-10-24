@@ -304,7 +304,7 @@ protected:
 };
 
 /// Nice name for vector of Transaction.
-using Transactions = std::vector<Transaction>;
+using Transactions = std::vector<Transaction::Ptr>;
 
 /// Simple human-readable stream-shift operator.
 inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)

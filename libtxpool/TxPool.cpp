@@ -37,7 +37,7 @@ std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_txsCache->push(_tx);
     m_signalled.notify_all();
-    return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+    return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
 
 void TxPool::startSubmitThread()
@@ -105,64 +105,64 @@ std::pair<h256, Address> TxPool::submitTransactions()
         return std::make_pair(dev::h256(), dev::FixedHash<20>());
     }
     m_totalTxsNum += 1;
-    return submitTransactions(*_tx);
+    return submitTransactions(_tx);
 }
 
-std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction& _tx)
+std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
 {
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
     {
         // only note block sync when submit transactions through RPC
         m_onReady();
-        return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+        return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
     }
 
     else if (ret == ImportResult::TransactionNonceCheckFail)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "TransactionNonceCheckFail, txHash=" + toHex(_tx.sha3().abridged())));
+                "TransactionNonceCheckFail, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::TransactionPoolIsFull == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "TransactionPoolIsFull, txHash=" + toHex(_tx.sha3().abridged())));
+                                  "TransactionPoolIsFull, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::TxPoolNonceCheckFail == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "TxPoolNonceCheckFail, txHash=" + toHex(_tx.sha3().abridged())));
+                                  "TxPoolNonceCheckFail, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::AlreadyKnown == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "TransactionAlreadyKown, txHash=" + toHex(_tx.sha3().abridged())));
+                "TransactionAlreadyKown, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::AlreadyInChain == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "TransactionAlreadyInChain, txHash=" + toHex(_tx.sha3().abridged())));
+                "TransactionAlreadyInChain, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::InvalidChainIdOrGroupId == ret)
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "InvalidChainIdOrGroupId, txHash=" + toHex(_tx.sha3().abridged())));
+                "InvalidChainIdOrGroupId, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::BlockLimitCheckFailed == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "BlockLimitCheckFailed, txBlockLimit=" + _tx.blockLimit().str() +
-                                  ", txHash=" + toHex(_tx.sha3().abridged())));
+                                  "BlockLimitCheckFailed, txBlockLimit=" + _tx->blockLimit().str() +
+                                  ", txHash=" + toHex(_tx->sha3().abridged())));
     }
     else
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment(
-                "TransactionSubmitFailed, txHash=" + toHex(_tx.sha3().abridged())));
+                "TransactionSubmitFailed, txHash=" + toHex(_tx->sha3().abridged())));
     }
 }
 
@@ -177,13 +177,13 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction& _tx)
  */
 ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
 {
-    Transaction tx;
+    Transaction::Ptr tx = std::make_shared<Transaction>();
     try
     {
         /// only decode, verify transactions later
-        tx.decode(_txBytes, CheckTransaction::None);
+        tx->decode(_txBytes, CheckTransaction::None);
         /// check sha3
-        if (sha3(_txBytes.toBytes()) != tx.sha3())
+        if (sha3(_txBytes.toBytes()) != tx->sha3())
             return ImportResult::Malformed;
     }
     catch (std::exception& e)
@@ -202,16 +202,16 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
  * @return ImportResult : Import result code.
  */
-ImportResult TxPool::import(Transaction& _tx, IfDropped)
+ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 {
-    _tx.setImportTime(u256(utcTime()));
+    _tx->setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
         if (g_BCOSConfig.version() < V2_1_0)
         {
-            auto callback = _tx.rpcCallback();
+            auto callback = _tx->rpcCallback();
             if (callback)
             {
                 dev::eth::LocalisedTransactionReceipt::Ptr receipt =
@@ -231,7 +231,7 @@ ImportResult TxPool::import(Transaction& _tx, IfDropped)
         UpgradeGuard ul(l);
         if (insert(_tx))
         {
-            m_txpoolNonceChecker->insertCache(_tx);
+            m_txpoolNonceChecker->insertCache(*_tx);
         }
     }
     return verify_ret;
@@ -244,7 +244,7 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
         tbb::blocked_range<size_t>(0, trans_num), [&](const tbb::blocked_range<size_t>& _r) {
             for (size_t i = _r.begin(); i != _r.end(); i++)
             {
-                h256 txHash = block.transactions()[i].sha3();
+                h256 txHash = (*block.transactions())[i]->sha3();
 
                 /// force sender for the transaction
                 ReadGuard l(m_lock);
@@ -253,7 +253,7 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
 
                 if (p_tx != m_txsHash.end())
                 {
-                    block.setSenderForTransaction(i, p_tx->second->sender());
+                    block.setSenderForTransaction(i, (*(p_tx->second))->sender());
                 }
                 /// verify the transaction
                 else
@@ -289,10 +289,10 @@ bool TxPool::txExists(dev::h256 const& txHash)
  * @param _drop_policy : Import transaction policy
  * @return ImportResult : import result
  */
-ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
+ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
 {
     /// check whether this transaction has been existed
-    h256 tx_hash = trans.sha3();
+    h256 tx_hash = trans->sha3();
     if (m_txsHash.count(tx_hash))
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already known tx")
@@ -320,7 +320,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
     try
     {
         /// check transaction signature here when everything is ok
-        trans.sender();
+        trans->sender();
     }
     catch (std::exception& e)
     {
@@ -334,7 +334,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy)
         return ImportResult::TxPoolNonceCheckFail;
     }
     /// check chainId and groupId
-    if (false == trans.checkChainIdAndGroupId(u256(g_BCOSConfig.chainId()), u256(m_groupId)))
+    if (false == trans->checkChainIdAndGroupId(u256(g_BCOSConfig.chainId()), u256(m_groupId)))
     {
         return ImportResult::InvalidChainIdOrGroupId;
     }
@@ -360,12 +360,14 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         return false;
     }
 
-    if (needTriggerCallback && pReceipt && p_tx->second->rpcCallback())
+    if (needTriggerCallback && pReceipt && (*(p_tx->second))->rpcCallback())
     {
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-        bytes input = p_tx->second->data();
-        TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
+
+    	//TODO
+        bytes input = (*(p_tx->second))->data();
+        TxCallback callback{(*(p_tx->second))->rpcCallback(), pReceipt};
         m_callbackPool->enqueue([callback, input] { callback.call(callback.pReceipt, input); });
     }
     m_txsQueue.erase(p_tx->second);
@@ -377,9 +379,9 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
  * @brief : insert the newest transaction into the transaction queue
  * @param _tx: the give transaction queue can be inserted to the transaction queue
  */
-bool TxPool::insert(Transaction const& _tx)
+bool TxPool::insert(Transaction::Ptr _tx)
 {
-    h256 tx_hash = _tx.sha3();
+    h256 tx_hash = _tx->sha3();
     if (m_txsHash.count(tx_hash))
     {
         return false;
@@ -417,12 +419,12 @@ bool TxPool::drop(h256 const& _txHash)
 }
 
 dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
-    Transaction const& tx, TransactionReceipt const& receipt, Block const& block, unsigned index)
+    Transaction::Ptr tx, TransactionReceipt::Ptr receipt, Block const& block, unsigned index)
 {
     dev::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
-        std::make_shared<LocalisedTransactionReceipt>(receipt, tx.sha3(),
-            block.blockHeader().hash(), block.blockHeader().number(), tx.safeSender(),
-            tx.receiveAddress(), index, receipt.gasUsed(), receipt.contractAddress());
+        std::make_shared<dev::eth::LocalisedTransactionReceipt>(*receipt, tx->sha3(),
+            block.blockHeader().hash(), block.blockHeader().number(), tx->safeSender(),
+            tx->receiveAddress(), index, receipt->gasUsed(), receipt->contractAddress());
     return pTxReceipt;
 }
 
@@ -431,9 +433,9 @@ bool TxPool::removeBlockKnowTrans(Block const& block)
     if (block.getTransactionSize() == 0)
         return true;
     WriteGuard l(x_transactionKnownBy);
-    for (auto const& trans : block.transactions())
+    for (auto const& trans : *block.transactions())
     {
-        removeTransactionKnowBy(trans.sha3());
+        removeTransactionKnowBy(trans->sha3());
     }
     return true;
 }
@@ -444,15 +446,15 @@ bool TxPool::dropTransactions(Block const& block, bool)
         return true;
     WriteGuard l(m_lock);
     bool succ = true;
-    for (size_t i = 0; i < block.transactions().size(); i++)
+    for (size_t i = 0; i < block.transactions()->size(); i++)
     {
         LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-        if (block.transactionReceipts().size() > i)
+        if (block.transactionReceipts()->size() > i)
         {
             pReceipt = constructTransactionReceipt(
-                block.transactions()[i], block.transactionReceipts()[i], block, i);
+                (*(block.transactions()))[i], (*(block.transactionReceipts()))[i], block, i);
         }
-        if (removeTrans(block.transactions()[i].sha3(), true, pReceipt) == false)
+        if (removeTrans((*(block.transactions()))[i]->sha3(), true, pReceipt) == false)
             succ = false;
     }
     return succ;
@@ -475,7 +477,7 @@ bool TxPool::dropBlockTrans(Block const& block)
     /// remove the information of known transactions from map
     removeBlockKnowTrans(block);
     /// remove the nonce check related to txpool
-    m_txpoolNonceChecker->delCache(block.transactions());
+    m_txpoolNonceChecker->delCache(*(block.transactions()));
     return ret;
 }
 
@@ -487,17 +489,17 @@ bool TxPool::dropBlockTrans(Block const& block)
  * @param _condition : The function return false to avoid transaction to return.
  * @return Transactions : up to _limit transactions
  */
-dev::eth::Transactions TxPool::topTransactions(uint64_t const& _limit)
+std::shared_ptr<dev::eth::Transactions> TxPool::topTransactions(uint64_t const& _limit)
 {
     h256Hash _avoid = h256Hash();
     return topTransactions(_limit, _avoid);
 }
 
-Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
+std::shared_ptr<Transactions> TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid)
 {
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
-    Transactions ret;
+    auto ret = std::make_shared<Transactions>();
     std::vector<dev::h256> invalidBlockLimitTxs;
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
     {
@@ -513,12 +515,12 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
                 continue;
             }
 #endif
-            if (!_avoid.count(it->sha3()))
+            if (!_avoid.count((*it)->sha3()))
             {
-                ret.push_back(*it);
+                ret->push_back(*it);
                 txCnt++;
                 if (_updateAvoid)
-                    _avoid.insert(it->sha3());
+                    _avoid.insert((*it)->sha3());
             }
         }
         if (invalidBlockLimitTxs.size() > 0)
@@ -552,19 +554,19 @@ Transactions TxPool::topTransactions(uint64_t const& _limit, h256Hash& _avoid, b
     return ret;
 }
 
-Transactions TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 const& _nodeId)
+std::shared_ptr<Transactions> TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 const& _nodeId)
 {
     ReadGuard l(m_lock);
-    Transactions ret;
+    std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
     uint64_t limit = min(m_limit, _limit);
     {
         uint64_t txCnt = 0;
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (!isTransactionKnownBy(it->sha3(), _nodeId))
+            if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
-                ret.push_back(*it);
+                ret->push_back(*it);
                 txCnt++;
             }
         }
@@ -574,13 +576,13 @@ Transactions TxPool::topTransactionsCondition(uint64_t const& _limit, dev::h512 
 }
 
 /// get all transactions(maybe blocksync module need this interface)
-Transactions TxPool::pendingList() const
+std::shared_ptr<Transactions> TxPool::pendingList() const
 {
     ReadGuard l(m_lock);
-    Transactions ret;
+    std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
     for (auto t = m_txsQueue.begin(); t != m_txsQueue.end(); ++t)
     {
-        ret.push_back(*t);
+        ret->push_back(*t);
     }
     return ret;
 }

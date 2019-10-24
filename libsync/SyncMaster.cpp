@@ -235,7 +235,7 @@ void SyncMaster::maintainTransactions()
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
 
     auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
-    auto txSize = ts.size();
+    auto txSize = ts->size();
     if (txSize == 0)
     {
         m_newTransactions = false;
@@ -246,33 +246,33 @@ void SyncMaster::maintainTransactions()
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
-    for (size_t i = 0; i < ts.size(); ++i)
+    for (size_t i = 0; i < ts->size(); ++i)
     {
-        auto const& t = ts[i];
+        auto t = (*ts)[i];
         NodeIDs peers;
 #if 0
         unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
 #endif
         unsigned _percent = 100;
-        if (m_txPool->isTransactionKnownBySomeone(t.sha3()))
+        if (m_txPool->isTransactionKnownBySomeone(t->sha3()))
         {
-            m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+            m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
             continue;
         }
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
+            bool unsent = !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId);
             bool isSealer = _p->isSealer;
-            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
         });
         UpgradeGuard ul(l);
-        m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+        m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
         if (0 == peers.size())
             continue;
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->setTransactionIsKnownBy(t.sha3(), p);
+            m_txPool->setTransactionIsKnownBy(t->sha3(), p);
         }
     }
 
@@ -283,7 +283,7 @@ void SyncMaster::maintainTransactions()
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(ts[i].rlp(WithSignature));
+            txRLPs.emplace_back((*ts)[i]->rlp(WithSignature));
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);
@@ -507,7 +507,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                << LOG_DESC("Download block execute")
                                << LOG_KV("number", topBlock->header().number())
-                               << LOG_KV("txs", topBlock->transactions().size())
+                               << LOG_KV("txs", topBlock->transactions()->size())
                                << LOG_KV("hash", topBlock->headerHash().abridged());
                 ExecutiveContext::Ptr exeCtx =
                     m_blockVerifier->executeBlock(*topBlock, parentBlockInfo);
@@ -532,7 +532,7 @@ bool SyncMaster::maintainDownloadingQueue()
                     SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                    << LOG_DESC("Download block commit succ")
                                    << LOG_KV("number", topBlock->header().number())
-                                   << LOG_KV("txs", topBlock->transactions().size())
+                                   << LOG_KV("txs", topBlock->transactions()->size())
                                    << LOG_KV("hash", topBlock->headerHash().abridged())
                                    << LOG_KV("getBlockByNumberTimeCost", getBlockByNumber_time_cost)
                                    << LOG_KV("executeBlockTimeCost", executeBlock_time_cost)
@@ -544,7 +544,7 @@ bool SyncMaster::maintainDownloadingQueue()
                     SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                     << LOG_DESC("Block commit failed")
                                     << LOG_KV("number", topBlock->header().number())
-                                    << LOG_KV("txs", topBlock->transactions().size())
+                                    << LOG_KV("txs", topBlock->transactions()->size())
                                     << LOG_KV("hash", topBlock->headerHash().abridged());
                 }
             }
@@ -553,7 +553,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                 << LOG_DESC("Block of queue top is not the next block")
                                 << LOG_KV("number", topBlock->header().number())
-                                << LOG_KV("txs", topBlock->transactions().size())
+                                << LOG_KV("txs", topBlock->transactions()->size())
                                 << LOG_KV("hash", topBlock->headerHash().abridged());
             }
         }
@@ -562,7 +562,7 @@ bool SyncMaster::maintainDownloadingQueue()
             SYNC_LOG(ERROR) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                             << LOG_DESC("Block of queue top is not a valid block")
                             << LOG_KV("number", topBlock->header().number())
-                            << LOG_KV("txs", topBlock->transactions().size())
+                            << LOG_KV("txs", topBlock->transactions()->size())
                             << LOG_KV("hash", topBlock->headerHash().abridged());
         }
 
