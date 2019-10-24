@@ -52,19 +52,20 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
-    virtual dev::eth::Transactions topTransactions(
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(uint64_t const& _limit) = 0;
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
 
     /// param 1: the transaction limit
     /// param 2: the node id
-    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const&, dev::h512 const&)
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(
+        uint64_t const&, dev::h512 const&)
     {
-        return dev::eth::Transactions();
+        return std::make_shared<dev::eth::Transactions>();
     };
 
     /// get all current transactions(maybe blocksync module need this interface)
-    virtual dev::eth::Transactions pendingList() const = 0;
+    virtual std::shared_ptr<dev::eth::Transactions> pendingList() const = 0;
     /// get current transaction num
     virtual size_t pendingSize() = 0;
 
@@ -73,11 +74,7 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
-    virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction>)
-    {
-        return std::make_pair(h256(), Address());
-    }
-    virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) = 0;
+    virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction> _tx) = 0;
 
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -87,7 +84,7 @@ public:
      * @return ImportResult : Import result code.
      */
     virtual dev::eth::ImportResult import(
-        dev::eth::Transaction& _tx, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
+        dev::eth::Transaction::Ptr, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
     virtual dev::eth::ImportResult import(
         bytesConstRef _txBytes, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
     /// @returns the status of the transaction queue.

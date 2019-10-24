@@ -71,7 +71,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
         std::vector<dev::eth::NonceKeyType> delList;
         for (unsigned i = 0; i < _transactions.size(); i++)
         {
-            const auto& key = _transactions[i].nonce();
+            const auto& key = _transactions[i]->nonce();
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
             {

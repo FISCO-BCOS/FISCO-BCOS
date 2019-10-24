@@ -65,10 +65,11 @@ public:
     virtual ~BlockChainInterface(){};
     virtual int64_t number() = 0;
     virtual dev::h256 numberHash(int64_t _i) = 0;
-    virtual dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) = 0;
-    virtual dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) = 0;
-    virtual dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) = 0;
-    virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+    virtual dev::eth::Transaction::Ptr getTxByHash(dev::h256 const& _txHash) = 0;
+    virtual dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const& _txHash) = 0;
+    virtual dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+        dev::h256 const& _txHash) = 0;
+    virtual dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) = 0;
     virtual std::shared_ptr<dev::eth::Block> getBlockByHash(
         dev::h256 const& _blockHash, int64_t _blockNumber = -1) = 0;
@@ -80,15 +81,15 @@ public:
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual std::pair<int64_t, int64_t> totalFailedTransactionCount() = 0;
     virtual dev::bytes getCode(dev::Address _address) = 0;
-    virtual void getNonces(
-        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) = 0;
+    virtual std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(
+        int64_t _blockNumber) = 0;
 
-    virtual std::pair<dev::eth::LocalisedTransaction,
+    virtual std::pair<dev::eth::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(dev::h256 const& _txHash) = 0;
 
 
-    virtual std::pair<dev::eth::LocalisedTransactionReceipt,
+    virtual std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction& _transaction) = 0;

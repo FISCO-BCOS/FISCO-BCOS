@@ -10,11 +10,11 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
     const auto& receipts = _block.transactionReceipts();
     const auto& transactions = _block.transactions();
 
-    for (size_t i = 0; i < receipts.size(); ++i)
+    for (size_t i = 0; i < receipts->size(); ++i)
     {
-        auto const& receipt = receipts[i];
-        auto const& tx = transactions[i];
-        auto const& logs = receipt.log();
+        auto receipt = (*receipts)[i];
+        auto tx = (*transactions)[i];
+        auto logs = receipt->log();
 
         for (size_t j = 0; j < logs.size(); ++j)
         {
@@ -37,7 +37,7 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
                 resp["topics"].append(toJS(log.topics[k]));
             }
 
-            resp["transactionHash"] = toJS(tx.sha3());
+            resp["transactionHash"] = toJS(tx->sha3());
             resp["transactionIndex"] = toJS(i);
 
             _value.append(resp);

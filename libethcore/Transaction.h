@@ -52,7 +52,7 @@ const int c_fieldCountRC2WithOutSig = 10;
 const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
-using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, bytes input)>;
+using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 class Transaction
 {
@@ -304,7 +304,7 @@ protected:
 };
 
 /// Nice name for vector of Transaction.
-using Transactions = std::vector<Transaction>;
+using Transactions = std::vector<Transaction::Ptr>;
 
 /// Simple human-readable stream-shift operator.
 inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
@@ -324,6 +324,8 @@ inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 class LocalisedTransaction : public Transaction
 {
 public:
+    typedef std::shared_ptr<LocalisedTransaction> Ptr;
+
     LocalisedTransaction() {}
     LocalisedTransaction(Transaction const& _t, h256 const& _blockHash, unsigned _transactionIndex,
         BlockNumber _blockNumber = 0)

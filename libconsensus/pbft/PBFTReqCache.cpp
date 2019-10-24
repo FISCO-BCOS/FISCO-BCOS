@@ -22,6 +22,8 @@
  * @date: 2018-10-09
  */
 #include "PBFTReqCache.h"
+#include <memory>
+
 using namespace dev::eth;
 namespace dev
 {
@@ -57,15 +59,15 @@ void PBFTReqCache::delCache(h256 const& hash)
  */
 bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& minSigSize)
 {
-    std::vector<std::pair<u256, Signature>> sig_list;
+    auto sig_list = std::make_shared<std::vector<std::pair<u256, Signature>>>();
     if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
         for (auto const& item : m_commitCache[m_prepareCache.block_hash])
         {
-            sig_list.push_back(
+            sig_list->push_back(
                 std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
         }
-        if (sig_list.size() < minSigSize)
+        if (sig_list->size() < minSigSize)
         {
             return false;
         }

@@ -81,10 +81,11 @@ public:
     virtual ~BlockChainImp(){};
     int64_t number() override;
     dev::h256 numberHash(int64_t _i) override;
-    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override;
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
-    virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const& _txHash) override;
+    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const& _txHash) override;
+    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+        dev::h256 const& _txHash) override;
+    virtual dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(
         dev::h256 const& _blockHash, int64_t _blockNumber = -1) override;
@@ -105,21 +106,19 @@ public:
     dev::h512s sealerList() override;
     dev::h512s observerList() override;
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
-    void getNonces(
-        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override;
+    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override;
 
     void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
     {
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
-
-    std::pair<dev::eth::LocalisedTransaction,
+    std::pair<dev::eth::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(dev::h256 const& _txHash) override;
 
 
-    std::pair<dev::eth::LocalisedTransactionReceipt,
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
@@ -185,14 +184,14 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 
-    std::pair<dev::eth::LocalisedTransaction, std::map<std::string, std::vector<std::string>>>
+    std::pair<dev::eth::LocalisedTransaction::Ptr, std::map<std::string, std::vector<std::string>>>
         transactionWithProof;
     std::mutex transactionWithProofMutex;
 
-    std::pair<dev::eth::LocalisedTransactionReceipt,
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::map<std::string, std::vector<std::string>>>
-        receiptWithProof = std::make_pair(
-            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+        receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                              executive::TransactionException::None),
             std::map<std::string, std::vector<std::string>>());
     std::mutex receiptWithProofMutex;
 };

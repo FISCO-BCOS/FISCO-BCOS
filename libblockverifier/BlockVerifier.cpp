@@ -76,7 +76,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     Block& block, BlockInfo const& parentBlockInfo)
 {
     BLOCKVERIFIER_LOG(INFO) << LOG_DESC("executeBlock]Executing block")
-                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("txNum", block.transactions()->size())
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("hash", block.header().hash().abridged())
                             << LOG_KV("height", block.header().number())
@@ -107,24 +107,24 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
-    block.resizeTransactionReceipt(block.transactions().size());
+    block.resizeTransactionReceipt(block.transactions()->size());
 
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Init env takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
-                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("txNum", block.transactions()->size())
                              << LOG_KV("num", block.blockHeader().number());
     uint64_t pastTime = utcTime();
 
     try
     {
-        for (size_t i = 0; i < block.transactions().size(); i++)
+        for (size_t i = 0; i < block.transactions()->size(); i++)
         {
-            auto& tx = block.transactions()[i];
+            auto& tx = (*block.transactions())[i];
             EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
             envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
-                execute(envInfo, tx, OnOpFunc(), executiveContext);
+            std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
+                execute(envInfo, *tx, OnOpFunc(), executiveContext);
             block.setTransactionReceipt(i, resultReceipt.second);
             executiveContext->getState()->commit();
         }
@@ -143,7 +143,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Run serial tx takes")
                              << LOG_KV("time(ms)", utcTime() - pastTime)
-                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("txNum", block.transactions()->size())
                              << LOG_KV("num", block.blockHeader().number());
 
     h256 stateRoot = executiveContext->getState()->rootHash();
@@ -179,7 +179,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     }
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Execute block takes")
                              << LOG_KV("time(ms)", utcTime() - startTime)
-                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("txNum", block.transactions()->size())
                              << LOG_KV("num", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
@@ -193,7 +193,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
 {
     BLOCKVERIFIER_LOG(INFO) << LOG_DESC("[executeBlock]Executing block")
-                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("txNum", block.transactions()->size())
                             << LOG_KV("num", block.blockHeader().number())
                             << LOG_KV("parentHash", parentBlockInfo.hash)
                             << LOG_KV("parentNum", parentBlockInfo.number)
@@ -223,7 +223,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     BlockHeader tmpHeader = block.blockHeader();
     block.clearAllReceipts();
-    block.resizeTransactionReceipt(block.transactions().size());
+    block.resizeTransactionReceipt(block.transactions()->size());
     auto perpareBlock_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -233,7 +233,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
-        std::pair<ExecutionResult, TransactionReceipt> resultReceipt =
+        std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
         block.setTransactionReceipt(_txId, resultReceipt.second);
         executiveContext->getState()->commit();
@@ -257,7 +257,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                         isWarnedTimeout.store(true);
                         BLOCKVERIFIER_LOG(WARNING)
                             << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
-                            << LOG_KV("txNum", block.transactions().size())
+                            << LOG_KV("txNum", block.transactions()->size())
                             << LOG_KV("blockNumber", block.blockHeader().number());
 
 #if 0
@@ -323,7 +323,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     }
     BLOCKVERIFIER_LOG(DEBUG) << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block takes")
                              << LOG_KV("time(ms)", utcTime() - start_time)
-                             << LOG_KV("txNum", block.transactions().size())
+                             << LOG_KV("txNum", block.transactions()->size())
                              << LOG_KV("blockNumber", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
@@ -340,7 +340,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     return executiveContext;
 }
 
-std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction(
+std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::executeTransaction(
     const BlockHeader& blockHeader, dev::eth::Transaction const& _t)
 {
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
@@ -363,7 +363,7 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::executeTransaction
     return execute(envInfo, _t, OnOpFunc(), executiveContext);
 }
 
-std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo const& _envInfo,
+std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
     auto onOp = _onOp;
@@ -404,6 +404,6 @@ std::pair<ExecutionResult, TransactionReceipt> BlockVerifier::execute(EnvInfo co
     e.loggingException();
 
     return make_pair(
-        res, TransactionReceipt(executiveContext->getState()->rootHash(false), e.gasUsed(),
-                 e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
+        res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
+                 e.gasUsed(), e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
 }

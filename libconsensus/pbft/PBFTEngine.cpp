@@ -598,15 +598,15 @@ bool PBFTEngine::checkBlock(Block const& block)
     }
     /// check sign num
     auto sig_list = block.sigList();
-    if (sig_list.size() < minValidNodes())
+    if (sig_list->size() < minValidNodes())
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: insufficient signatures")
-                              << LOG_KV("signNum", sig_list.size())
+                              << LOG_KV("signNum", sig_list->size())
                               << LOG_KV("minValidSign", minValidNodes());
         return false;
     }
     /// check sign
-    for (auto sign : sig_list)
+    for (auto& sign : *sig_list)
     {
         if (sign.first >= sealers.size())
         {
@@ -628,7 +628,7 @@ bool PBFTEngine::checkBlock(Block const& block)
     }  /// end of check sign
 
     /// Check whether the number of transactions in block exceeds the limit
-    if (block.transactions().size() > maxBlockTransactions())
+    if (block.transactions()->size() > maxBlockTransactions())
     {
         return false;
     }
@@ -652,9 +652,9 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     {
         /// obtain transaction filters
         h256Hash filter;
-        for (auto& trans : block.transactions())
+        for (auto& trans : *(block.transactions()))
         {
-            filter.insert(trans.sha3());
+            filter.insert(trans->sha3());
         }
         PBFTENGINE_LOG(INFO) << "I am the next leader = " << getNextLeader()
                              << ", filter trans size = " << filter.size()
@@ -673,7 +673,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto record_time = utcTime();
     if (req.pBlock)
     {
-        sealing.block = req.pBlock;
+        *(sealing.block) = *(req.pBlock);
     }
     /// decode the network received prepare packet
     else

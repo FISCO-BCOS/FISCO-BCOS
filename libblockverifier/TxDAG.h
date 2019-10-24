@@ -57,7 +57,8 @@ public:
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(ExecutiveContext::Ptr _ctx, dev::eth::Transactions const& _txs, int64_t _blockHeight);
+    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs,
+        int64_t _blockHeight);
 
     // Set transaction execution function
     void setTxExecuteFunc(ExecuteTxFunc const& _f);
