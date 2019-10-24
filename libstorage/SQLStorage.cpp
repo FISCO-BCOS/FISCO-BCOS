@@ -307,13 +307,26 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
 
         TableData::Ptr tableData = std::make_shared<TableData>();
         tableData->info = tableInfo;
+        STORAGE_EXTERNAL_LOG(TRACE)
+            << LOG_DESC("fields in table") << LOG_KV("table", tableInfo->name)
+            << LOG_KV("size", tableInfo->fields.size());
         for (Json::ArrayIndex i = 0; i < responseJson["result"].size(); ++i)
         {
             Json::Value line = responseJson["result"][i];
             Entry::Ptr entry = std::make_shared<Entry>();
             for (auto key : line.getMemberNames())
             {
-                entry->setField(key, line.get(key, "").asString());
+                if (std::find(tableInfo->fields.begin(), tableInfo->fields.end(), key) !=
+                    tableInfo->fields.end())
+                {
+                    entry->setField(key, line.get(key, "").asString());
+                }
+                else
+                {
+                    STORAGE_EXTERNAL_LOG(ERROR)
+                        << LOG_DESC("Invalid key in table") << LOG_KV("table", tableInfo->name)
+                        << LOG_KV("key", key);
+                }
             }
             entry->setID(line.get(ID_FIELD, "").asString());
             entry->setNum(line.get(NUM_FIELD, "").asString());
