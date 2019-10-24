@@ -334,7 +334,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     if (!it->second->deleted())
                     {
                         m_tableData->dirtyEntries->addEntry(it->second);
-                        allSize += it->second->capacity();
+                        allSize += (it->second->capacity() + 1); // 1 for status field
                     }
                 }
             });
@@ -351,7 +351,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                                 if (!it->second->get(i)->deleted())
                                 {
                                     m_tableData->newEntries->addEntry(it->second->get(i));
-                                    allSize += it->second->get(i)->capacity();
+                                    allSize += (it->second->get(i)->capacity() + 1);
                                 }
                             }
                         });
@@ -364,7 +364,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 				EntryLessNoLock(m_tableInfo));
 			tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
 				EntryLessNoLock(m_tableInfo));
-			TIME_RECORD("Submmit data");
+			TIME_RECORD("Calc hash");
 
 			bytes allData;
 			allData.reserve(allSize);
@@ -408,6 +408,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 			m_hash = dev::sha256(bR);
     	}
     	else {
+    		STORAGE_LOG(DEBUG) << "Ignore sort and hash for : " << m_tableInfo->name;
+
     		std::string nothing = "nothing";
     		m_hash = dev::sha256(bytesConstRef(nothing));
     	}
