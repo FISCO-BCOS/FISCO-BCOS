@@ -535,8 +535,6 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
             	++ignoreCount;
-                //invalidBlockLimitTxs.push_back(it->sha3());
-                //nonceKeyCache.push_back(it->nonce());
                 continue;
             }
 #endif
@@ -586,6 +584,8 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
+
+    size_t ignoreCount = 0;
     uint64_t limit = min(m_limit, _limit);
     {
         uint64_t txCnt = 0;
@@ -594,11 +594,19 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         {
             if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
+            	if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
+				{
+					++ignoreCount;
+					continue;
+				}
+
                 ret->push_back(*it);
                 txCnt++;
             }
         }
     }
+
+    TXPOOL_LOG(DEBUG) << "topTransactionCondition done, ignore: " << ignoreCount;
 
     return ret;
 }
