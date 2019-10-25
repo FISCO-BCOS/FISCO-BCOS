@@ -213,7 +213,9 @@ bytes DagTransferPrecompiled::call(
 
     return out;
 #endif
-    return bytes();
+
+    dev::eth::ContractABI abi;
+    return abi.abiIn("", dev::u256(0));
 }
 
 void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,
