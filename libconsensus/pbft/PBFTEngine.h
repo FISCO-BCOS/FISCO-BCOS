@@ -609,6 +609,8 @@ protected:
 
     // the thread pool is used to execute the async-function
     dev::ThreadPool::Ptr m_threadPool;
+
+    std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
 };
 }  // namespace consensus
 }  // namespace dev
