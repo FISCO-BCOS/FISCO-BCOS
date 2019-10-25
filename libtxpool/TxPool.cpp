@@ -370,23 +370,26 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         m_txsQueue.erase(p_tx->second);
         m_txsHash.erase(p_tx);
 
-        m_delTransactions.unsafe_erase(_txHash);
+        // m_delTransactions.unsafe_erase(_txHash);
     }
 
     if (needTriggerCallback && block && transaction->rpcCallback())
     {
-        // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
-        // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-        if (block->transactionReceipts()->size() > index)
-        {
-            pReceipt = constructTransactionReceipt((*(block->transactions()))[index],
-                (*(block->transactionReceipts()))[index], *block, index);
-        }
+    	m_workerPool->enqueue([this, block, index, transaction]() {
+			// Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
+			// m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+			LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+			if (block->transactionReceipts()->size() > index)
+			{
+				pReceipt = constructTransactionReceipt((*(block->transactions()))[index],
+					(*(block->transactionReceipts()))[index], *block, index);
+			}
 
-        auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
-        TxCallback callback{transaction->rpcCallback(), pReceipt};
-        callback.call(callback.pReceipt, input);
+			auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
+			TxCallback callback{transaction->rpcCallback(), pReceipt};
+
+        	callback.call(callback.pReceipt, input);
+        });
     }
 
     return true;
@@ -483,6 +486,7 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
+#if 0
     TIME_RECORD("dropBlockTrans, prepare, count:" +
                 boost::lexical_cast<std::string>(block->transactions()->size()));
     for (auto& it : *(block->transactions()))
@@ -490,26 +494,27 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
         h256 txHash = it->sha3();
         m_delTransactions.insert(txHash);
     }
+#endif
 
-    m_workerPool->enqueue([this, block]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    //m_workerPool->enqueue([this, block]() {
+        //std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-        TIME_RECORD("dropBlockTrans, updateCache, count:" +
-                    boost::lexical_cast<std::string>(block->transactions()->size()));
-        /// update the nonce check related to block chain
-        m_txNonceCheck->updateCache(false);
+	TIME_RECORD("dropBlockTrans, updateCache, count:" +
+				boost::lexical_cast<std::string>(block->transactions()->size()));
+	/// update the nonce check related to block chain
+	m_txNonceCheck->updateCache(false);
 
-        TIME_RECORD("dropTransaction");
-        dropTransactions(block, true);
-        /// remove the information of known transactions from map
+	TIME_RECORD("dropTransaction");
+	dropTransactions(block, true);
+	/// remove the information of known transactions from map
 
-        TIME_RECORD("removeBlockKnowTrans");
-        removeBlockKnowTrans(*block);
-        /// remove the nonce check related to txpool
+	TIME_RECORD("removeBlockKnowTrans");
+	removeBlockKnowTrans(*block);
+	/// remove the nonce check related to txpool
 
-        TIME_RECORD("nonceChecker delCache");
-        m_txpoolNonceChecker->delCache(*(block->transactions()));
-    });
+	TIME_RECORD("nonceChecker delCache");
+	m_txpoolNonceChecker->delCache(*(block->transactions()));
+    //});
 
     return true;
 }
@@ -538,12 +543,12 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
 
     TIME_RECORD("topTransaction");
-    size_t ignoreCount = 0;
+    //size_t ignoreCount = 0;
     {
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-#if 1
+#if 0
             /// check block limit and nonce again when obtain transactions
             // if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
             if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
@@ -588,7 +593,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         }
     }
 
-    TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
+    // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
 
     return ret;
 }
@@ -599,7 +604,7 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
 
-    size_t ignoreCount = 0;
+    //size_t ignoreCount = 0;
     uint64_t limit = min(m_limit, _limit);
     {
         uint64_t txCnt = 0;
@@ -608,11 +613,13 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         {
             if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
+#if 0
                 if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
                 {
                     ++ignoreCount;
                     continue;
                 }
+#endif
 
                 ret->push_back(*it);
                 txCnt++;
@@ -620,7 +627,7 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         }
     }
 
-    TXPOOL_LOG(DEBUG) << "topTransactionCondition done, ignore: " << ignoreCount;
+    //TXPOOL_LOG(DEBUG) << "topTransactionCondition done, ignore: " << ignoreCount;
 
     return ret;
 }

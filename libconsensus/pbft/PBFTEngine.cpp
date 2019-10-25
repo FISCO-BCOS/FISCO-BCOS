@@ -676,7 +676,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto record_time = utcTime();
     if (req.pBlock)
     {
-        *(sealing.block) = *(req.pBlock);
+        sealing.block = req.pBlock;
     }
     /// decode the network received prepare packet
     else
@@ -709,7 +709,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto notify_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-
     m_blockSync->noteSealingBlockNumber(sealing.block->header().number());
     auto noteSealing_time_cost = utcTime() - record_time;
     record_time = utcTime();
@@ -720,7 +719,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     m_txPool->verifyAndSetSenderForBlock(*sealing.block);
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
 
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
