@@ -527,7 +527,7 @@ bool SyncMaster::maintainDownloadingQueue()
                 record_time = utcTime();
                 if (ret == CommitResult::OK)
                 {
-                    m_txPool->dropBlockTrans(*topBlock);
+                    m_txPool->dropBlockTrans(topBlock);
                     auto dropBlockTrans_time_cost = utcTime() - record_time;
                     SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                                    << LOG_DESC("Download block commit succ")

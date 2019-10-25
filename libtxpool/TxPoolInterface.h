@@ -42,7 +42,7 @@ public:
      * @param _txHash: transaction hash
      */
     virtual bool drop(h256 const& _txHash) = 0;
-    virtual bool dropBlockTrans(dev::eth::Block const& block) = 0;
+    virtual bool dropBlockTrans(std::shared_ptr<dev::eth::Block> block) = 0;
     virtual bool handleBadBlock(dev::eth::Block const& block) = 0;
     /**
      * @brief Get top transactions from the queue

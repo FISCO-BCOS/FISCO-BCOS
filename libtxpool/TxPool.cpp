@@ -221,7 +221,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
                     std::make_shared<dev::eth::LocalisedTransactionReceipt>(
                         executive::TransactionException::TxPoolIsFull);
 
-                m_callbackPool->enqueue(
+                m_workerPool->enqueue(
                     [callback, receipt] { callback(receipt, bytesConstRef()); });
             }
         }
@@ -355,28 +355,58 @@ struct TxCallback
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
-    dev::eth::LocalisedTransactionReceipt::Ptr pReceipt)
+bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::shared_ptr<dev::eth::Block> block, size_t index)
 {
-    auto p_tx = m_txsHash.find(_txHash);
-    if (p_tx == m_txsHash.end())
-    {
-        return false;
-    }
+#if 0
+	if (block.getTransactionSize() == 0)
+	        return true;
+	    WriteGuard l(m_lock);
+	    bool succ = true;
 
-    if (needTriggerCallback && pReceipt && (*(p_tx->second))->rpcCallback())
-    {
-        // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
-        // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+	    for (size_t i = 0; i < block.transactions()->size(); i++)
+	    {
+	        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+	        if (block.transactionReceipts()->size() > i)
+	        {
+	            pReceipt = constructTransactionReceipt(
+	                (*(block.transactions()))[i], (*(block.transactionReceipts()))[i], block, i);
+	        }
+	        if (removeTrans((*(block.transactions()))[i]->sha3(), true, pReceipt) == false)
+	            succ = false;
+	    }
+#endif
 
-        auto transaction = *(p_tx->second);
-        auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
-        TxCallback callback{(*(p_tx->second))->rpcCallback(), pReceipt};
-        m_callbackPool->enqueue(
-            [callback, input, transaction] { callback.call(callback.pReceipt, input); });
-    }
-    m_txsQueue.erase(p_tx->second);
-    m_txsHash.erase(p_tx);
+	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
+	{
+		WriteGuard l(m_lock);
+		p_tx = m_txsHash.find(_txHash);
+		if (p_tx == m_txsHash.end())
+		{
+			return false;
+		}
+		m_txsQueue.erase(p_tx->second);
+		m_txsHash.erase(p_tx);
+	}
+
+	if (needTriggerCallback && block && (*(p_tx->second))->rpcCallback())
+	{
+		auto transaction = *(p_tx->second);
+		m_workerPool->enqueue([this, transaction, block, index] {
+				// Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
+				// m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+				LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+				if (block->transactionReceipts()->size() > index)
+				{
+					pReceipt = constructTransactionReceipt(
+						(*(block->transactions()))[index], (*(block->transactionReceipts()))[index], *block, index);
+				}
+
+				auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
+				TxCallback callback{transaction->rpcCallback(), pReceipt};
+				callback.call(callback.pReceipt, input);
+		});
+	}
+
     return true;
 }
 
@@ -445,21 +475,16 @@ bool TxPool::removeBlockKnowTrans(Block const& block)
     return true;
 }
 
-bool TxPool::dropTransactions(Block const& block, bool)
+bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
 {
-    if (block.getTransactionSize() == 0)
+    if (block->getTransactionSize() == 0)
         return true;
-    WriteGuard l(m_lock);
+    //WriteGuard l(m_lock);
     bool succ = true;
-    for (size_t i = 0; i < block.transactions()->size(); i++)
+
+    for (size_t i = 0; i < block->transactions()->size(); i++)
     {
-        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-        if (block.transactionReceipts()->size() > i)
-        {
-            pReceipt = constructTransactionReceipt(
-                (*(block.transactions()))[i], (*(block.transactionReceipts()))[i], block, i);
-        }
-        if (removeTrans((*(block.transactions()))[i]->sha3(), true, pReceipt) == false)
+        if (removeTrans((*(block->transactions()))[i]->sha3(), true, block, i) == false)
             succ = false;
     }
     return succ;
@@ -474,9 +499,9 @@ bool TxPool::handleBadBlock(Block const&)
     return true;
 }
 /// drop a block when it has been committed successfully
-bool TxPool::dropBlockTrans(Block const& block)
+bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
-	TIME_RECORD("dropBlockTrans, updateCache, count:" + boost::lexical_cast<std::string>(block.transactions()->size()));
+	TIME_RECORD("dropBlockTrans, updateCache, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
 
@@ -485,11 +510,11 @@ bool TxPool::dropBlockTrans(Block const& block)
     /// remove the information of known transactions from map
 
     TIME_RECORD("removeBlockKnowTrans");
-    removeBlockKnowTrans(block);
+    removeBlockKnowTrans(*block);
     /// remove the nonce check related to txpool
 
     TIME_RECORD("nonceChecker delCache");
-    m_txpoolNonceChecker->delCache(*(block.transactions()));
+    m_txpoolNonceChecker->delCache(*(block->transactions()));
     return ret;
 }
 

@@ -978,7 +978,7 @@ void PBFTEngine::checkAndSave()
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
-                dropHandledTransactions(*p_block);
+                dropHandledTransactions(p_block);
                 auto dropTxs_time_cost = utcTime() - record_time;
                 record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
