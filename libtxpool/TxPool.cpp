@@ -360,6 +360,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 	Transaction::Ptr transaction;
 	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 	{
+		WriteGuard l(m_lock);
 		p_tx = m_txsHash.find(_txHash);
 		if (p_tx == m_txsHash.end())
 		{
@@ -371,7 +372,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 		m_txsQueue.erase(p_tx->second);
 		m_txsHash.erase(p_tx);
 
-		m_delTransactions.unsafe_erase(transaction->sha3());
+		m_delTransactions.unsafe_erase(_txHash);
 	}
 
 	if (needTriggerCallback && block && transaction->rpcCallback())
@@ -462,7 +463,7 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
 {
     if (block->getTransactionSize() == 0)
         return true;
-    WriteGuard l(m_lock);
+
     bool succ = true;
 
     for (size_t i = 0; i < block->transactions()->size(); i++)
