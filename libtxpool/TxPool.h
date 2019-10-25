@@ -32,8 +32,8 @@
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
 #include <tbb/concurrent_queue.h>
-#include <unordered_map>
 #include <tbb/concurrent_unordered_set.h>
+#include <unordered_map>
 
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -42,7 +42,6 @@ using namespace dev::p2p;
 
 namespace dev
 {
-
 namespace txpool
 {
 class TxPool;
@@ -81,8 +80,8 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
-        m_workerPool =
-            std::make_shared<dev::ThreadPool>("txPoolWorker-" + std::to_string(_protocolId), workThreads);
+        m_workerPool = std::make_shared<dev::ThreadPool>(
+            "txPoolWorker-" + std::to_string(_protocolId), workThreads);
         m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
         m_submitThread = std::make_shared<std::thread>();
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
@@ -199,7 +198,9 @@ private:
         dev::eth::Transaction::Ptr tx, dev::eth::TransactionReceipt::Ptr receipt,
         dev::eth::Block const& block, unsigned index);
 
-    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false, std::shared_ptr<dev::eth::Block> block = std::shared_ptr<dev::eth::Block>(), size_t index = 0);
+    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
+        std::shared_ptr<dev::eth::Block> block = std::shared_ptr<dev::eth::Block>(),
+        size_t index = 0);
     bool insert(dev::eth::Transaction::Ptr _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
@@ -237,16 +238,14 @@ private:
 
     dev::ThreadPool::Ptr m_workerPool;
 
-    class H256Compare {
+    class H256Compare
+    {
         dev::h256::hash hasher;
+
     public:
-        size_t operator()(const h256& x) const {
-            return hasher(x);
-        }
+        size_t operator()(const h256& x) const { return hasher(x); }
         // True if strings are equal
-        bool equal(const h256& x, const h256& y) const {
-                return x==y;
-        }
+        bool equal(const h256& x, const h256& y) const { return x == y; }
     };
     tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
 

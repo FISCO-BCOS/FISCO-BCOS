@@ -221,8 +221,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
                     std::make_shared<dev::eth::LocalisedTransactionReceipt>(
                         executive::TransactionException::TxPoolIsFull);
 
-                m_workerPool->enqueue(
-                    [callback, receipt] { callback(receipt, bytesConstRef()); });
+                m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
             }
         }
 
@@ -355,39 +354,40 @@ struct TxCallback
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::shared_ptr<dev::eth::Block> block, size_t index)
+bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
+    std::shared_ptr<dev::eth::Block> block, size_t index)
 {
-	Transaction::Ptr transaction;
-	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
-	{
-		p_tx = m_txsHash.find(_txHash);
-		if (p_tx == m_txsHash.end())
-		{
-			return true;
-		}
+    Transaction::Ptr transaction;
+    std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
+    {
+        p_tx = m_txsHash.find(_txHash);
+        if (p_tx == m_txsHash.end())
+        {
+            return true;
+        }
 
-		transaction = *(p_tx->second);
-		m_txsQueue.erase(p_tx->second);
-		m_txsHash.erase(p_tx);
+        transaction = *(p_tx->second);
+        m_txsQueue.erase(p_tx->second);
+        m_txsHash.erase(p_tx);
 
-		m_delTransactions.unsafe_erase(_txHash);
-	}
+        m_delTransactions.unsafe_erase(_txHash);
+    }
 
-	if (needTriggerCallback && block && transaction->rpcCallback())
-	{
-			// Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
-			// m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-			LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-			if (block->transactionReceipts()->size() > index)
-			{
-				pReceipt = constructTransactionReceipt(
-					(*(block->transactions()))[index], (*(block->transactionReceipts()))[index], *block, index);
-			}
+    if (needTriggerCallback && block && transaction->rpcCallback())
+    {
+        // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
+        // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
+        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
+        if (block->transactionReceipts()->size() > index)
+        {
+            pReceipt = constructTransactionReceipt((*(block->transactions()))[index],
+                (*(block->transactionReceipts()))[index], *block, index);
+        }
 
-			auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
-			TxCallback callback{transaction->rpcCallback(), pReceipt};
-			callback.call(callback.pReceipt, input);
-	}
+        auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
+        TxCallback callback{transaction->rpcCallback(), pReceipt};
+        callback.call(callback.pReceipt, input);
+    }
 
     return true;
 }
@@ -483,30 +483,33 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
-	TIME_RECORD("dropBlockTrans, prepare, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
-	for(auto& it: *(block->transactions())) {
-		h256 txHash = it->sha3();
-		m_delTransactions.insert(txHash);
-	}
+    TIME_RECORD("dropBlockTrans, prepare, count:" +
+                boost::lexical_cast<std::string>(block->transactions()->size()));
+    for (auto& it : *(block->transactions()))
+    {
+        h256 txHash = it->sha3();
+        m_delTransactions.insert(txHash);
+    }
 
-	m_workerPool->enqueue([this, block]() {
-		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    m_workerPool->enqueue([this, block]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-		TIME_RECORD("dropBlockTrans, updateCache, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
-		/// update the nonce check related to block chain
-		m_txNonceCheck->updateCache(false);
+        TIME_RECORD("dropBlockTrans, updateCache, count:" +
+                    boost::lexical_cast<std::string>(block->transactions()->size()));
+        /// update the nonce check related to block chain
+        m_txNonceCheck->updateCache(false);
 
-		TIME_RECORD("dropTransaction");
-		dropTransactions(block, true);
-		/// remove the information of known transactions from map
+        TIME_RECORD("dropTransaction");
+        dropTransactions(block, true);
+        /// remove the information of known transactions from map
 
-		TIME_RECORD("removeBlockKnowTrans");
-		removeBlockKnowTrans(*block);
-		/// remove the nonce check related to txpool
+        TIME_RECORD("removeBlockKnowTrans");
+        removeBlockKnowTrans(*block);
+        /// remove the nonce check related to txpool
 
-		TIME_RECORD("nonceChecker delCache");
-		m_txpoolNonceChecker->delCache(*(block->transactions()));
-	});
+        TIME_RECORD("nonceChecker delCache");
+        m_txpoolNonceChecker->delCache(*(block->transactions()));
+    });
 
     return true;
 }
@@ -542,10 +545,10 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         {
 #if 1
             /// check block limit and nonce again when obtain transactions
-            //if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
-        	if(m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
+            // if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
+            if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
             {
-            	++ignoreCount;
+                ++ignoreCount;
                 continue;
             }
 #endif
@@ -605,11 +608,11 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         {
             if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
-            	if(m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-				{
-					++ignoreCount;
-					continue;
-				}
+                if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
+                {
+                    ++ignoreCount;
+                    continue;
+                }
 
                 ret->push_back(*it);
                 txCnt++;

@@ -722,7 +722,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     record_time = utcTime();
 
 
-
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
