@@ -548,11 +548,13 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-#if 0
+#if 1
             /// check block limit and nonce again when obtain transactions
-            // if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
-            if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
+             if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
+            //if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
             {
+				invalidBlockLimitTxs.push_back((*it)->sha3());
+				nonceKeyCache.push_back((*it)->nonce());
                 // ++ignoreCount;
                 continue;
             }
