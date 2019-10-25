@@ -360,8 +360,6 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 	Transaction::Ptr transaction;
 	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 	{
-		WriteGuard l(m_lock);
-
 		p_tx = m_txsHash.find(_txHash);
 		if (p_tx == m_txsHash.end())
 		{
