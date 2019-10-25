@@ -92,6 +92,19 @@ struct ExecutionResult
     u256 gasRefunded = 0;
     unsigned depositSize = 0;  ///< Amount of code of the creation's attempted deposit.
     u256 gasForDeposit;        ///< Amount of gas remaining for the code deposit phase.
+
+    void reset()
+    {
+        gasUsed = 0;
+        excepted = TransactionException::Unknown;
+        newAddress = Address();
+        output.clear();
+        codeDeposit =
+            CodeDeposit::None;  ///< Failed if an attempted deposit failed due to lack of gas.
+        gasRefunded = 0;
+        depositSize = 0;  ///< Amount of code of the creation's attempted deposit.
+        gasForDeposit = 0;
+    }
 };
 
 std::ostream& operator<<(std::ostream& _out, ExecutionResult const& _er);

@@ -127,6 +127,9 @@ public:
       : m_headerInfo(_current), m_numberHash(_callback), m_gasUsed(_gasUsed)
     {}
 
+    EnvInfo() {}
+
+
     /// @return block header
     BlockHeader const& header() const { return m_headerInfo; }
 

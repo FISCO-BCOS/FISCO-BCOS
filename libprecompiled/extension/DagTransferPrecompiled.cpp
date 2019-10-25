@@ -125,6 +125,9 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
             results.push_back(fromUser);
             results.push_back(toUser);
         }
+
+        results.push_back(boost::lexical_cast<std::string>(++m_count));
+        results.push_back(boost::lexical_cast<std::string>(++m_count));
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_BAL_STR])
     {

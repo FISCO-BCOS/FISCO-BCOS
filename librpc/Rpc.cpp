@@ -996,16 +996,16 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         TransactionSkeleton txSkeleton = toTransactionSkeleton(request);
-        Transaction tx(txSkeleton.value, gasPrice, maxTransactionGasLimit, txSkeleton.to,
-            txSkeleton.data, txSkeleton.nonce);
+        Transaction::Ptr tx = std::make_shared<Transaction>(txSkeleton.value, gasPrice,
+            maxTransactionGasLimit, txSkeleton.to, txSkeleton.data, txSkeleton.nonce);
         auto blockHeader = block->header();
-        tx.forceSender(txSkeleton.from);
+        tx->forceSender(txSkeleton.from);
         auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
 
         Json::Value response;
         response["currentBlockNumber"] = toJS(blockNumber);
-        response["status"] = toJS(executionResult.second->status());
-        response["output"] = toJS(executionResult.second->outputBytes());
+        response["status"] = toJS(executionResult->status());
+        response["output"] = toJS(executionResult->outputBytes());
         return response;
     }
     catch (JsonRpcException& e)

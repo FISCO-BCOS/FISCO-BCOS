@@ -67,6 +67,9 @@ public:
         Address const& origin, bytes& out);
     void userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
+
+private:
+    size_t m_count = 0;
 };
 
 }  // namespace precompiled
