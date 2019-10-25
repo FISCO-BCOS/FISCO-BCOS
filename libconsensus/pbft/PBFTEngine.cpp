@@ -277,10 +277,13 @@ bool PBFTEngine::generatePrepare(Block const& block)
     Guard l(m_mutex);
     m_notifyNextLeaderSeal = false;
     PrepareReq prepare_req(block, m_keyPair, m_view, nodeIdx());
-    /// broadcast the generated preparePacket
-    std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-    prepare_req.encode(*prepare_data);
-    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
+
+    // broadcast prepare request
+    m_threadPool->enqueue([=]() {
+        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+        prepare_req.encode(*prepare_data);
+        broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
+    });
 
     if (prepare_req.pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
@@ -718,6 +721,9 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
+    // calTransactionRoot before executeBlock
+    sealing.block->calTransactionRoot();
+
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
@@ -865,12 +871,15 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
+    auto startT = utcTime();
     PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
+    m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
                           << LOG_KV("reqNum", sign_prepare.height)
                           << LOG_KV("hash", sign_prepare.block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
+                          << LOG_KV("addPrepareTime", utcTime() - startT)
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     /// broadcast the re-generated signReq(add the signReq to cache)
@@ -1400,6 +1409,16 @@ void PBFTEngine::checkTimeout()
     bool flag = false;
     {
         Guard l(m_mutex);
+        // clear and destruct the executiveContext
+        for (auto& exec : m_execContextForAsyncReset)
+        {
+            if (exec)
+            {
+                exec.reset();
+            }
+        }
+        m_execContextForAsyncReset.clear();
+
         if (m_timeManager.isTimeout())
         {
             /// timeout not triggered by fast view change

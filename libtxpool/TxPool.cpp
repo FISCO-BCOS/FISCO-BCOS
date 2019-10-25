@@ -105,7 +105,6 @@ std::pair<h256, Address> TxPool::submitTransactions()
         m_signalled.wait_for(l, std::chrono::milliseconds(20));
         return std::make_pair(dev::h256(), dev::FixedHash<20>());
     }
-    m_totalTxsNum += 1;
     return submitTransactions(_tx);
 }
 
@@ -651,9 +650,10 @@ bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 // Remove the record of transaction know by some peers
 void TxPool::removeTransactionKnowBy(h256 const& _txHash)
 {
-    auto p = m_transactionKnownBy.find(_txHash);
-    if (p != m_transactionKnownBy.end())
-        m_transactionKnownBy.erase(p);
+    if (m_transactionKnownBy.count(_txHash))
+    {
+        m_transactionKnownBy.erase(_txHash);
+    }
 }
 
 }  // namespace txpool
