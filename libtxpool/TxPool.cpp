@@ -386,11 +386,15 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
 
         auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
         TxCallback callback{transaction->rpcCallback(), pReceipt};
-        callback.call(callback.pReceipt, input);
-    }
 
-    return true;
+        // callback.call(callback.pReceipt, input);
+        m_workerPool->enqueue(
+            [callback, input, transaction] { callback.call(callback.pReceipt, input); });
+    }
 }
+
+return true;
+}  // namespace txpool
 
 /**
  * @brief : insert the newest transaction into the transaction queue
@@ -548,6 +552,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             // if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
             if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
             {
+                invalidBlockLimitTxs.push_back((*it)->sha3());
+                nonceKeyCache.push_back((*it)->nonce());
                 ++ignoreCount;
                 continue;
             }
@@ -699,5 +705,5 @@ void TxPool::removeTransactionKnowBy(h256 const& _txHash)
         m_transactionKnownBy.erase(p);
 }
 
-}  // namespace txpool
+}  // namespace dev
 }  // namespace dev
