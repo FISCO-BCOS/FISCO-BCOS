@@ -487,12 +487,15 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
+	TIME_RECORD("dropBlockTrans, prepare, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 	for(auto& it: *(block->transactions())) {
 		h256 txHash = it->sha3();
 		m_delTransactions.insert(txHash);
 	}
 
 	m_workerPool->enqueue([this, block]() {
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
 		TIME_RECORD("dropBlockTrans, updateCache, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 		/// update the nonce check related to block chain
 		m_txNonceCheck->updateCache(false);
