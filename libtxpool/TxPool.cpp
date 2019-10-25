@@ -371,7 +371,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 		m_txsQueue.erase(p_tx->second);
 		m_txsHash.erase(p_tx);
 
-		m_delTransactions.unsafe_erase(p_tx->first);
+		m_delTransactions.unsafe_erase(transaction->sha3());
 	}
 
 	if (needTriggerCallback && block && transaction->rpcCallback())
