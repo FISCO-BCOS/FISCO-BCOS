@@ -306,6 +306,11 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
         }
 
         TableData::Ptr tableData = std::make_shared<TableData>();
+        tableInfo->fields.emplace_back(tableInfo->key);
+        tableInfo->fields.emplace_back(STATUS);
+        tableInfo->fields.emplace_back(NUM_FIELD);
+        tableInfo->fields.emplace_back(ID_FIELD);
+        tableInfo->fields.emplace_back("_hash_");
         tableData->info = tableInfo;
         STORAGE_EXTERNAL_LOG(TRACE)
             << LOG_DESC("fields in table") << LOG_KV("table", tableInfo->name)
@@ -326,6 +331,7 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
                     STORAGE_EXTERNAL_LOG(ERROR)
                         << LOG_DESC("Invalid key in table") << LOG_KV("table", tableInfo->name)
                         << LOG_KV("key", key);
+                    // BOOST_THROW_EXCEPTION(runtime_error("Invalid key in table"));
                 }
             }
             entry->setID(line.get(ID_FIELD, "").asString());
@@ -335,10 +341,10 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
             if (entry->getStatus() == 0)
             {
                 entry->setDirty(false);
-                tableData->dirtyEntries->addEntry(entry);
+                tableData->newEntries->addEntry(entry);
             }
         }
-        tableData->newEntries = std::make_shared<Entries>();
+        tableData->dirtyEntries = std::make_shared<Entries>();
         return tableData;
     }
     catch (std::exception& e)
