@@ -376,6 +376,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 	    }
 #endif
 
+	Transaction::Ptr transaction;
 	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 	{
 		WriteGuard l(m_lock);
@@ -384,13 +385,14 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 		{
 			return false;
 		}
+
+		transaction = *(p_tx->second);
 		m_txsQueue.erase(p_tx->second);
 		m_txsHash.erase(p_tx);
 	}
 
-	if (needTriggerCallback && block && (*(p_tx->second))->rpcCallback())
+	if (needTriggerCallback && block && transaction->rpcCallback())
 	{
-		auto transaction = *(p_tx->second);
 		m_workerPool->enqueue([this, transaction, block, index] {
 				// Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
 				// m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
