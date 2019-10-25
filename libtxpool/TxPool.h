@@ -238,6 +238,7 @@ private:
 
     dev::ThreadPool::Ptr m_workerPool;
 
+#if 0
     class H256Compare
     {
         dev::h256::hash hasher;
@@ -248,6 +249,7 @@ private:
         bool equal(const h256& x, const h256& y) const { return x == y; }
     };
     tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
+#endif
 
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::shared_ptr<std::thread> m_submitThread;

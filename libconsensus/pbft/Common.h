@@ -334,7 +334,7 @@ struct PrepareReq : public PBFTMsg
         block_hash = sealing.block->blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        pBlock = std::make_shared<dev::eth::Block>(*(sealing.block));
+        pBlock = sealing.block;
         LOG(DEBUG) << "Re-generate prepare_requests since block has been executed, time = "
                    << timestamp << " , block_hash: " << block_hash.abridged();
     }
