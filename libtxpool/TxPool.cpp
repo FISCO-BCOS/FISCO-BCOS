@@ -357,16 +357,15 @@ struct TxCallback
  */
 bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::shared_ptr<dev::eth::Block> block, size_t index)
 {
-	m_workerPool->enqueue([this, _txHash, needTriggerCallback, block, index] {
+	//m_workerPool->enqueue([this, _txHash, needTriggerCallback, block, index] {
 		Transaction::Ptr transaction;
 		std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 		{
-			WriteGuard l(m_lock);
-
 			p_tx = m_txsHash.find(_txHash);
 			if (p_tx == m_txsHash.end())
 			{
-				return;
+				//return;
+				return true;
 			}
 
 			transaction = *(p_tx->second);
@@ -391,7 +390,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 				TxCallback callback{transaction->rpcCallback(), pReceipt};
 				callback.call(callback.pReceipt, input);
 		}
-	});
+	//});
 
     return true;
 }
