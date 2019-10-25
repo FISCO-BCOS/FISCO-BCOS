@@ -21,6 +21,10 @@
  * @date 2019-10-15
  */
 #include "Common.h"
+#include "boost/archive/text_iarchive.hpp"
+#include "boost/archive/text_oarchive.hpp"
+#include "boost/serialization/serialization.hpp"
+#include "boost/serialization/unordered_map.hpp"
 #include "libinitializer/Initializer.h"
 #include "libledger/DBInitializer.h"
 #include "libledger/LedgerParam.h"
@@ -44,24 +48,80 @@ using namespace dev::storage;
 using namespace dev::initializer;
 namespace fs = boost::filesystem;
 
-vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, Entries::Ptr = nullptr)
+struct SyncRecorder
 {
-    auto entries = data->dirtyEntries;
-    vector<TableInfo::Ptr> res(entries->size(), nullptr);
+    explicit SyncRecorder(const std::string& path) : filename(path + "/.sync")
+    {
+        if (fs::exists(filename))
+        {
+            fstream fs(filename);
+            boost::archive::text_iarchive ia(fs);
+            ia >> tables;
+            fs.close();
+        }
+    }
+    ~SyncRecorder() { serialization(); }
+    bool isCompleted(string _tableName) const { return tables.at(_tableName); }
+
+    void markStatus(string tableName, bool status)
+    {
+        tables[tableName] = status;
+        serialization();
+    }
+
+    void serialization()
+    {
+        if (!tables.empty())
+        {
+            ofstream fs(filename, std::fstream::trunc);
+            boost::archive::text_oarchive oa(fs);
+            oa << tables;
+            fs.close();
+        }
+    }
+    unordered_map<string, bool> tables;
+    string filename;
+};
+
+vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, unordered_map<string, bool>& _tableMap)
+{
+    auto entries = data->newEntries;
+    vector<TableInfo::Ptr> res;
+    bool accordTableMap = true;
+    if (_tableMap.empty())
+    {
+        accordTableMap = false;
+    }
+
     for (size_t i = 0; i < entries->size(); ++i)
     {
-        // FIXME: skip SYS_HASH_2_BLOCK and SYS_BLOCK_2_NONCES, use storage select
         auto entry = entries->get(i);
-        res[i] = std::make_shared<TableInfo>();
-        res[i]->name = entry->getField("table_name");
-        res[i]->key = entry->getField("key_field");
+        auto tableInfo = std::make_shared<TableInfo>();
+        tableInfo->name = entry->getField("table_name");
+        if (tableInfo->name.empty())
+        {
+            throw std::runtime_error("empty table name");
+        }
+        if (accordTableMap && _tableMap.at(tableInfo->name))
+        {
+            std::cout << tableInfo->name << " already committed" << endl;
+            continue;
+        }
+        else
+        {
+            tableInfo->key = entry->getField("key_field");
+            auto valueFields = entry->getField("value_field");
+            boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
+            _tableMap.insert(std::make_pair(tableInfo->name, false));
+            res.push_back(tableInfo);
+        }
     }
     return res;
 }
 
 TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber)
 {
-    cout << "Process " << SYS_BLOCK_2_NONCES << endl;
+    cout << " Process " << SYS_BLOCK_2_NONCES << endl;
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
@@ -83,9 +143,9 @@ TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber
         {
             auto entry = std::make_shared<Entry>();
             entry->copyFrom(entries->get(i));
-            tableData->dirtyEntries->addEntry(entry);
+            tableData->newEntries->addEntry(entry);
         }
-        tableData->newEntries = std::make_shared<Entries>();
+        tableData->dirtyEntries = std::make_shared<Entries>();
         return tableData;
     }
 }
@@ -134,83 +194,128 @@ TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
     }
 }
 
-void syncData(SQLStorage::Ptr _reader, ScalableStorage::Ptr _writer, int64_t _blockNumber)
+void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
+    const std::string& _dataPath, bool _fullSync)
 {
-    // TODO: check if already sync part of data
-    cout << "Sync block number is " << _blockNumber << endl;
+    cout << "sync block number is " << _blockNumber << ", data path is " << _dataPath << endl;
     auto sysTableInfo = getSysTableInfo(SYS_TABLES);
     auto data = _reader->selectTableDataByNum(_blockNumber, sysTableInfo);
-    _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
-    cout << SYS_TABLES << " is committed." << endl;
+    boost::filesystem::create_directories(_dataPath);
+    SyncRecorder recorder(_dataPath);
+    auto tableInfos = parseTableNames(data, recorder.tables);
+    if (!recorder.isCompleted(SYS_TABLES))
+    {
+        _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
+        recorder.markStatus(SYS_TABLES, true);
+        cout << SYS_TABLES << " is committed." << endl;
+    }
 
-    // get tables' data of last step
-    vector<TableInfo::Ptr> tableInfos = parseTableNames(data);
     for (const auto& tableInfo : tableInfos)
     {
-        if (_writer->isStateData(tableInfo->name) && tableInfo->name != SYS_TABLES)
+        if (tableInfo->name == SYS_TABLES)
         {
+            continue;
+        }
+        if (_fullSync || (!_fullSync && tableInfo->name != SYS_BLOCK_2_NONCES &&
+                             tableInfo->name != SYS_HASH_2_BLOCK))
+        {
+            cout << "[" << getCurrentDateTime() << "] " << tableInfo->name << " is in-process... "
+                 << flush;
             auto tableData = _reader->selectTableDataByNum(_blockNumber, tableInfo);
             if (!tableData)
             {
-                LOG(ERROR) << "query failed. Table=" << tableInfo->name << endl;
+                cerr << "query failed. Table=" << tableInfo->name << endl;
             }
             _writer->commit(_blockNumber, vector<TableData::Ptr>{tableData});
-            LOG(INFO) << tableInfo->name << " is committed." << endl;
-            cout << tableInfo->name << " is committed." << endl;
-            // TODO: write data into _writer, record the committed table name
+            recorder.markStatus(tableInfo->name, true);
+            cout << "[committed]" << endl;
         }
     }
-    // SYS_HASH_2_BLOCK
-    data = getHashToBlockData(_reader, _blockNumber);
-    _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
-    // SYS_BLOCK_2_NONCES
-    data = getBlockToNonceData(_reader, _blockNumber);
-    if (data)
+    if (!_fullSync)
     {
-        _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
+        // SYS_HASH_2_BLOCK
+        if (!recorder.isCompleted(SYS_HASH_2_BLOCK))
+        {
+            data = getHashToBlockData(_reader, _blockNumber);
+            _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
+            recorder.markStatus(SYS_HASH_2_BLOCK, true);
+        }
+        // SYS_BLOCK_2_NONCES
+        if (!recorder.isCompleted(SYS_BLOCK_2_NONCES))
+        {
+            data = getBlockToNonceData(_reader, _blockNumber);
+            if (data)
+            {
+                _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
+                recorder.markStatus(SYS_BLOCK_2_NONCES, true);
+            }
+            else
+            {
+                cout << "block number to nonce is empty at " << _blockNumber << endl;
+            }
+        }
     }
-    else
-    {
-        cout << "block number to nonce is empty at " << _blockNumber << endl;
-    }
-    // TODO: record the committed table name, clean records
 }
 
-void fastSyncGroupData(const std::string& _genesisConfigFile, const std::string& _dataPath,
+void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     ChannelRPCServer::Ptr _channelRPCServer, int64_t _rollbackNumber = 1000)
 {
-    auto params = std::make_shared<LedgerParam>();
-    params->init(_genesisConfigFile, _dataPath);
     // create SQLStorage
-    auto sqlStorage = std::make_shared<SQLStorage>();
-    sqlStorage->setChannelRPCServer(_channelRPCServer);
-    sqlStorage->setTopic(params->mutableStorageParam().topic);
-    sqlStorage->setFatalHandler([](std::exception& e) {
+    auto sqlStorage = createSQLStorage(_param, _channelRPCServer, [](std::exception& e) {
         LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                    << "access mysql failed exit:" << e.what();
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(e);
     });
-    sqlStorage->setMaxRetry(params->mutableStorageParam().maxRetry);
     auto blockNumber = getBlockNumberFromStorage(sqlStorage);
     blockNumber = blockNumber >= _rollbackNumber ? blockNumber - _rollbackNumber : 0;
-    // create scalableStorage
-    auto scalableStorage =
-        std::make_shared<ScalableStorage>(params->mutableStorageParam().scrollThreshold);
-    auto rocksDBStorageFactory =
-        std::make_shared<RocksDBStorageFactory>(params->mutableStorageParam().path + "/blocksDB",
-            params->mutableStorageParam().binaryLog, false);
-    rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
-    scalableStorage->setStorageFactory(rocksDBStorageFactory);
-    // make RocksDBStorage think cachedStorage is exist
-    auto stateStorage =
-        createRocksDBStorage(params->mutableStorageParam().path + "/state", false, false, true);
-    scalableStorage->setStateStorage(stateStorage);
-    auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
-    scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
-    scalableStorage->setRemoteBlockNumber(blockNumber);
+
+    // create writer
+    Storage::Ptr writerStorage;
+    bool fullSync = true;
+    if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "External"))
+    {
+        cout << "error unsupported external storage" << endl;
+        exit(0);
+    }
+    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "MySQL"))
+    {
+        writerStorage = createZdbStorage(_param, [](std::exception& e) {
+            LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
+                       << "access mysql failed exit:" << e.what();
+            raise(SIGTERM);
+            BOOST_THROW_EXCEPTION(e);
+        });
+    }
+    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
+    {
+        writerStorage = createRocksDBStorage(_param->mutableStorageParam().path,
+            g_BCOSConfig.diskEncryption.enable, _param->mutableStorageParam().binaryLog,
+            _param->mutableStorageParam().CachedStorage);
+    }
+    else
+    {
+        fullSync = false;
+        auto scalableStorage =
+            std::make_shared<ScalableStorage>(_param->mutableStorageParam().scrollThreshold);
+        auto rocksDBStorageFactory = std::make_shared<RocksDBStorageFactory>(
+            _param->mutableStorageParam().path + "/blocksDB",
+            _param->mutableStorageParam().binaryLog, false);
+        rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
+        scalableStorage->setStorageFactory(rocksDBStorageFactory);
+        // make RocksDBStorage think cachedStorage is exist
+        auto stateStorage =
+            createRocksDBStorage(_param->mutableStorageParam().path + "/state", false, false, true);
+        scalableStorage->setStateStorage(stateStorage);
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
+        scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
+        scalableStorage->setRemoteBlockNumber(blockNumber);
+        writerStorage = scalableStorage;
+    }
+
     // fast sync data
-    syncData(sqlStorage, scalableStorage, blockNumber);
+    syncData(dynamic_pointer_cast<SQLStorage>(sqlStorage), writerStorage, blockNumber,
+        _param->mutableStorageParam().path, fullSync);
 }
 
 int main(int argc, const char* argv[])
@@ -222,10 +327,36 @@ int main(int argc, const char* argv[])
         abort();
     });
     /// init params
-    string configPath = initCommandLine(argc, argv);
     version();
     std::cout << "[" << getCurrentDateTime() << "] "
-              << ". The sync-tool is Initializing..." << std::endl;
+              << "The sync-tool is Initializing..." << std::endl;
+    boost::program_options::options_description main_options("Usage of FISCO-BCOS");
+    main_options.add_options()("help,h", "print help information")("config,c",
+        boost::program_options::value<std::string>()->default_value("./config.ini"),
+        "config file path, eg. config.ini")("verify,v",
+        boost::program_options::value<int64_t>()->default_value(1000), "verify number of blocks")(
+        "group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
+    boost::program_options::variables_map vm;
+    try
+    {
+        boost::program_options::store(
+            boost::program_options::parse_command_line(argc, argv, main_options), vm);
+    }
+    catch (...)
+    {
+        std::cout << "invalid parameters" << std::endl;
+        std::cout << main_options << std::endl;
+        exit(0);
+    }
+    if (vm.count("help") || vm.count("h"))
+    {
+        std::cout << main_options << std::endl;
+        exit(0);
+    }
+    int64_t verifyBlocks = vm["verify"].as<int64_t>();
+    string configPath = vm["config"].as<std::string>();
+    int groupID = vm["group"].as<uint>();
+
     try
     {
         /// init log
@@ -249,31 +380,35 @@ int main(int argc, const char* argv[])
         auto groupConfigPath = pt.get<string>("group.group_config_path", "conf/");
         auto dataPath = pt.get<string>("group.group_data_path", "data/");
         boost::filesystem::path path(groupConfigPath);
-        std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing..." << std::endl;
         if (fs::is_directory(path))
         {
             fs::directory_iterator endIter;
             for (fs::directory_iterator iter(path); iter != endIter; iter++)
             {
-                if (fs::extension(*iter) == ".genesis")
+                if (fs::extension(*iter) == ".genesis" &&
+                    iter->path().stem().string() == "group." + to_string(groupID))
                 {
+                    std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "
+                              << groupID << ". config file " << iter->path().string() << std::endl;
+                    auto params = std::make_shared<LedgerParam>();
+                    params->init(iter->path().string(), dataPath);
+                    fastSyncGroupData(params, rpcInitializer->channelRPCServer(), verifyBlocks);
                     std::cout << "[" << getCurrentDateTime() << "] "
-                              << "syncing " << iter->path().string() << " ..." << std::endl;
-                    fastSyncGroupData(
-                        iter->path().string(), dataPath, rpcInitializer->channelRPCServer());
+                              << "sync complete." << std::endl;
+                    return 0;
                 }
             }
+            std::cout << "[" << getCurrentDateTime() << "] "
+                      << "Can't find genesis and ini config of group" << groupID << std::endl;
         }
     }
     catch (std::exception& e)
     {
-        std::cerr << LOG_KV("EINFO", boost::diagnostic_information(e));
-        std::cerr << "Sync failed!!!" << std::endl;
+        std::cerr << boost::diagnostic_information(e);
+        std::cerr << "sync failed!!!" << std::endl;
         return -1;
     }
 
-    std::cout << "[" << getCurrentDateTime() << "] "
-              << "Sync complete." << std::endl;
 
     return 0;
 }

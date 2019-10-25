@@ -196,7 +196,11 @@ EOF
 }
 
 main()
-{
+{    
+    if [ ! -z "$(openssl version | grep reSSL)" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+    fi
+
     while :
     do
         gen_node_cert "" ${key_path} ${output_dir} > ${logfile} 2>&1
