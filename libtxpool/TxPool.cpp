@@ -105,7 +105,7 @@ std::pair<h256, Address> TxPool::submitTransactions()
         m_signalled.wait_for(l, std::chrono::milliseconds(20));
         return std::make_pair(dev::h256(), dev::FixedHash<20>());
     }
-
+    m_totalTxsNum += 1;
     return submitTransactions(_tx);
 }
 
@@ -361,10 +361,10 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 	{
 		WriteGuard l(m_lock);
+
 		p_tx = m_txsHash.find(_txHash);
 		if (p_tx == m_txsHash.end())
 		{
-			//return;
 			return true;
 		}
 
@@ -463,7 +463,7 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
 {
     if (block->getTransactionSize() == 0)
         return true;
-
+    WriteGuard l(m_lock);
     bool succ = true;
 
     for (size_t i = 0; i < block->transactions()->size(); i++)
@@ -486,12 +486,15 @@ bool TxPool::handleBadBlock(Block const&)
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
 	TIME_RECORD("dropBlockTrans, prepare, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
-	for(auto &it: *(block->transactions())) {
-		m_delTransactions.insert(it->sha3());
+	for(auto& it: *(block->transactions())) {
+		h256 txHash = it->sha3();
+		m_delTransactions.insert(txHash);
 	}
 
 	m_workerPool->enqueue([this, block]() {
-		TIME_RECORD("dropBlockTrans, updateCache");
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+		TIME_RECORD("dropBlockTrans, updateCache, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 		/// update the nonce check related to block chain
 		m_txNonceCheck->updateCache(false);
 
@@ -533,9 +536,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     std::vector<dev::h256> invalidBlockLimitTxs;
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
 
-    size_t ignoreCount = 0;
-
     TIME_RECORD("topTransaction");
+    size_t ignoreCount = 0;
     {
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
@@ -585,7 +587,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         }
     }
 
-    TXPOOL_LOG(DEBUG) << "topTransaction ignore: " << ignoreCount << " transactions";
+    TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
 
     return ret;
 }
@@ -595,9 +597,10 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
+
+    size_t ignoreCount = 0;
     uint64_t limit = min(m_limit, _limit);
     {
-    	size_t ignoreCount = 0;
         uint64_t txCnt = 0;
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
@@ -613,12 +616,10 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
                 ret->push_back(*it);
                 txCnt++;
             }
-
-
         }
-
-        TXPOOL_LOG(DEBUG) << "topTransactionsCondition ignore: " << ignoreCount << " transactions";
     }
+
+    TXPOOL_LOG(DEBUG) << "topTransactionCondition done, ignore: " << ignoreCount;
 
     return ret;
 }
@@ -692,10 +693,9 @@ bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 // Remove the record of transaction know by some peers
 void TxPool::removeTransactionKnowBy(h256 const& _txHash)
 {
-    if (m_transactionKnownBy.count(_txHash))
-    {
-        m_transactionKnownBy.erase(_txHash);
-    }
+    auto p = m_transactionKnownBy.find(_txHash);
+    if (p != m_transactionKnownBy.end())
+        m_transactionKnownBy.erase(p);
 }
 
 }  // namespace txpool
