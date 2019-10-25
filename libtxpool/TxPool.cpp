@@ -601,20 +601,22 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-        	if(m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-			{
-				++ignoreCount;
-				continue;
-			}
-
             if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
+            	if(m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
+				{
+					++ignoreCount;
+					continue;
+				}
+
                 ret->push_back(*it);
                 txCnt++;
             }
 
-            TXPOOL_LOG(DEBUG) << "topTransactionsCondition ignore: " << ignoreCount << " transactions";
+
         }
+
+        TXPOOL_LOG(DEBUG) << "topTransactionsCondition ignore: " << ignoreCount << " transactions";
     }
 
     return ret;
