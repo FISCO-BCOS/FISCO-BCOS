@@ -70,6 +70,7 @@ bool DagTransferPrecompiled::invalidUserName(const std::string& strUserName)
 
 std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef param)
 {
+#if 0
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
@@ -113,7 +114,8 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
         }
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
-    {  // userTransfer(string,string,uint256)
+    {
+    	// userTransfer(string,string,uint256)
         std::string fromUser, toUser;
         dev::u256 amount;
 
@@ -124,12 +126,21 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
             results.push_back(fromUser);
             results.push_back(toUser);
         }
+
+        results.push_back(boost::lexical_cast<std::string>(++m_count));
+        results.push_back(boost::lexical_cast<std::string>(++m_count));
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_BAL_STR])
     {
         // query interface has no parallel processing conflict.
         // do nothing
     }
+#endif
+
+    (void)param;
+    std::vector<std::string> results;
+
+    results.push_back(boost::lexical_cast<std::string>(++m_count));
 
     return results;
 }
@@ -158,6 +169,10 @@ Table::Ptr DagTransferPrecompiled::openTable(
 bytes DagTransferPrecompiled::call(
     dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
+	(void)context;
+	(void)param;
+	(void)origin;
+#if 0
     // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
     //                       << LOG_KV("param", toHex(param));
 
@@ -197,6 +212,8 @@ bytes DagTransferPrecompiled::call(
     //                       << LOG_DESC("end");
 
     return out;
+#endif
+    return bytes();
 }
 
 void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,

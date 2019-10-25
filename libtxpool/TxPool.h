@@ -40,36 +40,6 @@ using namespace dev::p2p;
 
 #define TXPOOL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("TXPOOL")
 
-#if 0
-template<typename Key>
-	struct tbb_hash_compare {
-   	h256::hash hasher;
-
-		size_t operator()(const h256& k) {
-
-			return hasher(k);
-		}
-		bool operator()(const h256& k1, const h256& k2) {
-			return k1 == k2;
-		}
-	};
-
-
-template<dev::h256>
-class tbb::tbb_hash
-{
-public:
-    tbb_hash() {}
-    dev::h256::hash hasher;
-
-    size_t operator()(const dev::h256& key) const
-    {
-        return hasher(key);
-    }
-};
-}
-#endif
-
 namespace dev
 {
 
@@ -276,8 +246,6 @@ private:
     /// Transaction is known by some peers
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
-
-    tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
 
     dev::ThreadPool::Ptr m_workerPool;
 
