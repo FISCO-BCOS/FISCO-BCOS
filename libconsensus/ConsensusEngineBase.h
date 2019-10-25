@@ -153,7 +153,10 @@ public:
 
 protected:
     virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
-    void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
+    void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
+    {
+        m_txPool->dropBlockTrans(block);
+    }
     /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list

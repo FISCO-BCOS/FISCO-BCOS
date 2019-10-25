@@ -32,6 +32,8 @@
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
 #include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_set.h>
+#include <unordered_map>
 
 using namespace dev::eth;
 using namespace dev::p2p;
@@ -66,7 +68,7 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400)
+        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 16)
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
@@ -78,8 +80,8 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
-        m_callbackPool =
-            std::make_shared<dev::ThreadPool>("txPoolCallback-" + std::to_string(_protocolId), 2);
+        m_workerPool = std::make_shared<dev::ThreadPool>(
+            "txPoolWorker-" + std::to_string(_protocolId), workThreads);
         m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
         m_submitThread = std::make_shared<std::thread>();
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
@@ -110,7 +112,7 @@ public:
      * @param _txHash: Remove bad transaction from the queue
      */
     bool drop(h256 const& _txHash) override;
-    bool dropBlockTrans(dev::eth::Block const& block) override;
+    bool dropBlockTrans(std::shared_ptr<dev::eth::Block> block) override;
     bool handleBadBlock(dev::eth::Block const& block) override;
     /**
      * @brief Get top transactions from the queue
@@ -165,7 +167,7 @@ public:
         return m_txsQueue.size() >= m_limit;
     }
 
-    dev::ThreadPool::Ptr callbackPool() { return m_callbackPool; }
+    dev::ThreadPool::Ptr workerPool() { return m_workerPool; }
 
     uint64_t totalTransactionNum() override { return m_totalTxsNum; }
 
@@ -185,7 +187,7 @@ protected:
     /// interface for filter check
     virtual u256 filterCheck(Transaction::Ptr) const { return u256(0); };
     void clear();
-    bool dropTransactions(dev::eth::Block const& block, bool needNotify = false);
+    bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     bool removeBlockKnowTrans(dev::eth::Block const& block);
 
 private:
@@ -197,7 +199,8 @@ private:
         dev::eth::Block const& block, unsigned index);
 
     bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
-        dev::eth::LocalisedTransactionReceipt::Ptr pReceipt = nullptr);
+        std::shared_ptr<dev::eth::Block> block = std::shared_ptr<dev::eth::Block>(),
+        size_t index = 0);
     bool insert(dev::eth::Transaction::Ptr _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
@@ -233,7 +236,18 @@ private:
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
-    dev::ThreadPool::Ptr m_callbackPool;
+    dev::ThreadPool::Ptr m_workerPool;
+
+    class H256Compare
+    {
+        dev::h256::hash hasher;
+
+    public:
+        size_t operator()(const h256& x) const { return hasher(x); }
+        // True if strings are equal
+        bool equal(const h256& x, const h256& y) const { return x == y; }
+    };
+    tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
 
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::shared_ptr<std::thread> m_submitThread;

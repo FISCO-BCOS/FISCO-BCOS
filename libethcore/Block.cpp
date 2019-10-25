@@ -373,6 +373,7 @@ void Block::decode(
     m_transactionReceipts->resize(transactionReceipts_rlp.itemCount());
     for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
     {
+        (*m_transactionReceipts)[i] = std::make_shared<dev::eth::TransactionReceipt>();
         (*m_transactionReceipts)[i]->decode(transactionReceipts_rlp[i]);
     }
     /// get hash
@@ -420,6 +421,7 @@ void Block::decodeRC2(
         m_transactionReceipts->resize(transactionReceipts_rlp.itemCount());
         for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
         {
+            (*m_transactionReceipts)[i] = std::make_shared<TransactionReceipt>();
             (*m_transactionReceipts)[i]->decode(transactionReceipts_rlp[i]);
         }
     }

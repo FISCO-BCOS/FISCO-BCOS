@@ -1536,7 +1536,7 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
     {
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#checkAndSave]Commit block succ");
         // drop handled transactions
-        dropHandledTransactions(*_sealing.block);
+        dropHandledTransactions(_sealing.block);
     }
     else
     {

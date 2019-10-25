@@ -721,8 +721,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    // calTransactionRoot before executeBlock
-    sealing.block->calTransactionRoot();
 
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
@@ -987,7 +985,7 @@ void PBFTEngine::checkAndSave()
             /// drop handled transactions
             if (ret == CommitResult::OK)
             {
-                dropHandledTransactions(*p_block);
+                dropHandledTransactions(p_block);
                 auto dropTxs_time_cost = utcTime() - record_time;
                 record_time = utcTime();
                 m_blockSync->noteSealingBlockNumber(m_reqCache->prepareCache().height);
