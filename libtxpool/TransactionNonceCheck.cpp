@@ -139,9 +139,11 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 for (auto i = prestartblk; i < m_startblk; i++)
                 {
                     auto nonce_vec = getNonceAndUpdateCache(i, false);
-                    for (auto& nonce : *nonce_vec)
-                    {
-                        m_cache.erase(nonce);
+                    if(nonce_vec) {
+						for (auto& nonce : *nonce_vec)
+						{
+							m_cache.erase(nonce);
+						}
                     }
                     /// erase the expired nonces from cache since it can't be touched forever
                     if (m_blockNonceCache.count(i))

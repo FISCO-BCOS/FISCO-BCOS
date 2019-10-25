@@ -357,43 +357,24 @@ struct TxCallback
  */
 bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::shared_ptr<dev::eth::Block> block, size_t index)
 {
-#if 0
-	if (block.getTransactionSize() == 0)
-	        return true;
-	    WriteGuard l(m_lock);
-	    bool succ = true;
-
-	    for (size_t i = 0; i < block.transactions()->size(); i++)
-	    {
-	        LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-	        if (block.transactionReceipts()->size() > i)
-	        {
-	            pReceipt = constructTransactionReceipt(
-	                (*(block.transactions()))[i], (*(block.transactionReceipts()))[i], block, i);
-	        }
-	        if (removeTrans((*(block.transactions()))[i]->sha3(), true, pReceipt) == false)
-	            succ = false;
-	    }
-#endif
-
-	Transaction::Ptr transaction;
-	std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
-	{
-		WriteGuard l(m_lock);
-		p_tx = m_txsHash.find(_txHash);
-		if (p_tx == m_txsHash.end())
+	m_workerPool->enqueue([=] {
+		Transaction::Ptr transaction;
+		std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
 		{
-			return false;
+			WriteGuard l(m_lock);
+			p_tx = m_txsHash.find(_txHash);
+			if (p_tx == m_txsHash.end())
+			{
+				return;
+			}
+
+			transaction = *(p_tx->second);
+			m_txsQueue.erase(p_tx->second);
+			m_txsHash.erase(p_tx);
 		}
 
-		transaction = *(p_tx->second);
-		m_txsQueue.erase(p_tx->second);
-		m_txsHash.erase(p_tx);
-	}
-
-	if (needTriggerCallback && block && transaction->rpcCallback())
-	{
-		m_workerPool->enqueue([this, transaction, block, index] {
+		if (needTriggerCallback && block && transaction->rpcCallback())
+		{
 				// Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
 				// m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
 				LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
@@ -406,8 +387,8 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback, std::sha
 				auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
 				TxCallback callback{transaction->rpcCallback(), pReceipt};
 				callback.call(callback.pReceipt, input);
-		});
-	}
+		}
+	});
 
     return true;
 }
@@ -481,7 +462,7 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
 {
     if (block->getTransactionSize() == 0)
         return true;
-    //WriteGuard l(m_lock);
+    WriteGuard l(m_lock);
     bool succ = true;
 
     for (size_t i = 0; i < block->transactions()->size(); i++)
@@ -546,12 +527,12 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-#if 0
+#if 1
             /// check block limit and nonce again when obtain transactions
-            if (false == m_txNonceCheck->isBlockLimitOk(*it))
+            if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
-                invalidBlockLimitTxs.push_back(it->sha3());
-                nonceKeyCache.push_back(it->nonce());
+                //invalidBlockLimitTxs.push_back(it->sha3());
+                //nonceKeyCache.push_back(it->nonce());
                 continue;
             }
 #endif
