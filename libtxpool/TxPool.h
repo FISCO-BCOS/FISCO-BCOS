@@ -53,18 +53,6 @@ struct TxPoolStatus
     size_t dropped;
 };
 
-class H256Compare {
-    dev::h256::hash hasher;
-public:
-    size_t operator()(const h256& x) const {
-        return hasher(x);
-    }
-    // True if strings are equal
-    bool equal(const h256& x, const h256& y) const {
-            return x==y;
-    }
-};
-
 class TxPoolNonceManager
 {
 public:
@@ -248,6 +236,19 @@ private:
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
     dev::ThreadPool::Ptr m_workerPool;
+
+    class H256Compare {
+        dev::h256::hash hasher;
+    public:
+        size_t operator()(const h256& x) const {
+            return hasher(x);
+        }
+        // True if strings are equal
+        bool equal(const h256& x, const h256& y) const {
+                return x==y;
+        }
+    };
+    tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
 
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::shared_ptr<std::thread> m_submitThread;
