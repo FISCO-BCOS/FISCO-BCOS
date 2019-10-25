@@ -24,8 +24,8 @@
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "Precompiled.h"
-
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
@@ -33,6 +33,7 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libevm/ExtVMFace.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libexecutive/Executive.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
 #include <algorithm>
@@ -64,7 +65,8 @@ public:
     {
         if (_enableParallel)
         {
-            m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
+            // m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
+            m_threadNum = 8;
         }
     }
 
@@ -76,13 +78,21 @@ public:
     ExecutiveContext::Ptr parallelExecuteBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo);
 
-    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt::Ptr>
-    executeTransaction(const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t);
 
+    dev::eth::TransactionReceipt::Ptr executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t);
+#if 0
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt::Ptr> execute(
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
         dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);
+#endif
+
+
+    dev::eth::TransactionReceipt::Ptr execute(dev::eth::Transaction::Ptr _t,
+        dev::eth::OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext,
+        dev::executive::Executive::Ptr executive);
+
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
     {

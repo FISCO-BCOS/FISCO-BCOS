@@ -51,9 +51,9 @@ public:
 
     virtual ExecutiveContext::Ptr executeBlock(
         dev::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt::Ptr>
-    executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction const& _t) = 0;
+
+    virtual dev::eth::TransactionReceipt::Ptr executeTransaction(
+        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t) = 0;
 };
 }  // namespace blockverifier
 }  // namespace dev
