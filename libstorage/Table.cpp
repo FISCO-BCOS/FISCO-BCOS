@@ -859,6 +859,8 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = "number";
         tableInfo->fields = vector<string>{SYS_VALUE};
+        tableInfo->enableConsensus = false;
+        tableInfo->enableCache = false;
     }
     return tableInfo;
 }

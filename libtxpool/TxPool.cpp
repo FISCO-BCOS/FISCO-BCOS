@@ -476,12 +476,17 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(Block const& block)
 {
+	TIME_RECORD("dropTransaction, count:" + boost::lexical_cast<std::string>(block.transactions()->size()));
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
     bool ret = dropTransactions(block, true);
     /// remove the information of known transactions from map
+
+    TIME_RECORD("removeBlockKnowTrans");
     removeBlockKnowTrans(block);
     /// remove the nonce check related to txpool
+
+    TIME_RECORD("nonceChecker delCache");
     m_txpoolNonceChecker->delCache(*(block.transactions()));
     return ret;
 }
