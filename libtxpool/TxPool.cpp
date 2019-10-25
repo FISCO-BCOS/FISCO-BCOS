@@ -523,6 +523,9 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     auto ret = std::make_shared<Transactions>();
     std::vector<dev::h256> invalidBlockLimitTxs;
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
+
+    TIME_RECORD("topTransaction");
+    size_t ignoreCount = 0;
     {
         UpgradableGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
@@ -531,6 +534,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             /// check block limit and nonce again when obtain transactions
             if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
+            	++ignoreCount;
                 //invalidBlockLimitTxs.push_back(it->sha3());
                 //nonceKeyCache.push_back(it->nonce());
                 continue;
@@ -571,6 +575,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                               << LOG_KV("hash", txHash.abridged());
         }
     }
+
+    TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
 
     return ret;
 }
