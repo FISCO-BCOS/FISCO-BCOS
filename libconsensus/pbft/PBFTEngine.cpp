@@ -720,8 +720,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     m_txPool->verifyAndSetSenderForBlock(*sealing.block);
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
-
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)

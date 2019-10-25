@@ -29,6 +29,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::blockverifier;
+using namespace dev::executive;
 
 #define DAG_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("DAG")
 
@@ -114,7 +115,7 @@ void TxDAG::setTxExecuteFunc(ExecuteTxFunc const& _f)
     f_executeTx = _f;
 }
 
-int TxDAG::executeUnit()
+int TxDAG::executeUnit(Executive::Ptr _executive)
 {
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit") << LOG_KV("exeCnt", m_exeCnt)
     //              << LOG_KV("total", m_txs->size());
@@ -125,7 +126,7 @@ int TxDAG::executeUnit()
         do
         {
             exeCnt += 1;
-            f_executeTx(*((*m_txs)[id]), id);
+            f_executeTx((*m_txs)[id], id, _executive);
             id = m_dag.consume(id);
         } while (id != INVALID_ID);
 

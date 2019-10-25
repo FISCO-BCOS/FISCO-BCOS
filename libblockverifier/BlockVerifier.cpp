@@ -26,7 +26,6 @@
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libexecutive/Executive.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <exception>
@@ -118,14 +117,18 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     try
     {
+        Executive::Ptr executive = std::make_shared<Executive>();
+        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        envInfo.setPrecompiledEngine(executiveContext);
+        executive->setEnvInfo(envInfo);
+        executive->setState(executiveContext->getState());
         for (size_t i = 0; i < block.transactions()->size(); i++)
         {
             auto& tx = (*block.transactions())[i];
-            EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-            envInfo.setPrecompiledEngine(executiveContext);
-            std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
-                execute(envInfo, *tx, OnOpFunc(), executiveContext);
-            block.setTransactionReceipt(i, resultReceipt.second);
+
+            TransactionReceipt::Ptr resultReceipt =
+                execute(tx, OnOpFunc(), executiveContext, executive);
+            block.setTransactionReceipt(i, resultReceipt);
             executiveContext->getState()->commit();
         }
     }
@@ -230,12 +233,17 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(executiveContext, block.transactions(), block.blockHeader().number());
 
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
-        EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
-        envInfo.setPrecompiledEngine(executiveContext);
+
+    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, Executive::Ptr _executive) {
+
+
+#if 0
         std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
             execute(envInfo, _tr, OnOpFunc(), executiveContext);
-        block.setTransactionReceipt(_txId, resultReceipt.second);
+#endif
+        auto resultReceipt = execute(_tr, OnOpFunc(), executiveContext, _executive);
+
+        block.setTransactionReceipt(_txId, resultReceipt);
         executiveContext->getState()->commit();
         return true;
     });
@@ -250,6 +258,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
             [&](const tbb::blocked_range<unsigned int>& _r) {
                 (void)_r;
+                EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+                envInfo.setPrecompiledEngine(executiveContext);
+                Executive::Ptr executive = std::make_shared<Executive>();
+                executive->setEnvInfo(envInfo);
+                executive->setState(executiveContext->getState());
+
                 while (!txDag->hasFinished())
                 {
                     if (!isWarnedTimeout.load() && utcTime() >= parallelTimeOut)
@@ -259,14 +273,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                             << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
                             << LOG_KV("txNum", block.transactions()->size())
                             << LOG_KV("blockNumber", block.blockHeader().number());
-
-#if 0
-                        BOOST_THROW_EXCEPTION(BlockExecutionFailed()
-                                              << errinfo_comment("Para execute block timeout"));
-#endif
                     }
 
-                    txDag->executeUnit();
+                    txDag->executeUnit(executive);
                 }
             });
     }
@@ -340,8 +349,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     return executiveContext;
 }
 
-std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::executeTransaction(
-    const BlockHeader& blockHeader, dev::eth::Transaction const& _t)
+
+TransactionReceipt::Ptr BlockVerifier::executeTransaction(
+    const BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t)
 {
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
@@ -357,12 +367,17 @@ std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::executeTransa
             << LOG_KV("errorMsg", boost::diagnostic_information(e));
     }
 
+    Executive::Ptr executive = std::make_shared<Executive>();
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
     envInfo.setPrecompiledEngine(executiveContext);
+    executive->setEnvInfo(envInfo);
+    executive->setState(executiveContext->getState());
     // only Rpc::call will use executeTransaction, RPC do catch exception
-    return execute(envInfo, _t, OnOpFunc(), executiveContext);
+    return execute(_t, OnOpFunc(), executiveContext, executive);
 }
 
+
+#if 0
 std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvInfo const& _envInfo,
     Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
 {
@@ -406,4 +421,50 @@ std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvIn
     return make_pair(
         res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
                  e.gasUsed(), e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
+}
+#endif
+
+
+dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::Ptr _t,
+    dev::eth::OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext,
+    Executive::Ptr executive)
+{
+    auto onOp = _onOp;
+#if ETH_VMTRACE
+    if (isChannelVisible<VMTraceChannel>())
+        onOp = Executive::simpleTrace();  // override tracer
+#endif
+    // Create and initialize the executive. This will throw fairly cheaply and quickly if the
+    // transaction is bad in any way.
+    executive->reset();
+
+
+    // OK - transaction looks valid - execute.
+    try
+    {
+        executive->initialize(_t);
+        if (!executive->execute())
+            executive->go(onOp);
+        executive->finalize();
+    }
+    catch (StorageException const& e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("get StorageException") << LOG_KV("what", e.what());
+        BOOST_THROW_EXCEPTION(e);
+    }
+    catch (Exception const& _e)
+    {
+        // only OutOfGasBase ExecutorNotFound exception will throw
+        BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
+    }
+    catch (std::exception const& _e)
+    {
+        BLOCKVERIFIER_LOG(ERROR) << _e.what();
+    }
+
+    executive->loggingException();
+
+    return std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
+        executive->gasUsed(), executive->logs(), executive->status(),
+        executive->takeOutput().takeBytes(), executive->newAddress());
 }

@@ -309,12 +309,12 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
                           << LOG_KV("hash", tx_hash.abridged());
         return ImportResult::AlreadyInChain;
     }
-/// check nonce
-#if 0
-    if (trans.nonce() == Invalid256 || (!m_txNonceCheck->isNonceOk(trans, false)))
+    /// check nonce
+    if (trans->nonce() == Invalid256 || (!m_txNonceCheck->isNonceOk(*trans, false)))
     {
         return ImportResult::TransactionNonceCheckFail;
     }
+#if 0
     if (false == m_txNonceCheck->isBlockLimitOk(trans))
     {
         return ImportResult::BlockLimitCheckFailed;
