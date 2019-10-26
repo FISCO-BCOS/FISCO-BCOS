@@ -420,16 +420,6 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
-#if 0
-    TIME_RECORD("dropBlockTrans, prepare, count:" +
-                boost::lexical_cast<std::string>(block->transactions()->size()));
-    for (auto& it : *(block->transactions()))
-    {
-        h256 txHash = it->sha3();
-        m_delTransactions.insert(txHash);
-    }
-#endif
-
     TIME_RECORD("dropBlockTrans, count:" +
                 boost::lexical_cast<std::string>(block->transactions()->size()));
 
@@ -447,21 +437,6 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 			m_txpoolNonceChecker->delCache(*(block->transactions()));
 		}
     );
-#if 0
-    /// update the nonce check related to block chain
-    m_txNonceCheck->updateCache(false);
-
-    TIME_RECORD("dropTransaction");
-    dropTransactions(block, true);
-    /// remove the information of known transactions from map
-
-    TIME_RECORD("removeBlockKnowTrans");
-    removeBlockKnowTrans(*block);
-    /// remove the nonce check related to txpool
-
-    TIME_RECORD("nonceChecker delCache");
-    m_txpoolNonceChecker->delCache(*(block->transactions()));
-#endif
 
     return true;
 }
