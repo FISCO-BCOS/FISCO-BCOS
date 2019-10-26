@@ -942,6 +942,15 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 {
     try
     {
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+
+        Json::Value response;
+        std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
+        response["txSum"] = toJS(result.first);
+        response["blockNumber"] = toJS(result.second);
+        result = blockChain->totalFailedTransactionCount();
+        response["failedTxSum"] = toJS(result.first);
+        return response;
 #if 0
         RPC_LOG(INFO) << LOG_BADGE("getTotalTransactionCount") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
@@ -950,18 +959,16 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
         auto blockChain = ledgerManager()->blockChain(_groupID);
 
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-#endif
+
         Json::Value response;
         auto txPool = ledgerManager()->txPool(_groupID);
 
         auto ret = txPool->totalTransactionNum();
         response["txSum"] = toJS(ret);
-#if 0
-            response["blockNumber"] = toJS(result.second);
-            result = blockChain->totalFailedTransactionCount();
-            response["failedTxSum"] = toJS(result.first);
+        response["blockNumber"] = toJS(result.second);
+        result = blockChain->totalFailedTransactionCount();
+        response["failedTxSum"] = toJS(result.first);
 #endif
-        return response;
     }
     catch (JsonRpcException& e)
     {
