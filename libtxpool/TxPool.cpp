@@ -25,6 +25,7 @@
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
 
 using namespace std;
 using namespace dev::p2p;
@@ -36,77 +37,10 @@ namespace txpool
 // import transaction to the txPool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
-    m_txsCache->push(_tx);
-    m_signalled.notify_all();
-    return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
-}
-
-void TxPool::startSubmitThread()
-{
-    TXPOOL_LOG(DEBUG) << LOG_DESC("startSubmitThread");
-    std::weak_ptr<TxPool> self(std::dynamic_pointer_cast<TxPool>(shared_from_this()));
-    m_running = true;
-    m_submitThread = std::make_shared<std::thread>([self] {
-        while (true)
-        {
-            auto txPool = self.lock();
-            if (txPool && txPool->m_running.load())
-            {
-                try
-                {
-                    txPool->submitTransactions();
-                }
-                catch (std::exception const& e)
-                {
-                    TXPOOL_LOG(ERROR) << LOG_DESC("submit transaction failed")
-                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
-                }
-            }
-            else
-            {
-                return;
-            }
-        }
+    m_workerPool->enqueue([this, _tx]() {
+    	submitTransactions(_tx);
     });
-}
-
-void TxPool::stopSubmitThread()
-{
-    TXPOOL_LOG(DEBUG) << LOG_DESC("stopSubmitThread");
-    m_running.store(false);
-    if (m_submitThread)
-    {
-        if (m_submitThread->get_id() != std::this_thread::get_id())
-        {
-            m_submitThread->join();
-            m_submitThread.reset();
-        }
-        else
-        {
-            m_submitThread->detach();
-        }
-    }
-}
-
-/**
- * @brief submit a transaction through RPC/web3sdk
- *
- * @param _t : transaction
- * @return std::pair<h256, Address> : maps from transaction hash to contract address
- */
-std::pair<h256, Address> TxPool::submitTransactions()
-{
-    dev::eth::Transaction::Ptr _tx;
-    auto result = m_txsCache->try_pop(_tx);
-    if (!result)
-    {
-        // wait 20ms and return if empty
-        std::unique_lock<std::mutex> l(x_signalled);
-        m_signalled.wait_for(l, std::chrono::milliseconds(20));
-        return std::make_pair(dev::h256(), dev::FixedHash<20>());
-    }
-    m_totalTxsNum += 1;
-    return submitTransactions(_tx);
+    return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
 
 std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
@@ -496,11 +430,24 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
     }
 #endif
 
-    // m_workerPool->enqueue([this, block]() {
-    // std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-    TIME_RECORD("dropBlockTrans, updateCache, count:" +
+    TIME_RECORD("dropBlockTrans, count:" +
                 boost::lexical_cast<std::string>(block->transactions()->size()));
+
+    tbb::parallel_invoke(
+		[this]() {
+			m_txNonceCheck->updateCache(false);
+		},
+		[this, block]() {
+			dropTransactions(block, true);
+		},
+		[this, block]() {
+			removeBlockKnowTrans(*block);
+		},
+		[this, block]() {
+			m_txpoolNonceChecker->delCache(*(block->transactions()));
+		}
+    );
+#if 0
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
 
@@ -514,7 +461,7 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 
     TIME_RECORD("nonceChecker delCache");
     m_txpoolNonceChecker->delCache(*(block->transactions()));
-    //});
+#endif
 
     return true;
 }

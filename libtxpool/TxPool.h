@@ -68,7 +68,7 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 16)
+        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 32)
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
@@ -81,13 +81,11 @@ public:
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
         m_workerPool = std::make_shared<dev::ThreadPool>(
-            "txPoolWorker-" + std::to_string(_protocolId), workThreads);
-        m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
-        m_submitThread = std::make_shared<std::thread>();
+            "txPool-" + std::to_string(_protocolId), workThreads);
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
     }
-    void start() override { startSubmitThread(); }
-    void stop() override { stopSubmitThread(); }
+    void start() override { }
+    void stop() override {}
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
     virtual ~TxPool()
@@ -104,7 +102,6 @@ public:
      */
     std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override;
 
-    std::pair<h256, Address> submitTransactions();
     std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx);
 
     /**
@@ -252,10 +249,8 @@ private:
 #endif
 
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
-    std::shared_ptr<std::thread> m_submitThread;
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;
-    Mutex x_signalled;
 
     // total txsNum
     std::atomic<uint64_t> m_totalTxsNum = {0};
