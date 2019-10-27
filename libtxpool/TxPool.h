@@ -80,6 +80,8 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
+        m_submitPool = std::make_shared<dev::ThreadPool>(
+                "submit-" + std::to_string(_protocolId), 1);
         m_workerPool = std::make_shared<dev::ThreadPool>(
             "txPool-" + std::to_string(_protocolId), workThreads);
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
@@ -233,6 +235,7 @@ private:
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
+    dev::ThreadPool::Ptr m_submitPool;
     dev::ThreadPool::Ptr m_workerPool;
 
 #if 0
