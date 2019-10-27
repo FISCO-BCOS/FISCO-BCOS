@@ -37,9 +37,7 @@ namespace txpool
 // import transaction to the txPool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
-	m_submitPool->enqueue([this, _tx]() {
-    	submitTransactions(_tx);
-    });
+    m_submitPool->enqueue([this, _tx]() { submitTransactions(_tx); });
     return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
 
@@ -420,23 +418,13 @@ bool TxPool::handleBadBlock(Block const&)
 /// drop a block when it has been committed successfully
 bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
-    TIME_RECORD("dropBlockTrans, count:" +
-                boost::lexical_cast<std::string>(block->transactions()->size()));
+    TIME_RECORD(
+        "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 
-    tbb::parallel_invoke(
-		[this]() {
-			m_txNonceCheck->updateCache(false);
-		},
-		[this, block]() {
-			dropTransactions(block, true);
-		},
-		[this, block]() {
-			removeBlockKnowTrans(*block);
-		},
-		[this, block]() {
-			m_txpoolNonceChecker->delCache(*(block->transactions()));
-		}
-    );
+    tbb::parallel_invoke([this]() { m_txNonceCheck->updateCache(false); },
+        [this, block]() { dropTransactions(block, true); },
+        [this, block]() { removeBlockKnowTrans(*block); },
+        [this, block]() { m_txpoolNonceChecker->delCache(*(block->transactions())); });
 
     return true;
 }

@@ -80,13 +80,13 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
-        m_submitPool = std::make_shared<dev::ThreadPool>(
-                "submit-" + std::to_string(_protocolId), 1);
-        m_workerPool = std::make_shared<dev::ThreadPool>(
-            "txPool-" + std::to_string(_protocolId), workThreads);
+        m_submitPool =
+            std::make_shared<dev::ThreadPool>("submit-" + std::to_string(_protocolId), 1);
+        m_workerPool =
+            std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(_protocolId), workThreads);
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
     }
-    void start() override { }
+    void start() override {}
     void stop() override {}
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
