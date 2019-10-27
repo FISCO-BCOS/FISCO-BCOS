@@ -99,7 +99,7 @@ struct StorageParam
     size_t timeout;
     int maxRetry;
     // MB
-    int maxCapacity;
+    int64_t maxCapacity;
 
     int64_t scrollThreshold = 2000;
     // for zdb storage
