@@ -238,19 +238,6 @@ private:
     dev::ThreadPool::Ptr m_submitPool;
     dev::ThreadPool::Ptr m_workerPool;
 
-#if 0
-    class H256Compare
-    {
-        dev::h256::hash hasher;
-
-    public:
-        size_t operator()(const h256& x) const { return hasher(x); }
-        // True if strings are equal
-        bool equal(const h256& x, const h256& y) const { return x == y; }
-    };
-    tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
-#endif
-
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;

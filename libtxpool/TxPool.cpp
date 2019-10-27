@@ -477,17 +477,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                 nonceKeyCache.push_back((*it)->nonce());
                 continue;
             }
-#if 0
-            /// check block limit and nonce again when obtain transactions
-            if (false == m_txNonceCheck->isBlockLimitOk(*(*it)))
-            // if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-            {
-                invalidBlockLimitTxs.push_back((*it)->sha3());
-                nonceKeyCache.push_back((*it)->nonce());
-                // ++ignoreCount;
-                continue;
-            }
-#endif
+
             if (!_avoid.count((*it)->sha3()))
             {
                 ret->push_back(*it);
