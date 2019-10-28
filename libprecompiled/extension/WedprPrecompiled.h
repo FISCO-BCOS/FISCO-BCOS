@@ -37,9 +37,11 @@ extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
 extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[];
+extern const char API_ANONYMOUS_VOTING_AGGREGATE_HPOINT[];
 extern const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
-extern const char API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT[];
+extern const char API_VERIFY_VOTE_RESULT[];
+extern const char API_GET_VOTE_RESULT_FROM_REQUEST[];
 
 extern const char WEDPR_VERFIY_FAILED[];
 extern const char WEDPR_PRECOMPILED[];
@@ -67,9 +69,11 @@ public:
     bytes verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes aggregateHPoint(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data);
-    bytes countCandidatesResult(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
 };
 
 }  // namespace precompiled
