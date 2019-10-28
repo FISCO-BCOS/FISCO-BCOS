@@ -68,7 +68,7 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 16)
+        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 32)
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
@@ -80,14 +80,14 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
-        m_workerPool = std::make_shared<dev::ThreadPool>(
-            "txPoolWorker-" + std::to_string(_protocolId), workThreads);
-        m_txsCache = std::make_shared<tbb::concurrent_queue<dev::eth::Transaction::Ptr>>();
-        m_submitThread = std::make_shared<std::thread>();
+        m_submitPool =
+            std::make_shared<dev::ThreadPool>("submit-" + std::to_string(_protocolId), 1);
+        m_workerPool =
+            std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(_protocolId), workThreads);
         m_totalTxsNum = m_blockChain->totalTransactionCount().first;
     }
-    void start() override { startSubmitThread(); }
-    void stop() override { stopSubmitThread(); }
+    void start() override {}
+    void stop() override {}
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
     virtual ~TxPool()
@@ -104,7 +104,6 @@ public:
      */
     std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override;
 
-    std::pair<h256, Address> submitTransactions();
     std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx);
 
     /**
@@ -236,26 +235,12 @@ private:
     mutable SharedMutex x_transactionKnownBy;
     std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
+    dev::ThreadPool::Ptr m_submitPool;
     dev::ThreadPool::Ptr m_workerPool;
 
-#if 0
-    class H256Compare
-    {
-        dev::h256::hash hasher;
-
-    public:
-        size_t operator()(const h256& x) const { return hasher(x); }
-        // True if strings are equal
-        bool equal(const h256& x, const h256& y) const { return x == y; }
-    };
-    tbb::concurrent_unordered_set<h256, H256Compare> m_delTransactions;
-#endif
-
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
-    std::shared_ptr<std::thread> m_submitThread;
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;
-    Mutex x_signalled;
 
     // total txsNum
     std::atomic<uint64_t> m_totalTxsNum = {0};
