@@ -56,7 +56,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         // Compatibility with previous versions RC2/RC1
         mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
-        mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
         m_groupID = pt.get<int>("group.id", 0);
     }
     catch (std::exception& e)
@@ -284,7 +284,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     try
     {
         // idleWaitMs: default is 30ms
-        mutableSyncParam().idleWaitMs = pt.get<signed>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+        mutableSyncParam().idleWaitMs = pt.get<uint>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
         if (mutableSyncParam().idleWaitMs < 0)
         {
             BOOST_THROW_EXCEPTION(ForbidNegativeValue()
@@ -307,7 +307,7 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     {
         mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
-        mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+        mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
         mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
         mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
         if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
@@ -329,22 +329,12 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     auto scrollThresholdMultiple = pt.get<uint>("storage.scroll_threshold_multiple", 2);
     mutableStorageParam().scrollThreshold =
         scrollThresholdMultiple > 0 ? scrollThresholdMultiple * g_BCOSConfig.c_blockLimit : 2000;
-    if (mutableStorageParam().maxCapacity < 0)
-    {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                              << errinfo_comment("Please set storage.max_capacity to positive !"));
-    }
 
     mutableStorageParam().maxForwardBlock = pt.get<uint>("storage.max_forward_block", 10);
-    if (mutableStorageParam().maxForwardBlock < 0)
-    {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set storage.max_forward_block to positive !"));
-    }
 
     if (mutableStorageParam().maxRetry <= 0)
     {
-        mutableStorageParam().maxRetry = 100;
+        mutableStorageParam().maxRetry = 60;
     }
 
     mutableStorageParam().dbType = pt.get<std::string>("storage.db_type", "mysql");
@@ -357,17 +347,18 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
     mutableStorageParam().maxConnections = pt.get<int>("storage.max_connections", 50);
 
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initStorageConfig")
-                           << LOG_KV("stateType", mutableStateParam().type)
-                           << LOG_KV("storageDB", mutableStorageParam().type)
-                           << LOG_KV("storagePath", mutableStorageParam().path)
-                           << LOG_KV("baseDir", baseDir())
-                           << LOG_KV("dbtype", mutableStorageParam().dbType)
-                           << LOG_KV("dbip", mutableStorageParam().dbIP)
-                           << LOG_KV("dbport", mutableStorageParam().dbPort)
-                           << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
-                           << LOG_KV("initconnections", mutableStorageParam().initConnections)
-                           << LOG_KV("maxconnections", mutableStorageParam().maxConnections);
+    LedgerParam_LOG(INFO) << LOG_BADGE("initStorageConfig")
+                          << LOG_KV("stateType", mutableStateParam().type)
+                          << LOG_KV("storageDB", mutableStorageParam().type)
+                          << LOG_KV("storagePath", mutableStorageParam().path)
+                          << LOG_KV("baseDir", baseDir())
+                          << LOG_KV("dbtype", mutableStorageParam().dbType)
+                          << LOG_KV("dbip", mutableStorageParam().dbIP)
+                          << LOG_KV("dbport", mutableStorageParam().dbPort)
+                          << LOG_KV("dbcharset", mutableStorageParam().dbCharset)
+                          << LOG_KV("initconnections", mutableStorageParam().initConnections)
+                          << LOG_KV("maxconnections", mutableStorageParam().maxConnections)
+                          << LOG_KV("scrollThreshold", mutableStorageParam().scrollThreshold);
 }
 
 void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt)
