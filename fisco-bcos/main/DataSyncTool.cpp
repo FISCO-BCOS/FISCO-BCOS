@@ -21,10 +21,6 @@
  * @date 2019-10-15
  */
 #include "Common.h"
-#include "boost/archive/text_iarchive.hpp"
-#include "boost/archive/text_oarchive.hpp"
-#include "boost/serialization/serialization.hpp"
-#include "boost/serialization/unordered_map.hpp"
 #include "libinitializer/Initializer.h"
 #include "libledger/DBInitializer.h"
 #include "libledger/LedgerParam.h"
@@ -34,7 +30,11 @@
 #include "libstorage/RocksDBStorageFactory.h"
 #include "libstorage/SQLStorage.h"
 #include <boost/algorithm/string.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/serialization/serialization.hpp>
+#include <boost/serialization/unordered_map.hpp>
 #include <clocale>
 #include <ctime>
 #include <iostream>
@@ -289,9 +289,8 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     }
     else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
     {
-        writerStorage = createRocksDBStorage(_param->mutableStorageParam().path,
-            g_BCOSConfig.diskEncryption.enable, _param->mutableStorageParam().binaryLog,
-            _param->mutableStorageParam().CachedStorage);
+        writerStorage =
+            createRocksDBStorage(_param->mutableStorageParam().path, false, false, true);
     }
     else
     {

@@ -60,6 +60,8 @@ macro(configure_project)
     eth_default_option(TESTS OFF)
     # mini demos
     eth_default_option(DEMO OFF)
+    # tools
+    eth_default_option(TOOL OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
