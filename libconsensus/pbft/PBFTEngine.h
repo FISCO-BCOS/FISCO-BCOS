@@ -39,6 +39,7 @@
 #include <libp2p/Service.h>
 #include <libp2p/StatisticHandler.h>
 
+#include "PBFTMsgFactory.h"
 #include <libsync/SyncStatus.h>
 
 namespace dev
@@ -51,7 +52,7 @@ enum CheckResult
     INVALID = 1,
     FUTURE = 2
 };
-using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket>;
+using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket::Ptr>;
 class PBFTEngine : public ConsensusEngineBase
 {
 public:
@@ -261,7 +262,7 @@ protected:
     bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
     bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
     bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
-    void handleMsg(PBFTMsgPacket const& pbftMsg);
+    void handleMsg(PBFTMsgPacket::Ptr pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
 
@@ -339,14 +340,14 @@ protected:
             m_service->p2pMessageFactory()->buildMessage());
         // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
         bytes ret_data;
-        PBFTMsgPacket packet;
-        packet.data = data.toBytes();
-        packet.packet_id = packetType;
+        PBFTMsgPacket::Ptr pbftPacket = m_pbftMsgFactory->createPBFTMsgPacket();
+        pbftPacket->data = data.toBytes();
+        pbftPacket->packet_id = packetType;
         if (ttl == 0)
-            packet.ttl = maxTTL;
+            pbftPacket->ttl = maxTTL;
         else
-            packet.ttl = ttl;
-        packet.encode(ret_data);
+            pbftPacket->ttl = ttl;
+        pbftPacket->encode(ret_data);
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
         message->setBuffer(p_data);
         message->setProtocolID(protocolId);
@@ -574,6 +575,37 @@ protected:
 
     void waitSignal();
 
+    template <class T>
+    inline bool decodePBFTMsgPacket(std::shared_ptr<T> _req,
+        std::shared_ptr<dev::p2p::P2PMessage> _message,
+        std::shared_ptr<dev::p2p::P2PSession> _session)
+    {
+        ssize_t peerIndex = 0;
+        bool valid = isValidReq(_message, _session, peerIndex);
+        if (valid)
+        {
+            try
+            {
+                _req->decode(ref(*(_message->buffer())));
+            }
+            catch (std::exception& e)
+            {
+                PBFTENGINE_LOG(DEBUG) << "[decodeToRequests] Invalid network-received packet";
+                return false;
+            }
+            _req->setOtherField(
+                peerIndex, _session->nodeID(), _session->session()->nodeIPEndpoint().name());
+        }
+        return valid;
+    }
+
+    virtual bool needForwardMsg(bool const& _valid, std::string const& _key,
+        PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
+
+    virtual void forwardMsg(
+        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
+    virtual void createPBFTMsgFactory() { m_pbftMsgFactory = std::make_shared<PBFTMsgFactory>(); }
+
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
@@ -619,7 +651,8 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     std::atomic<uint64_t> m_sealingNumber = {0};
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler;
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
+    PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev
