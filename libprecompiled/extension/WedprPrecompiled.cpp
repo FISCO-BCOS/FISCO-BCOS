@@ -24,8 +24,7 @@
 #include "libstorage/EntriesPrecompiled.h"
 #include "libstorage/StorageException.h"
 #include "libstorage/TableFactoryPrecompiled.h"
-#include "wedpr-generated/ffi_anonymous_voting.h"
-#include "wedpr-generated/ffi_hidden_asset.h"
+#include "wedpr-generated/ffi_storage.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
@@ -55,12 +54,15 @@ const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyUnboundedVoteRequest(string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
     "anonymousVotingAggregateVoteSumResponse(string,string,string)";
+const char API_ANONYMOUS_VOTING_AGGREGATE_HPOINT[] =
+    "anonymousVotingAggregateHPoint(string,string)";
 const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[] =
     "anonymousVotingVerifyCountRequest(string,string,string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[] =
     "anonymousVotingAggregateDecryptedPartSum(string,string,string)";
-const char API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT[] =
-    "anonymousVotingCountCandidatesResult(string,string,string)";
+const char API_VERIFY_VOTE_RESULT[] =
+    "anonymousVotingVerifyVoteResult(string,string,string,string)";
+const char API_GET_VOTE_RESULT_FROM_REQUEST[] = "anonymousVotingGetVoteResultFromRequest(string)";
 
 const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
 
@@ -88,12 +90,15 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE] =
         getFuncSelector(API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE);
+    name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_HPOINT] =
+        getFuncSelector(API_ANONYMOUS_VOTING_AGGREGATE_HPOINT);
     name2Selector[API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST] =
         getFuncSelector(API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM] =
         getFuncSelector(API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM);
-    name2Selector[API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT] =
-        getFuncSelector(API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT);
+    name2Selector[API_VERIFY_VOTE_RESULT] = getFuncSelector(API_VERIFY_VOTE_RESULT);
+    name2Selector[API_GET_VOTE_RESULT_FROM_REQUEST] =
+        getFuncSelector(API_GET_VOTE_RESULT_FROM_REQUEST);
 }
 
 std::string WedprPrecompiled::toString()
@@ -134,12 +139,12 @@ bytes WedprPrecompiled::call(
     {
         out = verifySplitCredit(abi, data);
     }
-    // anonymousVotingVerifyVoteRequest(string systemParameters, string voteRequest)
+    // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST])
     {
         out = verifyBoundedVoteRequest(abi, data);
     }
-    // anonymousVotingVerifyVoteRequest(string systemParameters, string voteRequest)
+    // anonymousVotingVerifyUnboundedVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST])
     {
         out = verifyUnboundedVoteRequest(abi, data);
@@ -149,6 +154,11 @@ bytes WedprPrecompiled::call(
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE])
     {
         out = aggregateVoteSumResponse(abi, data);
+    }
+    // anonymousVotingAggregateHPoint(string hPointShare, string hPointSum)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_HPOINT])
+    {
+        out = aggregateHPoint(abi, data);
     }
     // anonymousVotingVerifyCountRequest(string systemParameters, string voteStorage, string
     // hPointShare, string decryptedRequest)
@@ -162,11 +172,13 @@ bytes WedprPrecompiled::call(
     {
         out = aggregateDecryptedPartSum(abi, data);
     }
-    // anonymousVotingCountsCandidatesResult(string systemParameters, string voteStorage, string
-    // voteSumTotal)
-    else if (func == name2Selector[API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT])
+    else if (func == name2Selector[API_VERIFY_VOTE_RESULT])
     {
-        out = countCandidatesResult(abi, data);
+        out = verifyVoteResult(abi, data);
+    }
+    else if (func == name2Selector[API_GET_VOTE_RESULT_FROM_REQUEST])
+    {
+        out = getVoteResultFromRequest(abi, data);
     }
     else
     {
@@ -314,6 +326,19 @@ bytes WedprPrecompiled::aggregateVoteSumResponse(dev::eth::ContractABI& abi, byt
     return abi.abiIn("", blankBallot, voteStoragePart, voteStorageSum);
 }
 
+bytes WedprPrecompiled::aggregateHPoint(dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    std::string hPointShare;
+    std::string hPointSum;
+    abi.abiOut(data, hPointShare, hPointSum);
+
+    char* hPointShareChar = stringToChar(hPointShare);
+    char* hPointSumChar = stringToChar(hPointSum);
+    std::string newHPointSum = aggregate_h_point(hPointShareChar, hPointSumChar);
+
+    return abi.abiIn("", newHPointSum);
+}
+
 bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
@@ -353,20 +378,37 @@ bytes WedprPrecompiled::aggregateDecryptedPartSum(dev::eth::ContractABI& abi, by
 
     return abi.abiIn("", counterId, decryptedResultPartStoragePart, decryptedResultPartStorageSum);
 }
-bytes WedprPrecompiled::countCandidatesResult(dev::eth::ContractABI& abi, bytesConstRef& data)
+bytes WedprPrecompiled::verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
-    std::string voteStorage;
-    std::string voteSumTotal;
-    abi.abiOut(data, systemParameters, voteStorage, voteSumTotal);
-
+    std::string voteStorageSum;
+    std::string decryptedResultPartStorageSum;
+    std::string voteResultRequest;
+    abi.abiOut(
+        data, systemParameters, voteStorageSum, decryptedResultPartStorageSum, voteResultRequest);
     char* systemParametersChar = stringToChar(systemParameters);
-    char* voteStorageChar = stringToChar(voteStorage);
-    char* voteSumTotalChar = stringToChar(voteSumTotal);
-    std::string countResult =
-        count_candidates_result(systemParametersChar, voteStorageChar, voteSumTotalChar);
+    char* voteStorageSumChar = stringToChar(voteStorageSum);
+    char* decryptedResultPartStorageSumChar = stringToChar(decryptedResultPartStorageSum);
+    char* voteResultRequestChar = stringToChar(voteResultRequest);
 
-    return abi.abiIn("", countResult);
+    if (verify_vote_result(systemParametersChar, voteStorageSumChar,
+            decryptedResultPartStorageSumChar, voteResultRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_vote_result", WEDPR_VERFIY_FAILED);
+        throwException("verify_vote_result failed");
+    }
+
+    return abi.abiIn("", WEDPR_SUCCESS);
 }
+bytes WedprPrecompiled::getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    std::string voteResultRequest;
+    abi.abiOut(data, voteResultRequest);
+    char* voteResultRequestChar = stringToChar(voteResultRequest);
+    std::string voteResultStorage = get_vote_result_from_request(voteResultRequestChar);
+
+    return abi.abiIn("", voteResultStorage);
+}
+
 }  // namespace precompiled
 }  // namespace dev

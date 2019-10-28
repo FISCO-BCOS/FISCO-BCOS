@@ -719,55 +719,92 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateDecryptedPartSum)
         "dWRIM3FIOGlRWjNkWWxaendYVHM0SW9nVitad0E9");
 }
 
-BOOST_AUTO_TEST_CASE(anonymousVotingCountCandidatesResult)
+BOOST_AUTO_TEST_CASE(anonymousVotingAggregateHPoint)
+{
+    dev::eth::ContractABI abi;
+    std::string hPointShare = "okC7xuEG7yVFHxY2pI+gxPdez9StkhxZrCs5diySZXI=";
+    std::string hPointSum = "0PoMptw9RCM5U9D59bC76WVEOfzjYpxdHLAthYOATy8=";
+    bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_HPOINT, hPointShare, hPointSum);
+    // anonymousVotingAggregateHPoint(string hPointShare, string hPointSum)
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+
+    std::string newHPointSum;
+    abi.abiOut(&out, newHPointSum);
+    BOOST_TEST(newHPointSum == "vLQ720mMmUTJ4J+0tQKinhFrxO9MQEG58Zyxtmw0J1M=");
+}
+
+BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteResult)
 {
     dev::eth::ContractABI abi;
     std::string systemParameters =
-        "CixxcWk4QmMwaXNYczZjRk1nWkl2ZEw1M3A5ZWM5c1Fqc1d5RWZQSUdZUkE4PRIGS2l0dGVuEgREb2dlEgVCdW5ueQ"
+        "Cix2TFE3MjBtTW1VVEo0SiswdFFLaW5oRnJ4TzlNUUVHNThaeXh0bXcwSjFNPRIGS2l0dGVuEgREb2dlEgVCdW5ueQ"
         "==";
-    std::string voteStorage =
-        "ElwKLDFuZlcyWDBpT3FPTjEwTHBOMnkzSnZlTVJaaU9DY1pzUk1yaUt4YVExbW89EixRampqaDhkWFRiZnBLKzZ1TX"
-        "ZzUkh0amZEMjhNUjVPV0RIRDN2MmkvY1FVPSJmCgZLaXR0ZW4SXAosQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+    std::string voteStorageSum =
+        "ElwKLG1Mc2UzSk8wTGtNR0UxeENvZFE2VXNMTlJNMVNxcDV0N0JSdXZsYkZDUU09Eix3a1FzbkQxclIwc25uc3dpV0"
+        "hLaVptZk9oSy8rVzBpdU1saTVaNnZvMG1JPSJmCgZLaXR0ZW4SXAosQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
         "QUFBQUFBQUFBQUFBQUFBQT0SLEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9ImQKBE"
         "RvZ2USXAosQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0SLEFBQUFBQUFBQUFBQUFB"
         "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9ImUKBUJ1bm55ElwKLEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU"
         "FBQUFBQUFBQUFBQUFBQUFBQUE9EixBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPSJm"
-        "CgZLaXR0ZW4SXAosckE1OXdMY21JbWt3YmlZWHNBUWhnVG1FYkhaM1hwQVA4R3ExampDSGhsYz0SLE5wZWc4TjNsWG"
-        "xpaUxaWjlrSFdvZUljR1ZoQXViWVJZdlBVU0c2cDAwRTg9ImQKBERvZ2USXAosaW5nRWVaRy9oSzZlR2wyZlJoNTZK"
-        "ZytyYnN0cmh0S1Y4eUFtMWhGRy9sTT0SLGRMOW9tN0h6OFk1SHVDV1pJUUFnZHY3RUJQTzVzV0NIcysyU0N0TjN4d2"
-        "89ImUKBUJ1bm55ElwKLG1JV2I5eHRVaE9oQVE3cEkzZGltdktBcUJPb3d6aUFHMlpmWlVodkFrWDA9EixoaWhNOUIr"
-        "cTFQRkdNTnZRTnJ4Y3ZVTUluUzBwUnBvdDFGNGtkRXgwTHhZPSJmCgZLaXR0ZW4SXAosdUdHUmZrZ0Y4QkVML3VjZj"
-        "crT09kc1Y0UDNENEhDUGo2UURNVWRXR1pEQT0SLGpxTHFQTDZlM0VqVWtRQW0ycFh5ZmtsNERhV2IwRFUzdHFlVWd5"
-        "NUhCaFk9ImQKBERvZ2USXAoscHFrRjJMbWdaRENTeTFFaytlTWo5Q1JaU1FqSE9TSlZaZnU2RzJBS1puMD0SLFlHZV"
-        "VuQUlYRk95dzJQcGxXWjVVa2N0cHhXNGp4VVljbDQxbGQxRmluRFU9ImUKBUJ1bm55ElwKLHFyMm9RckQrRGluaXJF"
-        "R0kyZHUzVHZqejJmaFlFKzVKbnV2RC9KQTZmQUk9EixrdWQ1dmFHeFdCWVFFdWpDSnBVVUhDYnNEd0NoWmZhcStMWW"
-        "JWV2NLb1JrPSJmCgZLaXR0ZW4SXAosYW5oemkwYXpMYTVnZXIxYzJYRDRpeTl0SGw2ZTl5VTFGK1l6bjZadVZCOD0S"
-        "LE5tMnE3Tzkrc0Q3SHdoMFNpT25IdFovZURyMnBVdkxualg0Nld3OWx1MDg9ImQKBERvZ2USXAosaGtvZ2lTZnRiSF"
-        "B3WFBPY0Yrb1AwczZuaElZK29WQWlFek5rUDhYQ1lYZz0SLGRIc2FkL1ZWaGdMRXI5WTdGUWtHUVhlWmVIQStOTTlT"
-        "UEpwdXJ6R1ZlUVE9ImUKBUJ1bm55ElwKLEVuOWdRcjdlcGtpbnVrWFBYU2JaSEVTdlpRS09LWDEya3B4aDRlbitlVH"
-        "c9EixZRmF6WWlxTEs5bkVneHpXdHJUeDRCSEd2QkJwZzl1UlhLR0laRkV6a1ZjPQ==";
-    std::string voteSumTotal =
-        "CjcKB2RlZmF1bHQSLDVObk05dGcyZU1HTTBzQmZWMHlRaUVYcUxZcVpTYXJkek1aWkhPZ2xSejA9EjgKBktpdHRlbh"
+        "CgZLaXR0ZW4SXAosQW55dHQwcWRQVUV6N2c3bmxrdnMzRU1uSGlreDh6VnB2VzVnMHFoSkEyND0SLFBDQlFWOW1RQX"
+        "daZ2tHWkxYaDVsem1CWHd0RndtMWRJSElvNG83TzVyQm89ImQKBERvZ2USXAosWWhnWkF4NWxiMytwVjRsekV1MW1F"
+        "NUpFYU01UlRZb3U0WEtJN3VRTEpBYz0SLEdLWDdRbE1Eai8wcUs2NE1OOGZNaVk2a2JjRkFvaFV1Mm5IbHhqWFFwd1"
+        "k9ImUKBUJ1bm55ElwKLGNLczNqUzgxYllkTGs5d1ZETW5zSC8zdzY1N2NJMzBhR1k0aVRBL29Ld0E9EixPQ2RBWUl3"
+        "ckQ0TGtPWXZMMmZ5cUQyOVdPbzRPWXp0Y1F4NHVqeFJFSWx3PSJmCgZLaXR0ZW4SXAosSER6SmlyNUU3V0NPR2o0ZG"
+        "5RalhpMDQvM0Y5TUJoWW05ZEVma2w0NlJWYz0SLG9PZ2pRdkpEdjRpZVYwT0xJMGF5UEtnVWhUemRsaFZseTU3M28z"
+        "SnRMSE09ImQKBERvZ2USXAosNkdNVHE5dlJmaWRaSWtTZ25wcDhGS05hcUxDYyt2NDc1MnBVREhTMG5qMD0SLEtCbl"
+        "dMT3c1cjVoZ0hZM3ZDNDNEdHNJa0J2UVp4UHhMZDUrQ3JjMmhaQWc9ImUKBUJ1bm55ElwKLFZCb0k0ZEZVWlBwT0Nq"
+        "NTFYWnB6cXZqUkUvRzU1dTdVSGI5NVRMYU5hUWs9Eixyc1VXU1BCLzFBdnQ0R3A5MDhLMzR5YWhFMlhxd3B1NmhRMl"
+        "dHdW1wTndFPSJmCgZLaXR0ZW4SXAosK2xWWHpQQzFLVlo5bTBSVkY0R0lEVEtLY1c0MUViSXFXWWg0Q294ay9Sbz0S"
+        "LDJuS3ppcmlvZWhTNW1LSFZGTTlWeE1pcTdGeUg1M1lQdnhLaHltcDIvalk9ImQKBERvZ2USXAosRVBydlBsL1RMS0"
+        "p0b3QvcVBWTzBJcHVnUDA1aThVdENzLzhBMUpPSWZHOD0SLFZLTG9xVTlkbEUxcEMxZ3doZktKRFBiRjNQd3VKdzhu"
+        "TGtkTGY0QVdMREk9ImUKBUJ1bm55ElwKLDNDR2toUERGVzF4Tm1LRER3bVlFZ1cveUE2QjdVYndoV3FnVmtmQ3NXeE"
+        "E9Eiw1SWJ2VkF5ZisyVUoweFJNRE5ZcUEybm4zYW5IOU5xV05rZk5zZWM3VmlnPQ==";
+    std::string decryptedResultPartStorageSum =
+        "CjcKB2RlZmF1bHQSLFVOTkNTWVU5NXM2YW9oT3Npbms3SHdvSjRWcXZlZGNMYjBtMXlQN0orVnc9EjgKBktpdHRlbh"
         "IuEixBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBPRI2CgREb2dlEi4SLEFBQUFBQUFB"
         "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9EjcKBUJ1bm55Ei4SLEFBQUFBQUFBQUFBQUFBQUFBQU"
-        "FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9EjgKBktpdHRlbhIuEixzbnV6dWRmcVhkZFNUU1hWcUNQeDBiTzlNYjM4"
-        "SXRhWUsxSTQ0WmhOdzFnPRI2CgREb2dlEi4SLHN2a2psMkxCK2kxY215MnBiUUlkL0dRMEhpbnVoUE9COWJwSytVWU"
-        "hoR3M9EjcKBUJ1bm55Ei4SLHlHSzhUK2Z5dm8wb2xzbHpSZ29hRVJWV3lqa3RJbWd5Q29tQjRJQjZGZ0U9EjgKBktp"
-        "dHRlbhIuEiwxb1dtZ0szWE40SU5vcWl5djM0UWd0OTJOZ3F5SkNNVzB3R1MySVN4c1dzPRI2CgREb2dlEi4SLExrMn"
-        "RMbSs5anYvOE1YMlpUYnVpVHBLK3IzZERkTHZVNUtpbi96ZHFmUXM9EjcKBUJ1bm55Ei4SLHVsVzZxZXR3Wk5RdVY5"
-        "R1BobkZCUTR4T2RBdVBFejgyeVRYODVpaFZEU009";
-    bytes param = abi.abiIn(
-        API_ANONYMOUS_VOTING_COUNT_CANDIDATES_RESULT, systemParameters, voteStorage, voteSumTotal);
-    // anonymousVotingCountCandidatesResult(string systemParameters, string voteStorage, string
-    // voteSumTotal)
+        "FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9EjgKBktpdHRlbhIuEixScHpFN3hXZEJ6bDJhZ1dGTytBK1VKYUI3UUpo"
+        "elc0TWRCdGhKekg4TVRFPRI2CgREb2dlEi4SLHpJOFRIT1VRTlhaL290VzVZQVRWVU9KNmFsV2FzakRLRXBnMGdZaW"
+        "duenc9EjcKBUJ1bm55Ei4SLElsK2pwZkhiUVE4MzNmRUNKa1N2NXd4SXpJd1h3ZzM4NURzM1hpZU1teUU9EjgKBktp"
+        "dHRlbhIuEixTT3JORnVGS2JoRnNJbTMrRFMxaEc3ZHFaaVBRWGxud05Hb3crREN6ZXpjPRI2CgREb2dlEi4SLGh0Nm"
+        "VBbm9PdW9vd2FrUkRMc28zb2kzbk5zNlpzZU9tNHFMUkRrS1BESHc9EjcKBUJ1bm55Ei4SLHhFektQL216djUza2Vq"
+        "NTgzcFhwcVBLMHhoa2RwZlFzR2k0Sm12NitNRHM9";
+    std::string voteResultRequest =
+        "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnVubnkQDA"
+        "==";
+    bytes param = abi.abiIn(API_VERIFY_VOTE_RESULT, systemParameters, voteStorageSum,
+        decryptedResultPartStorageSum, voteResultRequest);
+    // anonymousVotingVerifyVoteResult(string systemParameters, string voteStorageSum, string
+    // decryptedResultPartStorageSum, string voteResultRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    u256 result;
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_SUCCESS);
 
-    std::string countResult;
+    std::string errorSystemParameters = "123";
+    std::string errorVoteStorageSum = "123";
+    std::string errorDecryptedResultPartStorageSum = "123";
+    std::string errorVoteResultRequest = "123";
+    param = abi.abiIn(API_VERIFY_VOTE_RESULT, errorSystemParameters, errorVoteStorageSum,
+        errorDecryptedResultPartStorageSum, errorVoteResultRequest);
+    BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
+}
 
-    abi.abiOut(&out, countResult);
-    BOOST_TEST(countResult ==
-               "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnV"
-               "ubnkQDA==");
+BOOST_AUTO_TEST_CASE(anonymousVotingGetVoteResultFromRequest)
+{
+    dev::eth::ContractABI abi;
+    std::string voteResultRequest =
+        "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnVubnkQDA"
+        "==";
+    bytes param = abi.abiIn(API_GET_VOTE_RESULT_FROM_REQUEST, voteResultRequest);
+    // anonymousVotingGetVoteResultFromRequest(string voteResultRequest)
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    std::string voteResultStorage;
+    abi.abiOut(&out, voteResultStorage);
+    BOOST_TEST(
+        voteResultStorage ==
+        "Ch4KGldlZHByX3ZvdGluZ190b3RhbF9iYWxsb3RzEDwKCgoGS2l0dGVuEAYKCAoERG9nZRAJCgkKBUJ1bm55EAw=");
 }
 
 BOOST_AUTO_TEST_CASE(unKnownFunc)
