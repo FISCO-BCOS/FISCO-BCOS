@@ -21,6 +21,7 @@
  * @date 2019-10-15
  */
 #include "Common.h"
+#include "include/BuildInfo.h"
 #include "libinitializer/Initializer.h"
 #include "libledger/DBInitializer.h"
 #include "libledger/LedgerParam.h"
@@ -325,11 +326,13 @@ int main(int argc, const char* argv[])
         std::cerr << "terminate handler called" << endl;
         abort();
     });
+    std::cout << "fisco-sync version : " << "0.1.0" << std::endl;
+    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
+    std::cout << "Commit Hash        : " << FISCO_BCOS_COMMIT_HASH << std::endl;
     /// init params
-    version();
     std::cout << "[" << getCurrentDateTime() << "] "
               << "The sync-tool is Initializing..." << std::endl;
-    boost::program_options::options_description main_options("Usage of FISCO-BCOS");
+    boost::program_options::options_description main_options("Usage of fisco-sync");
     main_options.add_options()("help,h", "print help information")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("verify,v",
