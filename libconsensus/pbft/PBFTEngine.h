@@ -239,7 +239,8 @@ protected:
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-        std::string const& key, bytesConstRef data, unsigned const& ttl = 1);
+        std::string const& key, bytesConstRef data, unsigned const& ttl = 1,
+        dev::h512s const& forwardNodes = dev::h512s());
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -332,14 +333,9 @@ protected:
         return dev::network::NodeID();
     }
 
-    /// trans data into message
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
-        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
+    virtual PBFTMsgPacket::Ptr createPBFTMsgPacket(
+        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl, dev::h512s const&)
     {
-        dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-            m_service->p2pMessageFactory()->buildMessage());
-        // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
-        bytes ret_data;
         PBFTMsgPacket::Ptr pbftPacket = m_pbftMsgFactory->createPBFTMsgPacket();
         pbftPacket->data = data.toBytes();
         pbftPacket->packet_id = packetType;
@@ -347,6 +343,19 @@ protected:
             pbftPacket->ttl = maxTTL;
         else
             pbftPacket->ttl = ttl;
+        return pbftPacket;
+    }
+
+    /// trans data into message
+    virtual dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
+        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl,
+        dev::h512s const& forwardNodes = dev::h512s())
+    {
+        dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+            m_service->p2pMessageFactory()->buildMessage());
+        // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
+        bytes ret_data;
+        PBFTMsgPacket::Ptr pbftPacket = createPBFTMsgPacket(data, packetType, ttl, forwardNodes);
         pbftPacket->encode(ret_data);
         std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
         message->setBuffer(p_data);
@@ -354,10 +363,11 @@ protected:
         return message;
     }
 
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(
-        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
+        PACKET_TYPE const& packetType, unsigned const& ttl,
+        dev::h512s const& forwardNodes = dev::h512s())
     {
-        return transDataToMessage(data, packetType, m_protocolId, ttl);
+        return transDataToMessage(data, packetType, m_protocolId, ttl, forwardNodes);
     }
 
     /**
@@ -605,6 +615,9 @@ protected:
     virtual void forwardMsg(
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
     virtual void createPBFTMsgFactory() { m_pbftMsgFactory = std::make_shared<PBFTMsgFactory>(); }
+
+    virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+        unsigned const& _packetType, unsigned const& _ttl);
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};

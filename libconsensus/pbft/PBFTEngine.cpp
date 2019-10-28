@@ -365,7 +365,7 @@ bool PBFTEngine::broadcastViewChangeReq()
 
 /// set default ttl to 1 to in case of forward-broadcast
 bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-    std::string const& key, bytesConstRef data, unsigned const& ttl)
+    std::string const& key, bytesConstRef data, unsigned const& ttl, dev::h512s const& forwardNodes)
 {
     /// is sealer?
     if (getIndexBySealer(nodeId) < 0)
@@ -387,7 +387,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
         if (session.nodeID() == nodeId)
         {
             m_service->asyncSendMessageByNodeID(
-                session.nodeID(), transDataToMessage(data, packetType, ttl), nullptr);
+                session.nodeID(), transDataToMessage(data, packetType, ttl, forwardNodes), nullptr);
 
             // update the network-out statistic information
             if (m_statisticHandler)
@@ -450,8 +450,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         broadcastMark(session.nodeID(), packetType, key);
     }
     /// send messages according to node id
-    m_service->asyncMulticastMessageByNodeIDList(
-        nodeIdList, transDataToMessage(data, packetType, ttl));
+    broadcastMsg(nodeIdList, data, packetType, ttl);
 
     // update the network-out statistic information
     if (m_statisticHandler)
@@ -459,6 +458,13 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         m_statisticHandler->updateConsOutPacketsInfo(packetType, nodeIdList.size(), data.size());
     }
     return true;
+}
+
+void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+    unsigned const& _packetType, unsigned const& _ttl)
+{
+    return m_service->asyncMulticastMessageByNodeIDList(
+        _targetNodes, transDataToMessage(_data, _packetType, _ttl));
 }
 
 /**

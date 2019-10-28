@@ -301,3 +301,95 @@ void RotatingPBFTEngine::resetLocatedInConsensusNodes()
     }
     m_locatedInConsensusNodes = false;
 }
+
+
+// get the forwardNodes
+void RotatingPBFTEngine::getForwardNodes(
+    dev::h512s& _forwardNodes, dev::p2p::P2PSessionInfos const& _sessions)
+{
+    std::set<h512> consensusNodes;
+    {
+        ReadGuard l(x_chosedConsensusNodes);
+        consensusNodes = m_chosedConsensusNodes;
+    }
+    // select the disconnected consensus nodes
+    for (auto const& session : _sessions)
+    {
+        if (consensusNodes.count(session.nodeID()))
+        {
+            consensusNodes.erase(session.nodeID());
+        }
+    }
+    consensusNodes.erase(m_keyPair.pub());
+    if (consensusNodes.size() > 0)
+    {
+        _forwardNodes.resize(consensusNodes.size());
+        std::copy(consensusNodes.begin(), consensusNodes.end(), _forwardNodes.begin());
+        RPBFTENGINE_LOG(DEBUG)
+            << LOG_DESC("forwardPBFTMsgByForwardNodes: get disconnected consensus nodes")
+            << LOG_KV("forwardNodesSize", _forwardNodes.size())
+            << LOG_KV("sessionSize", _sessions.size()) << LOG_KV("minValidNodes", minValidNodes())
+            << LOG_KV("idx", nodeIdx());
+    }
+}
+
+// forward PBFTMsg according to the forwardNodes
+void RotatingPBFTEngine::forwardMsg(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const&)
+{
+    RPBFTMsgPacket::Ptr rpbftMsgPacket = std::dynamic_pointer_cast<RPBFTMsgPacket>(_pbftMsgPacket);
+    // get the forwardNodes from the _pbftMsgPacket
+    std::set<dev::h512> forwardedNodes(
+        rpbftMsgPacket->forwardNodes.begin(), rpbftMsgPacket->forwardNodes.end());
+
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    // find the remaining forwardNodes
+    auto remainingForwardNodes = forwardedNodes;
+    // send message to the forwardNodes
+    for (auto const& session : sessions)
+    {
+        if (remainingForwardNodes.count(session.nodeID()))
+        {
+            remainingForwardNodes.erase(session.nodeID());
+        }
+    }
+    // erase the node-self from the remaining forwardNodes
+    if (remainingForwardNodes.count(m_keyPair.pub()))
+    {
+        remainingForwardNodes.erase(m_keyPair.pub());
+    }
+
+    h512s remainingForwardNodeList(remainingForwardNodes.size());
+    std::copy(remainingForwardNodes.begin(), remainingForwardNodes.end(),
+        remainingForwardNodeList.begin());
+    // forward the message to corresponding nodes
+    for (auto const& nodeID : forwardedNodes)
+    {
+        sendMsg(nodeID, _pbftMsgPacket->packet_id, _key, ref(_pbftMsgPacket->data), 1,
+            remainingForwardNodeList);
+    }
+}
+
+void RotatingPBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+    unsigned const& _packetType, unsigned const& _ttl)
+{
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    // get the forwardNodes
+    dev::h512s forwardNodes;
+    getForwardNodes(forwardNodes, sessions);
+    return m_service->asyncMulticastMessageByNodeIDList(
+        _targetNodes, transDataToMessage(_data, _packetType, _ttl, forwardNodes));
+}
+
+PBFTMsgPacket::Ptr RotatingPBFTEngine::createPBFTMsgPacket(bytesConstRef _data,
+    PACKET_TYPE const& _packetType, unsigned const& _ttl, dev::h512s const& _forwardNodes)
+{
+    auto pbftMsgPacket = PBFTEngine::createPBFTMsgPacket(_data, _packetType, _ttl, _forwardNodes);
+    if (_forwardNodes.size() > 0)
+    {
+        RPBFTMsgPacket::Ptr rpbftMsgPacket =
+            std::dynamic_pointer_cast<RPBFTMsgPacket>(pbftMsgPacket);
+        rpbftMsgPacket->setForwardNodes(_forwardNodes);
+    }
+    return pbftMsgPacket;
+}

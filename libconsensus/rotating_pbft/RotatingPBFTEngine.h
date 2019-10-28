@@ -21,6 +21,7 @@
  * @date: 2019-09-11
  */
 #pragma once
+#include "RPBFTMsgFactory.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
@@ -95,16 +96,25 @@ protected:
 
     virtual bool updateGroupSize();
     virtual bool updateRotatingInterval();
+    void createPBFTMsgFactory() override { m_pbftMsgFactory = std::make_shared<RPBFTMsgFactory>(); }
+
+    // get the disconnected node list
+    void getForwardNodes(dev::h512s& _forwardNodes, dev::p2p::P2PSessionInfos const& _sessions);
+
+    void forwardMsg(
+        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const&) override;
+
+    PBFTMsgPacket::Ptr createPBFTMsgPacket(bytesConstRef _data, PACKET_TYPE const& _packetType,
+        unsigned const& _ttl, dev::h512s const& _forwardNodes) override;
+
+    void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+        unsigned const& _packetType, unsigned const& _ttl) override;
 
 protected:
     // configured group size
     std::atomic<int64_t> m_groupSize = {-1};
     // the interval(measured by block number) to adjust the sealers
     std::atomic<int64_t> m_rotatingInterval = {-1};
-
-    // the chosed consensus node list
-    mutable SharedMutex x_chosedConsensusNodes;
-    std::set<dev::h512> m_chosedConsensusNodes;
 
     std::atomic<int64_t> m_startNodeIdx = {-1};
     std::atomic<int64_t> m_rotatingRound = {0};
@@ -113,6 +123,8 @@ protected:
     std::atomic_bool m_locatedInConsensusNodes = {true};
 
     std::atomic_bool m_chosedConsNodeChanged = {false};
+    mutable SharedMutex x_chosedConsensusNodes;
+    std::set<dev::h512> m_chosedConsensusNodes;
 
     // used to record the rotatingIntervalEnableNumber changed or not
     dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
