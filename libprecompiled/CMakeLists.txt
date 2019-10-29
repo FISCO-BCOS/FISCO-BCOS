@@ -4,7 +4,7 @@ file(GLOB_RECURSE HEADERS "*.h")
 if (APPLE)
     set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_storage.dylib")
 else()
-    set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_storage.so")
+    set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/safe_libffi_storage.o")
 endif()
 
 if(NOT WEDPR_EXTENSION)

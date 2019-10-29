@@ -23,16 +23,16 @@
 include(ExternalProject)
 
 if (APPLE)
-    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/wedpr-mac-nodes-lib.tar.gz)
-    set(WEDPR_SHA256 145d9d041dcd2b6550a432d870092b44b7ced08f875982c40b52872ec7455f02)
+    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/mac_libffi_storage.tar.gz)
+    set(WEDPR_SHA256 6e5fb91257172a5b21999dfe895c78fbf8931fc2abdcd7a90d150d39c1d83b91)
 else()
-    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/wedpr-node-lib.tar.gz)
-    set(WEDPR_SHA256 e712c7cbc68eed4ae0af415aca0b159650bbeef7e29efaaa2d4301903ec62765)
+    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/linux_libffi_storage.tar.gz)
+    set(WEDPR_SHA256 1de1f442bd73e0d62220bdb18d21930a3691875e242c284f127cf93e6fa4dbfe)
 endif()
 
 ExternalProject_Add(WeDPR
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libwedpr-0.1.0-nodes.tar.gz
+    DOWNLOAD_NAME libwedpr-0.1.0-lib.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     BUILD_IN_SOURCE 1
     URL ${WEDPR_URL}
