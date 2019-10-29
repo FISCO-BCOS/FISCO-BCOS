@@ -281,7 +281,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         {
             currentStateIdx = i;
         }
-        for (auto& entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
+        for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
              ++entry)
         {
             (*entry)->setID(++m_ID);
