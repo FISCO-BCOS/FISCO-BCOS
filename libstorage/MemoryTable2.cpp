@@ -346,7 +346,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 {
                     tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
                         [&](tbb::blocked_range<size_t>& rangeIndex) {
-                            for (auto& i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
                             {
                                 if (!it->second->get(i)->deleted())
                                 {
