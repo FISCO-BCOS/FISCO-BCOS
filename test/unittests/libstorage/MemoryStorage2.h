@@ -61,7 +61,7 @@ public:
             processEntries(tableData->info->name, tableData->info->key, tableData->dirtyEntries);
             processEntries(tableData->info->name, tableData->info->key, tableData->newEntries);
         }
-        return key2Entries.size();
+        return datas.size();
     }
     bool onlyCommitDirty() override { return false; }
     void processEntries(const std::string& tableName, const std::string& key, Entries::Ptr entries)
@@ -83,6 +83,28 @@ public:
 private:
     std::map<std::string, Entries::Ptr> key2Entries;
     tbb::mutex m_mutex;
+};
+
+class MemoryStorageFactory : public StorageFactory
+{
+public:
+    MemoryStorageFactory() {}
+    virtual ~MemoryStorageFactory() {}
+    Storage::Ptr getStorage(const std::string& _dbName, bool = false) override
+    {
+        RecursiveGuard l(x_cache);
+        auto it = m_cache.find(_dbName);
+        if (it == m_cache.end())
+        {
+            m_cache[_dbName] = std::make_shared<MemoryStorage2>();
+            return m_cache[_dbName];
+        }
+        return it->second;
+    }
+
+private:
+    std::recursive_mutex x_cache;
+    std::map<std::string, Storage::Ptr> m_cache;
 };
 }  // namespace storage
 
