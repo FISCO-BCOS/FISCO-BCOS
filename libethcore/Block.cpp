@@ -183,10 +183,11 @@ void Block::calTransactionRoot(bool update) const
 }
 
 
-std::map<std::string, std::vector<std::string>> Block::calTransactionRootV2_2_0(
+std::shared_ptr< std::map<std::string, std::vector<std::string>> > Block::calTransactionRootV2_2_0(
     bool update, bool calForce) const
 {
-    std::map<std::string, std::vector<std::string>> merklePath;
+	TIME_RECORD("Calc transaction root, count:" + boost::lexical_cast<std::string>(m_transactions->size()));
+    auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string> > >();
     WriteGuard l(x_txsCache);
     if (m_txsCache == bytes() || calForce)
     {
@@ -210,10 +211,12 @@ std::map<std::string, std::vector<std::string>> Block::calTransactionRootV2_2_0(
     return merklePath;
 }
 
-std::map<std::string, std::vector<std::string>> Block::calReceiptRootV2_2_0(
+std::shared_ptr< std::map<std::string, std::vector<std::string>> > Block::calReceiptRootV2_2_0(
     bool update, bool calForce) const
 {
-    std::map<std::string, std::vector<std::string>> merklePath;
+	TIME_RECORD("Calc transaction root, count:" + boost::lexical_cast<std::string>(m_transactionReceipts->size()));
+
+    auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string> > >();
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes() || calForce)
     {

@@ -36,7 +36,7 @@ enum trieHashNodeType
 };
 
 bytes getTrieTree256(
-    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
+    BytesMap const& _s, std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList);
 h256 getHash256(
-    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
+    BytesMap const& _s, std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList);
 }  // namespace dev
