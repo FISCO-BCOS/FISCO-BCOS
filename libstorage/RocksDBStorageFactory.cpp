@@ -50,11 +50,6 @@ Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName, bool 
     }
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
     rocksDB->Open(m_options, dbName);
-    if (m_encryptHandler && m_decryptHandler)
-    {
-        rocksDB->setEncryptHandler(m_encryptHandler);
-        rocksDB->setDecryptHandler(m_decryptHandler);
-    }
     std::shared_ptr<RocksDBStorage> rocksdbStorage =
         std::make_shared<RocksDBStorage>(m_disableWAL, m_completeDirty);
     rocksdbStorage->setDB(rocksDB);

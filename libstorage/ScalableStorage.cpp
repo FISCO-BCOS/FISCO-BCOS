@@ -106,21 +106,6 @@ Entries::Ptr ScalableStorage::selectFromArchive(
     return nullptr;
 }
 
-int64_t ScalableStorage::getBlockNumberByHash(std::string _blockHash)
-{
-    TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
-    tableInfo->name = SYS_HASH_2_BLOCK;
-    auto entries = m_state->select(0, tableInfo, _blockHash, nullptr);
-    if (entries && entries->size() > 0)
-    {
-        auto entry = entries->get(0);
-        string remoteNumber = entry->getField(SYS_VALUE);
-        return lexical_cast<int64_t>(remoteNumber);
-    }
-    SCALABLE_STORAGE_LOG(FATAL) << "Can't find block number by hash!" << LOG_KV("hash", _blockHash);
-    return 0;
-}
-
 Entries::Ptr ScalableStorage::select(
     int64_t num, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {

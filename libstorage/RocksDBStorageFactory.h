@@ -48,8 +48,6 @@ private:
     rocksdb::Options m_options;
     std::recursive_mutex x_cache;
     std::pair<std::string, Storage::Ptr> m_cache;
-    std::function<void(std::string const&, std::string&)> m_encryptHandler = nullptr;
-    std::function<void(std::string&)> m_decryptHandler = nullptr;
 };
 }  // namespace storage
 }  // namespace dev
