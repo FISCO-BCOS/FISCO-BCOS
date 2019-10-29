@@ -123,7 +123,7 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
     std::vector<bytes> bytePath;
     int32_t nodeType = trieHashNodeType::typeDefault;
     hash256TrieTree(_s, _begin, _end, _preLen, bytesTemp, nodeType, bytePath, _parent2ChildList);
-    TRIEHASH_SESSION_LOG(DEBUG) << " intermediate out size:" << bytesTemp.size()
+    TRIEHASH_SESSION_LOG(TRACE) << " intermediate out size:" << bytesTemp.size()
                                 << " intermediate h256 out:" << sha3(bytesTemp).hex()
                                 << " tohex:" << toHex(bytesTemp) << " nodetype:" << nodeType
                                 << " keypath size:" << bytePath.size();
@@ -197,7 +197,7 @@ bytes h256ForOneNode(
         bytesChild.end(), _hexMap.begin()->second.begin(), _hexMap.begin()->second.end());
     dev::h256 hChild = sha3(bytesChild);
     _parent2ChildList[sha3(hChild).hex()].push_back(toHex(hChild));
-    TRIEHASH_SESSION_LOG(DEBUG) << "child node:" << hChild.hex()
+    TRIEHASH_SESSION_LOG(TRACE) << "child node:" << hChild.hex()
                                 << " parent node:" << sha3(hChild).hex();
     return hChild.asBytes();
 }
