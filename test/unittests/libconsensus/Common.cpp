@@ -129,19 +129,19 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     BOOST_CHECK(decode_prepare.block == constructed_prepare.block);
 
     /// test construct prepare from given block
-    PrepareReq block_populated_prepare(fake_block.m_block, key_pair2, 2, 135);
-    checkPBFTMsg(block_populated_prepare, key_pair2, fake_block.m_block.blockHeader().number(), 2,
-        135, block_populated_prepare.timestamp, fake_block.m_block.header().hash());
+    PrepareReq block_populated_prepare(*fake_block.m_block, key_pair2, 2, 135);
+    checkPBFTMsg(block_populated_prepare, key_pair2, fake_block.m_block->blockHeader().number(), 2,
+        135, block_populated_prepare.timestamp, fake_block.m_block->header().hash());
     BOOST_CHECK(block_populated_prepare.timestamp >= constructed_prepare.timestamp);
     /// test encode && decode
     block_populated_prepare.encode(prepare_req_data);
     PrepareReq tmp_req;
     BOOST_REQUIRE_NO_THROW(tmp_req.decode(ref(prepare_req_data)));
-    checkPBFTMsg(tmp_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,
-        block_populated_prepare.timestamp, fake_block.m_block.header().hash());
+    checkPBFTMsg(tmp_req, key_pair2, fake_block.m_block->blockHeader().number(), 2, 135,
+        block_populated_prepare.timestamp, fake_block.m_block->header().hash());
     Block tmp_block;
     BOOST_REQUIRE_NO_THROW(tmp_block.decode(ref(tmp_req.block)));
-    BOOST_CHECK(tmp_block.equalAll(fake_block.m_block));
+    BOOST_CHECK(tmp_block.equalAll(*fake_block.m_block));
 
     /// test updatePrepareReq
     Sealing sealing;
@@ -150,8 +150,8 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
-    checkPBFTMsg(new_req, key_pair2, fake_block.m_block.blockHeader().number(), 2, 135,
-        new_req.timestamp, fake_block.m_block.header().hash());
+    checkPBFTMsg(new_req, key_pair2, fake_block.m_block->blockHeader().number(), 2, 135,
+        new_req.timestamp, fake_block.m_block->header().hash());
     BOOST_CHECK(new_req.timestamp >= tmp_req.timestamp);
 }
 

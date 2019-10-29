@@ -67,13 +67,14 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             bytes data =
                 abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
             u256 nonce = u256(utcTime());
-            Transaction tx(value, gasPrice, gas, dest, data, nonce);
-            Signature sig = sign(sec, tx.sha3(WithoutSignature));
+            Transaction::Ptr tx =
+                std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+            Signature sig = sign(sec, tx->sha3(WithoutSignature));
 
             for (auto group : ledgerManager->getGroupList())
             {
-                tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + 250);
-                tx.updateSignature(SignatureStruct(sig));
+                tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + 250);
+                tx->updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }
         }
@@ -129,12 +130,13 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                     money);  // add 1000000000 to user i
                 u256 nonce = u256(utcTime() + rand());
 
-                Transaction tx(value, gasPrice, gas, dest, data, nonce);
+                Transaction::Ptr tx =
+                    std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
                 // sec = KeyPair::create().secret();
-                Signature sig = sign(sec, tx.sha3(WithoutSignature));
+                Signature sig = sign(sec, tx->sha3(WithoutSignature));
 
-                tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
-                tx.updateSignature(SignatureStruct(sig));
+                tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                tx->updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }
 

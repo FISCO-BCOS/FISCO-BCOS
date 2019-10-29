@@ -104,7 +104,7 @@ public:
      */
     std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override;
 
-    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx);
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override;
 
     /**
      * @brief Remove transaction from the queue

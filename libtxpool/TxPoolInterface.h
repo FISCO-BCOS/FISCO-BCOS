@@ -75,6 +75,10 @@ public:
      * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
     virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction> _tx) = 0;
+    virtual std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr)
+    {
+        return std::make_pair(h256(), Address());
+    };
 
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue

@@ -54,8 +54,13 @@ namespace test
 //   const std::string m_number2hash = "number2hash";
 //   const std::string m_hash2Block = "hash2Block";
 
+#if 0
 static std::string const c_commonHash =
     "067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
+#endif
+// TODO: compatibility support
+static std::string const c_commonHash =
+    "0b9702045ea4b58d1bdae2f802f57ac22c6b63ce571777da8586337c69834ad3";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
 class MockTable : public dev::storage::MemoryTable<Serial>
@@ -86,7 +91,7 @@ public:
 
         entry = std::make_shared<Entry>();
         entry->setField("value",
-            boost::lexical_cast<std::string>(_fakeBlock->getBlock().transactions().size()));
+            boost::lexical_cast<std::string>(_fakeBlock->getBlock()->transactions()->size()));
         m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_TOTAL_TRANSACTION_COUNT] = entry;
 
         entry = std::make_shared<Entry>();
@@ -94,7 +99,9 @@ public:
         m_fakeStorage[SYS_NUMBER_2_HASH]["0"] = entry;
 
         entry = std::make_shared<Entry>();
-        entry->setField("value", toHexPrefixed(_fakeBlock->getBlockData()));
+        bytes encodedData;
+        _fakeBlock->m_block->encode(encodedData);
+        entry->setField("value", encodedData.data(), encodedData.size());
         m_fakeStorage[SYS_HASH_2_BLOCK][c_commonHash] = entry;
 
         entry = std::make_shared<Entry>();
@@ -231,14 +238,15 @@ BOOST_AUTO_TEST_CASE(emptyChain)
 #endif
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
-    BOOST_CHECK_EQUAL(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)),
+    BOOST_CHECK_EQUAL(*(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))),
         LocalisedTransaction(Transaction(), h256(0), -1));
-    BOOST_CHECK_EQUAL(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix)), Transaction());
     BOOST_CHECK_EQUAL(
-        sha3(empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix)).rlp()),
+        *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
+    BOOST_CHECK_EQUAL(
+        sha3(empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
         sha3(TransactionReceipt().rlp()));
     BOOST_CHECK_EQUAL(
-        empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix)).hash(),
+        empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix))->hash(),
         h256(0));
 }
 
@@ -258,7 +266,7 @@ BOOST_AUTO_TEST_CASE(getBlockByHash)
     std::shared_ptr<dev::eth::Block> bptr =
         m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
 
-    BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock().getTransactionSize());
+    BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock()->getTransactionSize());
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), 5);
 }
 
@@ -282,21 +290,21 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
 {
-    Transaction tx = m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));
-    BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
+    Transaction::Ptr tx = m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK_EQUAL(tx->sha3(), (*m_fakeBlock->m_transaction)[0]->sha3());
 }
 
 BOOST_AUTO_TEST_CASE(getTxByHash)
 {
-    Transaction tx = m_blockChainImp->getTxByHash(h256(c_commonHashPrefix));
-    BOOST_CHECK_EQUAL(tx.sha3(), m_fakeBlock->m_transaction[0].sha3());
+    Transaction::Ptr tx = m_blockChainImp->getTxByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK_EQUAL(tx->sha3(), (*m_fakeBlock->m_transaction)[0]->sha3());
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
 {
     auto txReceipt = m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix));
 
-    BOOST_CHECK_EQUAL(sha3(txReceipt.rlp()), sha3(m_fakeBlock->m_transactionReceipt[0].rlp()));
+    BOOST_CHECK_EQUAL(sha3(txReceipt->rlp()), sha3((*m_fakeBlock->m_transactionReceipt)[0]->rlp()));
 }
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxReceiptByHash)
@@ -304,21 +312,21 @@ BOOST_AUTO_TEST_CASE(getLocalisedTxReceiptByHash)
     auto localisedTxReceipt =
         m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix));
 
-    BOOST_CHECK_EQUAL(localisedTxReceipt.hash(), h256(c_commonHashPrefix));
+    BOOST_CHECK_EQUAL(localisedTxReceipt->hash(), h256(c_commonHashPrefix));
 }
 
 BOOST_AUTO_TEST_CASE(commitBlock)
 {
     auto fakeBlock2 = std::make_shared<FakeBlock>(10);
-    fakeBlock2->getBlock().header().setNumber(m_blockChainImp->number());
+    fakeBlock2->getBlock()->header().setNumber(m_blockChainImp->number());
     auto commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::ERROR_NUMBER);
 
-    fakeBlock2->getBlock().header().setNumber(m_blockChainImp->number() + 1);
+    fakeBlock2->getBlock()->header().setNumber(m_blockChainImp->number() + 1);
     commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::ERROR_PARENT_HASH);
 
-    fakeBlock2->getBlock().header().setParentHash(
+    fakeBlock2->getBlock()->header().setParentHash(
         m_blockChainImp->numberHash(m_blockChainImp->number()));
     commitResult = m_blockChainImp->commitBlock(fakeBlock2->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);
@@ -327,8 +335,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     BOOST_CHECK_EQUAL(m_blockChainImp->totalTransactionCount().second, 1);
 
     auto fakeBlock3 = std::make_shared<FakeBlock>(15);
-    fakeBlock3->getBlock().header().setNumber(m_blockChainImp->number() + 1);
-    fakeBlock3->getBlock().header().setParentHash(
+    fakeBlock3->getBlock()->header().setNumber(m_blockChainImp->number() + 1);
+    fakeBlock3->getBlock()->header().setParentHash(
         m_blockChainImp->numberHash(m_blockChainImp->number()));
     commitResult = m_blockChainImp->commitBlock(fakeBlock3->getBlock(), m_executiveContext);
     BOOST_CHECK(commitResult == CommitResult::OK);

@@ -83,9 +83,9 @@ public:
         }
 
         // seal
-        dev::eth::Transactions const& txs = m_txPool->pendingList();
+        std::shared_ptr<dev::eth::Transactions> txs = m_txPool->pendingList();
 
-        if (0 == txs.size())
+        if (0 == txs->size())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
             return;
@@ -105,13 +105,13 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
 
         // commit
-        m_blockChain->commitBlock(*block, exeCtx);
-        m_txPool->dropBlockTrans(*block);
-        m_totalTxCommit += txs.size();
+        m_blockChain->commitBlock(block, exeCtx);
+        m_txPool->dropBlockTrans(block);
+        m_totalTxCommit += txs->size();
 
         SYNC_LOG(TRACE) << LOG_BADGE("Commit") << LOG_DESC("Consensus block commit: ")
                         << LOG_KV("blockNumber", currentNumber + 1)
-                        << LOG_KV("txNumber", txs.size())
+                        << LOG_KV("txNumber", txs->size())
                         << LOG_KV("totalTxCommitThisNode", m_totalTxCommit)
                         << LOG_KV("blockHash", block->headerHash())
                         << LOG_KV("parentHash", parentHash);
@@ -119,7 +119,7 @@ public:
 
 private:
     BlockPtr newBlock(
-        dev::h256 _parentHash, int64_t _currentNumner, dev::eth::Transactions const& _txs)
+        dev::h256 _parentHash, int64_t _currentNumner, std::shared_ptr<dev::eth::Transactions> _txs)
     {
         // Generate block header
         BlockHeaderPtr header = newBlockHeader(_parentHash, _currentNumner);
@@ -128,7 +128,7 @@ private:
 
         // Generate block
         BlockPtr block = std::make_shared<dev::eth::Block>();
-        block->setSigList(sigList(_txs.size()));
+        block->setSigList(sigList(_txs->size()));
         block->setTransactions(_txs);
 
         // Add block header into block
@@ -160,9 +160,9 @@ private:
         return blockHeader;
     }
 
-    SigList sigList(size_t _size)
+    std::shared_ptr<SigList> sigList(size_t _size)
     {
-        SigList retList;
+        std::shared_ptr<SigList> retList = std::make_shared<SigList>();
         /// set sig list
         dev::Signature sig;
         dev::h256 block_hash;
@@ -171,7 +171,7 @@ private:
         {
             block_hash = dev::sha3("block " + std::to_string(i));
             sig = dev::sign(sec, block_hash);
-            retList.push_back(std::make_pair(dev::u256(block_hash), sig));
+            retList->push_back(std::make_pair(dev::u256(block_hash), sig));
         }
         return retList;
     }

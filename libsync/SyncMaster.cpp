@@ -250,15 +250,8 @@ void SyncMaster::maintainTransactions()
     {
         auto t = (*ts)[i];
         NodeIDs peers;
-#if 0
-        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
-#endif
-        unsigned _percent = 100;
-        if (m_txPool->isTransactionKnownBySomeone(t->sha3()))
-        {
-            m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
-            continue;
-        }
+
+        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t->sha3()) ? 25 : 100;
 
         peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent = !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId);

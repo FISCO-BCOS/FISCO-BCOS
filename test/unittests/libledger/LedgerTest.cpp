@@ -254,8 +254,8 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     /// check BlockChain
     std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(groupId);
     std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
-    Block populateBlock;
-    populateBlock.resetCurrentBlock(block->header());
+    std::shared_ptr<Block> populateBlock = std::make_shared<Block>();
+    populateBlock->resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
 }

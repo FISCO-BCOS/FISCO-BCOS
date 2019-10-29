@@ -38,12 +38,12 @@ public:
     {
         return std::make_shared<ExecutiveContext>();
     }
-    virtual std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt>
-    executeTransaction(const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
+    dev::eth::TransactionReceipt::Ptr executeTransaction(
+        const dev::eth::BlockHeader&, dev::eth::Transaction::Ptr) override
     {
-        dev::executive::ExecutionResult res;
-        dev::eth::TransactionReceipt reciept;
-        return std::make_pair(res, reciept);
+        dev::eth::TransactionReceipt::Ptr receipt =
+            std::make_shared<dev::eth::TransactionReceipt>();
+        return receipt;
     }
 
 
