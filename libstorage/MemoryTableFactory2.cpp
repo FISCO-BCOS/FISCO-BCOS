@@ -207,7 +207,7 @@ h256 MemoryTableFactory2::hash()
     data.resize(tables.size() * 32);
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
-            for (auto& it = range.begin(); it != range.end(); ++it)
+            for (auto it = range.begin(); it != range.end(); ++it)
             {
                 auto table = tables[it];
                 h256 hash = table.second->hash();
@@ -281,7 +281,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         {
             currentStateIdx = i;
         }
-        for (auto& entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
+        for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
              ++entry)
         {
             (*entry)->setID(++m_ID);
