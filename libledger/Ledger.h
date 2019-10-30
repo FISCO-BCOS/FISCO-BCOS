@@ -156,11 +156,18 @@ protected:
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
 
+    dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
+        dev::PROTOCOL_ID const& _protocolId);
+    void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+    void initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
+
+    bool isRotatingPBFTEnabled();
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

@@ -155,9 +155,9 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
+    int64_t currentNumber = m_blockChain->number();
     if (status == nullptr)
     {
-        int64_t currentNumber = m_blockChain->number();
         if (currentNumber < info.number)
         {
             m_syncStatus->newSyncPeerStatus(info);
@@ -180,6 +180,10 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
                                << LOG_KV("latestHash", info.latestHash.abridged());
         status->update(info);
     }
+    if (currentNumber < info.number && m_onNotifyWorker)
+    {
+        m_onNotifyWorker();
+    }
 }
 
 bool SyncMsgEngine::isFarSyncing() const
@@ -196,17 +200,12 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
-    // only drop the transactions when the block height of this node falls behind a log
-    if (isFarSyncing())
-    {
-        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx")
-                               << LOG_DESC("Drop peer transactions when dowloading blocks")
-                               << LOG_KV("fromNodeId", _packet.nodeId.abridged());
-        return;
-    }
-
     RLP const& rlps = _packet.rlp();
     m_txQueue->push(rlps.data(), _packet.nodeId);
+    if (m_onNotifySyncTrans)
+    {
+        m_onNotifySyncTrans();
+    }
     SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
                            << LOG_KV("packetSize(B)", rlps.data().size());
 }
@@ -220,6 +219,11 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
                            << LOG_KV("packetSize(B)", rlps.data().size());
 
     m_syncStatus->bq().push(rlps);
+    // notify sync master to solve DownloadingQueue
+    if (m_onNotifyWorker)
+    {
+        m_onNotifyWorker();
+    }
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
@@ -253,7 +257,14 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 
     auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
     if (peerStatus != nullptr && peerStatus)
+    {
         peerStatus->reqQueue.push(from, (int64_t)size);
+        // notify sync master to handle block requests
+        if (m_onNotifyWorker)
+        {
+            m_onNotifyWorker();
+        }
+    }
 }
 
 void DownloadBlocksContainer::batchAndSend(BlockPtr _block)

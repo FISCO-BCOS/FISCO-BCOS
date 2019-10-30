@@ -42,6 +42,7 @@ namespace consensus
 class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusEngineBase>;
     ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -66,6 +67,7 @@ public:
                                   << errinfo_comment("Protocol id must be larger than 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
+        m_lastSealerListUpdateNumber = m_blockChain->number();
     }
 
     void start() override;
@@ -144,15 +146,15 @@ public:
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
 
-    IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
+    virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const&) override {}
 
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
+    virtual void resetConfig();
 
 protected:
-    virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
     void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
     {
         m_txPool->dropBlockTrans(block);
@@ -227,7 +229,7 @@ protected:
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P();
+    virtual void updateNodeListInP2P(dev::h512s const& _nodeList);
 
     /// set the max number of transactions in a block
     virtual void updateMaxBlockTransactions()
@@ -241,8 +243,13 @@ protected:
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
 
+    virtual dev::h512s consensusList() const { return sealerList(); }
+
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
+    // record the sealer list has been updated or not
+    std::atomic_bool m_sealerListUpdated = {true};
+    int64_t m_lastSealerListUpdateNumber = 0;
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler

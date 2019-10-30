@@ -474,19 +474,22 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         tb = mtb->openTable(SYS_CONFIG);
         if (tb)
         {
-            Entry::Ptr entry1 = std::make_shared<Entry>();
-            entry1->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_COUNT_LIMIT);
-            entry1->setField(
-                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txCountLimit));
-            entry1->setField(SYSTEM_CONFIG_ENABLENUM, "0");
-            tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry1);
+            // init for tx_count_limit
+            initSystemConfig(tb, SYSTEM_KEY_TX_COUNT_LIMIT,
+                boost::lexical_cast<std::string>(initParam.txCountLimit));
 
-            Entry::Ptr entry2 = std::make_shared<Entry>();
-            entry2->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_GAS_LIMIT);
-            entry2->setField(
-                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txGasLimit));
-            entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
-            tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
+            // init for tx_gas_limit
+            initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
+                boost::lexical_cast<std::string>(initParam.txGasLimit));
+            // init configurations for RPBFT
+            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rotating_pbft") == 0)
+            {
+                // init rotating-epoch-size
+                initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SIZE,
+                    boost::lexical_cast<std::string>(initParam.rpbftEpochSize));
+                initSystemConfig(tb, SYSTEM_KEY_RPBFT_ROTATING_INTERVAL,
+                    boost::lexical_cast<std::string>(initParam.rpbftRotatingInterval));
+            }
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);
@@ -581,6 +584,17 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
     return true;
 }
 
+// init system config
+void BlockChainImp::initSystemConfig(
+    Table::Ptr _tb, std::string const& _key, std::string const& _value)
+{
+    Entry::Ptr entry = std::make_shared<Entry>();
+    entry->setField(SYSTEM_CONFIG_KEY, _key);
+    entry->setField(SYSTEM_CONFIG_VALUE, _value);
+    entry->setField(SYSTEM_CONFIG_ENABLENUM, "0");
+    _tb->insert(_key, entry);
+}
+
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
 {
     dev::h512s list;
@@ -664,18 +678,26 @@ dev::h512s BlockChainImp::observerList()
 
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)
 {
+    return getSystemConfigInfoByKey(key, num).first;
+}
+
+std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
+    std::string const& key, int64_t const& num)
+{
     // Different keys can go into the function
     // -1 means that the parameter is invalid and to obtain current block height
     // The param was reset at height number(), and takes effect in next block.
     // So we query the status of number() + 1.
     int64_t blockNumber = (-1 == num) ? number() + 1 : num;
 
+    BlockNumber enableNumber = -1;
+
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
     if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
     {
         // get value from cache
-        return it->second.value;
+        return std::make_pair(it->second.value, it->second.enableNumber);
     }
 
     std::string ret;
@@ -687,7 +709,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
-            return ret;
+            return std::make_pair(ret, -1);
         }
         auto values = tb->select(key, tb->newCondition());
         if (!values || values->size() != 1)
@@ -695,7 +717,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
                                   << LOG_KV("key", key);
             // FIXME: throw exception here, or fatal error
-            return ret;
+            return std::make_pair(ret, enableNumber);
         }
 
         auto value = values->get(0);
@@ -703,12 +725,15 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer");
             // FIXME: throw exception here, or fatal error
-            return ret;
+            return std::make_pair(ret, enableNumber);
         }
 
-        if (boost::lexical_cast<int>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= blockNumber)
+        if (boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <=
+            blockNumber)
         {
             ret = value->getField(SYSTEM_CONFIG_VALUE);
+            enableNumber =
+                boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM));
         }
     }
     catch (std::exception& e)
@@ -720,7 +745,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
     // update cache
     {
         UpgradeGuard ul(l);
-        SystemConfigRecord systemConfigRecord(ret, blockNumber);
+        SystemConfigRecord systemConfigRecord(ret, enableNumber, blockNumber);
         if (it != m_systemConfigRecord.end())
         {
             it->second = systemConfigRecord;
@@ -734,7 +759,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getSystemConfigByKey]Data in db") << LOG_KV("key", key)
                           << LOG_KV("value", ret);
-    return ret;
+    return std::make_pair(ret, enableNumber);
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)

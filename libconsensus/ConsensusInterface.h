@@ -30,6 +30,7 @@ namespace consensus
 class ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusInterface>;
     ConsensusInterface() = default;
     virtual ~ConsensusInterface(){};
 
@@ -59,6 +60,8 @@ public:
     virtual uint64_t maxBlockTransactions() { return 1000; }
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
+
+    virtual bool shouldRecvTxs() const { return false; }
 };
 }  // namespace consensus
 }  // namespace dev

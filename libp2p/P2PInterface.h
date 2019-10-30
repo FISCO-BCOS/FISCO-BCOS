@@ -34,6 +34,7 @@ namespace p2p
 class P2PMessage;
 class P2PMessageFactory;
 class P2PSession;
+class StatisticHandler;
 typedef std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
     std::shared_ptr<dev::p2p::P2PMessage>)>
     CallbackFuncWithSession;
@@ -41,6 +42,7 @@ typedef std::function<void(const std::string&, const std::string&)> CallbackFunc
 class P2PInterface
 {
 public:
+    using Ptr = std::shared_ptr<P2PInterface>;
     virtual ~P2PInterface(){};
 
     virtual NodeID id() const = 0;
@@ -92,6 +94,7 @@ public:
     virtual CallbackFuncForTopicVerify callbackFuncForTopicVerify() = 0;
 
     virtual std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) = 0;
+    virtual std::shared_ptr<StatisticHandler> statisticHandler() { return nullptr; }
 };
 
 }  // namespace p2p

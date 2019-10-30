@@ -33,8 +33,6 @@ using namespace dev::blockchain;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 
-static unsigned const c_maxSendTransactions = 1000;
-
 void SyncMaster::printSyncInfo()
 {
     auto pendingSize = m_txPool->pendingSize();
@@ -103,17 +101,21 @@ string const SyncMaster::syncInfo() const
 
 void SyncMaster::start()
 {
-    if (!fp_isConsensusOk)
-    {
-        SYNC_LOG(ERROR) << LOG_DESC("Consensus verify handler is not set");
-        BOOST_THROW_EXCEPTION(SyncVerifyHandlerNotSet());
-    }
-
     startWorking();
+    m_syncTrans->start();
+    if (m_blockStatusGossipThread)
+    {
+        m_blockStatusGossipThread->start();
+    }
 }
 
 void SyncMaster::stop()
 {
+    m_syncTrans->stop();
+    if (m_blockStatusGossipThread)
+    {
+        m_blockStatusGossipThread->stop();
+    }
     doneWorking();
     stopWorking();
     // will not restart worker, so terminate it
@@ -130,45 +132,22 @@ void SyncMaster::doWork()
         printSyncInfo();
     auto printSyncInfo_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
-    // Always do
     maintainPeersConnection();
     auto maintainPeersConnection_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     maintainDownloadingQueueBuffer();
     auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     maintainPeersStatus();
     auto maintainPeersStatus_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    maintainDownloadingTransactions();
-    auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
     record_time = utcTime();
     maintainBlocks();
     auto maintainBlocks_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
-    auto maintainTransactions_time_cost = 0;
     auto maintainBlockRequest_time_cost = 0;
-    // Idle do
-    if (!isSyncing())
-    {
-        // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        if (m_needMaintainTransactions && m_newTransactions)
-        {
-            maintainTransactions();
-        }
-        maintainTransactions_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        maintainBlockRequest();
-        maintainBlockRequest_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-    }
-
+    maintainBlockRequest();
+    maintainBlockRequest_time_cost = utcTime() - record_time;
+    record_time = utcTime();
     auto maintainDownloadingQueue_time_cost = 0;
     // Not Idle do
     if (isSyncing())
@@ -184,14 +163,11 @@ void SyncMaster::doWork()
 
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainPeersConnectionTimeCost", maintainPeersConnection_time_cost)
+                    << LOG_KV("maintainPeersConnection", maintainPeersConnection_time_cost)
                     << LOG_KV("maintainDownloadingQueueBufferTimeCost",
                            maintainDownloadingQueueBuffer_time_cost)
                     << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
                     << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
-                    << LOG_KV("maintainDownloadingTransactionsTimeCost",
-                           maintainDownloadingTransactions_time_cost)
-                    << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
                     << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
                     << LOG_KV(
                            "maintainDownloadingQueueTimeCost", maintainDownloadingQueue_time_cost)
@@ -203,7 +179,7 @@ void SyncMaster::workLoop()
     while (workerState() == WorkerState::Started)
     {
         doWork();
-        if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
+        if (idleWaitMs())
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -230,73 +206,6 @@ bool SyncMaster::isFarSyncing() const
     return m_msgEngine->isFarSyncing();
 }
 
-void SyncMaster::maintainTransactions()
-{
-    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
-
-    auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
-    auto txSize = ts->size();
-    if (txSize == 0)
-    {
-        m_newTransactions = false;
-        return;
-    }
-    auto pendingSize = m_txPool->pendingSize();
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
-                    << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
-    UpgradableGuard l(m_txPool->xtransactionKnownBy());
-    for (size_t i = 0; i < ts->size(); ++i)
-    {
-        auto t = (*ts)[i];
-        NodeIDs peers;
-
-        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t->sha3()) ? 25 : 100;
-
-        peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent = !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId);
-            bool isSealer = _p->isSealer;
-            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
-        });
-        UpgradeGuard ul(l);
-        m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
-        if (0 == peers.size())
-            continue;
-        for (auto const& p : peers)
-        {
-            peerTransactions[p].push_back(i);
-            m_txPool->setTransactionIsKnownBy(t->sha3(), p);
-        }
-    }
-
-    m_syncStatus->foreachPeerRandom([&](shared_ptr<SyncPeerStatus> _p) {
-        std::vector<bytes> txRLPs;
-        unsigned txsSize = peerTransactions[_p->nodeId].size();
-        if (0 == txsSize)
-            return true;  // No need to send
-
-        for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back((*ts)[i]->rlp(WithSignature));
-
-        SyncTransactionsPacket packet;
-        packet.encode(txRLPs);
-
-        auto msg = packet.toMessage(m_protocolId);
-        m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
-
-        SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
-                        << LOG_KV("txNum", int(txsSize))
-                        << LOG_KV("toNodeId", _p->nodeId.abridged())
-                        << LOG_KV("messageSize(B)", msg->buffer()->size());
-        return true;
-    });
-}
-
-void SyncMaster::maintainDownloadingTransactions()
-{
-    m_txQueue->pop2TxPool(m_txPool);
-}
-
 void SyncMaster::maintainBlocks()
 {
     if (!m_needSendStatus)
@@ -316,27 +225,74 @@ void SyncMaster::maintainBlocks()
     int64_t number = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(number);
 
-    // Just broadcast status
+    if (m_syncTreeRouter)
+    {
+        // sendSyncStatus by tree
+        sendSyncStatusByTree(number, currentHash);
+    }
+    else
+    {
+        // broadcast status
+        broadcastSyncStatus(number, currentHash);
+    }
+}
+
+
+void SyncMaster::sendSyncStatusByTree(BlockNumber const& _blockNumber, h256 const& _currentHash)
+{
+    dev::h512s selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
+    for (auto const& nodeId : selectedNodes)
+    {
+        sendSyncStatusByNodeId(_blockNumber, _currentHash, nodeId);
+    }
+}
+
+void SyncMaster::broadcastSyncStatus(BlockNumber const& _blockNumber, h256 const& _currentHash)
+{
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        SyncStatusPacket packet;
-        packet.encode(number, m_genesisHash, currentHash);
-
-        m_service->asyncSendMessageByNodeID(
-            _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-
-        SYNC_LOG(DEBUG) << LOG_BADGE("Status")
-                        << LOG_DESC("Send current status when maintainBlocks")
-                        << LOG_KV("number", int(number))
-                        << LOG_KV("genesisHash", m_genesisHash.abridged())
-                        << LOG_KV("currentHash", currentHash.abridged())
-                        << LOG_KV("peer", _p->nodeId.abridged());
-
-        return true;
+        return sendSyncStatusByNodeId(_blockNumber, _currentHash, _p->nodeId);
     });
+}
+
+bool SyncMaster::sendSyncStatusByNodeId(
+    BlockNumber const& blockNumber, h256 const& currentHash, dev::network::NodeID const& nodeId)
+{
+    SyncStatusPacket packet;
+    packet.encode(blockNumber, m_genesisHash, currentHash);
+    m_service->asyncSendMessageByNodeID(
+        nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+
+    SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
+                    << LOG_KV("number", blockNumber)
+                    << LOG_KV("genesisHash", m_genesisHash.abridged())
+                    << LOG_KV("currentHash", currentHash.abridged())
+                    << LOG_KV("peer", nodeId.abridged());
+    return true;
 }
 
 void SyncMaster::maintainPeersStatus()
 {
+    uint64_t currentTime = utcTime();
+    if (isSyncing())
+    {
+        // Skip downloading if last if not timeout
+        if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
+            (int64_t)m_eachBlockDownloadingRequestTimeout *
+                (m_maxRequestNumber - m_lastDownloadingBlockNumber))
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
+                            << LOG_KV("maxRequestNumber", m_maxRequestNumber)
+                            << LOG_KV("lastDownloadingBlockNumber", m_lastDownloadingBlockNumber);
+            return;  // no need to sync
+        }
+        else
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("timeout and request a new block")
+                            << LOG_KV("maxRequestNumber", m_maxRequestNumber)
+                            << LOG_KV("lastDownloadingBlockNumber", m_lastDownloadingBlockNumber);
+        }
+    }
+
     // need download? ->set syncing and knownHighestNumber
     int64_t currentNumber = m_blockChain->number();
     int64_t maxPeerNumber = 0;
@@ -381,19 +337,8 @@ void SyncMaster::maintainPeersStatus()
         }
     }
 
-    // Skip downloading if last if not timeout
-
-    uint64_t currentTime = utcTime();
-    if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
-        (int64_t)c_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
-    {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
-                        << LOG_KV("currentNumber", currentNumber)
-                        << LOG_KV("maxRequestNumber", m_maxRequestNumber)
-                        << LOG_KV("maxPeerNumber", maxPeerNumber);
-        return;  // no need to sync
-    }
     m_lastDownloadingRequestTime = currentTime;
+    m_lastDownloadingBlockNumber = currentNumber;
 
     // Start download
     noteDownloadingBegin();
@@ -483,8 +428,13 @@ bool SyncMaster::maintainDownloadingQueue()
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
-    while (isWorking() && topBlock != nullptr &&
-           topBlock->header().number() <= (m_blockChain->number() + 1))
+    if (topBlock && topBlock->header().number() > (m_blockChain->number() + 1))
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("Discontinuous block")
+                        << LOG_KV("topNumber", topBlock->header().number())
+                        << LOG_KV("curNumber", m_blockChain->number());
+    }
+    while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
         try
         {
@@ -674,7 +624,7 @@ void SyncMaster::maintainPeersConnection()
     });
 
     // If myself is not in group, no need to maintain transactions(send transactions to peers)
-    m_needMaintainTransactions = hasMyself;
+    m_syncTrans->updateNeedMaintainTransactions(hasMyself);
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
     m_needSendStatus = hasMyself;
@@ -697,7 +647,7 @@ void SyncMaster::maintainBlockRequest()
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
-            return true;  // no need to respeond
+            return true;  // no need to respond
 
         // Just select one peer per maintain
         reqQueue.disablePush();  // drop push at this time
@@ -729,6 +679,14 @@ void SyncMaster::maintainBlockRequest()
                                 << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
                                 << LOG_KV("timeCost", utcTime() - start_get_block_time);
                 blockContainer.batchAndSend(blockRLP);
+
+                // update the sended block information
+                if (m_statisticHandler)
+                {
+                    m_statisticHandler->updateSendedBlockInfo(blockRLP->size());
+                    // print the statistic information
+                    m_statisticHandler->printStatistics();
+                }
             }
 
             if (number < numberLimit)  // This respond not reach the end due to timeout
@@ -792,4 +750,13 @@ bool SyncMaster::isNextBlock(BlockPtr _block)
     }
 
     return true;
+}
+
+void SyncMaster::sendBlockStatus(int64_t const& _gossipPeersNumber)
+{
+    auto blockNumber = m_blockChain->number();
+    auto currentHash = m_blockChain->numberHash(blockNumber);
+    m_syncStatus->forRandomPeers(_gossipPeersNumber, [&](std::shared_ptr<SyncPeerStatus> _p) {
+        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+    });
 }

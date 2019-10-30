@@ -34,6 +34,7 @@ struct TxPoolStatus;
 class TxPoolInterface
 {
 public:
+    using Ptr = std::shared_ptr<TxPoolInterface>;
     TxPoolInterface() = default;
     virtual ~TxPoolInterface(){};
     void setMaxBlockLimit(unsigned const&) {}

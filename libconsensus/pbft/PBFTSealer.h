@@ -38,28 +38,11 @@ namespace consensus
 class PBFTSealer : public Sealer
 {
 public:
-    PBFTSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    PBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _key_pair,
-        h512s const& _sealerList = h512s())
+        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
       : Sealer(_txPool, _blockChain, _blockSync)
-    {
-        m_consensusEngine = std::make_shared<PBFTEngine>(_service, _txPool, _blockChain, _blockSync,
-            _blockVerifier, _protocolId, _baseDir, _key_pair, _sealerList);
-        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
-        /// called by viewchange procedure to reset block when timeout
-        m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
-        /// called by the next leader to reset block when it receives the prepare block
-        m_pbftEngine->onNotifyNextLeaderReset(
-            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
-
-        /// set thread name for PBFTSealer
-        std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
-        setName(threadName);
-    }
+    {}
 
     void start() override;
     void stop() override;
@@ -85,6 +68,12 @@ public:
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());
     }
 
+    void setConsensusEngine(ConsensusInterface::Ptr _consensusEngine) override
+    {
+        Sealer::setConsensusEngine(_consensusEngine);
+        initConsensusEngine();
+    }
+
     void setEnableDynamicBlockSize(bool enableDynamicBlockSize)
     {
         m_enableDynamicBlockSize = enableDynamicBlockSize;
@@ -96,6 +85,24 @@ public:
     }
 
 protected:
+    virtual void initConsensusEngine()
+    {
+        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+
+        // called by viewchange procedure to reset block when timeout
+        m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
+
+        /// called by the next leader to reset block when it receives the prepare block
+        m_pbftEngine->onNotifyNextLeaderReset(
+            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+
+        // resetConfig to update m_sealersNum
+        m_pbftEngine->resetConfig();
+        /// set thread name for PBFTSealer
+        std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
+        setName(threadName);
+    }
+
     void handleBlock() override;
     bool shouldSeal() override;
     // only the leader can generate the latest block

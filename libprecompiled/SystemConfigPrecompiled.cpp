@@ -152,6 +152,33 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    // only can insert tx_count_limit and tx_gas_limit as system config
+    else if (SYSTEM_KEY_RPBFT_EPOCH_SIZE == key)
+    {
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= RPBFT_EPOCH_SIZE_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
+            return false;
+        }
+    }
+    else if (SYSTEM_KEY_RPBFT_ROTATING_INTERVAL == key)
+    {
+        try
+        {
+            return (boost::lexical_cast<uint64_t>(value) >= RPBFT_ROTATING_INTERVAL_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
+            return false;
+        }
+    }
+    // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_size,  rpbft_rotating_interval
+    // as system config
     return false;
 }

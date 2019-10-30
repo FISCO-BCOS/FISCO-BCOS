@@ -441,6 +441,7 @@ generate_config_ini()
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
     ;enable_compress=true
+    ;enable_statistic=false
     ; nodes to connect
     $ip_list
 
@@ -549,6 +550,11 @@ function generate_group_ini()
     limit=150000
 [tx_execute]
     enable_parallel=${enable_parallel}
+[sync]
+    idle_wait_ms=200
+    send_block_status_by_tree=true
+    gossip_interval_ms=1000
+    gossip_peers_number=3
 EOF
 }
 

@@ -52,7 +52,7 @@ public:
         PROTOCOL_ID const& _protocolId, h512s const& _sealerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _sealerList)
+            _key_pair, _sealerList)
     {
         setLeaderFailed(false);
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
@@ -61,7 +61,9 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
+        setBaseDir(_baseDir);
         setMaxBlockTransactions(300000000);
+        createPBFTMsgFactory();
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -202,7 +204,12 @@ public:
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
     inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
 
-    void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
+    void handleMsg(PBFTMsgPacket const& pbftMsg)
+    {
+        std::shared_ptr<PBFTMsgPacket> pbftMsgPtr = std::make_shared<PBFTMsgPacket>(pbftMsg);
+        return PBFTEngine::handleMsg(pbftMsgPtr);
+    }
+
     void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
@@ -315,8 +322,7 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
         KeyPair const& _key_pair = KeyPair::create(), h512s const& _sealerList = h512s())
-      : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _sealerList)
+      : PBFTSealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);

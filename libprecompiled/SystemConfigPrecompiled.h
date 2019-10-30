@@ -30,10 +30,18 @@ const char* const SYSTEM_CONFIG_ENABLENUM = "enable_num";
 const char* const SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 const char* const SYSTEM_INIT_VALUE_TX_COUNT_LIMIT = "1000";
 const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
+
+// system configuration for RPBFT
+const char* const SYSTEM_KEY_RPBFT_EPOCH_SIZE = "rpbft_epoch_size";
+const char* const SYSTEM_KEY_RPBFT_ROTATING_INTERVAL = "rpbft_rotating_interval";
+
 const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 
 const int TX_COUNT_LIMIT_MIN = 1;
 const int TX_GAS_LIMIT_MIN = 100000;
+
+const int RPBFT_EPOCH_SIZE_MIN = 1;
+const int RPBFT_ROTATING_INTERVAL_MIN = 1;
 
 #if 0
 contract SystemConfigTable
