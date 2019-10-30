@@ -22,7 +22,6 @@
 #include "GroupSigPrecompiled.h"
 #include <group_sig/algorithm/GroupSig.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <string>
 
