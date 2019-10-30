@@ -144,7 +144,8 @@ private:
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
-    void parseMerkleMap(const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+    void parseMerkleMap(
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
         std::map<std::string, std::string>& child2Parent);
 
     void getMerkleProof(dev::h256 const& _txHash,
@@ -184,16 +185,17 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 
-    std::pair<dev::eth::LocalisedTransaction::Ptr, std::map<std::string, std::vector<std::string>>>
-        transactionWithProof;
-    std::mutex transactionWithProofMutex;
+    std::pair<dev::eth::LocalisedTransaction::Ptr,
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        m_transactionWithProof;
+    std::mutex m_transactionWithProofMutex;
 
     std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
-        std::map<std::string, std::vector<std::string>>>
-        receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                              executive::TransactionException::None),
-            std::map<std::string, std::vector<std::string>>());
-    std::mutex receiptWithProofMutex;
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        m_receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                                executive::TransactionException::None),
+            std::shared_ptr<std::map<std::string, std::vector<std::string>>>());
+    std::mutex m_receiptWithProofMutex;
 };
 }  // namespace blockchain
 }  // namespace dev

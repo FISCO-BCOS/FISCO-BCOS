@@ -865,7 +865,7 @@ std::pair<LocalisedTransaction::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 {
-    std::lock_guard<std::mutex> lock(transactionWithProofMutex);
+    std::lock_guard<std::mutex> lock(m_transactionWithProofMutex);
     auto tx = std::make_shared<dev::eth::LocalisedTransaction>();
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
@@ -888,15 +888,15 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
         blockInfo->headerHash(), lexical_cast<unsigned>(txIndex),
         blockInfo->blockHeader().number());
 
-    std::map<std::string, std::vector<std::string>> parent2ChildList;
-    if (transactionWithProof.first->blockNumber() == tx->blockNumber())
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
+    if (m_transactionWithProof.first->blockNumber() == tx->blockNumber())
     {
-        parent2ChildList = transactionWithProof.second;
+        parent2ChildList = m_transactionWithProof.second;
     }
     else
     {
         parent2ChildList = blockInfo->calTransactionRootV2_2_0(true, true);
-        transactionWithProof = std::make_pair(tx, parent2ChildList);
+        m_transactionWithProof = std::make_pair(tx, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
     parseMerkleMap(parent2ChildList, child2Parent);
@@ -904,7 +904,7 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
     bytes txData;
     tx->encode(txData);
     dev::h256 hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
-    this->getMerkleProof(hashWithIndex, parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
@@ -925,10 +925,10 @@ dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& dat
 }
 
 void BlockChainImp::parseMerkleMap(
-    const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
     std::map<std::string, std::string>& child2Parent)
 {
-    for (const auto& item : parent2ChildList)
+    for (const auto& item : *parent2ChildList)
     {
         for (const auto& child : item.second)
         {
@@ -1008,7 +1008,7 @@ std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
 BlockChainImp::getTransactionReceiptByHashWithProof(
     dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction)
 {
-    std::lock_guard<std::mutex> lock(receiptWithProofMutex);
+    std::lock_guard<std::mutex> lock(m_receiptWithProofMutex);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
 
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
@@ -1043,15 +1043,15 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         blockInfo->headerHash(), blockInfo->header().number(), transaction.from(), transaction.to(),
         lexical_cast<uint>(txIndex), receipt->gasUsed(), receipt->contractAddress());
 
-    std::map<std::string, std::vector<std::string>> parent2ChildList;
-    if (receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
+    if (m_receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
     {
-        parent2ChildList = receiptWithProof.second;
+        parent2ChildList = m_receiptWithProof.second;
     }
     else
     {
         parent2ChildList = blockInfo->calReceiptRootV2_2_0(true, true);
-        receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
+        m_receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
     parseMerkleMap(parent2ChildList, child2Parent);
@@ -1060,7 +1060,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     txReceipt->encode(receiptData);
     dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
-    this->getMerkleProof(hashWithIndex, parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(txReceipt, merkleProof);
 }
 

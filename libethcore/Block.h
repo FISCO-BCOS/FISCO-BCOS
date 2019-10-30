@@ -245,10 +245,10 @@ public:
     void calReceiptRoot(bool update = true) const;
     void calReceiptRootRC2(bool update = true) const;
 
-    std::map<std::string, std::vector<std::string>> calTransactionRootV2_2_0(
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> calTransactionRootV2_2_0(
         bool update = true, bool calForce = false) const;
 
-    std::map<std::string, std::vector<std::string>> calReceiptRootV2_2_0(
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> calReceiptRootV2_2_0(
         bool update = true, bool calForce = false) const;
 
     /**
