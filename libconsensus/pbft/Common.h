@@ -101,7 +101,7 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
+    virtual void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -116,7 +116,7 @@ struct PBFTMsgPacket
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object
-    void populate(RLP const& rlp)
+    virtual void populate(RLP const& rlp)
     {
         try
         {

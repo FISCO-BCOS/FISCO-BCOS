@@ -16,26 +16,27 @@
  */
 
 /**
- * @file: PBFTMsgFactory.h
+ * @file: RPBFTMsgFactory.h
  * @author: yujiechen
  *
- * @date: 2019-10-22
+ * @date: 2019-10-28
  *
  */
 #pragma once
-#include "Common.h"
+#include "RPBFTMsgPacket.h"
+#include <libconsensus/pbft/PBFTMsgFactory.h>
 
 namespace dev
 {
 namespace consensus
 {
-class PBFTMsgFactory
+class RPBFTMsgFactory : public PBFTMsgFactory
 {
 public:
-    using Ptr = std::shared_ptr<PBFTMsgFactory>;
-    PBFTMsgFactory() = default;
-    virtual ~PBFTMsgFactory() {}
-    virtual PBFTMsgPacket::Ptr createPBFTMsgPacket() { return std::make_shared<PBFTMsgPacket>(); }
+    using Ptr = std::shared_ptr<RPBFTMsgFactory>;
+    RPBFTMsgFactory() = default;
+    virtual ~RPBFTMsgFactory() {}
+    PBFTMsgPacket::Ptr createPBFTMsgPacket() override { return std::make_shared<RPBFTMsgPacket>(); }
 };
 }  // namespace consensus
 }  // namespace dev
