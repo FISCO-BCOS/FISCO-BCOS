@@ -300,7 +300,7 @@ ssize_t Entry::capacity() const
     return m_capacity;
 }
 
-void Entry::copyFrom(Entry::Ptr entry)
+void Entry::copyFrom(Entry::ConstPtr entry)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
 

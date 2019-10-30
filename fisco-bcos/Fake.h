@@ -175,7 +175,7 @@ public:
         return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
     }
 
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
 
     dev::h512s sealerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };

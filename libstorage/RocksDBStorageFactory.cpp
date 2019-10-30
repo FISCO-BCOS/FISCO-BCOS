@@ -29,9 +29,18 @@ using namespace std;
 using namespace dev;
 using namespace dev::storage;
 
-Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName)
+void RocksDBStorageFactory::setDBOpitons(rocksdb::Options _options)
+{
+    m_options = _options;
+}
+
+Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName, bool _createIfMissing)
 {
     auto dbName = m_DBPath + "/" + _dbName;
+    if (!_createIfMissing && !boost::filesystem::exists(dbName))
+    {
+        return nullptr;
+    }
     boost::filesystem::create_directories(dbName);
 
     RecursiveGuard l(x_cache);
@@ -41,11 +50,6 @@ Storage::Ptr RocksDBStorageFactory::getStorage(const std::string& _dbName)
     }
     std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
     rocksDB->Open(m_options, dbName);
-    if (m_encryptHandler && m_decryptHandler)
-    {
-        rocksDB->setEncryptHandler(m_encryptHandler);
-        rocksDB->setDecryptHandler(m_decryptHandler);
-    }
     std::shared_ptr<RocksDBStorage> rocksdbStorage =
         std::make_shared<RocksDBStorage>(m_disableWAL, m_completeDirty);
     rocksdbStorage->setDB(rocksDB);

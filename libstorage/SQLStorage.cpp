@@ -292,7 +292,7 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
                                    << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num);
         Json::Value requestJson;
         requestJson["op"] = "selectbynum";
-        requestJson["params"]["tableNum"] = tableInfo->name;
+        requestJson["params"]["tableName"] = tableInfo->name;
         requestJson["params"]["num"] = num;
 
         Json::Value responseJson = requestDB(requestJson);
@@ -306,14 +306,33 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
         }
 
         TableData::Ptr tableData = std::make_shared<TableData>();
+        tableInfo->fields.emplace_back(tableInfo->key);
+        tableInfo->fields.emplace_back(STATUS);
+        tableInfo->fields.emplace_back(NUM_FIELD);
+        tableInfo->fields.emplace_back(ID_FIELD);
+        tableInfo->fields.emplace_back("_hash_");
         tableData->info = tableInfo;
+        STORAGE_EXTERNAL_LOG(TRACE)
+            << LOG_DESC("fields in table") << LOG_KV("table", tableInfo->name)
+            << LOG_KV("size", tableInfo->fields.size());
         for (Json::ArrayIndex i = 0; i < responseJson["result"].size(); ++i)
         {
             Json::Value line = responseJson["result"][i];
             Entry::Ptr entry = std::make_shared<Entry>();
             for (auto key : line.getMemberNames())
             {
-                entry->setField(key, line.get(key, "").asString());
+                if (std::find(tableInfo->fields.begin(), tableInfo->fields.end(), key) !=
+                    tableInfo->fields.end())
+                {
+                    entry->setField(key, line.get(key, "").asString());
+                }
+                else
+                {
+                    STORAGE_EXTERNAL_LOG(ERROR)
+                        << LOG_DESC("Invalid key in table") << LOG_KV("table", tableInfo->name)
+                        << LOG_KV("key", key);
+                    // BOOST_THROW_EXCEPTION(runtime_error("Invalid key in table"));
+                }
             }
             entry->setID(line.get(ID_FIELD, "").asString());
             entry->setNum(line.get(NUM_FIELD, "").asString());
@@ -322,10 +341,10 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
             if (entry->getStatus() == 0)
             {
                 entry->setDirty(false);
-                tableData->dirtyEntries->addEntry(entry);
+                tableData->newEntries->addEntry(entry);
             }
         }
-        tableData->newEntries = std::make_shared<Entries>();
+        tableData->dirtyEntries = std::make_shared<Entries>();
         return tableData;
     }
     catch (std::exception& e)

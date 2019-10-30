@@ -60,6 +60,8 @@ macro(configure_project)
     eth_default_option(TESTS OFF)
     # mini demos
     eth_default_option(DEMO OFF)
+    # tools
+    eth_default_option(TOOL OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
@@ -117,6 +119,7 @@ macro(print_config NAME)
     message("-- TARGET_PLATFORM  Target platform              ${CMAKE_SYSTEM_NAME}")
     message("-- BUILD_STATIC     Build static                 ${BUILD_STATIC}")
     message("-- DEMO             Build demos                  ${DEMO}")
+    message("-- TOOL             Build tools                  ${TOOL}")
     message("-- COVERAGE         Build code coverage          ${COVERAGE}")
     message("-- TESTS            Build tests                  ${TESTS}")
     message("-- ARCH_NATIVE      Enable native code           ${ARCH_NATIVE}")

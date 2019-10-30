@@ -48,7 +48,7 @@ public:
                 }
             }
         }
-        catch (std::exception _e)
+        catch (std::exception& _e)
         {
             if (boost::filesystem::exists(_file))
             {

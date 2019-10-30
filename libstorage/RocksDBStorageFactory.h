@@ -38,8 +38,8 @@ public:
       : m_DBPath(_dbPath), m_disableWAL(_disableWAL), m_completeDirty(_enableCompleteDirty)
     {}
     virtual ~RocksDBStorageFactory() {}
-    void setDBOpitons(rocksdb::Options _options) { m_options = _options; }
-    Storage::Ptr getStorage(const std::string& _dbName) override;
+    void setDBOpitons(rocksdb::Options _options);
+    Storage::Ptr getStorage(const std::string& _dbName, bool _createIfMissing = true) override;
 
 private:
     const std::string m_DBPath;
@@ -48,8 +48,6 @@ private:
     rocksdb::Options m_options;
     std::recursive_mutex x_cache;
     std::pair<std::string, Storage::Ptr> m_cache;
-    std::function<void(std::string const&, std::string&)> m_encryptHandler = nullptr;
-    std::function<void(std::string&)> m_decryptHandler = nullptr;
 };
 }  // namespace storage
 }  // namespace dev
