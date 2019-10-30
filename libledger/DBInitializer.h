@@ -97,19 +97,15 @@ protected:
 private:
     void initLevelDBStorage();
     // below use MemoryTableFactory2
-    void initSQLStorage();
+    dev::storage::Storage::Ptr initSQLStorage();
     void initTableFactory2(
-        dev::storage::Storage::Ptr _backend, bool _enableCache, bool _enableBinlog);
-    void initRocksDBStorage();
-    dev::storage::Storage::Ptr createSQLStorage(
-        std::function<void(std::exception& e)> _fatalHandler);
-    void initScalableStorage();
+        dev::storage::Storage::Ptr _backend, std::shared_ptr<LedgerParamInterface> _param);
+    dev::storage::Storage::Ptr initRocksDBStorage(std::shared_ptr<LedgerParamInterface> _param);
+    dev::storage::Storage::Ptr initScalableStorage(std::shared_ptr<LedgerParamInterface> _param);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
-    dev::storage::Storage::Ptr createZdbStorage(const storage::ConnectionPoolConfig& _zdbConfig,
-        std::function<void(std::exception& e)> _fatalHandler);
 
-    void initZdbStorage();
+    dev::storage::Storage::Ptr initZdbStorage();
     void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
         dev::storage::Storage::Ptr _storage);
 
@@ -129,5 +125,10 @@ std::function<void(std::string&)> getDecryptHandler();
 std::function<void(std::string const&, std::string&)> getEncryptHandler();
 dev::storage::Storage::Ptr createRocksDBStorage(
     const std::string& _dbPath, bool _enableEncryption, bool _disableWAL, bool _enableCache);
+dev::storage::Storage::Ptr createSQLStorage(std::shared_ptr<LedgerParamInterface> _param,
+    std::shared_ptr<ChannelRPCServer> _channelRPCServer,
+    std::function<void(std::exception& e)> _fatalHandler);
+dev::storage::Storage::Ptr createZdbStorage(std::shared_ptr<LedgerParamInterface> _param,
+    std::function<void(std::exception& e)> _fatalHandler);
 }  // namespace ledger
 }  // namespace dev

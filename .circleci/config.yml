@@ -128,7 +128,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON -DDEMO=ON ..
+            cmake3 -DBUILD_GM=ON -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -218,7 +218,7 @@ jobs:
           packages: "ca-certificates golang-go"
       - checkout
       - compile:
-          options: "-DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
+          options: "-DTOOL=ON -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - run:
           name: Strip
@@ -227,12 +227,15 @@ jobs:
             tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
             strip fisco-bcos
             tar -zcf fisco-bcos.tar.gz fisco-bcos
+            strip fisco-sync
+            tar -zcf fisco-sync.tar.gz fisco-sync
       - run:
           name: Upload to GitHub Release
           command: |
             go get github.com/tcnksm/ghr
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
 
   deploy_guomi:

@@ -33,7 +33,7 @@ namespace storage
     LOG(LEVEL) << "[g:" << std::to_string(groupID()) << "]" << LOG_BADGE("STORAGE") \
                << LOG_BADGE("CachedStorage")
 #define BINLOG_HANDLER_LOG(LEVEL) LOG(LEVEL) << "[BINLOG]"
-#define SCALABLE_STORAGE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("[ScalableStorage]")
+#define SCALABLE_STORAGE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("ScalableStorage")
 
 static const std::string ID_FIELD = "_id_";
 static const std::string NUM_FIELD = "_num_";

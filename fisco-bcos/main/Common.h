@@ -51,7 +51,8 @@ std::string initCommandLine(int argc, const char* argv[])
     boost::program_options::options_description main_options("Usage of FISCO-BCOS");
     main_options.add_options()("help,h", "print help information")(
         "version,v", "version of FISCO-BCOS")("config,c",
-        boost::program_options::value<std::string>(), "config file path, eg. config.ini");
+        boost::program_options::value<std::string>()->default_value("./config.ini"),
+        "config file path, eg. config.ini");
     boost::program_options::variables_map vm;
     try
     {

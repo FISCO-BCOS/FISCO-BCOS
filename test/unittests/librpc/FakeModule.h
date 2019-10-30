@@ -173,7 +173,7 @@ public:
     {
         return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
     }
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool = true) override
     {
         m_initParam = initParam;
         return true;
