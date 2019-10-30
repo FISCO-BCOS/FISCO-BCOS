@@ -888,7 +888,7 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
         blockInfo->headerHash(), lexical_cast<unsigned>(txIndex),
         blockInfo->blockHeader().number());
 
-    std::shared_ptr<std::map<std::string, std::vector<std::string>> > parent2ChildList;
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
     if (m_transactionWithProof.first->blockNumber() == tx->blockNumber())
     {
         parent2ChildList = m_transactionWithProof.second;
@@ -925,7 +925,7 @@ dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& dat
 }
 
 void BlockChainImp::parseMerkleMap(
-    std::shared_ptr< std::map<std::string, std::vector<std::string>> > parent2ChildList,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
     std::map<std::string, std::string>& child2Parent)
 {
     for (const auto& item : *parent2ChildList)
@@ -1043,7 +1043,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         blockInfo->headerHash(), blockInfo->header().number(), transaction.from(), transaction.to(),
         lexical_cast<uint>(txIndex), receipt->gasUsed(), receipt->contractAddress());
 
-    std::shared_ptr<std::map<std::string, std::vector<std::string>> > parent2ChildList;
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
     if (m_receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
     {
         parent2ChildList = m_receiptWithProof.second;

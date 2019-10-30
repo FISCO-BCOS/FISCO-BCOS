@@ -35,14 +35,14 @@ namespace dev
 {
 void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes, std::vector<bytes>& _bytePath,
-    std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList);
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList);
 
-bytes h256ForOneNode(
-    HexMap const& _s, std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList);
+bytes h256ForOneNode(HexMap const& _s,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList);
 
 void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes, int32_t& _nodeType, std::vector<bytes>& _bytePath,
-    std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList)
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList)
 {
     if (_begin == _end)
     {
@@ -117,7 +117,7 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
 
 void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes, std::vector<bytes>& _bytePath,
-    std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList)
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList)
 {
     bytes bytesTemp;
     std::vector<bytes> bytePath;
@@ -144,8 +144,8 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
     _bytePath.push_back(hValue.asBytes());
 }
 
-bytes getTrieTree256(
-    BytesMap const& _s, std::shared_ptr<std::map<std::string, std::vector<std::string>> > _parent2ChildList)
+bytes getTrieTree256(BytesMap const& _s,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList)
 {
     if (_s.empty())
     {
@@ -189,8 +189,8 @@ bytes getTrieTree256(
     return bytesTemp;
 }
 
-bytes h256ForOneNode(
-    HexMap const& _hexMap, std::shared_ptr< std::map<std::string, std::vector<std::string>> > _parent2ChildList)
+bytes h256ForOneNode(HexMap const& _hexMap,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList)
 {
     bytes bytesChild;
     bytesChild.insert(
@@ -202,8 +202,8 @@ bytes h256ForOneNode(
     return hChild.asBytes();
 }
 
-h256 getHash256(
-    BytesMap const& _s, std::shared_ptr< std::map<std::string, std::vector<std::string>> > _parent2ChildList)
+h256 getHash256(BytesMap const& _s,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList)
 {
     return sha3(getTrieTree256(_s, _parent2ChildList));
 }
