@@ -162,6 +162,8 @@ private:
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
 
+    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 

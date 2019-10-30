@@ -87,10 +87,10 @@ install: |
     fi
 script: |
     if [[ $TRAVIS_OS_NAME == linux ]]; then
-      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake .. && \
+      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake -DCRYPTO_EXTENSION=ON .. && \
       make -j2 && cd ../tools && bash ci/ci_check.sh
     else
-      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
+      mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCRYPTO_EXTENSION=ON .. && \
       make -j2 && cd ../tools && bash ci/ci_check.sh
     fi
 after_success: |

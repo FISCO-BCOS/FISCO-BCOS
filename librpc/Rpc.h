@@ -134,6 +134,10 @@ private:
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
 
+    std::string buildReceipt(uint32_t clientProtocolVersion, int errorCode,
+        const std::string& errorMessage, const bytes& input,
+        dev::eth::LocalisedTransactionReceipt::Ptr receipt);
+
     /// transaction callback related
     std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
