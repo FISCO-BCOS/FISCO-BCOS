@@ -942,6 +942,7 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 {
     try
     {
+        checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
 
         Json::Value response;
@@ -1037,8 +1038,13 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         checkRequest(_groupID);
         checkTxReceive(_groupID);
 #endif
-
         auto txPool = ledgerManager()->txPool(_groupID);
+        // only check txPool here
+        if (!txPool)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
+        }
 
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(

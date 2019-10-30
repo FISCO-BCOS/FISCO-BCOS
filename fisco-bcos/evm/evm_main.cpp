@@ -45,10 +45,9 @@ static void FakeBlockHeader(BlockHeader& header, EvmParams const& param)
 }
 
 static void ExecuteTransaction(
-    ExecutionResult& res, std::shared_ptr<MPTState> mptState, EnvInfo& info, Transaction const& tx)
+    ExecutionResult&, std::shared_ptr<MPTState> mptState, EnvInfo& info, Transaction::Ptr tx)
 {
     Executive executive(mptState, info, 0);
-    executive.setResultRecipient(res);
     executive.initialize(tx);
     /// execute transaction
     if (!executive.execute())
@@ -61,11 +60,11 @@ static void ExecuteTransaction(
 }
 
 static void updateSender(
-    std::shared_ptr<MPTState> mptState, Transaction& tx, EvmParams const& param)
+    std::shared_ptr<MPTState> mptState, Transaction::Ptr tx, EvmParams const& param)
 {
     KeyPair key_pair = KeyPair::create();
     Address sender = toAddress(key_pair.pub());
-    tx.forceSender(sender);
+    tx->forceSender(sender);
     mptState->addBalance(sender, param.transValue());
 }
 
@@ -74,7 +73,8 @@ static void deployContract(
     std::shared_ptr<MPTState> mptState, EnvInfo& info, bytes const& code, EvmParams const& param)
 {
     /// LOG(DEBUG) << "[evm_main] codeData: " << toHex(code);
-    Transaction tx = Transaction(param.transValue(), param.gasPrice(), param.gas(), code, u256(0));
+    Transaction::Ptr tx = std::make_shared<Transaction>(
+        param.transValue(), param.gasPrice(), param.gas(), code, u256(0));
     updateSender(mptState, tx, param);
     ExecutionResult res;
     ExecuteTransaction(res, mptState, info, tx);
@@ -104,7 +104,7 @@ static void callTransaction(
     ContractABI abi;
     bytes inputData = abi.abiIn(input.inputCall);
     EVMC_LOG(INFO) << "[evm_main/callTransaction/Parms]: " << toHex(inputData);
-    Transaction tx = Transaction(
+    Transaction::Ptr tx = std::make_shared<Transaction>(
         param.transValue(), param.gasPrice(), param.gas(), input.addr, inputData, u256(0));
     updateSender(mptState, tx, param);
     ExecutionResult res;

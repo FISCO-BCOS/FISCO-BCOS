@@ -121,13 +121,13 @@ public:
             Address dst = toAddress(KeyPair::create().pub());
             std::string str = "test transaction";
             bytes data(str.begin(), str.end());
-            Transaction tx(value, gasPrice, gas, dst, data);
+            Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             KeyPair sigKeyPair = KeyPair::create();
-            tx.setNonce(tx.nonce() + u256(rand()));
-            tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+            tx->setNonce(tx->nonce() + u256(rand()));
+            tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
+            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
-            tx.updateSignature(sig);
+            tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
             txs->emplace_back(tx);
         }
@@ -179,7 +179,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
 
     shared_ptr<Transactions> txs = fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
-        txPool->submit(tx);
+        txPool->submitTransactions(tx);
 
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
 
     txs = fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
-        txPool->submit(tx);
+        txPool->submitTransactions(tx);
 
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     // test transaction has send logic
     txs = fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
-        txPool->submit(tx);
+        txPool->submitTransactions(tx);
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
@@ -221,10 +221,10 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
 
     // test transaction known by peer logic
     txs = fakeTransactions(1, currentBlockNumber);
-    for (auto& tx : *txs)
+    for (auto tx : *txs)
     {
-        txPool->submit(tx);
-        txPool->setTransactionIsKnownBy(tx.sha3(), NodeID(101));
+        txPool->submitTransactions(tx);
+        txPool->setTransactionIsKnownBy(tx->sha3(), NodeID(101));
     }
     sync->maintainTransactions();
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(101)) << endl;

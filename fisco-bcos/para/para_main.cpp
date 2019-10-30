@@ -47,7 +47,7 @@ static shared_ptr<Secret> sec;
 
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
-    Transactions txs;
+    std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
     // Generate user + receiver = _userNum
     for (size_t i = 0; i < _userNum; i++)
     {
@@ -61,35 +61,36 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         bytes data =
             abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime());
-        Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        tx.setBlockLimit(250);
+        Transaction::Ptr tx =
+            std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+        tx->setBlockLimit(250);
         // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx.sha3(WithoutSignature));
-        tx.updateSignature(SignatureStruct(sig));
-        txs.push_back(tx);
+        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        tx->updateSignature(SignatureStruct(sig));
+        txs->push_back(tx);
     }
 
     _block.setTransactions(txs);
-    for (auto& tx : _block.transactions())
-        tx.sender();
+    for (auto tx : *_block.transactions())
+        tx->sender();
 }
 
 void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
     std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
 {
-    Block userAddBlock;
-    userAddBlock.header().setNumber(_parentBlockInfo.number + 1);
-    userAddBlock.header().setParentHash(_parentBlockInfo.hash);
+    std::shared_ptr<Block> userAddBlock = std::make_shared<Block>();
+    userAddBlock->header().setNumber(_parentBlockInfo.number + 1);
+    userAddBlock->header().setParentHash(_parentBlockInfo.hash);
 
-    genTxUserAddBlock(userAddBlock, _userNum);
-    auto exeCtx = _blockVerifier->executeBlock(userAddBlock, _parentBlockInfo);
+    genTxUserAddBlock(*userAddBlock, _userNum);
+    auto exeCtx = _blockVerifier->executeBlock(*userAddBlock, _parentBlockInfo);
     _blockChain->commitBlock(userAddBlock, exeCtx);
 }
 
 void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 {
-    Transactions txs;
+    std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
     srand(utcTime());
     for (size_t i = 0; i < _txNum; i++)
     {
@@ -117,17 +118,18 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
             money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime());
-        Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        tx.setBlockLimit(250);
+        Transaction::Ptr tx =
+            std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+        tx->setBlockLimit(250);
         // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx.sha3(WithoutSignature));
-        tx.updateSignature(SignatureStruct(sig));
-        txs.push_back(tx);
+        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        tx->updateSignature(SignatureStruct(sig));
+        txs->push_back(tx);
     }
 
     _block.setTransactions(txs);
-    for (auto& tx : _block.transactions())
-        tx.sender();
+    for (auto tx : *_block.transactions())
+        tx->sender();
 }
 
 
@@ -182,17 +184,17 @@ static void startExecute(int _totalUser, int _totalTxs)
     parentBlockInfo = {parentBlock->header().hash(), parentBlock->header().number(),
         parentBlock->header().stateRoot()};
 
-    Block block;
-    genTxUserTransfer(block, _totalUser, _totalTxs);
+    std::shared_ptr<Block> block = std::make_shared<Block>();
+    genTxUserTransfer(*block, _totalUser, _totalTxs);
     // while (true)
     // getchar();
     for (int i = 0; i < 10; i++)
     {
-        blockVerifier->serialExecuteBlock(block, parentBlockInfo);
+        blockVerifier->serialExecuteBlock(*block, parentBlockInfo);
     }
     for (int i = 0; i < 10; i++)
     {
-        blockVerifier->parallelExecuteBlock(block, parentBlockInfo);
+        blockVerifier->parallelExecuteBlock(*block, parentBlockInfo);
     }
     auto end = chrono::system_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);

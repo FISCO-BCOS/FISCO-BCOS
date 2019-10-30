@@ -46,8 +46,6 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
     {
-        // only note block sync when submit transactions through RPC
-        m_onReady();
         return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
     }
 
@@ -168,6 +166,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
         {
             m_txpoolNonceChecker->insertCache(*_tx);
         }
+        m_onReady();
     }
     return verify_ret;
 }
@@ -246,12 +245,10 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
     {
         return ImportResult::TransactionNonceCheckFail;
     }
-#if 0
-    if (false == m_txNonceCheck->isBlockLimitOk(trans))
+    if (false == m_txNonceCheck->isBlockLimitOk(*trans))
     {
         return ImportResult::BlockLimitCheckFailed;
     }
-#endif
     try
     {
         /// check transaction signature here when everything is ok

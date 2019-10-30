@@ -58,15 +58,26 @@ public:
     ~Block() {}
     ///-----opearator overloads of Block
     /// operator ==
+    // only use for UT
     bool equalAll(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_sigList == _block.sigList() &&
-               m_transactions == _block.transactions();
+        // check transaction
+        size_t i = 0;
+        for (auto tx : *_block.transactions())
+        {
+            if (*tx != (*(*m_transactions)[i]))
+            {
+                return false;
+            }
+            i++;
+        }
+        return m_blockHeader == _block.blockHeader() && *m_sigList == *_block.sigList();
     }
 
+    // only used for UT
     bool equalWithoutSig(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && *m_transactions == *_block.transactions();
     }
 
     bool equalHeader(Block const& _block) const { return m_blockHeader == _block.blockHeader(); }

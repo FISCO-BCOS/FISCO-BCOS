@@ -329,7 +329,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
         tbb::parallel_for(m_dirty.range(),
             [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
-                for (auto& it = range.begin(); it != range.end(); ++it)
+                for (auto it = range.begin(); it != range.end(); ++it)
                 {
                     if (!it->second->deleted())
                     {
@@ -342,11 +342,11 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         m_tableData->newEntries = std::make_shared<Entries>();
         tbb::parallel_for(m_newEntries.range(),
             [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
-                for (auto& it = range.begin(); it != range.end(); ++it)
+                for (auto it = range.begin(); it != range.end(); ++it)
                 {
                     tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
                         [&](tbb::blocked_range<size_t>& rangeIndex) {
-                            for (auto& i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
                             {
                                 if (!it->second->get(i)->deleted())
                                 {

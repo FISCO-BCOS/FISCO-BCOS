@@ -362,7 +362,8 @@ public:
     }
     void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
     {
-        return PBFTSealer::resetBlock(block, resetNextLeader);
+        std::shared_ptr<dev::eth::Block> p_block = std::make_shared<dev::eth::Block>(block);
+        return PBFTSealer::resetBlock(p_block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }
     void start() override { return Sealer::start(); }

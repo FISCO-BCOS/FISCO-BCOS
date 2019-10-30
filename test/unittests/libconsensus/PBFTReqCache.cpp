@@ -111,8 +111,8 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
     req_cache.addPrepareReq(prepare_req);
     ret = req_cache.generateAndSetSigList(block, node_num);
     BOOST_CHECK(ret);
-    BOOST_CHECK(block.sigList().size() == node_num);
-    std::vector<std::pair<u256, Signature>> sig_list = block.sigList();
+    BOOST_CHECK(block.sigList()->size() == node_num);
+    std::vector<std::pair<u256, Signature>> sig_list = *(block.sigList());
     /// check the signature
     for (auto& item : sig_list)
     {
