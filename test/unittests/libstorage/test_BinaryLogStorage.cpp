@@ -91,6 +91,8 @@ BOOST_AUTO_TEST_CASE(commit)
 BOOST_AUTO_TEST_CASE(exception)
 {
     binlogStorage->setBackend(nullptr);
+    binlogStorage->setBinaryLogger(nullptr);
+
     int num = 1;
     std::vector<dev::storage::TableData::Ptr> datas;
     dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();

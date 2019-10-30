@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(empty_select)
     BOOST_CHECK_EQUAL(entries->size(), 0u);
 }
 
-BOOST_AUTO_TEST_CASE(commit)
+BOOST_AUTO_TEST_CASE(commitNew)
 {
     h256 h(0x01);
     int num = 1;
@@ -261,6 +261,30 @@ BOOST_AUTO_TEST_CASE(commit)
     tableData->info->fields.push_back("id");
     Entries::Ptr entries = getEntries();
     tableData->newEntries = entries;
+    datas.push_back(tableData);
+    size_t c = rocksDB->commit(num, datas);
+    BOOST_CHECK_EQUAL(c, 1u);
+    std::string table("t_test");
+    std::string key("LiSi");
+
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = table;
+    entries = rocksDB->select(num, tableInfo, key, std::make_shared<Condition>());
+    BOOST_CHECK_EQUAL(entries->size(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(commitDirty)
+{
+    h256 h(0x01);
+    int num = 1;
+    h256 blockHash(0x11231);
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = "t_test";
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+    Entries::Ptr entries = getEntries();
+    tableData->dirtyEntries = entries;
     datas.push_back(tableData);
     size_t c = rocksDB->commit(num, datas);
     BOOST_CHECK_EQUAL(c, 1u);

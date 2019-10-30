@@ -28,11 +28,14 @@ struct StorageFixture
 {
     StorageFixture()
     {
-        scalableStorage = std::make_shared<ScalableStorage>(2000);
+        scalableStorage = std::make_shared<ScalableStorage>(2);
         memStorage = std::make_shared<MemoryStorage2>();
+        storageFactory = std::make_shared<MemoryStorageFactory>();
+        auto storage = storageFactory->getStorage("0");
         scalableStorage->setStateStorage(memStorage);
-        scalableStorage->setArchiveStorage(memStorage, 10);
+        scalableStorage->setArchiveStorage(storage, 0);
         scalableStorage->setRemoteStorage(memStorage);
+        scalableStorage->setStorageFactory(storageFactory);
     }
     Entries::Ptr getEntries()
     {
@@ -45,6 +48,7 @@ struct StorageFixture
     }
     std::shared_ptr<ScalableStorage> scalableStorage;
     std::shared_ptr<MemoryStorage2> memStorage;
+    std::shared_ptr<MemoryStorageFactory> storageFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestScalableStorage, StorageFixture)
@@ -80,9 +84,36 @@ BOOST_AUTO_TEST_CASE(commit)
     BOOST_CHECK_EQUAL(c, 2u);
     std::string table("t_test");
     std::string key("LiSi");
-
     auto tableInfo = std::make_shared<TableInfo>();
     tableInfo->name = table;
+    entries = scalableStorage->select(num, tableInfo, key, std::make_shared<Condition>());
+    BOOST_CHECK_EQUAL(entries->size(), 1u);
+    scalableStorage->stop();
+}
+
+BOOST_AUTO_TEST_CASE(archiveData)
+{
+    auto storage = storageFactory->getStorage("0");
+    scalableStorage->setStateStorage(memStorage);
+    scalableStorage->setArchiveStorage(storage, 0);
+    scalableStorage->setRemoteStorage(memStorage);
+    scalableStorage->setStorageFactory(storageFactory);
+    h256 h(0x01);
+    int num = 1;
+    std::vector<dev::storage::TableData::Ptr> datas;
+    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    tableData->info->name = SYS_HASH_2_BLOCK;
+    tableData->info->key = "Name";
+    tableData->info->fields.push_back("id");
+    Entries::Ptr entries = getEntries();
+    tableData->newEntries = entries;
+    datas.push_back(tableData);
+    size_t c = scalableStorage->commit(num, datas);
+    BOOST_CHECK_EQUAL(c, 2u);
+    std::string key("LiSi");
+    auto tableInfo = std::make_shared<TableInfo>();
+    tableInfo->name = SYS_HASH_2_BLOCK;
+    tableInfo->key = "Name";
     entries = scalableStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
     scalableStorage->stop();
