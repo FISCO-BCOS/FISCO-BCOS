@@ -17,6 +17,7 @@ ExternalProject_Add(mysqlclient
 ExternalProject_Get_Property(mysqlclient SOURCE_DIR)
 
 
+
 set(MYSQL_CLIENT_LIB ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a)
 set(ZDB_CONFIGURE_COMMAND ./configure --with-mysql=${SOURCE_DIR}/scripts/mysql_config --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
 
