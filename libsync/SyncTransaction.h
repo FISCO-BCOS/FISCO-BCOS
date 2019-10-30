@@ -73,8 +73,8 @@ public:
     /// stop blockSync
     virtual void stop();
     /// doWork every idleWaitMs
-    virtual void doWork() override;
-    virtual void workLoop() override;
+    void doWork() override;
+    void workLoop() override;
     void noteNewTransactions()
     {
         m_newTransactions = true;
@@ -161,8 +161,8 @@ private:
 public:
     void maintainTransactions();
     void forwardRemainingTxs();
-    void sendTransactions(dev::eth::Transactions const& _ts, bool const& _fastForwardRemainTxs,
-        int64_t const& _startIndex);
+    void sendTransactions(std::shared_ptr<dev::eth::Transactions> _ts,
+        bool const& _fastForwardRemainTxs, int64_t const& _startIndex);
     void maintainDownloadingTransactions();
 };
 

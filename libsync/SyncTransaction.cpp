@@ -96,7 +96,7 @@ void SyncTransaction::workLoop()
 void SyncTransaction::maintainTransactions()
 {
     auto ts = m_txPool->topTransactionsCondition(c_maxSendTransactions, m_nodeId);
-    auto txSize = ts.size();
+    auto txSize = ts->size();
     if (txSize == 0)
     {
         m_newTransactions = false;
@@ -105,15 +105,15 @@ void SyncTransaction::maintainTransactions()
     sendTransactions(ts, false, 0);
 }
 
-void SyncTransaction::sendTransactions(
-    Transactions const& _ts, bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
+void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
+    bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
-                    << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts.size())
+                    << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts->size())
                     << LOG_KV("totalTxs", pendingSize);
 
     NodeIDs selectedPeers;
@@ -138,33 +138,33 @@ void SyncTransaction::sendTransactions(
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
 
     auto endIndex =
-        std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts.size() - 1));
+        std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts->size() - 1));
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
     {
-        auto const& t = _ts[i];
+        auto t = (*_ts)[i];
         NodeIDs peers;
 
         // TODO: add redundancy when receive transactions from P2P
-        if (m_txPool->isTransactionKnownBySomeone(t.sha3()) && !_fastForwardRemainTxs)
+        if (m_txPool->isTransactionKnownBySomeone(t->sha3()) && !_fastForwardRemainTxs)
         {
-            m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+            m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
             continue;
         }
 
         peers = m_syncStatus->filterPeers(selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
             bool unsent =
-                !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId) || _fastForwardRemainTxs;
+                !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId) || _fastForwardRemainTxs;
             bool isSealer = _p->isSealer;
-            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
         });
         UpgradeGuard ul(l);
-        m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
+        m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
         if (0 == peers.size())
             continue;
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->setTransactionIsKnownBy(t.sha3(), p);
+            m_txPool->setTransactionIsKnownBy(t->sha3(), p);
         }
     }
 
@@ -175,7 +175,10 @@ void SyncTransaction::sendTransactions(
             return true;  // No need to send
 
         for (auto const& i : peerTransactions[_p->nodeId])
-            txRLPs.emplace_back(_ts[i].rlp(WithSignature));
+        {
+            txRLPs.emplace_back((*_ts)[i]->rlp(WithSignature));
+        }
+
 
         SyncTransactionsPacket packet;
         packet.encode(txRLPs);

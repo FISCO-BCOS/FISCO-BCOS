@@ -172,7 +172,7 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
         if (m_statisticHandler)
         {
-            m_statisticHandler->updateDownloadedTxsCount(txs.size());
+            m_statisticHandler->updateDownloadedTxsCount(txs->size());
         }
     }
 }

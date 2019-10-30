@@ -86,7 +86,6 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
 
     // init groupSize and rotatingInterval for RPBFT
     if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rotating_pbft") == 0)
-        ;
     {
         s << "-" << mutableConsensusParam().groupSize << "-";
         s << mutableConsensusParam().rotatingInterval;
