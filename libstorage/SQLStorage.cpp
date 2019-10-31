@@ -284,7 +284,8 @@ size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
     return 0;
 }
 
-TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo)
+TableData::Ptr SQLStorage::selectTableDataByNum(
+    int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts)
 {
     try
     {
@@ -294,6 +295,8 @@ TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tabl
         requestJson["op"] = "selectbynum";
         requestJson["params"]["tableName"] = tableInfo->name;
         requestJson["params"]["num"] = num;
+        requestJson["params"]["preIndex"] = start;
+        requestJson["params"]["pageSize"] = counts;
 
         Json::Value responseJson = requestDB(requestJson);
         int code = responseJson["code"].asInt();
