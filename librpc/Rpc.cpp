@@ -1053,10 +1053,12 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
+
+        uint32_t clientProtocolversion = ProtocolVersion::v1;
         if (currentTransactionCallback)
         {
             auto transactionCallback = *currentTransactionCallback;
-            auto clientProtocolversion = (*m_transactionCallbackVersion)();
+            clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback(
                 [transactionCallback, clientProtocolversion](
                     LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
@@ -1095,8 +1097,26 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     transactionCallback(receiptContent);
                 });
         }
-        std::pair<h256, Address> ret = txPool->submit(tx);
-
+        std::pair<h256, Address> ret;
+        switch (clientProtocolversion)
+        {
+        // the oldest SDK: submit transactions sync
+        case ProtocolVersion::v1:
+            checkRequest(_groupID);
+            ret = txPool->submitTransactions(tx);
+            break;
+        // TODO: the SDK protocol upgrade to 3,
+        // the v2 submit transactions sync
+        // and v3 submit transactions async
+        case ProtocolVersion::v2:
+            ret = txPool->submit(tx);
+            break;
+        // default submit transactions sync
+        default:
+            checkRequest(_groupID);
+            ret = txPool->submitTransactions(tx);
+            break;
+        }
         return toJS(ret.first);
     }
     catch (JsonRpcException& e)

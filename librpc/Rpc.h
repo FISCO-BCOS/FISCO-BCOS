@@ -135,7 +135,6 @@ private:
     bool isValidSystemConfig(std::string const& key);
 
     /// transaction callback related
-    std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
     boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;

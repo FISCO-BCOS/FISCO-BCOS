@@ -133,8 +133,6 @@ public:
     virtual void start() {}
     virtual void stop() {}
 
-    virtual uint64_t totalTransactionNum() { return 0; }
-
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.

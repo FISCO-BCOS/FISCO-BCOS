@@ -111,7 +111,8 @@ enum class ImportResult
     TxPoolNonceCheckFail,
     TransactionPoolIsFull,
     InvalidChainIdOrGroupId,
-    BlockLimitCheckFailed
+    BlockLimitCheckFailed,
+    NotBelongToTheGroup
 };
 
 struct ImportRequirements

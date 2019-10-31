@@ -68,6 +68,10 @@ enum class TransactionException : uint32_t
     GasOverflow = 27,
     TxPoolIsFull = 28,
     TransactionRefused = 29,
+    AlreadyKnown = 10000,  /// txPool related errors
+    AlreadyInChain = 10001,
+    InvalidChainIdOrGroupId = 10002,
+    NotBelongToTheGroup = 10003,
 };
 
 enum class CodeDeposit
