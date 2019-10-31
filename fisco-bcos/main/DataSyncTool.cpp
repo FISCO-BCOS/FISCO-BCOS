@@ -49,6 +49,9 @@ using namespace dev::storage;
 using namespace dev::initializer;
 namespace fs = boost::filesystem;
 
+uint32_t PageCount = 10000;
+uint32_t BigTablePageCount = 50;
+
 struct SyncRecorder
 {
     explicit SyncRecorder(const std::string& path) : filename(path + "/.sync")
@@ -62,10 +65,20 @@ struct SyncRecorder
         }
     }
     ~SyncRecorder() { serialization(); }
-    bool isCompleted(string _tableName) const { return tables.at(_tableName); }
-
-    void markStatus(string tableName, bool status)
+    bool isCompleted(string _tableName) const
     {
+        std::lock_guard<std::mutex> l(x_tableStatus);
+        return tables.at(_tableName).second;
+    }
+    uint64_t tableSyncOffset(string _tableName) const
+    {
+        std::lock_guard<std::mutex> l(x_tableStatus);
+        return tables.at(_tableName).first;
+    }
+
+    void markStatus(string tableName, pair<uint64_t, bool> status)
+    {
+        std::lock_guard<std::mutex> l(x_tableStatus);
         tables[tableName] = status;
         serialization();
     }
@@ -80,11 +93,13 @@ struct SyncRecorder
             fs.close();
         }
     }
-    unordered_map<string, bool> tables;
+    mutable std::mutex x_tableStatus;
+    unordered_map<string, pair<uint64_t, bool>> tables;
     string filename;
 };
 
-vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, unordered_map<string, bool>& _tableMap)
+vector<TableInfo::Ptr> parseTableNames(
+    TableData::Ptr data, unordered_map<string, pair<uint64_t, bool>>& _tableMap)
 {
     auto entries = data->newEntries;
     vector<TableInfo::Ptr> res;
@@ -103,7 +118,7 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, unordered_map<string
         {
             throw std::runtime_error("empty table name");
         }
-        if (accordTableMap && _tableMap.at(tableInfo->name))
+        if (accordTableMap && _tableMap.at(tableInfo->name).second)
         {
             std::cout << tableInfo->name << " already committed" << endl;
             continue;
@@ -113,7 +128,7 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, unordered_map<string
             tableInfo->key = entry->getField("key_field");
             auto valueFields = entry->getField("value_field");
             boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-            _tableMap.insert(std::make_pair(tableInfo->name, false));
+            _tableMap.insert(std::make_pair(tableInfo->name, make_pair(0, false)));
             res.push_back(tableInfo);
         }
     }
@@ -200,61 +215,117 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
 {
     cout << "sync block number is " << _blockNumber << ", data path is " << _dataPath << endl;
     auto sysTableInfo = getSysTableInfo(SYS_TABLES);
-    auto data = _reader->selectTableDataByNum(_blockNumber, sysTableInfo);
-    boost::filesystem::create_directories(_dataPath);
-    SyncRecorder recorder(_dataPath);
-    auto tableInfos = parseTableNames(data, recorder.tables);
-    if (!recorder.isCompleted(SYS_TABLES))
+    TableData::Ptr sysTableData = std::make_shared<TableData>();
+    sysTableData->info = sysTableInfo;
+    uint64_t start = 0;
+    while (true)
     {
-        _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
-        recorder.markStatus(SYS_TABLES, true);
+        auto data = _reader->selectTableDataByNum(_blockNumber, sysTableInfo, start, PageCount);
+        for (size_t i = 0; i < data->newEntries->size(); ++i)
+        {
+            sysTableData->newEntries->addEntry(data->newEntries->get(i));
+        }
+        if (data->newEntries->size() == 0)
+        {
+            break;
+        }
+        auto lastEntry = data->newEntries->get(data->newEntries->size() - 1);
+        start = lastEntry->getID();
+        if (data->newEntries->size() < PageCount)
+        {
+            break;
+        }
+    }
+    boost::filesystem::create_directories(_dataPath);
+    auto recorder = std::make_shared<SyncRecorder>(_dataPath);
+    auto tableInfos = parseTableNames(sysTableData, recorder->tables);
+    if (!recorder->isCompleted(SYS_TABLES))
+    {
+        cout << "commit " << SYS_TABLES << endl;
+        _writer->commit(_blockNumber, vector<TableData::Ptr>{sysTableData});
+        recorder->markStatus(SYS_TABLES, make_pair(start, true));
         cout << SYS_TABLES << " is committed." << endl;
     }
 
-    for (const auto& tableInfo : tableInfos)
-    {
-        if (tableInfo->name == SYS_TABLES)
+    auto pullCommitTableData = [=](TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts) {
+        cout << endl << "[" << getCurrentDateTime() << "] processing " << tableInfo->name << endl;
+        while (true)
         {
-            continue;
-        }
-        if (_fullSync || (!_fullSync && tableInfo->name != SYS_BLOCK_2_NONCES &&
-                             tableInfo->name != SYS_HASH_2_BLOCK))
-        {
-            cout << "[" << getCurrentDateTime() << "] " << tableInfo->name << " is in-process... "
-                 << flush;
-            auto tableData = _reader->selectTableDataByNum(_blockNumber, tableInfo);
+            auto tableData = _reader->selectTableDataByNum(_blockNumber, tableInfo, start, counts);
             if (!tableData)
             {
                 cerr << "query failed. Table=" << tableInfo->name << endl;
+                break;
             }
+            if (tableData->newEntries->size() == 0)
+            {
+                cout << " --> end " << tableInfo->name << " is empty" << flush;
+                break;
+            }
+            cout << "\r|" << start << flush;
+            auto lastEntry = tableData->newEntries->get(tableData->newEntries->size() - 1);
+            start = lastEntry->getID();
             _writer->commit(_blockNumber, vector<TableData::Ptr>{tableData});
-            recorder.markStatus(tableInfo->name, true);
-            cout << "[committed]" << endl;
+            recorder->markStatus(tableInfo->name, make_pair(start, false));
+            cout << " --> " << start << flush;
+
+            if (tableData->newEntries->size() < counts)
+            {
+                break;
+            }
+        }
+        recorder->markStatus(tableInfo->name, make_pair(start, true));
+        cout << " done." << endl;
+    };
+
+    // SYS_HASH_2_BLOCK
+    if (!recorder->isCompleted(SYS_HASH_2_BLOCK))
+    {
+        if (!_fullSync)
+        {
+            auto data = getHashToBlockData(_reader, _blockNumber);
+            _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
+            recorder->markStatus(SYS_HASH_2_BLOCK, make_pair(data->newEntries->size(), true));
+        }
+        else
+        {
+            auto tableInfo = getSysTableInfo(SYS_HASH_2_BLOCK);
+            pullCommitTableData(
+                tableInfo, recorder->tableSyncOffset(tableInfo->name), BigTablePageCount);
         }
     }
-    if (!_fullSync)
+    // SYS_BLOCK_2_NONCES
+    if (!recorder->isCompleted(SYS_BLOCK_2_NONCES))
     {
-        // SYS_HASH_2_BLOCK
-        if (!recorder.isCompleted(SYS_HASH_2_BLOCK))
+        if (!_fullSync)
         {
-            data = getHashToBlockData(_reader, _blockNumber);
-            _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
-            recorder.markStatus(SYS_HASH_2_BLOCK, true);
-        }
-        // SYS_BLOCK_2_NONCES
-        if (!recorder.isCompleted(SYS_BLOCK_2_NONCES))
-        {
-            data = getBlockToNonceData(_reader, _blockNumber);
+            auto data = getBlockToNonceData(_reader, _blockNumber);
             if (data)
             {
                 _writer->commit(_blockNumber, vector<TableData::Ptr>{data});
-                recorder.markStatus(SYS_BLOCK_2_NONCES, true);
+                recorder->markStatus(SYS_BLOCK_2_NONCES, make_pair(data->newEntries->size(), true));
             }
             else
             {
                 cout << "block number to nonce is empty at " << _blockNumber << endl;
             }
         }
+        else
+        {
+            auto tableInfo = getSysTableInfo(SYS_BLOCK_2_NONCES);
+            pullCommitTableData(
+                tableInfo, recorder->tableSyncOffset(tableInfo->name), BigTablePageCount);
+        }
+    }
+
+    for (const auto& tableInfo : tableInfos)
+    {
+        if (tableInfo->name == SYS_TABLES || tableInfo->name == SYS_BLOCK_2_NONCES ||
+            tableInfo->name == SYS_HASH_2_BLOCK)
+        {
+            continue;
+        }
+        pullCommitTableData(tableInfo, recorder->tableSyncOffset(tableInfo->name), PageCount);
     }
 }
 
@@ -268,6 +339,8 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
         raise(SIGTERM);
         BOOST_THROW_EXCEPTION(e);
     });
+    auto p = dynamic_pointer_cast<SQLStorage>(sqlStorage);
+    p->setTimeout(15);
     auto blockNumber = getBlockNumberFromStorage(sqlStorage);
     blockNumber = blockNumber >= _rollbackNumber ? blockNumber - _rollbackNumber : 0;
 
@@ -326,7 +399,8 @@ int main(int argc, const char* argv[])
         std::cerr << "terminate handler called" << endl;
         abort();
     });
-    std::cout << "fisco-sync version : " << "0.1.0" << std::endl;
+    std::cout << "fisco-sync version : "
+              << "0.1.0" << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
     std::cout << "Commit Hash        : " << FISCO_BCOS_COMMIT_HASH << std::endl;
     /// init params
@@ -336,7 +410,11 @@ int main(int argc, const char* argv[])
     main_options.add_options()("help,h", "print help information")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("verify,v",
-        boost::program_options::value<int64_t>()->default_value(1000), "verify number of blocks")(
+        boost::program_options::value<int64_t>()->default_value(1000),
+        "verify number of blocks")("limit,l",
+        boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
+        "sys_limit,s", boost::program_options::value<uint32_t>()->default_value(10000),
+        "page counts of system table")(
         "group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
     boost::program_options::variables_map vm;
     try
@@ -356,6 +434,8 @@ int main(int argc, const char* argv[])
         exit(0);
     }
     int64_t verifyBlocks = vm["verify"].as<int64_t>();
+    PageCount = vm["limit"].as<uint32_t>();
+    BigTablePageCount = vm["sys_limit"].as<uint32_t>();
     string configPath = vm["config"].as<std::string>();
     int groupID = vm["group"].as<uint>();
 
@@ -395,8 +475,8 @@ int main(int argc, const char* argv[])
                     auto params = std::make_shared<LedgerParam>();
                     params->init(iter->path().string(), dataPath);
                     fastSyncGroupData(params, rpcInitializer->channelRPCServer(), verifyBlocks);
-                    std::cout << "[" << getCurrentDateTime() << "] "
-                              << "sync complete." << std::endl;
+                    std::cout << endl
+                              << "[" << getCurrentDateTime() << "] sync complete." << std::endl;
                     return 0;
                 }
             }
