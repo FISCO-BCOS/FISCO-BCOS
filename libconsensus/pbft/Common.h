@@ -63,6 +63,9 @@ struct PBFTMsgPacket
     u256 timestamp;
     /// endpoint
     std::string endpoint;
+
+    using Ptr = std::shared_ptr<PBFTMsgPacket>;
+
     /// default constructor
     PBFTMsgPacket()
       : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))
@@ -98,7 +101,7 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
+    virtual void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -113,7 +116,7 @@ struct PBFTMsgPacket
         timestamp = u256(utcTime());
     }
     /// populate PBFTMsgPacket from RLP object
-    void populate(RLP const& rlp)
+    virtual void populate(RLP const& rlp)
     {
         try
         {

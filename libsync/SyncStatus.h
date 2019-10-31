@@ -30,6 +30,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
@@ -115,12 +116,21 @@ public:
     void deletePeer(NodeID const& _id);
 
     NodeIDs peers();
+    std::set<NodeID> peersSet();
+
+    // filter the nodes that the txs should be sent to from a given node list
+    NodeIDs filterPeers(
+        NodeIDs const& peers, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
     void foreachPeerRandom(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
+    // select neighborSize peers
+    // call _f for each selected peers
+    void forRandomPeers(int64_t const& _neighborSize,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f);
 
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
@@ -131,6 +141,11 @@ public:
         size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
+
+    void setStatHandlerForDownloadingBlockQueue(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_downloadingBlockQueue.setStatHandler(_statisticHandler);
+    }
 
 public:
     h256 genesisHash;

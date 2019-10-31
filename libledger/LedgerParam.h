@@ -60,6 +60,11 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+
+    // group size for RPBFT, default is 10
+    int64_t groupSize = 10;
+    // rotating interval, default is 10
+    int64_t rotatingInterval = 10;
 };
 
 struct AMDBParam
@@ -74,6 +79,12 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    // enable send block status by tree or not
+    bool enableSendBlockStatusByTree = true;
+    // default block status gossip interval is 1s
+    int64_t gossipInterval = 1000;
+    // default gossip peers is 3
+    int64_t gossipPeers = 3;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam

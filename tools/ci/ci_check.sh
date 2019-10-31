@@ -43,6 +43,7 @@ check_reports()
     if [ ${total} -ne 4 ]; then
         LOG_ERROR "${errorMessage} ${total} != ${target}"
         cat node*/log/*
+        cat node*/nohup.out
         exit 1
     else
         LOG_INFO "${successdMessage}"

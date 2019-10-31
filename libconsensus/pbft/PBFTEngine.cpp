@@ -53,6 +53,8 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
+    // create PBFTMsgFactory
+    createPBFTMsgFactory();
     auto block = m_blockChain->getBlockByNumber(m_blockChain->number());
     if (!block)
     {
@@ -118,45 +120,6 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
     m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-}
-
-/// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
-void PBFTEngine::resetConfig()
-{
-    updateMaxBlockTransactions();
-    auto node_idx = MAXIDX;
-    m_accountType = NodeAccountType::ObserverAccount;
-    size_t nodeNum = 0;
-    updateConsensusNodeList();
-    {
-        ReadGuard l(m_sealerListMutex);
-        for (size_t i = 0; i < m_sealerList.size(); i++)
-        {
-            if (m_sealerList[i] == m_keyPair.pub())
-            {
-                m_accountType = NodeAccountType::SealerAccount;
-                node_idx = i;
-                break;
-            }
-        }
-        nodeNum = m_sealerList.size();
-    }
-    if (nodeNum < 1)
-    {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC(
-            "Must set at least one pbft sealer, current number of sealers is zero");
-        raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(
-            EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
-    }
-    // update m_nodeNum
-    if (m_nodeNum != nodeNum)
-    {
-        m_nodeNum = nodeNum;
-    }
-    m_f = (m_nodeNum - 1) / 3;
-    m_cfgErr = (node_idx == MAXIDX);
-    m_idx = node_idx;
 }
 
 /// init pbftMsgBackup
@@ -404,7 +367,7 @@ bool PBFTEngine::broadcastViewChangeReq()
 
 /// set default ttl to 1 to in case of forward-broadcast
 bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-    std::string const& key, bytesConstRef data, unsigned const& ttl)
+    std::string const& key, bytesConstRef data, unsigned const& ttl, dev::h512s const& forwardNodes)
 {
     /// is sealer?
     if (getIndexBySealer(nodeId) < 0)
@@ -426,7 +389,13 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
         if (session.nodeID() == nodeId)
         {
             m_service->asyncSendMessageByNodeID(
-                session.nodeID(), transDataToMessage(data, packetType, ttl), nullptr);
+                session.nodeID(), transDataToMessage(data, packetType, ttl, forwardNodes), nullptr);
+
+            // update the network-out statistic information
+            if (m_statisticHandler)
+            {
+                m_statisticHandler->updateConsOutPacketsInfo(packetType, 1, data.size());
+            }
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
                                   << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
@@ -451,7 +420,8 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
  * @param filter: the list that shouldn't be broadcasted to
  */
 bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
-    bytesConstRef data, std::unordered_set<h512> const& filter, unsigned const& ttl)
+    bytesConstRef data, std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
+    std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -459,8 +429,10 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
-        if (getIndexBySealer(session.nodeID()) < 0)
+        if (filterFunction(session.nodeID()) < 0)
+        {
             continue;
+        }
         /// peer is in the _filter list ?
         if (filter.count(session.nodeID()))
         {
@@ -480,9 +452,21 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         broadcastMark(session.nodeID(), packetType, key);
     }
     /// send messages according to node id
-    m_service->asyncMulticastMessageByNodeIDList(
-        nodeIdList, transDataToMessage(data, packetType, ttl));
+    broadcastMsg(nodeIdList, data, packetType, ttl);
+
+    // update the network-out statistic information
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(packetType, nodeIdList.size(), data.size());
+    }
     return true;
+}
+
+void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+    unsigned const& _packetType, unsigned const& _ttl)
+{
+    return m_service->asyncMulticastMessageByNodeIDList(
+        _targetNodes, transDataToMessage(_data, _packetType, _ttl));
 }
 
 /**
@@ -771,23 +755,30 @@ void PBFTEngine::onRecvPBFTMessage(
             "directly");
         return;
     }
-    PBFTMsgPacket pbft_msg;
-    bool valid = decodeToRequests(pbft_msg, message, session);
+    PBFTMsgPacket::Ptr pbft_msg = m_pbftMsgFactory->createPBFTMsgPacket();
+    bool valid = decodePBFTMsgPacket(pbft_msg, message, session);
     if (!valid)
     {
         return;
     }
-    if (pbft_msg.packet_id <= ViewChangeReqPacket)
+    if (pbft_msg->packet_id <= ViewChangeReqPacket)
     {
         m_msgQueue.push(pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
         m_signalled.notify_all();
+
+        // update the network-in statistic information
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateConsInPacketsInfo(pbft_msg->packet_id, message->length());
+        }
     }
     else
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("onRecvPBFTMessage: illegal msg ")
-                              << LOG_KV("fromId", pbft_msg.packet_id)
-                              << LOG_KV("fromIp", pbft_msg.endpoint) << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("fromId", pbft_msg->packet_id)
+                              << LOG_KV("fromIp", pbft_msg->endpoint)
+                              << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
 }
@@ -1071,6 +1062,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("next", m_consensusBlockNumber)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("nodeIdx", nodeIdx());
+        // print the statistic information after commit each block
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->printStatistics();
+        }
     }
 }
 
@@ -1455,18 +1451,18 @@ void PBFTEngine::checkTimeout()
         m_onViewChange();
 }
 
-void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
+void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 {
     Guard l(m_mutex);
     PBFTMsg pbft_msg;
     std::string key;
     bool succ = false;
-    switch (pbftMsg.packet_id)
+    switch (pbftMsg->packet_id)
     {
     case PrepareReqPacket:
     {
         PrepareReq prepare_req;
-        succ = handlePrepareMsg(prepare_req, pbftMsg);
+        succ = handlePrepareMsg(prepare_req, *pbftMsg);
         key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
@@ -1474,7 +1470,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case SignReqPacket:
     {
         SignReq req;
-        succ = handleSignMsg(req, pbftMsg);
+        succ = handleSignMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1482,7 +1478,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case CommitReqPacket:
     {
         CommitReq req;
-        succ = handleCommitMsg(req, pbftMsg);
+        succ = handleCommitMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1490,7 +1486,7 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     case ViewChangeReqPacket:
     {
         ViewChangeReq req;
-        succ = handleViewChangeMsg(req, pbftMsg);
+        succ = handleViewChangeMsg(req, *pbftMsg);
         key = req.uniqueKey();
         pbft_msg = req;
         break;
@@ -1498,31 +1494,51 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     default:
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("handleMsg:  Err pbft message")
-                              << LOG_KV("from", pbftMsg.node_idx) << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("from", pbftMsg->node_idx) << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return;
     }
     }
 
-    if (pbftMsg.ttl == 1)
+    if (!needForwardMsg(succ, key, pbftMsg, pbft_msg))
     {
         return;
     }
-    bool height_flag = (pbft_msg.height > m_highestBlock.number()) ||
-                       (m_highestBlock.number() - pbft_msg.height < 10);
-    if (succ && key.size() > 0 && height_flag)
+    forwardMsg(key, pbftMsg, pbft_msg);
+}
+
+// should forward message or not
+bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
+    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    if (!_valid || _key.size() == 0)
     {
-        std::unordered_set<h512> filter;
-        filter.insert(pbftMsg.node_id);
-        /// get the origin gen node id of the request
-        h512 gen_node_id = getSealerByIndex(pbft_msg.idx);
-        if (gen_node_id != h512())
-        {
-            filter.insert(gen_node_id);
-        }
-        unsigned current_ttl = pbftMsg.ttl - 1;
-        broadcastMsg(pbftMsg.packet_id, key, ref(pbftMsg.data), filter, current_ttl);
+        return false;
     }
+    // check ttl
+    if (_pbftMsgPacket->ttl == 1)
+    {
+        return false;
+    }
+    // check blockNumber
+    return (_pbftMsg.height > m_highestBlock.number() ||
+            (m_highestBlock.number() - _pbftMsg.height < 10));
+}
+
+// update ttl and forward the message
+void PBFTEngine::forwardMsg(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    std::unordered_set<h512> filter;
+    filter.insert(_pbftMsgPacket->node_id);
+    /// get the origin gen node id of the request
+    h512 genNodeId = getSealerByIndex(_pbftMsg.idx);
+    if (genNodeId != h512())
+    {
+        filter.insert(genNodeId);
+    }
+    unsigned current_ttl = _pbftMsgPacket->ttl - 1;
+    broadcastMsg(_pbftMsgPacket->packet_id, _key, ref(_pbftMsgPacket->data), filter, current_ttl);
 }
 
 /// start a new thread to handle the network-receivied message
@@ -1532,28 +1548,29 @@ void PBFTEngine::workLoop()
     {
         try
         {
-            std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
+            if (!locatedInChosedConsensensusNodes())
+            {
+                waitSignal();
+                continue;
+            }
+            std::pair<bool, PBFTMsgPacket::Ptr> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
                 PBFTENGINE_LOG(TRACE)
                     << LOG_DESC("workLoop: handleMsg")
-                    << LOG_KV("type", std::to_string(ret.second.packet_id))
-                    << LOG_KV("fromIdx", ret.second.node_idx) << LOG_KV("nodeIdx", nodeIdx())
+                    << LOG_KV("type", std::to_string(ret.second->packet_id))
+                    << LOG_KV("fromIdx", ret.second->node_idx) << LOG_KV("nodeIdx", nodeIdx())
                     << LOG_KV("myNode", m_keyPair.pub().abridged());
                 handleMsg(ret.second);
             }
             /// to avoid of cpu problem
             else if (m_reqCache->futurePrepareCacheSize() == 0)
             {
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(5));
+                waitSignal();
             }
-            if (nodeIdx() != MAXIDX)
-            {
-                checkTimeout();
-                handleFutureBlock();
-                collectGarbage();
-            }
+            checkTimeout();
+            handleFutureBlock();
+            collectGarbage();
         }
         catch (std::exception& _e)
         {
@@ -1562,6 +1579,11 @@ void PBFTEngine::workLoop()
     }
 }
 
+void PBFTEngine::waitSignal()
+{
+    std::unique_lock<std::mutex> l(x_signalled);
+    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+}
 
 /// handle the prepareReq cached in the futurePrepareCache
 void PBFTEngine::handleFutureBlock()

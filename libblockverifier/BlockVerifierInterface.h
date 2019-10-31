@@ -45,6 +45,7 @@ namespace blockverifier
 class BlockVerifierInterface
 {
 public:
+    using Ptr = std::shared_ptr<BlockVerifierInterface>;
     BlockVerifierInterface() = default;
 
     virtual ~BlockVerifierInterface(){};

@@ -57,10 +57,13 @@ struct GenesisBlockParam
     int64_t txCountLimit;       // the maximum number of transactions recorded in a block
     int64_t txGasLimit;         // the maximum gas required to execute a transaction
     uint64_t timeStamp;         /// the timestamp of genesis block
+    int64_t rpbftEpochSize;
+    int64_t rpbftRotatingInterval;
 };
 class BlockChainInterface
 {
 public:
+    using Ptr = std::shared_ptr<BlockChainInterface>;
     BlockChainInterface() = default;
     virtual ~BlockChainInterface(){};
     virtual int64_t number() = 0;
@@ -104,6 +107,11 @@ public:
     virtual dev::h512s observerList() = 0;
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
+    virtual std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
+        std::string const&, int64_t const& _num = -1)
+    {
+        return std::make_pair("", _num);
+    }
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>

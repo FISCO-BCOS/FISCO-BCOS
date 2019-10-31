@@ -31,6 +31,10 @@ void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
 {
     WriteGuard l(x_buffer);
     m_buffer->emplace_back(_txsBytes, _fromPeer);
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateDownloadedTxsBytes(_txsBytes.size());
+    }
 }
 
 
@@ -166,5 +170,9 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_KV("getPendingSizeTimeCost", getPendingSize_time_cost)
                         << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
                         << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateDownloadedTxsCount(txs->size());
+        }
     }
 }

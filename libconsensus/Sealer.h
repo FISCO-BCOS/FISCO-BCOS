@@ -42,6 +42,7 @@ namespace consensus
 class Sealer : public Worker, public std::enable_shared_from_this<Sealer>
 {
 public:
+    using Ptr = std::shared_ptr<Sealer>;
     /**
      * @param _service: p2p service module
      * @param _txPool: transaction pool module
@@ -108,6 +109,12 @@ public:
     std::shared_ptr<dev::consensus::ConsensusInterface> const consensusEngine()
     {
         return m_consensusEngine;
+    }
+
+    // set consensusEngine
+    virtual void setConsensusEngine(ConsensusInterface::Ptr _consensusEngine)
+    {
+        m_consensusEngine = _consensusEngine;
     }
 
 protected:

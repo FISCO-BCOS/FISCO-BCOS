@@ -105,8 +105,13 @@ public:
 
     dev::h512s sealerList() override;
     dev::h512s observerList() override;
+
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
+
     std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override;
+
+    std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
+        std::string const& _key, int64_t const& _num = -1) override;
 
     void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
     {
@@ -124,6 +129,10 @@ public:
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
 
 private:
+    void initSystemConfig(
+        dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
+
+
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
@@ -171,9 +180,11 @@ private:
     struct SystemConfigRecord
     {
         std::string value;
+        dev::eth::BlockNumber enableNumber;
         int64_t curBlockNum = -1;  // at which block gets the configuration value
-        SystemConfigRecord(std::string const& _value, int64_t _num)
-          : value(_value), curBlockNum(_num){};
+        SystemConfigRecord(std::string const& _value, dev::eth::BlockNumber const& _enableNumber,
+            int64_t const& _num)
+          : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
     };
     std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;
