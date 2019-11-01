@@ -70,22 +70,22 @@ void SyncMasterStatus::deletePeer(NodeID const& _id)
         m_peersStatus.erase(peer);
 }
 
-NodeIDs SyncMasterStatus::peers()
+std::shared_ptr<NodeIDs> SyncMasterStatus::peers()
 {
-    NodeIDs nodeIds;
+    std::shared_ptr<NodeIDs> nodeIds = std::make_shared<NodeIDs>();
     ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
-        nodeIds.emplace_back(peer.first);
+        nodeIds->emplace_back(peer.first);
     return nodeIds;
 }
 
 // get all the peers maintained in SyncStatus
-std::set<NodeID> SyncMasterStatus::peersSet()
+std::shared_ptr<std::set<NodeID>> SyncMasterStatus::peersSet()
 {
-    std::set<NodeID> nodeIdSet;
+    std::shared_ptr<std::set<NodeID>> nodeIdSet = std::make_shared<std::set<NodeID>>();
     ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
-        nodeIdSet.insert(peer.first);
+        nodeIdSet->insert(peer.first);
     return nodeIdSet;
 }
 
@@ -111,15 +111,24 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
  *  if the function return false, then ignore the corresponding node
  * @return NodeIDs : the filtered node list that the txs should be sent to
  */
-NodeIDs SyncMasterStatus::filterPeers(
-    NodeIDs const& peers, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
+NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _peers,
+    std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
 {
+    int64_t selectedSize = _peers->size();
+    if (selectedSize > _neighborSize)
+    {
+        selectedSize = selectPeers(_neighborSize, _peers);
+    }
     NodeIDs chosen;
-    for (auto const& peer : peers)
+    for (auto const& peer : (*_peers))
     {
         if (m_peersStatus.count(peer) && _allow(m_peersStatus[peer]))
         {
             chosen.push_back(peer);
+            if ((int64_t)chosen.size() == selectedSize)
+            {
+                break;
+            }
         }
     }
     return chosen;
@@ -166,29 +175,35 @@ void SyncMasterStatus::foreachPeerRandom(
     }
 }
 
+int64_t SyncMasterStatus::selectPeers(
+    int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds)
+{
+    std::srand(std::time(nullptr));
+    int64_t nodeSize = _nodeIds->size();
+    int64_t selectedSize = _neighborSize > nodeSize ? nodeSize : _neighborSize;
+    for (auto i = 0; i < selectedSize; i++)
+    {
+        int64_t randomValue = std::rand() % selectedSize;
+        swap((*_nodeIds)[i], (*_nodeIds)[randomValue]);
+    }
+    return selectedSize;
+}
+
 void SyncMasterStatus::forRandomPeers(
     int64_t const& _neighborSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f)
 {
-    std::srand(std::time(0));
-    int64_t peersSize = m_peersStatus.size();
-    int64_t selectedSize = _neighborSize > peersSize ? peersSize : _neighborSize;
-
-    NodeIDs nodeIds;
+    std::shared_ptr<NodeIDs> nodeIds = std::make_shared<NodeIDs>();
     ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
     {
-        nodeIds.emplace_back(peer.first);
+        nodeIds->emplace_back(peer.first);
     }
-    NodeID selectedNode;
-    for (auto i = 0; i < selectedSize; i++)
-    {
-        int64_t randomValue = std::rand() % peersSize;
-        swap(nodeIds[i], nodeIds[randomValue]);
-    }
+
+    int64_t selectedSize = selectPeers(_neighborSize, nodeIds);
     // call _f for the selected nodes
     for (int i = 0; i < selectedSize; i++)
     {
-        _f(m_peersStatus[nodeIds[i]]);
+        _f(m_peersStatus[(*nodeIds)[i]]);
     }
 }
 

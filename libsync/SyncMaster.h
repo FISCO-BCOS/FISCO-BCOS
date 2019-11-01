@@ -33,6 +33,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
@@ -94,7 +95,8 @@ public:
 
         m_txQueue->setStatisticHandler(m_statisticHandler);
 
-
+        m_downloadBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-download", 1);
+        m_sendBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-sender", 1);
         if (m_enableSendBlockStatusByTree)
         {
             m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
@@ -182,7 +184,8 @@ public:
     void sendBlockStatus(int64_t const& _gossipPeersNumber);
 
     void registerTxsReceiversFilter(
-        std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
+        std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+            _handler) override
     {
         m_syncTrans->registerTxsReceiversFilter(_handler);
     }
@@ -246,6 +249,9 @@ private:
 
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
+
+    dev::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
+    dev::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
 
     // Internal data
     PROTOCOL_ID m_protocolId;

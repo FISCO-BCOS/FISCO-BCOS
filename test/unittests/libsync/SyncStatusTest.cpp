@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(PeerNewHasDeleteTest)
         BOOST_CHECK(status.hasPeer(node.nodeId));
     }
 
-    NodeIDs peers = status.peers();
+    NodeIDs peers = *(status.peers());
     BOOST_CHECK_EQUAL(peers.size(), 10);
 
     for (auto peer : peers)

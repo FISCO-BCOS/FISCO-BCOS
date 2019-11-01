@@ -39,6 +39,7 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_submitPool->enqueue([this, _tx]() {
+        // NotBelongToTheGroup: 10003
         ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
         if (isSealerOrObserver())
         {
@@ -83,17 +84,21 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
     case ImportResult::TxPoolNonceCheckFail:
         txException = TransactionException::NonceCheckFail;
         break;
-    // 30
+    // 10000
     case ImportResult::AlreadyKnown:
         txException = TransactionException::AlreadyKnown;
         break;
-    // 31
+    // 10001
     case ImportResult::AlreadyInChain:
         txException = TransactionException::AlreadyInChain;
         break;
-    // 32
+    // 10002
     case ImportResult::InvalidChainIdOrGroupId:
         txException = TransactionException::InvalidChainIdOrGroupId;
+        break;
+    // invalid transaction: 10004
+    case ImportResult::Malformed:
+        txException = TransactionException ::MalformedTx;
         break;
     default:
         txException = TransactionException::TransactionRefused;
@@ -340,13 +345,15 @@ struct TxCallback
     dev::eth::LocalisedTransactionReceipt::Ptr pReceipt;
 };
 
+
 /**
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
-bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
-    std::shared_ptr<dev::eth::Block> block, size_t index)
+bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
+    std::shared_ptr<dev::eth::Block> _block, size_t _index)
 {
-    Transaction::Ptr transaction;
+    Transaction::Ptr transaction = nullptr;
+    // remove transaction from txPool
     std::unordered_map<h256, TransactionQueue::iterator>::iterator p_tx;
     {
         p_tx = m_txsHash.find(_txHash);
@@ -354,24 +361,23 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
         {
             return true;
         }
-
         transaction = *(p_tx->second);
         m_txsQueue.erase(p_tx->second);
         m_txsHash.erase(p_tx);
 
         // m_delTransactions.unsafe_erase(_txHash);
     }
-
-    if (needTriggerCallback && block && transaction->rpcCallback())
+    // call transaction callback
+    if (_needTriggerCallback && _block && transaction->rpcCallback())
     {
-        m_workerPool->enqueue([this, block, index, transaction]() {
+        m_workerPool->enqueue([this, _block, _index, transaction]() {
             // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
             // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
             LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-            if (block->transactionReceipts()->size() > index)
+            if (_block->transactionReceipts()->size() > _index)
             {
-                pReceipt = constructTransactionReceipt((*(block->transactions()))[index],
-                    (*(block->transactionReceipts()))[index], *block, index);
+                pReceipt = constructTransactionReceipt((*(_block->transactions()))[_index],
+                    (*(_block->transactionReceipts()))[_index], *_block, _index);
             }
 
             auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
@@ -453,15 +459,62 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
 {
     if (block->getTransactionSize() == 0)
         return true;
-    WriteGuard l(m_lock);
     bool succ = true;
-
-    for (size_t i = 0; i < block->transactions()->size(); i++)
     {
-        if (removeTrans((*(block->transactions()))[i]->sha3(), true, block, i) == false)
-            succ = false;
+        WriteGuard l(m_lock);
+        WriteGuard wl(x_invalidTxs);
+
+        for (size_t i = 0; i < block->transactions()->size(); i++)
+        {
+            if (removeTrans((*(block->transactions()))[i]->sha3(), true, block, i) == false)
+                succ = false;
+            if (m_invalidTxs->count((*(block->transactions()))[i]->sha3()))
+            {
+                m_invalidTxs->erase((*(block->transactions()))[i]->sha3());
+            }
+        }
     }
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
+    // remove InvalidTxs
     return succ;
+}
+
+// this function should be called after remove
+void TxPool::removeInvalidTxs()
+{
+    {
+        ReadGuard l(x_invalidTxs);
+        if (m_invalidTxs->size() == 0)
+        {
+            return;
+        }
+        tbb::parallel_invoke(
+            [this]() {
+                // remove invalid txs
+                WriteGuard l(m_lock);
+                for (auto const& item : *m_invalidTxs)
+                {
+                    removeTrans(item.first);
+                    m_dropped.insert(item.first);
+                }
+            },
+            [this]() {
+                // remove invalid nonce
+                for (auto const& item : *m_invalidTxs)
+                {
+                    m_txpoolNonceChecker->delCache(item.second);
+                }
+            },
+            [this]() {
+                // remove transaction knownBy
+                for (auto const& item : *m_invalidTxs)
+                {
+                    removeTransactionKnowBy(item.second);
+                }
+            });
+    }
+    WriteGuard wl(x_invalidTxs);
+    m_invalidTxs->clear();
 }
 
 // TODO: drop a block when it has been committed failed
@@ -478,10 +531,14 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
     TIME_RECORD(
         "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 
-    tbb::parallel_invoke([this]() { m_txNonceCheck->updateCache(false); },
-        [this, block]() { dropTransactions(block, true); },
+    tbb::parallel_invoke([this, block]() { dropTransactions(block, true); },
         [this, block]() { removeBlockKnowTrans(*block); },
-        [this, block]() { m_txpoolNonceChecker->delCache(*(block->transactions())); });
+        [this, block]() {
+            // update the Nonces of txs
+            m_txNonceCheck->updateCache(false);
+            // delete the nonce cache
+            m_txpoolNonceChecker->delCache(*(block->transactions()));
+        });
 
     return true;
 }
@@ -512,17 +569,26 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     TIME_RECORD("topTransaction");
     // size_t ignoreCount = 0;
     {
-        UpgradableGuard l(m_lock);
+        ReadGuard l(m_lock);
+        WriteGuard wl(x_invalidTxs);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
+            if (m_invalidTxs->count((*it)->sha3()))
+            {
+                continue;
+            }
             /// check  nonce again when obtain transactions
             if (!m_txNonceCheck->isNonceOk(*(*it), false))
             {
-                invalidBlockLimitTxs.push_back((*it)->sha3());
-                nonceKeyCache.push_back((*it)->nonce());
+                m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
                 continue;
             }
-
+            // check block limit
+            if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
+            {
+                m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
+                continue;
+            }
             if (!_avoid.count((*it)->sha3()))
             {
                 ret->push_back(*it);
@@ -531,34 +597,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                     _avoid.insert((*it)->sha3());
             }
         }
-        if (invalidBlockLimitTxs.size() > 0)
-        {
-            UpgradeGuard ul(l);
-            for (auto txHash : invalidBlockLimitTxs)
-            {
-                removeTrans(txHash);
-                m_dropped.insert(txHash);
-            }
-        }
-        /// delete cached invalid nonce
-        if (nonceKeyCache.size() > 0)
-        {
-            for (auto key : nonceKeyCache)
-                m_txpoolNonceChecker->delCache(key);
-        }
     }
-
-    if (invalidBlockLimitTxs.size() > 0)
-    {
-        WriteGuard l(x_transactionKnownBy);
-        for (auto txHash : invalidBlockLimitTxs)
-        {
-            removeTransactionKnowBy(txHash);
-            TXPOOL_LOG(DEBUG) << LOG_DESC("remove imported tx: the block limit expired")
-                              << LOG_KV("hash", txHash.abridged());
-        }
-    }
-
     // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
 
     return ret;

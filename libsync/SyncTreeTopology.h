@@ -48,15 +48,15 @@ public:
     // update corresponding info when the consensus nodes changed
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
     // select the nodes by tree topology
-    virtual dev::h512s selectNodes(std::set<dev::h512> const& _peers);
+    virtual std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers);
 
 protected:
     // select the child nodes by tree
-    void recursiveSelectChildNodes(dev::h512s& _selectedNodeList, ssize_t const& _parentIndex,
-        std::set<dev::h512> const& _peers);
+    void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
+        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers);
     // select the parent nodes by tree
-    void selectParentNodes(dev::h512s& _selectedNodeList, std::set<dev::h512> const& _peers,
-        int64_t const& _nodeIndex);
+    void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex);
 
 private:
     bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;

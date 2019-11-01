@@ -129,7 +129,6 @@ int TxDAG::executeUnit(Executive::Ptr _executive)
             f_executeTx((*m_txs)[id], id, _executive);
             id = m_dag.consume(id);
         } while (id != INVALID_ID);
-
         id = m_dag.waitPop();
     }
     if (exeCnt > 0)

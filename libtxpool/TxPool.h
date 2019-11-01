@@ -84,6 +84,7 @@ public:
             std::make_shared<dev::ThreadPool>("submit-" + std::to_string(_protocolId), 1);
         m_workerPool =
             std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(_protocolId), workThreads);
+        m_invalidTxs = std::make_shared<std::map<dev::h256, dev::u256>>();
     }
     void start() override {}
     void stop() override {}
@@ -185,6 +186,7 @@ protected:
     void clear();
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     bool removeBlockKnowTrans(dev::eth::Block const& block);
+    void removeInvalidTxs();
 
 private:
     void startSubmitThread();
@@ -194,9 +196,9 @@ private:
         dev::eth::Transaction::Ptr tx, dev::eth::TransactionReceipt::Ptr receipt,
         dev::eth::Block const& block, unsigned index);
 
-    bool removeTrans(h256 const& _txHash, bool needTriggerCallback = false,
-        std::shared_ptr<dev::eth::Block> block = std::shared_ptr<dev::eth::Block>(),
-        size_t index = 0);
+    bool removeTrans(h256 const& _txHash, bool _needTriggerCallback = false,
+        std::shared_ptr<dev::eth::Block> _block = nullptr, size_t _index = 0);
+
     bool insert(dev::eth::Transaction::Ptr _tx);
     void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
@@ -242,6 +244,8 @@ private:
     std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;
+    std::shared_ptr<std::map<dev::h256, dev::u256>> m_invalidTxs;
+    mutable SharedMutex x_invalidTxs;
 };
 }  // namespace txpool
 }  // namespace dev

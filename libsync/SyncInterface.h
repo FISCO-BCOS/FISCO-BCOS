@@ -62,8 +62,8 @@ public:
     virtual void registerConsensusVerifyHandler(
         std::function<bool(dev::eth::Block const&)> _handler) = 0;
 
-    virtual void registerTxsReceiversFilter(
-        std::function<dev::p2p::NodeIDs(std::set<dev::network::NodeID> const&)>)
+    virtual void registerTxsReceiversFilter(std::function<std::shared_ptr<dev::p2p::NodeIDs>(
+            std::shared_ptr<std::set<dev::network::NodeID>>)>)
     {}
     virtual void updateNodeListInfo(dev::h512s const&) {}
     virtual void updateConsensusNodeInfo(dev::h512s const&) {}

@@ -65,6 +65,7 @@ public:
         std::string threadName = "SyncTrans-" + std::to_string(m_groupId);
         setName(threadName);
         m_msgEngine->onNotifySyncTrans([&]() { m_signalled.notify_all(); });
+        m_fastForwardedNodes = std::make_shared<dev::h512s>();
     }
 
     virtual ~SyncTransaction() { stop(); };
@@ -87,7 +88,8 @@ public:
     std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
 
     void registerTxsReceiversFilter(
-        std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler)
+        std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+            _handler)
     {
         fp_txsReceiversFilter = _handler;
     }
@@ -105,10 +107,10 @@ public:
         Guard l(m_fastForwardMutex);
         m_needForwardRemainTxs = true;
         auto retIter =
-            std::find(m_fastForwardedNodes.begin(), m_fastForwardedNodes.end(), _targetNodeId);
-        if (retIter == m_fastForwardedNodes.end())
+            std::find(m_fastForwardedNodes->begin(), m_fastForwardedNodes->end(), _targetNodeId);
+        if (retIter == m_fastForwardedNodes->end())
         {
-            m_fastForwardedNodes.push_back(_targetNodeId);
+            m_fastForwardedNodes->push_back(_targetNodeId);
         }
         m_signalled.notify_all();
     }
@@ -150,11 +152,12 @@ private:
     // settings
     dev::eth::Handler<> m_tqReady;
 
-    std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_txsReceiversFilter = nullptr;
+    std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+        fp_txsReceiversFilter = nullptr;
 
     mutable Mutex m_fastForwardMutex;
     std::atomic_bool m_needForwardRemainTxs = {false};
-    dev::h512s m_fastForwardedNodes;
+    std::shared_ptr<dev::h512s> m_fastForwardedNodes;
 
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
