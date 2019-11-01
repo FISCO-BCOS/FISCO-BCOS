@@ -28,6 +28,10 @@
 #include <string>
 #include <thread>
 
+#include "ChannelException.h"
+#include "Message.h"
+#include "libdevcore/ThreadPool.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
@@ -35,20 +39,10 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
-#include "ChannelException.h"
-#include "Message.h"
-#include "libdevcore/ThreadPool.h"
-
 namespace dev
 {
 namespace channel
 {
-enum class ProtocolVersion : uint32_t
-{
-    v1 = 1,
-    v2 = 2
-};
-
 class ChannelSession : public std::enable_shared_from_this<ChannelSession>
 {
 public:
@@ -123,10 +117,10 @@ public:
 
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
 
-    ProtocolVersion protocolVersion() { return m_channelProtocol; }
-    ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
-    ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
-    ProtocolVersion setProtocolVersion(ProtocolVersion _channelProtocol)
+    dev::ProtocolVersion protocolVersion() { return m_channelProtocol; }
+    dev::ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
+    dev::ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
+    dev::ProtocolVersion setProtocolVersion(dev::ProtocolVersion _channelProtocol)
     {
         return m_channelProtocol = _channelProtocol;
     }
@@ -218,9 +212,9 @@ private:
     std::shared_ptr<std::set<std::string>> m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
-    ProtocolVersion m_channelProtocol = ProtocolVersion::v1;
-    ProtocolVersion m_minimumProtocol = ProtocolVersion::v1;
-    ProtocolVersion m_maximumProtocol = ProtocolVersion::v2;
+    dev::ProtocolVersion m_channelProtocol = dev::ProtocolVersion::v1;
+    dev::ProtocolVersion m_minimumProtocol = dev::ProtocolVersion::v1;
+    dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::v2;
     std::string m_clientType;
     size_t _idleTime = 30000;
 };

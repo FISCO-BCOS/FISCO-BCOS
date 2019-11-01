@@ -442,6 +442,10 @@ public:
     {
         return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
     }
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
+    {
+        return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+    }
     dev::eth::ImportResult import(
         dev::eth::Transaction::Ptr, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {

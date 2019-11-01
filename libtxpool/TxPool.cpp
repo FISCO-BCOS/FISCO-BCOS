@@ -30,6 +30,7 @@
 using namespace std;
 using namespace dev::p2p;
 using namespace dev::eth;
+using namespace dev::executive;
 namespace dev
 {
 namespace txpool
@@ -37,8 +38,69 @@ namespace txpool
 // import transaction to the txPool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
-    m_submitPool->enqueue([this, _tx]() { submitTransactions(_tx); });
+    m_submitPool->enqueue([this, _tx]() {
+        ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
+        if (isSealerOrObserver())
+        {
+            verifyRet = import(_tx);
+            if (ImportResult::Success == verifyRet)
+            {
+                return;
+            }
+        }
+        notifyReceipt(_tx, verifyRet);
+    });
     return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+}
+
+// create receipt
+void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet)
+{
+    auto callback = _tx->rpcCallback();
+    if (!callback)
+    {
+        return;
+    }
+    TransactionException txException;
+    switch (_verifyRet)
+    {
+    case ImportResult::NotBelongToTheGroup:
+        txException = TransactionException::NotBelongToTheGroup;
+        break;
+    // 16
+    case ImportResult::BlockLimitCheckFailed:
+        txException = TransactionException::BlockLimitCheckFail;
+        break;
+    // 15
+    case ImportResult::TransactionNonceCheckFail:
+        txException = TransactionException::NonceCheckFail;
+        break;
+    // 28
+    case ImportResult::TransactionPoolIsFull:
+        txException = TransactionException::TxPoolIsFull;
+        break;
+    // 15
+    case ImportResult::TxPoolNonceCheckFail:
+        txException = TransactionException::NonceCheckFail;
+        break;
+    // 30
+    case ImportResult::AlreadyKnown:
+        txException = TransactionException::AlreadyKnown;
+        break;
+    // 31
+    case ImportResult::AlreadyInChain:
+        txException = TransactionException::AlreadyInChain;
+        break;
+    // 32
+    case ImportResult::InvalidChainIdOrGroupId:
+        txException = TransactionException::InvalidChainIdOrGroupId;
+        break;
+    default:
+        txException = TransactionException::TransactionRefused;
+    }
+    dev::eth::LocalisedTransactionReceipt::Ptr receipt =
+        std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
+    m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
 }
 
 std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
@@ -98,6 +160,18 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
     }
 }
 
+
+bool TxPool::isSealerOrObserver()
+{
+    auto _nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
+    auto it = std::find(_nodeList.begin(), _nodeList.end(), m_service->id());
+    if (it == _nodeList.end())
+    {
+        return false;
+    }
+    return true;
+}
+
 /**
  * @brief : veirfy specified transaction (called by libsync)
  *          && insert the valid transaction into the transaction queue
@@ -136,25 +210,11 @@ ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
  */
 ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 {
-    m_totalTxsNum += 1;
     _tx->setImportTime(u256(utcTime()));
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
     {
-        if (g_BCOSConfig.version() < V2_1_0)
-        {
-            auto callback = _tx->rpcCallback();
-            if (callback)
-            {
-                dev::eth::LocalisedTransactionReceipt::Ptr receipt =
-                    std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                        executive::TransactionException::TxPoolIsFull);
-
-                m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
-            }
-        }
-
         return ImportResult::TransactionPoolIsFull;
     }
     /// check the verify result(nonce && signature check)
