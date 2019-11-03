@@ -282,7 +282,7 @@ private:
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
     mutable Transactions m_transactions;
-    TransactionReceipts m_transactionReceipts;
+    mutable TransactionReceipts m_transactionReceipts;
     /// sig list (field 3)
     std::vector<std::pair<u256, Signature>> m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,
