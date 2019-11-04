@@ -151,12 +151,9 @@ void SyncMaster::doWork()
                     noteDownloadingFinish();
             }
         }
+        // send block-download-request to peers if this node is behind others
+        maintainPeersStatus();
     });
-    auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
-
-    // send block-download-request to peers if this node is behind others
-    maintainPeersStatus();
-    auto maintainPeersStatus_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     // send block-status to other nodes when commit a new block
@@ -172,9 +169,6 @@ void SyncMaster::doWork()
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
                     << LOG_KV("maintainPeersConnection", maintainPeersConnection_time_cost)
-                    << LOG_KV("maintainDownloadingQueueBufferTimeCost",
-                           maintainDownloadingQueueBuffer_time_cost)
-                    << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
                     << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
                     << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
                     << LOG_KV("syncTotalTimeCost", utcTime() - start_time);

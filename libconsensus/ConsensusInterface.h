@@ -41,6 +41,7 @@ public:
 
     /// get sealer list
     virtual h512s sealerList() const = 0;
+    virtual h512s consensusList() const = 0;
     /// set the sealer list
     /// virtual void setSealerList(h512s const& _sealerList) = 0;
     virtual void appendSealer(h512 const& _sealer) = 0;

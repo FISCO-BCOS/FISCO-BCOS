@@ -30,15 +30,7 @@ using namespace dev::sync;
 void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 {
     Guard l(x_push);
-    if (!x_canPush.try_lock())
-    {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Drop request when responding blocks")
-                        << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
-                        << LOG_KV("nodeId", m_nodeId.abridged());
-        return;
-    }
-
+    x_canPush.lock();
     if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")

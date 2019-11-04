@@ -79,9 +79,11 @@ BOOST_AUTO_TEST_CASE(disableTest)
     DownloadRequestQueue queue(NodeID(100));
     BOOST_CHECK(queue.empty());
 
+#if 0
     queue.disablePush();
     queue.push(1, 3);
     BOOST_CHECK(queue.empty());
+#endif
 
     queue.enablePush();
     queue.push(1, 3);

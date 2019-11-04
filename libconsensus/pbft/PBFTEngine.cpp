@@ -43,6 +43,12 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 
 void PBFTEngine::start()
 {
+    // create PBFTMsgFactory
+    createPBFTMsgFactory();
+
+    // register P2P callback after create PBFTMsgFactory
+    m_service->registerHandlerByProtoclID(
+        m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
@@ -53,8 +59,6 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
-    // create PBFTMsgFactory
-    createPBFTMsgFactory();
     auto block = m_blockChain->getBlockByNumber(m_blockChain->number());
     if (!block)
     {
@@ -532,11 +536,11 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
 /// check sealer list
 void PBFTEngine::checkSealerList(Block const& block)
 {
-    ReadGuard l(m_sealerListMutex);
-    if (m_sealerList != block.blockHeader().sealerList())
+    auto sealers = consensusList();
+    if (sealers != block.blockHeader().sealerList())
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("checkSealerList: wrong sealers")
-                              << LOG_KV("Nsealer", m_sealerList.size())
+                              << LOG_KV("Nsealer", sealers.size())
                               << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
                               << LOG_KV("hash", block.blockHeader().hash().abridged())
                               << LOG_KV("nodeIdx", nodeIdx())
@@ -557,7 +561,8 @@ bool PBFTEngine::checkBlock(Block const& block)
         Guard l(m_mutex);
         resetConfig();
     }
-    auto sealers = sealerList();
+    // the current sealer list
+    auto sealers = consensusList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)
     {
@@ -593,23 +598,10 @@ bool PBFTEngine::checkBlock(Block const& block)
         return false;
     }
     /// check sign
-    for (auto& sign : *sig_list)
+    for (auto const& sign : *sig_list)
     {
-        if (sign.first >= sealers.size())
+        if (!checkSign(sign.first.convert_to<IDXTYPE>(), block.blockHeader().hash(), sign.second))
         {
-            PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: overflowed signer")
-                                  << LOG_KV("signer", sign.first)
-                                  << LOG_KV("Nsealer", sealers.size());
-            return false;
-        }
-        if (!dev::verify(
-                sealers[sign.first.convert_to<size_t>()], sign.second, block.blockHeader().hash()))
-        {
-            PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: invalid sign")
-                                  << LOG_KV("signer", sign.first)
-                                  << LOG_KV(
-                                         "pub", sealers[sign.first.convert_to<size_t>()].abridged())
-                                  << LOG_KV("hash", block.blockHeader().hash().abridged());
             return false;
         }
     }  /// end of check sign
@@ -620,6 +612,16 @@ bool PBFTEngine::checkBlock(Block const& block)
         return false;
     }
     return true;
+}
+
+bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, Signature const& _sig)
+{
+    h512 nodeId;
+    if (getNodeIDByIndex(nodeId, _idx))
+    {
+        return dev::verify(nodeId, _sig, _hash);
+    }
+    return false;
 }
 
 /**
