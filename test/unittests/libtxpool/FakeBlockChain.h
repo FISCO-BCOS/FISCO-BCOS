@@ -176,16 +176,12 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
-    {
-        if (m_blockHash.count(_blockHash))
-            return m_blockChain[m_blockHash[_blockHash]]->rlpP();
-        return nullptr;
-    }
-
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
     {
-        return getBlockRLPByHash(numberHash(_i));
+        auto blockHash = numberHash(_i);
+        if (m_blockHash.count(blockHash))
+            return m_blockChain[m_blockHash[blockHash]]->rlpP();
+        return nullptr;
     }
 
     dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
