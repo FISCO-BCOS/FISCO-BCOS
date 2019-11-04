@@ -54,6 +54,7 @@ void SyncTransaction::doWork()
     record_time = utcTime();
 
     maintainDownloadingTransactions();
+
     auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -116,11 +117,13 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
                     << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts->size())
                     << LOG_KV("totalTxs", pendingSize);
 
-    NodeIDs selectedPeers;
+    std::shared_ptr<NodeIDs> selectedPeers;
     // fastforward remaining transactions
     if (_fastForwardRemainTxs)
     {
-        selectedPeers = m_fastForwardedNodes;
+        // copy m_fastForwardedNodes to selectedPeers in case of m_fastForwardedNodes changed
+        selectedPeers = std::make_shared<NodeIDs>();
+        *selectedPeers = *m_fastForwardedNodes;
     }
     else
     {
@@ -144,19 +147,21 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
         auto t = (*_ts)[i];
         NodeIDs peers;
 
-        // TODO: add redundancy when receive transactions from P2P
+        int64_t selectSize = selectedPeers->size();
+        // add redundancy when receive transactions from P2P
         if (m_txPool->isTransactionKnownBySomeone(t->sha3()) && !_fastForwardRemainTxs)
         {
-            m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
-            continue;
+            unsigned percent = 25;
+            selectSize = (selectSize * percent + 99) / 100;
         }
 
-        peers = m_syncStatus->filterPeers(selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent =
-                !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId) || _fastForwardRemainTxs;
-            bool isSealer = _p->isSealer;
-            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
-        });
+        peers = m_syncStatus->filterPeers(
+            selectSize, selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                bool unsent =
+                    !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId) || _fastForwardRemainTxs;
+                bool isSealer = _p->isSealer;
+                return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
+            });
         UpgradeGuard ul(l);
         m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
         if (0 == peers.size())
@@ -219,7 +224,7 @@ void SyncTransaction::forwardRemainingTxs()
         startIndex += c_maxSendTransactions;
     }
     m_needForwardRemainTxs = false;
-    m_fastForwardedNodes.clear();
+    m_fastForwardedNodes->clear();
 }
 
 void SyncTransaction::maintainDownloadingTransactions()

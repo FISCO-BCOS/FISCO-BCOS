@@ -149,14 +149,13 @@ bool SyncTreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex
  *  2. _parentIndex: the index of the node who needs select child nodes from the given peers
  *  3. _peers: the nodeIDs of peers maintained by syncStatus
  */
-void SyncTreeTopology::recursiveSelectChildNodes(
-    h512s& _selectedNodeList, ssize_t const& _parentIndex, std::set<dev::h512> const& _peers)
+void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNodeList,
+    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers)
 {
     // if the node doesn't locate in the group
     // (both m_consIndex and m_nodeIndex are -1), return empty node list
     if (!locatedInGroup())
     {
-        _selectedNodeList = h512s();
         return;
     }
     dev::h512 selectedNode;
@@ -173,12 +172,12 @@ void SyncTreeTopology::recursiveSelectChildNodes(
             break;
         }
         // the child node exists in the peers
-        if (getNodeIDByIndex(selectedNode, expectedIndex) && _peers.count(selectedNode))
+        if (getNodeIDByIndex(selectedNode, expectedIndex) && _peers->count(selectedNode))
         {
             SYNCTREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
                                 << LOG_KV("selectedNode", selectedNode.abridged())
                                 << LOG_KV("selectedIndex", expectedIndex);
-            _selectedNodeList.push_back(selectedNode);
+            _selectedNodeList->push_back(selectedNode);
         }
         // the child node doesn't exit in the peers, select the grand child recursively
         else
@@ -197,12 +196,11 @@ void SyncTreeTopology::recursiveSelectChildNodes(
  *  2. _peers: the nodeIDs of peers maintained by syncStatus
  *  3. _nodeIndex: the index of the node that need select parent from given peers
  */
-void SyncTreeTopology::selectParentNodes(
-    dev::h512s& _selectedNodeList, std::set<dev::h512> const& _peers, int64_t const& _nodeIndex)
+void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex)
 {
     if (!locatedInGroup())
     {
-        _selectedNodeList = h512s();
         return;
     }
     // push all other consensus node to the selectedNodeList if this node is the consensus node
@@ -210,9 +208,9 @@ void SyncTreeTopology::selectParentNodes(
     {
         for (auto const& consNode : m_currentConsensusNodes)
         {
-            if (_peers.count(consNode))
+            if (_peers->count(consNode))
             {
-                _selectedNodeList.push_back(consNode);
+                _selectedNodeList->push_back(consNode);
             }
         }
         return;
@@ -231,9 +229,9 @@ void SyncTreeTopology::selectParentNodes(
     while (parentIndex >= m_startIndex)
     {
         // find the parentNode from the peers
-        if (getNodeIDByIndex(selectedNode, parentIndex) && _peers.count(selectedNode))
+        if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
         {
-            _selectedNodeList.push_back(selectedNode);
+            _selectedNodeList->push_back(selectedNode);
             SYNCTREE_LOG(DEBUG) << LOG_DESC("selectParentNodes")
                                 << LOG_KV("parentIndex", parentIndex)
                                 << LOG_KV("selectedNode", selectedNode.abridged())
@@ -249,16 +247,18 @@ bool SyncTreeTopology::locatedInGroup()
     return (m_consIndex != -1) || (m_nodeIndex != -1);
 }
 
-dev::h512s SyncTreeTopology::selectNodes(std::set<dev::h512> const& _peers)
+std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
+    std::shared_ptr<std::set<dev::h512>> _peers)
 {
     Guard l(m_mutex);
+    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
     // the node doesn't locate in the group
     if (!locatedInGroup())
     {
-        return dev::h512s();
+        return selectedNodeList;
     }
 
-    dev::h512s selectedNodeList;
+
     // the node is the consensusNode, chose the childNode
     if (m_consIndex >= 0)
     {

@@ -115,12 +115,11 @@ public:
 
     void deletePeer(NodeID const& _id);
 
-    NodeIDs peers();
-    std::set<NodeID> peersSet();
+    std::shared_ptr<NodeIDs> peers();
+    std::shared_ptr<std::set<NodeID>> peersSet();
 
-    // filter the nodes that the txs should be sent to from a given node list
-    NodeIDs filterPeers(
-        NodeIDs const& peers, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
+    NodeIDs filterPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _peers,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
@@ -146,6 +145,9 @@ public:
     {
         m_downloadingBlockQueue.setStatHandler(_statisticHandler);
     }
+
+private:
+    int64_t selectPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds);
 
 public:
     h256 genesisHash;

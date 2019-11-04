@@ -36,9 +36,9 @@ using namespace dev::blockverifier;
 void SyncMaster::printSyncInfo()
 {
     auto pendingSize = m_txPool->pendingSize();
-    NodeIDs peers = m_syncStatus->peers();
+    auto peers = m_syncStatus->peers();
     std::string peer_str;
-    for (auto& peer : peers)
+    for (auto const& peer : *peers)
     {
         peer_str += peer.abridged() + "/";
     }
@@ -49,7 +49,7 @@ void SyncMaster::printSyncInfo()
                     << m_blockChain->numberHash(m_blockChain->number()) << "\n"
                     << "            Genesis hash: " << m_syncStatus->genesisHash.abridged() << "\n"
                     << "            TxPool size:  " << pendingSize << "\n"
-                    << "            Peers size:   " << m_syncStatus->peers().size() << "\n"
+                    << "            Peers size:   " << peers->size() << "\n"
                     << "[Peer Info] --------------------------------------------\n"
                     << "    Host: " << m_nodeId.abridged() << "\n"
                     << "    Peer: " << peer_str << "\n"
@@ -132,34 +132,42 @@ void SyncMaster::doWork()
         printSyncInfo();
     auto printSyncInfo_time_cost = utcTime() - record_time;
     record_time = utcTime();
+    // maintain the connections between observers/sealers
     maintainPeersConnection();
     auto maintainPeersConnection_time_cost = utcTime() - record_time;
     record_time = utcTime();
-    maintainDownloadingQueueBuffer();
+
+    m_downloadBlockProcessor->enqueue([this]() {
+        // flush downloaded buffer into downloading queue
+        maintainDownloadingQueueBuffer();
+        // Not Idle do
+        if (isSyncing())
+        {
+            // check and commit the downloaded block
+            if (m_syncStatus->state == SyncState::Downloading)
+            {
+                bool finished = maintainDownloadingQueue();
+                if (finished)
+                    noteDownloadingFinish();
+            }
+        }
+    });
     auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
-    record_time = utcTime();
+
+    // send block-download-request to peers if this node is behind others
     maintainPeersStatus();
     auto maintainPeersStatus_time_cost = utcTime() - record_time;
     record_time = utcTime();
+
+    // send block-status to other nodes when commit a new block
     maintainBlocks();
     auto maintainBlocks_time_cost = utcTime() - record_time;
     record_time = utcTime();
     auto maintainBlockRequest_time_cost = 0;
-    maintainBlockRequest();
+
+    // send block to other nodes
+    m_sendBlockProcessor->enqueue([this]() { maintainBlockRequest(); });
     maintainBlockRequest_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    auto maintainDownloadingQueue_time_cost = 0;
-    // Not Idle do
-    if (isSyncing())
-    {
-        if (m_syncStatus->state == SyncState::Downloading)
-        {
-            bool finished = maintainDownloadingQueue();
-            if (finished)
-                noteDownloadingFinish();
-        }
-        maintainDownloadingQueue_time_cost = utcTime() - record_time;
-    }
 
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
@@ -169,8 +177,6 @@ void SyncMaster::doWork()
                     << LOG_KV("maintainPeersStatusTimeCost", maintainPeersStatus_time_cost)
                     << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
                     << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
-                    << LOG_KV(
-                           "maintainDownloadingQueueTimeCost", maintainDownloadingQueue_time_cost)
                     << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
@@ -240,8 +246,8 @@ void SyncMaster::maintainBlocks()
 
 void SyncMaster::sendSyncStatusByTree(BlockNumber const& _blockNumber, h256 const& _currentHash)
 {
-    dev::h512s selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
-    for (auto const& nodeId : selectedNodes)
+    auto selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
+    for (auto const& nodeId : *selectedNodes)
     {
         sendSyncStatusByNodeId(_blockNumber, _currentHash, nodeId);
     }

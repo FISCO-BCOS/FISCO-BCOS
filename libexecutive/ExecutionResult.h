@@ -72,6 +72,7 @@ enum class TransactionException : uint32_t
     AlreadyInChain = 10001,
     InvalidChainIdOrGroupId = 10002,
     NotBelongToTheGroup = 10003,
+    MalformedTx = 10004
 };
 
 enum class CodeDeposit
