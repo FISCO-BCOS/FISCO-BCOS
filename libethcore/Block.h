@@ -160,6 +160,14 @@ public:
             m_transactions->push_back(trans);
         }
         noteChange();
+        if (!sealed)
+        {
+            return;
+        }
+        for (auto const& trans : *_trans_array)
+        {
+            trans->setSealed(true);
+        }
     }
     /// set block header
     void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
