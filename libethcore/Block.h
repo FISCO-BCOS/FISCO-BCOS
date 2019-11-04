@@ -153,10 +153,16 @@ public:
         noteChange();
     }
     /// append transactions
-    void appendTransactions(std::shared_ptr<Transactions> _trans_array)
+    void appendTransactions(std::shared_ptr<Transactions> _trans_array, bool const& sealed = false)
     {
         for (auto const& trans : *_trans_array)
+        {
             m_transactions->push_back(trans);
+            if (sealed)
+            {
+                trans->setSealed(true);
+            }
+        }
         noteChange();
     }
     /// set block header
@@ -191,6 +197,11 @@ public:
         }
         /// sealer must be reseted since it's used to decide a block is valid or not
         m_blockHeader.setSealer(Invalid256);
+        // set all the transactions unsealed
+        for (auto tx : *m_transactions)
+        {
+            tx->setSealed(false);
+        }
         m_transactions->clear();
         m_transactionReceipts->clear();
         m_sigList->clear();

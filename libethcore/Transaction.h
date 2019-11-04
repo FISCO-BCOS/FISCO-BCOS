@@ -245,6 +245,8 @@ public:
     void updateTransactionHashWithSig(dev::h256 const& txHash);
 
     bool checkChainIdAndGroupId(u256 _chainId, u256 _groupId);
+    bool sealed() const { return m_sealed; }
+    void setSealed(bool const& _sealed) { m_sealed = _sealed; }
 
 protected:
     /// Type of transaction.
@@ -301,6 +303,8 @@ protected:
     u256 m_chainId;     /// < The scenario to which the transaction belongs.
     u256 m_groupId;     /// < The group to which the transaction belongs.
     bytes m_extraData;  /// < Reserved fields, distinguished by "##".
+    // the transaction has been sealed or not
+    bool m_sealed = false;
 };
 
 /// Nice name for vector of Transaction.
