@@ -368,19 +368,27 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
         // m_delTransactions.unsafe_erase(_txHash);
     }
     // call transaction callback
-    if (_needTriggerCallback && _block && transaction->rpcCallback())
+    if (_needTriggerCallback && transaction->rpcCallback())
     {
         m_workerPool->enqueue([this, _block, _index, transaction]() {
             // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
             // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
             LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
-            if (_block->transactionReceipts()->size() > _index)
+
+            dev::bytesConstRef input = dev::bytesConstRef();
+            if (_block && _block->transactionReceipts()->size() > _index)
             {
+                input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
                 pReceipt = constructTransactionReceipt((*(_block->transactions()))[_index],
                     (*(_block->transactionReceipts()))[_index], *_block, _index);
             }
-
-            auto input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
+            // fake transaction receipt
+            else
+            {
+                // transaction refused
+                pReceipt = std::make_shared<LocalisedTransactionReceipt>(
+                    TransactionException::TransactionRefused);
+            }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
             callback.call(callback.pReceipt, input);
@@ -573,18 +581,18 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         WriteGuard wl(x_invalidTxs);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (m_invalidTxs->count((*it)->sha3()))
+            if (m_invalidTxs->count((*it)->sha3()) || (*it)->sealed())
             {
                 continue;
             }
             /// check  nonce again when obtain transactions
-            if (!m_txNonceCheck->isNonceOk(*(*it), false))
+            if (!(*it)->sealed() && !m_txNonceCheck->isNonceOk(*(*it), false))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
                 continue;
             }
             // check block limit
-            if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
+            if (!(*it)->sealed() && !m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
                 continue;

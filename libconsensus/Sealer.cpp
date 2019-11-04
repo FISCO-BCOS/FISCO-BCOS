@@ -147,7 +147,7 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
     m_sealing.block->appendTransactions(
-        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
+        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true), true);
 }
 
 /// check whether the blocksync module is syncing
