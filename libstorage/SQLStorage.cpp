@@ -290,7 +290,8 @@ TableData::Ptr SQLStorage::selectTableDataByNum(
     try
     {
         STORAGE_EXTERNAL_LOG(INFO) << LOG_DESC("Query AMOPDB data call selectTableDataByNum")
-                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num);
+                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num)
+                                   << LOG_KV("start", start) << LOG_KV("counts", counts);
         Json::Value requestJson;
         requestJson["op"] = "selectbynum";
         requestJson["params"]["tableName"] = tableInfo->name;

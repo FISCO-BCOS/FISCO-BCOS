@@ -430,7 +430,7 @@ int main(int argc, const char* argv[])
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("verify,v",
         boost::program_options::value<int64_t>()->default_value(1000),
-        "verify number of blocks")("limit,l",
+        "verify number of blocks, minimum is 100")("limit,l",
         boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
         "sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),
         "page counts of system table")(
