@@ -154,7 +154,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
     }
     else
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage");
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage")
+                              << LOG_KV("blockNumber", _blockNumber);
         string strBlock = "";
         Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
@@ -191,6 +192,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
         }
 
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockNumber", _blockNumber)
                               << LOG_KV("blockHash", _blockHash);
         return nullptr;
     }
@@ -212,7 +214,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(int64_t _i)
         {
             auto entry = entries->get(0);
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
-            return getBlockRLP(blockHash);
+            return getBlockRLP(blockHash, _i);
         }
     }
 
@@ -220,7 +222,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(int64_t _i)
     return nullptr;
 }
 
-std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
+std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -241,7 +243,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Cache missed, read from storage");
         string strBlock = "";
-        Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
         if (tb)
@@ -271,6 +273,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
         }
 
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockNumber", _blockNumber)
                               << LOG_KV("blockHash", _blockHash);
         return nullptr;
     }
@@ -424,21 +427,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int
     else
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockByHash]Can't find the block, return nullptr");
-        return nullptr;
-    }
-}
-
-std::shared_ptr<bytes> BlockChainImp::getBlockRLPByHash(h256 const& _blockHash)
-{
-    auto block = getBlockRLP(_blockHash);
-    if (bool(block))
-    {
-        return block;
-    }
-    else
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
-            "[#getBlockRLPByHash]Can't find the block, return nullptr");
         return nullptr;
     }
 }
