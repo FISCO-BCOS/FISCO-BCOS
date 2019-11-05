@@ -62,7 +62,7 @@ public:
         s.swapOut(receipt);
     }
 
-    bytes receipt()
+    const bytes& receipt()
     {
         if (m_receipt == bytes())
         {
@@ -71,7 +71,7 @@ public:
         return m_receipt;
     }
 
-    bytes sha3()
+    const bytes& sha3()
     {
         if (m_sha3 == bytes())
         {
