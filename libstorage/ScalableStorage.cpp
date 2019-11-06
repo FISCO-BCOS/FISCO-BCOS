@@ -87,7 +87,7 @@ Entries::Ptr ScalableStorage::selectFromArchive(
         auto dataStorage = m_storageFactory->getStorage(to_string(dbName), false);
         if (!dataStorage)
         {
-            SCALABLE_STORAGE_LOG(DEBUG)
+            SCALABLE_STORAGE_LOG(ERROR)
                 << "archive DB not exists" << LOG_KV("currentDBName", m_archiveDBName)
                 << LOG_KV("dbName", dbName) << LOG_KV("key", key);
             return std::make_shared<Entries>();
@@ -120,7 +120,12 @@ Entries::Ptr ScalableStorage::select(
         {
             SCALABLE_STORAGE_LOG(DEBUG) << "select from remote" << LOG_KV("table", tableInfo->name)
                                         << LOG_KV("key", key) << LOG_KV("number", num);
-            return m_remote->select(num, tableInfo, key, condition);
+            auto entries = m_remote->select(num, tableInfo, key, condition);
+            if (num > 0 && entries->size() == 0)
+            {
+                SCALABLE_STORAGE_LOG(FATAL) << "select from remote DB failed";
+            }
+            return entries;
         }
         else if (m_archive)
         {
