@@ -62,7 +62,7 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    bool ok = interpret(packet);
+    bool ok = interpret(packet, _msg);
     if (!ok)
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                  << LOG_DESC("Reject packet")
@@ -94,7 +94,7 @@ bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
     return m_syncStatus->hasPeer(_packet.nodeId);
 }
 
-bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
+bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg)
 {
     SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                            << LOG_DESC("interpret packet type")
@@ -107,7 +107,7 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
             onPeerStatus(_packet);
             break;
         case TransactionsPacket:
-            onPeerTransactions(_packet);
+            onPeerTransactions(_packet, _msg);
             break;
         case BlocksPacket:
             onPeerBlocks(_packet);
@@ -192,7 +192,7 @@ bool SyncMsgEngine::isFarSyncing() const
     return m_syncStatus->knownHighestNumber - currentNumber > 10;
 }
 
-void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
+void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg)
 {
     if (!checkGroupPacket(_packet))
     {
@@ -201,7 +201,8 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
         return;
     }
     RLP const& rlps = _packet.rlp();
-    m_txQueue->push(rlps.data(), _packet.nodeId);
+    // m_txQueue->push(rlps.data(), _packet.nodeId);
+    m_txQueue->push(_packet, _msg, _packet.nodeId);
     if (m_onNotifySyncTrans)
     {
         m_onNotifySyncTrans();

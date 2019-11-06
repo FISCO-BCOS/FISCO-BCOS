@@ -46,6 +46,7 @@ public:
     /// statistics for sync
     virtual void updateSendedBlockInfo(size_t const& _blockBytes, size_t const& _blockCount = 1);
     virtual void updateSendedTxsInfo(size_t const& _txsCount, size_t const& _txsBytes);
+    virtual void updateSendedTxsInfo(size_t const& _txsBytes);
     virtual void updateDownloadedBlockInfo(
         size_t const& _blockBytes, size_t const& _blockCount = 1);
     virtual void updateDownloadedTxsCount(size_t const& _txsCount);

@@ -27,13 +27,36 @@ using namespace dev;
 using namespace dev::sync;
 using namespace dev::eth;
 
-void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
+void DownloadingTxsQueue::push(
+    SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer)
 {
+    DownloadTxsShard txsShard(_packet.rlp().data(), _fromPeer);
+    int RPCPacketType = 1;
+    if (_msg->packetType() == RPCPacketType && m_syncTransTreeRouter)
+    {
+        auto selectedNodeList = m_syncTransTreeRouter->selectNodes(m_syncStatus->peersSet());
+        // forward the received txs
+        for (auto const& selectedNode : *selectedNodeList)
+        {
+            if (selectedNode == _fromPeer)
+            {
+                continue;
+            }
+            m_service->asyncSendMessageByNodeID(selectedNode, _msg, nullptr);
+            if (m_statisticHandler)
+            {
+                m_statisticHandler->updateSendedTxsInfo(_msg->length());
+            }
+            txsShard.appendForwardNodes(selectedNode);
+            SYNC_LOG(DEBUG) << LOG_DESC("forward transaction")
+                            << LOG_KV("selectedNode", selectedNode.abridged());
+        }
+    }
     WriteGuard l(x_buffer);
-    m_buffer->emplace_back(_txsBytes, _fromPeer);
+    m_buffer->emplace_back(txsShard);
     if (m_statisticHandler)
     {
-        m_statisticHandler->updateDownloadedTxsBytes(_txsBytes.size());
+        m_statisticHandler->updateDownloadedTxsBytes(_msg->length());
     }
 }
 
@@ -149,6 +172,11 @@ void DownloadingTxsQueue::pop2TxPool(
         {
             _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
         }
+        for (auto const& forwardedNode : *(txsShard.forwardNodes))
+        {
+            _txPool->setTransactionsAreKnownBy(knownTxHash, forwardedNode);
+        }
+
         auto setTxKnownBy_time_cost = utcTime() - record_time;
         record_time = utcTime();
 

@@ -74,6 +74,11 @@ void StatisticHandler::updateSendedTxsInfo(size_t const& _txsCount, size_t const
     m_sendedTxsBytes += _txsBytes;
 }
 
+void StatisticHandler::updateSendedTxsInfo(size_t const& _txsBytes)
+{
+    m_sendedTxsBytes += _txsBytes;
+}
+
 
 void StatisticHandler::updateDownloadedTxsCount(size_t const& _txsCount)
 {

@@ -86,6 +86,7 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
                 << LOG_DESC("Can't get block") << LOG_KV("blockNumber", blockNumber);
         }
     }
+    // block cache miss
     else
     {
         nonceVec = m_blockChain->getNonces(blockNumber);

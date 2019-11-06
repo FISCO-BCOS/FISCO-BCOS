@@ -83,23 +83,17 @@ public:
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
-
-        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
-            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
-
-        m_statisticHandler = m_service->statisticHandler();
-        m_syncTrans->setStatisticHandler(m_statisticHandler);
-
         // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
         m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_service->statisticHandler());
-
-        m_txQueue->setStatisticHandler(m_statisticHandler);
 
         m_downloadBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-download", 1);
         m_sendBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-sender", 1);
         if (m_enableSendBlockStatusByTree)
         {
             m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
+
+            auto syncTransTreeRouter = std::make_shared<SyncTransTreeTopology>(m_nodeId);
+            m_txQueue->setSyncTransTreeRouter(syncTransTreeRouter);
             // update the nodeInfo for syncTreeRouter
             updateNodeInfo();
 
@@ -109,6 +103,13 @@ public:
             m_blockStatusGossipThread->registerGossipHandler(
                 boost::bind(&SyncMaster::sendBlockStatus, this, _1));
         }
+        m_txQueue->setService(_service);
+        m_txQueue->setSyncStatus(m_syncStatus);
+        m_statisticHandler = m_service->statisticHandler();
+        m_txQueue->setStatisticHandler(m_statisticHandler);
+        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
+            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+        m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -201,6 +202,7 @@ public:
 
     void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
     {
+        m_txQueue->updateConsensusNodeInfo(_consensusNodes);
         if (!m_syncTreeRouter)
         {
             return;

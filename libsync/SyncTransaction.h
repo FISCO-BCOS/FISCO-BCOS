@@ -66,6 +66,7 @@ public:
         setName(threadName);
         m_msgEngine->onNotifySyncTrans([&]() { m_signalled.notify_all(); });
         m_fastForwardedNodes = std::make_shared<dev::h512s>();
+        m_syncTransTreeRouter = m_txQueue->syncTransTreeRouter();
     }
 
     virtual ~SyncTransaction() { stop(); };
@@ -161,11 +162,17 @@ private:
 
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
+    SyncTransTreeTopology::Ptr m_syncTransTreeRouter;
+
 public:
     void maintainTransactions();
     void forwardRemainingTxs();
     void sendTransactions(std::shared_ptr<dev::eth::Transactions> _ts,
         bool const& _fastForwardRemainTxs, int64_t const& _startIndex);
+    void broadcastTransactions(std::shared_ptr<dev::p2p::NodeIDs> _selectedPeers,
+        std::shared_ptr<dev::eth::Transactions> _ts, bool const& _fastForwardRemainTxs,
+        int64_t const& _startIndex, bool const& _fromRpc);
+
     void maintainDownloadingTransactions();
 };
 

@@ -514,7 +514,7 @@ void TxPool::removeInvalidTxs()
                 }
             },
             [this]() {
-                // remove transaction knownBy
+                WriteGuard l(x_transactionKnownBy);
                 for (auto const& item : *m_invalidTxs)
                 {
                     removeTransactionKnowBy(item.second);
@@ -540,13 +540,13 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
         "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 
     tbb::parallel_invoke([this, block]() { dropTransactions(block, true); },
-        [this, block]() { removeBlockKnowTrans(*block); },
         [this, block]() {
             // update the Nonces of txs
             m_txNonceCheck->updateCache(false);
             // delete the nonce cache
             m_txpoolNonceChecker->delCache(*(block->transactions()));
-        });
+        },
+        [this, block]() { removeBlockKnowTrans(*block); });
 
     return true;
 }

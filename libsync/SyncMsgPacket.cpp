@@ -22,6 +22,7 @@
  */
 
 #include "SyncMsgPacket.h"
+#include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -102,6 +103,13 @@ void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
     m_rlpStream.clear();
     bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
     prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
+}
+
+P2PMessage::Ptr SyncTransactionsPacket::toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC)
+{
+    auto msg = SyncMsgPacket::toMessage(_protocolId);
+    msg->setPacketType((int)(_fromRPC));
+    return msg;
 }
 
 void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
