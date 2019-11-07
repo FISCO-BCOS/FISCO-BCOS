@@ -52,7 +52,6 @@ void SyncTransaction::doWork()
     auto record_time = utcTime();
     auto printSyncInfo_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     maintainDownloadingTransactions();
 
     auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
@@ -138,13 +137,16 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
             selectedPeers = m_syncStatus->peers();
         }
     }
+
+    // send the transactions from RPC
+    broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, true);
+
+    // send the transactions from P2P
+    // broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, false);
     if (!_fastForwardRemainTxs)
     {
-        // send the transactions from RPC
-        broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, true);
+        sendTxsStatus(_ts, selectedPeers);
     }
-    // send the transactions from P2P
-    broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, false);
 }
 
 void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPeers,
@@ -169,13 +171,20 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         // add redundancy when receive transactions from P2P
         if (!t->rpcCallback() && !_fastForwardRemainTxs)
         {
+            continue;
             // skip the p2p-txs
+#if 0
             if (_fromRpc)
             {
                 continue;
             }
-            unsigned percent = 25;
-            selectSize = (selectSize * percent + 99) / 100;
+
+            else
+            {
+                unsigned percent = 25;
+                selectSize = (selectSize * percent + 99) / 100;
+            }
+#endif
         }
 
         peers = m_syncStatus->filterPeers(
@@ -254,4 +263,58 @@ void SyncTransaction::forwardRemainingTxs()
 void SyncTransaction::maintainDownloadingTransactions()
 {
     m_txQueue->pop2TxPool(m_txPool);
+}
+
+
+// send transaction hash
+void SyncTransaction::sendTxsStatus(
+    std::shared_ptr<dev::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
+{
+    unsigned percent = 25;
+    int64_t selectSize = (_selectedPeers->size() * percent + 99) / 100;
+    UpgradableGuard l(m_txPool->xtransactionKnownBy());
+    for (auto tx : *_txs)
+    {
+        auto peers = m_syncStatus->filterPeers(
+            selectSize, _selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                bool unsent = !m_txPool->isTransactionKnownBy(tx->sha3(), m_nodeId);
+                bool isSealer = _p->isSealer;
+                return isSealer && unsent &&
+                       !m_txPool->isTransactionKnownBy(tx->sha3(), _p->nodeId);
+            });
+        if (peers.size() == 0)
+        {
+            continue;
+        }
+        UpgradeGuard ul(l);
+        for (auto const& peer : peers)
+        {
+            if (!m_txsHash->count(peer))
+            {
+                m_txsHash->insert(std::make_pair(peer, std::make_shared<std::set<dev::h256>>()));
+            }
+            (*m_txsHash)[peer]->insert(tx->sha3());
+            m_txPool->setTransactionIsKnownBy(tx->sha3(), peer);
+        }
+        m_txPool->setTransactionIsKnownBy(tx->sha3(), m_nodeId);
+    }
+    auto blockNumber = m_blockChain->number();
+    for (auto const& it : *m_txsHash)
+    {
+        std::shared_ptr<SyncTxsStatusPacket> txsStatusPacket =
+            std::make_shared<SyncTxsStatusPacket>();
+        if (it.second->size() == 0)
+        {
+            continue;
+        }
+        txsStatusPacket->encode(blockNumber, it.second);
+        auto p2pMsg = txsStatusPacket->toMessage(m_protocolId);
+        m_service->asyncSendMessageByNodeID(it.first, p2pMsg, CallbackFuncWithSession(), Options());
+
+        SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction status to peer")
+                        << LOG_KV("txNum", it.second->size())
+                        << LOG_KV("toNode", it.first.abridged())
+                        << LOG_KV("messageSize(B)", p2pMsg->length());
+    }
+    m_txsHash->clear();
 }

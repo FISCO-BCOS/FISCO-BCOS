@@ -50,12 +50,11 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 200)
+        unsigned _idleWaitMs = 200, int64_t _gossipInterval = 1000, int64_t _gossipPeers = 3,
+        bool _enableSendBlockStatusByTree = false)
       : SyncMaster(_service, _txPool, _blockChain, _blockVerifier, _protocolId, _nodeId,
-            _genesisHash, _idleWaitMs)
-    {
-        resetTreeRouter();
-    }
+            _genesisHash, _idleWaitMs, _gossipInterval, _gossipPeers, _enableSendBlockStatusByTree)
+    {}
 
     /// start blockSync
     void start() override
@@ -127,6 +126,8 @@ public:
             KeyPair sigKeyPair = KeyPair::create();
             tx->setNonce(tx->nonce() + u256(rand()));
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
+            tx->setRpcCallback([&](LocalisedTransactionReceipt::Ptr, dev::bytesConstRef) {});
+
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);

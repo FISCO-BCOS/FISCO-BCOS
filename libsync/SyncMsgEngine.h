@@ -28,6 +28,7 @@
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
@@ -61,6 +62,10 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
+        m_txsWorker =
+            std::make_shared<dev::ThreadPool>("SyncMsgEngine-" + std::to_string(_protocolId), 1);
+        m_txsSender = std::make_shared<dev::ThreadPool>(
+            "SyncMsgEngine-sender-" + std::to_string(_protocolId), 1);
     }
 
     void messageHandler(dev::p2p::NetworkException _e,
@@ -70,18 +75,29 @@ public:
 
     void onNotifyWorker(std::function<void()> const& _f) { m_onNotifyWorker = _f; }
     void onNotifySyncTrans(std::function<void()> const& _f) { m_onNotifySyncTrans = _f; }
+    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
 
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool checkGroupPacket(SyncMsgPacket const& _packet);
-    bool interpret(SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg);
+    bool interpret(std::shared_ptr<SyncMsgPacket> _packet, dev::p2p::P2PMessage::Ptr _msg,
+        dev::h512 const& _peer);
 
 private:
     void onPeerStatus(SyncMsgPacket const& _packet);
     void onPeerTransactions(SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg);
     void onPeerBlocks(SyncMsgPacket const& _packet);
     void onPeerRequestBlocks(SyncMsgPacket const& _packet);
+    // receive txsStatus from peers
+    void onPeerTxsStatus(
+        std::shared_ptr<SyncMsgPacket> _packet, dev::h512 const& _peer, dev::p2p::P2PMessage::Ptr);
+    // response transactions to peers
+    void onReceiveTxsRequest(std::shared_ptr<SyncMsgPacket> _txsReqPacket, dev::h512 const& _peer,
+        dev::p2p::P2PMessage::Ptr);
 
 private:
     // Outside data
@@ -98,6 +114,9 @@ private:
     h256 m_genesisHash;
     std::function<void()> m_onNotifyWorker = nullptr;
     std::function<void()> m_onNotifySyncTrans = nullptr;
+    std::shared_ptr<dev::ThreadPool> m_txsWorker;
+    std::shared_ptr<dev::ThreadPool> m_txsSender;
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler;
 };
 
 class DownloadBlocksContainer

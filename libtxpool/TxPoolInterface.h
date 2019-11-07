@@ -132,6 +132,15 @@ public:
     virtual bool isFull() { return false; }
     virtual void start() {}
     virtual void stop() {}
+    virtual std::shared_ptr<dev::eth::Transactions> obtainTransactions(
+        std::vector<dev::h256> const&)
+    {
+        return nullptr;
+    }
+    virtual std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(std::set<dev::h256> const&)
+    {
+        return nullptr;
+    }
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

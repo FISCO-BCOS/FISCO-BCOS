@@ -48,7 +48,9 @@ public:
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<DownloadingTxsQueue> _txsQueue, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, std::shared_ptr<SyncMasterStatus> _syncStatus,
-        std::shared_ptr<SyncMsgEngine> _msgEngine, unsigned _idleWaitMs = 200)
+        std::shared_ptr<SyncMsgEngine> _msgEngine,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        unsigned _idleWaitMs = 200)
       : Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
@@ -57,7 +59,8 @@ public:
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_syncStatus(_syncStatus),
-        m_msgEngine(_msgEngine)
+        m_msgEngine(_msgEngine),
+        m_blockChain(_blockChain)
     {
         // signal registration
         m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
@@ -67,6 +70,7 @@ public:
         m_msgEngine->onNotifySyncTrans([&]() { m_signalled.notify_all(); });
         m_fastForwardedNodes = std::make_shared<dev::h512s>();
         m_syncTransTreeRouter = m_txQueue->syncTransTreeRouter();
+        m_txsHash = std::make_shared<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>>();
     }
 
     virtual ~SyncTransaction() { stop(); };
@@ -121,6 +125,9 @@ public:
         m_statisticHandler = _statisticHandler;
     }
 
+    void sendTxsStatus(
+        std::shared_ptr<dev::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers);
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -138,6 +145,7 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
+    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -163,6 +171,7 @@ private:
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
     SyncTransTreeTopology::Ptr m_syncTransTreeRouter;
+    std::shared_ptr<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>> m_txsHash;
 
 public:
     void maintainTransactions();

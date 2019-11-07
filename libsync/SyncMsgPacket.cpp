@@ -74,6 +74,21 @@ RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
     return _s.appendRaw(bytes(1, _id + c_syncPacketIDBase)).appendList(_args);
 }
 
+void SyncTxsStatusPacket::encode(
+    int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash)
+{
+    m_rlpStream.clear();
+    auto& retRlp = prep(m_rlpStream, packetType, 2);
+    retRlp << _number;
+    retRlp.append(*_txsHash);
+}
+
+void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, packetType, 1).append(*_requestedTxs);
+}
+
 void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
 {
     m_rlpStream.clear();

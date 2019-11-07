@@ -75,6 +75,19 @@ private:
     bool checkPacket(bytesConstRef _msg);
 };
 
+class SyncTxsStatusPacket : public SyncMsgPacket
+{
+public:
+    SyncTxsStatusPacket() { packetType = TxsStatusPacket; }
+    void encode(int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash);
+};
+
+class SyncTxsReqPacket : public SyncMsgPacket
+{
+public:
+    SyncTxsReqPacket() { packetType = TxsRequestPacekt; }
+    void encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs);
+};
 
 class SyncStatusPacket : public SyncMsgPacket
 {

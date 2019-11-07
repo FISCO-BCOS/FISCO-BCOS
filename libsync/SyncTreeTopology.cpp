@@ -98,9 +98,11 @@ void SyncTreeTopology::updateStartAndEndIndex()
         endIndex = m_nodeNum - 1;
     }
     m_endIndex = endIndex;
+#if 0
     SYNCTREE_LOG(DEBUG) << LOG_DESC("updateStartAndEndIndex") << LOG_KV("startIndex", m_startIndex)
                         << LOG_KV("endIndex", m_endIndex) << LOG_KV("slotSize", slotSize)
                         << LOG_KV("nodeNum", m_nodeNum) << LOG_KV("consNum", consensusNodeSize);
+#endif
 }
 
 /**
@@ -133,8 +135,10 @@ bool SyncTreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex
 {
     if (_nodeIndex >= m_nodeNum)
     {
+#if 0
         SYNCTREE_LOG(DEBUG) << LOG_DESC("getNodeIDByIndex: invalidNode")
                             << LOG_KV("nodeIndex", _nodeIndex) << LOG_KV("nodeListSize", m_nodeNum);
+#endif
         return false;
     }
     _nodeID = m_nodeList[_nodeIndex];
@@ -174,9 +178,11 @@ void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selecte
         // the child node exists in the peers
         if (getNodeIDByIndex(selectedNode, expectedIndex) && _peers->count(selectedNode))
         {
+#if 0
             SYNCTREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
                                 << LOG_KV("selectedNode", selectedNode.abridged())
                                 << LOG_KV("selectedIndex", expectedIndex);
+#endif
             _selectedNodeList->push_back(selectedNode);
         }
         // the child node doesn't exit in the peers, select the grand child recursively
@@ -232,10 +238,12 @@ void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNo
         if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
+#if 0
             SYNCTREE_LOG(DEBUG) << LOG_DESC("selectParentNodes")
                                 << LOG_KV("parentIndex", parentIndex)
                                 << LOG_KV("selectedNode", selectedNode.abridged())
                                 << LOG_KV("idx", m_nodeIndex);
+#endif
             break;
         }
         parentIndex = (parentIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;

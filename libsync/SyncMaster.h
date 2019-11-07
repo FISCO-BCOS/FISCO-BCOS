@@ -108,8 +108,9 @@ public:
         m_statisticHandler = m_service->statisticHandler();
         m_txQueue->setStatisticHandler(m_statisticHandler);
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
-            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+            _nodeId, m_syncStatus, m_msgEngine, m_blockChain, _idleWaitMs);
         m_syncTrans->setStatisticHandler(m_statisticHandler);
+        m_msgEngine->setStatisticHandler(m_statisticHandler);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -215,10 +216,6 @@ public:
     {
         m_syncTrans->noteForwardRemainTxs(_targetNodeId);
     }
-
-protected:
-    // for UT
-    void resetTreeRouter() { m_syncTreeRouter = nullptr; }
 
 private:
     // init via blockchain when the sync thread started

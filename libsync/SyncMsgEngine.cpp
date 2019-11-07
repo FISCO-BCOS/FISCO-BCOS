@@ -51,8 +51,8 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    SyncMsgPacket packet;
-    if (!packet.decode(_session, _msg))
+    std::shared_ptr<SyncMsgPacket> packet = std::make_shared<SyncMsgPacket>();
+    if (!packet->decode(_session, _msg))
     {
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                  << LOG_DESC("Reject packet") << LOG_KV("reason", "decode failed")
@@ -62,12 +62,12 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    bool ok = interpret(packet, _msg);
+    bool ok = interpret(packet, _msg, _session->nodeID());
     if (!ok)
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                  << LOG_DESC("Reject packet")
                                  << LOG_KV("reason", "illegal packet type")
-                                 << LOG_KV("packetType", int(packet.packetType));
+                                 << LOG_KV("packetType", int(packet->packetType));
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
@@ -94,26 +94,35 @@ bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
     return m_syncStatus->hasPeer(_packet.nodeId);
 }
 
-bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet, dev::p2p::P2PMessage::Ptr _msg)
+bool SyncMsgEngine::interpret(
+    std::shared_ptr<SyncMsgPacket> _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer)
 {
     SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                            << LOG_DESC("interpret packet type")
-                           << LOG_KV("type", int(_packet.packetType));
+                           << LOG_KV("type", int(_packet->packetType));
     try
     {
-        switch (_packet.packetType)
+        switch (_packet->packetType)
         {
         case StatusPacket:
-            onPeerStatus(_packet);
+            onPeerStatus(*_packet);
             break;
         case TransactionsPacket:
-            onPeerTransactions(_packet, _msg);
+            onPeerTransactions(*_packet, _msg);
             break;
         case BlocksPacket:
-            onPeerBlocks(_packet);
+            onPeerBlocks(*_packet);
             break;
         case ReqBlocskPacket:
-            onPeerRequestBlocks(_packet);
+            onPeerRequestBlocks(*_packet);
+            break;
+        case TxsStatusPacket:
+            m_txsWorker->enqueue(
+                [this, _packet, _peer, _msg]() { onPeerTxsStatus(_packet, _peer, _msg); });
+            break;
+        case TxsRequestPacekt:
+            m_txsSender->enqueue(
+                [this, _packet, _peer, _msg]() { onReceiveTxsRequest(_packet, _peer, _msg); });
             break;
         default:
             return false;
@@ -126,6 +135,88 @@ bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet, dev::p2p::P2PMessage
         return false;
     }
     return true;
+}
+
+void SyncMsgEngine::onPeerTxsStatus(
+    std::shared_ptr<SyncMsgPacket> _packet, dev::h512 const& _peer, dev::p2p::P2PMessage::Ptr)
+{
+    try
+    {
+        // get blockNumber
+        RLP const& rlps = _packet->rlp();
+        // filter all downloaded txs into the txPool
+        while (m_txQueue->bufferSize() > 0)
+        {
+            m_txQueue->pop2TxPool(m_txPool);
+        }
+        auto blockNumber = m_blockChain->number();
+        std::set<dev::h256> txsHash = rlps[1].toSet<dev::h256>();
+        // request transaction to the peer
+        auto requestTxs = m_txPool->filterUnknownTxs(txsHash);
+        if (requestTxs->size() == 0)
+        {
+            return;
+        }
+        std::shared_ptr<SyncTxsReqPacket> txsReqPacket = std::make_shared<SyncTxsReqPacket>();
+        txsReqPacket->encode(requestTxs);
+        auto p2pMsg = txsReqPacket->toMessage(m_protocolId);
+        // send request to the peer
+        m_service->asyncSendMessageByNodeID(_peer, p2pMsg, nullptr);
+        SYNC_ENGINE_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus")
+                               << LOG_KV("reqSize", requestTxs->size())
+                               << LOG_KV("blockNumber", blockNumber)
+                               << LOG_KV("peerTxsSize", txsHash.size())
+                               << LOG_KV("peer", _peer.abridged());
+    }
+    catch (std::exception const& _e)
+    {
+        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
+                                 << LOG_DESC("invalid txs status")
+                                 << LOG_KV("peer", _peer.abridged())
+                                 << LOG_KV("reason", boost::diagnostic_information(_e));
+    }
+}
+
+void SyncMsgEngine::onReceiveTxsRequest(
+    std::shared_ptr<SyncMsgPacket> _txsReqPacket, dev::h512 const& _peer, dev::p2p::P2PMessage::Ptr)
+{
+    try
+    {
+        // get blockNumber
+        RLP const& rlps = _txsReqPacket->rlp();
+        std::vector<dev::h256> reqTxs = rlps[0].toVector<dev::h256>();
+        auto txs = m_txPool->obtainTransactions(reqTxs);
+        if (0 == txs->size())
+        {
+            return;
+        }
+        std::shared_ptr<std::vector<bytes>> txRLPs = std::make_shared<std::vector<bytes>>();
+        for (auto tx : *txs)
+        {
+            txRLPs->emplace_back(tx->rlp(WithSignature));
+        }
+        // create the SyncTransactionsPacket
+        std::shared_ptr<SyncTransactionsPacket> txsPacket =
+            std::make_shared<SyncTransactionsPacket>();
+        txsPacket->encode(*txRLPs);
+        auto p2pMsg = txsPacket->toMessage(m_protocolId);
+        m_service->asyncSendMessageByNodeID(_peer, p2pMsg, CallbackFuncWithSession(), Options());
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateSendedTxsInfo(txRLPs->size(), p2pMsg->length());
+        }
+        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("onReceiveTxsRequest")
+                               << LOG_KV("sendedTxsSize", txRLPs->size())
+                               << LOG_KV("messageSize", p2pMsg->length())
+                               << LOG_KV("peer", _peer.abridged());
+    }
+    catch (std::exception const& _e)
+    {
+        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
+                                 << LOG_DESC("invalid txs request packet")
+                                 << LOG_KV("peer", _peer.abridged())
+                                 << LOG_KV("reason", boost::diagnostic_information(_e));
+    }
 }
 
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
@@ -203,9 +294,10 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet, dev::p2p::P
     RLP const& rlps = _packet.rlp();
     // m_txQueue->push(rlps.data(), _packet.nodeId);
     m_txQueue->push(_packet, _msg, _packet.nodeId);
-    if (m_onNotifySyncTrans)
+    // notify sync master to solve DownloadingQueue
+    if (m_onNotifyWorker)
     {
-        m_onNotifySyncTrans();
+        m_onNotifyWorker();
     }
     SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
                            << LOG_KV("packetSize(B)", rlps.data().size());

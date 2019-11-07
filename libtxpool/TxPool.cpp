@@ -226,10 +226,16 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
     ImportResult verify_ret = verify(_tx);
     if (verify_ret == ImportResult::Success)
     {
-        UpgradeGuard ul(l);
-        if (insert(_tx))
         {
-            m_txpoolNonceChecker->insertCache(*_tx);
+            UpgradeGuard ul(l);
+            if (insert(_tx))
+            {
+                m_txpoolNonceChecker->insertCache(*_tx);
+            }
+        }
+        {
+            WriteGuard txsLock(x_txsHashFilter);
+            m_txsHashFilter->insert(_tx->sha3());
         }
         m_onReady();
     }
@@ -364,7 +370,6 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
         transaction = *(p_tx->second);
         m_txsQueue.erase(p_tx->second);
         m_txsHash.erase(p_tx);
-
         // m_delTransactions.unsafe_erase(_txHash);
     }
     // call transaction callback
@@ -482,9 +487,26 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
             }
         }
     }
-    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     // remove InvalidTxs
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
+    m_workerPool->enqueue([this, block]() { dropBlockTxsFilter(block); });
     return succ;
+}
+
+void TxPool::dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block)
+{
+    if (!_block)
+    {
+        return;
+    }
+    WriteGuard l(x_txsHashFilter);
+    for (auto tx : (*_block->transactions()))
+    {
+        if (m_txsHashFilter->count(tx->sha3()))
+        {
+            m_txsHashFilter->erase(tx->sha3());
+        }
+    }
 }
 
 // this function should be called after remove
@@ -519,6 +541,13 @@ void TxPool::removeInvalidTxs()
                 {
                     removeTransactionKnowBy(item.second);
                 }
+            },
+            [this]() {
+                WriteGuard txsLock(x_txsHashFilter);
+                for (auto const& item : *m_invalidTxs)
+                {
+                    m_txsHashFilter->erase(item.second);
+                }
             });
     }
     WriteGuard wl(x_invalidTxs);
@@ -550,6 +579,7 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 
     return true;
 }
+
 
 /**
  * @brief Get top transactions from the queue
@@ -608,6 +638,20 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     }
     // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
 
+    return ret;
+}
+
+std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<dev::h256> const& _reqTxs)
+{
+    std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
+    ReadGuard l(m_lock);
+    for (auto const& txHash : _reqTxs)
+    {
+        if (m_txsHash.count(txHash))
+        {
+            ret->push_back(*(m_txsHash[txHash]));
+        }
+    }
     return ret;
 }
 
@@ -717,6 +761,22 @@ void TxPool::removeTransactionKnowBy(h256 const& _txHash)
     auto p = m_transactionKnownBy.find(_txHash);
     if (p != m_transactionKnownBy.end())
         m_transactionKnownBy.erase(p);
+}
+
+std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
+    std::set<dev::h256> const& _txsHashSet)
+{
+    std::shared_ptr<std::vector<dev::h256>> unknownTxs = std::make_shared<std::vector<dev::h256>>();
+    WriteGuard l(x_txsHashFilter);
+    for (auto const& txHash : _txsHashSet)
+    {
+        if (!m_txsHashFilter->count(txHash))
+        {
+            unknownTxs->push_back(txHash);
+            m_txsHashFilter->insert(txHash);
+        }
+    }
+    return unknownTxs;
 }
 
 }  // namespace txpool

@@ -158,7 +158,6 @@ private:
                                          "sealingNumber", m_sealing.block->blockHeader().number())
                                   << LOG_KV("curNum", m_blockChain->number());
             resetSealingBlock();
-            resetTransactions();
         }
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
@@ -177,14 +176,6 @@ private:
         }
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
-    }
-
-    void resetTransactions()
-    {
-        for (auto tx : *(m_sealing.block->transactions()))
-        {
-            tx->setSealed(false);
-        }
     }
 
 protected:
