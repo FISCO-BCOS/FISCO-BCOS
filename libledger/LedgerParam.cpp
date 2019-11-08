@@ -26,6 +26,8 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libconfig/GlobalConfigure.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/bind.hpp>
+#include <boost/function_output_iterator.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
 using namespace boost::property_tree;
@@ -301,6 +303,29 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     }
 }
 
+std::string LedgerParam::uriEncode(const std::string& keyWord)
+{
+    std::vector<std::string> keyWordList;
+    string keyWordEncode;
+    std::transform(keyWord.begin(), keyWord.end(), std::back_inserter(keyWordList),
+        [](std::string::value_type v) -> std::string {
+            if (isalnum(v))
+            {
+                return std::string() + v;
+            }
+            std::ostringstream enc;
+            enc << '%' << std::setw(2) << std::setfill('0') << std::hex << std::uppercase
+                << int(static_cast<unsigned char>(v));
+            return enc.str();
+        });
+    for (const auto& item : keyWordList)
+    {
+        keyWordEncode.append(item);
+    }
+    return keyWordEncode;
+}
+
+
 void LedgerParam::initStorageConfig(ptree const& pt)
 {
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -341,7 +366,7 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     mutableStorageParam().dbIP = pt.get<std::string>("storage.db_ip", "127.0.0.1");
     mutableStorageParam().dbPort = pt.get<int>("storage.db_port", 3306);
     mutableStorageParam().dbUsername = pt.get<std::string>("storage.db_username", "");
-    mutableStorageParam().dbPasswd = pt.get<std::string>("storage.db_passwd", "");
+    mutableStorageParam().dbPasswd = uriEncode(pt.get<std::string>("storage.db_passwd", ""));
     mutableStorageParam().dbName = pt.get<std::string>("storage.db_name", "");
     mutableStorageParam().dbCharset = pt.get<std::string>("storage.db_charset", "utf8mb4");
     mutableStorageParam().initConnections = pt.get<int>("storage.init_connections", 15);
