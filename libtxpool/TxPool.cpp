@@ -581,18 +581,18 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         WriteGuard wl(x_invalidTxs);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (m_invalidTxs->count((*it)->sha3()) || (*it)->sealed())
+            if (m_invalidTxs->count((*it)->sha3()))
             {
                 continue;
             }
             /// check  nonce again when obtain transactions
-            if (!(*it)->sealed() && !m_txNonceCheck->isNonceOk(*(*it), false))
+            if (!m_txNonceCheck->isNonceOk(*(*it), false))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
                 continue;
             }
             // check block limit
-            if (!(*it)->sealed() && !m_txNonceCheck->isBlockLimitOk(*(*it)))
+            if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
                 continue;

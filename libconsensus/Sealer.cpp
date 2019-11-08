@@ -147,7 +147,7 @@ void Sealer::loadTransactions(uint64_t const& transToFetch)
 {
     /// fetch transactions and update m_transactionSet
     m_sealing.block->appendTransactions(
-        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true), true);
+        m_txPool->topTransactions(transToFetch, m_sealing.m_transactionSet, true));
 }
 
 /// check whether the blocksync module is syncing
@@ -222,7 +222,7 @@ void Sealer::resetSealingHeader(BlockHeader& header)
 {
     /// import block
     resetCurrentTime();
-    header.setSealerList(m_consensusEngine->sealerList());
+    header.setSealerList(m_consensusEngine->consensusList());
     header.setSealer(m_consensusEngine->nodeIdx());
     header.setLogBloom(LogBloom());
     header.setGasUsed(u256(0));

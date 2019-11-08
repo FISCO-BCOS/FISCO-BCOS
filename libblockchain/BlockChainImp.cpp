@@ -331,7 +331,7 @@ std::shared_ptr<std::vector<dev::eth::NonceKeyType>> BlockChainImp::getNonces(in
         }
     }
 
-    return std::shared_ptr<std::vector<dev::eth::NonceKeyType>>();
+    return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
 }
 
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()

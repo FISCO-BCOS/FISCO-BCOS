@@ -247,7 +247,7 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     RotatingPBFTEngine::Ptr rotatingPBFT =
         std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
     assert(rotatingPBFT);
-    rotatingPBFT->setGroupSize(m_param->mutableConsensusParam().groupSize);
+    rotatingPBFT->setEpochSize(m_param->mutableConsensusParam().epochSize);
     rotatingPBFT->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
 }
 

@@ -243,7 +243,11 @@ protected:
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
 
-    virtual dev::h512s consensusList() const { return sealerList(); }
+    dev::h512s consensusList() const override
+    {
+        ReadGuard l(m_sealerListMutex);
+        return m_sealerList;
+    }
 
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};

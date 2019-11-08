@@ -68,16 +68,13 @@ public:
 
     void chooseConsensusNodes() override { return RotatingPBFTEngine::chooseConsensusNodes(); }
 
-    void updateConsensusInfoForTreeRouter() override
-    {
-        return RotatingPBFTEngine::updateConsensusInfoForTreeRouter();
-    }
+    void updateConsensusInfo() override { return RotatingPBFTEngine::updateConsensusInfo(); }
 
     IDXTYPE minValidNodes() const override { return RotatingPBFTEngine::minValidNodes(); }
-    bool updateGroupSize() override { return false; }
+    bool updateEpochSize() override { return false; }
     bool updateRotatingInterval() override { return false; }
 
-    int64_t groupSize() { return m_groupSize; }
+    int64_t epochSize() { return m_epochSize; }
     int64_t rotatingInterval() { return m_rotatingInterval; }
     std::set<dev::h512> chosedConsensusNodes() { return m_chosedConsensusNodes; }
     IDXTYPE startNodeIdx() { return m_startNodeIdx; }
@@ -130,11 +127,11 @@ private:
 };
 
 std::set<dev::h512> getExpectedSelectedNodes(
-    RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _round, int64_t const& _groupSize)
+    RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _round, int64_t const& _epochSize)
 {
     std::set<dev::h512> expectedSelectedNodes;
     auto currentSealerList = _fixture->rotatingPBFT()->sealerList();
-    for (auto i = _round; i < (_round + _groupSize); i++)
+    for (auto i = _round; i < (_round + _epochSize); i++)
     {
         expectedSelectedNodes.insert(currentSealerList[i % currentSealerList.size()]);
     }
@@ -142,16 +139,16 @@ std::set<dev::h512> getExpectedSelectedNodes(
 }
 
 void checkResetConfig(RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _round,
-    int64_t const& _rotatingInterval, int64_t const& _groupSize, int64_t const& _sealersNum)
+    int64_t const& _rotatingInterval, int64_t const& _epochSize, int64_t const& _sealersNum)
 {
     int64_t startBlockNumber = _round * _rotatingInterval;
-    auto expectedSelectedNodes = getExpectedSelectedNodes(_fixture, _round, _groupSize);
+    auto expectedSelectedNodes = getExpectedSelectedNodes(_fixture, _round, _epochSize);
     // block number range: [startBlockNumber, startBlockNumber + _rotatingInterval - 1](the
     // {_round}th rotating round)
-    int64_t groupSize = _groupSize;
-    if (_groupSize > _sealersNum)
+    int64_t epochSize = _epochSize;
+    if (_epochSize > _sealersNum)
     {
-        groupSize = _groupSize;
+        epochSize = _epochSize;
     }
     for (auto i = startBlockNumber; i < (startBlockNumber + _rotatingInterval); i++)
     {
@@ -162,7 +159,7 @@ void checkResetConfig(RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _r
         BOOST_CHECK(_fixture->rotatingPBFT()->startNodeIdx() == _round % _sealersNum);
         BOOST_CHECK(_fixture->rotatingPBFT()->rotatingRound() == _round);
         auto selectedConsensusNodes = _fixture->rotatingPBFT()->chosedConsensusNodes();
-        BOOST_CHECK(selectedConsensusNodes.size() == (size_t)groupSize);
+        BOOST_CHECK(selectedConsensusNodes.size() == (size_t)epochSize);
         BOOST_CHECK(selectedConsensusNodes == expectedSelectedNodes);
         _fixture->rotatingPBFT()->setSealerListUpdated(false);
     }
@@ -179,24 +176,24 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
     fixture->rotatingPBFT()->setSealersNum(8);
     fixture->rotatingPBFT()->resetConfig();
     int64_t rotatingInterval = 10;
-    for (auto groupSize = 4; groupSize < 10; groupSize++)
+    for (auto epochSize = 4; epochSize < 10; epochSize++)
     {
         // the node set up: update m_sealerListUpdated
         fixture->rotatingPBFT()->clearStartIdx();
         fixture->rotatingPBFT()->setSealerListUpdated(true);
 
-        fixture->rotatingPBFT()->setGroupSize(groupSize);
+        fixture->rotatingPBFT()->setEpochSize(epochSize);
         fixture->rotatingPBFT()->setRotatingInterval(rotatingInterval);
         BOOST_CHECK(fixture->rotatingPBFT()->rotatingInterval() == rotatingInterval);
-        auto tmpGroupSize = groupSize;
-        if (groupSize <= 8)
+        auto tmpEpochSize = epochSize;
+        if (epochSize <= 8)
         {
-            BOOST_CHECK(fixture->rotatingPBFT()->groupSize() == groupSize);
+            BOOST_CHECK(fixture->rotatingPBFT()->epochSize() == epochSize);
         }
         else
         {
-            tmpGroupSize = 8;
-            BOOST_CHECK(fixture->rotatingPBFT()->groupSize() == 8);
+            tmpEpochSize = 8;
+            BOOST_CHECK(fixture->rotatingPBFT()->epochSize() == 8);
         }
 
         auto currentSealerList = fixture->rotatingPBFT()->sealerList();
@@ -204,13 +201,13 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
         // check [10, 29] round
         for (auto round = 10; round < 30; round++)
         {
-            checkResetConfig(fixture, round, rotatingInterval, tmpGroupSize, sealersNum);
+            checkResetConfig(fixture, round, rotatingInterval, tmpEpochSize, sealersNum);
         }
         // check falut-tolerance
-        BOOST_CHECK(fixture->rotatingPBFT()->f() == (tmpGroupSize - 1) / 3);
+        BOOST_CHECK(fixture->rotatingPBFT()->f() == (tmpEpochSize - 1) / 3);
         // check minValidNodes
         BOOST_CHECK(fixture->rotatingPBFT()->minValidNodes() ==
-                    (tmpGroupSize - fixture->rotatingPBFT()->f()));
+                    (tmpEpochSize - fixture->rotatingPBFT()->f()));
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

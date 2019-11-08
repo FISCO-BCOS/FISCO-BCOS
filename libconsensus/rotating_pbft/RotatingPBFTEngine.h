@@ -59,13 +59,14 @@ public:
                 }
                 return selectedNode;
             });
+        m_chosedSealerList = std::make_shared<dev::h512s>();
     }
 
-    void setGroupSize(int64_t const& _groupSize)
+    void setEpochSize(int64_t const& _epochSize)
     {
-        _groupSize > m_sealersNum.load() ? m_groupSize = m_sealersNum.load() :
-                                           m_groupSize = _groupSize;
-        RPBFTENGINE_LOG(INFO) << LOG_KV("configured _groupSize", m_groupSize);
+        _epochSize > m_sealersNum.load() ? m_epochSize = m_sealersNum.load() :
+                                           m_epochSize = _epochSize;
+        RPBFTENGINE_LOG(INFO) << LOG_KV("configured _epochSize", m_epochSize);
     }
 
     void setRotatingInterval(int64_t const& _rotatingInterval)
@@ -80,23 +81,33 @@ public:
         return m_blockSync->isFarSyncing() && m_locatedInConsensusNodes;
     }
 
+    /// get sealer list
+    dev::h512s consensusList() const override
+    {
+        ReadGuard l(x_chosedSealerList);
+        return *m_chosedSealerList;
+    }
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
     bool locatedInChosedConsensensusNodes() const override;
+    dev::network::NodeID getSealerByIndex(size_t const& _index) const override;
+    dev::network::NodeID getNodeIDByIndex(size_t const& _index) const;
+
     // TODO: select nodes with VRF algorithm
     IDXTYPE VRFSelection() const;
 
     void resetConfig() override;
     virtual void resetChosedConsensusNodes();
     virtual void chooseConsensusNodes();
-    virtual void updateConsensusInfoForTreeRouter();
+    virtual void updateConsensusInfo();
     virtual void resetLocatedInConsensusNodes();
-    IDXTYPE minValidNodes() const override { return std::min(m_groupSize, m_sealersNum) - m_f; }
+    IDXTYPE minValidNodes() const override { return std::min(m_epochSize, m_sealersNum) - m_f; }
 
     virtual ssize_t filterBroadcastTargets(dev::network::NodeID const& _nodeId);
 
-    virtual bool updateGroupSize();
+    virtual bool updateEpochSize();
     virtual bool updateRotatingInterval();
     void createPBFTMsgFactory() override { m_pbftMsgFactory = std::make_shared<RPBFTMsgFactory>(); }
 
@@ -113,8 +124,8 @@ protected:
         unsigned const& _packetType, unsigned const& _ttl) override;
 
 protected:
-    // configured group size
-    std::atomic<int64_t> m_groupSize = {-1};
+    // configured epoch size
+    std::atomic<int64_t> m_epochSize = {-1};
     // the interval(measured by block number) to adjust the sealers
     std::atomic<int64_t> m_rotatingInterval = {-1};
 
@@ -127,6 +138,9 @@ protected:
     std::atomic_bool m_chosedConsNodeChanged = {false};
     mutable SharedMutex x_chosedConsensusNodes;
     std::set<dev::h512> m_chosedConsensusNodes;
+
+    mutable SharedMutex x_chosedSealerList;
+    std::shared_ptr<dev::h512s> m_chosedSealerList;
 
     // used to record the rotatingIntervalEnableNumber changed or not
     dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};

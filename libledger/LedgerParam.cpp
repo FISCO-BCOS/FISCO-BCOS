@@ -84,10 +84,10 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
 
-    // init groupSize and rotatingInterval for RPBFT
+    // init epochSize and rotatingInterval for RPBFT
     if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rotating_pbft") == 0)
     {
-        s << "-" << mutableConsensusParam().groupSize << "-";
+        s << "-" << mutableConsensusParam().epochSize << "-";
         s << mutableConsensusParam().rotatingInterval;
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", s.str());
@@ -95,7 +95,7 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
         mutableConsensusParam().observerList, mutableConsensusParam().consensusType,
         mutableStorageParam().type, mutableStateParam().type,
         mutableConsensusParam().maxTransactions, mutableTxParam().txGasLimit,
-        mutableGenesisParam().timeStamp, mutableConsensusParam().groupSize,
+        mutableGenesisParam().timeStamp, mutableConsensusParam().epochSize,
         mutableConsensusParam().rotatingInterval};
 }
 
@@ -288,12 +288,12 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     mutableGenesisParam().nodeListMark = nodeListMark.str();
 
     // init configurations for RPBFT
-    mutableConsensusParam().groupSize =
-        pt.get<int64_t>("consensus.group_size", mutableConsensusParam().sealerList.size());
-    if (mutableConsensusParam().groupSize <= 0)
+    mutableConsensusParam().epochSize =
+        pt.get<int64_t>("consensus.epoch_size", mutableConsensusParam().sealerList.size());
+    if (mutableConsensusParam().epochSize <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                              << errinfo_comment("Please set consensus.group_size to positive !"));
+                              << errinfo_comment("Please set consensus.epoch_size to positive !"));
     }
 
     mutableConsensusParam().rotatingInterval = pt.get<int64_t>("consensus.rotating_interval", 10);
@@ -303,7 +303,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                                   "Please set consensus.rotating_interval to positive !"));
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
-                           << LOG_KV("groupSize", mutableConsensusParam().groupSize)
+                           << LOG_KV("epochSize", mutableConsensusParam().epochSize)
                            << LOG_KV("rotatingInterval", mutableConsensusParam().rotatingInterval);
 }
 

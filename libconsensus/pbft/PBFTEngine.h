@@ -70,8 +70,7 @@ public:
             _keyPair, _sealerList)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
-        m_service->registerHandlerByProtoclID(
-            m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
+
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
         m_reqCache = std::make_shared<PBFTReqCache>();
 
@@ -281,6 +280,8 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
+    bool checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, Signature const& _sig);
+
     inline bool broadcastFilter(
         dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
@@ -327,7 +328,7 @@ protected:
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
+    virtual dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
         ReadGuard l(m_sealerListMutex);
         if (index < m_sealerList.size())
