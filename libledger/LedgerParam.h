@@ -173,6 +173,9 @@ private:
     TxParam m_txParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
     dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+
+private:
+    std::string uriEncode(const std::string& keyWord);
 };
 }  // namespace ledger
 }  // namespace dev
