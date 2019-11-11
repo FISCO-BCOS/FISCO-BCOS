@@ -110,6 +110,10 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     {
         return dev::network::PACKET_INCOMPLETE;
     }
+
+    m_cache->clear();
+    m_cache->insert(m_cache->end(), buffer, buffer + size);
+
     /// get version
     offset += sizeof(m_length);
     m_version = ntohs(*((VERSION_TYPE*)&buffer[offset]));

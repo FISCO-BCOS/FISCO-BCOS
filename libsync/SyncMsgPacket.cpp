@@ -133,3 +133,18 @@ void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
     m_rlpStream.clear();
     prep(m_rlpStream, ReqBlocskPacket, 2) << _from << _size;
 }
+
+void SyncTxsStatusPacket::encode(
+    int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash)
+{
+    m_rlpStream.clear();
+    auto& retRlp = prep(m_rlpStream, packetType, 2);
+    retRlp << _number;
+    retRlp.append(*_txsHash);
+}
+
+void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, packetType, 1).append(*_requestedTxs);
+}

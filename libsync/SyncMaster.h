@@ -109,9 +109,10 @@ public:
         m_txQueue->setService(_service);
         m_txQueue->setSyncStatus(m_syncStatus);
         m_statisticHandler = m_service->statisticHandler();
+        m_msgEngine->setStatisticHandler(m_statisticHandler);
         m_txQueue->setStatisticHandler(m_statisticHandler);
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
-            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+            _nodeId, m_syncStatus, m_msgEngine, _blockChain, _idleWaitMs);
         m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
