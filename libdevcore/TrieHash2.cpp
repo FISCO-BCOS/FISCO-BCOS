@@ -128,7 +128,7 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
         nodeType == trieHashNodeType::typeAllNodeHaveCommonPrefix)
     {
         std::string parentNode = sha3(bytesTemp).hex();
-        for (const auto& it : bytePath)
+        for (auto it = bytePath.begin(); it != bytePath.end(); ++it)
         {
             (*_parent2ChildList)[parentNode].emplace_back(toHex(*it));
         }
@@ -164,7 +164,7 @@ bytes getTrieTree256(BytesMap const& _s,
     hash256TrieTree(hexMap, hexMap.cbegin(), hexMap.cend(), 0, bytesTemp, nodeType, bytePath,
         _parent2ChildList);
     std::string rootNode = sha3(bytesTemp).hex();
-    for (const auto& it : bytePath)
+    for (auto it = bytePath.begin(); it != bytePath.end(); ++it)
     {
         (*_parent2ChildList)[rootNode].emplace_back(toHex(*it));
     }
