@@ -53,7 +53,7 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
         bytes bytesTemp;
         bytesTemp.insert(bytesTemp.end(), _begin->second.begin(), _begin->second.end());
         _bytes.insert(_bytes.end(), bytesTemp.begin(), bytesTemp.end());
-        _bytePath.push_back(std::move(bytesTemp));
+        _bytePath.emplace_back(std::move(bytesTemp));
         _nodeType = trieHashNodeType::typeLeafNode;
     }
     else
@@ -110,7 +110,7 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
                 bytesTemp.insert(bytesTemp.end(), _begin->second.begin(), _begin->second.end());
                 _bytes.insert(_bytes.end(), bytesTemp.begin(), bytesTemp.end());
             }
-            _bytePath.push_back(std::move(bytesTemp));
+            _bytePath.emplace_back(std::move(bytesTemp));
         }
     }
 }
@@ -123,20 +123,14 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
     std::vector<bytes> bytePath;
     int32_t nodeType = trieHashNodeType::typeDefault;
     hash256TrieTree(_s, _begin, _end, _preLen, bytesTemp, nodeType, bytePath, _parent2ChildList);
-    TRIEHASH_SESSION_LOG(TRACE) << " intermediate out size:" << bytesTemp.size()
-                                << " intermediate h256 out:" << sha3(bytesTemp).hex()
-                                << " tohex:" << toHex(bytesTemp) << " nodetype:" << nodeType
-                                << " keypath size:" << bytePath.size();
 
     if (nodeType == trieHashNodeType::typeIntermediateNode ||
         nodeType == trieHashNodeType::typeAllNodeHaveCommonPrefix)
     {
         std::string parentNode = sha3(bytesTemp).hex();
-        for (auto it = bytePath.begin(); it != bytePath.end(); ++it)
+        for (const auto& it : bytePath)
         {
-            (*_parent2ChildList)[parentNode].push_back(toHex(*it));
-            TRIEHASH_SESSION_LOG(TRACE)
-                << "parent node:" << parentNode << " child node:" << toHex(*it);
+            (*_parent2ChildList)[parentNode].emplace_back(toHex(*it));
         }
     }
     h256 hValue = sha3(bytesTemp);
@@ -155,8 +149,7 @@ bytes getTrieTree256(BytesMap const& _s,
     for (auto i = _s.rbegin(); i != _s.rend(); ++i)
     {
         bytes bytesData = i->first;
-        dev::h256 hValue = sha3(i->second);
-        bytesData.insert(bytesData.end(), hValue.begin(), hValue.end());
+        bytesData.insert(bytesData.end(), i->second.begin(), i->second.end());
         hexMap[asNibbles(bytesConstRef(&i->first))] = bytesData;
     }
 
@@ -171,21 +164,10 @@ bytes getTrieTree256(BytesMap const& _s,
     hash256TrieTree(hexMap, hexMap.cbegin(), hexMap.cend(), 0, bytesTemp, nodeType, bytePath,
         _parent2ChildList);
     std::string rootNode = sha3(bytesTemp).hex();
-    for (auto it = bytePath.begin(); it != bytePath.end(); ++it)
+    for (const auto& it : bytePath)
     {
-        (*_parent2ChildList)[rootNode].push_back(toHex(*it));
+        (*_parent2ChildList)[rootNode].emplace_back(toHex(*it));
     }
-    for_each(_parent2ChildList->cbegin(), _parent2ChildList->cend(),
-        [](const std::pair<std::string, std::vector<std::string>>& val) -> void {
-            const auto& value = val.second;
-            for_each(value.cbegin(), value.cend(), [val](const std::string& childNode) -> void {
-                TRIEHASH_SESSION_LOG(TRACE)
-                    << "parent node:" << val.first << " child node:" << childNode;
-            });
-        });
-    TRIEHASH_SESSION_LOG(DEBUG) << "root h256out:" << sha3(bytesTemp).hex()
-                                << " tohex:" << toHex(bytesTemp) << " nodetype:" << nodeType
-                                << " keypath size:" << bytePath.size();
     return bytesTemp;
 }
 
@@ -197,8 +179,6 @@ bytes h256ForOneNode(HexMap const& _hexMap,
         bytesChild.end(), _hexMap.begin()->second.begin(), _hexMap.begin()->second.end());
     dev::h256 hChild = sha3(bytesChild);
     (*_parent2ChildList)[sha3(hChild).hex()].push_back(toHex(hChild));
-    TRIEHASH_SESSION_LOG(TRACE) << "child node:" << hChild.hex()
-                                << " parent node:" << sha3(hChild).hex();
     return hChild.asBytes();
 }
 

@@ -197,9 +197,7 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::calTrans
         {
             RLPStream s;
             s << i;
-            bytes trans_data;
-            (*m_transactions)[i]->encode(trans_data);
-            txsMapCache.insert(std::make_pair(s.out(), trans_data));
+            txsMapCache.insert(std::make_pair(s.out(), (*m_transactions)[i]->sha3().asBytes()));
         }
         m_txsCache = TxsParallelParser::encode(m_transactions);
         m_transRootCache = dev::getHash256(txsMapCache, merklePath);
@@ -225,14 +223,22 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::calRecei
         RLPStream txReceipts;
         txReceipts.appendList(m_transactionReceipts->size());
         BytesMap mapCache;
+
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
+            [&](const tbb::blocked_range<size_t>& _r) {
+                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+                {
+                    (*m_transactionReceipts)[i]->receipt();
+                    (*m_transactionReceipts)[i]->sha3();
+                }
+            });
+
         for (size_t i = 0; i < m_transactionReceipts->size(); i++)
         {
-            bytes tranReceipts_data;
-            (*m_transactionReceipts)[i]->encode(tranReceipts_data);
-            txReceipts.appendRaw(tranReceipts_data);
+            txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
             RLPStream s;
             s << i;
-            mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
+            mapCache.insert(std::make_pair(s.out(), (*m_transactionReceipts)[i]->sha3()));
         }
         txReceipts.swapOut(m_tReceiptsCache);
         m_receiptRootCache = dev::getHash256(mapCache, merklePath);

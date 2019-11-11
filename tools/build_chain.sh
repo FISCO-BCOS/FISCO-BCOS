@@ -40,7 +40,7 @@ compatibility_version=""
 default_version="2.2.0"
 macOS=""
 x86_64_arch="true"
-download_timeout=60
+download_timeout=240
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
 help() {

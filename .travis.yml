@@ -52,7 +52,7 @@ matrix:
 
         - language: cpp
           os: osx
-          osx_image: xcode10.2
+          osx_image: xcode11.2
           env: 
             - CACHE_NAME=osx
             - PROJECT_USERNAME=FISCO-BCOS

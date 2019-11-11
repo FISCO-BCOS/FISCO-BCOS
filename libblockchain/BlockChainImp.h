@@ -90,7 +90,6 @@ public:
     std::shared_ptr<dev::eth::Block> getBlockByHash(
         dev::h256 const& _blockHash, int64_t _blockNumber = -1) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
     CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
@@ -136,7 +135,7 @@ private:
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
-    std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash);
+    std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber);
     int64_t obtainNumber();
     void writeNumber(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);

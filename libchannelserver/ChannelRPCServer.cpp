@@ -555,7 +555,7 @@ void dev::ChannelRPCServer::onClientHandshake(
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["protocol"])
                           << LOG_KV("clientType", clientType) << LOG_KV("endpoint", session->host())
-                          << session->port();
+                          << ":" << session->port();
     }
     catch (std::exception& e)
     {
