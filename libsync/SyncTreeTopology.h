@@ -21,10 +21,7 @@
  * @date: 2019-09-19
  */
 #pragma once
-#include "Common.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include "TreeTopology.h"
 
 #define SYNCTREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
@@ -34,51 +31,48 @@ namespace dev
 {
 namespace sync
 {
-class SyncTreeTopology
+class SyncTreeTopology : public TreeTopology
 {
 public:
     using Ptr = std::shared_ptr<SyncTreeTopology>;
     SyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 2)
-      : m_treeWidth(_treeWidth), m_nodeId(_nodeId)
-    {}
+      : TreeTopology(_nodeId, _treeWidth)
+    {
+        m_childOffset = 1;
+        m_nodeList = std::make_shared<dev::h512s>();
+    }
 
     virtual ~SyncTreeTopology() {}
     // update corresponding info when the nodes changed
     virtual void updateNodeListInfo(dev::h512s const& _nodeList);
-    // update corresponding info when the consensus nodes changed
-    virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
     // select the nodes by tree topology
-    virtual std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers);
+    std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers) override;
 
 protected:
+    bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const override;
+    // update the tree-topology range the nodes located in
+    void updateStartAndEndIndex() override;
+
+    ssize_t getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset) override;
+    ssize_t getParentNodeIndex(ssize_t const& _nodeIndex) override;
+
     // select the child nodes by tree
     void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers);
+        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers) override;
     // select the parent nodes by tree
     void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex);
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex) override;
 
 private:
-    bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;
-    ssize_t getNodeIndexByNodeId(dev::h512s const& _findSet, dev::h512& _nodeId);
-    // update the tree-topology range the nodes located in
-    void updateStartAndEndIndex();
     bool locatedInGroup();
 
 protected:
     mutable Mutex m_mutex;
     // the nodeList include both the consensus nodes and the observer nodes
-    dev::h512s m_nodeList;
+    std::shared_ptr<dev::h512s> m_nodeList;
     std::atomic<int64_t> m_nodeNum = {0};
 
-    // the list of the current consensus nodes
-    dev::h512s m_currentConsensusNodes;
-    unsigned m_treeWidth;
-    dev::h512 m_nodeId;
     std::atomic<int64_t> m_nodeIndex = {0};
-    std::atomic<int64_t> m_consIndex = {0};
-    std::atomic<int64_t> m_endIndex = {0};
-    std::atomic<int64_t> m_startIndex = {0};
 };
 }  // namespace sync
 }  // namespace dev
