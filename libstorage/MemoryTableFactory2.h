@@ -39,6 +39,7 @@ class ExecutiveContext;
 }
 namespace storage
 {
+const uint64_t ENTRY_ID_START = 100000;
 class MemoryTableFactory2 : public TableFactory
 {
 public:

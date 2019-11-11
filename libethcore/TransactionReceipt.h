@@ -64,6 +64,24 @@ public:
         s.swapOut(receipt);
     }
 
+    const bytes& receipt()
+    {
+        if (m_receipt == bytes())
+        {
+            encode(m_receipt);
+        }
+        return m_receipt;
+    }
+
+    const bytes& sha3()
+    {
+        if (m_sha3 == bytes())
+        {
+            m_sha3 = dev::sha3(receipt()).asBytes();
+        }
+        return m_sha3;
+    }
+
     bytes rlp() const
     {
         RLPStream s;
@@ -86,6 +104,10 @@ protected:
 private:
     bytes m_outputBytes;
     LogEntries m_log;
+
+private:
+    bytes m_receipt = bytes();
+    bytes m_sha3 = bytes();
 };
 
 using TransactionReceipts = std::vector<TransactionReceipt::Ptr>;

@@ -116,6 +116,9 @@ BOOST_AUTO_TEST_CASE(archiveData)
     tableInfo->key = "Name";
     entries = scalableStorage->select(num, tableInfo, key, std::make_shared<Condition>());
     BOOST_CHECK_EQUAL(entries->size(), 1u);
+    // scalableStorage->setRemoteBlockNumber(10);
+    // entries = scalableStorage->select(num, tableInfo, key, std::make_shared<Condition>());
+    // BOOST_CHECK_EQUAL(entries->size(), 0);
     scalableStorage->stop();
 }
 

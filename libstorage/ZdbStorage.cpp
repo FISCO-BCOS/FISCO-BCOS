@@ -135,7 +135,7 @@ void ZdbStorage::createSysTables()
     ss << " `value_field` varchar(1024) DEFAULT '',\n";
     ss << " PRIMARY KEY (`_id_`),\n";
     ss << " UNIQUE KEY `table_name` (`table_name`)\n";
-    ss << ") ENGINE=InnoDB AUTO_INCREMENT=62 DEFAULT CHARSET=utf8mb4;";
+    ss << ") ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;";
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }

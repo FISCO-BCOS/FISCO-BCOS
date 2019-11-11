@@ -284,16 +284,20 @@ size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
     return 0;
 }
 
-TableData::Ptr SQLStorage::selectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo)
+TableData::Ptr SQLStorage::selectTableDataByNum(
+    int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts)
 {
     try
     {
         STORAGE_EXTERNAL_LOG(INFO) << LOG_DESC("Query AMOPDB data call selectTableDataByNum")
-                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num);
+                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num)
+                                   << LOG_KV("start", start) << LOG_KV("counts", counts);
         Json::Value requestJson;
         requestJson["op"] = "selectbynum";
         requestJson["params"]["tableName"] = tableInfo->name;
         requestJson["params"]["num"] = num;
+        requestJson["params"]["preIndex"] = start;
+        requestJson["params"]["pageSize"] = counts;
 
         Json::Value responseJson = requestDB(requestJson);
         int code = responseJson["code"].asInt();

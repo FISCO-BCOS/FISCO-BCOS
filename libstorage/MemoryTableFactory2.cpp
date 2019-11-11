@@ -67,6 +67,10 @@ void MemoryTableFactory2::init()
         auto numStr = entry->getField(SYS_VALUE);
         m_ID = boost::lexical_cast<size_t>(numStr);
     }
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        m_ID = m_ID > ENTRY_ID_START ? m_ID : m_ID + ENTRY_ID_START;
+    }
 }
 
 Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool authorityFlag, bool)
