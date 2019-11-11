@@ -270,6 +270,7 @@ dev::storage::Storage::Ptr DBInitializer::initSQLStorage()
     auto sqlStorage = createSQLStorage(m_param, m_channelRPCServer, [](std::exception& e) {
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
                                  << "Access amdb failed exit:" << e.what();
+        raise(SIGTERM);
         BOOST_THROW_EXCEPTION(e);
     });
     return sqlStorage;
