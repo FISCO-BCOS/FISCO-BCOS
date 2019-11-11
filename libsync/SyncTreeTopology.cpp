@@ -29,7 +29,7 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
 {
     Guard l(m_mutex);
 
-    if (_nodeList == m_nodeList)
+    if (_nodeList == *m_nodeList)
     {
         return;
     }
@@ -39,35 +39,21 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
     {
         m_nodeNum = nodeNum;
     }
-    m_nodeList = _nodeList;
+    *m_nodeList = _nodeList;
     // update the nodeIndex
     m_nodeIndex = getNodeIndexByNodeId(m_nodeList, m_nodeId);
-    updateStartAndEndIndex();
-}
-
-void SyncTreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
-{
-    Guard l(m_mutex);
-
-    if (m_currentConsensusNodes == _consensusNodes)
-    {
-        return;
-    }
-    m_currentConsensusNodes = _consensusNodes;
-
-    m_consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, m_nodeId);
     updateStartAndEndIndex();
 }
 
 void SyncTreeTopology::updateStartAndEndIndex()
 {
     // the currentConsensus node list hasn't been set
-    if (m_currentConsensusNodes.size() == 0)
+    if (m_currentConsensusNodes->size() == 0)
     {
         return;
     }
     // the current node list hasn't been set
-    if (m_nodeList.size() == 0)
+    if (m_nodeList->size() == 0)
     {
         return;
     }
@@ -78,7 +64,7 @@ void SyncTreeTopology::updateStartAndEndIndex()
     }
     int64_t consensusNodeSize = 0;
 
-    consensusNodeSize = m_currentConsensusNodes.size();
+    consensusNodeSize = m_currentConsensusNodes->size();
     // max node size every consensus node responses to sync the newest block
     int64_t slotSize = (m_nodeNum + consensusNodeSize - 1) / consensusNodeSize;
     // calculate the node index interval([m_startIndex, m_endIndex]) every consensus node repsonses
@@ -104,26 +90,6 @@ void SyncTreeTopology::updateStartAndEndIndex()
 }
 
 /**
- * @brief : get node index according to given nodeID and node list
- * @return:
- *  -1: the given _nodeId doesn't exist in _findSet
- *   >=0 : the index of the given node
- */
-ssize_t SyncTreeTopology::getNodeIndexByNodeId(dev::h512s const& _findSet, dev::h512& _nodeId)
-{
-    ssize_t nodeIndex = -1;
-    for (ssize_t i = 0; i < (ssize_t)_findSet.size(); i++)
-    {
-        if (_nodeId == _findSet[i])
-        {
-            nodeIndex = i;
-            break;
-        }
-    }
-    return nodeIndex;
-}
-
-/**
  * @brief : get nodeID according to nodeIndex
  * @return:
  *  false: the given node doesn't locate in the node list
@@ -137,76 +103,55 @@ bool SyncTreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex
                             << LOG_KV("nodeIndex", _nodeIndex) << LOG_KV("nodeListSize", m_nodeNum);
         return false;
     }
-    _nodeID = m_nodeList[_nodeIndex];
+    _nodeID = (*m_nodeList)[_nodeIndex];
     return true;
 }
 
-/**
- * @brief : select child nodes of given node from peers recursively
- *          if the any child node doesn't exist in the peers, select the grand child nodes, etc.
- * @params :
- *  1. _selectedNodeList: return value, the selected child nodes(maybe the grand child, etc.)
- *  2. _parentIndex: the index of the node who needs select child nodes from the given peers
- *  3. _peers: the nodeIDs of peers maintained by syncStatus
- */
-void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNodeList,
+ssize_t SyncTreeTopology::getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset)
+{
+    return (_parentIndex - m_startIndex) * m_treeWidth + _offset + m_startIndex;
+}
+
+// find the parentNode if this node is not the consensus node:
+// {_nodeIndex - m_startIndex} is the ID of the given node in the {m_startIndex}th tree
+// {(_nodeIndex - m_startIndex) / m_treeWidth} is the parent ID of the given node in the
+// {m_startIndex}th tree, parentIndex is the nodeIndex of the parentNode
+ssize_t SyncTreeTopology::getParentNodeIndex(ssize_t const& _nodeIndex)
+{
+    return (_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
+}
+
+bool SyncTreeTopology::locatedInGroup()
+{
+    return (m_consIndex != -1) || (m_nodeIndex != -1);
+}
+
+// select the child nodes by tree
+void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
     ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers)
 {
     // if the node doesn't locate in the group
-    // (both m_consIndex and m_nodeIndex are -1), return empty node list
     if (!locatedInGroup())
     {
         return;
     }
-    dev::h512 selectedNode;
-    for (ssize_t i = 0; i < m_treeWidth; i++)
-    {
-        // the index of the child node:
-        // {_parentIndex - m_startIndex} is the ID of the parent node in the {m_startIndex}th tree
-        // {(_parentIndex - m_startIndex) * m_treeWidth + i} is the ID of the child node in the
-        // {m_startIndex}th tree, expectedIndex is the node index of the child node
-        ssize_t expectedIndex = (_parentIndex - m_startIndex) * m_treeWidth + i + m_startIndex;
-        // when expectedIndex is bigger than m_endIndex, return
-        if (expectedIndex > m_endIndex)
-        {
-            break;
-        }
-        // the child node exists in the peers
-        if (getNodeIDByIndex(selectedNode, expectedIndex) && _peers->count(selectedNode))
-        {
-            SYNCTREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
-                                << LOG_KV("selectedNode", selectedNode.abridged())
-                                << LOG_KV("selectedIndex", expectedIndex);
-            _selectedNodeList->push_back(selectedNode);
-        }
-        // the child node doesn't exit in the peers, select the grand child recursively
-        else
-        {
-            recursiveSelectChildNodes(_selectedNodeList, expectedIndex + 1, _peers);
-        }
-    }
+    return TreeTopology::recursiveSelectChildNodes(_selectedNodeList, _parentIndex, _peers);
 }
 
-/**
- * @brief : select parent node of given node from peers
- *          if the parent node doesn't exist in the peers, select the grand parent, etc.
- *
- * @params :
- *  1. _selectedNodeList: return value, the selected parent node(maybe the grand parent, etc.)
- *  2. _peers: the nodeIDs of peers maintained by syncStatus
- *  3. _nodeIndex: the index of the node that need select parent from given peers
- */
+// select the parent nodes by tree
 void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
     std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex)
 {
+    // if the node doesn't locate in the group
     if (!locatedInGroup())
     {
         return;
     }
     // push all other consensus node to the selectedNodeList if this node is the consensus node
+    // return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex);
     if (m_consIndex >= 0)
     {
-        for (auto const& consNode : m_currentConsensusNodes)
+        for (auto const& consNode : *m_currentConsensusNodes)
         {
             if (_peers->count(consNode))
             {
@@ -215,36 +160,7 @@ void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNo
         }
         return;
     }
-    // find the parentNode if this node is not the consensus node:
-    // {_nodeIndex - m_startIndex} is the ID of the given node in the {m_startIndex}th tree
-    // {(_nodeIndex - m_startIndex) / m_treeWidth} is the parent ID of the given node in the
-    // {m_startIndex}th tree, parentIndex is the nodeIndex of the parentNode
-    ssize_t parentIndex = (_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
-    // the parentNode is the node-slef
-    if (parentIndex == _nodeIndex)
-    {
-        return;
-    }
-    dev::h512 selectedNode;
-    while (parentIndex >= m_startIndex)
-    {
-        // find the parentNode from the peers
-        if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
-        {
-            _selectedNodeList->push_back(selectedNode);
-            SYNCTREE_LOG(DEBUG) << LOG_DESC("selectParentNodes")
-                                << LOG_KV("parentIndex", parentIndex)
-                                << LOG_KV("selectedNode", selectedNode.abridged())
-                                << LOG_KV("idx", m_nodeIndex);
-            break;
-        }
-        parentIndex = (parentIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
-    }
-}
-
-bool SyncTreeTopology::locatedInGroup()
-{
-    return (m_consIndex != -1) || (m_nodeIndex != -1);
+    return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex);
 }
 
 std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
@@ -257,8 +173,6 @@ std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
     {
         return selectedNodeList;
     }
-
-
     // the node is the consensusNode, chose the childNode
     if (m_consIndex >= 0)
     {

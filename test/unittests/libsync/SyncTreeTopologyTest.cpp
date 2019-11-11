@@ -40,9 +40,9 @@ public:
       : SyncTreeTopology(_nodeId, _treeWidth)
     {}
 
-    virtual dev::h512s const& currentConsensusNodes() { return m_currentConsensusNodes; }
+    virtual dev::h512s const& currentConsensusNodes() { return *m_currentConsensusNodes; }
 
-    virtual dev::h512s const& nodeList() { return m_nodeList; }
+    virtual dev::h512s const& nodeList() { return *m_nodeList; }
     void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> selectedNodeList,
         ssize_t const& parentIndex, std::shared_ptr<std::set<dev::h512>> peers)
     {
