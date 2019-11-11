@@ -555,6 +555,7 @@ function generate_group_ini()
     send_block_status_by_tree=true
     gossip_interval_ms=1000
     gossip_peers_number=3
+    sync_tree_width=3
 EOF
 }
 

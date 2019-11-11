@@ -23,8 +23,6 @@
 
 #pragma once
 #include "Common.h"
-#include "DownloadingTxsQueue.h"
-#include "SyncMsgPacket.h"
 #include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
 #include <libp2p/P2PMessageFactory.h>
@@ -37,6 +35,7 @@ namespace sync
 class SyncMsgPacket
 {
 public:
+    using Ptr = std::shared_ptr<SyncMsgPacket>;
     SyncMsgPacket()
     {
         /// TODO:
@@ -91,6 +90,7 @@ public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
     void encode(std::vector<bytes> const& _txRLPs);
     void encodeRC2(std::vector<bytes> const& _txRLPs);
+    dev::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC = false);
 };
 
 class SyncBlocksPacket : public SyncMsgPacket

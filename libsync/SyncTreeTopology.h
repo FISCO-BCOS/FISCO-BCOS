@@ -35,7 +35,7 @@ class SyncTreeTopology : public TreeTopology
 {
 public:
     using Ptr = std::shared_ptr<SyncTreeTopology>;
-    SyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 2)
+    SyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 3)
       : TreeTopology(_nodeId, _treeWidth)
     {
         m_childOffset = 1;

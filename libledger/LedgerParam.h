@@ -85,6 +85,8 @@ struct SyncParam
     int64_t gossipInterval = 1000;
     // default gossip peers is 3
     int64_t gossipPeers = 3;
+    // default syncTreeWidth is 3
+    int64_t syncTreeWidth = 3;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam

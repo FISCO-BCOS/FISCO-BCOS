@@ -326,7 +326,8 @@ bool Ledger::initSync()
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
         m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
-        m_param->mutableSyncParam().enableSendBlockStatusByTree);
+        m_param->mutableSyncParam().enableSendBlockStatusByTree,
+        m_param->mutableSyncParam().syncTreeWidth);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

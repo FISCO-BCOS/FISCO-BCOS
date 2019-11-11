@@ -178,7 +178,6 @@ void SyncMasterStatus::foreachPeerRandom(
 int64_t SyncMasterStatus::selectPeers(
     int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds)
 {
-    std::srand(std::time(nullptr));
     int64_t nodeSize = _nodeIds->size();
     int64_t selectedSize = _neighborSize > nodeSize ? nodeSize : _neighborSize;
     for (auto i = 0; i < selectedSize; i++)

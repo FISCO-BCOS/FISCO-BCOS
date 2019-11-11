@@ -51,8 +51,8 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    SyncMsgPacket packet;
-    if (!packet.decode(_session, _msg))
+    SyncMsgPacket::Ptr packet = std::make_shared<SyncMsgPacket>();
+    if (!packet->decode(_session, _msg))
     {
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                  << LOG_DESC("Reject packet") << LOG_KV("reason", "decode failed")
@@ -62,12 +62,12 @@ void SyncMsgEngine::messageHandler(
         return;
     }
 
-    bool ok = interpret(packet);
+    bool ok = interpret(packet, _msg, _session->nodeID());
     if (!ok)
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                                  << LOG_DESC("Reject packet")
                                  << LOG_KV("reason", "illegal packet type")
-                                 << LOG_KV("packetType", int(packet.packetType));
+                                 << LOG_KV("packetType", int(packet->packetType));
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
@@ -94,26 +94,27 @@ bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
     return m_syncStatus->hasPeer(_packet.nodeId);
 }
 
-bool SyncMsgEngine::interpret(SyncMsgPacket const& _packet)
+bool SyncMsgEngine::interpret(
+    SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const&)
 {
     SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
                            << LOG_DESC("interpret packet type")
-                           << LOG_KV("type", int(_packet.packetType));
+                           << LOG_KV("type", int(_packet->packetType));
     try
     {
-        switch (_packet.packetType)
+        switch (_packet->packetType)
         {
         case StatusPacket:
-            onPeerStatus(_packet);
+            onPeerStatus(*_packet);
             break;
         case TransactionsPacket:
-            onPeerTransactions(_packet);
+            onPeerTransactions(_packet, _msg);
             break;
         case BlocksPacket:
-            onPeerBlocks(_packet);
+            onPeerBlocks(*_packet);
             break;
         case ReqBlocskPacket:
-            onPeerRequestBlocks(_packet);
+            onPeerRequestBlocks(*_packet);
             break;
         default:
             return false;
@@ -192,16 +193,16 @@ bool SyncMsgEngine::isFarSyncing() const
     return m_syncStatus->knownHighestNumber - currentNumber > 10;
 }
 
-void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
+void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg)
 {
-    if (!checkGroupPacket(_packet))
+    if (!checkGroupPacket(*_packet))
     {
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
-                               << LOG_KV("fromNodeId", _packet.nodeId.abridged());
+                               << LOG_KV("fromNodeId", _packet->nodeId.abridged());
         return;
     }
-    RLP const& rlps = _packet.rlp();
-    m_txQueue->push(rlps.data(), _packet.nodeId);
+    RLP const& rlps = _packet->rlp();
+    m_txQueue->push(_packet, _msg, _packet->nodeId);
     if (m_onNotifySyncTrans)
     {
         m_onNotifySyncTrans();

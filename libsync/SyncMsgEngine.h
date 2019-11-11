@@ -75,11 +75,12 @@ private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool checkGroupPacket(SyncMsgPacket const& _packet);
-    bool interpret(SyncMsgPacket const& _packet);
+    bool interpret(
+        SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer);
 
 private:
     void onPeerStatus(SyncMsgPacket const& _packet);
-    void onPeerTransactions(SyncMsgPacket const& _packet);
+    void onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg);
     void onPeerBlocks(SyncMsgPacket const& _packet);
     void onPeerRequestBlocks(SyncMsgPacket const& _packet);
 

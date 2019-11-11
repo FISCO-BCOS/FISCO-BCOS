@@ -56,8 +56,9 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 200, int64_t _gossipInterval = 1000, int64_t _gossipPeers = 3,
-        bool _enableSendBlockStatusByTree = true)
+        unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
+        int64_t const& _gossipPeers = 3, bool const& _enableSendBlockStatusByTree = true,
+        int64_t const& _syncTreeWidth = 3)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -84,22 +85,18 @@ public:
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
 
-        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
-            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
-
-        m_statisticHandler = m_service->statisticHandler();
-        m_syncTrans->setStatisticHandler(m_statisticHandler);
 
         // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
         m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_service->statisticHandler());
-
-        m_txQueue->setStatisticHandler(m_statisticHandler);
 
         m_downloadBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-download", 1);
         m_sendBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-sender", 1);
         if (m_enableSendBlockStatusByTree)
         {
-            m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
+            m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId, _syncTreeWidth);
+            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
+            m_txQueue->setTreeRouter(treeRouter);
+
             // update the nodeInfo for syncTreeRouter
             updateNodeInfo();
 
@@ -109,6 +106,13 @@ public:
             m_blockStatusGossipThread->registerGossipHandler(
                 boost::bind(&SyncMaster::sendBlockStatus, this, _1));
         }
+        m_txQueue->setService(_service);
+        m_txQueue->setSyncStatus(m_syncStatus);
+        m_statisticHandler = m_service->statisticHandler();
+        m_txQueue->setStatisticHandler(m_statisticHandler);
+        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
+            _nodeId, m_syncStatus, m_msgEngine, _idleWaitMs);
+        m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -201,6 +205,7 @@ public:
 
     void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
     {
+        m_txQueue->updateConsensusNodeInfo(_consensusNodes);
         if (!m_syncTreeRouter)
         {
             return;
@@ -213,10 +218,6 @@ public:
     {
         m_syncTrans->noteForwardRemainTxs(_targetNodeId);
     }
-
-protected:
-    // for UT
-    void resetTreeRouter() { m_syncTreeRouter = nullptr; }
 
 private:
     // init via blockchain when the sync thread started

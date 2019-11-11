@@ -90,6 +90,7 @@ public:
 class SyncMasterStatus
 {
 public:
+    using Ptr = std::shared_ptr<SyncMasterStatus>;
     SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, h256 const& _genesisHash, NodeID const& _nodeId)
       : genesisHash(_genesisHash),
