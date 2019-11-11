@@ -39,7 +39,7 @@ class TreeTopology
 {
 public:
     using Ptr = std::shared_ptr<TreeTopology>;
-    TreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 2)
+    TreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 3)
       : m_treeWidth(_treeWidth), m_nodeId(_nodeId)
     {
         m_currentConsensusNodes = std::make_shared<dev::h512s>();

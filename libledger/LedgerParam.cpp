@@ -344,8 +344,20 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set sync.gossip_peers_number to positive !"));
     }
+    // set the sync-tree-width, default is 3
+    mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
+    if (mutableSyncParam().syncTreeWidth <= 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
+                              << errinfo_comment("Please set sync.sync_tree_width to positive !"));
+    }
+
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                           << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers);
+                           << LOG_KV("enableSendBlockStatusByTree",
+                                  mutableSyncParam().enableSendBlockStatusByTree)
+                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
+                           << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
+                           << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)

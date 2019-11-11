@@ -109,7 +109,6 @@ void SyncTransaction::maintainTransactions()
 void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
     bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
 {
-    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
     auto pendingSize = m_txPool->pendingSize();
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
@@ -118,6 +117,7 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
                     << LOG_KV("totalTxs", pendingSize);
 
     std::shared_ptr<NodeIDs> selectedPeers;
+    std::shared_ptr<std::set<dev::h512>> peers = m_syncStatus->peersSet();
     // fastforward remaining transactions
     if (_fastForwardRemainTxs)
     {
@@ -130,7 +130,7 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
         // only broadcastTransactions to the consensus nodes
         if (fp_txsReceiversFilter)
         {
-            selectedPeers = fp_txsReceiversFilter(m_syncStatus->peersSet());
+            selectedPeers = fp_txsReceiversFilter(peers);
         }
         else
         {
@@ -138,25 +138,53 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
         }
     }
 
-    UpgradableGuard l(m_txPool->xtransactionKnownBy());
+    // send the transactions from RPC
+    broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, true);
+    // TODO: send the transaction status from P2P
+    if (!_fastForwardRemainTxs)
+    {
+        broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, false);
+    }
+}
 
+void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPeers,
+    std::shared_ptr<Transactions> _ts, bool const& _fastForwardRemainTxs,
+    int64_t const& _startIndex, bool const& _fromRpc)
+{
+    unordered_map<NodeID, std::vector<size_t>> peerTransactions;
     auto endIndex =
         std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts->size() - 1));
+
+    auto randomSelectedPeers = _selectedPeers;
+    if (_fromRpc && m_treeRouter)
+    {
+        randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet());
+    }
+
+    UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
     {
         auto t = (*_ts)[i];
         NodeIDs peers;
 
-        int64_t selectSize = selectedPeers->size();
+        int64_t selectSize = _selectedPeers->size();
         // add redundancy when receive transactions from P2P
-        if (m_txPool->isTransactionKnownBySomeone(t->sha3()) && !_fastForwardRemainTxs)
+        if ((!t->rpcCallback() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
+            !_fastForwardRemainTxs)
         {
-            unsigned percent = 25;
-            selectSize = (selectSize * percent + 99) / 100;
+            if (_fromRpc)
+            {
+                continue;
+            }
+            else
+            {
+                unsigned percent = 25;
+                selectSize = (selectSize * percent + 99) / 100;
+            }
         }
 
         peers = m_syncStatus->filterPeers(
-            selectSize, selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
+            selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
                 bool unsent =
                     !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId) || _fastForwardRemainTxs;
                 bool isSealer = _p->isSealer;
@@ -185,10 +213,10 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
         }
 
 
-        SyncTransactionsPacket packet;
-        packet.encode(txRLPs);
+        std::shared_ptr<SyncTransactionsPacket> packet = std::make_shared<SyncTransactionsPacket>();
+        packet->encode(txRLPs);
 
-        auto msg = packet.toMessage(m_protocolId);
+        auto msg = packet->toMessage(m_protocolId, _fromRpc);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
 
         // update sended txs information
@@ -202,7 +230,9 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
                         << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
                         << LOG_KV("startIndex", _startIndex)
                         << LOG_KV("toNodeId", _p->nodeId.abridged())
-                        << LOG_KV("messageSize(B)", msg->buffer()->size());
+                        << LOG_KV("messageSize(B)", msg->buffer()->size())
+                        << LOG_KV("fromRpc", _fromRpc);
+        ;
         return true;
     });
 }
