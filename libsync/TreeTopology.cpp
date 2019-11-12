@@ -71,7 +71,8 @@ bool TreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) co
 {
     if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size())
     {
-        TREE_LOG(DEBUG) << LOG_DESC("getNodeIDByIndex: invalidNode")
+        // TODO: remove this for performance
+        TREE_LOG(TRACE) << LOG_DESC("getNodeIDByIndex: invalidNode")
                         << LOG_KV("nodeIndex", _nodeIndex)
                         << LOG_KV("nodeListSize", m_currentConsensusNodes->size());
         return false;
@@ -114,7 +115,7 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
         // the child node exists in the peers
         if (_peers->count(selectedNode))
         {
-            TREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
+            TREE_LOG(TRACE) << LOG_DESC("recursiveSelectChildNodes")
                             << LOG_KV("selectedNode", selectedNode.abridged())
                             << LOG_KV("selectedIndex", expectedIndex);
             _selectedNodeList->push_back(selectedNode);
@@ -158,7 +159,7 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            TREE_LOG(DEBUG) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
+            TREE_LOG(TRACE) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
                             << LOG_KV("selectedNode", selectedNode.abridged())
                             << LOG_KV("idx", m_consIndex);
             break;

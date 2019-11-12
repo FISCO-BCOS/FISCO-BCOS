@@ -85,6 +85,7 @@ public:
         m_workerPool =
             std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(_protocolId), workThreads);
         m_invalidTxs = std::make_shared<std::map<dev::h256, dev::u256>>();
+        m_txsHashFilter = std::make_shared<std::set<h256>>();
     }
     void start() override {}
     void stop() override {}
@@ -167,6 +168,10 @@ public:
     }
 
     dev::ThreadPool::Ptr workerPool() { return m_workerPool; }
+    std::shared_ptr<dev::eth::Transactions> obtainTransactions(
+        std::vector<dev::h256> const& _reqTxs) override;
+    std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(
+        std::set<dev::h256> const& _txsHashSet) override;
 
 protected:
     /**
@@ -187,6 +192,7 @@ protected:
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     bool removeBlockKnowTrans(dev::eth::Block const& block);
     void removeInvalidTxs();
+    void dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block);
 
 private:
     void startSubmitThread();
@@ -232,6 +238,8 @@ private:
     using TransactionQueue = std::set<dev::eth::Transaction::Ptr, transactionCompare>;
     TransactionQueue m_txsQueue;
     std::unordered_map<h256, TransactionQueue::iterator> m_txsHash;
+    mutable SharedMutex x_txsHashFilter;
+    std::shared_ptr<std::set<h256>> m_txsHashFilter;
     /// hash of dropped transactions
     h256Hash m_dropped;
     /// Transaction is known by some peers
