@@ -650,7 +650,6 @@ void SyncMaster::maintainBlockRequest()
             return true;  // no need to respond
 
         // Just select one peer per maintain
-        reqQueue.disablePush();  // drop push at this time
         DownloadBlocksContainer blockContainer(m_service, m_protocolId, _p->nodeId);
 
         while (!reqQueue.empty() && utcTime() <= timeout)
@@ -692,7 +691,6 @@ void SyncMaster::maintainBlockRequest()
             if (number < numberLimit)  // This respond not reach the end due to timeout
             {
                 // write back the rest request range
-                reqQueue.enablePush();
                 SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                 << LOG_DESC("Push unsent requests back to reqQueue")
                                 << LOG_KV("from", number) << LOG_KV("to", numberLimit - 1)
@@ -701,8 +699,6 @@ void SyncMaster::maintainBlockRequest()
                 return false;
             }
         }
-
-        reqQueue.enablePush();
         return false;
     });
 }

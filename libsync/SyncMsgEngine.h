@@ -66,7 +66,11 @@ public:
             std::make_shared<dev::ThreadPool>("SyncMsgEngine-" + std::to_string(_protocolId), 1);
         m_txsSender = std::make_shared<dev::ThreadPool>(
             "SyncMsgEngine-sender-" + std::to_string(_protocolId), 1);
+        m_txsReceiver = std::make_shared<dev::ThreadPool>(
+            "SyncMsgEngine-receiver-" + std::to_string(_protocolId), 1);
     }
+
+    virtual ~SyncMsgEngine() {}
 
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
@@ -85,10 +89,11 @@ private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
     bool checkGroupPacket(SyncMsgPacket const& _packet);
-    bool interpret(
+
+protected:
+    virtual bool interpret(
         SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer);
 
-private:
     void onPeerStatus(SyncMsgPacket const& _packet);
     void onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg);
     void onPeerBlocks(SyncMsgPacket const& _packet);
@@ -100,7 +105,7 @@ private:
         dev::p2p::P2PMessage::Ptr);
 
 
-private:
+protected:
     // Outside data
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
@@ -118,6 +123,7 @@ private:
 
     std::shared_ptr<dev::ThreadPool> m_txsWorker;
     std::shared_ptr<dev::ThreadPool> m_txsSender;
+    std::shared_ptr<dev::ThreadPool> m_txsReceiver;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler;
 };
 

@@ -34,8 +34,7 @@ using namespace dev::txpool;
 bool SyncMasterStatus::hasPeer(NodeID const& _id)
 {
     ReadGuard l(x_peerStatus);
-    auto peer = m_peersStatus.find(_id);
-    return peer != m_peersStatus.end();
+    return m_peersStatus.count(_id);
 }
 
 bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)

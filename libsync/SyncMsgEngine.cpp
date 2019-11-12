@@ -98,7 +98,7 @@ bool SyncMsgEngine::interpret(
             onPeerStatus(*_packet);
             break;
         case TransactionsPacket:
-            onPeerTransactions(_packet, _msg);
+            m_txsReceiver->enqueue([this, _packet, _msg]() { onPeerTransactions(_packet, _msg); });
             break;
         case BlocksPacket:
             onPeerBlocks(*_packet);
@@ -195,20 +195,18 @@ bool SyncMsgEngine::isFarSyncing() const
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg)
 {
+    // Note: checkGroupPacket degrade the speed of receiving transactions
     if (!checkGroupPacket(*_packet))
     {
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
                                << LOG_KV("fromNodeId", _packet->nodeId.abridged());
         return;
     }
-    RLP const& rlps = _packet->rlp();
     m_txQueue->push(_packet, _msg, _packet->nodeId);
     if (m_onNotifySyncTrans)
     {
         m_onNotifySyncTrans();
     }
-    SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Receive peer txs packet")
-                           << LOG_KV("packetSize(B)", rlps.data().size());
 }
 
 void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
