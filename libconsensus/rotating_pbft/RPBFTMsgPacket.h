@@ -26,6 +26,18 @@ namespace dev
 {
 namespace consensus
 {
+// packetType for partiallyBlock
+enum P2PPacketType : uint32_t
+{
+    // PartiallyPreparePacket
+    // note: the forwarded prepare messages include all the transaction data
+    PartiallyPreparePacket = 0x1,
+    // represent that the node should response the missed transaction data
+    GetMissedTxsPacket = 0x2,
+    // represent that the node receives the missed transaction data
+    MissedTxsPacket = 0x3,
+};
+
 class RPBFTMsgPacket : public PBFTMsgPacket
 {
 public:

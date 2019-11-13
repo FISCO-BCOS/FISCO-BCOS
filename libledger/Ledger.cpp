@@ -187,6 +187,21 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
     return nullptr;
 }
 
+dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
+{
+    if (!m_param->mutableConsensusParam().enablePrepareWithTxHash)
+    {
+        return std::make_shared<dev::eth::BlockFactory>();
+    }
+    // RPBFT support PartiallyBlockFactory
+    if (isRotatingPBFTEnabled())
+    {
+        return std::make_shared<dev::eth::PartiallyBlockFactory>();
+    }
+    BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
+                          << errinfo_comment("only RPBFT support prepare-packet with txs hash"));
+}
+
 /**
  * @brief: create PBFTEngine
  * @param param: Ledger related params
@@ -215,7 +230,11 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
                                   "create PBFTEngine failed, maybe unsupported consensus type " +
                                   m_param->mutableConsensusParam().consensusType));
     }
+    auto blockFactory = createBlockFactory();
+
     pbftSealer->setConsensusEngine(pbftEngine);
+    pbftSealer->setBlockFactory(blockFactory);
+
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
     initPBFTEngine(pbftSealer);
@@ -249,6 +268,8 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     assert(rotatingPBFT);
     rotatingPBFT->setEpochSize(m_param->mutableConsensusParam().epochSize);
     rotatingPBFT->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
+    rotatingPBFT->setEnablePrepareWithTxsHash(
+        m_param->mutableConsensusParam().enablePrepareWithTxHash);
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
@@ -273,6 +294,8 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
             m_param->mutableConsensusParam().maxElectTime, protocol_id,
             m_param->mutableConsensusParam().sealerList);
+    auto blockFactory = createBlockFactory();
+    raftSealer->setBlockFactory(blockFactory);
     return raftSealer;
 }
 

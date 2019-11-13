@@ -33,22 +33,24 @@ namespace consensus
  * @brief: delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
  * @param hash
  */
-void PBFTReqCache::delCache(h256 const& hash)
+void PBFTReqCache::delCache(dev::eth::BlockHeader const& highestBlockHeader)
 {
-    PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache") << LOG_KV("hash", hash.abridged());
+    PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache")
+                            << LOG_KV("hash", highestBlockHeader.hash().abridged());
     /// delete from sign cache
-    auto psign = m_signCache.find(hash);
+    auto psign = m_signCache.find(highestBlockHeader.hash());
     if (psign != m_signCache.end())
         m_signCache.erase(psign);
     /// delete from commit cache
-    auto pcommit = m_commitCache.find(hash);
+    auto pcommit = m_commitCache.find(highestBlockHeader.hash());
     if (pcommit != m_commitCache.end())
         m_commitCache.erase(pcommit);
     /// delete from prepare cache
-    if (hash == m_prepareCache.block_hash)
+    if (highestBlockHeader.hash() == m_prepareCache.block_hash)
     {
         m_prepareCache.clear();
     }
+    removeInvalidFutureCache(highestBlockHeader.number());
 }
 
 /**
@@ -193,11 +195,11 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 }
 
 /// clear the cache of future block to solve the memory leak problems
-void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader)
+void PBFTReqCache::removeInvalidFutureCache(int64_t const& highestBlockNumber)
 {
     for (auto pcache = m_futurePrepareCache.begin(); pcache != m_futurePrepareCache.end();)
     {
-        if (pcache->first <= (uint64_t)(highestBlockHeader.number()))
+        if (pcache->first <= (uint64_t)highestBlockNumber)
         {
             pcache = m_futurePrepareCache.erase(pcache);
         }

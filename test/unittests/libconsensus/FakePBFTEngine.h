@@ -26,6 +26,7 @@
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libdevcore/TopicInfo.h>
+#include <libethcore/BlockFactory.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -64,6 +65,7 @@ public:
         setBaseDir(_baseDir);
         setMaxBlockTransactions(300000000);
         createPBFTMsgFactory();
+        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -120,7 +122,7 @@ public:
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
         unsigned const& ttl = 0)
     {
-        return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl);
+        return PBFTEngine::broadcastMsg(packetType, key, data, 0, filter, ttl);
     }
 
     bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
@@ -249,7 +251,7 @@ public:
 
     void setNodeIdx(IDXTYPE const& _idx) { m_idx = _idx; }
     void collectGarbage() { return PBFTEngine::collectGarbage(); }
-    void handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
+    bool handleFutureBlock() { return PBFTEngine::handleFutureBlock(); }
     /// NodeAccountType accountType() override { return m_accountType; }
     void setAccountType(NodeAccountType const& accountType) { m_accountType = accountType; }
 
@@ -327,6 +329,8 @@ public:
         m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+        auto blockFactory = std::make_shared<BlockFactory>();
+        setBlockFactory(blockFactory);
     }
 
     void loadTransactions(uint64_t const& transToFetch)

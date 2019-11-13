@@ -31,6 +31,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Exceptions.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPool.h>
@@ -115,6 +116,12 @@ public:
     virtual void setConsensusEngine(ConsensusInterface::Ptr _consensusEngine)
     {
         m_consensusEngine = _consensusEngine;
+    }
+
+    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    {
+        m_sealing.setBlockFactory(_blockFactory);
+        m_consensusEngine->setBlockFactory(_blockFactory);
     }
 
 protected:

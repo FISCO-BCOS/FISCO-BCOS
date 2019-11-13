@@ -29,6 +29,7 @@
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
@@ -158,6 +159,9 @@ protected:
 
     dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
         dev::PROTOCOL_ID const& _protocolId);
+
+    dev::eth::BlockFactory::Ptr createBlockFactory();
+
     void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
     void initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 

@@ -142,7 +142,7 @@ public:
     {
         return nullptr;
     }
-
+    virtual bool initPartiallyBlock(std::shared_ptr<dev::eth::Block>) { return true; }
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

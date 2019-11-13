@@ -65,6 +65,7 @@ struct ConsensusParam
     int64_t epochSize = 10;
     // rotating interval, default is 10
     int64_t rotatingInterval = 10;
+    bool enablePrepareWithTxHash = false;
 };
 
 struct AMDBParam

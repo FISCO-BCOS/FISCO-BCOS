@@ -261,18 +261,23 @@ struct PBFTMsg
 /// definition of the prepare requests
 struct PrepareReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<PrepareReq>;
     /// block data
-    bytes block;
+    std::shared_ptr<bytes> block;
     std::shared_ptr<dev::eth::Block> pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
     /// default constructor
-    PrepareReq() = default;
+    PrepareReq() { block = std::make_shared<dev::bytes>(); }
+    virtual ~PrepareReq() {}
+
     PrepareReq(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
         IDXTYPE const& _idx, h256 const _blockHash)
       : PBFTMsg(_keyPair, _height, _view, _idx, _blockHash), p_execContext(nullptr)
-    {}
+    {
+        block = std::make_shared<dev::bytes>();
+    }
 
     /**
      * @brief: populate the prepare request from specified prepare request,
@@ -286,6 +291,7 @@ struct PrepareReq : public PBFTMsg
     PrepareReq(
         PrepareReq const& req, KeyPair const& keyPair, VIEWTYPE const& _view, IDXTYPE const& _idx)
     {
+        block = std::make_shared<dev::bytes>();
         height = req.height;
         view = _view;
         idx = _idx;
@@ -305,18 +311,19 @@ struct PrepareReq : public PBFTMsg
      * @param _view : current view
      * @param _idx : index of the node that generates this PrepareReq
      */
-    PrepareReq(dev::eth::Block const& blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
-        IDXTYPE const& _idx)
+    PrepareReq(dev::eth::Block::Ptr blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
+        IDXTYPE const& _idx, bool const& _onlyHash = false)
     {
-        height = blockStruct.blockHeader().number();
+        block = std::make_shared<dev::bytes>();
+        height = blockStruct->blockHeader().number();
         view = _view;
         idx = _idx;
         timestamp = u256(utcTime());
-        block_hash = blockStruct.blockHeader().hash();
+        block_hash = blockStruct->blockHeader().hash();
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
-        blockStruct.encode(block);
-        pBlock = std::make_shared<dev::eth::Block>(std::move(blockStruct));
+        blockStruct->encodeProposal(block, _onlyHash);
+        pBlock = blockStruct;
         p_execContext = nullptr;
     }
 
@@ -328,6 +335,7 @@ struct PrepareReq : public PBFTMsg
      */
     PrepareReq(PrepareReq const& req, Sealing const& sealing, KeyPair const& keyPair)
     {
+        block = std::make_shared<dev::bytes>();
         height = req.height;
         view = req.view;
         idx = req.idx;
@@ -344,7 +352,7 @@ struct PrepareReq : public PBFTMsg
 
     bool operator==(PrepareReq const& req) const
     {
-        return PBFTMsg::operator==(req) && req.block == block;
+        return PBFTMsg::operator==(req) && *req.block == *block;
     }
     bool operator!=(PrepareReq const& req) const { return !(operator==(req)); }
 
@@ -352,7 +360,7 @@ struct PrepareReq : public PBFTMsg
     virtual void streamRLPFields(RLPStream& _s) const
     {
         PBFTMsg::streamRLPFields(_s);
-        _s << block;
+        _s << *block;
     }
 
     /// populate PrepareReq from given RLP object
@@ -362,7 +370,7 @@ struct PrepareReq : public PBFTMsg
         int field = 0;
         try
         {
-            block = _rlp[field = 7].toBytes();
+            *block = _rlp[field = 7].toBytes();
         }
         catch (Exception const& _e)
         {

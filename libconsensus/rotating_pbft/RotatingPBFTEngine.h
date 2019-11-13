@@ -22,7 +22,9 @@
  */
 #pragma once
 #include "RPBFTMsgFactory.h"
+#include "RPBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
+#include <libdevcore/ThreadPool.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
 
@@ -60,6 +62,14 @@ public:
                 return selectedNode;
             });
         m_chosedSealerList = std::make_shared<dev::h512s>();
+        m_messageHandler = std::make_shared<dev::ThreadPool>(
+            "RPBFT-messageHandler-" + std::to_string(_protocolId), 1);
+        m_prepareWorker =
+            std::make_shared<dev::ThreadPool>("RPBFT-worker-" + std::to_string(_protocolId), 1);
+        m_reqCache = std::make_shared<RPBFTReqCache>();
+        m_rpbftReqCache = std::dynamic_pointer_cast<RPBFTReqCache>(m_reqCache);
+        m_cachedForwardMsg =
+            std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
 
     void setEpochSize(int64_t const& _epochSize)
@@ -88,12 +98,44 @@ public:
         return *m_chosedSealerList;
     }
 
+    void setEnablePrepareWithTxsHash(bool const& _enablePrepareWithTxsHash)
+    {
+        m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
+    }
+
+
 protected:
+    void registerP2PHandler() override;
+    void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message) override;
+
+    virtual void handleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    // receive GetMissedTxs request, response the missed txs
+    virtual void onReceiveGetMissedTxsRequest(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    // receive missed txs, fill the block
+    virtual void onReceiveMissedTxsResponse(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
+    virtual bool handlePartiallyPrepare(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    virtual bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
+    void clearInvalidCachedForwardMsg();
+
+    bool handleFutureBlock() override;
+
+    virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
+        std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
+
+    PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block) override;
+
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
     bool locatedInChosedConsensensusNodes() const override;
     dev::network::NodeID getSealerByIndex(size_t const& _index) const override;
-    dev::network::NodeID getNodeIDByIndex(size_t const& _index) const;
+    dev::network::NodeID getNodeIDViaIndex(size_t const& _index) const;
 
     // TODO: select nodes with VRF algorithm
     IDXTYPE VRFSelection() const;
@@ -116,12 +158,17 @@ protected:
 
     void forwardMsg(
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const&) override;
+    void forwardMsg(
+        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data);
+    void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
 
     PBFTMsgPacket::Ptr createPBFTMsgPacket(bytesConstRef _data, PACKET_TYPE const& _packetType,
         unsigned const& _ttl, dev::h512s const& _forwardNodes) override;
 
-    void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl) override;
+    void broadcastMsgToTargetNodes(dev::h512s const& _targetNodes, bytesConstRef _data,
+        unsigned const& _packetType, unsigned const& _ttl,
+        PACKET_TYPE const& _p2pPacketType = 0) override;
+
 
 protected:
     // configured epoch size
@@ -145,6 +192,13 @@ protected:
     // used to record the rotatingIntervalEnableNumber changed or not
     dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
     bool m_rotatingIntervalUpdated = false;
+
+    bool m_enablePrepareWithTxsHash = false;
+    ThreadPool::Ptr m_messageHandler;
+    ThreadPool::Ptr m_prepareWorker;
+    RPBFTReqCache::Ptr m_rpbftReqCache;
+
+    std::shared_ptr<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>> m_cachedForwardMsg;
 };
 }  // namespace consensus
 }  // namespace dev

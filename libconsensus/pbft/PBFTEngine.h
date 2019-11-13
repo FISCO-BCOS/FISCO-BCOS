@@ -82,6 +82,9 @@ public:
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
 
         m_threadPool = std::make_shared<dev::ThreadPool>("pbftPool" + std::to_string(m_groupId), 1);
+        m_msgReceiver =
+            std::make_shared<dev::ThreadPool>("msgReceiver" + std::to_string(m_groupId), 1);
+
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
         // set statisticHandler
         m_statisticHandler = m_service->statisticHandler();
@@ -157,7 +160,10 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block const& block);
+    bool generatePrepare(dev::eth::Block::Ptr block);
+
+    virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
+
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -208,10 +214,11 @@ public:
     bool shouldRecvTxs() const override { return m_blockSync->isFarSyncing(); }
 
 protected:
+    virtual void registerP2PHandler();
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
-    void handleFutureBlock();
+    virtual bool handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
@@ -226,16 +233,18 @@ protected:
 
     // broadcast given messages to all-peers with cache-filter and specified filter
     virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
-        bytesConstRef _data, std::unordered_set<dev::network::NodeID> const& _filter,
-        unsigned const& _ttl,
+        bytesConstRef _data, PACKET_TYPE const& _p2pPacketType,
+        std::unordered_set<dev::network::NodeID> const& _filter, unsigned const& _ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
 
     bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
+        PACKET_TYPE const& _p2pPacketType = 0,
         std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
         unsigned const& _ttl = 0)
     {
-        return broadcastMsg(_packetType, _key, _data, _filter, _ttl, m_broacastTargetsFilter);
+        return broadcastMsg(
+            _packetType, _key, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
     }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -252,11 +261,13 @@ protected:
     bool shouldBroadcastViewChange();
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void onRecvPBFTMessage(dev::p2p::NetworkException exception,
+    virtual void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
     bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& oss);
+
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
@@ -619,8 +630,8 @@ protected:
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
     virtual void createPBFTMsgFactory() { m_pbftMsgFactory = std::make_shared<PBFTMsgFactory>(); }
 
-    virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl);
+    virtual void broadcastMsgToTargetNodes(dev::h512s const& _targetNodes, bytesConstRef _data,
+        unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType = 0);
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
@@ -670,6 +681,7 @@ protected:
 
     // the thread pool is used to execute the async-function
     dev::ThreadPool::Ptr m_threadPool;
+    dev::ThreadPool::Ptr m_msgReceiver;
 
     std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;

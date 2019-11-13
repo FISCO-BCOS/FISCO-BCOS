@@ -1471,7 +1471,7 @@ bool RaftEngine::commit(Block const& _block)
 
 bool RaftEngine::checkAndExecute(Block const& _block)
 {
-    Sealing workingSealing;
+    Sealing workingSealing(m_blockFactory);
     try
     {
         execBlock(workingSealing, _block);

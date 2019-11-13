@@ -38,6 +38,7 @@ namespace eth
 class Block
 {
 public:
+    using Ptr = std::shared_ptr<Block>;
     ///-----constructors of Block
     Block()
     {
@@ -55,7 +56,7 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-    ~Block() {}
+    virtual ~Block() {}
     ///-----opearator overloads of Block
     /// operator ==
     // only use for UT
@@ -88,6 +89,10 @@ public:
     void encode(bytes& _out) const;
     void encodeRC2(bytes& _out) const;
 
+    virtual void encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash = false);
+
+    virtual void decodeProposal(bytesConstRef _block, bool const& _onlyTxsHash = false);
+    virtual bool txsAllHit() { return true; }
     ///-----decode functions
     void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
         bool _withReceipt = true, bool _withTxHash = false);
@@ -299,7 +304,7 @@ private:
         m_tReceiptsCache = bytes();
     }
 
-private:
+protected:
     /// block header of the block (field 0)
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)

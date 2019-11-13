@@ -21,12 +21,14 @@
  * @date: 2019-09-11
  */
 #include "RotatingPBFTEngine.h"
+#include <libethcore/PartiallyBlock.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 
 using namespace dev::eth;
 using namespace dev::consensus;
 using namespace dev::p2p;
 using namespace dev::network;
+
 std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
 {
     // this node doesn't located in the chosed consensus node list
@@ -192,7 +194,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     }
     // remove one consensus Node
     auto chosedOutIdx = m_rotatingRound % m_sealersNum;
-    NodeID chosedOutNodeId = getNodeIDByIndex(chosedOutIdx);
+    NodeID chosedOutNodeId = getNodeIDViaIndex(chosedOutIdx);
     if (chosedOutNodeId == dev::h512())
     {
         ReadGuard l(x_chosedConsensusNodes);
@@ -216,7 +218,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     m_startNodeIdx = m_rotatingRound % m_sealersNum;
     auto epochSize = std::min(m_epochSize.load(), m_sealersNum.load());
     IDXTYPE chosedInNodeIdx = (m_startNodeIdx.load() + epochSize - 1) % m_sealersNum;
-    NodeID chosedInNodeId = getNodeIDByIndex(chosedInNodeIdx);
+    NodeID chosedInNodeId = getNodeIDViaIndex(chosedInNodeIdx);
     if (chosedOutNodeId == dev::h512())
     {
         ReadGuard l(x_chosedConsensusNodes);
@@ -348,7 +350,18 @@ void RotatingPBFTEngine::getForwardNodes(
 void RotatingPBFTEngine::forwardMsg(
     std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const&)
 {
+    forwardMsg(_key, _pbftMsgPacket, ref(_pbftMsgPacket->data));
+}
+
+void RotatingPBFTEngine::forwardMsg(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data)
+{
     RPBFTMsgPacket::Ptr rpbftMsgPacket = std::dynamic_pointer_cast<RPBFTMsgPacket>(_pbftMsgPacket);
+    if (rpbftMsgPacket->forwardNodes.size() == 0)
+    {
+        return;
+    }
+
     // get the forwardNodes from the _pbftMsgPacket
     std::set<dev::h512> forwardedNodes(
         rpbftMsgPacket->forwardNodes.begin(), rpbftMsgPacket->forwardNodes.end());
@@ -376,20 +389,26 @@ void RotatingPBFTEngine::forwardMsg(
     // forward the message to corresponding nodes
     for (auto const& nodeID : forwardedNodes)
     {
-        sendMsg(nodeID, _pbftMsgPacket->packet_id, _key, ref(_pbftMsgPacket->data), 1,
-            remainingForwardNodeList);
+        sendMsg(nodeID, _pbftMsgPacket->packet_id, _key, _data, 1, remainingForwardNodeList);
     }
 }
 
-void RotatingPBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-    unsigned const& _packetType, unsigned const& _ttl)
+void RotatingPBFTEngine::broadcastMsgToTargetNodes(dev::h512s const& _targetNodes,
+    bytesConstRef _data, unsigned const& _packetType, unsigned const& _ttl,
+    PACKET_TYPE const& _p2pPacketType)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     // get the forwardNodes
     dev::h512s forwardNodes;
     getForwardNodes(forwardNodes, sessions);
-    return m_service->asyncMulticastMessageByNodeIDList(
-        _targetNodes, transDataToMessage(_data, _packetType, _ttl, forwardNodes));
+    auto p2pMsg = transDataToMessage(_data, _packetType, _ttl, forwardNodes);
+    p2pMsg->setPacketType(_p2pPacketType);
+    m_service->asyncMulticastMessageByNodeIDList(_targetNodes, p2pMsg);
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(
+            _packetType, _targetNodes.size(), p2pMsg->length());
+    }
 }
 
 PBFTMsgPacket::Ptr RotatingPBFTEngine::createPBFTMsgPacket(bytesConstRef _data,
@@ -419,7 +438,334 @@ dev::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) 
     return dev::network::NodeID();
 }
 
-dev::network::NodeID RotatingPBFTEngine::getNodeIDByIndex(size_t const& _index) const
+dev::network::NodeID RotatingPBFTEngine::getNodeIDViaIndex(size_t const& _index) const
 {
     return PBFTEngine::getSealerByIndex(_index);
+}
+
+void RotatingPBFTEngine::registerP2PHandler()
+{
+    m_service->registerHandlerByProtoclID(
+        m_protocolId, boost::bind(&RotatingPBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
+}
+
+void RotatingPBFTEngine::onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    if (nodeIdx() == MAXIDX)
+    {
+        RPBFTENGINE_LOG(TRACE) << LOG_DESC(
+            "onRecvPBFTMessage: I'm an observer or not in the group, drop the PBFT message packets "
+            "directly");
+        return;
+    }
+    handleP2PMessage(_exception, _session, _message);
+}
+
+void RotatingPBFTEngine::handleP2PMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    if (!m_enablePrepareWithTxsHash)
+    {
+        PBFTEngine::onRecvPBFTMessage(_exception, _session, _message);
+        return;
+    }
+    try
+    {
+        // update the network-in statistic information
+        if (m_statisticHandler && (_message->packetType() != 0))
+        {
+            m_statisticHandler->updateConsInPacketsInfo(_message->packetType(), _message->length());
+        }
+        switch (_message->packetType())
+        {
+        case PartiallyPreparePacket:
+            m_prepareWorker->enqueue(
+                [this, _session, _message]() { handlePartiallyPrepare(_session, _message); });
+            break;
+        // receive getMissedPacket request, response missed transactions
+        case GetMissedTxsPacket:
+            m_messageHandler->enqueue(
+                [this, _session, _message]() { onReceiveGetMissedTxsRequest(_session, _message); });
+            break;
+        // receive missed transactions, fill block
+        case MissedTxsPacket:
+            m_messageHandler->enqueue(
+                [this, _session, _message]() { onReceiveMissedTxsResponse(_session, _message); });
+            break;
+        default:
+            PBFTEngine::onRecvPBFTMessage(_exception, _session, _message);
+            break;
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("handleP2PMessage: invalid message")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+// handle Partially prepare
+bool RotatingPBFTEngine::handlePartiallyPrepare(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    // decode the _message into prepareReq
+    PBFTMsgPacket::Ptr pbftMsg = m_pbftMsgFactory->createPBFTMsgPacket();
+    if (!decodePBFTMsgPacket(pbftMsg, _message, _session))
+    {
+        return false;
+    }
+    PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
+    if (!decodeToRequests(*prepareReq, ref(pbftMsg->data)))
+    {
+        return false;
+    }
+    Guard l(m_mutex);
+    bool succ = handlePartiallyPrepare(prepareReq);
+    // maybe return succ for addFuturePrepare
+    if (!prepareReq->pBlock)
+    {
+        return false;
+    }
+    if (needForwardMsg(succ, prepareReq->uniqueKey(), pbftMsg, *prepareReq))
+    {
+        clearInvalidCachedForwardMsg();
+        m_cachedForwardMsg->insert(
+            std::make_pair(prepareReq->block_hash, std::make_pair(prepareReq->height, pbftMsg)));
+    }
+    // all hit ?
+    if (prepareReq->pBlock->txsAllHit())
+    {
+        forwardPrepareMsg(pbftMsg, prepareReq);
+    }
+    return succ;
+}
+
+void RotatingPBFTEngine::clearInvalidCachedForwardMsg()
+{
+    for (auto it = m_cachedForwardMsg->begin(); it != m_cachedForwardMsg->end();)
+    {
+        if (it->second.first < m_highestBlock.number() &&
+            m_highestBlock.number() - it->second.first >= 10)
+        {
+            it = m_cachedForwardMsg->erase(it);
+        }
+        else
+        {
+            it++;
+        }
+    }
+}
+
+void RotatingPBFTEngine::forwardPrepareMsg(
+    PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr _prepareReq)
+{
+    // forward the message
+    std::shared_ptr<dev::bytes> encodedBytes = std::make_shared<dev::bytes>();
+    _prepareReq->encode(*encodedBytes);
+    forwardMsg(_prepareReq->uniqueKey(), _pbftMsgPacket, ref(*encodedBytes));
+}
+
+bool RotatingPBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
+{
+    std::ostringstream oss;
+    oss << LOG_DESC("handlePartiallyPrepare") << LOG_KV("reqIdx", _prepareReq->idx)
+        << LOG_KV("view", _prepareReq->view) << LOG_KV("reqNum", _prepareReq->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("consNum", m_consensusBlockNumber)
+        << LOG_KV("hash", _prepareReq->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
+    RPBFTENGINE_LOG(DEBUG) << oss.str();
+    // check the PartiallyPrepare
+    auto ret = isValidPrepare(*_prepareReq, oss);
+    if (ret == CheckResult::INVALID)
+    {
+        return false;
+    }
+    /// update the view for given idx
+    updateViewMap(_prepareReq->idx, _prepareReq->view);
+
+    if (ret == CheckResult::FUTURE)
+    {
+        m_rpbftReqCache->addPartiallyFuturePrepare(_prepareReq);
+        return true;
+    }
+    _prepareReq->pBlock = m_blockFactory->createBlock();
+    if (!m_rpbftReqCache->addPartiallyRawPrepare(_prepareReq))
+    {
+        return false;
+    }
+    assert(_prepareReq->pBlock);
+    bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
+    // hit all transactions
+    if (allHit)
+    {
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC(
+            "hit all the transactions, handle the rawPrepare directly");
+        m_rpbftReqCache->transPartiallyPrepareIntoRawPrepare();
+        // begin to handlePrepare
+        return execPrepareAndGenerateSignMsg(*_prepareReq, oss);
+    }
+    // can't find the node that generate the prepareReq
+    h512 targetNode;
+    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    {
+        return false;
+    }
+
+    // miss some transactions, request the missed transaction
+    PartiallyBlock::Ptr partiallyBlock =
+        std::dynamic_pointer_cast<PartiallyBlock>(_prepareReq->pBlock);
+    assert(partiallyBlock);
+    std::shared_ptr<bytes> encodedMissTxsInfo = std::make_shared<bytes>();
+    partiallyBlock->encodeMissedInfo(encodedMissTxsInfo);
+
+    auto p2pMsg = toP2PMessage(encodedMissTxsInfo, GetMissedTxsPacket);
+    p2pMsg->setPacketType(GetMissedTxsPacket);
+
+    m_service->asyncSendMessageByNodeID(targetNode, p2pMsg, nullptr);
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(p2pMsg->packetType(), 1, p2pMsg->length());
+    }
+
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("send GetMissedTxsPacket to the leader")
+                           << LOG_KV("targetIdx", _prepareReq->idx)
+                           << LOG_KV("number", _prepareReq->height)
+                           << LOG_KV("hash", _prepareReq->block_hash.abridged())
+                           << LOG_KV("size", p2pMsg->length());
+    return true;
+}
+
+// m_enablePrepareWithTxsHash is true: only send transaction hash to other sealers
+// m_enablePrepareWithTxsHash is false: send all the transactions to other sealers
+PrepareReq::Ptr RotatingPBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
+{
+    dev::eth::Block::Ptr engineBlock = m_blockFactory->createBlock();
+    *engineBlock = std::move(*_block);
+    PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
+        engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
+    // broadcast prepare request
+    m_threadPool->enqueue([this, prepareReq]() {
+        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+        prepareReq->encode(*prepare_data);
+        // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
+        if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
+        {
+            broadcastMsg(PartiallyPreparePacket, prepareReq->uniqueKey(), ref(*prepare_data),
+                PartiallyPreparePacket);
+        }
+        else
+        {
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+        }
+    });
+    return prepareReq;
+}
+
+dev::p2p::P2PMessage::Ptr RotatingPBFTEngine::toP2PMessage(
+    std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType)
+{
+    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+        m_service->p2pMessageFactory()->buildMessage());
+    message->setBuffer(_data);
+    message->setPacketType(_packetType);
+    message->setProtocolID(m_protocolId);
+    return message;
+}
+
+void RotatingPBFTEngine::onReceiveGetMissedTxsRequest(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    try
+    {
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveGetMissedTxsRequest")
+                               << LOG_KV("size", _message->length())
+                               << LOG_KV("peer", _session->nodeID().abridged());
+        std::shared_ptr<bytes> _encodedBytes = std::make_shared<bytes>();
+        if (!m_rpbftReqCache->fetchMissedTxs(_encodedBytes, ref(*(_message->buffer()))))
+        {
+            return;
+        }
+        // response the transaction to the request node
+        auto p2pMsg = toP2PMessage(_encodedBytes, MissedTxsPacket);
+        p2pMsg->setPacketType(MissedTxsPacket);
+
+        m_service->asyncSendMessageByNodeID(_session->nodeID(), p2pMsg, nullptr);
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateConsOutPacketsInfo(p2pMsg->packetType(), 1, p2pMsg->length());
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveGetMissedTxsRequest exceptioned")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+void RotatingPBFTEngine::onReceiveMissedTxsResponse(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    try
+    {
+        Guard l(m_mutex);
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveMissedTxsResponse and fillBlock")
+                               << LOG_KV("size", _message->length())
+                               << LOG_KV("peer", _session->nodeID().abridged());
+        if (!m_rpbftReqCache->fillBlock(ref(*(_message->buffer()))))
+        {
+            return;
+        }
+        // handlePrepare
+        auto prepareReq = m_rpbftReqCache->partiallyRawPrepare();
+        bool ret = handlePrepareMsg(*prepareReq);
+        // forward the completed prepare message
+        if (ret && m_cachedForwardMsg->count(prepareReq->block_hash))
+        {
+            auto pbftMsg = (*m_cachedForwardMsg)[prepareReq->block_hash].second;
+            // forward the message
+            forwardPrepareMsg(pbftMsg, prepareReq);
+        }
+        m_cachedForwardMsg->erase(prepareReq->block_hash);
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveMissedTxsResponse exceptioned")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+bool RotatingPBFTEngine::handleFutureBlock()
+{
+    // hit the futurePrepareCache
+    bool ret = PBFTEngine::handleFutureBlock();
+    if (!m_enablePrepareWithTxsHash || ret)
+    {
+        return ret;
+    }
+    {
+        Guard l(m_mutex);
+        // miss the future prepare cache, find from the partially future prepare
+        auto partiallyFuturePrepare =
+            m_rpbftReqCache->getPartiallyFuturePrepare(m_consensusBlockNumber);
+        if (partiallyFuturePrepare && partiallyFuturePrepare->view == m_view)
+        {
+            PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock: partiallyFuturePrepare")
+                                 << LOG_KV("reqNum", partiallyFuturePrepare->height)
+                                 << LOG_KV("curNum", m_highestBlock.number())
+                                 << LOG_KV("view", m_view)
+                                 << LOG_KV("conNum", m_consensusBlockNumber)
+                                 << LOG_KV("hash", partiallyFuturePrepare->block_hash.abridged())
+                                 << LOG_KV("nodeIdx", nodeIdx())
+                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
+            handlePartiallyPrepare(partiallyFuturePrepare);
+            m_rpbftReqCache->eraseHandledPartiallyFutureReq(partiallyFuturePrepare->height);
+            return true;
+        }
+    }
+    return false;
 }

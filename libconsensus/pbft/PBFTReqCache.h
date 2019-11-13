@@ -26,6 +26,7 @@
 #include <libconsensus/pbft/Common.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/Protocol.h>
+
 namespace dev
 {
 namespace consensus
@@ -88,6 +89,7 @@ public:
         return 0;
     }
 
+    int64_t rawPrepareCacheHeight() { return m_rawPrepareCache.height; }
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
@@ -217,6 +219,7 @@ public:
     inline void triggerViewChange(VIEWTYPE const& curView)
     {
         m_rawPrepareCache.clear();
+
         m_prepareCache.clear();
         m_signCache.clear();
         m_commitCache.clear();
@@ -227,13 +230,13 @@ public:
     /// update the sign cache and commit cache immediately
     /// in case of that the commit/sign requests with the same hash are solved in
     /// handleCommitMsg/handleSignMsg again
-    void delCache(h256 const& hash);
-    inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
+    void delCache(dev::eth::BlockHeader const& highestBlockHeader);
+    virtual void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
         /// remove invalid future block cache from cache
-        removeInvalidFutureCache(highestBlockHeader);
+        removeInvalidFutureCache(highestBlockHeader.number());
         /// delete invalid viewchange from cache
         delInvalidViewChange(highestBlockHeader);
     }
@@ -250,7 +253,7 @@ public:
         m_recvViewChangeReq.clear();
     }
 
-    void removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader);
+    virtual void removeInvalidFutureCache(int64_t const& highestBlockNumber);
 
     inline void clearAll()
     {
@@ -283,7 +286,7 @@ public:
         return m_recvViewChangeReq;
     }
 
-private:
+protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
@@ -334,11 +337,12 @@ private:
         return (it->second.find(key)) != (it->second.end());
     }
 
-private:
+protected:
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
     PrepareReq m_rawPrepareCache;
+
     /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;
     /// cache for received-viewChange requests(maps between view and view change requests)

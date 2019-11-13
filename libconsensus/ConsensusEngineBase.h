@@ -29,6 +29,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
@@ -153,6 +154,10 @@ public:
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
     virtual void resetConfig();
+    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory) override
+    {
+        m_blockFactory = _blockFactory;
+    }
 
 protected:
     void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
@@ -297,6 +302,8 @@ protected:
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
     std::atomic_bool m_cfgErr = {false};
+
+    dev::eth::BlockFactory::Ptr m_blockFactory;
 };
 }  // namespace consensus
 }  // namespace dev

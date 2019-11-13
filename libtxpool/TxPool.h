@@ -35,6 +35,7 @@
 #include <tbb/concurrent_unordered_set.h>
 #include <unordered_map>
 
+
 using namespace dev::eth;
 using namespace dev::p2p;
 
@@ -172,6 +173,8 @@ public:
         std::vector<dev::h256> const& _reqTxs) override;
     std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(
         std::set<dev::h256> const& _txsHashSet) override;
+
+    bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
 
 protected:
     /**
