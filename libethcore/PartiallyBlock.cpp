@@ -77,7 +77,7 @@ void PartiallyBlock::decodeProposal(bytesConstRef _blockBytes, bool const& _only
     // decode transaction hash
     *m_txsHash = blockRlp[1].toVector<dev::h256>();
     // decode and check blockHash
-    dev::h256 blockHash = blockRlp[2].toHash<h256>();
+    dev::h256 blockHash = blockRlp[2].toHash<h256>(RLP::VeryStrict);
     if (blockHash != m_blockHeader.hash())
     {
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
@@ -107,6 +107,7 @@ void PartiallyBlock::checkBasic(RLP const& rlp)
 // fill the missed transactions into the block
 void PartiallyBlock::fillBlock(bytesConstRef _txsData)
 {
+    m_missedTransactions->clear();
     RLP blockRlp(_txsData);
     // check block number
     checkBasic(blockRlp);
@@ -166,15 +167,18 @@ void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytes
     // decode _missInfo
     RLP missedInfoRlp(_missInfo);
     checkBasic(missedInfoRlp);
-    std::shared_ptr<std::vector<std::pair<dev::h256, int64_t>>> missedTxs =
-        std::make_shared<std::vector<std::pair<dev::h256, int64_t>>>();
-    *missedTxs = missedInfoRlp[2].toVector<std::pair<dev::h256, int64_t>>();
+
+    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> missedTxs =
+        std::make_shared<std::vector<std::pair<dev::h256, uint64_t>>>();
+
+    *missedTxs = missedInfoRlp[2].toVector<std::pair<dev::h256, uint64_t>>();
+
     encodeMissedTxs(_encodedBytes, missedTxs);
 }
 
 
 void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
-    std::shared_ptr<std::vector<std::pair<dev::h256, int64_t>>> _missedTxs)
+    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs)
 {
     std::shared_ptr<Transactions> missedTransactions = std::make_shared<Transactions>();
 
@@ -195,6 +199,7 @@ void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
     txsStream.appendList(3);
     txsStream << m_blockHeader.number() << m_blockHeader.hash();
     auto txsBytes = TxsParallelParser::encode(missedTransactions);
-    txsStream.appendRaw(txsBytes);
+
+    txsStream.append(ref(txsBytes));
     txsStream.swapOut(*_encodedBytes);
 }

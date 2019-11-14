@@ -47,6 +47,7 @@ public:
     PrepareReq::Ptr partiallyRawPrepare() { return m_partiallyRawPrepare; }
     virtual void transPartiallyPrepareIntoRawPrepare()
     {
+        WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = *m_partiallyRawPrepare;
     }
 

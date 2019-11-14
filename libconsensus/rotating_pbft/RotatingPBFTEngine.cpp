@@ -48,8 +48,8 @@ std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
 // TODO: chose leader by VRF algorithm
 IDXTYPE RotatingPBFTEngine::VRFSelection() const
 {
-    size_t index = (m_view + m_highestBlock.number()) % m_epochSize;
-    return (IDXTYPE)((m_startNodeIdx.load() + index) % m_sealersNum);
+    size_t index = (m_view + m_highestBlock.number()) % m_chosedConsensusNodeSize.load();
+    return (IDXTYPE)((m_startNodeIdx.load() + index) % m_sealersNum.load());
 }
 
 bool RotatingPBFTEngine::locatedInChosedConsensensusNodes() const
@@ -166,13 +166,14 @@ void RotatingPBFTEngine::resetChosedConsensusNodes()
     {
         UpgradeGuard ul(lock);
         m_chosedConsensusNodes = chosedConsensusNodes;
+        m_chosedConsensusNodeSize = m_chosedConsensusNodes.size();
         m_chosedConsNodeChanged = true;
     }
     RPBFTENGINE_LOG(DEBUG)
         << LOG_DESC("resetChosedConsensusNodes for sealerList changed or epoch size changed")
         << LOG_KV("epochUpdated", epochUpdated) << LOG_KV("updatedSealersNum", m_sealersNum)
         << LOG_KV("updatedStartNodeIdx", m_startNodeIdx)
-        << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes.size())
+        << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodeSize)
         << LOG_KV("blockNumber", blockNumber) << LOG_KV("rotatingRound", m_rotatingRound)
         << LOG_KV("idx", m_idx) << LOG_KV("nodeId", m_keyPair.pub().abridged());
 }
@@ -211,6 +212,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     {
         WriteGuard l(x_chosedConsensusNodes);
         m_chosedConsensusNodes.erase(chosedOutNodeId);
+        m_chosedConsensusNodeSize = m_chosedConsensusNodes.size();
     }
     m_chosedConsNodeChanged = true;
     // update the startIndex
@@ -232,11 +234,10 @@ void RotatingPBFTEngine::chooseConsensusNodes()
                                << LOG_KV("sealersNum", m_sealersNum) << LOG_KV("idx", m_idx)
                                << LOG_KV("nodeId", m_keyPair.pub().abridged());
     }
-    size_t chosedConsensusNodesSize = 0;
     {
         WriteGuard l(x_chosedConsensusNodes);
         m_chosedConsensusNodes.insert(chosedInNodeId);
-        chosedConsensusNodesSize = m_chosedConsensusNodes.size();
+        m_chosedConsensusNodeSize = m_chosedConsensusNodes.size();
     }
 
     // noteNewTransaction to send the remaining transactions to the inserted consensus nodes
@@ -251,7 +252,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
 
     m_leaderFailed = false;
     RPBFTENGINE_LOG(INFO) << LOG_DESC("chooseConsensusNodes") << LOG_KV("blockNumber", blockNumber)
-                          << LOG_KV("chosedConsensusNodesNum", chosedConsensusNodesSize)
+                          << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodeSize)
                           << LOG_KV("chosedOutIdx", chosedOutIdx)
                           << LOG_KV("chosedInIdx", chosedInNodeIdx)
                           << LOG_KV("rotatingRound", m_rotatingRound)
@@ -353,6 +354,17 @@ void RotatingPBFTEngine::forwardMsg(
     forwardMsg(_key, _pbftMsgPacket, ref(_pbftMsgPacket->data));
 }
 
+bool RotatingPBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
+    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    RPBFTMsgPacket::Ptr rpbftMsgPacket = std::dynamic_pointer_cast<RPBFTMsgPacket>(_pbftMsgPacket);
+    if (rpbftMsgPacket->forwardNodes.size() == 0)
+    {
+        return false;
+    }
+    return PBFTEngine::needForwardMsg(_valid, _key, _pbftMsgPacket, _pbftMsg);
+}
+
 void RotatingPBFTEngine::forwardMsg(
     std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data)
 {
@@ -361,7 +373,6 @@ void RotatingPBFTEngine::forwardMsg(
     {
         return;
     }
-
     // get the forwardNodes from the _pbftMsgPacket
     std::set<dev::h512> forwardedNodes(
         rpbftMsgPacket->forwardNodes.begin(), rpbftMsgPacket->forwardNodes.end());
@@ -530,15 +541,18 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(
     }
     if (needForwardMsg(succ, prepareReq->uniqueKey(), pbftMsg, *prepareReq))
     {
+        // all hit ?
+        if (prepareReq->pBlock->txsAllHit())
+        {
+            forwardPrepareMsg(pbftMsg, prepareReq);
+            return succ;
+        }
         clearInvalidCachedForwardMsg();
+        // pbftMsg->packet_id = PrepareReqPacket;
         m_cachedForwardMsg->insert(
             std::make_pair(prepareReq->block_hash, std::make_pair(prepareReq->height, pbftMsg)));
     }
-    // all hit ?
-    if (prepareReq->pBlock->txsAllHit())
-    {
-        forwardPrepareMsg(pbftMsg, prepareReq);
-    }
+
     return succ;
 }
 
@@ -563,6 +577,7 @@ void RotatingPBFTEngine::forwardPrepareMsg(
 {
     // forward the message
     std::shared_ptr<dev::bytes> encodedBytes = std::make_shared<dev::bytes>();
+    _prepareReq->pBlock->encode(*(_prepareReq->block));
     _prepareReq->encode(*encodedBytes);
     forwardMsg(_prepareReq->uniqueKey(), _pbftMsgPacket, ref(*encodedBytes));
 }
@@ -634,6 +649,7 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
                            << LOG_KV("targetIdx", _prepareReq->idx)
                            << LOG_KV("number", _prepareReq->height)
                            << LOG_KV("hash", _prepareReq->block_hash.abridged())
+                           << LOG_KV("missedTxsSize", partiallyBlock->missedTxs()->size())
                            << LOG_KV("size", p2pMsg->length());
     return true;
 }
@@ -653,7 +669,7 @@ PrepareReq::Ptr RotatingPBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _bl
         // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
         if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
         {
-            broadcastMsg(PartiallyPreparePacket, prepareReq->uniqueKey(), ref(*prepare_data),
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data),
                 PartiallyPreparePacket);
         }
         else

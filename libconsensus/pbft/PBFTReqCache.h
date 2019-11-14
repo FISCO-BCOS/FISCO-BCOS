@@ -42,6 +42,7 @@ public:
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
     inline bool isExistPrepare(PrepareReq const& req)
     {
+        ReadGuard l(x_rawPrepareCache);
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
     /// specified SignReq exists in the sign-cache or not?
@@ -90,7 +91,10 @@ public:
     }
 
     int64_t rawPrepareCacheHeight() { return m_rawPrepareCache.height; }
+
+    // Note: only used for UT
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
+
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
@@ -109,7 +113,10 @@ public:
     inline void addRawPrepare(PrepareReq const& req)
     {
         auto startT = utcTime();
-        m_rawPrepareCache = req;
+        {
+            WriteGuard l(x_rawPrepareCache);
+            m_rawPrepareCache = req;
+        }
         // m_prepareCache = PrepareReq();
         m_prepareCache.clear();
         PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
@@ -207,7 +214,11 @@ public:
     inline size_t futurePrepareCacheSize() { return m_futurePrepareCache.size(); }
 
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
-    inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
+    inline void updateCommittedPrepare()
+    {
+        ReadGuard l(x_rawPrepareCache);
+        m_committedPrepareCache = m_rawPrepareCache;
+    }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
     bool generateAndSetSigList(dev::eth::Block& block, const IDXTYPE& minSigSize);
     ///  determine can trigger viewchange or not
@@ -218,8 +229,10 @@ public:
     /// trigger viewchange
     inline void triggerViewChange(VIEWTYPE const& curView)
     {
-        m_rawPrepareCache.clear();
-
+        {
+            WriteGuard l(x_rawPrepareCache);
+            m_rawPrepareCache.clear();
+        }
         m_prepareCache.clear();
         m_signCache.clear();
         m_commitCache.clear();
@@ -257,7 +270,10 @@ public:
 
     inline void clearAll()
     {
-        m_rawPrepareCache.clear();
+        {
+            WriteGuard l(x_rawPrepareCache);
+            m_rawPrepareCache.clear();
+        }
         m_futurePrepareCache.clear();
         clearAllExceptCommitCache();
         m_commitCache.clear();
@@ -342,6 +358,7 @@ protected:
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
     PrepareReq m_rawPrepareCache;
+    mutable SharedMutex x_rawPrepareCache;
 
     /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;

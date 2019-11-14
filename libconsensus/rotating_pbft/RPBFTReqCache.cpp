@@ -62,6 +62,9 @@ void RPBFTReqCache::addPartiallyFuturePrepare(PrepareReq::Ptr _partiallyRawPrepa
 
 bool RPBFTReqCache::fetchMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo)
 {
+    // this lock is necessary since the transactions-request may occurred when rawPrepareCache
+    // changed
+    ReadGuard l(x_rawPrepareCache);
     if (!m_rawPrepareCache.pBlock)
     {
         return false;
@@ -70,7 +73,7 @@ bool RPBFTReqCache::fetchMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytesCo
         std::dynamic_pointer_cast<PartiallyBlock>(m_rawPrepareCache.pBlock);
     assert(partiallyBlock);
     partiallyBlock->encodeMissedTxs(_encodedBytes, _missInfo);
-    RPBFTReqCache_LOG(DEBUG) << LOG_DESC("request to fetchMissedTxs")
+    RPBFTReqCache_LOG(DEBUG) << LOG_DESC("fetchMissedTxs")
                              << LOG_KV("number", partiallyBlock->blockHeader().number())
                              << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged())
                              << LOG_KV("missedSize", partiallyBlock->missedTxs()->size());

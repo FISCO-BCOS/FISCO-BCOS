@@ -520,10 +520,13 @@ void TxPool::removeInvalidTxs()
         {
             return;
         }
+    }  // namespace txpool
+    {
         tbb::parallel_invoke(
             [this]() {
                 // remove invalid txs
                 WriteGuard l(m_lock);
+                ReadGuard rl(x_invalidTxs);
                 for (auto const& item : *m_invalidTxs)
                 {
                     removeTrans(item.first);
@@ -532,6 +535,7 @@ void TxPool::removeInvalidTxs()
             },
             [this]() {
                 // remove invalid nonce
+                ReadGuard l(x_invalidTxs);
                 for (auto const& item : *m_invalidTxs)
                 {
                     m_txpoolNonceChecker->delCache(item.second);
@@ -539,6 +543,7 @@ void TxPool::removeInvalidTxs()
             },
             [this]() {
                 WriteGuard l(x_transactionKnownBy);
+                ReadGuard rl(x_invalidTxs);
                 // remove transaction knownBy
                 for (auto const& item : *m_invalidTxs)
                 {
@@ -547,15 +552,17 @@ void TxPool::removeInvalidTxs()
             },
             [this]() {
                 WriteGuard txsLock(x_txsHashFilter);
+                ReadGuard l(x_invalidTxs);
                 for (auto const& item : *m_invalidTxs)
                 {
                     m_txsHashFilter->erase(item.second);
                 }
             });
     }
-
-    WriteGuard wl(x_invalidTxs);
-    m_invalidTxs->clear();
+    {
+        WriteGuard wl(x_invalidTxs);
+        m_invalidTxs->clear();
+    }
 }
 
 // TODO: drop a block when it has been committed failed

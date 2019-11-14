@@ -36,7 +36,7 @@ public:
     PartiallyBlock() : Block()
     {
         m_txsHash = std::make_shared<std::vector<dev::h256>>();
-        m_missedTxs = std::make_shared<std::vector<std::pair<dev::h256, int64_t>>>();
+        m_missedTxs = std::make_shared<std::vector<std::pair<dev::h256, uint64_t>>>();
         m_missedTransactions = std::make_shared<Transactions>();
     }
 
@@ -54,14 +54,14 @@ public:
     // encode the missed info
     void encodeMissedInfo(std::shared_ptr<bytes> _encodedBytes);
 
-    std::shared_ptr<std::vector<std::pair<dev::h256, int64_t>>> missedTxs() { return m_missedTxs; }
+    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> missedTxs() { return m_missedTxs; }
 
     std::shared_ptr<std::vector<dev::h256>> txsHash() { return m_txsHash; }
     std::shared_ptr<Transactions> missedTransactions() { return m_missedTransactions; }
 
 private:
     void encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
-        std::shared_ptr<std::vector<std::pair<dev::h256, int64_t>>> _missedTxs);
+        std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs);
     void calTxsHashBytes();
     void checkBasic(RLP const& rlp);
 
@@ -69,7 +69,7 @@ private:
     // record the transaction hash
     std::shared_ptr<std::vector<dev::h256>> m_txsHash;
     // record the missed transactions
-    std::shared_ptr<std::vector<std::pair<dev::h256, int64_t>>> m_missedTxs;
+    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> m_missedTxs;
     std::shared_ptr<Transactions> m_missedTransactions;
 };
 }  // namespace eth

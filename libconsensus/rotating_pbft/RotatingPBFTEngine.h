@@ -124,6 +124,9 @@ protected:
     virtual bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
     void clearInvalidCachedForwardMsg();
 
+    bool needForwardMsg(bool const& _valid, std::string const& _key,
+        PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg) override;
+
     bool handleFutureBlock() override;
 
     virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
@@ -179,6 +182,7 @@ protected:
     std::atomic<int64_t> m_startNodeIdx = {-1};
     std::atomic<int64_t> m_rotatingRound = {0};
     std::atomic<int64_t> m_sealersNum = {0};
+    std::atomic<int64_t> m_chosedConsensusNodeSize = {0};
 
     std::atomic_bool m_locatedInConsensusNodes = {true};
 
