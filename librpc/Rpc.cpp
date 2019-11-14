@@ -509,6 +509,7 @@ Json::Value Rpc::getBlockByHash(
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);
         auto sealers = block->header().sealerList();
