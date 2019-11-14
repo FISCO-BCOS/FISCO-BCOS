@@ -156,7 +156,7 @@ bytes getTrieTree256(
     /*just one element*/
     if (std::next(hexMap.begin()) == hexMap.end())
     {
-        h256ForOneNode(hexMap, _parent2ChildList);
+        return h256ForOneNode(hexMap, _parent2ChildList);
     }
     std::vector<bytes> bytePath;
     bytes bytesTemp;
@@ -177,9 +177,9 @@ bytes h256ForOneNode(
     bytes bytesChild;
     bytesChild.insert(
         bytesChild.end(), _hexMap.begin()->second.begin(), _hexMap.begin()->second.end());
-    dev::h256 hChild = sha3(bytesChild);
-    _parent2ChildList[sha3(hChild).hex()].push_back(toHex(hChild));
-    return hChild.asBytes();
+    dev::h256 parentNode = sha3(bytesChild);
+    _parent2ChildList[sha3(parentNode).hex()].push_back(toHex(parentNode));
+    return parentNode.asBytes();
 }
 
 h256 getHash256(
