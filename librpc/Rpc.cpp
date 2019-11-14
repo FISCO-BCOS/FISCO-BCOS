@@ -815,6 +815,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         Json::Value response;
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(txReceipt.transactionIndex());
+        response["root"] = toJS(txReceipt.stateRoot());
         response["blockNumber"] = toJS(txReceipt.blockNumber());
         response["blockHash"] = toJS(txReceipt.blockHash());
         response["from"] = toJS(txReceipt.from());
@@ -1038,6 +1039,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                 {  // FIXME: If made protocol modify, please modify upside if
                     response["transactionHash"] = toJS(receipt->hash());
                     response["transactionIndex"] = toJS(receipt->transactionIndex());
+                    response["root"] = toJS(receipt->stateRoot());
                     response["blockNumber"] = toJS(receipt->blockNumber());
                     response["blockHash"] = toJS(receipt->blockHash());
                     response["from"] = toJS(receipt->from());
