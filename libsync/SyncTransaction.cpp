@@ -61,7 +61,7 @@ void SyncTransaction::doWork()
     auto maintainTransactions_time_cost = 0;
 
     // only maintain transactions for the nodes inner the group
-    if (m_needMaintainTransactions && m_newTransactions)
+    if (m_needMaintainTransactions && m_newTransactions && m_txQueue->bufferSize() == 0)
     {
         maintainTransactions();
     }

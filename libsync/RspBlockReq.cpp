@@ -29,31 +29,33 @@ using namespace dev::sync;
 
 void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 {
-    Guard l(x_push);
-    x_canPush.lock();
-    if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
     {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Drop request for reqQueue full")
-                        << LOG_KV("reqQueueSize", m_reqQueue.size())
-                        << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
-                        << LOG_KV("nodeId", m_nodeId.abridged());
+        ReadGuard l(x_reqQueue);
+        if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                            << LOG_DESC("Drop request for reqQueue full")
+                            << LOG_KV("reqQueueSize", m_reqQueue.size())
+                            << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
+                            << LOG_KV("nodeId", m_nodeId.abridged());
 
-        x_canPush.unlock();
-        return;
+            return;
+        }
     }
+    {
+        WriteGuard l(x_reqQueue);
+        m_reqQueue.push(DownloadRequest(_fromNumber, _size));
 
-    m_reqQueue.push(DownloadRequest(_fromNumber, _size));
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                    << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
-                    << LOG_KV("to", _fromNumber + _size - 1) << LOG_KV("peer", m_nodeId.abridged());
-
-    x_canPush.unlock();
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
+                        << LOG_KV("to", _fromNumber + _size - 1)
+                        << LOG_KV("peer", m_nodeId.abridged());
+    }
 }
 
 DownloadRequest DownloadRequestQueue::topAndPop()
 {
+    WriteGuard l(x_reqQueue);
     if (m_reqQueue.empty())
         return DownloadRequest(0, 0);
 
@@ -87,5 +89,6 @@ DownloadRequest DownloadRequestQueue::topAndPop()
 
 bool DownloadRequestQueue::empty()
 {
+    ReadGuard l(x_reqQueue);
     return m_reqQueue.empty();
 }

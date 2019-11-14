@@ -53,7 +53,7 @@ static size_t const c_maxDownloadingBlockQueueSize =
     c_maxRequestShards * c_maxRequestBlocks * 2;  // maybe less than 128 is ok
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxDownloadingBlockQueueSize;
 
-static size_t const c_maxReceivedDownloadRequestPerPeer = 8;
+static size_t const c_maxReceivedDownloadRequestPerPeer = 1000;
 static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
 
 static unsigned const c_syncPacketIDBase = 1;

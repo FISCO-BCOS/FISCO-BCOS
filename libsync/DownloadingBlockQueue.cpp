@@ -43,6 +43,7 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     m_buffer->emplace_back(blocksShard);
 }
 
+// only used for UT
 void DownloadingBlockQueue::push(BlockPtrVec _blocks)
 {
     RLPStream rlpStream;

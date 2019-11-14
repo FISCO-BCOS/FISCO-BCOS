@@ -59,7 +59,8 @@ class DownloadingTxsQueue
 {
 public:
     DownloadingTxsQueue(PROTOCOL_ID const&, NodeID const& _nodeId)
-      : m_nodeId(_nodeId), m_buffer(std::make_shared<std::vector<DownloadTxsShard>>())
+      : m_nodeId(_nodeId),
+        m_buffer(std::make_shared<std::vector<std::shared_ptr<DownloadTxsShard>>>())
     {}
     // push txs bytes in queue
     // void push(bytesConstRef _txsBytes, NodeID const& _fromPeer);
@@ -97,8 +98,9 @@ public:
 
 private:
     NodeID m_nodeId;
-    std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
+    std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> m_buffer;
     mutable SharedMutex x_buffer;
+    mutable Mutex m_mutex;
 
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
     TreeTopology::Ptr m_treeRouter = nullptr;
