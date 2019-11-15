@@ -126,6 +126,7 @@ protected:
 
     bool needForwardMsg(bool const& _valid, std::string const& _key,
         PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg) override;
+    bool TTLExpired(PBFTMsgPacket::Ptr) override { return false; }
 
     bool handleFutureBlock() override;
 

@@ -1523,7 +1523,10 @@ void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
         return;
     }
     }
-
+    if (TTLExpired(pbftMsg))
+    {
+        return;
+    }
     if (!needForwardMsg(succ, key, pbftMsg, pbft_msg))
     {
         return;
@@ -1531,16 +1534,17 @@ void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
     forwardMsg(key, pbftMsg, pbft_msg);
 }
 
+bool PBFTEngine::TTLExpired(PBFTMsgPacket::Ptr _pbftMsgPacket)
+{
+    // check ttl
+    return (_pbftMsgPacket->ttl == 1);
+}
+
 // should forward message or not
-bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
-    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+bool PBFTEngine::needForwardMsg(
+    bool const& _valid, std::string const& _key, PBFTMsgPacket::Ptr, PBFTMsg const& _pbftMsg)
 {
     if (!_valid || _key.size() == 0)
-    {
-        return false;
-    }
-    // check ttl
-    if (_pbftMsgPacket->ttl == 1)
     {
         return false;
     }

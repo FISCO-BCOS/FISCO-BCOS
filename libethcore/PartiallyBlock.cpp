@@ -114,7 +114,7 @@ void PartiallyBlock::fillBlock(bytesConstRef _txsData)
 
     auto txsBytes = blockRlp[2].toBytesConstRef();
     // decode transactions into m_missedTransactions
-    TxsParallelParser::decode(m_missedTransactions, txsBytes);
+    TxsParallelParser::decode(m_missedTransactions, txsBytes, CheckTransaction::Everything, true);
 
     if (m_missedTransactions->size() != m_missedTxs->size())
     {

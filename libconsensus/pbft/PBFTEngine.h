@@ -625,6 +625,7 @@ protected:
 
     virtual bool needForwardMsg(bool const& _valid, std::string const& _key,
         PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
+    virtual bool TTLExpired(PBFTMsgPacket::Ptr _pbftMsgPacket);
 
     virtual void forwardMsg(
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
