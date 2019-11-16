@@ -1093,13 +1093,13 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
 {
     try
     {
-	if (g_BCOSConfig.version() < V2_2_0)
+        if (g_BCOSConfig.version() < V2_2_0)
         {
             RPC_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
-            return Json::nullValue;
-        }        
-
-	RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+                "method getTransactionByHashWithProof not support this version"));
+        }
+        RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
         checkRequest(_groupID);
         Json::Value response;
@@ -1165,13 +1165,12 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         RPC_LOG(INFO) << LOG_BADGE("getTransactionReceiptByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
-	if (g_BCOSConfig.version() < V2_2_0)
+        if (g_BCOSConfig.version() < V2_2_0)
         {
             RPC_LOG(ERROR) << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
-            return Json::nullValue;
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+                "method getTransactionReceiptByHashWithProof not support this version"));
         }
-
-
         checkRequest(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
         auto blockchain = ledgerManager()->blockChain(_groupID);

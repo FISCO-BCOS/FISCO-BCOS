@@ -52,6 +52,8 @@ namespace fs = boost::filesystem;
 uint32_t PageCount = 10000;
 uint32_t BigTablePageCount = 50;
 const string SYNCED_BLOCK_NUMBER = "#extra_synce_block_number#";
+const std::vector<std::string> ForceTables = {
+    SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES, SYS_TX_HASH_2_BLOCK};
 
 struct SyncRecorder
 {
@@ -147,7 +149,8 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
 
 TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber)
 {
-    cout << " Process " << SYS_BLOCK_2_NONCES << endl;
+    cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
+
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
@@ -178,7 +181,7 @@ TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber
 
 TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
 {
-    cout << " Process " << SYS_HASH_2_BLOCK << endl;
+    cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_HASH_2_BLOCK;
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
@@ -252,12 +255,6 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
     }
 
     auto tableInfos = parseTableNames(sysTableData, recorder);
-    if (!recorder->isCompleted(SYS_TABLES))
-    {
-        _writer->commit(syncBlock, vector<TableData::Ptr>{sysTableData});
-        recorder->markStatus(SYS_TABLES, make_pair(begin, true));
-        cout << SYS_TABLES << " is committed." << endl;
-    }
     auto totalTable = tableInfos.size();
     size_t syncedCount = 1;
     auto pullCommitTableData = [&](TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts) {
@@ -275,17 +272,25 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
             }
             if (tableData->newEntries->size() == 0)
             {
-                cout << " |" << tableInfo->name << flush;
+                cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+                     << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
                 break;
             }
-            cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
-                 << "] |" << start << flush;
+            if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
+            {
+                for (size_t i = 0; i < tableData->newEntries->size(); i++)
+                {
+                    auto entry = tableData->newEntries->get(i);
+                    entry->setForce(true);
+                }
+            }
             auto lastEntry = tableData->newEntries->get(tableData->newEntries->size() - 1);
             start = lastEntry->getID();
             _writer->commit(syncBlock, vector<TableData::Ptr>{tableData});
             recorder->markStatus(tableInfo->name, make_pair(start, false));
             downloaded += tableData->newEntries->size();
-            cout << " --> " << start << " |downloaded items : " << downloaded << flush;
+            cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+                 << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
 
             if (tableData->newEntries->size() < counts)
             {
@@ -297,6 +302,12 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
         cout << " done.\r" << flush;
     };
 
+    // SYS_TABLES
+    if (!recorder->isCompleted(SYS_TABLES))
+    {
+        auto tableInfo = getSysTableInfo(SYS_TABLES);
+        pullCommitTableData(tableInfo, recorder->tableSyncOffset(tableInfo->name), PageCount);
+    }
     // SYS_HASH_2_BLOCK
     if (!recorder->isCompleted(SYS_HASH_2_BLOCK))
     {

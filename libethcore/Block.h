@@ -240,9 +240,9 @@ public:
 
     void calReceiptRootV2_2_0(bool update = true) const;
 
-    void getReceiptAndSha3(RLPStream& txReceipts, dev::BytesMap &mapCache) const;
+    void getReceiptAndSha3(RLPStream& txReceipts, dev::BytesMap& mapCache) const;
 
-        std::map<std::string, std::vector<std::string>> getReceiptProof() const;
+    std::map<std::string, std::vector<std::string>> getReceiptProof() const;
     std::map<std::string, std::vector<std::string>> getTransactionProof() const;
 
     /**

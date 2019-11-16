@@ -47,8 +47,7 @@ bytes h256ForOneNode(HexMap const& _s);
 unsigned getSharedPre(HexMap::const_iterator _begin, HexMap::const_iterator _end, unsigned _preLen)
 {
     unsigned sharedPre = (unsigned)-1;
-    unsigned c = 0;
-    for (auto i = std::next(_begin); i != _end && sharedPre; ++i, ++c)
+    for (auto i = std::next(_begin); i != _end && sharedPre; ++i)
     {
         unsigned x = std::min(
             sharedPre, std::min((unsigned)_begin->first.size(), (unsigned)i->first.size()));
@@ -111,7 +110,6 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
         }
     }
 }
-
 void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes, int32_t& _nodeType, std::vector<bytes>& _bytePath,
     std::map<std::string, std::vector<std::string>>& _parent2ChildList)
@@ -164,7 +162,6 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
                 }
                 b = n;
             }
-
             bytes bytesTemp;
             if (_preLen == _begin->first.size())
             {
@@ -175,7 +172,6 @@ void hash256TrieTree(HexMap const& _s, HexMap::const_iterator _begin, HexMap::co
         }
     }
 }
-
 void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes)
 {
@@ -184,7 +180,6 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
     h256 hValue = sha3(bytesTemp);
     _bytes.insert(_bytes.end(), hValue.begin(), hValue.end());
 }
-
 void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_iterator _end,
     unsigned _preLen, bytes& _bytes, std::vector<bytes>& _bytePath,
     std::map<std::string, std::vector<std::string>>& _parent2ChildList)
@@ -207,7 +202,6 @@ void hash256Recursive(HexMap const& _s, HexMap::const_iterator _begin, HexMap::c
     _bytes.insert(_bytes.end(), hValue.begin(), hValue.end());
     _bytePath.push_back(hValue.asBytes());
 }
-
 bytes getTrieTree256(
     BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList)
 {
@@ -240,8 +234,6 @@ bytes getTrieTree256(
     }
     return bytesTemp;
 }
-
-
 bytes getTrieTree256(BytesMap const& _s)
 {
     if (_s.empty())
@@ -265,7 +257,6 @@ bytes getTrieTree256(BytesMap const& _s)
     hash256TrieTree(hexMap, hexMap.cbegin(), hexMap.cend(), 0, bytesTemp);
     return bytesTemp;
 }
-
 bytes h256ForOneNode(
     HexMap const& _hexMap, std::map<std::string, std::vector<std::string>>& _parent2ChildList)
 {
@@ -276,8 +267,6 @@ bytes h256ForOneNode(
     _parent2ChildList[sha3(parentNode).hex()].push_back(toHex(parentNode));
     return parentNode.asBytes();
 }
-
-
 bytes h256ForOneNode(HexMap const& _hexMap)
 {
     bytes bytesChild;
@@ -285,16 +274,13 @@ bytes h256ForOneNode(HexMap const& _hexMap)
         bytesChild.end(), _hexMap.begin()->second.begin(), _hexMap.begin()->second.end());
     return sha3(bytesChild).asBytes();
 }
-
 h256 getHash256(
     BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList)
 {
     return sha3(getTrieTree256(_s, _parent2ChildList));
 }
-
 h256 getHash256(BytesMap const& _s)
 {
     return sha3(getTrieTree256(_s));
 }
-
 }  // namespace dev

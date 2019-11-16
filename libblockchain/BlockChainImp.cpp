@@ -858,8 +858,8 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
     if (g_BCOSConfig.version() < V2_2_0)
     {
         BLOCKCHAIN_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
-        return std::make_pair(dev::eth::LocalisedTransaction(),
-            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
 
     std::lock_guard<std::mutex> lock(transactionWithProofMutex);
@@ -1013,9 +1013,8 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     {
         BLOCKCHAIN_LOG(ERROR)
             << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
-        return std::make_pair(
-            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
-            merkleProof);
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
 
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))

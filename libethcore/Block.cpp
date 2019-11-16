@@ -202,7 +202,8 @@ std::map<std::string, std::vector<std::string>> Block::getTransactionProof() con
     if (g_BCOSConfig.version() < V2_2_0)
     {
         BLOCK_LOG(ERROR) << "calTransactionRootV2_2_0 only support after by v2.2.0";
-        return std::map<std::string, std::vector<std::string>>();
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
     std::map<std::string, std::vector<std::string>> merklePath;
     BytesMap txsMapCache;
@@ -262,7 +263,8 @@ std::map<std::string, std::vector<std::string>> Block::getReceiptProof() const
     if (g_BCOSConfig.version() < V2_2_0)
     {
         BLOCK_LOG(ERROR) << "calReceiptRootV2_2_0 only support after by v2.2.0";
-        return std::map<std::string, std::vector<std::string>>();
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
 
     RLPStream txReceipts;
