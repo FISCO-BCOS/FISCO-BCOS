@@ -236,11 +236,14 @@ public:
     void calReceiptRoot(bool update = true) const;
     void calReceiptRootRC2(bool update = true) const;
 
-    std::map<std::string, std::vector<std::string>> calTransactionRootV2_2_0(
-        bool update = true, bool calForce = false) const;
+    void calTransactionRootV2_2_0(bool update = true) const;
 
-    std::map<std::string, std::vector<std::string>> calReceiptRootV2_2_0(
-        bool update = true, bool calForce = false) const;
+    void calReceiptRootV2_2_0(bool update = true) const;
+
+    void getReceiptAndSha3(RLPStream& txReceipts, dev::BytesMap& mapCache) const;
+
+    std::map<std::string, std::vector<std::string>> getReceiptProof() const;
+    std::map<std::string, std::vector<std::string>> getTransactionProof() const;
 
     /**
      * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
