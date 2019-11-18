@@ -678,7 +678,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto record_time = utcTime();
     if (req.pBlock)
     {
-        sealing.block = req.pBlock;
+        *sealing.block = *req.pBlock;
     }
     /// decode the network received prepare packet
     else
