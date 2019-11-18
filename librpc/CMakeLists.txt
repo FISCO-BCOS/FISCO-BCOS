@@ -5,5 +5,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(rpc ${SRC_LIST} ${HEADERS})
 target_include_directories(rpc PRIVATE ..)
-target_link_libraries(rpc PUBLIC JsonRpcCpp::Server)
-target_link_libraries(rpc PRIVATE consensus)
+target_link_libraries(rpc PUBLIC ledger consensus JsonRpcCpp::Server)

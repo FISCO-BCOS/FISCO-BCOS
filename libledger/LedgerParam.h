@@ -39,7 +39,6 @@ namespace ledger
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
-#define MAX_BLOCK_PER_PROCESS (3)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
