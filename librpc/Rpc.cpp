@@ -512,6 +512,7 @@ Json::Value Rpc::getBlockByHash(
         response["logsBloom"] = toJS(block->header().logBloom());
         response["transactionsRoot"] = toJS(block->header().transactionsRoot());
         response["stateRoot"] = toJS(block->header().stateRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
         response["sealer"] = toJS(block->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);
         auto sealers = block->header().sealerList();
@@ -817,6 +818,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         Json::Value response;
         response["transactionHash"] = _transactionHash;
         response["transactionIndex"] = toJS(txReceipt->transactionIndex());
+        response["root"] = toJS(txReceipt->stateRoot());
         response["blockNumber"] = toJS(txReceipt->blockNumber());
         response["blockHash"] = toJS(txReceipt->blockHash());
         response["from"] = toJS(txReceipt->from());
@@ -1067,6 +1069,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     {  // FIXME: If made protocol modify, please modify upside if
                         response["transactionHash"] = toJS(receipt->hash());
                         response["transactionIndex"] = toJS(receipt->transactionIndex());
+                        response["root"] = toJS(receipt->stateRoot());
                         response["blockNumber"] = toJS(receipt->blockNumber());
                         response["blockHash"] = toJS(receipt->blockHash());
                         response["from"] = toJS(receipt->from());
@@ -1138,6 +1141,12 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
 {
     try
     {
+        if (g_BCOSConfig.version() < V2_2_0)
+        {
+            RPC_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+                "method getTransactionByHashWithProof not support this version"));
+        }
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
         checkRequest(_groupID);
@@ -1204,6 +1213,12 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         RPC_LOG(INFO) << LOG_BADGE("getTransactionReceiptByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
+        if (g_BCOSConfig.version() < V2_2_0)
+        {
+            RPC_LOG(ERROR) << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+                "method getTransactionReceiptByHashWithProof not support this version"));
+        }
         checkRequest(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
         auto blockchain = ledgerManager()->blockChain(_groupID);
