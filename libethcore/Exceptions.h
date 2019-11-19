@@ -97,6 +97,7 @@ DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
 DEV_SIMPLE_EXCEPTION(EmptySealers);
+DEV_SIMPLE_EXCEPTION(MethodNotSupport);
 
 struct VMException : Exception
 {

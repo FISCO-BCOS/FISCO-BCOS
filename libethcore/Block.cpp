@@ -183,14 +183,13 @@ void Block::calTransactionRoot(bool update) const
 }
 
 
-std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::calTransactionRootV2_2_0(
-    bool update, bool calForce) const
+void Block::calTransactionRootV2_2_0(bool update) const
 {
     TIME_RECORD(
         "Calc transaction root, count:" + boost::lexical_cast<std::string>(m_transactions->size()));
     auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string>>>();
     WriteGuard l(x_txsCache);
-    if (m_txsCache == bytes() || calForce)
+    if (m_txsCache == bytes())
     {
         BytesMap txsMapCache;
         for (size_t i = 0; i < m_transactions->size(); i++)
@@ -200,54 +199,94 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::calTrans
             txsMapCache.insert(std::make_pair(s.out(), (*m_transactions)[i]->sha3().asBytes()));
         }
         m_txsCache = TxsParallelParser::encode(m_transactions);
-        m_transRootCache = dev::getHash256(txsMapCache, merklePath);
+        m_transRootCache = dev::getHash256(txsMapCache);
     }
     if (update == true)
     {
         m_blockHeader.setTransactionsRoot(m_transRootCache);
     }
+}
 
+std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTransactionProof() const
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCK_LOG(ERROR) << "calTransactionRootV2_2_0 only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
+        std::make_shared<std::map<std::string, std::vector<std::string>>>();
+    BytesMap txsMapCache;
+    for (size_t i = 0; i < m_transactions->size(); i++)
+    {
+        RLPStream s;
+        s << i;
+        txsMapCache.insert(std::make_pair(s.out(), (*m_transactions)[i]->sha3().asBytes()));
+    }
+    dev::getHash256(txsMapCache, merklePath);
     return merklePath;
 }
 
-std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::calReceiptRootV2_2_0(
-    bool update, bool calForce) const
+
+void Block::getReceiptAndSha3(RLPStream& txReceipts, BytesMap& mapCache) const
+{
+    txReceipts.appendList(m_transactionReceipts.size());
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts.size()),
+        [&](const tbb::blocked_range<size_t>& _r) {
+            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            {
+                m_transactionReceipts[i].receipt();
+                m_transactionReceipts[i].sha3();
+            }
+        });
+
+    for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+    {
+        txReceipts.appendRaw(m_transactionReceipts[i].receipt());
+        RLPStream s;
+        s << i;
+        mapCache.insert(std::make_pair(s.out(), m_transactionReceipts[i].sha3()));
+    }
+}
+
+void Block::calReceiptRootV2_2_0(bool update) const
 {
     TIME_RECORD("Calc transaction root, count:" +
                 boost::lexical_cast<std::string>(m_transactionReceipts->size()));
 
     auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string>>>();
     WriteGuard l(x_txReceiptsCache);
-    if (m_tReceiptsCache == bytes() || calForce)
+    if (m_tReceiptsCache == bytes())
     {
         RLPStream txReceipts;
-        txReceipts.appendList(m_transactionReceipts->size());
         BytesMap mapCache;
-
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
-            [&](const tbb::blocked_range<size_t>& _r) {
-                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
-                {
-                    (*m_transactionReceipts)[i]->receipt();
-                    (*m_transactionReceipts)[i]->sha3();
-                }
-            });
-
-        for (size_t i = 0; i < m_transactionReceipts->size(); i++)
-        {
-            txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
-            RLPStream s;
-            s << i;
-            mapCache.insert(std::make_pair(s.out(), (*m_transactionReceipts)[i]->sha3()));
-        }
+        getReceiptAndSha3(txReceipts, mapCache);
         txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = dev::getHash256(mapCache, merklePath);
+        m_receiptRootCache = dev::getHash256(mapCache);
     }
     if (update == true)
     {
         m_blockHeader.setReceiptsRoot(m_receiptRootCache);
     }
+}
 
+
+std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getReceiptProof() const
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCK_LOG(ERROR) << "calReceiptRootV2_2_0 only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
+    RLPStream txReceipts;
+    BytesMap mapCache;
+    getReceiptAndSha3(txReceipts, mapCache);
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
+        std::make_shared<std::map<std::string, std::vector<std::string>>>();
+    dev::getHash256(mapCache, merklePath);
     return merklePath;
 }
 

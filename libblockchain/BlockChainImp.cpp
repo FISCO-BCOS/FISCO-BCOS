@@ -885,6 +885,13 @@ std::pair<LocalisedTransaction::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 {
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCKCHAIN_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
     std::lock_guard<std::mutex> lock(m_transactionWithProofMutex);
     auto tx = std::make_shared<dev::eth::LocalisedTransaction>();
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
@@ -916,7 +923,7 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
     }
     else
     {
-        parent2ChildList = blockInfo->calTransactionRootV2_2_0(true, true);
+        parent2ChildList = blockInfo->getTransactionProof();
         m_transactionWithProof = std::make_pair(tx, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
@@ -1033,6 +1040,15 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
 
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCKCHAIN_LOG(ERROR)
+            << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
@@ -1072,7 +1088,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     }
     else
     {
-        parent2ChildList = blockInfo->calReceiptRootV2_2_0(true, true);
+        parent2ChildList = blockInfo->getReceiptProof();
         m_receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
