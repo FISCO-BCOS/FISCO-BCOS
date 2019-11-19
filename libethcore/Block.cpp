@@ -231,22 +231,22 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
 
 void Block::getReceiptAndSha3(RLPStream& txReceipts, BytesMap& mapCache) const
 {
-    txReceipts.appendList(m_transactionReceipts.size());
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts.size()),
+    txReceipts.appendList(m_transactionReceipts->size());
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
         [&](const tbb::blocked_range<size_t>& _r) {
             for (uint32_t i = _r.begin(); i < _r.end(); ++i)
             {
-                m_transactionReceipts[i].receipt();
-                m_transactionReceipts[i].sha3();
+                (*m_transactionReceipts)[i]->receipt();
+                (*m_transactionReceipts)[i]->sha3();
             }
         });
 
-    for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+    for (size_t i = 0; i < m_transactionReceipts->size(); i++)
     {
-        txReceipts.appendRaw(m_transactionReceipts[i].receipt());
+        txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
         RLPStream s;
         s << i;
-        mapCache.insert(std::make_pair(s.out(), m_transactionReceipts[i].sha3()));
+        mapCache.insert(std::make_pair(s.out(), (*m_transactionReceipts)[i]->sha3()));
     }
 }
 

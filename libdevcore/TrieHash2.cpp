@@ -265,7 +265,7 @@ bytes h256ForOneNode(HexMap const& _hexMap,
     bytesChild.insert(
         bytesChild.end(), _hexMap.begin()->second.begin(), _hexMap.begin()->second.end());
     dev::h256 parentNode = sha3(bytesChild);
-    (*_parent2ChildList）[sha3(parentNode).hex()].push_back(toHex(parentNode));
+    (*_parent2ChildList)[sha3(parentNode).hex()].push_back(toHex(parentNode));
     return parentNode.asBytes();
 }
 bytes h256ForOneNode(HexMap const& _hexMap)
