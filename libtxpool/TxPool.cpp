@@ -475,9 +475,8 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
         return true;
     bool succ = true;
     {
-        WriteGuard l(m_lock);
         WriteGuard wl(x_invalidTxs);
-
+        WriteGuard l(m_lock);
         for (size_t i = 0; i < block->transactions()->size(); i++)
         {
             if (removeTrans((*(block->transactions()))[i]->sha3(), true, block, i) == false)
@@ -513,47 +512,46 @@ void TxPool::dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block)
 // this function should be called after remove
 void TxPool::removeInvalidTxs()
 {
+    UpgradableGuard l(x_invalidTxs);
+    if (m_invalidTxs->size() == 0)
     {
-        ReadGuard l(x_invalidTxs);
-        if (m_invalidTxs->size() == 0)
-        {
-            return;
-        }
-        tbb::parallel_invoke(
-            [this]() {
-                // remove invalid txs
-                WriteGuard l(m_lock);
-                for (auto const& item : *m_invalidTxs)
-                {
-                    removeTrans(item.first);
-                    m_dropped.insert(item.first);
-                }
-            },
-            [this]() {
-                // remove invalid nonce
-                for (auto const& item : *m_invalidTxs)
-                {
-                    m_txpoolNonceChecker->delCache(item.second);
-                }
-            },
-            [this]() {
-                WriteGuard l(x_transactionKnownBy);
-                // remove transaction knownBy
-                for (auto const& item : *m_invalidTxs)
-                {
-                    removeTransactionKnowBy(item.second);
-                }
-            },
-            [this]() {
-                WriteGuard txsLock(x_txsHashFilter);
-                for (auto const& item : *m_invalidTxs)
-                {
-                    m_txsHashFilter->erase(item.second);
-                }
-            });
+        return;
     }
 
-    WriteGuard wl(x_invalidTxs);
+    tbb::parallel_invoke(
+        [this]() {
+            // remove invalid txs
+            WriteGuard l(m_lock);
+            for (auto const& item : *m_invalidTxs)
+            {
+                removeTrans(item.first);
+                m_dropped.insert(item.first);
+            }
+        },
+        [this]() {
+            // remove invalid nonce
+            for (auto const& item : *m_invalidTxs)
+            {
+                m_txpoolNonceChecker->delCache(item.second);
+            }
+        },
+        [this]() {
+            WriteGuard l(x_transactionKnownBy);
+            // remove transaction knownBy
+            for (auto const& item : *m_invalidTxs)
+            {
+                removeTransactionKnowBy(item.second);
+            }
+        },
+        [this]() {
+            WriteGuard txsLock(x_txsHashFilter);
+            for (auto const& item : *m_invalidTxs)
+            {
+                m_txsHashFilter->erase(item.second);
+            }
+        });
+
+    UpgradeGuard wl(l);
     m_invalidTxs->clear();
 }
 
@@ -607,8 +605,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
 
     {
-        ReadGuard l(m_lock);
         WriteGuard wl(x_invalidTxs);
+        ReadGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
             if (m_invalidTxs->count((*it)->sha3()))

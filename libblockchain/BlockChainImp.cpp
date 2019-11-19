@@ -909,7 +909,8 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
         blockInfo->blockHeader().number());
 
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
-    if (m_transactionWithProof.first->blockNumber() == tx->blockNumber())
+    if (m_transactionWithProof.first &&
+        m_transactionWithProof.first->blockNumber() == tx->blockNumber())
     {
         parent2ChildList = m_transactionWithProof.second;
     }
@@ -1064,7 +1065,8 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         lexical_cast<uint>(txIndex), receipt->gasUsed(), receipt->contractAddress());
 
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
-    if (m_receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
+    if (m_receiptWithProof.first &&
+        m_receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
     {
         parent2ChildList = m_receiptWithProof.second;
     }
