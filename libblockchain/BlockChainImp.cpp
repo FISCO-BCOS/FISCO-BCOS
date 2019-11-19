@@ -470,15 +470,6 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
             // init for tx_gas_limit
             initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
                 boost::lexical_cast<std::string>(initParam.txGasLimit));
-            // init configurations for RPBFT
-            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rotating_pbft") == 0)
-            {
-                // init rotating-epoch-size
-                initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SIZE,
-                    boost::lexical_cast<std::string>(initParam.rpbftEpochSize));
-                initSystemConfig(tb, SYSTEM_KEY_RPBFT_ROTATING_INTERVAL,
-                    boost::lexical_cast<std::string>(initParam.rpbftRotatingInterval));
-            }
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);

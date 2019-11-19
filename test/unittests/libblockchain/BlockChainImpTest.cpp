@@ -195,7 +195,7 @@ struct EmptyFixture
         m_blockChainImp->setStateFactory(m_storageStateFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
-        GenesisBlockParam initParam{"", dev::h512s(), dev::h512s(), "", "", "", 0, 0, 0, -1, -1};
+        GenesisBlockParam initParam{"", dev::h512s(), dev::h512s(), "", "", "", 0, 0, 0};
         m_blockChainImp->checkAndBuildGenesisBlock(initParam);
     }
 

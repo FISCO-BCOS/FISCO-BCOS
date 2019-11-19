@@ -57,8 +57,6 @@ struct GenesisBlockParam
     int64_t txCountLimit;       // the maximum number of transactions recorded in a block
     int64_t txGasLimit;         // the maximum gas required to execute a transaction
     uint64_t timeStamp;         /// the timestamp of genesis block
-    int64_t rpbftEpochSize;
-    int64_t rpbftRotatingInterval;
 };
 class BlockChainInterface
 {
