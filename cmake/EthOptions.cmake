@@ -71,12 +71,6 @@ macro(configure_project)
         add_definitions(-DFISCO_GM)
     endif()
 
-    # extension privacy module
-    eth_default_option(CRYPTO_EXTENSION OFF)
-    if (CRYPTO_EXTENSION)
-        add_definitions(-DFISCO_CRYPTO_EXTENSION)
-    endif()
-
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
@@ -132,9 +126,6 @@ macro(print_config NAME)
     message("-- PROF                                          ${PROF}")
 if (BUILD_GM)
     message("-- BUILD_GM           Build GM                       ${BUILD_GM}")
-endif()
-if (CRYPTO_EXTENSION)
-    message("-- CRYPTO_EXTENSION   Build crypto extension         ${CRYPTO_EXTENSION}")
 endif()
     message("------------------------------------------------------------------------")
     message("")

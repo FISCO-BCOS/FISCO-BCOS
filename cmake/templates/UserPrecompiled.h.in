@@ -32,12 +32,4 @@
     // std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x5002), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
-#ifdef FISCO_CRYPTO_EXTENSION
-    context->setAddress2Precompiled(
-        Address(0x5003), std::make_shared<dev::precompiled::PaillierPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x5004), std::make_shared<dev::precompiled::GroupSigPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x5005), std::make_shared<dev::precompiled::RingSigPrecompiled>());
-#endif
 }

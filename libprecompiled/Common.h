@@ -41,15 +41,6 @@ namespace precompiled
 
 enum PrecompiledError : int
 {
-    // RingSigPrecompiled -51899 ~ -51800
-    VERIFY_RING_SIG_FAILED = -51800,
-
-    // GroupSigPrecompiled -51799 ~ -51700
-    VERIFY_GROUP_SIG_FAILED = -51700,
-
-    // PaillierPrecompiled -51699 ~ -51600
-    CODE_INVALID_CIPHERS = -51600,
-
     // CRUDPrecompiled -51599 ~ -51500
     CODE_CONDITION_OPERATION_UNDEFINED = -51502,
     CODE_PARSE_CONDITION_ERROR = -51501,
