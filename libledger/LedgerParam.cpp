@@ -25,6 +25,7 @@
 #include "libconsensus/Common.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libconfig/GlobalConfigure.h>
+#include <libeventfilter/EventLogFilterManager.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/bind.hpp>
 #include <boost/function_output_iterator.hpp>
