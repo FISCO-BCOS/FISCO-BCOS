@@ -127,10 +127,15 @@ public:
     getTransactionReceiptByHashWithProof(
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
 
+    void setEnableHexBlock(bool const& _enableHexBlock) { m_enableHexBlock = _enableHexBlock; }
+
 private:
     void initSystemConfig(
         dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
 
+    std::shared_ptr<dev::eth::Block> decodeBlock(dev::storage::Entry::ConstPtr _entry);
+    std::shared_ptr<dev::bytes> getBlockRLP(dev::storage::Entry::ConstPtr _entry);
+    void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
 
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
@@ -206,6 +211,8 @@ private:
                                                 executive::TransactionException::None),
             std::shared_ptr<std::map<std::string, std::vector<std::string>>>());
     std::mutex m_receiptWithProofMutex;
+
+    bool m_enableHexBlock = false;
 };
 }  // namespace blockchain
 }  // namespace dev
