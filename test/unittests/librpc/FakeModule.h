@@ -554,7 +554,7 @@ public:
             dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                       "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
         GenesisBlockParam initParam = {
-            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0, -1, -1};
+            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0};
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
 

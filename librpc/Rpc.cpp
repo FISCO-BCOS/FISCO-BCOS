@@ -86,8 +86,7 @@ std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
 
 bool Rpc::isValidSystemConfig(std::string const& key)
 {
-    return (key == SYSTEM_KEY_TX_COUNT_LIMIT || key == SYSTEM_KEY_TX_GAS_LIMIT ||
-            key == SYSTEM_KEY_RPBFT_ROTATING_INTERVAL || key == SYSTEM_KEY_RPBFT_EPOCH_SIZE);
+    return (key == SYSTEM_KEY_TX_COUNT_LIMIT || key == SYSTEM_KEY_TX_GAS_LIMIT);
 }
 
 void Rpc::checkRequest(int _groupID)
