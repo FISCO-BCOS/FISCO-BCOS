@@ -65,6 +65,10 @@ include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
+if (CRYPTO_EXTENSION)
+    include(ProjectPaillier)
+    include(ProjectGroupSig)
+endif()
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 

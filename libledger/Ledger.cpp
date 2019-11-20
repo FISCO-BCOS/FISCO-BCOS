@@ -29,6 +29,7 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
+#include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -183,11 +184,22 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
+bool Ledger::isRotatingPBFTEnabled()
+{
+    return (dev::stringCmpIgnoreCase(
+                m_param->mutableConsensusParam().consensusType, "rotating_pbft") == 0);
+}
+
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    }
+    if (isRotatingPBFTEnabled())
+    {
+        return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
     return nullptr;
@@ -225,6 +237,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
     initPBFTEngine(pbftSealer);
+    initRotatingPBFTEngine(pbftSealer);
     return pbftSealer;
 }
 
@@ -239,6 +252,21 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setBaseDir(m_param->baseDir());
+}
+
+// init rotating-pbft engine
+void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
+{
+    if (!isRotatingPBFTEnabled())
+    {
+        return;
+    }
+
+    RotatingPBFTEngine::Ptr rotatingPBFT =
+        std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
+    assert(rotatingPBFT);
+    rotatingPBFT->setEpochSize(m_param->mutableConsensusParam().epochSize);
+    rotatingPBFT->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
@@ -281,7 +309,8 @@ bool Ledger::consensusInitFactory()
         return true;
     }
 
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 &&
+        !isRotatingPBFTEnabled())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
                           << LOG_KV("UnsupportConsensusType",
