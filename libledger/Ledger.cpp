@@ -150,16 +150,23 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
         !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
+                          << LOG_KV("version", g_BCOSConfig.version())
+                          << LOG_KV("storageType", m_param->mutableStorageParam().type);
         blockChain->setEnableHexBlock(true);
     }
     // >= v2.2.0
     else if (g_BCOSConfig.version() >= V2_2_0)
     {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be false")
+                          << LOG_KV("version", g_BCOSConfig.version());
         blockChain->setEnableHexBlock(false);
     }
     // < v2.2.0
     else
     {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
+                          << LOG_KV("version", g_BCOSConfig.version());
         blockChain->setEnableHexBlock(true);
     }
 
