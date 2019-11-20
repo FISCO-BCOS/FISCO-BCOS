@@ -1090,32 +1090,64 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
 std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
 {
-     RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
+    
+    try
+    {
+         RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-    auto blockchain = ledgerManager()->blockChain(_groupID);
-    auto number = blockchain->number();
-    auto block = blockchain->getBlockByNumber(number);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto number = blockchain->number();
+        Json::Value response;
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+
+        auto block = blockchain->getBlockByNumber(number);
         if (!block)
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
+        response["number"] = toJS(number);
+        response["hash"] = toJS(block->headerHash());
+        response["parentHash"] = toJS(block->header().parentHash());
+        response["logsBloom"] = toJS(block->header().logBloom());
+        response["transactionsRoot"] = toJS(block->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
+        response["dbHash"] = toJS(block->header().dbHash());
+        response["stateRoot"] = toJS(block->header().stateRoot());
+        response["sealer"] = toJS(block->header().sealer());
+        response["sealerList"] = Json::Value(Json::arrayValue);
+        auto sealers = block->header().sealerList();
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response["sealerList"].append((*it).hex());
+        }
+        response["extraData"] = Json::Value(Json::arrayValue);
+        auto datas = block->header().extraData();
+        for (auto const& data : datas)
+            response["extraData"].append(toJS(data));
+        response["gasLimit"] = toJS(block->header().gasLimit());
+        response["gasUsed"] = toJS(block->header().gasUsed());
+        response["timestamp"] = toJS(block->header().timestamp());
         const Transactions& transactions = block->transactions();
-        unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions.size())
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
+        response["transactions"] = Json::Value(Json::arrayValue);
+        for (unsigned i = 0; i < transactions.size(); i++)
+        {
+            if (_includeTransactions)
+                response["transactions"].append(toJson(transactions[i],
+                    std::make_pair(block->headerHash(), i), block->header().number()));
+            else
+                response["transactions"].append(toJS(transactions[i].sha3()));
+        }
 
-        Transaction tx = transactions[txIndex];
-        response["blockHash"] = toJS(block->header().hash());
-        response["blockNumber"] = toJS(block->header().number());
-        response["from"] = toJS(tx.from());
-        response["gas"] = toJS(tx.gas());
-        response["gasPrice"] = toJS(tx.gasPrice());
-        response["hash"] = toJS(tx.sha3());
-        response["input"] = toJS(tx.data());
-        response["nonce"] = toJS(tx.nonce());
-        response["to"] = toJS(tx.to());
-        response["transactionIndex"] = toJS(txIndex);
-        response["value"] = toJS(tx.value());
         return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
 }
