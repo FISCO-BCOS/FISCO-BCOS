@@ -22,6 +22,7 @@
  */
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>
 #include <libethcore/BlockHeader.h>
@@ -210,6 +211,7 @@ struct MemoryTableFactoryFixture : EmptyFixture
 {
     MemoryTableFactoryFixture()
     {
+        g_BCOSConfig.setSupportedVersion("2.2.0", V2_2_0);
         m_fakeBlock = std::make_shared<FakeBlock>(5);
         m_mockTable->insertGenesisBlock(m_fakeBlock);
     }
