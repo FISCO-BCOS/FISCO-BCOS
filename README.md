@@ -24,7 +24,7 @@ Parallel transaction processing engine effectively exploits multi-core computati
 
 FISCO BCOS provides various guides to compile and deploy blockchain instances, offering one-click deployment, speedy installation, and deployment on all mainstream platforms including Docker. It includes a comprehensive toolkit for speedy deployment, continuous monitoring, enterprise-level data governance, to save developers’ valuable time from toil.
 
-![Key Features of FISCO BCOS 2.0](https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/plane_en.png)
+![Key Features of FISCO BCOS 2.0](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/plane_en.png)
 
 For more information, please refer to new features in [version 2.0](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
 
