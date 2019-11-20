@@ -60,6 +60,7 @@ public:
     virtual void commit() override;
     virtual void rollback(size_t _savepoint) override;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
+    void setEnableOptimize(bool const& _enableOptimize) { m_enableOptimize = _enableOptimize; }
 
 private:
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
@@ -73,6 +74,7 @@ private:
 
     // mutex
     mutable RecursiveMutex x_name2Table;
+    bool m_enableOptimize = true;
 };
 
 }  // namespace storage

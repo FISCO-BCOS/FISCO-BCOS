@@ -83,9 +83,11 @@ public:
     dev::storage::TableData::Ptr dump() override;
 
     void rollback(const Change& _change) override;
+    void setEnableOptimize(bool const& _enableOptimize) { m_enableOptimize = _enableOptimize; }
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
+    dev::storage::TableData::Ptr dumpWithoutOptimize();
 
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;
@@ -143,6 +145,7 @@ private:
     bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
     dev::storage::TableData::Ptr m_tableData;
+    bool m_enableOptimize = false;
 };
 }  // namespace storage
 }  // namespace dev
