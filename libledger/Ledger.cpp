@@ -145,6 +145,24 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
         shouldBuild = false;
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+
+    // write the hex-string block data when use external or mysql
+    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
+        !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    {
+        blockChain->setEnableHexBlock(true);
+    }
+    // >= v2.2.0
+    else if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        blockChain->setEnableHexBlock(false);
+    }
+    // < v2.2.0
+    else
+    {
+        blockChain->setEnableHexBlock(true);
+    }
+
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
     m_blockChain = blockChain;

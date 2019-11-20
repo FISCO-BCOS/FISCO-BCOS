@@ -168,13 +168,10 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                auto strBlock = entry->getFieldConst(SYS_VALUE);
-                auto getField_time_cost = utcTime() - record_time;
-                record_time = utcTime();
 
-                // use binary block
-                // auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
-                auto block = std::make_shared<Block>(strBlock, CheckTransaction::None);
+                record_time = utcTime();
+                // use binary block since v2.2.0
+                auto block = decodeBlock(entry);
 
                 auto constructBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
@@ -186,7 +183,6 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
-                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
                                       << LOG_KV("constructBlockTimeCost", constructBlock_time_cost)
                                       << LOG_KV("addCacheTimeCost", addCache_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
@@ -256,18 +252,15 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash, i
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                auto strBlock = entry->getFieldConst(SYS_VALUE);
-                auto getField_time_cost = utcTime() - record_time;
-                record_time = utcTime();
 
-                auto blockRLP = std::make_shared<bytes>(strBlock.begin(), strBlock.end());
+                record_time = utcTime();
+                auto blockRLP = getBlockRLP(entry);
                 auto blockRLP_time_cost = utcTime() - record_time;
 
                 BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
-                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
                                       << LOG_KV("constructblockRLPTimeCost", blockRLP_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
                 return blockRLP;
@@ -497,10 +490,10 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
+
         auto entry = std::make_shared<Entry>();
-        bytes out;
-        block->encode(out);
-        entry->setField(SYS_VALUE, out.data(), out.size());
+        writeBlockToField(*block, entry);
+
         tb->insert(block->blockHeader().hash().hex(), entry);
 
         tb = mtb->openTable(SYS_CURRENT_STATE, false);
@@ -1242,7 +1235,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         record_time = utcTime();
 
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
-        entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        entry_tb2nonces->setField(SYS_VALUE, toHex(rs.out()));
         entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
@@ -1283,13 +1276,8 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        bytes out;
-        block.encode(out);
-
-        // use binary block data
-        // entry->setField(SYS_VALUE, toHexPrefixed(out));
-        entry->setField(SYS_VALUE, out.data(), out.size());
-
+        // use binary block data since v2.2.0, use toHex before v2.2.0
+        writeBlockToField(block, entry);
         entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
@@ -1436,4 +1424,62 @@ CommitResult BlockChainImp::commitBlock(
             OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
     return CommitResult::OK;
+}
+
+// decode the block from the block data fetched from system table
+std::shared_ptr<Block> BlockChainImp::decodeBlock(dev::storage::Entry::ConstPtr _entry)
+{
+    std::shared_ptr<Block> block = nullptr;
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
+        block = std::make_shared<Block>(bytesBlock, CheckTransaction::None);
+    }
+    else
+    {
+        // < v2.2.0 or use mysql, external
+        auto strBlock = _entry->getField(SYS_VALUE);
+        block = std::make_shared<Block>(fromHex(strBlock.c_str()), CheckTransaction::None);
+    }
+
+    return block;
+}
+
+// get blockRLP from the block data fetched from the system table
+std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::storage::Entry::ConstPtr _entry)
+{
+    std::shared_ptr<bytes> blockRlp = nullptr;
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
+        blockRlp = std::make_shared<bytes>(bytesBlock.begin(), bytesBlock.end());
+    }
+    else
+    {
+        // < v2.2.0 or use mysql, external
+        auto strBlock = _entry->getField(SYS_VALUE);
+        blockRlp = std::make_shared<bytes>(fromHex(strBlock.c_str()));
+    }
+
+    return blockRlp;
+}
+
+// write block data into the system table
+void BlockChainImp::writeBlockToField(
+    dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry)
+{
+    bytes out;
+    _block.encode(out);
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        _entry->setField(SYS_VALUE, out.data(), out.size());
+    }
+    // < v2.2.0
+    else
+    {
+        _entry->setField(SYS_VALUE, toHex(out));
+    }
 }

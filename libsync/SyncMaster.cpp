@@ -72,12 +72,12 @@ string const SyncMaster::syncInfo() const
     Json::Value syncInfo;
     syncInfo["isSyncing"] = isSyncing();
     syncInfo["protocolId"] = m_protocolId;
-    syncInfo["genesisHash"] = toHexPrefixed(m_syncStatus->genesisHash);
+    syncInfo["genesisHash"] = toHex(m_syncStatus->genesisHash);
     syncInfo["nodeId"] = toHex(m_nodeId);
 
     int64_t currentNumber = m_blockChain->number();
     syncInfo["blockNumber"] = currentNumber;
-    syncInfo["latestHash"] = toHexPrefixed(m_blockChain->numberHash(currentNumber));
+    syncInfo["latestHash"] = toHex(m_blockChain->numberHash(currentNumber));
     syncInfo["knownHighestNumber"] = m_syncStatus->knownHighestNumber;
     syncInfo["knownLatestHash"] = toHex(m_syncStatus->knownLatestHash);
     syncInfo["txPoolSize"] = std::to_string(m_txPool->pendingSize());
@@ -86,9 +86,9 @@ string const SyncMaster::syncInfo() const
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         Json::Value info;
         info["nodeId"] = toHex(_p->nodeId);
-        info["genesisHash"] = toHexPrefixed(_p->genesisHash);
+        info["genesisHash"] = toHex(_p->genesisHash);
         info["blockNumber"] = _p->number;
-        info["latestHash"] = toHexPrefixed(_p->latestHash);
+        info["latestHash"] = toHex(_p->latestHash);
         peersInfo.append(info);
         return true;
     });
