@@ -25,7 +25,7 @@
 
 提供多种编译部署方式，支持一键部署，支持Docker等所有主流平台的快速安装部署。提供了完整的工具套件来实现快速安装部署，系统监控、企业级数据治理等，解放开发人员的非业务开发时间。
 
-<div style="text-align:center"><img src="https://media.githubusercontent.com/media/FISCO-BCOS/LargeFiles/master/images/plane.jpg"/> </div>
+<div style="text-align:center"><img src="https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/plane.jpg"/> </div>
 
 更多信息，请[参阅2.0版本新特性](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html#id11)。
 
