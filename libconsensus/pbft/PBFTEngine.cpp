@@ -371,7 +371,8 @@ bool PBFTEngine::broadcastViewChangeReq()
 
 /// set default ttl to 1 to in case of forward-broadcast
 bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
-    std::string const& key, bytesConstRef data, unsigned const& ttl, dev::h512s const& forwardNodes)
+    std::string const& key, bytesConstRef data, unsigned const& ttl,
+    std::shared_ptr<dev::h512s> forwardNodes)
 {
     /// is sealer?
     if (getIndexBySealer(nodeId) < 0)
@@ -469,8 +470,15 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
 void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
     unsigned const& _packetType, unsigned const& _ttl)
 {
+    std::shared_ptr<dev::h512s> forwardNodes = nullptr;
+    if (m_enableTTLOptimize)
+    {
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        // get the forwardNodes
+        forwardNodes = getForwardNodes(sessions);
+    }
     return m_service->asyncMulticastMessageByNodeIDList(
-        _targetNodes, transDataToMessage(_data, _packetType, _ttl));
+        _targetNodes, transDataToMessage(_data, _packetType, _ttl, forwardNodes));
 }
 
 /**
@@ -1518,7 +1526,7 @@ bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
         return false;
     }
     // check ttl
-    if (_pbftMsgPacket->ttl == 1)
+    if (!m_enableTTLOptimize && _pbftMsgPacket->ttl == 1)
     {
         return false;
     }
@@ -1528,8 +1536,8 @@ bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
 }
 
 // update ttl and forward the message
-void PBFTEngine::forwardMsg(
-    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+void PBFTEngine::forwardMsgByTTL(std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket,
+    PBFTMsg const& _pbftMsg, bytesConstRef _data)
 {
     std::unordered_set<h512> filter;
     filter.insert(_pbftMsgPacket->node_id);
@@ -1540,7 +1548,7 @@ void PBFTEngine::forwardMsg(
         filter.insert(genNodeId);
     }
     unsigned current_ttl = _pbftMsgPacket->ttl - 1;
-    broadcastMsg(_pbftMsgPacket->packet_id, _key, ref(_pbftMsgPacket->data), filter, current_ttl);
+    broadcastMsg(_pbftMsgPacket->packet_id, _key, _data, filter, current_ttl);
 }
 
 /// start a new thread to handle the network-receivied message
@@ -1649,5 +1657,149 @@ void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
     status.append(view_array);
 }
 
+
+PBFTMsgPacket::Ptr PBFTEngine::createPBFTMsgPacket(bytesConstRef data,
+    PACKET_TYPE const& packetType, unsigned const& ttl, std::shared_ptr<dev::h512s> _forwardNodes)
+{
+    PBFTMsgPacket::Ptr pbftPacket = m_pbftMsgFactory->createPBFTMsgPacket();
+    pbftPacket->data = data.toBytes();
+    pbftPacket->packet_id = packetType;
+    if (ttl == 0)
+        pbftPacket->ttl = maxTTL;
+    else
+        pbftPacket->ttl = ttl;
+    // set forwardNodes when optimize ttl
+    if (_forwardNodes && _forwardNodes->size() > 0)
+    {
+        pbftPacket->setForwardNodes(_forwardNodes);
+    }
+    return pbftPacket;
+}
+
+P2PMessage::Ptr PBFTEngine::transDataToMessage(bytesConstRef _data, PACKET_TYPE const& _packetType,
+    PROTOCOL_ID const& _protocolId, unsigned const& _ttl, std::shared_ptr<dev::h512s> _forwardNodes)
+{
+    P2PMessage::Ptr message =
+        std::dynamic_pointer_cast<P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
+    bytes ret_data;
+    PBFTMsgPacket::Ptr pbftPacket = createPBFTMsgPacket(_data, _packetType, _ttl, _forwardNodes);
+    pbftPacket->encode(ret_data);
+    std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
+    message->setBuffer(p_data);
+    message->setProtocolID(_protocolId);
+    return message;
+}
+
+void PBFTEngine::createPBFTMsgFactory()
+{
+    if (m_enableTTLOptimize)
+    {
+        m_pbftMsgFactory = std::make_shared<OPBFTMsgFactory>();
+    }
+    else
+    {
+        m_pbftMsgFactory = std::make_shared<PBFTMsgFactory>();
+    }
+}
+
+// get the forwardNodes
+std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions)
+{
+    std::shared_ptr<dev::h512s> forwardNodes = nullptr;
+    std::set<h512> consensusNodes;
+    {
+        ReadGuard l(x_consensusSet);
+        consensusNodes = *m_consensusSet;
+    }
+    // select the disconnected consensus nodes
+    for (auto const& session : _sessions)
+    {
+        if (consensusNodes.count(session.nodeID()))
+        {
+            consensusNodes.erase(session.nodeID());
+        }
+    }
+    consensusNodes.erase(m_keyPair.pub());
+    if (consensusNodes.size() > 0)
+    {
+        forwardNodes = std::make_shared<dev::h512s>();
+        forwardNodes->resize(consensusNodes.size());
+        std::copy(consensusNodes.begin(), consensusNodes.end(), forwardNodes->begin());
+        PBFTENGINE_LOG(DEBUG)
+            << LOG_DESC("forwardPBFTMsgByForwardNodes: get disconnected consensus nodes")
+            << LOG_KV("forwardNodesSize", forwardNodes->size())
+            << LOG_KV("sessionSize", _sessions.size()) << LOG_KV("minValidNodes", minValidNodes())
+            << LOG_KV("idx", nodeIdx());
+    }
+    return forwardNodes;
+}
+
+void PBFTEngine::forwardMsgByNodeInfo(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data)
+{
+    if (_pbftMsgPacket->forwardNodes->size() == 0)
+    {
+        return;
+    }
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    // get the forwardNodes from the _pbftMsgPacket
+    // find the remaining forwardNodes
+    std::shared_ptr<std::set<dev::h512>> remainingForwardNodes =
+        std::make_shared<std::set<dev::h512>>(
+            _pbftMsgPacket->forwardNodes->begin(), _pbftMsgPacket->forwardNodes->end());
+    // send message to the forwardNodes
+    for (auto const& session : sessions)
+    {
+        if (remainingForwardNodes->count(session.nodeID()))
+        {
+            remainingForwardNodes->erase(session.nodeID());
+        }
+    }
+    // erase the node-self from the remaining forwardNodes
+    if (remainingForwardNodes->count(m_keyPair.pub()))
+    {
+        remainingForwardNodes->erase(m_keyPair.pub());
+    }
+
+    std::shared_ptr<h512s> remainingForwardNodeList = nullptr;
+    if (remainingForwardNodes->size() > 0)
+    {
+        remainingForwardNodeList = std::make_shared<h512s>(remainingForwardNodes->size());
+        std::copy(remainingForwardNodes->begin(), remainingForwardNodes->end(),
+            remainingForwardNodeList->begin());
+    }
+    // forward the message to corresponding nodes
+    for (auto const& nodeID : *_pbftMsgPacket->forwardNodes)
+    {
+        sendMsg(nodeID, _pbftMsgPacket->packet_id, _key, _data, 1, remainingForwardNodeList);
+    }
+}
+
+void PBFTEngine::forwardMsg(
+    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+{
+    if (m_enableTTLOptimize)
+    {
+        return forwardMsgByNodeInfo(_key, _pbftMsgPacket, ref(_pbftMsgPacket->data));
+    }
+    return forwardMsgByTTL(_key, _pbftMsgPacket, _pbftMsg, ref(_pbftMsgPacket->data));
+}
+
+void PBFTEngine::resetConfig()
+{
+    ConsensusEngineBase::resetConfig();
+    if (!m_enableTTLOptimize)
+    {
+        return;
+    }
+    if (m_sealerListUpdated)
+    {
+        WriteGuard l(x_consensusSet);
+        // m_consensusSet
+        m_consensusSet->clear();
+        ReadGuard rl(m_sealerListMutex);
+        m_consensusSet->insert(m_sealerList.begin(), m_sealerList.end());
+    }
+}
 }  // namespace consensus
 }  // namespace dev

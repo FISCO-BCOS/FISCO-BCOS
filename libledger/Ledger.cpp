@@ -246,6 +246,7 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setBaseDir(m_param->baseDir());
+    pbftEngine->setEnableTTLOptimize(m_param->mutableConsensusParam().enableTTLOptimize);
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
