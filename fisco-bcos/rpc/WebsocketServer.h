@@ -122,6 +122,9 @@ class session : public std::enable_shared_from_this<session>
         m_mapRpc.insert(std::make_pair(
             "sendRawTransaction", std::bind(&dev::rpc::RpcFace::sendRawTransactionI, m_rpcFace,
                                       std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(std::make_pair(
+            "submitTransactions", std::bind(&dev::rpc::RpcFace::submitTransactionsI, m_rpcFace,
+                                      std::placeholders::_1, std::placeholders::_2)));
     }
 
 public:
