@@ -1095,8 +1095,42 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
     {
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
+        vector<string> KV;
+        boost::split(KV, kv, boost::is_any_of(","));
+
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        //auto number = blockchain->number();
+        auto blockVerifier = ledgerManager()->blockVerifier(_groupID);
+        LOG(INFO) << "Ledger was prepared." ;
+        // get parent block
+        auto max = blockchain->number();
+        auto parentBlock = blockchain->getBlockByNumber(max);
+        LOG(INFO) << "parent number: " << max << " parentHeader " << parentBlock->header();
+        dev::eth::BlockHeader header;
+        header.setNumber(max + 1);
+        header.setParentHash(parentBlock->headerHash());
+        header.setGasLimit(dev::u256(1024 * 1024 * 1024));
+        #if 0
+            header.setRoots(parentBlock->header().transactionsRoot(),
+            parentBlock->header().receiptsRoot(), parentBlock->header().dbHash());
+        #endif
+        dev::eth::Block block;
+        block.setBlockHeader(header);
+    
+        for (auto& kv : KV)
+        {
+                   
+            dev::bytes rlpBytes = dev::fromHex(kv);
+            dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
+            LOG(INFO) << "Tx " << tx;
+            block.appendTransaction(tx);
+        }
+
+        dev::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
+            parentBlock->header().number(), parentBlock->header().dbHash()};
+        auto context = blockVerifier->executeBlock(block, parentBlockInfo);
+        blockchain->commitBlock(block, context);
+        LOG(INFO) << "Txs already committed. ";
+
         Json::Value response;
 
         //auto block = blockchain->getBlockByNumber(number);
