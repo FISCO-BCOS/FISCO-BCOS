@@ -1088,7 +1088,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
 }
 
-std::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
+Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
 {    
 
     try
