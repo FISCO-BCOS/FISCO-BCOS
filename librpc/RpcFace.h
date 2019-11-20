@@ -135,7 +135,7 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("submitTransactions", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_ARRAY, NULL),
-            &dev::rpc::RpcFace::submitTransactions);
+            &dev::rpc::RpcFace::submitTransactionsI);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -256,9 +256,10 @@ public:
         response = this->sendRawTransaction(
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
-    inline virtual void submitTransactions(const Json::Value& request, Json::Value& response)
+    inline virtual void submitTransactionsI(const Json::Value& request, Json::Value& response)
     {
-       // TODO
+       response = this->submitTransactions(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
     // system config part
@@ -310,6 +311,7 @@ public:
     virtual Json::Value call(int param1, const Json::Value& param2) = 0;
     /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
+    virtual std::string submitTransactions(int param1, const std::string& param2) = 0;
 };
 
 }  // namespace rpc

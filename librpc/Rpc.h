@@ -98,6 +98,7 @@ public:
     Json::Value getTotalTransactionCount(int _groupID) override;
     Json::Value call(int _groupID, const Json::Value& request) override;
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
+    std::string submitTransactions(int _groupID, const std::string& _rlp) override;
 
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
