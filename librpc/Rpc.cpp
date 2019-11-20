@@ -1095,8 +1095,8 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
     {
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-        vector<string> KV;
-        boost::split(KV, kv, boost::is_any_of(","));
+        std::vector<std::string> KV;
+        boost::split(KV, _rlp, boost::is_any_of(","));
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto blockVerifier = ledgerManager()->blockVerifier(_groupID);
@@ -1133,38 +1133,36 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
 
         Json::Value response;
 
-        //auto block = blockchain->getBlockByNumber(number);
         RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
         auto number = blockchain->number();
-        auto block = blockchain->getBlockByNumber(number);
-        if (!block)
+        auto block2 = blockchain->getBlockByNumber(number);
+        if (!block2)
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
-
         response["number"] = toJS(number);
-        response["hash"] = toJS(block->headerHash());
-        response["parentHash"] = toJS(block->header().parentHash());
-        response["logsBloom"] = toJS(block->header().logBloom());
-        response["transactionsRoot"] = toJS(block->header().transactionsRoot());
-        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
-        response["dbHash"] = toJS(block->header().dbHash());
-        response["stateRoot"] = toJS(block->header().stateRoot());
-        response["sealer"] = toJS(block->header().sealer());
+        response["hash"] = toJS(block2->headerHash());
+        response["parentHash"] = toJS(block2->header().parentHash());
+        response["logsBloom"] = toJS(block2->header().logBloom());
+        response["transactionsRoot"] = toJS(block2->header().transactionsRoot());
+        response["receiptsRoot"] = toJS(block2->header().receiptsRoot());
+        response["dbHash"] = toJS(block2->header().dbHash());
+        response["stateRoot"] = toJS(block2->header().stateRoot());
+        response["sealer"] = toJS(block2->header().sealer());
         response["sealerList"] = Json::Value(Json::arrayValue);
-        auto sealers = block->header().sealerList();
+        auto sealers = block2->header().sealerList();
         for (auto it = sealers.begin(); it != sealers.end(); ++it)
         {
             response["sealerList"].append((*it).hex());
         }
         response["extraData"] = Json::Value(Json::arrayValue);
-        auto datas = block->header().extraData();
+        auto datas = block2->header().extraData();
         for (auto const& data : datas)
             response["extraData"].append(toJS(data));
-        response["gasLimit"] = toJS(block->header().gasLimit());
-        response["gasUsed"] = toJS(block->header().gasUsed());
-        response["timestamp"] = toJS(block->header().timestamp());
-        const Transactions& transactions = block->transactions();
+        response["gasLimit"] = toJS(block2->header().gasLimit());
+        response["gasUsed"] = toJS(block2->header().gasUsed());
+        response["timestamp"] = toJS(block2->header().timestamp());
+        const Transactions& transactions = block2->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions.size(); i++)
         {
