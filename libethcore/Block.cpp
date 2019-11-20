@@ -477,5 +477,15 @@ void Block::decodeRC2(
     }
 }
 
+void Block::encodeProposal(std::shared_ptr<bytes> _out, bool const&)
+{
+    encode(*_out);
+}
+
+void Block::decodeProposal(bytesConstRef _block, bool const&)
+{
+    decode(_block);
+}
+
 }  // namespace eth
 }  // namespace dev
