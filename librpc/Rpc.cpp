@@ -1087,3 +1087,34 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
+
+std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
+{
+    auto blockchain = ledgerManager()->blockChain(_groupID);
+    auto number = blockchain->number();
+    auto block = blockchain->getBlockByNumber(number);
+        if (!block)
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+
+        const Transactions& transactions = block->transactions();
+        unsigned int txIndex = jsToInt(_transactionIndex);
+        if (txIndex >= transactions.size())
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
+
+        Transaction tx = transactions[txIndex];
+        response["blockHash"] = toJS(block->header().hash());
+        response["blockNumber"] = toJS(block->header().number());
+        response["from"] = toJS(tx.from());
+        response["gas"] = toJS(tx.gas());
+        response["gasPrice"] = toJS(tx.gasPrice());
+        response["hash"] = toJS(tx.sha3());
+        response["input"] = toJS(tx.data());
+        response["nonce"] = toJS(tx.nonce());
+        response["to"] = toJS(tx.to());
+        response["transactionIndex"] = toJS(txIndex);
+        response["value"] = toJS(tx.value());
+
+        return response;
+}
