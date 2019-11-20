@@ -1088,7 +1088,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
 }
 
-std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
+std::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
 {    
 
     try
@@ -1096,13 +1096,13 @@ std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
         auto blockchain = ledgerManager()->blockChain(_groupID);
-        auto number = blockchain->number();
+        //auto number = blockchain->number();
         Json::Value response;
 
-        auto block = blockchain->getBlockByNumber(number);
+        //auto block = blockchain->getBlockByNumber(number);
         RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-         auto number = blockchain->number();
+        auto number = blockchain->number();
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
             BOOST_THROW_EXCEPTION(JsonRpcException(
@@ -1134,11 +1134,7 @@ std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions.size(); i++)
         {
-            if (_includeTransactions)
-                response["transactions"].append(toJson(transactions[i],
-                    std::make_pair(block->headerHash(), i), block->header().number()));
-            else
-                response["transactions"].append(toJS(transactions[i].sha3()));
+            response["transactions"].append(toJS(transactions[i].sha3()));
         }
 
         return response;
