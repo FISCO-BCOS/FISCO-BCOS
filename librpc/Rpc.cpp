@@ -1117,5 +1117,6 @@ std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         response["to"] = toJS(tx.to());
         response["transactionIndex"] = toJS(txIndex);
         response["value"] = toJS(tx.value());
+        
         return response;
 }
