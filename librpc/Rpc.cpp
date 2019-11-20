@@ -1089,8 +1089,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 }
 
 std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
-{
-    
+{    
+
     try
     {
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
@@ -1099,8 +1099,10 @@ std::string Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         auto number = blockchain->number();
         Json::Value response;
 
-        auto blockchain = ledgerManager()->blockChain(_groupID);
-
+        auto block = blockchain->getBlockByNumber(number);
+        RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
+                       << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
+         auto number = blockchain->number();
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
             BOOST_THROW_EXCEPTION(JsonRpcException(
