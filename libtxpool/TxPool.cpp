@@ -24,6 +24,7 @@
 #include "TxPool.h"
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libethcore/PartiallyBlock.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 
@@ -775,6 +776,5 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
     }
     return unknownTxs;
 }
-
 }  // namespace txpool
 }  // namespace dev

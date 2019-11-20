@@ -25,6 +25,7 @@
 #include "Common.h"
 #include "PBFTMsgCache.h"
 #include "PBFTReqCache.h"
+#include "PartiallyPBFTReqCache.h"
 #include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libdevcore/FileSystem.h>
@@ -264,6 +265,7 @@ protected:
     bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
@@ -615,6 +617,15 @@ protected:
         unsigned const& _packetType, unsigned const& _ttl);
     std::shared_ptr<dev::h512s> getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions);
 
+
+    // BIP 152 related logic
+    virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
+        std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
+
+    bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
+
+    bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& _oss);
+
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
@@ -666,11 +677,14 @@ protected:
 
     std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
+
+    // bip 152 release logic
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
 
     bool m_enableTTLOptimize = false;
     mutable SharedMutex x_consensusSet;
     std::shared_ptr<std::set<dev::h512>> m_consensusSet;
+    PartiallyPBFTReqCache::Ptr m_partiallyPrepareCache = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

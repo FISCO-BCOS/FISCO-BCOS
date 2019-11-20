@@ -817,7 +817,6 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
  */
 bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
 {
-    Timer t;
     std::ostringstream oss;
     oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq.idx)
         << LOG_KV("view", prepareReq.view) << LOG_KV("reqNum", prepareReq.height)
@@ -840,11 +839,17 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     }
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
+    return execPrepareAndGenerateSignMsg(prepareReq, oss);
+}
 
+bool PBFTEngine::execPrepareAndGenerateSignMsg(
+    PrepareReq const& _prepareReq, std::ostringstream& _oss)
+{
+    Timer t;
     Sealing workingSealing;
     try
     {
-        execBlock(workingSealing, prepareReq, oss);
+        execBlock(workingSealing, _prepareReq, _oss);
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)
@@ -854,7 +859,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     }
     catch (std::exception& e)
     {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC("Block execute failed") << LOG_KV("INFO", oss.str())
+        PBFTENGINE_LOG(WARNING) << LOG_DESC("Block execute failed") << LOG_KV("INFO", _oss.str())
                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
         return true;
     }
@@ -869,7 +874,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     auto startT = utcTime();
-    PrepareReq sign_prepare(prepareReq, workingSealing, m_keyPair);
+    PrepareReq sign_prepare(_prepareReq, workingSealing, m_keyPair);
     m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
@@ -884,7 +889,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 
     checkAndCommit();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
-                         << LOG_KV("Timecost", 1000 * t.elapsed()) << LOG_KV("INFO", oss.str());
+                         << LOG_KV("Timecost", 1000 * t.elapsed()) << LOG_KV("INFO", _oss.str());
     return true;
 }
 
@@ -1801,5 +1806,88 @@ void PBFTEngine::resetConfig()
         m_consensusSet->insert(m_sealerList.begin(), m_sealerList.end());
     }
 }
+dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
+    std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType)
+{
+    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+        m_service->p2pMessageFactory()->buildMessage());
+    message->setBuffer(_data);
+    message->setPacketType(_packetType);
+    message->setProtocolID(m_protocolId);
+    return message;
+}
+
+bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
+{
+    std::ostringstream oss;
+    oss << LOG_DESC("handlePartiallyPrepare") << LOG_KV("reqIdx", _prepareReq->idx)
+        << LOG_KV("view", _prepareReq->view) << LOG_KV("reqNum", _prepareReq->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("consNum", m_consensusBlockNumber)
+        << LOG_KV("hash", _prepareReq->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
+    PBFTENGINE_LOG(DEBUG) << oss.str();
+    // check the PartiallyPrepare
+    auto ret = isValidPrepare(*_prepareReq, oss);
+    if (ret == CheckResult::INVALID)
+    {
+        return false;
+    }
+    /// update the view for given idx
+    updateViewMap(_prepareReq->idx, _prepareReq->view);
+
+    if (ret == CheckResult::FUTURE)
+    {
+        m_partiallyPrepareCache->addPartiallyFuturePrepare(_prepareReq);
+        return true;
+    }
+    _prepareReq->pBlock = m_blockFactory->createBlock();
+    if (!m_partiallyPrepareCache->addPartiallyRawPrepare(_prepareReq))
+    {
+        return false;
+    }
+    assert(_prepareReq->pBlock);
+    bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
+    // hit all transactions
+    if (allHit)
+    {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC(
+            "hit all the transactions, handle the rawPrepare directly");
+        m_partiallyPrepareCache->transPartiallyPrepareIntoRawPrepare();
+        // begin to handlePrepare
+        return execPrepareAndGenerateSignMsg(*_prepareReq, oss);
+    }
+    // can't find the node that generate the prepareReq
+    h512 targetNode;
+    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    {
+        return false;
+    }
+
+    // miss some transactions, request the missed transaction
+    PartiallyBlock::Ptr partiallyBlock =
+        std::dynamic_pointer_cast<PartiallyBlock>(_prepareReq->pBlock);
+    assert(partiallyBlock);
+    std::shared_ptr<bytes> encodedMissTxsInfo = std::make_shared<bytes>();
+    partiallyBlock->encodeMissedInfo(encodedMissTxsInfo);
+
+    auto p2pMsg = toP2PMessage(encodedMissTxsInfo, GetMissedTxsPacket);
+    p2pMsg->setPacketType(GetMissedTxsPacket);
+
+    m_service->asyncSendMessageByNodeID(targetNode, p2pMsg, nullptr);
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(p2pMsg->packetType(), 1, p2pMsg->length());
+    }
+
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("send GetMissedTxsPacket to the leader")
+                          << LOG_KV("targetIdx", _prepareReq->idx)
+                          << LOG_KV("number", _prepareReq->height)
+                          << LOG_KV("hash", _prepareReq->block_hash.abridged())
+                          << LOG_KV("missedTxsSize", partiallyBlock->missedTxs()->size())
+                          << LOG_KV("size", p2pMsg->length());
+    return true;
+}
+
 }  // namespace consensus
 }  // namespace dev
