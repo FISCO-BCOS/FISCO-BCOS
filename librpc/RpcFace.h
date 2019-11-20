@@ -130,6 +130,12 @@ public:
             jsonrpc::Procedure("getTotalTransactionCount", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getTotalTransactionCountI);
+        
+        // used in dev and test, directly submit the transactions.
+        this->bindAndAddMethod(jsonrpc::Procedure("submitTransactions", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
+                                   jsonrpc::JSON_ARRAY, NULL),
+            &dev::rpc::RpcFace::submitTransactions);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -249,6 +255,10 @@ public:
     {
         response = this->sendRawTransaction(
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
+    }
+    inline virtual void submitTransactions(const Json::Value& request, Json::Value& response)
+    {
+       // TODO
     }
 
     // system config part
