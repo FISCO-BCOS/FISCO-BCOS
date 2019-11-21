@@ -286,7 +286,9 @@ bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, byt
         throwException("verify_vote_request failed");
     }
 
-    return abi.abiIn("", WEDPR_SUCCESS);
+    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+    std::string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
+    return abi.abiIn("", blankBallot, voteStoragePart);
 }
 
 bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
@@ -302,28 +304,27 @@ bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, b
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
         throwException("verify_vote_request failed");
     }
+    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+    std::string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
 
-    return abi.abiIn("", WEDPR_SUCCESS);
+    return abi.abiIn("", blankBallot, voteStoragePart);
 }
 
 bytes WedprPrecompiled::aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
-    std::string voteRequest;
+    std::string voteStoragePart;
     std::string voteStorage;
-    abi.abiOut(data, systemParameters, voteRequest, voteStorage);
+    abi.abiOut(data, systemParameters, voteStoragePart, voteStorage);
 
     char* systemParametersChar = stringToChar(systemParameters);
-    char* voteRequestChar = stringToChar(voteRequest);
     char* voteStorageChar = stringToChar(voteStorage);
+    char* voteStoragePartChar = stringToChar(voteStoragePart);
 
-    char* voteStoragePartChar = get_vote_storage_from_vote_request(voteRequestChar);
-    std::string blankBallot = get_blank_ballot_from_vote_storage(voteStoragePartChar);
-    std::string voteStoragePart = voteStoragePartChar;
     std::string voteStorageSum =
-        aggregate_vote_sum_response(systemParametersChar, voteRequestChar, voteStorageChar);
+        aggregate_vote_sum_response(systemParametersChar, voteStoragePartChar, voteStorageChar);
 
-    return abi.abiIn("", blankBallot, voteStoragePart, voteStorageSum);
+    return abi.abiIn("", voteStorageSum);
 }
 
 bytes WedprPrecompiled::aggregateHPoint(dev::eth::ContractABI& abi, bytesConstRef& data)
@@ -357,26 +358,26 @@ bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesCons
         logError(WEDPR_PRECOMPILED, "verify_count_request", WEDPR_VERFIY_FAILED);
         throwException("verify_count_request failed");
     }
+    std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
+    std::string decryptedResultPartStoragePart =
+        get_decrypted_result_part_storage_from_decrypted_result_part_request(decryptedRequestChar);
 
-    return abi.abiIn("", WEDPR_SUCCESS);
+    return abi.abiIn("", counterId, decryptedResultPartStoragePart);
 }
 bytes WedprPrecompiled::aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string systemParameters;
-    std::string decryptedRequest;
+    std::string decryptedResultPartStoragePart;
     std::string decryptedResultPartStorage;
-    abi.abiOut(data, systemParameters, decryptedRequest, decryptedResultPartStorage);
+    abi.abiOut(data, systemParameters, decryptedResultPartStoragePart, decryptedResultPartStorage);
     char* systemParametersChar = stringToChar(systemParameters);
-    char* decryptedRequestChar = stringToChar(decryptedRequest);
+    char* decryptedResultPartStoragePartChar = stringToChar(decryptedResultPartStoragePart);
     char* decryptedResultPartStorageChar = stringToChar(decryptedResultPartStorage);
 
-    std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
-    std::string decryptedResultPartStoragePart =
-        get_decrypted_result_part_storage_from_decrypted_result_part_request(decryptedRequestChar);
     std::string decryptedResultPartStorageSum = aggregate_decrypted_part_sum(
-        systemParametersChar, decryptedRequestChar, decryptedResultPartStorageChar);
+        systemParametersChar, decryptedResultPartStoragePartChar, decryptedResultPartStorageChar);
 
-    return abi.abiIn("", counterId, decryptedResultPartStoragePart, decryptedResultPartStorageSum);
+    return abi.abiIn("", decryptedResultPartStorageSum);
 }
 bytes WedprPrecompiled::verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data)
 {

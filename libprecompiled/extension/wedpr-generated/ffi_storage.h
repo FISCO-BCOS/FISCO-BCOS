@@ -24,13 +24,18 @@ int __rbt_backtrace_pcinfo(backtrace_state* _state, uintptr_t _addr, backtrace_f
 int __rbt_backtrace_syminfo(backtrace_state* _state, uintptr_t _addr,
     backtrace_syminfo_callback _cb, backtrace_error_callback _error, void* _data);
 
-char* aggregate_decrypted_part_sum(char* param_pb, char* request_pb, char* count_result_sum_pb);
+char* aggregate_decrypted_part_sum(
+    char* param_pb, char* decrypted_result_part_storage_pb, char* count_result_sum_pb);
 
 char* aggregate_h_point(char* h_point_share_cstring, char* h_point_sum_cstring);
 
-char* aggregate_vote_sum_response(char* param_pb, char* request_pb, char* vote_sum_pb);
+char* aggregate_vote_sum_response(char* param_pb, char* vote_storage_part_pb, char* vote_sum_pb);
+
+char* get_blank_ballot_from_vote_request(char* request_pb);
 
 char* get_blank_ballot_from_vote_storage(char* vote_storage_pb);
+
+char* get_counter_id_from_decrypted_result_part(char* decrypted_result_part_pb);
 
 char* get_counter_id_from_decrypted_result_part_request(char* decrypted_result_part_request_pb);
 
