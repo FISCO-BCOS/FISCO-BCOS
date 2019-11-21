@@ -22,6 +22,7 @@
  */
 #pragma once
 #include "Common.h"
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Protocol.h>
 namespace dev
 {
@@ -63,6 +64,7 @@ public:
     virtual VIEWTYPE toView() const { return 0; }
 
     virtual bool shouldRecvTxs() const { return false; }
+    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
 };
 }  // namespace consensus
 }  // namespace dev

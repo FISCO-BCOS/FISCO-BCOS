@@ -35,6 +35,18 @@ namespace dev
 {
 namespace consensus
 {
+// for bip152: packetType for partiallyBlock
+enum P2PPacketType : uint32_t
+{
+    // PartiallyPreparePacket
+    // note: the forwarded prepare messages include all the transaction data
+    PartiallyPreparePacket = 0x1,
+    // represent that the node should response the missed transaction data
+    GetMissedTxsPacket = 0x2,
+    // represent that the node receives the missed transaction data
+    MissedTxsPacket = 0x3,
+};
+
 // for pbft
 enum PBFTPacketType : byte
 {
@@ -313,6 +325,8 @@ struct PrepareReq : public PBFTMsg
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
+
+    using Ptr = std::shared_ptr<PrepareReq>;
     /// default constructor
     PrepareReq() = default;
     PrepareReq(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,

@@ -283,7 +283,7 @@ public:
         return m_recvViewChangeReq;
     }
 
-private:
+protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
@@ -334,7 +334,7 @@ private:
         return (it->second.find(key)) != (it->second.end());
     }
 
-private:
+protected:
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
