@@ -1090,9 +1090,12 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
 Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
 {    
-
     try
     {
+        if (!g_BCOSConfig.migrateEnabled())
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::InvalidSystemConfig, RPCMsg[RPCExceptionType::InvalidSystemConfig]));
+                
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 

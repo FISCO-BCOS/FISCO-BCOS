@@ -52,6 +52,9 @@ public:
     void setChainId(int64_t _chainId) { m_chainId = _chainId; }
     int64_t chainId() const { return m_chainId; }
 
+    void setMigrate(bool const& migrate) { m_migrate = migrate; }
+    bool migrateEnabled() const { return m_migrate; }
+
     void setSupportedVersion(std::string const& _supportedVersion, VERSION _versionNumber)
     {
         m_supportedVersion = _supportedVersion;
@@ -87,6 +90,7 @@ private:
     VERSION m_version = RC3_VERSION;
     bool m_compress;
     int64_t m_chainId = 1;
+    bool m_migrate = false;
     std::string m_supportedVersion;
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
 };

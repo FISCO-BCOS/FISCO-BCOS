@@ -117,6 +117,9 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     bool enableCompress = _pt.get<bool>("p2p.enable_compress", true);
     g_BCOSConfig.setCompress(enableCompress);
 
+    bool enableMigrate = _pt.get<bool>("advance.enable_migrate", false);
+    g_BCOSConfig.setMigrate(enableMigrate);
+
     /// init version
     int64_t chainId = _pt.get<int64_t>("chain.id", 1);
     if (chainId < 0)

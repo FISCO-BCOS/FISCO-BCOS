@@ -142,8 +142,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     {
         return callRC2(_p, _gasPrice, _origin);
     }
-    // If external transaction.
-    if (m_t)
+    // If external transaction or in migrate mode.
+    if (g_BCOSConfig.migrateEnabled() || m_t)
     {
         // FIXME: changelog contains unrevertable balance change that paid
         //        for the transaction.
