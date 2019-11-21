@@ -206,12 +206,25 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     {
         mutableConsensusParam().blockSizeIncreaseRatio = 0.5;
     }
+    // set enableTTLOptimize
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", true);
+    }
+    else
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", false);
+    }
+
     LedgerParam_LOG(DEBUG)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
         << LOG_KV("minBlockGenerationTime", mutableConsensusParam().minBlockGenTime)
         << LOG_KV("enablDynamicBlockSize", mutableConsensusParam().enableDynamicBlockSize)
-        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio);
+        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
+        << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize);
 }
 
 

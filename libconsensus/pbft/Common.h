@@ -63,14 +63,28 @@ struct PBFTMsgPacket
     u256 timestamp;
     /// endpoint
     std::string endpoint;
+    // the node that disconnected from this node, but the packet should reach
+    std::shared_ptr<dev::h512s> forwardNodes;
 
     using Ptr = std::shared_ptr<PBFTMsgPacket>;
 
     /// default constructor
     PBFTMsgPacket()
-      : node_idx(0), node_id(h512(0)), packet_id(0), ttl(MAXTTL), timestamp(u256(utcTime()))
+      : node_idx(0),
+        node_id(h512(0)),
+        packet_id(0),
+        ttl(MAXTTL),
+        timestamp(u256(utcTime())),
+        forwardNodes(nullptr)
     {}
+
     virtual ~PBFTMsgPacket() = default;
+
+    void setForwardNodes(std::shared_ptr<dev::h512s> _forwardNodes)
+    {
+        forwardNodes = _forwardNodes;
+    }
+
     bool operator==(PBFTMsgPacket const& msg)
     {
         return node_idx == msg.node_idx && node_id == msg.node_id && packet_id == msg.packet_id &&
@@ -124,6 +138,38 @@ struct PBFTMsgPacket
             packet_id = rlp[field = 0].toInt<uint8_t>();
             ttl = rlp[field = 1].toInt<uint8_t>();
             data = rlp[field = 2].toBytes();
+        }
+        catch (Exception const& e)
+        {
+            e << dev::eth::errinfo_name("invalid msg format");
+            throw;
+        }
+    }
+};
+
+// PBFTMsgPacket for ttl-optimize
+class OPBFTMsgPacket : public PBFTMsgPacket
+{
+public:
+    using Ptr = std::shared_ptr<OPBFTMsgPacket>;
+    OPBFTMsgPacket() : PBFTMsgPacket()
+    {
+        // the node that disconnected from this node, but the packet should reach
+        forwardNodes = std::make_shared<dev::h512s>();
+    }
+
+    void streamRLPFields(RLPStream& _s) const override
+    {
+        PBFTMsgPacket::streamRLPFields(_s);
+        _s.appendVector(*forwardNodes);
+    }
+
+    void populate(RLP const& _rlp) override
+    {
+        try
+        {
+            PBFTMsgPacket::populate(_rlp);
+            *forwardNodes = _rlp[3].toVector<dev::h512>();
         }
         catch (Exception const& e)
         {
