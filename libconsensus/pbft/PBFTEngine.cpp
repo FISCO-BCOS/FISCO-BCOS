@@ -45,10 +45,19 @@ void PBFTEngine::start()
 {
     // create PBFTMsgFactory
     createPBFTMsgFactory();
-
+    // init enablePrepareWithTxsHash
+    if (m_enablePrepareWithTxsHash)
+    {
+        m_partiallyPrepareCache = std::make_shared<PartiallyPBFTReqCache>();
+        m_reqCache = m_partiallyPrepareCache;
+    }
+    else
+    {
+        m_reqCache = std::make_shared<PBFTReqCache>();
+    }
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::onRecvPBFTMessage, this, _1, _2, _3));
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
     initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
@@ -543,7 +552,6 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     if (isFuturePrepare(req))
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
-        m_reqCache->addFuturePrepareCache(req);
         return CheckResult::FUTURE;
     }
     if (!isValidLeader(req))
@@ -859,6 +867,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 
     if (valid_ret == CheckResult::FUTURE)
     {
+        m_reqCache->addFuturePrepareCache(prepareReq);
         return true;
     }
     /// add raw prepare request
@@ -1426,6 +1435,8 @@ void PBFTEngine::collectGarbage()
         std::chrono::seconds(m_timeManager.CollectInterval))
     {
         m_reqCache->collectGarbage(m_highestBlock);
+        // clear m_cachedForwardMsg
+        clearInvalidCachedForwardMsg();
         m_timeManager.m_lastGarbageCollection = now;
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                               << LOG_KV("Timecost", 1000 * t.elapsed());
@@ -1547,6 +1558,10 @@ void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
     PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
 {
+    if (_pbftMsgPacket->forwardNodes && _pbftMsgPacket->forwardNodes->size() == 0)
+    {
+        return false;
+    }
     if (!_valid || _key.size() == 0)
     {
         return false;
@@ -1625,8 +1640,10 @@ void PBFTEngine::waitSignal()
 void PBFTEngine::handleFutureBlock()
 {
     Guard l(m_mutex);
+    // handle the future block with full-txs firstly
     std::shared_ptr<PrepareReq> p_future_prepare =
         m_reqCache->futurePrepareCache(m_consensusBlockNumber);
+    bool succ = false;
     if (p_future_prepare && p_future_prepare->view == m_view)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock")
@@ -1636,8 +1653,28 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        handlePrepareMsg(*p_future_prepare);
+        succ = handlePrepareMsg(*p_future_prepare);
         m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
+    }
+
+    if (!m_enablePrepareWithTxsHash || succ)
+    {
+        return;
+    }
+    // miss the future prepare cache, find from the partially future prepare
+    auto partiallyFuturePrepare =
+        m_partiallyPrepareCache->getPartiallyFuturePrepare(m_consensusBlockNumber);
+    if (partiallyFuturePrepare && partiallyFuturePrepare->view == m_view)
+    {
+        PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock: partiallyFuturePrepare")
+                             << LOG_KV("reqNum", partiallyFuturePrepare->height)
+                             << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("view", m_view)
+                             << LOG_KV("conNum", m_consensusBlockNumber)
+                             << LOG_KV("hash", partiallyFuturePrepare->block_hash.abridged())
+                             << LOG_KV("nodeIdx", nodeIdx())
+                             << LOG_KV("myNode", m_keyPair.pub().abridged());
+        handlePartiallyPrepare(partiallyFuturePrepare);
+        m_partiallyPrepareCache->eraseHandledPartiallyFutureReq(partiallyFuturePrepare->height);
     }
 }
 
@@ -1960,6 +1997,137 @@ void PBFTEngine::onReceiveGetMissedTxsRequest(
     }
 }
 
+void PBFTEngine::handleP2PMessage(
+    NetworkException _exception, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    if (!m_enablePrepareWithTxsHash)
+    {
+        onRecvPBFTMessage(_exception, _session, _message);
+        return;
+    }
+    try
+    {
+        // update the network-in statistic information
+        if (m_statisticHandler && (_message->packetType() != 0))
+        {
+            m_statisticHandler->updateConsInPacketsInfo(_message->packetType(), _message->length());
+        }
+        switch (_message->packetType())
+        {
+        case PartiallyPreparePacket:
+            m_prepareWorker->enqueue(
+                [this, _session, _message]() { handlePartiallyPrepare(_session, _message); });
+            break;
+        // receive getMissedPacket request, response missed transactions
+        case GetMissedTxsPacket:
+            m_messageHandler->enqueue(
+                [this, _session, _message]() { onReceiveGetMissedTxsRequest(_session, _message); });
+            break;
+        // receive missed transactions, fill block
+        case MissedTxsPacket:
+            m_messageHandler->enqueue(
+                [this, _session, _message]() { onReceiveMissedTxsResponse(_session, _message); });
+            break;
+        default:
+            onRecvPBFTMessage(_exception, _session, _message);
+            break;
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        PBFTENGINE_LOG(WARNING) << LOG_DESC("handleP2PMessage: invalid message")
+                                << LOG_KV("peer", _session->nodeID().abridged())
+                                << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+// handle Partially prepare
+bool PBFTEngine::handlePartiallyPrepare(
+    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    // decode the _message into prepareReq
+    PBFTMsgPacket::Ptr pbftMsg = m_pbftMsgFactory->createPBFTMsgPacket();
+    if (!decodePBFTMsgPacket(pbftMsg, _message, _session))
+    {
+        return false;
+    }
+    PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
+    if (!decodeToRequests(*prepareReq, ref(pbftMsg->data)))
+    {
+        return false;
+    }
+    Guard l(m_mutex);
+    bool succ = handlePartiallyPrepare(prepareReq);
+    // maybe return succ for addFuturePrepare
+    if (!prepareReq->pBlock)
+    {
+        return false;
+    }
+    if (needForwardMsg(succ, prepareReq->uniqueKey(), pbftMsg, *prepareReq))
+    {
+        // all hit ?
+        if (prepareReq->pBlock->txsAllHit())
+        {
+            forwardPrepareMsg(pbftMsg, prepareReq);
+            return succ;
+        }
+        clearInvalidCachedForwardMsg();
+        // pbftMsg->packet_id = PrepareReqPacket;
+        m_cachedForwardMsg->insert(
+            std::make_pair(prepareReq->block_hash, std::make_pair(prepareReq->height, pbftMsg)));
+    }
+
+    return succ;
+}
+
+void PBFTEngine::onReceiveMissedTxsResponse(
+    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    try
+    {
+        Guard l(m_mutex);
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveMissedTxsResponse and fillBlock")
+                              << LOG_KV("size", _message->length())
+                              << LOG_KV("peer", _session->nodeID().abridged());
+        if (!m_partiallyPrepareCache->fillBlock(ref(*(_message->buffer()))))
+        {
+            return;
+        }
+        // handlePrepare
+        auto prepareReq = m_partiallyPrepareCache->partiallyRawPrepare();
+        bool ret = handlePrepareMsg(*prepareReq);
+        // forward the completed prepare message
+        if (ret && m_cachedForwardMsg->count(prepareReq->block_hash))
+        {
+            auto pbftMsg = (*m_cachedForwardMsg)[prepareReq->block_hash].second;
+            // forward the message
+            forwardPrepareMsg(pbftMsg, prepareReq);
+        }
+        m_cachedForwardMsg->erase(prepareReq->block_hash);
+    }
+    catch (std::exception const& _e)
+    {
+        PBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveMissedTxsResponse exceptioned")
+                                << LOG_KV("peer", _session->nodeID().abridged())
+                                << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+void PBFTEngine::clearInvalidCachedForwardMsg()
+{
+    for (auto it = m_cachedForwardMsg->begin(); it != m_cachedForwardMsg->end();)
+    {
+        if (it->second.first < m_highestBlock.number() &&
+            m_highestBlock.number() - it->second.first >= 10)
+        {
+            it = m_cachedForwardMsg->erase(it);
+        }
+        else
+        {
+            it++;
+        }
+    }
+}
 
 }  // namespace consensus
 }  // namespace dev

@@ -237,7 +237,13 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
 dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
 {
-    return std::make_shared<dev::eth::BlockFactory>();
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 ||
+        !m_param->mutableConsensusParam().enablePrepareWithTxsHash)
+    {
+        return std::make_shared<dev::eth::BlockFactory>();
+    }
+    // only create PartiallyBlockFactory for PBFT when enablePrepareWithTxsHash
+    return std::make_shared<dev::eth::PartiallyBlockFactory>();
 }
 
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
@@ -252,6 +258,8 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setBaseDir(m_param->baseDir());
     pbftEngine->setEnableTTLOptimize(m_param->mutableConsensusParam().enableTTLOptimize);
+    pbftEngine->setEnablePrepareWithTxsHash(
+        m_param->mutableConsensusParam().enablePrepareWithTxsHash);
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
