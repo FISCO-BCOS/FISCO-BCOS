@@ -214,7 +214,6 @@ public:
 
     VIEWTYPE view() const override { return m_view; }
     VIEWTYPE toView() const override { return m_toView; }
-    bool shouldRecvTxs() const override { return m_blockSync->isFarSyncing(); }
     void resetConfig() override;
     void setEnableTTLOptimize(bool const& _enableTTLOptimize)
     {

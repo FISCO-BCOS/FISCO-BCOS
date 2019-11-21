@@ -68,6 +68,23 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
         m_lastSealerListUpdateNumber = m_blockChain->number();
+
+        // only send transactions to the current consensus nodes
+        m_blockSync->registerTxsReceiversFilter(
+            [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
+                std::shared_ptr<dev::p2p::NodeIDs> selectedNode =
+                    std::make_shared<dev::p2p::NodeIDs>();
+
+                ReadGuard l(m_sealerListMutex);
+                for (auto const& peer : m_sealerList)
+                {
+                    if (_peers->count(peer))
+                    {
+                        selectedNode->push_back(peer);
+                    }
+                }
+                return selectedNode;
+            });
     }
 
     void start() override;

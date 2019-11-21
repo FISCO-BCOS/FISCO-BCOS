@@ -201,9 +201,9 @@ bool SyncMaster::isSyncing() const
 }
 
 // is my number is far smaller than max block number of this block chain
-bool SyncMaster::isFarSyncing() const
+bool SyncMaster::blockNumberFarBehind() const
 {
-    return m_msgEngine->isFarSyncing();
+    return m_msgEngine->blockNumberFarBehind();
 }
 
 void SyncMaster::maintainBlocks()

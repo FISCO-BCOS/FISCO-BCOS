@@ -525,6 +525,8 @@ function generate_group_ini()
     ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
+    ;enable_ttl_optimization=true
+    ;enable_prepare_with_txsHash=true
 [storage]
     ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended
     type=${storage_type}
@@ -552,7 +554,7 @@ function generate_group_ini()
     enable_parallel=${enable_parallel}
 [sync]
     idle_wait_ms=200
-    send_block_status_by_tree=true
+    sync_by_tree=true
     gossip_interval_ms=1000
     gossip_peers_number=3
     sync_tree_width=3
