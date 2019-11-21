@@ -41,7 +41,9 @@ public:
         dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
       : RaftEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _keyPair,
             _minElectTime, _maxElectTime, _protocolId, _sealerList)
-    {}
+    {
+        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+    }
 
     /*
     void updateSealerList()

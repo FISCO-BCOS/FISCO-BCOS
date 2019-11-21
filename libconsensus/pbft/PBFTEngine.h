@@ -160,7 +160,7 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block const& block);
+    bool generatePrepare(dev::eth::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -234,16 +234,18 @@ protected:
 
     // broadcast given messages to all-peers with cache-filter and specified filter
     virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
-        bytesConstRef _data, std::unordered_set<dev::network::NodeID> const& _filter,
-        unsigned const& _ttl,
+        bytesConstRef _data, PACKET_TYPE const& _p2pPacketType,
+        std::unordered_set<dev::network::NodeID> const& _filter, unsigned const& _ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
 
     bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
+        PACKET_TYPE const& _p2pPacketType = 0,
         std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
         unsigned const& _ttl = 0)
     {
-        return broadcastMsg(_packetType, _key, _data, _filter, _ttl, m_broacastTargetsFilter);
+        return broadcastMsg(
+            _packetType, _key, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
     }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -614,17 +616,21 @@ protected:
     virtual void createPBFTMsgFactory();
 
     virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl);
+        unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType);
     std::shared_ptr<dev::h512s> getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions);
 
 
     // BIP 152 related logic
+    virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
     virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
         std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
 
     bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
 
     bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& _oss);
+    void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
+    void onReceiveGetMissedTxsRequest(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
@@ -685,6 +691,8 @@ protected:
     mutable SharedMutex x_consensusSet;
     std::shared_ptr<std::set<dev::h512>> m_consensusSet;
     PartiallyPBFTReqCache::Ptr m_partiallyPrepareCache = nullptr;
+    // bip 152 releted
+    bool m_enablePrepareWithTxsHash = false;
 };
 }  // namespace consensus
 }  // namespace dev

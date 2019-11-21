@@ -47,6 +47,7 @@ public:
     PrepareReq::Ptr partiallyRawPrepare() { return m_partiallyRawPrepare; }
     virtual void transPartiallyPrepareIntoRawPrepare()
     {
+        WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = *m_partiallyRawPrepare;
     }
 
@@ -58,9 +59,8 @@ public:
 
     PrepareReq::Ptr getPartiallyFuturePrepare(int64_t const& _consensusNumber);
     virtual void eraseHandledPartiallyFutureReq(int64_t const& _blockNumber);
-#if 0
+
     void removeInvalidFutureCache(int64_t const& _highestBlockNumber) override;
-#endif
 
 private:
     PrepareReq::Ptr m_partiallyRawPrepare;

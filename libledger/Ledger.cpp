@@ -235,6 +235,11 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     return pbftSealer;
 }
 
+dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
+{
+    return std::make_shared<dev::eth::BlockFactory>();
+}
+
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 {
     /// set params for PBFTEngine
@@ -299,6 +304,10 @@ bool Ledger::consensusInitFactory()
 
     /// create PBFTSealer
     m_sealer = createPBFTSealer();
+    // create blockFactory
+    auto blockFactory = createBlockFactory();
+    m_sealer->setBlockFactory(blockFactory);
+
     if (!m_sealer)
     {
         return false;
