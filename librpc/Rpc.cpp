@@ -1095,8 +1095,6 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
     {
          RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-        std::vector<std::string> KV;
-        boost::split(KV, _rlp, boost::is_any_of(","));
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto blockVerifier = ledgerManager()->blockVerifier(_groupID);
@@ -1115,7 +1113,9 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         #endif
         dev::eth::Block block;
         block.setBlockHeader(header);
-    
+
+        std::vector<std::string> KV;
+        boost::split(KV, _rlp, boost::is_any_of(","));
         for (auto& kv : KV)
         {
                    

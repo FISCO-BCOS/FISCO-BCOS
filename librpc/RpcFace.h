@@ -134,7 +134,7 @@ public:
         // used in dev and test, directly submit the transactions.
         this->bindAndAddMethod(jsonrpc::Procedure("submitTransactions", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
-                                   jsonrpc::JSON_ARRAY, NULL),
+                                   jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::submitTransactionsI);
     }
 
@@ -311,7 +311,7 @@ public:
     virtual Json::Value call(int param1, const Json::Value& param2) = 0;
     /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
-    virtual std::string submitTransactions(int param1, const std::string& param2) = 0;
+    virtual Json::Value submitTransactions(int param1, const std::string& param2) = 0;
 };
 
 }  // namespace rpc
