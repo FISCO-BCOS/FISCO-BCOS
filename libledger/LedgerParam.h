@@ -61,6 +61,7 @@ struct ConsensusParam
     float blockSizeIncreaseRatio = 0.5;
     // enable optimize ttl or not
     bool enableTTLOptimize;
+    bool enablePrepareWithTxsHash;
 };
 
 struct AMDBParam

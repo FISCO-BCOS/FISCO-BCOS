@@ -66,6 +66,7 @@ public:
         setMaxBlockTransactions(300000000);
         createPBFTMsgFactory();
         m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+        m_reqCache = std::make_shared<PBFTReqCache>();
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }

@@ -218,13 +218,25 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
             pt.get<bool>("consensus.enable_ttl_optimization", false);
     }
 
+    // set enableTxsWithTxsHash
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
+    }
+    else
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
+    }
     LedgerParam_LOG(DEBUG)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
         << LOG_KV("minBlockGenerationTime", mutableConsensusParam().minBlockGenTime)
         << LOG_KV("enablDynamicBlockSize", mutableConsensusParam().enableDynamicBlockSize)
         << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
-        << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize);
+        << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize)
+        << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash);
 }
 
 

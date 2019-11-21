@@ -73,7 +73,6 @@ public:
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
 
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-        m_reqCache = std::make_shared<PBFTReqCache>();
 
         /// set thread name for PBFTEngine
         std::string threadName = "PBFT-" + std::to_string(m_groupId);
@@ -88,6 +87,13 @@ public:
         m_statisticHandler = m_service->statisticHandler();
 
         m_consensusSet = std::make_shared<std::set<dev::h512>>();
+
+        m_messageHandler = std::make_shared<dev::ThreadPool>(
+            "PBFT-messageHandler-" + std::to_string(_protocolId), 1);
+        m_prepareWorker =
+            std::make_shared<dev::ThreadPool>("PBFT-worker-" + std::to_string(_protocolId), 1);
+        m_cachedForwardMsg =
+            std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -213,6 +219,11 @@ public:
     void setEnableTTLOptimize(bool const& _enableTTLOptimize)
     {
         m_enableTTLOptimize = _enableTTLOptimize;
+    }
+
+    void setEnablePrepareWithTxsHash(bool const& _enablePrepareWithTxsHash)
+    {
+        m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
     }
 
 protected:
@@ -621,16 +632,24 @@ protected:
 
 
     // BIP 152 related logic
+    void handleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
     virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
     virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
         std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
 
+    bool handlePartiallyPrepare(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
     bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
 
     bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& _oss);
     void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
     void onReceiveGetMissedTxsRequest(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    void onReceiveMissedTxsResponse(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    void clearInvalidCachedForwardMsg();
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
@@ -683,15 +702,17 @@ protected:
 
     std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
-
-    // bip 152 release logic
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
-
+    // ttl-optimize related logic
     bool m_enableTTLOptimize = false;
     mutable SharedMutex x_consensusSet;
     std::shared_ptr<std::set<dev::h512>> m_consensusSet;
+
+    // bip 152 related logic
     PartiallyPBFTReqCache::Ptr m_partiallyPrepareCache = nullptr;
-    // bip 152 releted
+    std::shared_ptr<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>> m_cachedForwardMsg;
+    dev::ThreadPool::Ptr m_prepareWorker;
+    dev::ThreadPool::Ptr m_messageHandler;
     bool m_enablePrepareWithTxsHash = false;
 };
 }  // namespace consensus
