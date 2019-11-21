@@ -776,5 +776,40 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
     }
     return unknownTxs;
 }
+
+// init the PartiallyBlock
+bool TxPool::initPartiallyBlock(dev::eth::Block::Ptr _block)
+{
+    PartiallyBlock::Ptr partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(_block);
+    assert(partiallyBlock);
+    auto txsHash = partiallyBlock->txsHash();
+    auto transactions = partiallyBlock->transactions();
+    auto missedTxs = partiallyBlock->missedTxs();
+    // fetch all the hitted transactions
+    {
+        ReadGuard l(m_lock);
+        int64_t index = 0;
+        for (auto const& hash : *txsHash)
+        {
+            if (m_txsHash.count(hash))
+            {
+                (*transactions)[index] = *(m_txsHash[hash]);
+            }
+            else
+            {
+                missedTxs->push_back(std::make_pair(hash, index));
+            }
+            index++;
+        }
+    }
+    // missed some transactions
+    if (missedTxs->size() > 0)
+    {
+        return false;
+    }
+    // hit all the transactions
+    return true;
+}
+
 }  // namespace txpool
 }  // namespace dev

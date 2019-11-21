@@ -34,7 +34,7 @@ bool PartiallyPBFTReqCache::addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRaw
         return false;
     }
     // decode the partiallyBlock
-    _partiallyRawPrepare->pBlock->decodeProposal(ref(_partiallyRawPrepare->block), true);
+    _partiallyRawPrepare->pBlock->decodeProposal(ref(*_partiallyRawPrepare->block), true);
     m_partiallyRawPrepare = _partiallyRawPrepare;
 
     PartiallyPBFTReqCache_LOG(INFO)
@@ -66,6 +66,7 @@ bool PartiallyPBFTReqCache::fetchMissedTxs(
 {
     // this lock is necessary since the transactions-request may occurred when rawPrepareCache
     // changed
+    ReadGuard l(x_rawPrepareCache);
     if (!m_rawPrepareCache.pBlock)
     {
         return false;
@@ -116,7 +117,6 @@ void PartiallyPBFTReqCache::eraseHandledPartiallyFutureReq(int64_t const& _block
     }
 }
 
-#if 0
 void PartiallyPBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBlockNumber)
 {
     PBFTReqCache::removeInvalidFutureCache(_highestBlockNumber);
@@ -132,4 +132,3 @@ void PartiallyPBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBloc
         }
     }
 }
-#endif

@@ -117,6 +117,12 @@ public:
         m_consensusEngine = _consensusEngine;
     }
 
+    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    {
+        m_sealing.setBlockFactory(_blockFactory);
+        m_consensusEngine->setBlockFactory(_blockFactory);
+    }
+
 protected:
     void reportNewBlock();
     /// sealing block
