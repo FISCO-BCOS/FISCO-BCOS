@@ -112,7 +112,8 @@ enum class ImportResult
     TransactionPoolIsFull,
     InvalidChainIdOrGroupId,
     BlockLimitCheckFailed,
-    NotBelongToTheGroup
+    NotBelongToTheGroup,
+    TransactionRefused
 };
 
 struct ImportRequirements

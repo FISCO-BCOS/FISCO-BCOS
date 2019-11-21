@@ -52,7 +52,7 @@ public:
     virtual bool isSyncing() const = 0;
 
     // is my number is far smaller than max block number of this block chain
-    virtual bool isFarSyncing() const = 0;
+    virtual bool blockNumberFarBehind() const = 0;
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;

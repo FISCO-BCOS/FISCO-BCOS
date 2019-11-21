@@ -321,8 +321,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
 
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                            << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
-    mutableSyncParam().enableSendBlockStatusByTree =
-        pt.get<bool>("sync.send_block_status_by_tree", true);
+    mutableSyncParam().enableSendBlockStatusByTree = pt.get<bool>("sync.sync_by_tree", true);
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                            << LOG_KV("enableSendBlockStatusByTree",
                                   mutableSyncParam().enableSendBlockStatusByTree);

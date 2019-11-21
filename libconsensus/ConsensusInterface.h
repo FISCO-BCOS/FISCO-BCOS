@@ -62,8 +62,6 @@ public:
     virtual uint64_t maxBlockTransactions() { return 1000; }
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
-
-    virtual bool shouldRecvTxs() const { return false; }
     virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
 };
 }  // namespace consensus

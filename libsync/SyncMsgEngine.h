@@ -75,7 +75,7 @@ public:
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
 
-    bool isFarSyncing() const;
+    bool blockNumberFarBehind() const;
 
     void onNotifyWorker(std::function<void()> const& _f) { m_onNotifyWorker = _f; }
     void onNotifySyncTrans(std::function<void()> const& _f) { m_onNotifySyncTrans = _f; }

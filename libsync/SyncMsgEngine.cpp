@@ -187,10 +187,10 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
     }
 }
 
-bool SyncMsgEngine::isFarSyncing() const
+bool SyncMsgEngine::blockNumberFarBehind() const
 {
     int64_t currentNumber = m_blockChain->number();
-    return m_syncStatus->knownHighestNumber - currentNumber > 10;
+    return m_syncStatus->knownHighestNumber - currentNumber > 20;
 }
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg)

@@ -222,6 +222,10 @@ private:
     void notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet);
 
     bool isSealerOrObserver();
+    void registerSyncStatusChecker(std::function<bool()> _handler) override
+    {
+        m_syncStatusChecker = _handler;
+    }
 
 private:
     /// p2p module
@@ -256,6 +260,8 @@ private:
     std::condition_variable m_signalled;
     std::shared_ptr<std::map<dev::h256, dev::u256>> m_invalidTxs;
     mutable SharedMutex x_invalidTxs;
+
+    std::function<bool()> m_syncStatusChecker;
 };
 }  // namespace txpool
 }  // namespace dev

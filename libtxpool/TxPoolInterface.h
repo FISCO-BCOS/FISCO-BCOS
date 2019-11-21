@@ -144,6 +144,7 @@ public:
     }
 
     virtual bool initPartiallyBlock(std::shared_ptr<dev::eth::Block>) { return true; }
+    virtual void registerSyncStatusChecker(std::function<bool()>) {}
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

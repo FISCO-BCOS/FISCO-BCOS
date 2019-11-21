@@ -42,7 +42,7 @@ public:
     SyncStatus status() const override { return m_syncStatus; }
     std::string const syncInfo() const override { return m_syncInfo; }
     bool isSyncing() const override { return m_isSyncing; }
-    bool isFarSyncing() const override { return false; }
+    bool blockNumberFarBehind() const override { return false; }
     void setSyncing(bool syncing)
     {
         m_isSyncing = syncing;

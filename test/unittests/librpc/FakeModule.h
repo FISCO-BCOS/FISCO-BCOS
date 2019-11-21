@@ -496,7 +496,7 @@ public:
         return syncStatus;
     }
     bool isSyncing() const override { return m_isSyncing; }
-    bool isFarSyncing() const override { return false; }
+    bool blockNumberFarBehind() const override { return false; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
