@@ -77,8 +77,7 @@ bool PartiallyPBFTReqCache::fetchMissedTxs(
     partiallyBlock->fetchMissedTxs(_encodedBytes, _missInfo, m_rawPrepareCache.block_hash);
     PartiallyPBFTReqCache_LOG(DEBUG)
         << LOG_DESC("fetchMissedTxs") << LOG_KV("number", partiallyBlock->blockHeader().number())
-        << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged())
-        << LOG_KV("missedSize", partiallyBlock->missedTxs()->size());
+        << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged());
     return true;
 }
 

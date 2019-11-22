@@ -62,7 +62,8 @@ public:
 
 private:
     void encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
-        std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs);
+        std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs,
+        dev::h256 const& _expectedHash);
     void calTxsHashBytes();
     void checkBasic(RLP const& rlp, dev::h256 const& _expectedHash);
 

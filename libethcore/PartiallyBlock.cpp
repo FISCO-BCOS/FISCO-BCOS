@@ -185,6 +185,8 @@ void PartiallyBlock::fetchMissedTxs(
     }
     // decode _missInfo
     RLP missedInfoRlp(_missInfo);
+    // Note: since the blockHash maybe changed after the block executed,
+    // so should check the block_hash of rawPrepareCache
     checkBasic(missedInfoRlp, _expectedHash);
 
     std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> missedTxs =
@@ -192,12 +194,13 @@ void PartiallyBlock::fetchMissedTxs(
 
     *missedTxs = missedInfoRlp[2].toVector<std::pair<dev::h256, uint64_t>>();
 
-    encodeMissedTxs(_encodedBytes, missedTxs);
+    encodeMissedTxs(_encodedBytes, missedTxs, _expectedHash);
 }
 
 
 void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
-    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs)
+    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs,
+    dev::h256 const& _expectedHash)
 {
     std::shared_ptr<Transactions> missedTransactions = std::make_shared<Transactions>();
 
@@ -217,10 +220,16 @@ void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
         }
         missedTransactions->emplace_back(tx);
     }
+    PartiallyBlock_LOG(DEBUG) << LOG_DESC("fetchMissedTxs")
+                              << LOG_KV("hash", _expectedHash.abridged())
+                              << LOG_KV("number", m_blockHeader.number())
+                              << LOG_KV("txsSize", missedTransactions->size());
     // encode the missedTransactions
     RLPStream txsStream;
     txsStream.appendList(3);
-    txsStream << m_blockHeader.number() << m_blockHeader.hash();
+    // Note: since the blockHash maybe changed after the block executed,
+    // so should set the block_hash of rawPrepareCache into the hash field
+    txsStream << m_blockHeader.number() << _expectedHash;
     auto txsBytes = TxsParallelParser::encode(missedTransactions);
 
     txsStream.append(ref(txsBytes));
