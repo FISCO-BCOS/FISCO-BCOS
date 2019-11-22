@@ -291,35 +291,31 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
 bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
+    // create RaftSealer
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
-        /// create RaftSealer
         m_sealer = createRaftSealer();
-        if (!m_sealer)
-        {
-            return false;
-        }
-        return true;
     }
-
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+    // create PBFTSealer
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
-        Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
-                          << LOG_KV("UnsupportConsensusType",
-                                 m_param->mutableConsensusParam().consensusType)
-                          << " use PBFT as default";
+        m_sealer = createPBFTSealer();
     }
-
-    /// create PBFTSealer
-    m_sealer = createPBFTSealer();
+    else
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed()
+            << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
+                               m_param->mutableConsensusParam().consensusType));
+    }
+    if (!m_sealer)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
+    }
     // create blockFactory
     auto blockFactory = createBlockFactory();
     m_sealer->setBlockFactory(blockFactory);
-
-    if (!m_sealer)
-    {
-        return false;
-    }
     return true;
 }
 
