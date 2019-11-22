@@ -35,7 +35,7 @@
 
 ## 文档
 
-阅读[**技术文档**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/release-2.0/)，详细了解如何使用FISCO BCOS。
+阅读[**技术文档**](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)，详细了解如何使用FISCO BCOS。
 
 - [2.0版本新特性](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/what_is_new.html)
 - [版本及兼容](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
