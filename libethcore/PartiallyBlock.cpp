@@ -26,7 +26,6 @@
 
 using namespace dev;
 using namespace dev::eth;
-
 void PartiallyBlock::encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash)
 {
     if (!_onlyTxsHash)

@@ -70,9 +70,10 @@ enum class TransactionException : uint32_t
     TransactionRefused = 29,
     AlreadyKnown = 10000,  /// txPool related errors
     AlreadyInChain = 10001,
-    InvalidChainIdOrGroupId = 10002,
-    NotBelongToTheGroup = 10003,
-    MalformedTx = 10004
+    InvalidChainId = 10002,
+    InvalidGroupId = 10003,
+    RequestNotBelongToTheGroup = 10004,
+    MalformedTx = 10005
 };
 
 enum class CodeDeposit

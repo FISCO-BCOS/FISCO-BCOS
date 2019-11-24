@@ -173,7 +173,7 @@ void RaftEngine::reportBlock(dev::eth::Block const& _block)
 
         resetConfig();
         RAFTENGINE_LOG(INFO) << LOG_DESC("[#reportBlock]^^^^^^^^Report Block")
-                             << LOG_KV("number", m_highestBlock.number())
+                             << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("sealer", m_highestBlock.sealer())
                              << LOG_KV("hash", m_highestBlock.hash().abridged())
                              << LOG_KV("next", m_consensusBlockNumber)

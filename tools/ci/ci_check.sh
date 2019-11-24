@@ -22,6 +22,8 @@ EOF
     cd nodes/127.0.0.1
 }
 
+is_raft=0
+
 send_transaction()
 {
     LOG_INFO "==============send a transaction"
@@ -29,7 +31,11 @@ send_transaction()
         LOG_ERROR "send transaction failed!"
         exit 1
     fi
-    sleep 1.5
+    if [ ${is_raft} -eq 0 ];then
+        sleep 1.5
+    else
+        sleep 4
+    fi
     LOG_INFO "==============send a transaction is ok"
 }
 
@@ -70,7 +76,7 @@ check_sync_consensus()
     LOG_INFO "[round2]==============restart all node"
     bash stop_all.sh
     rm -rf node*/log
-    bash start_all.sh
+    bash start_all.sh && sleep 1
 
     send_transaction
     LOG_INFO "[round2]==============send a transaction is ok"
@@ -87,16 +93,8 @@ check_sync_consensus()
     bash stop_all.sh
 }
 
-check_binarylog()
+check_consensus_and_sync()
 {
-    LOG_INFO "***************check_binarylog"
-    rm -rf node*/data node*/log
-    local sed_cmd="sed -i"
-    if [ "$(uname)" == "Darwin" ];then
-        sed_cmd="sed -i .bkp"
-    fi
-    ${sed_cmd} "s/binary_log=false/binary_log=true/" node0/conf/group.1.ini
-    ${sed_cmd} "s/binary_log=false/binary_log=true/" node1/conf/group.1.ini
     bash start_all.sh
     send_transaction
     check_reports 1 4 "check report block failed!" "==============check report block is ok"
@@ -108,6 +106,33 @@ check_binarylog()
     bash stop_all.sh
 }
 
+check_binarylog()
+{
+    LOG_INFO "***************check_binarylog"
+    rm -rf node*/data node*/log
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd} "s/binary_log=false/binary_log=true/" node0/conf/group.1.ini
+    ${sed_cmd} "s/binary_log=false/binary_log=true/" node1/conf/group.1.ini
+    check_consensus_and_sync
+}
+
+check_raft()
+{
+    LOG_INFO "***************check_raft"
+    rm -rf node*/log node*/data
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd} "s/consensus_type=pbft/consensus_type=raft/" node*/conf/group.1.genesis
+    check_consensus_and_sync
+}
+
 init
 check_sync_consensus
 check_binarylog
+is_raft=1
+check_raft

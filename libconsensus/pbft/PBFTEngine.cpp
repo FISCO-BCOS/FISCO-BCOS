@@ -55,6 +55,8 @@ void PBFTEngine::start()
     {
         m_reqCache = std::make_shared<PBFTReqCache>();
     }
+    m_reqCache->setGroupId(m_groupId);
+
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
@@ -123,13 +125,25 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                          << LOG_KV("nodeId", m_keyPair.pub().abridged())
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
     m_broadCastCache->clearAll();
-    PrepareReq prepare_req(req, m_keyPair, m_view, nodeIdx());
+    std::shared_ptr<PrepareReq> prepareReq =
+        std::make_shared<PrepareReq>(req, m_keyPair, m_view, nodeIdx());
 
-    std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-    prepare_req.encode(*prepare_data);
-    /// broadcast prepare message
-    broadcastMsg(PrepareReqPacket, prepare_req.uniqueKey(), ref(*prepare_data));
-    handlePrepareMsg(prepare_req);
+    m_threadPool->enqueue([this, prepareReq]() {
+        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+        prepareReq->pBlock = m_blockFactory->createBlock();
+        prepareReq->pBlock->decodeProposal(ref(*prepareReq->block), m_enablePrepareWithTxsHash);
+        prepareReq->encode(*prepare_data);
+        if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
+        {
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data),
+                PartiallyPreparePacket);
+        }
+        else
+        {
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+        }
+    });
+    handlePrepareMsg(*prepareReq);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
     m_blockSync->noteSealingBlockNumber(m_blockChain->number());

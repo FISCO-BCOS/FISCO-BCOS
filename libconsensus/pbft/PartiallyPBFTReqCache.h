@@ -25,8 +25,11 @@
 #include "PBFTReqCache.h"
 #include <libethcore/PartiallyBlock.h>
 
-#define PartiallyPBFTReqCache_LOG(LEVEL) \
-    LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PartiallyPBFTReqCache")
+#define PartiallyPBFTReqCache_LOG(LEVEL)                            \
+    LOG(LEVEL) << LOG_BADGE(m_groupIdStr) << LOG_BADGE("CONSENSUS") \
+               << LOG_BADGE("PartiallyPBFTReqCache")
+
+
 namespace dev
 {
 namespace consensus
