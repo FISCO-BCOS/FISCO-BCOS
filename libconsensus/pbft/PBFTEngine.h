@@ -74,6 +74,7 @@ public:
 
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
 
+        m_groupIdStr = "g:" + std::to_string(m_groupId);
         /// set thread name for PBFTEngine
         std::string threadName = "PBFT-" + std::to_string(m_groupId);
         setName(threadName);
@@ -713,6 +714,7 @@ protected:
     dev::ThreadPool::Ptr m_prepareWorker;
     dev::ThreadPool::Ptr m_messageHandler;
     bool m_enablePrepareWithTxsHash = false;
+    std::string m_groupIdStr;
 };
 }  // namespace consensus
 }  // namespace dev

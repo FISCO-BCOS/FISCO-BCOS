@@ -110,7 +110,8 @@ enum class ImportResult
     TransactionNonceCheckFail,
     TxPoolNonceCheckFail,
     TransactionPoolIsFull,
-    InvalidChainIdOrGroupId,
+    InvalidChainId,
+    InvalidGroupId,
     BlockLimitCheckFailed,
     NotBelongToTheGroup,
     TransactionRefused

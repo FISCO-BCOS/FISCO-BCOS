@@ -23,6 +23,7 @@
 #pragma once
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
@@ -40,7 +41,8 @@ class FakeBlock
 {
 public:
     /// for normal case test
-    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0)
+    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0,
+        std::shared_ptr<BlockFactory> _blockFactory = nullptr)
     {
         m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
         m_transaction = std::make_shared<Transactions>();
@@ -50,7 +52,14 @@ public:
         FakeSigList(size);
         FakeTransaction(size);
         FakeTransactionReceipt(size);
-        m_block = std::make_shared<Block>();
+        if (_blockFactory)
+        {
+            m_block = _blockFactory->createBlock();
+        }
+        else
+        {
+            m_block = std::make_shared<Block>();
+        }
         m_block->setSigList(m_sigList);
         m_block->setTransactions(m_transaction);
         m_block->setBlockHeader(m_blockHeader);
@@ -62,12 +71,19 @@ public:
     }
 
     /// for empty case test
-    FakeBlock()
+    FakeBlock(std::shared_ptr<BlockFactory> _blockFactory = nullptr)
     {
         m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
         m_transaction = std::make_shared<Transactions>();
         m_transactionReceipt = std::make_shared<TransactionReceipts>();
-        m_block = std::make_shared<Block>();
+        if (_blockFactory)
+        {
+            m_block = _blockFactory->createBlock();
+        }
+        else
+        {
+            m_block = std::make_shared<Block>();
+        }
         m_block->setBlockHeader(m_blockHeader);
         m_block->encode(m_blockData);
     }
