@@ -71,6 +71,12 @@ macro(configure_project)
         add_definitions(-DFISCO_GM)
     endif()
 
+    # WeDPR extension module
+    eth_default_option(WEDPR_EXTENSION OFF)
+    if(WEDPR_EXTENSION)
+        add_definitions(-DFISCO_WEDPR_EXTENSION)
+    endif()
+
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
@@ -127,6 +133,7 @@ macro(print_config NAME)
 if (BUILD_GM)
     message("-- BUILD_GM         Build GM                     ${BUILD_GM}")
 endif()
+    message("-- WEDPR_EXTENSION   Build WeDPR extension       ${WEDPR_EXTENSION}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

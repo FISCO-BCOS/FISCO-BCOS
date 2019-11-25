@@ -88,6 +88,14 @@ const int USER_TABLE_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
+void logError(const std::string& precompiled_name, const std::string& op, const std::string& msg);
+
+void logError(const std::string& precompiled_name, const std::string& op, const std::string& key,
+    const std::string& value);
+
+void throwException(const std::string& msg);
+
+char* stringToChar(std::string& params);
 
 }  // namespace precompiled
 }  // namespace dev

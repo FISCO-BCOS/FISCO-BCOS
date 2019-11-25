@@ -77,6 +77,32 @@ jobs:
             - FISCO-BCOS/tools/*
             - FISCO-BCOS/.codecov.yml
 
+  build_wedpr_test:
+    working_directory: /FISCO-BCOS
+    executor: ubuntu-build-env
+    steps:
+      - install_depencies:
+          packages: "ccache lcov"
+      - checkout
+      - restore_cache:
+          keys:
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
+      - compile:
+          options: "-DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWEDPR_EXTENSION=ON"
+      - save_cache:
+          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          paths:
+            - deps
+            - /ccache
+      - run:
+          name: Unit test
+          command: |
+            cd build
+            CTEST_OUTPUT_ON_FAILURE=TRUE make test
+            rm -rf /FISCO-BCOS/deps
+
   generate_coverage:
     working_directory: /FISCO-BCOS
     executor: ubuntu-build-env
@@ -218,7 +244,7 @@ jobs:
           packages: "ca-certificates golang-go"
       - checkout
       - compile:
-          options: "-DTOOL=ON -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
+          options: "-DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - run:
           name: Strip
@@ -235,7 +261,6 @@ jobs:
             go get github.com/tcnksm/ghr
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/tools/build_chain.sh
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
 
   deploy_guomi:
@@ -268,6 +293,13 @@ workflows:
           filters:
             branches:
               only: /^pull.*/
+            tags:
+              ignore: /.*/
+      - build_wedpr_test:
+          filters:
+            branches:
+              only:
+                - /^pull.*/
             tags:
               ignore: /.*/
       - generate_coverage:
