@@ -65,6 +65,9 @@ include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
+if(WEDPR_EXTENSION)
+  include(ProjectDownloadWeDPR)
+endif()
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 

@@ -21,9 +21,11 @@
 #include "Common.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
+#include <libethcore/Exceptions.h>
 
 using namespace dev;
 using namespace std;
+
 
 static const string USER_TABLE_PREFIX = "_user_";
 static const string USER_TABLE_PREFIX_SHORT = "u_";
@@ -45,6 +47,28 @@ void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
     {
         out = abi.abiIn("", u256(-result));
     }
+}
+
+void dev::precompiled::logError(
+    const std::string& precompiled_name, const std::string& op, const std::string& msg)
+{
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE(precompiled_name) << LOG_DESC(op) << ": " << LOG_DESC(msg);
+}
+
+void dev::precompiled::logError(const std::string& precompiled_name, const std::string& op,
+    const std::string& _key, const std::string& _value)
+{
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE(precompiled_name) << LOG_DESC(op) << LOG_KV(_key, _value);
+}
+
+void dev::precompiled::throwException(const std::string& msg)
+{
+    BOOST_THROW_EXCEPTION(dev::eth::TransactionRefused() << dev::errinfo_comment(msg));
+}
+
+char* dev::precompiled::stringToChar(std::string& params)
+{
+    return const_cast<char*>(params.data());
 }
 
 std::string dev::precompiled::getTableName(const std::string& _tableName)
