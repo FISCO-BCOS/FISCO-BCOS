@@ -1110,13 +1110,16 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         header.setNumber(max + 1);
         header.setParentHash(parentBlock->headerHash());
         header.setGasLimit(dev::u256(1024 * 1024 * 1024));
+        auto t_sealerList = blockchain->sealerList();
+        header.setSealer(u256(0));
+        
         #if 0
             header.setRoots(parentBlock->header().transactionsRoot(),
             parentBlock->header().receiptsRoot(), parentBlock->header().dbHash());
         #endif
         dev::eth::Block block;
         block.setBlockHeader(header);
-
+        
         std::vector<std::string> KV;
         boost::split(KV, _rlp, boost::is_any_of(","));
         for (auto& kv : KV)
