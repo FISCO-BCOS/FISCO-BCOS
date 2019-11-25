@@ -1865,18 +1865,24 @@ void PBFTEngine::forwardMsg(
 void PBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
+    if (!m_sealerListUpdated)
+    {
+        return;
+    }
+    if (m_blockSync->syncTreeRouterEnabled())
+    {
+        m_blockSync->updateConsensusNodeInfo(sealerList());
+    }
     if (!m_enableTTLOptimize)
     {
         return;
     }
-    if (m_sealerListUpdated)
-    {
-        WriteGuard l(x_consensusSet);
-        // m_consensusSet
-        m_consensusSet->clear();
-        ReadGuard rl(m_sealerListMutex);
-        m_consensusSet->insert(m_sealerList.begin(), m_sealerList.end());
-    }
+    // for ttl-optimization
+    WriteGuard l(x_consensusSet);
+    // m_consensusSet
+    m_consensusSet->clear();
+    ReadGuard rl(m_sealerListMutex);
+    m_consensusSet->insert(m_sealerList.begin(), m_sealerList.end());
 }
 dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
     std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType)
