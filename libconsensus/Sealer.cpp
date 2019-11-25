@@ -205,6 +205,8 @@ void Sealer::resetBlock(std::shared_ptr<dev::eth::Block> block, bool resetNextLe
                             << LOG_KV("number", m_blockChain->number());
         }
         block->resetCurrentBlock(highestBlock->blockHeader());
+        SEAL_LOG(DEBUG) << "resetCurrentBlock to"
+                        << LOG_KV("sealingNum", block->blockHeader().number());
     }
 }
 
