@@ -212,9 +212,10 @@ private:
     std::shared_ptr<std::set<std::string>> m_topics;
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
+    // default m_channelProtocol is minVersion
     dev::ProtocolVersion m_channelProtocol = dev::ProtocolVersion::v1;
-    dev::ProtocolVersion m_minimumProtocol = dev::ProtocolVersion::v1;
-    dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::v2;
+    dev::ProtocolVersion m_minimumProtocol = dev::ProtocolVersion::minVersion;
+    dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::maxVersion;
     std::string m_clientType;
     size_t _idleTime = 30000;
 };

@@ -57,13 +57,17 @@ public:
     virtual void updateConsOutPacketsInfo(
         uint8_t const& _packetType, uint64_t _sessionSize, uint64_t const& _packetBytes);
 
+    virtual void updateTxsMissInfo(uint64_t const& _totalCount, uint64_t const& _missCount);
+
     // print the network statistic
     virtual void printStatistics();
+
 
 private:
     void printSerivceStatisticInfo();
     void printSyncStatisticInfo();
     void printConsStatisticInfo();
+    void printTxsMissInfo();
 
 private:
     /// statistics for Serivce
@@ -98,6 +102,10 @@ private:
     std::map<uint8_t, std::pair<uint64_t, uint64_t>> m_consOutPacketsInfo;
     mutable SharedMutex x_consOutPacketsInfo;
     uint64_t m_totalConsOutPacketBytes = 0;
+
+    // for transaction hit/miss statistic
+    std::atomic<uint64_t> m_totalTxs = {0};
+    std::atomic<uint64_t> m_missedTxs = {0};
 };
 }  // namespace p2p
 }  // namespace dev

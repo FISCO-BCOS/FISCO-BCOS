@@ -189,9 +189,23 @@ void StatisticHandler::printConsStatisticInfo()
     }
 }
 
+void StatisticHandler::updateTxsMissInfo(uint64_t const& _totalCount, uint64_t const& _missCount)
+{
+    m_totalTxs += _totalCount;
+    m_missedTxs += _missCount;
+}
+
+void StatisticHandler::printTxsMissInfo()
+{
+    STATISTIC_LOG(DEBUG) << LOG_DESC("Consensus: txsHitMissInfo") << LOG_KV("totalTxs", m_totalTxs)
+                         << LOG_KV("missedTxs", m_missedTxs)
+                         << LOG_KV("hitTxs", (m_totalTxs - m_missedTxs));
+}
+
 void StatisticHandler::printStatistics()
 {
     printSerivceStatisticInfo();
     printSyncStatisticInfo();
     printConsStatisticInfo();
+    printTxsMissInfo();
 }

@@ -52,6 +52,7 @@ public:
     {
         WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = *m_partiallyRawPrepare;
+        m_rawPrepareCache.pBlock->encode(*m_rawPrepareCache.block);
     }
 
     // fetch missed transaction

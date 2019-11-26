@@ -139,7 +139,7 @@ void SyncMasterStatus::foreachPeer(
     ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
     {
-        if (!_f(peer.second))
+        if (peer.second && !_f(peer.second))
             break;
     }
 }
