@@ -122,7 +122,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
     Guard l(m_mutex);
     PBFTENGINE_LOG(INFO) << LOG_DESC("rehandleCommittedPrepare") << LOG_KV("nodeIdx", nodeIdx())
-                         << LOG_KV("nodeId", m_keyPair.pub().abridged())
+                         << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("view", m_view)
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
     m_broadCastCache->clearAll();
     std::shared_ptr<PrepareReq> prepareReq =
@@ -130,18 +130,9 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 
     m_threadPool->enqueue([this, prepareReq]() {
         std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-        prepareReq->pBlock = m_blockFactory->createBlock();
-        prepareReq->pBlock->decodeProposal(ref(*prepareReq->block), m_enablePrepareWithTxsHash);
+        // when rehandle the committedPrepareCache, broadcast prepare directly
         prepareReq->encode(*prepare_data);
-        if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
-        {
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data),
-                PartiallyPreparePacket);
-        }
-        else
-        {
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
-        }
+        broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
     });
     handlePrepareMsg(*prepareReq);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
@@ -1926,11 +1917,20 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
     }
     assert(_prepareReq->pBlock);
     bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
+    // update the totalTxs size and the missedTxs size
+    if (m_statisticHandler)
+    {
+        auto partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(_prepareReq->pBlock);
+        m_statisticHandler->updateTxsMissInfo(
+            partiallyBlock->txsHash()->size(), partiallyBlock->missedTxs()->size());
+    }
+
     // hit all transactions
     if (allHit)
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC(
-            "hit all the transactions, handle the rawPrepare directly");
+                                     "hit all the transactions, handle the rawPrepare directly")
+                              << LOG_KV("txsSize", _prepareReq->pBlock->transactions()->size());
         m_partiallyPrepareCache->transPartiallyPrepareIntoRawPrepare();
         // begin to handlePrepare
         return execPrepareAndGenerateSignMsg(*_prepareReq, oss);
