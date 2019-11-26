@@ -40,7 +40,7 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_submitPool->enqueue([this, _tx]() {
-        // NotBelongToTheGroup: 10003
+        // RequestNotBelongToTheGroup: 10004
         ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
         if (isSealerOrObserver())
         {
@@ -79,7 +79,7 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
     switch (_verifyRet)
     {
     case ImportResult::NotBelongToTheGroup:
-        txException = TransactionException::NotBelongToTheGroup;
+        txException = TransactionException::RequestNotBelongToTheGroup;
         break;
     // 16
     case ImportResult::BlockLimitCheckFailed:
@@ -106,10 +106,14 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
         txException = TransactionException::AlreadyInChain;
         break;
     // 10002
-    case ImportResult::InvalidChainIdOrGroupId:
-        txException = TransactionException::InvalidChainIdOrGroupId;
+    case ImportResult::InvalidChainId:
+        txException = TransactionException::InvalidChainId;
         break;
-    // invalid transaction: 10004
+    // 10003
+    case ImportResult::InvalidGroupId:
+        txException = TransactionException::InvalidGroupId;
+        break;
+    // invalid transaction: 10005
     case ImportResult::Malformed:
         txException = TransactionException ::MalformedTx;
         break;
@@ -158,11 +162,15 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
             TransactionRefused() << errinfo_comment(
                 "TransactionAlreadyInChain, txHash=" + toHex(_tx->sha3().abridged())));
     }
-    else if (ImportResult::InvalidChainIdOrGroupId == ret)
+    else if (ImportResult::InvalidChainId == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "InvalidChainIdOrGroupId, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "InvalidChainId, txHash=" + toHex(_tx->sha3().abridged())));
+    }
+    else if (ImportResult::InvalidGroupId == ret)
+    {
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "InvalidGroupId, txHash=" + toHex(_tx->sha3().abridged())));
     }
     else if (ImportResult::BlockLimitCheckFailed == ret)
     {
@@ -350,9 +358,13 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
         return ImportResult::TxPoolNonceCheckFail;
     }
     /// check chainId and groupId
-    if (false == trans->checkChainIdAndGroupId(u256(g_BCOSConfig.chainId()), u256(m_groupId)))
+    if (false == trans->checkChainId(u256(g_BCOSConfig.chainId())))
     {
-        return ImportResult::InvalidChainIdOrGroupId;
+        return ImportResult::InvalidChainId;
+    }
+    if (false == trans->checkGroupId(u256(m_groupId)))
+    {
+        return ImportResult::InvalidGroupId;
     }
     /// TODO: filter check
     return ImportResult::Success;

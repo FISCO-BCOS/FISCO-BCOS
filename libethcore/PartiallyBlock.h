@@ -40,6 +40,14 @@ public:
         m_missedTransactions = std::make_shared<Transactions>();
     }
 
+    PartiallyBlock(std::shared_ptr<PartiallyBlock> _block) : Block(*_block)
+    {
+        m_txsHash = std::make_shared<std::vector<dev::h256>>(*(_block->txsHash()));
+        m_missedTxs =
+            std::make_shared<std::vector<std::pair<dev::h256, uint64_t>>>(*(_block->missedTxs()));
+        m_missedTransactions = std::make_shared<Transactions>(*(_block->missedTransactions()));
+    }
+
     ~PartiallyBlock() override {}
     void encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash = false) override;
 

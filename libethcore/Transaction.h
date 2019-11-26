@@ -244,7 +244,8 @@ public:
 
     void updateTransactionHashWithSig(dev::h256 const& txHash);
 
-    bool checkChainIdAndGroupId(u256 _chainId, u256 _groupId);
+    bool checkChainId(u256 _chainId);
+    bool checkGroupId(u256 _groupId);
 
 protected:
     /// Type of transaction.
