@@ -241,6 +241,9 @@ void SyncMaster::maintainBlocks()
 void SyncMaster::sendSyncStatusByTree(BlockNumber const& _blockNumber, h256 const& _currentHash)
 {
     auto selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
+    SYNC_LOG(DEBUG) << LOG_BADGE("sendSyncStatusByTree") << LOG_KV("blockNumber", _blockNumber)
+                    << LOG_KV("currentHash", _currentHash.abridged())
+                    << LOG_KV("selectedNodes", selectedNodes->size());
     for (auto const& nodeId : *selectedNodes)
     {
         sendSyncStatusByNodeId(_blockNumber, _currentHash, nodeId);

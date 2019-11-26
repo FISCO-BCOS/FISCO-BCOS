@@ -124,7 +124,7 @@ public:
             bytes data(str.begin(), str.end());
             Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             KeyPair sigKeyPair = KeyPair::create();
-            tx->setNonce(tx->nonce() + u256(rand()));
+            tx->setNonce(tx->nonce() + u256(rand()) + i);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcCallback([&](LocalisedTransactionReceipt::Ptr, dev::bytesConstRef) {});
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
