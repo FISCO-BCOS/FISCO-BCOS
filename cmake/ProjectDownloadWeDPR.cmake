@@ -20,24 +20,24 @@
 #
 # (c) 2016-2019 fisco-dev contributors.
 #------------------------------------------------------------------------------
-# include(ExternalProject)
+include(ExternalProject)
 
-# if (APPLE)
-#     set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/mac_libffi_storage.tar.gz)
-#     set(WEDPR_SHA256 4362fcfa67a39d43d10bf014c4ce38ff622e18b65ce8a83376f63ecf0f822f87)
-# else()
-#     set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/linux_libffi_storage.tar.gz)
-#     set(WEDPR_SHA256 1de1f442bd73e0d62220bdb18d21930a3691875e242c284f127cf93e6fa4dbfe)
-# endif()
+if (APPLE)
+    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/mac_libffi_storage.tar.gz)
+    set(WEDPR_SHA256 703c9c99fb1e1d43880466be968db9047d53ae861b41f34b3a07db4c4beccb06)
+else()
+    set(WEDPR_URL https://github.com/WeDPR/TestBinary/releases/download/v0.1/linux_libffi_storage.tar.gz)
+    set(WEDPR_SHA256 fa0fbb676b10bd0e4441fd815be43d8f42fc6d3917b81ddd9e53e2df7985ae2d)
+endif()
 
-# ExternalProject_Add(WeDPR
-#     PREFIX ${CMAKE_SOURCE_DIR}/deps
-#     DOWNLOAD_NAME libwedpr-0.1.0-lib.tar.gz
-#     DOWNLOAD_NO_PROGRESS 1
-#     BUILD_IN_SOURCE 1
-#     URL ${WEDPR_URL}
-#     URL_HASH SHA256=${WEDPR_SHA256}
-#     CONFIGURE_COMMAND ""
-#     BUILD_COMMAND ""
-#     INSTALL_COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/deps/src/WeDPR/* ${CMAKE_SOURCE_DIR}/deps/lib/"
-# )
+ExternalProject_Add(WeDPR
+    PREFIX ${CMAKE_SOURCE_DIR}/deps
+    DOWNLOAD_NAME libwedpr-0.1.0-lib.tar.gz
+    DOWNLOAD_NO_PROGRESS 1
+    BUILD_IN_SOURCE 1
+    URL ${WEDPR_URL}
+    URL_HASH SHA256=${WEDPR_SHA256}
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND bash -c "cp ${CMAKE_SOURCE_DIR}/deps/src/WeDPR/* ${CMAKE_SOURCE_DIR}/deps/lib/"
+)

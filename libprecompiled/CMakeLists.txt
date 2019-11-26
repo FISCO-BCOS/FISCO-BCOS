@@ -2,7 +2,7 @@
 file(GLOB_RECURSE SRC_LIST "*.cpp")
 file(GLOB_RECURSE HEADERS "*.h")
 if (APPLE)
-    set(WEDPR_LIB "/Users/asher/WeDPR/target/release/libffi_storage.dylib")
+    set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_storage.dylib")
 else()
     set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/safe_libffi_storage.o")
 endif()
