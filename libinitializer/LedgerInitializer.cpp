@@ -78,10 +78,6 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
                     BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
                     return false;
                 }
-                h512s sealerList = m_ledgerManager->getParamByGroupId(_groupID)
-                                       ->mutableConsensusParam()
-                                       .sealerList;
-                m_p2pService->setNodeListByGroupID(_groupID, sealerList);
                 LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
                           << LOG_KV("groupID", _groupID);
                 return true;
