@@ -169,7 +169,7 @@ public:
 
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
-    void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
+    void setNodeListByGroupID(GROUP_ID, const h512s&) override{};
 
     void setTopics(std::shared_ptr<std::set<std::string>>) override{};
 
