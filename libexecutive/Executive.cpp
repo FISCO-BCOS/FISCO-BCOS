@@ -140,7 +140,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
 {
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        //if in migrate mode.
+        // if in migrate mode.
         if (g_BCOSConfig.migrateEnabled())
         {
             m_s->incNonce(_p.senderAddress);

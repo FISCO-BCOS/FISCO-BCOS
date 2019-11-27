@@ -1089,19 +1089,19 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 }
 
 Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
-{    
+{
     try
     {
         if (!g_BCOSConfig.migrateEnabled())
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                RPCExceptionType::InvalidSystemConfig, RPCMsg[RPCExceptionType::InvalidSystemConfig]));
-                
-         RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidSystemConfig,
+                RPCMsg[RPCExceptionType::InvalidSystemConfig]));
+
+        RPC_LOG(TRACE) << LOG_BADGE("submitTransactions") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto blockVerifier = ledgerManager()->blockVerifier(_groupID);
-        LOG(INFO) << "Ledger was prepared." ;
+        LOG(INFO) << "Ledger was prepared.";
         // get parent block
         auto max = blockchain->number();
         auto parentBlock = blockchain->getBlockByNumber(max);
@@ -1112,19 +1112,18 @@ Json::Value Rpc::submitTransactions(int _groupID, const std::string& _rlp)
         header.setGasLimit(dev::u256(1024 * 1024 * 1024));
         auto t_sealerList = blockchain->sealerList();
         header.setSealer(u256(0));
-        
-        #if 0
+
+#if 0
             header.setRoots(parentBlock->header().transactionsRoot(),
             parentBlock->header().receiptsRoot(), parentBlock->header().dbHash());
-        #endif
+#endif
         dev::eth::Block block;
         block.setBlockHeader(header);
-        
+
         std::vector<std::string> KV;
         boost::split(KV, _rlp, boost::is_any_of(","));
         for (auto& kv : KV)
         {
-                   
             dev::bytes rlpBytes = dev::fromHex(kv);
             dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
             LOG(INFO) << "Tx " << tx;
