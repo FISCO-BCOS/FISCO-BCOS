@@ -130,8 +130,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
             EC_KEY_new_by_curve_name(NID_secp256k1), [](EC_KEY* p) { EC_KEY_free(p); });
         SSL_CTX_set_tmp_ecdh(sslContext->native_handle(), ecdh.get());
 
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
-                               << LOG_KV("nodeID", m_key.pub().hex());
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
+                              << LOG_KV("nodeID", m_key.pub().hex());
 
         boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
         sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);

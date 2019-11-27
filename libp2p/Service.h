@@ -107,7 +107,7 @@ public:
         m_groupID2NodeList = _groupID2NodeList;
     }
 
-    void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
+    void setNodeListByGroupID(GROUP_ID _groupID, const h512s& _nodeList) override
     {
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
