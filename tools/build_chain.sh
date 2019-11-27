@@ -551,10 +551,13 @@ function generate_group_ini()
     enable_parallel=${enable_parallel}
 [sync]
     idle_wait_ms=200
+    ; send block status and transaction by tree-topology
+    ; only supported when use pbft
     sync_by_tree=true
+    ; must between 1000 to 3000
+    ; only enabled when sync_by_tree is true
     gossip_interval_ms=1000
     gossip_peers_number=3
-    sync_tree_width=3
 EOF
 }
 

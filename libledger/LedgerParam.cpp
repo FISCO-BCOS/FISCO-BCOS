@@ -326,12 +326,12 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                            << LOG_KV("enableSendBlockStatusByTree",
                                   mutableSyncParam().enableSendBlockStatusByTree);
 
-    // set gossipInterval for syncMaster, default is 3s
+    // set gossipInterval for syncMaster, default is 1s
     mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
-    if (mutableSyncParam().gossipInterval <= 0)
+    if (mutableSyncParam().gossipInterval < 1000 || mutableSyncParam().gossipInterval > 3000)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set sync.gossip_interval_ms to positive !"));
+                                  "Please set sync.gossip_interval_ms to between 1000ms-3000ms!"));
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                            << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval);
@@ -344,13 +344,8 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "Please set sync.gossip_peers_number to positive !"));
     }
     // set the sync-tree-width, default is 3
-    mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
-    if (mutableSyncParam().syncTreeWidth <= 0)
-    {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                              << errinfo_comment("Please set sync.sync_tree_width to positive !"));
-    }
-
+    // mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
+    mutableSyncParam().syncTreeWidth = 3;
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                            << LOG_KV("enableSendBlockStatusByTree",
                                   mutableSyncParam().enableSendBlockStatusByTree)
