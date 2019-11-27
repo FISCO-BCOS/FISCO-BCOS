@@ -263,12 +263,9 @@ public:
     void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
     void calReceiptRootRC2(bool update = true) const;
-
-    void calTransactionRootV2_2_0(bool update = true) const;
-
-    void calReceiptRootV2_2_0(bool update = true) const;
-
-    void getReceiptAndSha3(RLPStream& txReceipts, dev::BytesMap& mapCache) const;
+    void calTransactionRootV2_2_0(bool update) const;
+    void getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const;
+    void calReceiptRootV2_2_0(bool update) const;
 
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> getReceiptProof() const;
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> getTransactionProof() const;

@@ -915,13 +915,13 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
     // get merkle from  parent2ChildList and child2Parent
     bytes txData;
     tx->encode(txData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
+    auto hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
     this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
 
-dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& data)
+dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& data)
 {
     RLPStream s;
     s << index;
@@ -933,7 +933,8 @@ dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& dat
     BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
                           << " bytesHash:" << toHex(bytesHash)
                           << " hashWithIndex:" << hashWithIndex.hex();
-    return hashWithIndex;
+
+    return bytesHash;
 }
 
 void BlockChainImp::parseMerkleMap(
@@ -952,12 +953,12 @@ void BlockChainImp::parseMerkleMap(
     }
 }
 
-void BlockChainImp::getMerkleProof(dev::h256 const& _txHash,
+void BlockChainImp::getMerkleProof(dev::bytes const& _txHash,
     const std::map<std::string, std::vector<std::string>>& parent2ChildList,
     const std::map<std::string, std::string>& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {
-    std::string merkleNode = _txHash.hex();
+    std::string merkleNode = toHex(_txHash);
     auto itChild2Parent = child2Parent.find(merkleNode);
     while (itChild2Parent != child2Parent.end())
     {
@@ -1080,7 +1081,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     // get receipt hash with index
     bytes receiptData;
     txReceipt->encode(receiptData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
+    auto hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
     this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(txReceipt, merkleProof);
