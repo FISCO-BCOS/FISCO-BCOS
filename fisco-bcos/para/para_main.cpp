@@ -20,9 +20,9 @@
  * @author: catli, jimmyshi
  * @date 2019-01-15
  */
+
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
@@ -41,7 +41,7 @@ using namespace dev::initializer;
 using namespace dev::txpool;
 using namespace dev::blockverifier;
 using namespace dev::blockchain;
-INITIALIZE_EASYLOGGINGPP
+
 
 static shared_ptr<Secret> sec;
 
@@ -149,7 +149,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     params->mutableStateParam().type = "storage";
 
 
-    auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
+    auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params, 1);
     dbInitializer->initStorageDB();
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(dbInitializer->storage());

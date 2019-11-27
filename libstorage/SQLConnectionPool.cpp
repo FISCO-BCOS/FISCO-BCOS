@@ -21,7 +21,6 @@
 
 #include "SQLConnectionPool.h"
 #include "StorageException.h"
-#include <libdevcore/easylog.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <csignal>
@@ -30,7 +29,7 @@
 using namespace dev::storage;
 using namespace std;
 
-bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
+bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
     {
@@ -60,11 +59,12 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ZDBConfig& _dbConfig)
         }
         CATCH(SQLException)
         {
-            SQLConnectionPool_LOG(ERROR) << "init connection pool failed IP:" << _dbConfig.dbIP
-                                         << ":" << _dbConfig.dbPort << " please check";
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                << " error msg:" << Exception_frame.message;
             stringstream exitInfo;
             exitInfo << "init connection pool failed IP:" << _dbConfig.dbIP << ":"
-                     << _dbConfig.dbPort << " please check";
+                     << _dbConfig.dbPort << " error msg:" << Exception_frame.message;
             errorExitOut(exitInfo);
         }
         END_TRY;
@@ -145,7 +145,7 @@ int SQLConnectionPool::GetTotalConnections()
     return ConnectionPool_size(m_connectionPool);
 }
 
-void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
+void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
 {
     if (_dbConfig.dbType == "mysql")
     {
@@ -201,11 +201,12 @@ void SQLConnectionPool::createDataBase(const ZDBConfig& _dbConfig)
             ConnectionPool_stop(_connectionPool);
             ConnectionPool_free(&_connectionPool);
             URL_free(&url);
-            SQLConnectionPool_LOG(ERROR) << "init connection pool failed url:" << _dbConfig.dbIP
-                                         << ":" << _dbConfig.dbPort << " please check";
+            SQLConnectionPool_LOG(ERROR)
+                << "init connection pool failed url:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
+                << " error msg:" << Exception_frame.message;
             stringstream _exitInfo;
             _exitInfo << "init connection pool failed url:" << _dbConfig.dbIP << ":"
-                      << _dbConfig.dbPort << " please check";
+                      << _dbConfig.dbPort << " error msg:" << Exception_frame.message;
             errorExitOut(_exitInfo);
         }
 

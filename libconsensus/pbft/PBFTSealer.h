@@ -66,6 +66,20 @@ public:
     /// can reset the sealing block or not?
     bool shouldResetSealing() override
     {
+        // in case of that:
+        // 1. block n has trigger reportNewBlock and the system is committing the block (n+1), the
+        // blockNumber has changed to (n+1)
+        // 2. Sealer calls reportNewBlock, and generate a new block with number of block (n+2)
+        // 3. block (n+1) commit completed and trigger reportNewBlock again
+        // 4. Sealer calls reportNewBlock, and generate a new block with number of block (n+2) again
+        if (m_sealing.block.isSealed() && shouldHandleBlock())
+        {
+            PBFTSEALER_LOG(DEBUG)
+                << LOG_DESC("sealing block have already been sealed and should be handled")
+                << LOG_KV("sealingNumber", m_sealing.block.blockHeader().number())
+                << LOG_KV("curNum", m_blockChain->number());
+            return false;
+        }
         /// only the leader need reset sealing in PBFT
         return Sealer::shouldResetSealing() &&
                (m_pbftEngine->getLeader().second == m_pbftEngine->nodeIdx());

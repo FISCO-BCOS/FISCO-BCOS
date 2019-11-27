@@ -67,15 +67,9 @@ public:
      * by the param ${configFileName}
      */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+        dev::KeyPair const& _keyPair)
       : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
     {
-        m_param = std::make_shared<LedgerParam>();
-        std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
-        if (_baseDir == "")
-            prefix = "./group" + std::to_string(_groupId);
-        m_param->setBaseDir(prefix);
-        // m_keyPair = _keyPair;
         assert(m_service);
     }
 
@@ -111,7 +105,7 @@ public:
 
     virtual ~Ledger(){};
 
-    bool initLedger(const std::string& _configFilePath = "config.ini") override;
+    bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -145,8 +139,6 @@ public:
     }
 
 protected:
-    /// load genesis config of group
-    void initGenesisConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
@@ -168,27 +160,12 @@ private:
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
-    /// init configurations
-    void initCommonConfig(boost::property_tree::ptree const& pt);
-    void initTxPoolConfig(boost::property_tree::ptree const& pt);
-    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
-
-    void initConsensusConfig(boost::property_tree::ptree const& pt);
-
-    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
-    void initSyncConfig(boost::property_tree::ptree const& pt);
-
-    void initTxConfig(boost::property_tree::ptree const& pt);
-
-    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::GROUP_ID m_groupId;
-    std::string m_postfixGenesis = ".genesis";
-    std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;

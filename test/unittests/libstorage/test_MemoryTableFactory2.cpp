@@ -17,7 +17,6 @@
 
 #include "Common.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory2.h>
@@ -40,15 +39,13 @@ public:
     virtual ~MockAMOPDB() {}
 
 
-    Entries::Ptr select(h256, int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
+    Entries::Ptr select(int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
-
-    bool onlyDirty() override { return false; }
+    size_t commit(int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
 };
 
 struct MemoryTableFactoryFixture2
@@ -111,6 +108,11 @@ BOOST_AUTO_TEST_CASE(open_Table)
     condition->EQ("key", "balance");
     condition->LE("value", "504");
     table->select("balance", condition);
+    table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
@@ -220,7 +222,11 @@ BOOST_AUTO_TEST_CASE(parallel_openTable)
         entries = table->select(key, table->newCondition());
         BOOST_TEST(entries->size() == size0);
     });
-
+    table = memoryDBFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
 }
 
@@ -240,6 +246,12 @@ BOOST_AUTO_TEST_CASE(setBlockHash)
 BOOST_AUTO_TEST_CASE(setBlockNum)
 {
     memoryDBFactory->setBlockNum(2);
+}
+
+BOOST_AUTO_TEST_CASE(init)
+{
+    memoryDBFactory->init();
+    BOOST_TEST(memoryDBFactory->ID() == 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -26,7 +26,6 @@
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
-#include <libdevcore/easylog.h>
 #include <boost/throw_exception.hpp>
 #include <chrono>
 #include <map>

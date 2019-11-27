@@ -30,7 +30,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
 {
     UpgradableGuard l(m_lock);
     {
-        auto key = this->generateKey(_trans);
+        const auto& key = _trans.nonce();
         auto iter = m_cache.find(key);
         if (iter != m_cache.end())
         {
@@ -64,14 +64,14 @@ void CommonTransactionNonceCheck::delCache(dev::eth::NonceKeyType const& key)
     }
 }
 
-void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
+void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
 {
     UpgradableGuard l(m_lock);
     {
         std::vector<dev::eth::NonceKeyType> delList;
-        for (unsigned i = 0; i < _transcations.size(); i++)
+        for (unsigned i = 0; i < _transactions.size(); i++)
         {
-            auto key = this->generateKey(_transcations[i]);
+            const auto& key = _transactions[i].nonce();
             auto iter = m_cache.find(key);
             if (iter != m_cache.end())
             {
@@ -90,12 +90,11 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transcations)
     }
 }
 
-void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _transcation)
+void CommonTransactionNonceCheck::insertCache(dev::eth::Transaction const& _transaction)
 {
     WriteGuard l(m_lock);
     {
-        auto key = this->generateKey(_transcation);
-        m_cache.insert(key);
+        m_cache.insert(_transaction.nonce());
     }
 }
 

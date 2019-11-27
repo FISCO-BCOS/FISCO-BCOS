@@ -20,10 +20,10 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;

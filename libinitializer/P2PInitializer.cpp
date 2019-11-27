@@ -25,7 +25,6 @@
 #include "libnetwork/ASIOInterface.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
-#include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <boost/algorithm/string/case_conv.hpp>

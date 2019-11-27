@@ -20,10 +20,8 @@
  *  @date 20190111
  */
 #include "DagTransferPrecompiled.h"
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -40,7 +38,7 @@ contract DagTransfer{
     function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
-const std::string DAG_TRANSFER = "_dag_transfer_";
+const std::string DAG_TRANSFER = "dag_transfer";
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
@@ -144,11 +142,11 @@ std::string DagTransferPrecompiled::toString()
 Table::Ptr DagTransferPrecompiled::openTable(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    auto table = Precompiled::openTable(context, DAG_TRANSFER);
+    auto table = Precompiled::openTable(context, precompiled::getTableName(DAG_TRANSFER));
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = createTable(
-            context, DAG_TRANSFER, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
+        table = createTable(context, precompiled::getTableName(DAG_TRANSFER), DAG_TRANSFER_FIELD_NAME,
+            DAG_TRANSFER_FIELD_BALANCE, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");

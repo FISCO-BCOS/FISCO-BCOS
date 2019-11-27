@@ -22,8 +22,8 @@
  */
 
 #pragma once
+
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Service.h>
@@ -31,7 +31,7 @@
 #include <cstdlib>
 #include <memory>
 
-INITIALIZE_EASYLOGGINGPP
+
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::eth;

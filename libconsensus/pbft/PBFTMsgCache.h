@@ -28,7 +28,6 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <libdevcore/easylog.h>
 #include <unordered_map>
 namespace dev
 {

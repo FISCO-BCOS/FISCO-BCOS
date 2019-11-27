@@ -81,7 +81,6 @@ class Task
 public:
     typedef std::shared_ptr<Task> Ptr;
 
-    h256 hash;
     int64_t num = 0;
     std::shared_ptr<std::vector<TableData::Ptr> > datas;
 };
@@ -100,15 +99,14 @@ public:
 
     virtual ~CachedStorage();
 
-    Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition = nullptr) override;
 
-    virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(h256 hash,
-        int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
-        Condition::Ptr condition = nullptr);
+    virtual std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> selectNoCondition(int64_t num,
+        TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition = nullptr);
 
-    size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) override;
-    bool onlyDirty() override;
+    size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
+    bool onlyCommitDirty() override { return true; }
 
     void setBackend(Storage::Ptr backend);
     void init();
@@ -122,9 +120,12 @@ public:
     void setMaxCapacity(int64_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
-    size_t ID();
-
     void startClearThread();
+    void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
+    dev::GROUP_ID groupID() const { return m_groupID; }
+
+protected:
+    dev::GROUP_ID m_groupID = 0;
 
 private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
@@ -159,7 +160,7 @@ private:
 
     // boost::multi_index
     Storage::Ptr m_backend;
-    uint64_t m_ID = 1;
+
 
     tbb::atomic<uint64_t> m_syncNum;
     tbb::atomic<uint64_t> m_commitNum;

@@ -18,6 +18,7 @@
  *  @author yujiechen
  *  @date 2010-06-26
  */
+#include "libdevcrypto/AES.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerParam.h>
@@ -27,7 +28,7 @@
 
 using namespace dev;
 using namespace dev::ledger;
-using namespace dev::db;
+using namespace dev::storage;
 using namespace rocksdb;
 
 namespace dev
@@ -147,21 +148,22 @@ BOOST_AUTO_TEST_CASE(testWriteAndReadValue)
 BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
 {
     // fake param
-    std::string dbName = "test_db/RocksDB";
-    std::shared_ptr<LedgerParam> param = std::make_shared<LedgerParam>();
-    param->mutableStorageParam().path = dbName;
-
-    // init DB initializer
-    std::shared_ptr<DBInitializer> dbInitializer = std::make_shared<DBInitializer>(param);
-
-    // init for disk encryption
-    // enable disk encryption
-    g_BCOSConfig.diskEncryption.enable = true;
+    std::string dbName = "tmp/testRocksDB";
     // set datakey
     g_BCOSConfig.diskEncryption.dataKey =
         asString(fromHex("3031323334353637303132333435363730313233343536373031323334353637"));
-    // init rocksDB, open db and set handler for DB
-    std::shared_ptr<BasicRocksDB> basicRocksDB = dbInitializer->initBasicRocksDB();
+    rocksdb::Options options;
+    options.create_if_missing = true;
+    std::shared_ptr<BasicRocksDB> basicRocksDB = std::make_shared<BasicRocksDB>();
+    // basicRocksDB->Open(options, dbName);
+
+    basicRocksDB->setEncryptHandler([=](std::string const& data, std::string& encData) {
+        encData = aesCBCEncrypt(data, g_BCOSConfig.diskEncryption.dataKey);
+    });
+
+    basicRocksDB->setDecryptHandler([=](std::string& data) {
+        data = aesCBCDecrypt(data, g_BCOSConfig.diskEncryption.dataKey);
+    });
 
     BOOST_CHECK(basicRocksDB != nullptr);
 
@@ -178,8 +180,6 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
         testReGetValue(basicRocksDB, keyPrefix, valuePrefix, dbName, succNum, true);
     }
     boost::filesystem::remove_all(dbName);
-    // disable disk encryption
-    g_BCOSConfig.diskEncryption.enable = false;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

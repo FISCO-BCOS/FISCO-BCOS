@@ -24,7 +24,6 @@
 #include <librpc/Rpc.h>
 #include <librpc/SafeHttpServer.h>
 
-INITIALIZE_EASYLOGGINGPP
 
 using namespace dev;
 using namespace dev::rpc;

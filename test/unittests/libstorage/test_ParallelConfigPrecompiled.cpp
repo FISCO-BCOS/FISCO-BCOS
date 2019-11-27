@@ -21,7 +21,6 @@
 #include "Common.h"
 #include "MemoryStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
@@ -85,14 +84,14 @@ public:
         return parallelConfigPrecompiled->call(context, _param, Address(0x12345));
     }
 
-    Table::Ptr getContract(const Address& _address)
-    {
-        return memoryTableFactory->openTable(PARA_CONFIG_TABLE_PREFIX + _address.hex() + "_");
-    }
-
     bool hasRegistered(const Address& _address, const string& _functionName)
     {
-        Table::Ptr table = getContract(_address);
+        auto tableName = PARA_CONFIG_TABLE_PREFIX + _address.hex() + "_";
+        if (g_BCOSConfig.version() >= V2_2_0)
+        {
+            tableName = std::string("c_" + _address.hex());
+        }
+        Table::Ptr table = memoryTableFactory->openTable(tableName);
         if (!table)
         {
             return false;

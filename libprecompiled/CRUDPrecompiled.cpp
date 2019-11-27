@@ -20,12 +20,11 @@
  */
 
 #include "CRUDPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/StorageException.h"
-#include "libstorage/TableFactoryPrecompiled.h"
 #include <json/json.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
@@ -84,7 +83,7 @@ bytes CRUDPrecompiled::call(
         checkLengthValidate(
             key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
 
-        tableName = storage::USER_TABLE_PREFIX + tableName;
+        tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
@@ -119,7 +118,7 @@ bytes CRUDPrecompiled::call(
     {  // update(string tableName, string key, string entry, string condition, string optional)
         std::string tableName, key, entryStr, conditionStr, optional;
         abi.abiOut(data, tableName, key, entryStr, conditionStr, optional);
-        tableName = storage::USER_TABLE_PREFIX + tableName;
+        tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
@@ -162,7 +161,7 @@ bytes CRUDPrecompiled::call(
     {  // remove(string tableName, string key, string condition, string optional)
         std::string tableName, key, conditionStr, optional;
         abi.abiOut(data, tableName, key, conditionStr, optional);
-        tableName = storage::USER_TABLE_PREFIX + tableName;
+        tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
         if (table)
         {
@@ -191,7 +190,7 @@ bytes CRUDPrecompiled::call(
         abi.abiOut(data, tableName, key, conditionStr, optional);
         if (tableName != storage::SYS_TABLES)
         {
-            tableName = storage::USER_TABLE_PREFIX + tableName;
+            tableName = precompiled::getTableName(tableName);
         }
         Table::Ptr table = openTable(context, tableName);
         if (table)

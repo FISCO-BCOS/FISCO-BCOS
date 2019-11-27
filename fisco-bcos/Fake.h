@@ -95,7 +95,8 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t = -1) override
     {
         ReadGuard l(x_blockChain);
         if (m_blockHash.count(_blockHash))
@@ -133,7 +134,21 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
-
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
+    {
+        return std::make_pair(
+            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    std::pair<LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const&) override
+    {
+        return std::make_pair(LocalisedTransaction(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
     CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
@@ -153,7 +168,7 @@ public:
 
     void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
 
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
 
     dev::h512s sealerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
@@ -246,18 +261,15 @@ class FakeLedger : public Ledger
 {
 public:
     FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir)
-      : Ledger(service, _groupId, _keyPair, _baseDir)
+        dev::KeyPair const& _keyPair, std::string const&)
+      : Ledger(service, _groupId, _keyPair)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger(const std::string& _configPath) override
+    bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override
     {
-        initGenesisConfig(_configPath);
-        std::string iniConfigFileName = _configPath;
-        boost::replace_last(iniConfigFileName, m_postfixGenesis, m_postfixIni);
-        initIniConfig(_configPath);
+        m_param = _ledgerParams;
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain
         initBlockChain(m_genesisParam);
         /// intit blockVerifier

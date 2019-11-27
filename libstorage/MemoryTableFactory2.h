@@ -24,8 +24,7 @@
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
-#include "TablePrecompiled.h"
-#include <libdevcore/easylog.h>
+
 #include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>
@@ -46,18 +45,15 @@ public:
     typedef std::shared_ptr<MemoryTableFactory2> Ptr;
     MemoryTableFactory2();
     virtual ~MemoryTableFactory2() {}
+    virtual void init();
+
     virtual Table::Ptr openTable(
         const std::string& tableName, bool authorityFlag = true, bool isPara = true) override;
     virtual Table::Ptr createTable(const std::string& tableName, const std::string& keyField,
         const std::string& valueField, bool authorityFlag = true,
         Address const& _origin = Address(), bool isPara = true) override;
 
-    virtual Storage::Ptr stateStorage() { return m_stateStorage; }
-    virtual void setStateStorage(Storage::Ptr stateStorage) { m_stateStorage = stateStorage; }
-
-    void setBlockHash(h256 blockHash);
-    void setBlockNum(int64_t blockNum);
-
+    virtual uint64_t ID() { return m_ID; };
     virtual h256 hash() override;
     virtual size_t savepoint() override;
     virtual void commit() override;
@@ -65,12 +61,9 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 
 private:
-    storage::TableInfo::Ptr getSysTableInfo(const std::string& tableName);
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
-    Storage::Ptr m_stateStorage;
-    h256 m_blockHash;
-    int m_blockNum;
+    uint64_t m_ID = 1;
     // this map can't be changed, hash() need ordered data
     tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
     tbb::enumerable_thread_specific<std::vector<Change> > s_changeLog;

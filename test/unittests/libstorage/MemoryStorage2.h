@@ -37,10 +37,9 @@ public:
 
     virtual ~MemoryStorage2(){};
 
-    Entries::Ptr select(dev::h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition) override
+    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition) override
     {
-        (void)hash;
         (void)num;
 
         tbb::mutex::scoped_lock lock(m_mutex);
@@ -54,14 +53,14 @@ public:
 
         return std::make_shared<Entries>();
     }
-    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>& datas) override
+    size_t commit(int64_t, const std::vector<TableData::Ptr>& datas) override
     {
         for (auto it : datas)
         {
         }
         return datas.size();
     }
-    bool onlyDirty() override { return false; }
+    bool onlyCommitDirty() override { return false; }
 
 private:
     std::map<std::string, TableData::Ptr> tableData;

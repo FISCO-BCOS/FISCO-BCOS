@@ -22,11 +22,9 @@
 #include "Common.h"
 #include "MemoryTable2.h"
 #include "StorageException.h"
-#include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
@@ -41,7 +39,7 @@ using namespace dev;
 using namespace dev::storage;
 using namespace std;
 
-MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
+MemoryTableFactory2::MemoryTableFactory2()
 {
     m_sysTables.push_back(SYS_CONSENSUS);
     m_sysTables.push_back(SYS_TABLES);
@@ -56,11 +54,23 @@ MemoryTableFactory2::MemoryTableFactory2() : m_blockHash(h256(0)), m_blockNum(0)
 }
 
 
-Table::Ptr MemoryTableFactory2::openTable(
-    const std::string& tableName, bool authorityFlag, bool isPara)
+void MemoryTableFactory2::init()
 {
-    (void)isPara;
+    auto table = openTable(SYS_CURRENT_STATE);
+    auto condition = table->newCondition();
+    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
+    // get id from backend
+    auto out = table->select(SYS_KEY_CURRENT_ID, condition);
+    if (out->size() > 0)
+    {
+        auto entry = out->get(0);
+        auto numStr = entry->getField(SYS_VALUE);
+        m_ID = boost::lexical_cast<size_t>(numStr);
+    }
+}
 
+Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool authorityFlag, bool)
+{
     RecursiveGuard l(x_name2Table);
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
@@ -178,16 +188,6 @@ void MemoryTableFactory2::commit()
     getChangeLog().clear();
 }
 
-void MemoryTableFactory2::setBlockHash(h256 blockHash)
-{
-    m_blockHash = blockHash;
-}
-
-void MemoryTableFactory2::setBlockNum(int64_t blockNum)
-{
-    m_blockNum = blockNum;
-}
-
 h256 MemoryTableFactory2::hash()
 {
     std::vector<std::pair<std::string, Table::Ptr> > tables;
@@ -247,7 +247,7 @@ void MemoryTableFactory2::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -269,12 +269,50 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
         [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
             return lhs->info->name < rhs->info->name;
         });
+    ssize_t currentStateIdx = -1;
+    for (size_t i = 0; i < datas.size(); ++i)
+    {
+        auto tableData = datas[i];
+        if (currentStateIdx < 0 && tableData->info->name == SYS_CURRENT_STATE)
+        {
+            currentStateIdx = i;
+        }
+        for (auto entry = tableData->newEntries->begin(); entry != tableData->newEntries->end();
+             ++entry)
+        {
+            (*entry)->setID(++m_ID);
+        }
+    }
+
+    // Write m_ID to SYS_CURRENT_STATE
+    Entry::Ptr idEntry = std::make_shared<Entry>();
+    idEntry->setID(1);
+    idEntry->setNum(_blockNumber);
+    idEntry->setStatus(0);
+    idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
+    idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
+    TableData::Ptr currentState;
+    if (currentStateIdx == -1)
+    {
+        STORAGE_LOG(FATAL) << "Can't find current state table";
+    }
+    currentState = datas[currentStateIdx];
+    if (_blockNumber == 0)
+    {
+        idEntry->setForce(true);
+        currentState->newEntries->addEntry(idEntry);
+    }
+    else
+    {
+        currentState->dirtyEntries->addEntry(idEntry);
+    }
+
     auto getData_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas);
+        stateStorage()->commit(_blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();
@@ -287,64 +325,6 @@ void MemoryTableFactory2::commitDB(dev::h256 const& _blockHash, int64_t _blockNu
                        << LOG_KV("clearTimeCost", clear_time_cost)
                        << LOG_KV("totalTimeCost", utcTime() - start_time);
 }
-
-storage::TableInfo::Ptr MemoryTableFactory2::getSysTableInfo(const std::string& tableName)
-{
-    auto tableInfo = make_shared<storage::TableInfo>();
-    tableInfo->name = tableName;
-    if (tableName == SYS_CONSENSUS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
-    }
-    else if (tableName == SYS_TABLES)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"key_field", "value_field"};
-    }
-    else if (tableName == SYS_ACCESS_TABLE)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"address", "enable_num"};
-    }
-    else if (tableName == SYS_CURRENT_STATE)
-    {
-        tableInfo->key = SYS_KEY;
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_NUMBER_2_HASH)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_TX_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value", "index"};
-    }
-    else if (tableName == SYS_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_CNS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = std::vector<std::string>{"version", "address", "abi"};
-    }
-    else if (tableName == SYS_CONFIG)
-    {
-        tableInfo->key = "key";
-        tableInfo->fields = std::vector<std::string>{"value", "enable_num"};
-    }
-    else if (tableName == SYS_BLOCK_2_NONCES)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{SYS_VALUE};
-    }
-    return tableInfo;
-}
-
 
 void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {

@@ -24,8 +24,8 @@
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "Precompiled.h"
+
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>

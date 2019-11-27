@@ -53,7 +53,12 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     m_consensusBlockNumber = 0;
     m_view = m_toView = 0;
     m_leaderFailed = false;
-    reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+    auto block = m_blockChain->getBlockByNumber(m_blockChain->number());
+    if (!block)
+    {
+        PBFTENGINE_LOG(FATAL) << "can't find latest block";
+    }
+    reportBlock(*block);
     initBackupDB();
     m_timeManager.initTimerManager(view_timeout);
     PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
@@ -1282,7 +1287,7 @@ bool PBFTEngine::isValidViewChangeReq(
     }
     /// check block hash
     if ((req.height == m_highestBlock.number() && req.block_hash != m_highestBlock.hash()) ||
-        (m_blockChain->getBlockByHash(req.block_hash) == nullptr))
+        (m_blockChain->getBlockByNumber(req.height) == nullptr))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq, invalid hash")
                               << LOG_KV("highHash", m_highestBlock.hash().abridged())

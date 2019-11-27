@@ -48,7 +48,7 @@ public:
     }
     ~TransactionNonceCheck() {}
     void init();
-    bool ok(dev::eth::Transaction const& _transaction, bool _needinsert = false);
+    bool ok(dev::eth::Transaction const& _transaction);
     void updateCache(bool _rebuild = false);
     unsigned const& maxBlockLimit() const { return m_maxBlockLimit; }
     void setBlockLimit(unsigned const& limit) { m_maxBlockLimit = limit; }

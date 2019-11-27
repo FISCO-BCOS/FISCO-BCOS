@@ -15,10 +15,12 @@ output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
 storage_type=rocksdb
+supported_storage=(rocksdb mysql external scalable)
 conf_path="conf"
 bin_path=
 make_tar=
 debug_log="false"
+binary_log="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -35,7 +37,7 @@ auto_flush="true"
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.1.0"
+default_version="2.2.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=60
@@ -52,7 +54,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
-    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external, rocksdb is recommended
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -m <MPT State type>                 Default storageState. if set -m, use mpt state
@@ -127,8 +129,8 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     e) bin_path=$OPTARG;;
     m) state_type=mpt;;
     s) storage_type=$OPTARG
-        if [ -z "${storage_type}" ];then
-            LOG_WARN "${storage_type} is not supported storage."
+        if ! echo "${supported_storage[*]}" | grep -i "${storage_type}" &>/dev/null; then
+            LOG_WARN "${storage_type} is not supported. Please set one of ${supported_storage[*]}"
             exit 1;
         fi
     ;;
@@ -152,6 +154,10 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     h) help;;
     esac
 done
+if [ "${storage_type}" == "scalable" ]; then
+    echo "use scalable storage, so turn on binary log"
+    binary_log="true"
+fi
 }
 
 print_result()
@@ -519,8 +525,14 @@ function generate_group_ini()
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
 [storage]
-    ; storage db type, rocksdb / mysql / external, rocksdb is recommended
+    ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended
     type=${storage_type}
+    ; set true to turn on binary log
+    binary_log=${binary_log}
+    ; scroll_threshold=scroll_threshold_multiple*1000, only for scalable
+    scroll_threshold_multiple=2
+    ; set fasle to disable CachedStorage
+    cached_storage=true
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10

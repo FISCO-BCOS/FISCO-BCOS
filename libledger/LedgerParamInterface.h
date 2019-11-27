@@ -28,6 +28,10 @@
 #include <vector>
 namespace dev
 {
+namespace blockchain
+{
+struct GenesisBlockParam;
+}
 namespace ledger
 {
 /// forward class declaration
@@ -60,6 +64,7 @@ public:
     virtual StateParam& mutableStateParam() = 0;
     virtual TxParam& mutableTxParam() = 0;
     virtual EventLogFilterManagerParams& mutableEventLogFilterManagerParams() = 0;
+    virtual blockchain::GenesisBlockParam& mutableGenesisBlockParam() = 0;
 };
 }  // namespace ledger
 }  // namespace dev

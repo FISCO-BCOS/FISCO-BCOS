@@ -21,7 +21,7 @@
  * common functions of test submodule
  */
 #pragma once
-#include <libdevcore/easylog.h>
+
 #include <test/tools/libbcos/Options.h>
 #include <boost/filesystem.hpp>
 #include <cstdlib>

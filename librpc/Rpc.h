@@ -17,6 +17,9 @@
  * @file Rpc.h
  * @author: caryliao
  * @date 2018-10-25
+ * @author:darrenyin
+ * @date  2019-09-20 add getTransactionByHashWithProof,getTransactionReceiptByHashWithProof for
+ * wecross
  */
 
 #pragma once
@@ -100,6 +103,13 @@ public:
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
     Json::Value submitTransactions(int _groupID, const std::string& _rlp) override;
 
+    // Get transaction with merkle proof by hash
+    Json::Value getTransactionByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+    // Get receipt with merkle proof by hash
+    Json::Value getTransactionReceiptByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
@@ -124,10 +134,6 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
-
-    std::string buildReceipt(uint32_t clientProtocolVersion, int errorCode,
-        const std::string& errorMessage, const bytes& input,
-        dev::eth::LocalisedTransactionReceipt::Ptr receipt);
 
     /// transaction callback related
     std::function<std::function<void>()> setTransactionCallbackFactory();

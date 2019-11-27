@@ -23,7 +23,6 @@
 #include "StorageException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
@@ -129,12 +128,12 @@ CachedStorage::~CachedStorage()
     }
 }
 
-Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr CachedStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     auto out = std::make_shared<Entries>();
 
-    auto result = selectNoCondition(hash, num, tableInfo, key, condition);
+    auto result = selectNoCondition(num, tableInfo, key, condition);
 
     Cache::Ptr caches = std::get<1>(result);
     for (auto entry : *(caches->entries()))
@@ -151,7 +150,7 @@ Entries::Ptr CachedStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableI
     return out;
 }
 
-std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNoCondition(h256 hash,
+std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNoCondition(
     int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     (void)condition;
@@ -165,7 +164,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
         {
             auto conditionKey = std::make_shared<Condition>();
             conditionKey->EQ(tableInfo->key, key);
-            auto backendData = m_backend->select(hash, num, tableInfo, key, conditionKey);
+            auto backendData = m_backend->select(num, tableInfo, key, conditionKey);
 
             CACHED_STORAGE_LOG(TRACE) << tableInfo->name << ": " << key << " miss the cache";
 
@@ -179,6 +178,10 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
             }
             touchMRU(tableInfo->name, key, totalCapacity);
         }
+        else
+        {
+            CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
+        }
     }
     else
     {
@@ -188,10 +191,9 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
     return std::make_tuple(std::get<0>(result), caches);
 }
 
-size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " hash: " << hash
-                             << " num: " << num;
+    CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " num: " << num;
 
     tbb::atomic<size_t> total = 0;
 
@@ -201,8 +203,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
 
     commitDatas->resize(datas.size());
 
-    ssize_t currentStateIdx = -1;
-
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
@@ -211,11 +211,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                 auto commitData = std::make_shared<TableData>();
                 commitData->info = requestData->info;
                 commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
-
-                if (currentStateIdx < 0 && commitData->info->name == SYS_CURRENT_STATE)
-                {
-                    currentStateIdx = idx;
-                }
 
                 // addtion data
                 std::set<std::string> addtionKey;
@@ -243,7 +238,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                         auto conditionKey = std::make_shared<Condition>();
                                         conditionKey->EQ(requestData->info->key, key);
                                         auto backendData = m_backend->select(
-                                            hash, num, requestData->info, key, conditionKey);
+                                            num, requestData->info, key, conditionKey);
 
                                         CACHED_STORAGE_LOG(DEBUG)
                                             << requestData->info->name << "-" << key
@@ -300,9 +295,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                     auto commitEntry = std::make_shared<Entry>();
                                     commitEntry->copyFrom(*entryIt);
                                     (*commitData->dirtyEntries)[i] = commitEntry;
-
-                                    if (m_backend && !m_backend->onlyDirty())
-                                    {
+                                    if (m_backend && !m_backend->onlyCommitDirty())
+                                    {  // Only for RocksDB
                                         tbb::spin_mutex::scoped_lock lock(addtionKeyMutex);
                                         auto inserted = addtionKey.insert(key).second;
 
@@ -323,7 +317,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                                 }
                                 else
                                 {
-                                    // impossible, so exit
+                                    // impossible, should exit
                                     CACHED_STORAGE_LOG(FATAL)
                                         << "Can not find entry in cache, id:" << entry->getID()
                                         << " key:" << key;
@@ -331,7 +325,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             }
                             else
                             {
-                                // impossible, so exit
+                                // impossible, should exit
                                 CACHED_STORAGE_LOG(FATAL)
                                     << "Dirty entry id equal to 0, id: " << id << " key: " << key;
                             }
@@ -339,17 +333,18 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                             touchMRU(requestData->info->name, key, change);
                         }
                     });
-
-                // TODO: check if necessery
+#if 0
+                // MemoryTable2 already sort
                 tbb::parallel_sort(commitData->dirtyEntries->begin(),
                     commitData->dirtyEntries->end(), EntryLessNoLock(requestData->info));
-
+#endif
                 commitData->newEntries->shallowFrom(requestData->newEntries);
 
+#if 0
                 TIME_RECORD("Sort new entries");
                 tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
                     EntryLessNoLock(requestData->info));
-
+#endif
                 (*commitDatas)[idx] = commitData;
             }
         });
@@ -364,11 +359,8 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         for (size_t j = 0; j < newEntriesSize; ++j)
         {
             auto commitEntry = commitData->newEntries->get(j);
-            commitEntry->setID(++m_ID);
+            // commitEntry->setID(++m_ID);
             commitEntry->setNum(num);
-#if 0
-            STORAGE_LOG(TRACE) << "Set new entry ID: " << m_ID;
-#endif
             ++total;
 
             auto key = commitEntry->getField(commitData->info->key);
@@ -396,7 +388,7 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
                         auto conditionKey = std::make_shared<Condition>();
                         conditionKey->EQ(commitData->info->key, key);
                         auto backendData =
-                            m_backend->select(hash, num, commitData->info, key, conditionKey);
+                            m_backend->select(num, commitData->info, key, conditionKey);
 
                         CACHED_STORAGE_LOG(TRACE) << commitData->info->name << "-" << key
                                                   << " miss the cache while commit new entries";
@@ -435,33 +427,9 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
         TIME_RECORD("Submit commit task");
         // new task write to backend
         Task::Ptr task = std::make_shared<Task>();
-        task->hash = hash;
         task->num = num;
         task->datas = commitDatas;
 
-        TableData::Ptr data;
-        if (currentStateIdx < 0)
-        {
-            data = std::make_shared<TableData>();
-            data->info->name = SYS_CURRENT_STATE;
-            data->info->key = SYS_KEY;
-            data->info->fields = std::vector<std::string>{"value"};
-        }
-        else
-        {
-            data = (*commitDatas)[currentStateIdx];
-        }
-
-        Entry::Ptr idEntry = std::make_shared<Entry>();
-        idEntry->setID(1);
-        idEntry->setNum(num);
-        idEntry->setStatus(0);
-        idEntry->setField(SYS_KEY, SYS_KEY_CURRENT_ID);
-        idEntry->setField("value", boost::lexical_cast<std::string>(m_ID));
-
-        data->dirtyEntries->addEntry(idEntry);
-
-        task->datas->push_back(data);
         auto backend = m_backend;
         auto self = std::weak_ptr<CachedStorage>(
             std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
@@ -521,11 +489,6 @@ size_t CachedStorage::commit(h256 hash, int64_t num, const std::vector<TableData
     return total;
 }
 
-bool CachedStorage::onlyDirty()
-{
-    return true;
-}
-
 void CachedStorage::setBackend(Storage::Ptr backend)
 {
     m_backend = backend;
@@ -533,23 +496,6 @@ void CachedStorage::setBackend(Storage::Ptr backend)
 
 void CachedStorage::init()
 {
-    auto tableInfo = std::make_shared<storage::TableInfo>();
-    tableInfo->name = SYS_CURRENT_STATE;
-    tableInfo->key = SYS_KEY;
-    tableInfo->fields = std::vector<std::string>{"value"};
-
-    auto condition = std::make_shared<Condition>();
-    condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
-
-    // get id from backend
-    auto out = m_backend->select(h256(), 0, tableInfo, SYS_KEY_CURRENT_ID, condition);
-    if (out->size() > 0)
-    {
-        auto entry = out->get(0);
-        auto numStr = entry->getField(SYS_VALUE);
-        m_ID = boost::lexical_cast<size_t>(numStr);
-    }
-
     if (!disabled())
     {
         startClearThread();
@@ -602,11 +548,6 @@ void CachedStorage::setMaxCapacity(int64_t maxCapacity)
 void CachedStorage::setMaxForwardBlock(size_t maxForwardBlock)
 {
     m_maxForwardBlock = maxForwardBlock;
-}
-
-size_t CachedStorage::ID()
-{
-    return m_ID;
 }
 
 void CachedStorage::startClearThread()
@@ -739,7 +680,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
     {
-        m_backend->commit(task->hash, task->num, *(task->datas));
+        m_backend->commit(task->num, *(task->datas));
 
         setSyncNum(task->num);
 

@@ -25,7 +25,6 @@
 #pragma once
 #include <libconsensus/pbft/Common.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 namespace dev
 {

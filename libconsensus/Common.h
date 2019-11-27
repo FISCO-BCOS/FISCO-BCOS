@@ -25,7 +25,6 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 
 #define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")

@@ -26,7 +26,6 @@
 #include <libdevcore/Assertions.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/TrieHash.h>
-#include <libdevcore/easylog.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>

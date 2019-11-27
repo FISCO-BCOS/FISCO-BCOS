@@ -28,7 +28,6 @@
 #include <libconsensus/ConsensusInterface.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/TopicInfo.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
@@ -168,7 +167,7 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
     void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool = true) override
     {
         m_initParam = initParam;
         return true;
@@ -228,7 +227,8 @@ public:
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
@@ -285,7 +285,22 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
-
+    std::pair<LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const& _txHash) override
+    {
+        (void)_txHash;
+        return std::make_pair(LocalisedTransaction(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
+    {
+        return std::make_pair(
+            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
     CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
@@ -500,8 +515,7 @@ public:
         /// init
         initLedgerParam();
     }
-    bool initLedger(const std::string&) override { return true; };
-    void initGenesisConfig(std::string const&) override{};
+    bool initLedger(std::shared_ptr<LedgerParamInterface>) override { return true; };
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {

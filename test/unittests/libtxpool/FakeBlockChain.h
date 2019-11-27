@@ -163,7 +163,8 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
@@ -202,7 +203,23 @@ public:
         return LocalisedTransactionReceipt(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
-
+    std::pair<LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const&) override
+    {
+        return std::make_pair(LocalisedTransaction(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(
+        dev::h256 const& _txHash, dev::eth::LocalisedTransaction&) override
+    {
+        (void)_txHash;
+        return std::make_pair(
+            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
     CommitResult commitBlock(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
@@ -217,7 +234,7 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&) override { return true; }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
     dev::h512s sealerList() override { return m_sealerList; }
     dev::h512s observerList() override { return m_observerList; }
@@ -225,7 +242,7 @@ public:
     void setObserverList(dev::h512s const& observers) { m_observerList = observers; }
 
     std::map<h256, int64_t> m_blockHash;
-    std::vector<std::shared_ptr<Block> > m_blockChain;
+    std::vector<std::shared_ptr<Block>> m_blockChain;
     int64_t m_blockNumber;
     int64_t m_totalTransactionCount;
     Secret m_sec;

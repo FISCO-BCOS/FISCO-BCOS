@@ -30,14 +30,12 @@
 #include "libchannelserver/ChannelServer.h"     // for ChannelServer
 #include "libchannelserver/ChannelSession.h"    // for ChannelSessio...
 #include "libdevcore/Common.h"                  // for bytes, byte
-#include "libdevcore/Log.h"                     // for LOG
 #include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
-#include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
 #include <unistd.h>

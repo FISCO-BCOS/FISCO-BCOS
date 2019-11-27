@@ -27,7 +27,6 @@
 
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <boost/timer.hpp>
 #include <numeric>
 

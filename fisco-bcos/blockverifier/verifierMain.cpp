@@ -20,13 +20,13 @@
  * @author: mingzhenliu
  * @date: 2018-09-21
  */
+
 #include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/Common.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
@@ -37,7 +37,7 @@
 #include <libstoragestate/StorageStateFactory.h>
 
 using namespace dev;
-INITIALIZE_EASYLOGGINGPP
+
 int main(int argc, char* argv[])
 {
     auto storagePath = std::string("test_storage/");

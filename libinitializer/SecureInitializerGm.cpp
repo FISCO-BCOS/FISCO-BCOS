@@ -24,7 +24,6 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libsecurity/EncryptedFile.h>
 #include <openssl/engine.h>

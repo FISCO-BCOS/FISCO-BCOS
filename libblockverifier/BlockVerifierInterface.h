@@ -22,8 +22,8 @@
 
 #include "Common.h"
 #include "ExecutiveContext.h"
+
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>

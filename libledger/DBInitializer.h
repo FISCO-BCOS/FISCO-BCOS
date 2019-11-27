@@ -23,9 +23,9 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
+#include "libstorage/ScalableStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/MemoryTableFactory.h>
@@ -36,17 +36,21 @@
 #define DBInitializer_LOG(LEVEL) LOG(LEVEL) << "[DBINITIALIZER] "
 namespace dev
 {
-namespace db
+namespace storage
 {
 class BasicRocksDB;
-}
+class BinLogHandler;
+struct ConnectionPoolConfig;
+}  // namespace storage
 
 namespace ledger
 {
 class DBInitializer
 {
 public:
-    DBInitializer(std::shared_ptr<LedgerParamInterface> param) : m_param(param) {}
+    DBInitializer(std::shared_ptr<LedgerParamInterface> param, dev::GROUP_ID _groupID)
+      : m_groupID(_groupID), m_param(param)
+    {}
     /// create storage DB(must be storage)
     ///  must be open before init
     virtual void initStorageDB();
@@ -81,34 +85,33 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
-    // open and init rocksDB
-    virtual std::shared_ptr<dev::db::BasicRocksDB> initBasicRocksDB();
-
 protected:
+    dev::GROUP_ID m_groupID = 0;
     /// create stateStorage (mpt or storageState options)
     virtual void createStateFactory(dev::h256 const& genesisHash);
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
-
-    // set handler to rocksDB
-    template <typename T>
-    void setHandlerForDB(std::shared_ptr<T> rocksDB);
 
     void unsupportedFeatures(std::string const& desc);
 
 private:
     void initLevelDBStorage();
     // below use MemoryTableFactory2
-    void initSQLStorage();
-    void initTableFactory2(dev::storage::Storage::Ptr _backend);
-    void initRocksDBStorage();
-
+    dev::storage::Storage::Ptr initSQLStorage();
+    void initTableFactory2(
+        dev::storage::Storage::Ptr _backend, std::shared_ptr<LedgerParamInterface> _param);
+    dev::storage::Storage::Ptr initRocksDBStorage(std::shared_ptr<LedgerParamInterface> _param);
+    dev::storage::Storage::Ptr initScalableStorage(std::shared_ptr<LedgerParamInterface> _param);
     void createStorageState();
     void createMptState(dev::h256 const& genesisHash);
 
-    void initZdbStorage();
+    dev::storage::Storage::Ptr initZdbStorage();
+    void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
+        dev::storage::Storage::Ptr _storage);
 
-private:
+    void setRemoteBlockNumber(std::shared_ptr<dev::storage::ScalableStorage> scalableStorage,
+        const std::string& blocksDBPath);
+
     std::shared_ptr<LedgerParamInterface> m_param;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
     dev::storage::Storage::Ptr m_storage = nullptr;
@@ -117,5 +120,15 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 };
+int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
+std::function<void(std::string&)> getDecryptHandler();
+std::function<void(std::string const&, std::string&)> getEncryptHandler();
+dev::storage::Storage::Ptr createRocksDBStorage(
+    const std::string& _dbPath, bool _enableEncryption, bool _disableWAL, bool _enableCache);
+dev::storage::Storage::Ptr createSQLStorage(std::shared_ptr<LedgerParamInterface> _param,
+    std::shared_ptr<ChannelRPCServer> _channelRPCServer,
+    std::function<void(std::exception& e)> _fatalHandler);
+dev::storage::Storage::Ptr createZdbStorage(std::shared_ptr<LedgerParamInterface> _param,
+    std::function<void(std::exception& e)> _fatalHandler);
 }  // namespace ledger
 }  // namespace dev

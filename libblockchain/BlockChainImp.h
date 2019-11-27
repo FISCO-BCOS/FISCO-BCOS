@@ -23,8 +23,8 @@
 #pragma once
 
 #include "BlockChainInterface.h"
+
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -86,7 +86,8 @@ public:
     dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
     virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override;
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override;
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t _blockNumber = -1) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
     std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
@@ -96,7 +97,7 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t num = 0);
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override;
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild = true) override;
     std::pair<int64_t, int64_t> totalTransactionCount() override;
     std::pair<int64_t, int64_t> totalFailedTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
@@ -112,9 +113,20 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+
+    std::pair<dev::eth::LocalisedTransaction,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const& _txHash) override;
+
+
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(
+        dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
+
 private:
-    std::shared_ptr<dev::eth::Block> getBlock(int64_t _i);
-    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash);
+    std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
+    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash);
     int64_t obtainNumber();
@@ -133,10 +145,20 @@ private:
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
+    void parseMerkleMap(const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+        std::map<std::string, std::string>& child2Parent);
+
+    void getMerkleProof(dev::h256 const& _txHash,
+        const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+        const std::map<std::string, std::string>& child2Parent,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
+
+    dev::h256 getHashNeed2Proof(uint32_t index, const dev::bytes& data);
+    bool getBlockAndIndexByTxHash(const dev::h256& _txHash,
+        std::pair<std::shared_ptr<dev::eth::Block>, std::string>& blockInfoWithTxIndex);
+
     dev::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
-    const std::string c_genesisHash =
-        "0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c";
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactory;
 
     dev::h512s getNodeListByType(int64_t num, std::string const& type);
@@ -162,6 +184,17 @@ private:
     int64_t m_blockNumber = -1;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+
+    std::pair<dev::eth::LocalisedTransaction, std::map<std::string, std::vector<std::string>>>
+        transactionWithProof;
+    std::mutex transactionWithProofMutex;
+
+    std::pair<dev::eth::LocalisedTransactionReceipt,
+        std::map<std::string, std::vector<std::string>>>
+        receiptWithProof = std::make_pair(
+            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+            std::map<std::string, std::vector<std::string>>());
+    std::mutex receiptWithProofMutex;
 };
 }  // namespace blockchain
 }  // namespace dev

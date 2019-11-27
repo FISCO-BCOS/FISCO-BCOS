@@ -24,7 +24,6 @@
 #pragma once
 
 #include <arpa/inet.h>
-#include <libdevcore/easylog.h>
 #include <queue>
 #include <string>
 #include <thread>

@@ -21,9 +21,9 @@
  * @date 2018-10-29
  */
 #pragma once
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
 #include <boost/algorithm/string/classification.hpp>

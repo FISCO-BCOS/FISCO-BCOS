@@ -23,8 +23,8 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Hash.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace blockverifier;

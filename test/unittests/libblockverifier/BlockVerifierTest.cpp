@@ -20,10 +20,10 @@
  * @author:
  * @date 2018-09-21
  */
+
 #include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>
@@ -176,7 +176,7 @@ public:
         /// set state db related param
         params->mutableStateParam().type = "storage";
 
-        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
+        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params, 1);
         dbInitializer->initStorageDB();
         std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
         blockChain->setStateStorage(dbInitializer->storage());

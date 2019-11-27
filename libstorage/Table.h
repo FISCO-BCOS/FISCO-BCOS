@@ -110,7 +110,7 @@ public:
 
     virtual ssize_t capacity() const;
 
-    virtual void copyFrom(Entry::Ptr entry);
+    virtual void copyFrom(Entry::ConstPtr entry);
 
     virtual ssize_t refCount();
 
@@ -337,16 +337,19 @@ public:
         m_recorder = _recorder;
     }
 
-    virtual void setStateStorage(std::shared_ptr<Storage> amopDB) = 0;
-    virtual void setBlockHash(h256 blockHash) = 0;
-    virtual void setBlockNum(int blockNum) = 0;
+    virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; };
+    virtual void setBlockHash(h256 const& _blockHash) { m_blockHash = _blockHash; }
+    virtual void setBlockNum(int64_t _blockNum) { m_blockNum = _blockNum; }
     virtual void setTableInfo(TableInfo::Ptr tableInfo) { m_tableInfo = tableInfo; };
     virtual size_t cacheSize() { return 0; }
 
 protected:
     std::function<void(Ptr, Change::Kind, std::string const&, std::vector<Change::Record>&)>
         m_recorder;
+    std::shared_ptr<Storage> m_remoteDB;
     TableInfo::Ptr m_tableInfo;
+    h256 m_blockHash;
+    int64_t m_blockNum = 0;
 };
 
 // Block execution time construction by TableFactoryFactory
@@ -368,6 +371,19 @@ public:
     virtual void rollback(size_t _savepoint) = 0;
     virtual void commit() = 0;
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) = 0;
+
+    virtual std::shared_ptr<Storage> stateStorage() { return m_stateStorage; }
+    virtual void setStateStorage(std::shared_ptr<Storage> stateStorage)
+    {
+        m_stateStorage = stateStorage;
+    }
+    virtual void setBlockHash(h256 const& blockHash) { m_blockHash = blockHash; }
+    virtual void setBlockNum(int64_t blockNum) { m_blockNum = blockNum; }
+
+protected:
+    std::shared_ptr<Storage> m_stateStorage;
+    h256 m_blockHash = h256(0);
+    int64_t m_blockNum = 0;
 };
 
 class TableFactoryFactory : public std::enable_shared_from_this<TableFactoryFactory>
@@ -377,8 +393,9 @@ public:
 
     virtual ~TableFactoryFactory(){};
 
-    virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) = 0;
+    virtual TableFactory::Ptr newTableFactory(dev::h256 const& hash, int64_t number) = 0;
 };
+TableInfo::Ptr getSysTableInfo(const std::string& tableName);
 
 }  // namespace storage
 }  // namespace dev

@@ -47,9 +47,8 @@ public:
 
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
-    virtual bool initLedger(const std::string& _configFilePath = "config.ini") = 0;
+    virtual bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) = 0;
 
-    virtual void initGenesisConfig(std::string const& configPath) = 0;
     virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const = 0;
     virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const = 0;
     virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const = 0;

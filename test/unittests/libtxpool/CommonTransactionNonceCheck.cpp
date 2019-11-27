@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     BOOST_CHECK(cache.isNonceOk(txs[1], true));  // insert cache if true
     BOOST_CHECK(!cache.isNonceOk(txs[1]));
 
-    dev::eth::NonceKeyType nonce = cache.generateKey(txs[0]);
+    dev::eth::NonceKeyType nonce = txs[0].nonce();
     cache.delCache(nonce);
     BOOST_CHECK(cache.isNonceOk(txs[0]));
 

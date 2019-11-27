@@ -22,9 +22,8 @@
 #include "libstorage/Table.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
@@ -179,6 +178,6 @@ void PermissionPrecompiled::addPrefixToUserTable(std::string& table_name)
     }
     else
     {
-        table_name = USER_TABLE_PREFIX + table_name;
+        table_name = precompiled::getTableName(table_name);
     }
 }

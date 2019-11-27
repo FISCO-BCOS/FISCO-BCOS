@@ -22,8 +22,8 @@
  */
 
 #include "ParamParse.h"
+
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>

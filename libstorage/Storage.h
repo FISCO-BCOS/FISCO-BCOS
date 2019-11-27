@@ -35,19 +35,21 @@ public:
 
     virtual ~Storage(){};
 
-    virtual Entries::Ptr select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-        const std::string& key, Condition::Ptr condition = nullptr) = 0;
-    virtual size_t commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
+    virtual Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+        Condition::Ptr condition = nullptr) = 0;
+    virtual size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) = 0;
     // Dicide if CachedStorage can commit modified part of Entries
-    virtual bool onlyDirty() = 0;
-
-    void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
-    dev::GROUP_ID groupID() const { return m_groupID; }
+    virtual bool onlyCommitDirty() { return false; };
 
     virtual void stop() {}
+};
 
-protected:
-    dev::GROUP_ID m_groupID = 0;
+class StorageFactory : public std::enable_shared_from_this<StorageFactory>
+{
+public:
+    typedef std::shared_ptr<StorageFactory> Ptr;
+    virtual ~StorageFactory(){};
+    virtual Storage::Ptr getStorage(const std::string& _dbName, bool _createIfMissing = false) = 0;
 };
 
 }  // namespace storage

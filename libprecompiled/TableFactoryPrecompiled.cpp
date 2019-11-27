@@ -19,12 +19,12 @@
  *  @date 20180921
  */
 #include "TableFactoryPrecompiled.h"
-#include "StorageException.h"
-#include "Table.h"
+#include "Common.h"
 #include "TablePrecompiled.h"
+#include "libstorage/StorageException.h"
+#include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
@@ -37,6 +37,7 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
 using namespace dev::storage;
+using namespace dev::precompiled;
 
 const char* const TABLE_METHOD_OPT_STR = "openTable(string)";
 const char* const TABLE_METHOD_CRT_STR_STR = "createTable(string,string,string)";
@@ -50,26 +51,6 @@ TableFactoryPrecompiled::TableFactoryPrecompiled()
 std::string TableFactoryPrecompiled::toString()
 {
     return "TableFactory";
-}
-
-// same as libprecompiled/Common.cpp getErrorCodeOut
-void getErrorCodeOut(bytes& out, int const& result)
-{
-    dev::eth::ContractABI abi;
-    if (result > 0 && result < 128)
-    {
-        out = abi.abiIn("", u256(result));
-        return;
-    }
-    out = abi.abiIn("", s256(result));
-    if (g_BCOSConfig.version() < RC2_VERSION)
-    {
-        out = abi.abiIn("", -result);
-    }
-    else if (g_BCOSConfig.version() == RC2_VERSION)
-    {
-        out = abi.abiIn("", u256(-result));
-    }
 }
 
 bytes TableFactoryPrecompiled::call(
@@ -88,7 +69,8 @@ bytes TableFactoryPrecompiled::call(
     {  // openTable(string)
         string tableName;
         abi.abiOut(data, tableName);
-        tableName = storage::USER_TABLE_PREFIX + tableName;
+        tableName = precompiled::getTableName(tableName);
+
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
         if (table)
@@ -133,13 +115,17 @@ bytes TableFactoryPrecompiled::call(
                     std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
         }
 
-        tableName = storage::USER_TABLE_PREFIX + tableName;
-        if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH)
+        tableName = precompiled::getTableName(tableName);
+        if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH ||
+            (g_BCOSConfig.version() > V2_1_0 &&
+                tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
         {  // mysql TableName and fieldName length limit is 64
+           // 2.2.0 user tableName length limit is 50-2=48
             BOOST_THROW_EXCEPTION(StorageException(
                 CODE_TABLE_NAME_LENGTH_OVERFLOW, std::string("tableName length overflow ") +
                                                      std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
         }
+
         int result = 0;
 
         if (g_BCOSConfig.version() < RC2_VERSION)

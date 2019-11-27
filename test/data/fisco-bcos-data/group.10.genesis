@@ -12,3 +12,6 @@ type=sql
 
 [tx]
 gas_limit=300000000
+
+[group]
+    id=10

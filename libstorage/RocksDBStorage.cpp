@@ -36,7 +36,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
 #include <memory>
 #include <thread>
@@ -47,7 +46,7 @@ using namespace dev::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(
-    h256, int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
+    int64_t, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
     try
     {
@@ -84,7 +83,8 @@ Entries::Ptr RocksDBStorage::select(
                 entry->setNum(it->at(NUM_FIELD));
                 entry->setStatus(it->at(STATUS));
 
-                if (entry->getStatus() == Entry::Status::NORMAL && condition->process(entry))
+                if (entry->getStatus() == Entry::Status::NORMAL &&
+                    (!condition || condition->process(entry)))
                 {
                     entry->setDirty(false);
                     entries->addEntry(entry);
@@ -110,13 +110,12 @@ Entries::Ptr RocksDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Ptr>& datas)
+size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
 {
     try
     {
         auto start_time = utcTime();
 
-        auto hex = hash.hex();
         WriteBatch batch;
         tbb::parallel_for(tbb::blocked_range<size_t>(0, datas.size()),
             [&](const tbb::blocked_range<size_t>& range) {
@@ -127,10 +126,17 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
 
                     auto tableInfo = datas[i]->info;
 
-                    processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
-                    processNewEntries(num, key2value, tableInfo, datas[i]->newEntries);
+                    if (m_shouldCompleteDirty)
+                    {
+                        processEntries(num, key2value, tableInfo, datas[i]->dirtyEntries, true);
+                    }
+                    else
+                    {
+                        processDirtyEntries(num, key2value, tableInfo, datas[i]->dirtyEntries);
+                    }
+                    processEntries(num, key2value, tableInfo, datas[i]->newEntries, false);
 
-                    for (auto it : *key2value)
+                    for (const auto& it : *key2value)
                     {
                         string entryKey = tableInfo->name + "_" + it.first;
                         stringstream ss;
@@ -145,8 +151,16 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
         auto encode_time_cost = utcTime();
 
         WriteOptions options;
+        // by default sync is false, if true, must enable WAL
         options.sync = false;
+        // by default WAL is enable
+        options.disableWAL = m_disableWAL;
+
         m_db->Write(options, batch);
+        if (m_disableWAL)
+        {  // if disableWAL must manually flush
+            m_db->flush();
+        }
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
@@ -171,15 +185,9 @@ size_t RocksDBStorage::commit(h256 hash, int64_t num, const vector<TableData::Pt
     return 0;
 }
 
-bool RocksDBStorage::onlyDirty()
-{
-    return false;
-}
-
-
-void RocksDBStorage::processNewEntries(int64_t num,
+void RocksDBStorage::processEntries(int64_t num,
     shared_ptr<map<string, vector<map<string, string>>>> key2value, TableInfo::Ptr tableInfo,
-    Entries::Ptr entries)
+    Entries::Ptr entries, bool isDirtyEntries)
 {
     for (size_t j = 0; j < entries->size(); ++j)
     {
@@ -187,8 +195,8 @@ void RocksDBStorage::processNewEntries(int64_t num,
         auto key = entry->getField(tableInfo->key);
 
         auto it = map<string, vector<map<string, string>>>::iterator();
-        if (entry->force())
-        {
+        if (!isDirtyEntries && entry->force())
+        {  // only new entries can be forced
             it = key2value->insert(make_pair(key, vector<map<string, string>>())).first;
         }
         else
@@ -221,20 +229,42 @@ void RocksDBStorage::processNewEntries(int64_t num,
                     stringstream ss(value);
                     boost::archive::binary_iarchive ia(ss);
                     ia >> res;
-                    it = key2value->emplace(key, res).first;
+                    it = key2value->emplace(key, move(res)).first;
                 }
             }
         }
 
-        map<string, string> value;
-        for (auto& fieldIt : *(entry))
+        auto copyFromEntry = [num](map<string, string>& value, Entry::Ptr entry) {
+            for (const auto& fieldIt : *(entry))
+            {
+                value[fieldIt.first] = fieldIt.second;
+            }
+            value[NUM_FIELD] = boost::lexical_cast<string>(num);
+            value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
+            value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
+        };
+        if (isDirtyEntries)
         {
-            value[fieldIt.first] = fieldIt.second;
+            // binary search
+            map<string, string> fakeEntry{{ID_FIELD, to_string(entry->getID())}};
+            auto originEntryIterator = lower_bound(it->second.begin(), it->second.end(), fakeEntry,
+                [](const map<string, string>& lhs, const map<string, string>& rhs) {
+                    return boost::lexical_cast<uint64_t>(lhs.at(ID_FIELD)) <
+                           boost::lexical_cast<uint64_t>(rhs.at(ID_FIELD));
+                });
+            if (originEntryIterator == it->second.end() ||
+                fakeEntry.at(ID_FIELD) != originEntryIterator->at(ID_FIELD))
+            {
+                STORAGE_ROCKSDB_LOG(FATAL) << "cannot find dirty entry";
+            }
+            copyFromEntry(*originEntryIterator, entry);
         }
-        value[NUM_FIELD] = boost::lexical_cast<string>(num);
-        value[ID_FIELD] = boost::lexical_cast<string>(entry->getID());
-        value[STATUS] = boost::lexical_cast<string>(entry->getStatus());
-        it->second.push_back(value);
+        else
+        {  // new entry
+            map<string, string> value;
+            copyFromEntry(value, entry);
+            it->second.push_back(move(value));
+        }
     }
 }
 

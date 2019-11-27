@@ -18,18 +18,18 @@
  * @author: xingqiangbai
  * @date 2018-11-14
  */
+
 #include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <leveldb/db.h>
 #include <libdevcore/BasicLevelDB.h>
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <libstorage/LevelDBStorage.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/program_options.hpp>
-INITIALIZE_EASYLOGGINGPP
+
 
 using namespace std;
 using namespace dev;

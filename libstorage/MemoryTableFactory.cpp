@@ -22,10 +22,8 @@
 #include "Common.h"
 #include "MemoryTable.h"
 #include "StorageException.h"
-#include "TablePrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
@@ -46,7 +44,7 @@ const std::vector<string> MemoryTableFactory::c_sysNonChangeLogTables =
     std::vector<string>{SYS_CURRENT_STATE, SYS_TX_HASH_2_BLOCK, SYS_NUMBER_2_HASH, SYS_HASH_2_BLOCK,
         SYS_BLOCK_2_NONCES};
 
-MemoryTableFactory::MemoryTableFactory() : m_blockHash(h256(0)), m_blockNum(0) {}
+MemoryTableFactory::MemoryTableFactory() {}
 
 Table::Ptr MemoryTableFactory::openTable(
     const std::string& tableName, bool authorityFlag, bool isPara)
@@ -176,16 +174,6 @@ size_t MemoryTableFactory::savepoint()
     return changeLog.size();
 }
 
-void MemoryTableFactory::setBlockHash(h256 blockHash)
-{
-    m_blockHash = blockHash;
-}
-
-void MemoryTableFactory::setBlockNum(int64_t blockNum)
-{
-    m_blockNum = blockNum;
-}
-
 h256 MemoryTableFactory::hash()
 {
     bytes data;
@@ -237,7 +225,7 @@ void MemoryTableFactory::commit()
     getChangeLog().clear();
 }
 
-void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
+void MemoryTableFactory::commitDB(h256 const&, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -260,7 +248,7 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
 
     if (!datas.empty())
     {
-        stateStorage()->commit(_blockHash, _blockNumber, datas);
+        stateStorage()->commit(_blockNumber, datas);
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();
@@ -273,64 +261,6 @@ void MemoryTableFactory::commitDB(h256 const& _blockHash, int64_t _blockNumber)
                        << LOG_KV("clearTimeCost", clear_time_cost)
                        << LOG_KV("totalTimeCost", utcTime() - start_time);
 }
-
-storage::TableInfo::Ptr MemoryTableFactory::getSysTableInfo(const std::string& tableName)
-{
-    auto tableInfo = make_shared<storage::TableInfo>();
-    tableInfo->name = tableName;
-    if (tableName == SYS_CONSENSUS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
-    }
-    else if (tableName == SYS_TABLES)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"key_field", "value_field"};
-    }
-    else if (tableName == SYS_ACCESS_TABLE)
-    {
-        tableInfo->key = "table_name";
-        tableInfo->fields = vector<string>{"address", "enable_num"};
-    }
-    else if (tableName == SYS_CURRENT_STATE)
-    {
-        tableInfo->key = SYS_KEY;
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_NUMBER_2_HASH)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_TX_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value", "index"};
-    }
-    else if (tableName == SYS_HASH_2_BLOCK)
-    {
-        tableInfo->key = "hash";
-        tableInfo->fields = std::vector<std::string>{"value"};
-    }
-    else if (tableName == SYS_CNS)
-    {
-        tableInfo->key = "name";
-        tableInfo->fields = std::vector<std::string>{"version", "address", "abi"};
-    }
-    else if (tableName == SYS_CONFIG)
-    {
-        tableInfo->key = "key";
-        tableInfo->fields = std::vector<std::string>{"value", "enable_num"};
-    }
-    else if (tableName == SYS_BLOCK_2_NONCES)
-    {
-        tableInfo->key = "number";
-        tableInfo->fields = std::vector<std::string>{SYS_VALUE};
-    }
-    return tableInfo;
-}
-
 
 void MemoryTableFactory::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {

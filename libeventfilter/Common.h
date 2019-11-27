@@ -20,8 +20,8 @@
  */
 
 #pragma once
+
 #include <libdevcore/Log.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/LogEntry.h>
 #include <libethcore/TransactionReceipt.h>
 

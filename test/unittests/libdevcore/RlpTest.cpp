@@ -29,7 +29,6 @@
 #include <libdevcore/CommonData.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 
 using namespace std;
 BOOST_FIXTURE_TEST_SUITE(RlpTests, dev::test::TestOutputHelperFixture)

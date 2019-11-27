@@ -22,7 +22,6 @@
 
 #pragma once
 #include <libdevcore/Common.h>
-#include <libdevcore/easylog.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -37,7 +36,7 @@
 
 namespace dev
 {
-namespace db
+namespace storage
 {
 class BasicRocksDB
 {
@@ -79,7 +78,8 @@ public:
         m_decryptHandler = decryptHandler;
     }
 
-    void closeDB() { m_db.reset(); }
+    void closeDB();
+    void flush();
 
 protected:
     void checkStatus(rocksdb::Status const& status, std::string const& path = "");
@@ -90,5 +90,6 @@ protected:
     EncHookFunction m_encryptHandler = nullptr;
     DecHookFunction m_decryptHandler = nullptr;
 };
-}  // namespace db
+rocksdb::Options getRocksDBOptions();
+}  // namespace storage
 }  // namespace dev

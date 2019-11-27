@@ -30,9 +30,10 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
+#include <memory>
+
 using namespace dev;
 using namespace dev::ledger;
-
 namespace dev
 {
 namespace test
@@ -45,16 +46,16 @@ public:
       : FakeLedger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
-    bool initLedger(const std::string& _configPath) override
+    bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override
     {
+        m_param = _ledgerParams;
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param);
+        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, 1);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
-        FakeLedger::initGenesisConfig(_configPath);
         /// init blockChain
-        FakeLedger::initGenesisMark(m_genesisParam);
+        m_genesisParam = _ledgerParams->mutableGenesisBlockParam();
         FakeLedger::initBlockChain(m_genesisParam);
         /// intit blockVerifier
         FakeLedger::initBlockVerifier();
@@ -98,22 +99,32 @@ public:
         return ret;
     }
 
-    void init(std::string const& _configPath) { return FakeLedger::initGenesisConfig(_configPath); }
-    void initMark()
+    void init(std::string const& _configPath)
     {
-        GenesisBlockParam m_genesisParam;
-        FakeLedger::initGenesisMark(m_genesisParam);
+        auto params = std::make_shared<LedgerParam>();
+        params->parseGenesisConfig(_configPath);
+        m_param = params;
     }
+
     void initIniConfig(std::string const& iniConfigFileName)
     {
-        return FakeLedger::initIniConfig(iniConfigFileName);
+        if (m_param)
+        {
+            auto params = std::dynamic_pointer_cast<LedgerParam>(m_param);
+            params->parseIniConfig(iniConfigFileName);
+        }
+        else
+        {
+            auto params = std::make_shared<LedgerParam>();
+            params->parseIniConfig(iniConfigFileName);
+            m_param = params;
+        }
     }
-
-    void initDBConfig(boost::property_tree::ptree const& pt)
+    void regenerateGenesisMark()
     {
-        return FakeLedger::initDBConfig(pt);
+        auto params = std::dynamic_pointer_cast<LedgerParam>(m_param);
+        params->mutableGenesisBlockParam() = params->generateGenesisMark();
     }
-
     void setDBInitializer(std::shared_ptr<dev::ledger::DBInitializer> _dbInitializer)
     {
         m_dbInitializer = _dbInitializer;
@@ -148,21 +159,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 
     /// check timestamp
     /// init genesis configuration
-    boost::property_tree::ptree pt;
-#if 0
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with invalid timestamp
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == UINT64_MAX);
-    /// check with valid timestamp
-    pt.put("group.timestamp", 1553520855);
-    pt.put("state.type", "storage");
-    fakeLedger.initGenesisConfig(pt);
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().timeStamp == 1553520855);
-#endif
-    /// check groupMark
-    fakeLedger.initMark();
+    fakeLedger.regenerateGenesisMark();
     std::string mark =
         "10-"
         "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc"
@@ -179,17 +176,18 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     {
         mark += "mpt-2000-300000000";
     }
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisParam().genesisMark == mark);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisBlockParam().groupMark == mark);
 
     /// init ini config
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxPoolParam().txPoolLimit == 150000);
-    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
+    BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == false);
     BOOST_CHECK(fakeLedger.getParam()->mutableConsensusParam().maxTTL == 3);
-
+    param->mutableStateParam().type = "storage";
     /// modify state to storage(the default option)
-    fakeLedger.initDBConfig(pt);
+    boost::property_tree::ptree pt;
+    // fakeLedger.initDBConfig(pt);
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
         BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
@@ -198,14 +196,13 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     {
         fakeLedger.getParam()->mutableStorageParam().type = "LevelDB";
     }
-
     BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 
     /// test DBInitializer
     std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =
-        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam());
+        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam(), groupId);
     /// init storageDB
     BOOST_CHECK(dbInitializer->storage() == nullptr);
     dbInitializer->initStorageDB();
@@ -248,7 +245,9 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
 
     std::shared_ptr<LedgerInterface> ledger =
         std::make_shared<FakeLedgerForTest>(txpool_creator.m_topicService, groupId, key_pair, "");
-    ledger->initLedger(configurationPath);
+    auto ledgerParams = std::make_shared<LedgerParam>();
+    ledgerParams->init(configurationPath);
+    ledger->initLedger(ledgerParams);
     ledgerManager->insertLedger(groupId, ledger);
     std::shared_ptr<LedgerParam> param =
         std::dynamic_pointer_cast<LedgerParam>(ledgerManager->getParamByGroupId(groupId));
@@ -270,8 +269,10 @@ BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.11.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
-    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
+        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair);
+    auto ledgerParams = std::make_shared<LedgerParam>();
+    ledgerParams->init(configurationPath);
+    BOOST_CHECK_NO_THROW(ledger->initLedger(ledgerParams));
 }
 
 BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
@@ -283,8 +284,10 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.12.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair, "");
-    BOOST_CHECK_NO_THROW(ledger->initLedger(configurationPath));
+        std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair);
+    auto ledgerParams = std::make_shared<LedgerParam>();
+    ledgerParams->init(configurationPath);
+    BOOST_CHECK_NO_THROW(ledger->initLedger(ledgerParams));
 }
 
 BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
