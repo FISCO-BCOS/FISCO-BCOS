@@ -169,7 +169,7 @@ void SyncMasterStatus::foreachPeerRandom(
         auto const& peer = m_peersStatus.find(nodeId);
         if (peer == m_peersStatus.end())
             continue;
-        if (!_f(peer->second))
+        if (peer->second && !_f(peer->second))
             break;
     }
 }
