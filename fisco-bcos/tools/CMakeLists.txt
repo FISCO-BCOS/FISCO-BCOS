@@ -31,4 +31,6 @@ if (TOOL)
 
     add_executable(rocksdb-storage rocksdb_main.cpp)
     target_link_libraries(rocksdb-storage PUBLIC initializer storage)
+    add_executable(calculate_address calculate_address.cpp)
+    target_link_libraries(calculate_address PUBLIC devcrypto devcore)
 endif()
