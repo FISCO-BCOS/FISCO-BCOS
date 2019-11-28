@@ -1449,7 +1449,7 @@ void PBFTEngine::collectGarbage()
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                               << LOG_KV(
-                                     "cachedForwardMsgSizeBeforeCler", m_cachedForwardMsg->size());
+                                     "cachedForwardMsgSizeBeforeClear", m_cachedForwardMsg->size());
         m_reqCache->collectGarbage(m_highestBlock);
         // clear m_cachedForwardMsg directly
         m_cachedForwardMsg->clear();
