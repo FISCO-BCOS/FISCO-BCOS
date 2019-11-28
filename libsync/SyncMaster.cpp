@@ -756,6 +756,10 @@ void SyncMaster::sendBlockStatus(int64_t const& _gossipPeersNumber)
     auto blockNumber = m_blockChain->number();
     auto currentHash = m_blockChain->numberHash(blockNumber);
     m_syncStatus->forRandomPeers(_gossipPeersNumber, [&](std::shared_ptr<SyncPeerStatus> _p) {
-        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        if (_p)
+        {
+            return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        }
+        return true;
     });
 }

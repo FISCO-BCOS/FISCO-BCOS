@@ -258,21 +258,29 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     *engineBlock = std::move(*_block);
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
         engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
-    // broadcast prepare request
-    m_threadPool->enqueue([this, prepareReq]() {
-        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-        prepareReq->encode(*prepare_data);
-        // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
-        if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
-        {
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data),
+    // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
+    if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
+    {
+        // encode prepareReq with in-completed transactions into sendedData
+        std::shared_ptr<bytes> sendedData = std::make_shared<bytes>();
+        prepareReq->encode(*sendedData);
+        m_threadPool->enqueue([this, prepareReq, sendedData]() {
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*sendedData),
                 PartiallyPreparePacket);
-        }
-        else
-        {
+        });
+        // re-encode the block with completed transactions
+        prepareReq->pBlock->encode(*prepareReq->block);
+    }
+    // not enable-prepare-with-txs-hash or the empty block
+    else
+    {
+        m_threadPool->enqueue([this, prepareReq, engineBlock]() {
+            std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+            prepareReq->encode(*prepare_data);
             broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
-        }
-    });
+        });
+    }
+
     return prepareReq;
 }
 
@@ -1439,9 +1447,14 @@ void PBFTEngine::collectGarbage()
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
     {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
+                              << LOG_KV(
+                                     "cachedForwardMsgSizeBeforeCler", m_cachedForwardMsg->size());
         m_reqCache->collectGarbage(m_highestBlock);
-        // clear m_cachedForwardMsg
-        clearInvalidCachedForwardMsg();
+        // clear m_cachedForwardMsg directly
+        m_cachedForwardMsg->clear();
+        // clear all the future prepare directly
+
         m_timeManager.m_lastGarbageCollection = now;
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                               << LOG_KV("Timecost", 1000 * t.elapsed());
@@ -2115,6 +2128,8 @@ void PBFTEngine::onReceiveMissedTxsResponse(
         }
         // handlePrepare
         auto prepareReq = m_partiallyPrepareCache->partiallyRawPrepare();
+        // re-encode the block into the completed block(for pbft-backup consideration)
+        prepareReq->pBlock->encode(*prepareReq->block);
         bool ret = handlePrepareMsg(*prepareReq);
         // forward the completed prepare message
         if (ret && m_cachedForwardMsg->count(prepareReq->block_hash))
