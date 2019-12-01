@@ -204,7 +204,9 @@ private:
         dev::eth::Transaction::Ptr tx, dev::eth::TransactionReceipt::Ptr receipt,
         dev::eth::Block const& block, unsigned index);
 
-    bool removeTrans(h256 const& _txHash, bool _needTriggerCallback = false,
+    // default set _needTriggerCallback to be true
+    // since all result should be notified asyncly after v3
+    bool removeTrans(h256 const& _txHash, bool _needTriggerCallback = true,
         std::shared_ptr<dev::eth::Block> _block = nullptr, size_t _index = 0);
 
     bool insert(dev::eth::Transaction::Ptr _tx);

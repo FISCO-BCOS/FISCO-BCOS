@@ -512,9 +512,9 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
             }
         }
     }
-    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     m_workerPool->enqueue([this, block]() { dropBlockTxsFilter(block); });
     // remove InvalidTxs
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     return succ;
 }
 
@@ -660,7 +660,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         }
     }
     // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
-
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     return ret;
 }
 
