@@ -108,7 +108,6 @@ Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool aut
 
     auto memoryTable2 = std::make_shared<MemoryTable2>();
     Table::Ptr memoryTable = memoryTable2;
-    memoryTable2->setEnableOptimize(m_enableOptimize);
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
@@ -198,10 +197,7 @@ h256 MemoryTableFactory2::hash()
     std::vector<std::pair<std::string, Table::Ptr> > tables;
     for (auto& it : m_name2Table)
     {
-        // < v2.2.0 (m_enableOptimize is false): push_back all table into tables
-        // >= v2.2.0 (m_enableOptimize is true): only push the data that `enableConsensus` flag is
-        // true
-        if (!m_enableOptimize || it.second->tableInfo()->enableConsensus)
+        if (it.second->tableInfo()->enableConsensus)
         {
             tables.push_back(std::make_pair(it.first, it.second));
         }
@@ -225,7 +221,6 @@ h256 MemoryTableFactory2::hash()
                 }
 
                 bytes tableHash = hash.asBytes();
-
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
             }
         });

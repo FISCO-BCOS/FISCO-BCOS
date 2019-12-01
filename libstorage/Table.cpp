@@ -826,6 +826,7 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = SYS_KEY;
         tableInfo->fields = vector<string>{"value"};
+        tableInfo->enableConsensus = false;
     }
     else if (tableName == SYS_NUMBER_2_HASH)
     {

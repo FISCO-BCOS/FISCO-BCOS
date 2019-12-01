@@ -152,19 +152,6 @@ int64_t dev::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 {
     int64_t startNum = -1;
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        DBInitializer_LOG(DEBUG) << LOG_DESC("set enableOptimize to be true")
-                                 << LOG_KV("version", g_BCOSConfig.version());
-        tableFactoryFactory->setEnableOptimize(true);
-    }
-    // < v2.2.0
-    else
-    {
-        DBInitializer_LOG(DEBUG) << LOG_DESC("set enableOptimize to be false")
-                                 << LOG_KV("version", g_BCOSConfig.version());
-        tableFactoryFactory->setEnableOptimize(false);
-    }
     tableFactoryFactory->setStorage(_storage);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), startNum);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
@@ -250,16 +237,6 @@ void DBInitializer::initTableFactory2(
     }
 
     auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
-    // optimize cacheStorage and MemoryTable2 when >= v2.2.0
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        tableFactoryFactory->setEnableOptimize(true);
-    }
-    // < v2.2.0
-    else
-    {
-        tableFactoryFactory->setEnableOptimize(false);
-    }
     if (_param->mutableStorageParam().binaryLog)
     {
         auto binaryLogStorage = make_shared<BinaryLogStorage>();

@@ -397,12 +397,6 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
-    // < v2.2.0
-    if (!m_enableOptimize)
-    {
-        return dumpWithoutOptimize();
-    }
-
     // >= v2.2.0
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
     if (m_isDirty)
