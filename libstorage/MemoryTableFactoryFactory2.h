@@ -36,7 +36,6 @@ public:
     TableFactory::Ptr newTableFactory(const dev::h256& hash, int64_t number) override
     {
         MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
-        tableFactory->setEnableOptimize(m_enableOptimize);
         tableFactory->setStateStorage(m_stroage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
@@ -47,11 +46,9 @@ public:
     }
 
     void setStorage(dev::storage::Storage::Ptr storage) { m_stroage = storage; }
-    void setEnableOptimize(bool const& _enableOptimize) { m_enableOptimize = _enableOptimize; }
 
 private:
     dev::storage::Storage::Ptr m_stroage;
-    bool m_enableOptimize = true;
 };
 
 }  // namespace storage

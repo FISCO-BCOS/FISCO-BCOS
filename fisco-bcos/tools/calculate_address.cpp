@@ -1,7 +1,6 @@
 #include "libdevcore/CommonData.h"
 #include "libdevcore/FixedHash.h"
 #include "libdevcrypto/Hash.h"
-#include "libdevcrypto/gm/sm3/sm3.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
