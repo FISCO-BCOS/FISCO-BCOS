@@ -446,8 +446,7 @@ public:
     {
         return ImportResult::Success;
     }
-    dev::eth::ImportResult import(
-        bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
+    dev::eth::ImportResult import(bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore)
     {
         return ImportResult::Success;
     }

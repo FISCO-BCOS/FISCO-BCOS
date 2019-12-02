@@ -185,7 +185,6 @@ protected:
      * @return ImportResult : Import result code.
      */
     ImportResult import(dev::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override;
-    ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore) override;
     /// verify transaction
     virtual ImportResult verify(Transaction::Ptr trans, IfDropped _ik = IfDropped::Ignore);
     /// interface for filter check

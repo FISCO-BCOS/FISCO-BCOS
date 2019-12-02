@@ -97,14 +97,15 @@ public:
         uint64_t const& _limit = 102400, int32_t const& _protocolId = dev::eth::ProtocolID::TxPool)
       : TxPool(_p2pService, _blockChain, _protocolId, _limit)
     {}
-    ImportResult import(bytesConstRef _txBytes, IfDropped _ik = IfDropped::Ignore)
-    {
-        return TxPool::import(_txBytes, _ik);
-    }
     std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
     {
         return TxPool::submitTransactions(_tx);
     };
+
+    ImportResult import(dev::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
+    {
+        return TxPool::import(_tx, _ik);
+    }
 };
 
 class FakeBlockChain : public BlockChainInterface
