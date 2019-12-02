@@ -186,6 +186,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
+                             << LOG_KV("dbHash", block.header().dbHash())
                              << LOG_KV("transactionRoot", block.transactionRoot())
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
@@ -307,7 +308,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(stateRoot);
+    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -336,6 +337,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                              << LOG_KV("blockNumber", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
+                             << LOG_KV("dbHash", block.header().dbHash())
                              << LOG_KV("transactionRoot", block.transactionRoot())
                              << LOG_KV("receiptRoot", block.receiptRoot())
                              << LOG_KV("initExeCtxTimeCost", initExeCtx_time_cost)

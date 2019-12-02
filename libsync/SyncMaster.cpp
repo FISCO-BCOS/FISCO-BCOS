@@ -630,7 +630,8 @@ void SyncMaster::maintainPeersConnection()
     m_syncTrans->updateNeedMaintainTransactions(hasMyself);
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
-    m_needSendStatus = hasMyself;
+    m_needSendStatus = m_isGroupMember || hasMyself;  // need to send if last time is in group
+    m_isGroupMember = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
@@ -756,6 +757,10 @@ void SyncMaster::sendBlockStatus(int64_t const& _gossipPeersNumber)
     auto blockNumber = m_blockChain->number();
     auto currentHash = m_blockChain->numberHash(blockNumber);
     m_syncStatus->forRandomPeers(_gossipPeersNumber, [&](std::shared_ptr<SyncPeerStatus> _p) {
-        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        if (_p)
+        {
+            return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        }
+        return true;
     });
 }

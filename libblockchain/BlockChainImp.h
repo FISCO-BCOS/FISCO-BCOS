@@ -134,7 +134,11 @@ private:
         dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
 
     std::shared_ptr<dev::eth::Block> decodeBlock(dev::storage::Entry::ConstPtr _entry);
-    std::shared_ptr<dev::bytes> getBlockRLP(dev::storage::Entry::ConstPtr _entry);
+    std::shared_ptr<dev::bytes> getDataBytes(
+        dev::storage::Entry::ConstPtr _entry, std::string const& _fieldName);
+
+    void writeBytesToField(std::shared_ptr<dev::bytes> _data, dev::storage::Entry::Ptr _entry,
+        std::string const& _fieldName = dev::storage::SYS_VALUE);
     void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
 
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);

@@ -121,7 +121,7 @@ NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_
     NodeIDs chosen;
     for (auto const& peer : (*_peers))
     {
-        if (m_peersStatus.count(peer) && _allow(m_peersStatus[peer]))
+        if (m_peersStatus.count(peer) && m_peersStatus[peer] && _allow(m_peersStatus[peer]))
         {
             chosen.push_back(peer);
             if ((int64_t)chosen.size() == selectedSize)
@@ -169,7 +169,7 @@ void SyncMasterStatus::foreachPeerRandom(
         auto const& peer = m_peersStatus.find(nodeId);
         if (peer == m_peersStatus.end())
             continue;
-        if (!_f(peer->second))
+        if (peer->second && !_f(peer->second))
             break;
     }
 }

@@ -331,13 +331,19 @@ bool Ledger::initSync()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("#initSync Failed");
         return false;
     }
+    // raft disable enableSendBlockStatusByTree
+    bool enableSendBlockStatusByTree = m_param->mutableSyncParam().enableSendBlockStatusByTree;
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    {
+        Ledger_LOG(DEBUG) << LOG_DESC("initLedger: disable send_by_tree when use raft");
+        enableSendBlockStatusByTree = false;
+    }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
         m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
-        m_param->mutableSyncParam().enableSendBlockStatusByTree,
-        m_param->mutableSyncParam().syncTreeWidth);
+        enableSendBlockStatusByTree, m_param->mutableSyncParam().syncTreeWidth);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

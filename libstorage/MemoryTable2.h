@@ -83,7 +83,6 @@ public:
     dev::storage::TableData::Ptr dump() override;
 
     void rollback(const Change& _change) override;
-    void setEnableOptimize(bool const& _enableOptimize) { m_enableOptimize = _enableOptimize; }
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
@@ -145,7 +144,6 @@ private:
     bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
     dev::storage::TableData::Ptr m_tableData;
-    bool m_enableOptimize = false;
 };
 }  // namespace storage
 }  // namespace dev
