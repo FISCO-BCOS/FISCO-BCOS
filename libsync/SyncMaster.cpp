@@ -630,7 +630,8 @@ void SyncMaster::maintainPeersConnection()
     m_syncTrans->updateNeedMaintainTransactions(hasMyself);
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
-    m_needSendStatus = hasMyself;
+    m_needSendStatus = m_isGroupMember || hasMyself;  // need to send if last time is in group
+    m_isGroupMember = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()

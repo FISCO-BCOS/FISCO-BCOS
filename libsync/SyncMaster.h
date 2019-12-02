@@ -281,6 +281,7 @@ private:
     std::atomic_bool m_newBlocks = {false};
     uint64_t m_maintainBlocksTimeout = 0;
     bool m_needSendStatus = true;
+    bool m_isGroupMember = false;
 
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;
