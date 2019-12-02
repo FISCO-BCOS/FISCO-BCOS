@@ -165,12 +165,12 @@ private:
         std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
         std::map<std::string, std::string>& child2Parent);
 
-    void getMerkleProof(dev::h256 const& _txHash,
+    void getMerkleProof(dev::bytes const& _txHash,
         const std::map<std::string, std::vector<std::string>>& parent2ChildList,
         const std::map<std::string, std::string>& child2Parent,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
 
-    dev::h256 getHashNeed2Proof(uint32_t index, const dev::bytes& data);
+    dev::bytes getHashNeed2Proof(uint32_t index, const dev::bytes& data);
     bool getBlockAndIndexByTxHash(const dev::h256& _txHash,
         std::pair<std::shared_ptr<dev::eth::Block>, std::string>& blockInfoWithTxIndex);
 
