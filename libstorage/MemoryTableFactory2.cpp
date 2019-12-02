@@ -56,7 +56,7 @@ MemoryTableFactory2::MemoryTableFactory2()
 
 void MemoryTableFactory2::init()
 {
-    auto table = openTable(SYS_CURRENT_STATE);
+    auto table = openTable(SYS_CURRENT_STATE, false);
     auto condition = table->newCondition();
     condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
     // get id from backend

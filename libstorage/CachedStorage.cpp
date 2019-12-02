@@ -29,6 +29,7 @@
 #include <tbb/parallel_sort.h>
 #include <thread>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 
@@ -224,7 +225,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         std::make_shared<std::vector<TableData::Ptr>>();
 
     commitDatas->resize(datas.size());
-
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
@@ -258,7 +258,14 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 auto id = entry->getID();
 
                                 ssize_t change = 0;
-                                if (id != 0)
+                                if (id == 0)
+                                {
+                                    // impossible, should exit
+                                    CACHED_STORAGE_LOG(FATAL)
+                                        << "Dirty entry id equal to 0, table: "
+                                        << requestData->info->name << LOG_KV("key", key);
+                                }
+                                else
                                 {
                                     auto result = touchCache(requestData->info, key, true);
                                     auto caches = std::get<1>(result);
@@ -282,6 +289,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             {
                                                 totalCapacity += it->capacity();
                                             }
+
 
                                             touchMRU(requestData->info->name, key, totalCapacity);
                                         }
@@ -341,21 +349,17 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                     {
                                         // impossible, should exit
                                         CACHED_STORAGE_LOG(FATAL)
-                                            << "Can not find entry in cache, id:" << entry->getID()
-                                            << " key:" << key;
+                                            << "Can not find entry in cache, key:" << key
+                                            << LOG_KV("num", num) << ",id" << id
+                                            << " != " << (*entryIt)->getID();
                                     }
-                                }
-                                else
-                                {
-                                    // impossible, should exit
-                                    CACHED_STORAGE_LOG(FATAL)
-                                        << "Dirty entry id equal to 0, id: " << id
-                                        << " key: " << key;
                                 }
 
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
+                    tbb::parallel_sort(commitData->dirtyEntries->begin(),
+                        commitData->dirtyEntries->end(), EntryLessNoLock(commitData->info));
                 }
 
                 commitData->newEntries->shallowFrom(requestData->newEntries);

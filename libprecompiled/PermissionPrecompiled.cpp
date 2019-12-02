@@ -62,13 +62,24 @@ bytes PermissionPrecompiled::call(
     bytes out;
     int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
-    {
+    {  // FIXME: modify insert(string,string) ==> insert(string,address)
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
+        bool isValidAddress = true;
+        try
+        {
+            Address address(addr);
+            (void)address;
+        }
+        catch (...)
+        {
+            isValidAddress = false;
+        }
+
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
@@ -79,6 +90,12 @@ bytes PermissionPrecompiled::call(
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
             result = CODE_TABLE_AND_ADDRESS_EXIST;
+        }
+        else if (!isValidAddress)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
+                                   << LOG_DESC("address invalid") << LOG_KV("address", addr);
+            result = CODE_ADDRESS_INVALID;
         }
         else
         {
