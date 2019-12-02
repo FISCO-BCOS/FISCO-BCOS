@@ -90,8 +90,6 @@ public:
      */
     virtual dev::eth::ImportResult import(
         dev::eth::Transaction::Ptr, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
-    virtual dev::eth::ImportResult import(
-        bytesConstRef _txBytes, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
     /// @returns the status of the transaction queue.
     virtual TxPoolStatus status() const = 0;
 

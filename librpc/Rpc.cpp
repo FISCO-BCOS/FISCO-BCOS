@@ -1121,6 +1121,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     transactionCallback(receiptContent);
                 });
         }
+        // calculate the sha3 before submit into the transaction pool
+        tx->sha3();
         std::pair<h256, Address> ret;
         switch (clientProtocolversion)
         {

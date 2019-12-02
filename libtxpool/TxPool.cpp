@@ -199,35 +199,6 @@ bool TxPool::isSealerOrObserver()
 }
 
 /**
- * @brief : veirfy specified transaction (called by libsync)
- *          && insert the valid transaction into the transaction queue
- * @param _txBytes : encoded data of the transaction
- * @param _ik :  Import transaction policy,
- *  1. Ignore: Don't import transaction that was previously dropped
- *  2. Retry: Import transaction even if it was dropped before
- * @return ImportResult : import result, if success, return ImportResult::Success
- */
-ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
-{
-    Transaction::Ptr tx = std::make_shared<Transaction>();
-    try
-    {
-        /// only decode, verify transactions later
-        tx->decode(_txBytes, CheckTransaction::None);
-        /// check sha3
-        if (sha3(_txBytes.toBytes()) != tx->sha3())
-            return ImportResult::Malformed;
-    }
-    catch (std::exception& e)
-    {
-        TXPOOL_LOG(ERROR) << LOG_DESC("import transaction failed")
-                          << LOG_KV("EINFO", boost::diagnostic_information(e));
-        return ImportResult::Malformed;
-    }
-    return import(tx, _ik);
-}
-
-/**
  * @brief : Verify and add transaction to the queue synchronously.
  *
  * @param _tx : Transaction data.

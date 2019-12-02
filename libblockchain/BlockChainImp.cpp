@@ -1493,6 +1493,6 @@ void BlockChainImp::writeBytesToField(std::shared_ptr<dev::bytes> _data,
     // < v2.2.0
     else
     {
-        _entry->setField(_fieldName, toHex(*_data));
+        _entry->setField(_fieldName, toHexPrefixed(*_data));
     }
 }
