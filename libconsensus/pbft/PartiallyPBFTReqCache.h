@@ -66,8 +66,17 @@ public:
 
     void removeInvalidFutureCache(int64_t const& _highestBlockNumber) override;
 
+    virtual void addPreRawPrepare(PrepareReq::Ptr _preRawPrepare);
+
+    virtual void clearPreRawPrepare();
+
 private:
     PrepareReq::Ptr m_partiallyRawPrepare;
+    // add the prepareReq into m_preRawPrepare once leader generate the prepareReq
+    // this cache is used to response txs to the request-sealers after generate prepareReq while
+    // before addRawPrepareReq clear this cache when addRawPrepare
+    PrepareReq::Ptr m_preRawPrepare;
+    mutable SharedMutex x_preRawPrepare;
     std::shared_ptr<std::unordered_map<int64_t, PrepareReq::Ptr>> m_partiallyFuturePrepare;
 };
 }  // namespace consensus
