@@ -94,64 +94,12 @@ Address toAddress(Secret const& _secret);
 // for contract adddress generation
 Address toAddress(Address const& _from, u256 const& _nonce);
 
-/// Encrypts plain text using Public key.(asymmetric encryption)
-void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
+// /// Encrypts plain text using Public key.(asymmetric encryption)
+// void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
 
-/// Decrypts cipher using Secret key.(asymmetric decryption)
-bool decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
+// /// Decrypts cipher using Secret key.(asymmetric decryption)
+// bool decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
 
-/// Symmetric encryption.
-void encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher);
-
-/// Symmetric decryption.
-bool decryptSym(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
-
-/// Encrypt payload using ECIES standard with AES128-CTR.
-void encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
-
-/// Encrypt payload using ECIES standard with AES128-CTR.
-/// @a _sharedMacData is shared authenticated data.
-void encryptECIES(
-    Public const& _k, bytesConstRef _sharedMacData, bytesConstRef _plain, bytes& o_cipher);
-
-/// Decrypt payload using ECIES standard with AES128-CTR.
-bool decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
-
-/// Decrypt payload using ECIES standard with AES128-CTR.
-/// @a _sharedMacData is shared authenticated data.
-bool decryptECIES(
-    Secret const& _k, bytesConstRef _sharedMacData, bytesConstRef _cipher, bytes& o_plaintext);
-
-/// Encrypts payload with random IV/ctr using AES128-CTR.
-std::pair<bytes, h128> encryptSymNoAuth(SecureFixedHash<16> const& _k, bytesConstRef _plain);
-
-/// Encrypts payload with specified IV/ctr using AES128-CTR.
-bytes encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _plain);
-
-/// Decrypts payload with specified IV/ctr using AES128-CTR.
-bytesSec decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _cipher);
-
-/// Encrypts payload with specified IV/ctr using AES128-CTR.
-inline bytes encryptSymNoAuth(SecureFixedHash<16> const& _k, h128 const& _iv, bytesConstRef _plain)
-{
-    return encryptAES128CTR(_k.ref(), _iv, _plain);
-}
-inline bytes encryptSymNoAuth(SecureFixedHash<32> const& _k, h128 const& _iv, bytesConstRef _plain)
-{
-    return encryptAES128CTR(_k.ref(), _iv, _plain);
-}
-
-/// Decrypts payload with specified IV/ctr using AES128-CTR.
-inline bytesSec decryptSymNoAuth(
-    SecureFixedHash<16> const& _k, h128 const& _iv, bytesConstRef _cipher)
-{
-    return decryptAES128CTR(_k.ref(), _iv, _cipher);
-}
-inline bytesSec decryptSymNoAuth(
-    SecureFixedHash<32> const& _k, h128 const& _iv, bytesConstRef _cipher)
-{
-    return decryptAES128CTR(_k.ref(), _iv, _cipher);
-}
 
 /// Recovers Public key from signed message hash.
 Public recover(Signature const& _sig, h256 const& _hash);
@@ -235,16 +183,5 @@ private:
     std::mutex x_value;
     Secret m_value;
 };
-
-namespace ecdh
-{
-// bool agree(Secret const& _s, Public const& _r, Secret& o_s) noexcept;
-bool agree(Secret const& _s, Public const& _r, Secret& o_s);
-}  // namespace ecdh
-
-namespace ecies
-{
-bytes kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen);
-}
 }  // namespace crypto
 }  // namespace dev
