@@ -653,6 +653,8 @@ protected:
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
     void clearInvalidCachedForwardMsg();
 
+    void clearPreRawPrepare();
+
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
