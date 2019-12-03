@@ -65,6 +65,23 @@ void PBFTEngine::start()
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
+void PBFTEngine::stop()
+{
+    if (m_threadPool)
+    {
+        m_threadPool->stop();
+    }
+    if (m_prepareWorker)
+    {
+        m_prepareWorker->stop();
+    }
+    if (m_messageHandler)
+    {
+        m_messageHandler->stop();
+    }
+    ConsensusEngineBase::stop();
+}
+
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
 {
     m_consensusBlockNumber = 0;

@@ -111,6 +111,14 @@ void SyncMaster::start()
 
 void SyncMaster::stop()
 {
+    if (m_downloadBlockProcessor)
+    {
+        m_downloadBlockProcessor->stop();
+    }
+    if (m_sendBlockProcessor)
+    {
+        m_sendBlockProcessor->stop();
+    }
     m_syncTrans->stop();
     if (m_blockStatusGossipThread)
     {
