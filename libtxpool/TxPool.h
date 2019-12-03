@@ -88,7 +88,18 @@ public:
         m_txsHashFilter = std::make_shared<std::set<h256>>();
     }
     void start() override {}
-    void stop() override {}
+    void stop() override
+    {
+        if (m_submitPool)
+        {
+            m_submitPool->stop();
+        }
+        if (m_workerPool)
+        {
+            m_workerPool->stop();
+        }
+        TXPOOL_LOG(DEBUG) << LOG_DESC("TxPool Stopped!");
+    }
     void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
     virtual ~TxPool()

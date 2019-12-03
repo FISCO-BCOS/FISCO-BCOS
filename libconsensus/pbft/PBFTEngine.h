@@ -226,6 +226,8 @@ public:
         m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
     }
 
+    void stop() override;
+
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);

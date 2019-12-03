@@ -34,7 +34,7 @@ send_transaction()
     if [ ${is_raft} -eq 0 ];then
         sleep 1.5
     else
-        sleep 4
+        sleep 8
     fi
     LOG_INFO "==============send a transaction is ok"
 }
