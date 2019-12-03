@@ -70,7 +70,21 @@ public:
             "SyncMsgEngine-receiver-" + std::to_string(_protocolId), 1);
     }
 
-    virtual ~SyncMsgEngine() {}
+    virtual ~SyncMsgEngine()
+    {
+        if (m_txsWorker)
+        {
+            m_txsWorker->stop();
+        }
+        if (m_txsSender)
+        {
+            m_txsSender->stop();
+        }
+        if (m_txsReceiver)
+        {
+            m_txsReceiver->stop();
+        }
+    }
 
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
