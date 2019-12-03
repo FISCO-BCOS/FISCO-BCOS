@@ -278,7 +278,9 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
     if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
     {
-        // encode prepareReq with in-completed transactions into sendedData
+        // addPreRawPrepare to response to the request-sealers
+        m_partiallyPrepareCache->addPreRawPrepare(prepareReq);
+        // encode prepareReq with uncompleted transactions into sendedData
         std::shared_ptr<bytes> sendedData = std::make_shared<bytes>();
         prepareReq->encode(*sendedData);
         m_threadPool->enqueue([this, prepareReq, sendedData]() {
@@ -297,7 +299,6 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
             broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
         });
     }
-
     return prepareReq;
 }
 
@@ -346,7 +347,7 @@ bool PBFTEngine::getNodeIDByIndex(h512& nodeID, const IDXTYPE& idx) const
     nodeID = getSealerByIndex(idx);
     if (nodeID == h512())
     {
-        PBFTENGINE_LOG(ERROR) << LOG_DESC("getNodeIDByIndex: not sealer") << LOG_KV("Idx", idx)
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("getNodeIDByIndex: not sealer") << LOG_KV("Idx", idx)
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
         return false;
     }
@@ -865,6 +866,14 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& 
     return handlePrepareMsg(prepare_req, pbftMsg.endpoint);
 }
 
+void PBFTEngine::clearPreRawPrepare()
+{
+    if (m_partiallyPrepareCache)
+    {
+        m_partiallyPrepareCache->clearPreRawPrepare();
+    }
+}
+
 /**
  * @brief: handle the prepare request:
  *       1. check whether the prepareReq is valid or not
@@ -890,6 +899,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     auto valid_ret = isValidPrepare(prepareReq, oss);
     if (valid_ret == CheckResult::INVALID)
     {
+        clearPreRawPrepare();
         return false;
     }
     /// update the view for given idx
@@ -897,9 +907,12 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 
     if (valid_ret == CheckResult::FUTURE)
     {
+        clearPreRawPrepare();
         m_reqCache->addFuturePrepareCache(prepareReq);
         return true;
     }
+    // clear preRawPrepare before addRawPrepare when enable_block_with_txs_hash
+    clearPreRawPrepare();
     /// add raw prepare request
     m_reqCache->addRawPrepare(prepareReq);
     return execPrepareAndGenerateSignMsg(prepareReq, oss);

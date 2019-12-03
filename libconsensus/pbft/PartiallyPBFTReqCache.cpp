@@ -64,20 +64,38 @@ void PartiallyPBFTReqCache::addPartiallyFuturePrepare(PrepareReq::Ptr _partially
 bool PartiallyPBFTReqCache::fetchMissedTxs(
     std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo)
 {
-    // this lock is necessary since the transactions-request may occurred when rawPrepareCache
-    // changed
-    ReadGuard l(x_rawPrepareCache);
-    if (!m_rawPrepareCache.pBlock)
+    PartiallyBlock::Ptr partiallyBlock = nullptr;
+    dev::h256 expectedHash;
+    // check the m_preRawPrepare
     {
-        return false;
+        ReadGuard l(x_preRawPrepare);
+        // fetch block from m_preRawPrepare
+        if (m_preRawPrepare && m_preRawPrepare->pBlock)
+        {
+            partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(m_preRawPrepare->pBlock);
+            expectedHash = m_preRawPrepare->block_hash;
+        }
     }
-    PartiallyBlock::Ptr partiallyBlock =
-        std::dynamic_pointer_cast<PartiallyBlock>(m_rawPrepareCache.pBlock);
+    if (!partiallyBlock)
+    {
+        // fetch from the rawPrepareCache
+        // this lock is necessary since the transactions-request may occurred when rawPrepareCache
+        // changed
+        ReadGuard l(x_rawPrepareCache);
+        // maybe the request-node falls behind
+        if (!m_rawPrepareCache.pBlock)
+        {
+            return false;
+        }
+        partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(m_rawPrepareCache.pBlock);
+        expectedHash = m_rawPrepareCache.block_hash;
+    }
     assert(partiallyBlock);
-    partiallyBlock->fetchMissedTxs(_encodedBytes, _missInfo, m_rawPrepareCache.block_hash);
+    partiallyBlock->fetchMissedTxs(_encodedBytes, _missInfo, expectedHash);
     PartiallyPBFTReqCache_LOG(DEBUG)
         << LOG_DESC("fetchMissedTxs") << LOG_KV("number", partiallyBlock->blockHeader().number())
-        << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged());
+        << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged())
+        << LOG_KV("expectedHash", expectedHash.abridged());
     return true;
 }
 
@@ -130,4 +148,22 @@ void PartiallyPBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBloc
             it++;
         }
     }
+}
+
+
+void PartiallyPBFTReqCache::addPreRawPrepare(PrepareReq::Ptr _preRawPrepare)
+{
+    WriteGuard l(x_preRawPrepare);
+    PartiallyPBFTReqCache_LOG(DEBUG)
+        << LOG_DESC("addPreRawPrepare for the leader-self")
+        << LOG_KV("number", _preRawPrepare->height)
+        << LOG_KV("hash", _preRawPrepare->block_hash.abridged())
+        << LOG_KV("idx", _preRawPrepare->idx) << LOG_KV("view", _preRawPrepare->view);
+    m_preRawPrepare = _preRawPrepare;
+}
+
+void PartiallyPBFTReqCache::clearPreRawPrepare()
+{
+    WriteGuard l(x_preRawPrepare);
+    m_preRawPrepare = nullptr;
 }
