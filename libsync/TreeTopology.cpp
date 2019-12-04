@@ -26,6 +26,7 @@ using namespace dev;
 using namespace dev::sync;
 void TreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
 {
+    Guard l(m_mutex);
     if (*m_currentConsensusNodes == _consensusNodes)
     {
         return;
@@ -120,7 +121,7 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
                             << LOG_KV("selectedIndex", expectedIndex);
             _selectedNodeList->push_back(selectedNode);
         }
-        // the child node doesn't exit in the peers, select the grand child recursively
+        // the child node doesn't exist in the peers, select the grand child recursively
         else
         {
             recursiveSelectChildNodes(_selectedNodeList, expectedIndex + m_childOffset, _peers);

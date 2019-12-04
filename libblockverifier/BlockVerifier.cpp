@@ -40,6 +40,11 @@ using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
+    // return nullptr prepare to exit when g_BCOSConfig.shouldExit is true
+    if (g_BCOSConfig.shouldExit)
+    {
+        return nullptr;
+    }
     if (block.blockHeader().number() < m_executingNumber)
     {
         return nullptr;
