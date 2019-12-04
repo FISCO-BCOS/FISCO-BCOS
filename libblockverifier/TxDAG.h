@@ -23,6 +23,7 @@
 #pragma once
 #include "DAG.h"
 #include "ExecutiveContext.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/Executive.h>
@@ -67,7 +68,13 @@ public:
 
     // Called by thread
     // Has the DAG reach the end?
-    bool hasFinished() override { return m_exeCnt >= m_totalParaTxs; }
+    // process-exit related:
+    // if the g_BCOSConfig.shouldExit is true(may be the storage has exceptioned), return true
+    // directly
+    bool hasFinished() override
+    {
+        return (m_exeCnt >= m_totalParaTxs) || (g_BCOSConfig.shouldExit.load());
+    }
 
     // Called by thread
     // Execute a unit in DAG
