@@ -40,6 +40,58 @@ namespace dev
 {
 namespace test
 {
+class FakeSyncMsgEngine : public SyncMsgEngine
+{
+public:
+    FakeSyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<SyncMasterStatus> _syncStatus,
+        std::shared_ptr<DownloadingTxsQueue> _txQueue, PROTOCOL_ID const& _protocolId,
+        NodeID const& _nodeId, h256 const& _genesisHash)
+      : SyncMsgEngine(_service, _txPool, _blockChain, _syncStatus, _txQueue, _protocolId, _nodeId,
+            _genesisHash)
+    {
+        m_txsWorker = nullptr;
+        m_txsSender = nullptr;
+        m_txsReceiver = nullptr;
+    }
+
+    bool interpret(
+        SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer) override
+    {
+        try
+        {
+            switch (_packet->packetType)
+            {
+            case TransactionsPacket:
+                onPeerTransactions(_packet, _msg);
+                break;
+            // receive transaction hash, _msg is only used to ensure the life-time for rlps of
+            // _packet
+            case TxsStatusPacket:
+                onPeerTxsStatus(_packet, _peer, _msg);
+                break;
+            // receive txs-requests,  _msg is only used to ensure the life-time for rlps of _packet
+            case TxsRequestPacekt:
+                onReceiveTxsRequest(_packet, _peer, _msg);
+                break;
+            default:
+                SyncMsgEngine::interpret(_packet, _msg, _peer);
+                break;
+            }
+        }
+        catch (std::exception& e)
+        {
+            SYNC_ENGINE_LOG(WARNING)
+                << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Interpret error for")
+                << LOG_KV("reason", e.what());
+            return false;
+        }
+        return true;
+    }
+};
+
 class SyncMsgEngineFixture : TestOutputHelperFixture
 {
 public:
@@ -58,7 +110,7 @@ public:
     FakeSyncToolsSet fakeSyncToolsSet;
     shared_ptr<SyncMasterStatus> fakeStatusPtr;
     shared_ptr<DownloadingTxsQueue> fakeTxQueuePtr;
-    SyncMsgEngine fakeMsgEngine;
+    FakeSyncMsgEngine fakeMsgEngine;
     NetworkException fakeException;
 };
 
@@ -117,7 +169,7 @@ public:
 
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
-    void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
+    void setNodeListByGroupID(GROUP_ID, const h512s&) override{};
 
     void setTopics(std::shared_ptr<std::set<std::string>>) override{};
 
@@ -166,8 +218,8 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     auto txPoolPtr = fakeSyncToolsSet.getTxPoolPtr();
     fakeTxQueuePtr->pop2TxPool(txPoolPtr);
     auto topTxs = txPoolPtr->topTransactions(1);
-    BOOST_CHECK(topTxs.size() == 1);
-    BOOST_CHECK_EQUAL(topTxs[0].sha3(), txPtr->sha3());
+    BOOST_CHECK(topTxs->size() == 1);
+    BOOST_CHECK_EQUAL((*topTxs)[0]->sha3(), txPtr->sha3());
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

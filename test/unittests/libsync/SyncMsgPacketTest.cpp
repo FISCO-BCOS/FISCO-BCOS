@@ -152,9 +152,9 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
     txPacket.decode(fakeSessionPtr, msgPtr);
 
     auto rlpTx = txPacket.rlp()[0];
-    Transactions txs;
+    std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
     dev::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
-    BOOST_CHECK(txs[0] == fakeTransaction);
+    BOOST_CHECK((*(*txs)[0]) == fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
@@ -163,13 +163,13 @@ BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
     vector<bytes> blockRLPs;
     FakeBlock fakeBlock;
 
-    blockRLPs.push_back(fakeBlock.getBlock().rlp());
+    blockRLPs.push_back(fakeBlock.getBlock()->rlp());
     blocksPacket.encode(blockRLPs);
     auto msgPtr = blocksPacket.toMessage(0x03);
     blocksPacket.decode(fakeSessionPtr, msgPtr);
     RLP const& rlps = blocksPacket.rlp();
     Block block(rlps[0].toBytes());
-    BOOST_CHECK(block.equalAll(fakeBlock.getBlock()));
+    BOOST_CHECK(block.equalAll(*fakeBlock.getBlock()));
 }
 
 BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)

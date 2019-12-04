@@ -31,8 +31,7 @@ bool CommonTransactionNonceCheck::isNonceOk(dev::eth::Transaction const& _trans,
     UpgradableGuard l(m_lock);
     {
         const auto& key = _trans.nonce();
-        auto iter = m_cache.find(key);
-        if (iter != m_cache.end())
+        if (m_cache.count(key))
         {
             // dupulated transaction sync may cause duplicated nonce
             LOG(TRACE) << LOG_DESC("CommonTransactionNonceCheck: isNonceOk: duplicated nonce")
@@ -71,9 +70,8 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
         std::vector<dev::eth::NonceKeyType> delList;
         for (unsigned i = 0; i < _transactions.size(); i++)
         {
-            const auto& key = _transactions[i].nonce();
-            auto iter = m_cache.find(key);
-            if (iter != m_cache.end())
+            const auto& key = _transactions[i]->nonce();
+            if (m_cache.count(key))
             {
                 delList.push_back(key);
             }

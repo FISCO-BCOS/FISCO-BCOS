@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(testVoteState)
 
 BOOST_AUTO_TEST_CASE(testGenerateMsg)
 {
-    raftEngine->setUncommitedBlock(fakeBlock.m_block);
+    raftEngine->setUncommitedBlock(*fakeBlock.m_block);
     raftEngine->setUncommitedNumber(10);
     raftEngine->setConsensusBlockNumber(10);
 
@@ -641,7 +641,7 @@ BOOST_AUTO_TEST_CASE(testCommitBlock)
     raftEngine->setState(RaftRole::EN_STATE_LEADER);
     auto t = std::thread(std::bind(&FakeRaftEngine::fakeLeader, raftEngine.get()));
     auto flag = false;
-    auto block = fakeBlock.m_block;
+    auto block = *fakeBlock.m_block;
     auto number = raftEngine->getBlockChain()->number();
     block.header().setNumber(number + 1);
     auto parent = raftEngine->getBlockChain()->getBlockByNumber(number);

@@ -59,54 +59,50 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     // pool_test.m_host->setThreadPool(threadPool);
 
     Transactions trans =
-        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
-            ->transactions();
-    trans[0].setBlockLimit(pool_test.m_blockChain->number() + u256(1));
-    Signature sig = sign(pool_test.m_blockChain->m_sec, trans[0].sha3(WithoutSignature));
-    trans[0].updateSignature(SignatureStruct(sig));
+        *(pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+                ->transactions());
+    trans[0]->setBlockLimit(pool_test.m_blockChain->number() + u256(1));
+    Signature sig = sign(pool_test.m_blockChain->m_sec, trans[0]->sha3(WithoutSignature));
+    trans[0]->updateSignature(SignatureStruct(sig));
     bytes trans_data;
-    trans[0].encode(trans_data);
-    /// import invalid transaction
-    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
-    BOOST_CHECK(result == ImportResult::TransactionNonceCheckFail);
+    trans[0]->encode(trans_data);
     /// submit invalid transaction
-    Transaction tx(trans_data, CheckTransaction::Everything);
-    BOOST_CHECK_THROW(pool_test.m_txPool->submit(tx), TransactionRefused);
+    Transaction::Ptr tx = std::make_shared<Transaction>(trans_data, CheckTransaction::Everything);
+    BOOST_CHECK_THROW(pool_test.m_txPool->submitTransactions(tx), TransactionRefused);
     Transactions transaction_vec =
-        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
-            ->transactions();
+        *(pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+                ->transactions());
     /// set valid nonce
     size_t i = 0;
-    for (auto& tx : transaction_vec)
+    for (auto tx : transaction_vec)
     {
-        tx.setNonce(tx.nonce() + u256(i) + u256(1));
-        tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));
+        tx->setNonce(tx->nonce() + u256(i) + u256(1));
+        tx->setBlockLimit(pool_test.m_blockChain->number() + u256(1));
         bytes trans_bytes2;
-        tx.encode(trans_bytes2);
-        BOOST_CHECK(pool_test.m_txPool->import(ref(trans_bytes2)) == ImportResult::Malformed);
+        tx->encode(trans_bytes2);
         /// resignature
-        sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
-        tx.updateSignature(SignatureStruct(sig));
-        tx.encode(trans_bytes2);
-        result = pool_test.m_txPool->import(ref(trans_bytes2));
+        sig = sign(pool_test.m_blockChain->m_sec, tx->sha3(WithoutSignature));
+        tx->updateSignature(SignatureStruct(sig));
+        tx->encode(trans_bytes2);
+        auto result = pool_test.m_txPool->import(tx);
         BOOST_CHECK(result == ImportResult::Success);
         i++;
     }
     BOOST_CHECK(pool_test.m_txPool->pendingSize() == 5);
     /// test ordering of txPool
-    Transactions pending_list = pool_test.m_txPool->pendingList();
+    Transactions pending_list = *(pool_test.m_txPool->pendingList());
     for (unsigned int i = 1; i < pool_test.m_txPool->pendingSize(); i++)
     {
-        BOOST_CHECK(pending_list[i - 1].importTime() <= pending_list[i].importTime());
+        BOOST_CHECK(pending_list[i - 1]->importTime() <= pending_list[i]->importTime());
     }
     /// test out of limit, clear the queue
-    tx.setNonce(u256(tx.nonce() + u256(10)));
-    tx.setBlockLimit(pool_test.m_blockChain->number() + u256(1));
-    sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
-    tx.updateSignature(SignatureStruct(sig));
-    tx.encode(trans_data);
+    tx->setNonce(u256(tx->nonce() + u256(10)));
+    tx->setBlockLimit(pool_test.m_blockChain->number() + u256(1));
+    sig = sign(pool_test.m_blockChain->m_sec, tx->sha3(WithoutSignature));
+    tx->updateSignature(SignatureStruct(sig));
+    tx->encode(trans_data);
     pool_test.m_txPool->setTxPoolLimit(5);
-    result = pool_test.m_txPool->import(ref(trans_data));
+    auto result = pool_test.m_txPool->import(tx);
     BOOST_CHECK(pool_test.m_txPool->pendingSize() == 5);
     BOOST_CHECK(result == ImportResult::TransactionPoolIsFull);
     /// test status
@@ -114,7 +110,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(m_status.current == 5);
     BOOST_CHECK(m_status.dropped == 0);
     /// test drop
-    bool ret = pool_test.m_txPool->drop(pending_list[0].sha3());
+    bool ret = pool_test.m_txPool->drop(pending_list[0]->sha3());
     BOOST_CHECK(ret == true);
     BOOST_CHECK(pool_test.m_txPool->pendingSize() == 4);
     m_status = pool_test.m_txPool->status();
@@ -122,12 +118,12 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(m_status.dropped == 1);
 
     /// test topTransactions
-    Transactions top_transactions = pool_test.m_txPool->topTransactions(20);
+    Transactions top_transactions = *(pool_test.m_txPool->topTransactions(20));
     BOOST_CHECK(top_transactions.size() == pool_test.m_txPool->pendingSize());
     h256Hash avoid;
-    for (size_t i = 0; i < pool_test.m_txPool->pendingList().size(); i++)
-        avoid.insert(pool_test.m_txPool->pendingList()[i].sha3());
-    top_transactions = pool_test.m_txPool->topTransactions(20, avoid);
+    for (size_t i = 0; i < pool_test.m_txPool->pendingList()->size(); i++)
+        avoid.insert((*pool_test.m_txPool->pendingList())[i]->sha3());
+    top_transactions = *(pool_test.m_txPool->topTransactions(20, avoid));
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
     BOOST_CHECK(
@@ -142,18 +138,18 @@ BOOST_AUTO_TEST_CASE(BlockLimitCheck)
     TxPoolFixture pool_test(5, 5);
     /// test out of limit, clear the queue
     Transactions trans =
-        pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
-            ->transactions();
+        *(pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
+                ->transactions());
     bytes trans_data;
-    trans[0].encode(trans_data);
-    Transaction tx(trans_data, CheckTransaction::Everything);
-    tx.setNonce(u256(tx.nonce() + u256(10)));
-    tx.setBlockLimit(pool_test.m_blockChain->number() + u256(10000));
-    Signature sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
-    tx.updateSignature(SignatureStruct(sig));
-    tx.encode(trans_data);
+    trans[0]->encode(trans_data);
+    Transaction::Ptr tx = std::make_shared<Transaction>(trans_data, CheckTransaction::Everything);
+    tx->setNonce(u256(tx->nonce() + u256(10)));
+    tx->setBlockLimit(pool_test.m_blockChain->number() + u256(10000));
+    Signature sig = sign(pool_test.m_blockChain->m_sec, tx->sha3(WithoutSignature));
+    tx->updateSignature(SignatureStruct(sig));
+    tx->encode(trans_data);
     pool_test.m_txPool->setTxPoolLimit(5);
-    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
+    ImportResult result = pool_test.m_txPool->import(tx);
     BOOST_CHECK(result == ImportResult::BlockLimitCheckFailed);
 }
 

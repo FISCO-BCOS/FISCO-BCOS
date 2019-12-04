@@ -42,7 +42,7 @@ public:
     SyncStatus status() const override { return m_syncStatus; }
     std::string const syncInfo() const override { return m_syncInfo; }
     bool isSyncing() const override { return m_isSyncing; }
-    bool isFarSyncing() const override { return false; }
+    bool blockNumberFarBehind() const override { return false; }
     void setSyncing(bool syncing)
     {
         m_isSyncing = syncing;
@@ -60,6 +60,11 @@ public:
     void noteSealingBlockNumber(int64_t) override{};
 
     void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
+    bool syncTreeRouterEnabled() override { return m_syncTreeRouterEnabled; }
+    void setSyncTreeRouterEnabled(bool const& _syncTreeRouterEnabled)
+    {
+        m_syncTreeRouterEnabled = _syncTreeRouterEnabled;
+    }
 
 private:
     SyncStatus m_syncStatus;
@@ -67,6 +72,7 @@ private:
     Block m_latestSentBlock;
     PROTOCOL_ID m_protocolId;
     std::string m_syncInfo;
+    bool m_syncTreeRouterEnabled = false;
 };
 }  // namespace test
 }  // namespace dev

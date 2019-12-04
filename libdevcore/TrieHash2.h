@@ -27,22 +27,9 @@
 
 namespace dev
 {
-enum trieHashNodeType
-{
-    typeDefault = 0,
-    typeLeafNode = 1,
-    typeAllNodeHaveCommonPrefix = 2,
-    typeIntermediateNode = 3,
-};
+h256 getHash256(const std::vector<dev::bytes>& bytesCaches);
 
-bytes getTrieTree256(
-    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
-
-bytes getTrieTree256(BytesMap const& _s);
-
-h256 getHash256(
-    BytesMap const& _s, std::map<std::string, std::vector<std::string>>& _parent2ChildList);
-
-h256 getHash256(BytesMap const& _s);
+void getMerkleProof(const std::vector<dev::bytes>& bytesCaches,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList);
 
 }  // namespace dev

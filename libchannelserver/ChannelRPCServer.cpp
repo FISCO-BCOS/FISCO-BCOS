@@ -246,13 +246,14 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     for (auto session : activedSessions)
     {
         message->clearData();
-        if (session->protocolVersion() == ProtocolVersion::v2)
+        // default is v1
+        if (session->protocolVersion() == dev::ProtocolVersion::v1)
         {
-            message->setTopicData(topic, (const byte*)resp.data(), resp.size());
+            message->setTopicData(topic, (const byte*)content.data(), content.size());
         }
         else
-        {  // default is v1
-            message->setTopicData(topic, (const byte*)content.data(), content.size());
+        {
+            message->setTopicData(topic, (const byte*)resp.data(), resp.size());
         }
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
@@ -567,7 +568,18 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
     std::string data((char*)message->data(), message->dataSize());
-    if (session->protocolVersion() == ProtocolVersion::v2)
+    if (session->protocolVersion() == ProtocolVersion::v1)
+    {
+        // default is ProtocolVersion::v1
+        if (data == "0")
+        {
+            data = "1";
+            message->setData((const byte*)data.data(), data.size());
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
+    }
+    // v2 and v3 for now
+    else
     {
         Json::Value response;
         response["heartBeat"] = 1;
@@ -575,15 +587,6 @@ void dev::ChannelRPCServer::onClientHeartbeat(
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-    }
-    else
-    {  // default is ProtocolVersion::v1
-        if (data == "0")
-        {
-            data = "1";
-            message->setData((const byte*)data.data(), data.size());
-            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        }
     }
 }
 

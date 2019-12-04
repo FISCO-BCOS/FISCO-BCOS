@@ -47,26 +47,26 @@ void Executive::accrueSubState(SubState& _parentContext)
         _parentContext += m_ext->sub();
 }
 
-void Executive::initialize(Transaction const& _transaction)
+void Executive::initialize(Transaction::Ptr _transaction)
 {
     m_t = _transaction;
-    m_baseGasRequired = m_t.baseGasRequired(g_BCOSConfig.evmSchedule());
+    m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
 
     verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
-    if (!m_t.hasZeroSignature())
+    if (!m_t->hasZeroSignature())
     {
         // No need nonce increasing sequently at all. See random id for more.
 
         // Avoid unaffordable transactions.
-        bigint gasCost = (bigint)m_t.gas() * m_t.gasPrice();
-        bigint totalCost = m_t.value() + gasCost;
+        bigint gasCost = (bigint)m_t->gas() * m_t->gasPrice();
+        bigint totalCost = m_t->value() + gasCost;
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
 }
 
 void Executive::verifyTransaction(
-    ImportRequirements::value _ir, Transaction const& _t, BlockHeader const&, u256 const&)
+    ImportRequirements::value _ir, Transaction::Ptr _t, BlockHeader const&, u256 const&)
 {
     eth::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
 
@@ -74,15 +74,15 @@ void Executive::verifyTransaction(
     // The gas limit is dynamic, not fixed.
     // Pre calculate the gas needed for execution
     if ((_ir & ImportRequirements::TransactionBasic) &&
-        _t.baseGasRequired(schedule) > (bigint)txGasLimit)
+        _t->baseGasRequired(schedule) > (bigint)txGasLimit)
     {
         m_excepted = TransactionException::OutOfGasIntrinsic;
         m_exceptionReason
             << LOG_KV("reason",
                    "The gas required by deploying this contract is more than tx_gas_limit")
-            << LOG_KV("limit", txGasLimit) << LOG_KV("require", _t.baseGasRequired(schedule));
+            << LOG_KV("limit", txGasLimit) << LOG_KV("require", _t->baseGasRequired(schedule));
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
-                                  (bigint)(_t.baseGasRequired(schedule)), (bigint)txGasLimit));
+                                  (bigint)(_t->baseGasRequired(schedule)), (bigint)txGasLimit));
     }
 }
 
@@ -106,24 +106,24 @@ bool Executive::execute()
     }
     else
     {
-        if (m_t.gas() < (u256)m_baseGasRequired)
+        if (m_t->gas() < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
             m_exceptionReason
                 << LOG_KV("reason",
                        "The gas required by deploying this contract is more than sender given")
-                << LOG_KV("given", m_t.gas()) << LOG_KV("require", m_baseGasRequired);
+                << LOG_KV("given", m_t->gas()) << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
         }
     }
-    if (m_t.isCreation())
-        return create(m_t.sender(), m_t.value(), m_t.gasPrice(),
-            txGasLimit - (u256)m_baseGasRequired, &m_t.data(), m_t.sender());
+    if (m_t->isCreation())
+        return create(m_t->sender(), m_t->value(), m_t->gasPrice(),
+            txGasLimit - (u256)m_baseGasRequired, &m_t->data(), m_t->sender());
     else
-        return call(m_t.receiveAddress(), m_t.sender(), m_t.value(), m_t.gasPrice(),
-            bytesConstRef(&m_t.data()), txGasLimit - (u256)m_baseGasRequired);
+        return call(m_t->receiveAddress(), m_t->sender(), m_t->value(), m_t->gasPrice(),
+            bytesConstRef(&m_t->data()), txGasLimit - (u256)m_baseGasRequired);
 }
 
 bool Executive::call(Address const& _receiveAddress, Address const& _senderAddress,
@@ -357,11 +357,10 @@ bool Executive::go(OnOpFunc const& _onOp)
             {
                 m_s->clearStorage(m_ext->myAddress());
                 auto out = vm->exec(m_gas, *m_ext, _onOp);
-                if (m_res)
-                {
-                    m_res->gasForDeposit = m_gas;
-                    m_res->depositSize = out.size();
-                }
+
+                m_res.gasForDeposit = m_gas;
+                m_res.depositSize = out.size();
+
                 if (out.size() > m_ext->evmSchedule().maxCodeSize)
                 {
                     m_exceptionReason << LOG_KV("reason", "Code is too long")
@@ -371,8 +370,7 @@ bool Executive::go(OnOpFunc const& _onOp)
                 }
                 else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
-                    if (m_res)
-                        m_res->codeDeposit = CodeDeposit::Success;
+                    m_res.codeDeposit = CodeDeposit::Success;
                     m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
                 }
                 else
@@ -384,13 +382,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                     }
                     else
                     {
-                        if (m_res)
-                            m_res->codeDeposit = CodeDeposit::Failed;
+                        m_res.codeDeposit = CodeDeposit::Failed;
                         out = {};
                     }
                 }
-                if (m_res)
-                    m_res->output = out.toVector();  // copy output to execution result
+
+                m_res.output = out.toVector();  // copy output to execution result
                 m_s->setCode(m_ext->myAddress(), out.toVector());
             }
             else
@@ -464,9 +461,9 @@ bool Executive::go(OnOpFunc const& _onOp)
             // has drawbacks. Essentially, the amount of ram has to be increased here.
         }
 
-        if (m_res && m_output)
+        if (m_output)
             // Copy full output:
-            m_res->output = m_output.toVector();
+            m_res.output = m_output.toVector();
 
 #if ETH_TIMED_EXECUTIONS
         cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
@@ -484,7 +481,7 @@ bool Executive::finalize()
 
     // SSTORE refunds...
     // must be done before the sealer gets the fees.
-    m_refunded = m_ext ? min((m_t.gas() - m_gas) / 2, m_ext->sub().refunds) : 0;
+    m_refunded = m_ext ? min((m_t->gas() - m_gas) / 2, m_ext->sub().refunds) : 0;
     m_gas += m_refunded;
 
     // Suicides...
@@ -496,13 +493,12 @@ bool Executive::finalize()
     if (m_ext)
         m_logs = m_ext->sub().logs;
 
-    if (m_res)  // Collect results
-    {
-        m_res->gasUsed = gasUsed();
-        m_res->excepted = m_excepted;  // TODO: m_except is used only in ExtVM::call
-        m_res->newAddress = m_newAddress;
-        m_res->gasRefunded = m_ext ? m_ext->sub().refunds : 0;
-    }
+
+    m_res.gasUsed = gasUsed();
+    m_res.excepted = m_excepted;  // TODO: m_except is used only in ExtVM::call
+    m_res.newAddress = m_newAddress;
+    m_res.gasRefunded = m_ext ? m_ext->sub().refunds : 0;
+
     return (m_excepted == TransactionException::None);
 }
 
@@ -524,7 +520,7 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                   << LOG_KV("hash", (!m_t.hasZeroSignature()) ? m_t.sha3().abridged() : "call")
+                   << LOG_KV("hash", (m_t->hasSignature()) ? m_t->sha3().abridged() : "call")
                    << m_exceptionReason.str();
     }
 }

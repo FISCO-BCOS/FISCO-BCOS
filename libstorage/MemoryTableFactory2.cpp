@@ -56,7 +56,7 @@ MemoryTableFactory2::MemoryTableFactory2()
 
 void MemoryTableFactory2::init()
 {
-    auto table = openTable(SYS_CURRENT_STATE);
+    auto table = openTable(SYS_CURRENT_STATE, false);
     auto condition = table->newCondition();
     condition->EQ(SYS_KEY, SYS_KEY_CURRENT_ID);
     // get id from backend
@@ -106,8 +106,8 @@ Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool aut
     tableInfo->fields.emplace_back(NUM_FIELD);
     tableInfo->fields.emplace_back(ID_FIELD);
 
-    Table::Ptr memoryTable = std::make_shared<MemoryTable2>();
-
+    auto memoryTable2 = std::make_shared<MemoryTable2>();
+    Table::Ptr memoryTable = memoryTable2;
     memoryTable->setStateStorage(m_stateStorage);
     memoryTable->setBlockHash(m_blockHash);
     memoryTable->setBlockNum(m_blockNum);
@@ -195,9 +195,12 @@ void MemoryTableFactory2::commit()
 h256 MemoryTableFactory2::hash()
 {
     std::vector<std::pair<std::string, Table::Ptr> > tables;
-    for (auto it : m_name2Table)
+    for (auto& it : m_name2Table)
     {
-        tables.push_back(std::make_pair(it.first, it.second));
+        if (it.second->tableInfo()->enableConsensus)
+        {
+            tables.push_back(std::make_pair(it.first, it.second));
+        }
     }
 
     tbb::parallel_sort(tables.begin(), tables.end(),
@@ -218,7 +221,6 @@ h256 MemoryTableFactory2::hash()
                 }
 
                 bytes tableHash = hash.asBytes();
-
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
             }
         });
@@ -262,6 +264,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         auto table = std::dynamic_pointer_cast<Table>(dbIt.second);
 
         STORAGE_LOG(TRACE) << "Dumping table: " << dbIt.first;
+
         auto tableData = table->dump();
 
         if (tableData && (tableData->dirtyEntries->size() > 0 || tableData->newEntries->size() > 0))

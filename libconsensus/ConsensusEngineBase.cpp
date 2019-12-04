@@ -135,8 +135,19 @@ void ConsensusEngineBase::updateConsensusNodeList()
         std::stringstream s2;
         s2 << "[updateConsensusNodeList] Sealers:";
         {
-            WriteGuard l(m_sealerListMutex);
-            m_sealerList = m_blockChain->sealerList();
+            auto sealerList = m_blockChain->sealerList();
+            UpgradableGuard l(m_sealerListMutex);
+            if (sealerList != m_sealerList)
+            {
+                UpgradeGuard ul(l);
+                m_sealerList = sealerList;
+                m_sealerListUpdated = true;
+                m_lastSealerListUpdateNumber = m_blockChain->number();
+            }
+            else if (m_blockChain->number() != m_lastSealerListUpdateNumber)
+            {
+                m_sealerListUpdated = false;
+            }
             /// to make sure the index of all sealers are consistent
             std::sort(m_sealerList.begin(), m_sealerList.end());
             for (dev::h512 node : m_sealerList)
@@ -151,7 +162,18 @@ void ConsensusEngineBase::updateConsensusNodeList()
         if (m_lastNodeList != s2.str())
         {
             ENGINE_LOG(TRACE) << "[updateConsensusNodeList] update P2P List done.";
-            updateNodeListInP2P();
+
+            // get all nodes
+            auto sealerList = m_blockChain->sealerList();
+            dev::h512s nodeList = sealerList + observerList;
+            std::sort(nodeList.begin(), nodeList.end());
+            if (m_blockSync->syncTreeRouterEnabled())
+            {
+                // update the nodeList
+                m_blockSync->updateNodeListInfo(nodeList);
+            }
+            m_service->setNodeListByGroupID(m_groupId, nodeList);
+
             m_lastNodeList = s2.str();
         }
     }
@@ -163,11 +185,42 @@ void ConsensusEngineBase::updateConsensusNodeList()
     }
 }
 
-void ConsensusEngineBase::updateNodeListInP2P()
+void ConsensusEngineBase::resetConfig()
 {
-    dev::h512s nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
-    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
-    m_service->setNodeListByGroupID(ret.first, nodeList);
+    updateMaxBlockTransactions();
+    auto node_idx = MAXIDX;
+    m_accountType = NodeAccountType::ObserverAccount;
+    size_t nodeNum = 0;
+    updateConsensusNodeList();
+    {
+        ReadGuard l(m_sealerListMutex);
+        for (size_t i = 0; i < m_sealerList.size(); i++)
+        {
+            if (m_sealerList[i] == m_keyPair.pub())
+            {
+                m_accountType = NodeAccountType::SealerAccount;
+                node_idx = i;
+                break;
+            }
+        }
+        nodeNum = m_sealerList.size();
+    }
+    if (nodeNum < 1)
+    {
+        ENGINE_LOG(ERROR) << LOG_DESC(
+            "Must set at least one pbft sealer, current number of sealers is zero");
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(
+            EmptySealers() << errinfo_comment("Must set at least one pbft sealer!"));
+    }
+    // update m_nodeNum
+    if (m_nodeNum != nodeNum)
+    {
+        m_nodeNum = nodeNum;
+    }
+    m_f = (m_nodeNum - 1) / 3;
+    m_cfgErr = (node_idx == MAXIDX);
+    m_idx = node_idx;
 }
 
 }  // namespace consensus

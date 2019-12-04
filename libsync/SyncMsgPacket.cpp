@@ -22,6 +22,7 @@
  */
 
 #include "SyncMsgPacket.h"
+#include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -104,6 +105,13 @@ void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
     prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
 }
 
+P2PMessage::Ptr SyncTransactionsPacket::toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC)
+{
+    auto msg = SyncMsgPacket::toMessage(_protocolId);
+    msg->setPacketType((int)(_fromRPC));
+    return msg;
+}
+
 void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
 {
     m_rlpStream.clear();
@@ -124,4 +132,19 @@ void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
 {
     m_rlpStream.clear();
     prep(m_rlpStream, ReqBlocskPacket, 2) << _from << _size;
+}
+
+void SyncTxsStatusPacket::encode(
+    int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash)
+{
+    m_rlpStream.clear();
+    auto& retRlp = prep(m_rlpStream, packetType, 2);
+    retRlp << _number;
+    retRlp.append(*_txsHash);
+}
+
+void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, packetType, 1).append(*_requestedTxs);
 }

@@ -98,6 +98,7 @@ bool Ledger::initTxPool()
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
     m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
+    m_txPool->start();
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
@@ -144,6 +145,31 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
         shouldBuild = false;
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
+
+    // write the hex-string block data when use external or mysql
+    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
+        !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
+                          << LOG_KV("version", g_BCOSConfig.version())
+                          << LOG_KV("storageType", m_param->mutableStorageParam().type);
+        blockChain->setEnableHexBlock(true);
+    }
+    // >= v2.2.0
+    else if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be false")
+                          << LOG_KV("version", g_BCOSConfig.version());
+        blockChain->setEnableHexBlock(false);
+    }
+    // < v2.2.0
+    else
+    {
+        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
+                          << LOG_KV("version", g_BCOSConfig.version());
+        blockChain->setEnableHexBlock(true);
+    }
+
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
     m_blockChain = blockChain;
@@ -164,6 +190,16 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
+ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
+        return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    }
+    return nullptr;
+}
+
 /**
  * @brief: create PBFTEngine
  * @param param: Ledger related params
@@ -182,23 +218,48 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                       << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<PBFTSealer> pbftSealer = std::make_shared<PBFTSealer>(m_service, m_txPool,
-        m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
-        m_param->mutableConsensusParam().sealerList);
+    std::shared_ptr<PBFTSealer> pbftSealer =
+        std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
 
+    ConsensusInterface::Ptr pbftEngine = createConsensusEngine(protocol_id);
+    if (!pbftEngine)
+    {
+        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+                                  "create PBFTEngine failed, maybe unsupported consensus type " +
+                                  m_param->mutableConsensusParam().consensusType));
+    }
+    pbftSealer->setConsensusEngine(pbftEngine);
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
+    initPBFTEngine(pbftSealer);
+    return pbftSealer;
+}
 
+dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 ||
+        !m_param->mutableConsensusParam().enablePrepareWithTxsHash)
+    {
+        return std::make_shared<dev::eth::BlockFactory>();
+    }
+    // only create PartiallyBlockFactory for PBFT when enablePrepareWithTxsHash
+    return std::make_shared<dev::eth::PartiallyBlockFactory>();
+}
+
+void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
+{
     /// set params for PBFTEngine
-    std::shared_ptr<PBFTEngine> pbftEngine =
-        std::dynamic_pointer_cast<PBFTEngine>(pbftSealer->consensusEngine());
+    PBFTEngine::Ptr pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(_sealer->consensusEngine());
     /// set the range of block generation time
     pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
-    return pbftSealer;
+    pbftEngine->setBaseDir(m_param->baseDir());
+    pbftEngine->setEnableTTLOptimize(m_param->mutableConsensusParam().enableTTLOptimize);
+    pbftEngine->setEnablePrepareWithTxsHash(
+        m_param->mutableConsensusParam().enablePrepareWithTxsHash);
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
@@ -230,31 +291,31 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
 bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
+    // create RaftSealer
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
-        /// create RaftSealer
         m_sealer = createRaftSealer();
-        if (!m_sealer)
-        {
-            return false;
-        }
-        return true;
     }
-
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0)
+    // create PBFTSealer
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
-        Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
-                          << LOG_KV("UnsupportConsensusType",
-                                 m_param->mutableConsensusParam().consensusType)
-                          << " use PBFT as default";
+        m_sealer = createPBFTSealer();
     }
-
-    /// create PBFTSealer
-    m_sealer = createPBFTSealer();
+    else
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed()
+            << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
+                               m_param->mutableConsensusParam().consensusType));
+    }
     if (!m_sealer)
     {
-        return false;
+        BOOST_THROW_EXCEPTION(
+            dev::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
     }
+    // create blockFactory
+    auto blockFactory = createBlockFactory();
+    m_sealer->setBlockFactory(blockFactory);
     return true;
 }
 
@@ -262,16 +323,27 @@ bool Ledger::consensusInitFactory()
 bool Ledger::initSync()
 {
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initSync")
-                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs)
+                      << LOG_KV("gossipInterval", m_param->mutableSyncParam().gossipInterval)
+                      << LOG_KV("gossipPeers", m_param->mutableSyncParam().gossipPeers);
     if (!m_txPool || !m_blockChain || !m_blockVerifier)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("#initSync Failed");
         return false;
     }
+    // raft disable enableSendBlockStatusByTree
+    bool enableSendBlockStatusByTree = m_param->mutableSyncParam().enableSendBlockStatusByTree;
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    {
+        Ledger_LOG(DEBUG) << LOG_DESC("initLedger: disable send_by_tree when use raft");
+        enableSendBlockStatusByTree = false;
+    }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
+        m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
+        enableSendBlockStatusByTree, m_param->mutableSyncParam().syncTreeWidth);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }
