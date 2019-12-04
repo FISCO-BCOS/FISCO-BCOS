@@ -148,7 +148,7 @@ public:
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
-    VIEWTYPE view() { return m_view; }
+    VIEWTYPE view() const override { return m_view; }
     void setView(VIEWTYPE const& _view) { m_view = _view; }
     void checkAndSave() { return PBFTEngine::checkAndSave(); }
 
