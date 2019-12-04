@@ -393,6 +393,8 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
                 // transaction refused
                 pReceipt = std::make_shared<LocalisedTransactionReceipt>(
                     TransactionException::TransactionRefused);
+                TXPOOL_LOG(WARNING) << LOG_DESC(
+                    "NotifyReceipt: TransactionRefused, maybe invalid blocklimit or nonce");
             }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
@@ -568,11 +570,12 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
     TIME_RECORD(
         "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 
-    tbb::parallel_invoke([this, block]() { dropTransactions(block, true); },
-        [this, block]() { removeBlockKnowTrans(*block); },
+    tbb::parallel_invoke([this, block]() { removeBlockKnowTrans(*block); },
         [this, block]() {
             // update the Nonces of txs
+            // (must be updated before dropTransactions to in case of sealing the same txs)
             m_txNonceCheck->updateCache(false);
+            dropTransactions(block, true);
             // delete the nonce cache
             m_txpoolNonceChecker->delCache(*(block->transactions()));
         });
@@ -612,16 +615,27 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             {
                 continue;
             }
-            /// check  nonce again when obtain transactions
+            /// check nonce again when obtain transactions
+            // since the invalid nonce has already been checked before the txs import into the
+            // txPool the txs with duplicated nonce here are already-committed, but have not been
+            // dropped, so no need to insert the already-committed transaction into m_invalidTxs
             if (!m_txNonceCheck->isNonceOk(*(*it), false))
             {
-                m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
+                TXPOOL_LOG(DEBUG) << LOG_DESC(
+                                         "Duplicated nonce: transaction maybe already-committed")
+                                  << LOG_KV("nonce", (*it)->nonce())
+                                  << LOG_KV("hash", (*it)->sha3().abridged());
                 continue;
             }
-            // check block limit
+            // check block limit(only insert txs with invalid blockLimit into m_invalidTxs)
             if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", (*it)->sha3().abridged())
+                    << LOG_KV("blockLimit", (*it)->blockLimit())
+                    << LOG_KV("blockNumber", m_blockChain->number());
+                ;
                 continue;
             }
             if (!_avoid.count((*it)->sha3()))
