@@ -120,6 +120,9 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
     default:
         txException = TransactionException::TransactionRefused;
     }
+    TXPOOL_LOG(ERROR) << LOG_DESC("notifyReceipt: txException")
+                      << LOG_KV("hash", _tx->sha3().abridged())
+                      << LOG_KV("exception", int(txException));
     dev::eth::LocalisedTransactionReceipt::Ptr receipt =
         std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
     m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
