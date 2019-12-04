@@ -23,8 +23,6 @@
 
 #include "Common.h"
 #include "AES.h"
-#include "CryptoPP.h"
-#include "ECDHE.h"
 #include "Exceptions.h"
 #include "Hash.h"
 #include <cryptopp/aes.h>
@@ -186,123 +184,6 @@ Address dev::toAddress(Address const& _from, u256 const& _nonce)
     return right160(sha3(rlpList(_from, _nonce)));
 }
 
-/**
- * @brief : encrypt plain text with public key
- * @param _k : public key
- * @param _plain : plain text need to be encrypted
- * @param o_cipher : encrypted ciper text
- */
-void dev::encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    bytes io = _plain.toBytes();
-    Secp256k1PP::get()->encrypt(_k, io);
-    o_cipher = std::move(io);
-}
-
-/**
- * @brief : decrypt ciper text with secret key
- * @param _k : private key used to decrypt
- * @param _cipher : ciper text
- * @param o_plaintext : decrypted plain text
- * @return true : decrypt succeed
- * @return false : decrypt failed(maybe key or ciper text is invalid)
- */
-bool dev::decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
-{
-    bytes io = _cipher.toBytes();
-    Secp256k1PP::get()->decrypt(_k, io);
-    if (io.empty())
-        return false;
-    o_plaintext = std::move(io);
-    return true;
-}
-
-void dev::encryptECIES(Public const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    encryptECIES(_k, bytesConstRef(), _plain, o_cipher);
-}
-
-void dev::encryptECIES(
-    Public const& _k, bytesConstRef _sharedMacData, bytesConstRef _plain, bytes& o_cipher)
-{
-    bytes io = _plain.toBytes();
-    Secp256k1PP::get()->encryptECIES(_k, _sharedMacData, io);
-    o_cipher = std::move(io);
-}
-
-bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
-{
-    return decryptECIES(_k, bytesConstRef(), _cipher, o_plaintext);
-}
-
-bool dev::decryptECIES(
-    Secret const& _k, bytesConstRef _sharedMacData, bytesConstRef _cipher, bytes& o_plaintext)
-{
-    bytes io = _cipher.toBytes();
-    if (!Secp256k1PP::get()->decryptECIES(_k, _sharedMacData, io))
-        return false;
-    o_plaintext = std::move(io);
-    return true;
-}
-
-void dev::encryptSym(Secret const& _k, bytesConstRef _plain, bytes& o_cipher)
-{
-    // TODO: @alex @subtly do this properly.
-    encrypt(KeyPair(_k).pub(), _plain, o_cipher);
-}
-
-bool dev::decryptSym(Secret const& _k, bytesConstRef _cipher, bytes& o_plain)
-{
-    // TODO: @alex @subtly do this properly.
-    return decrypt(_k, _cipher, o_plain);
-}
-
-std::pair<bytes, h128> dev::encryptSymNoAuth(SecureFixedHash<16> const& _k, bytesConstRef _plain)
-{
-    h128 iv(Nonce::get().makeInsecure());
-    return make_pair(encryptSymNoAuth(_k, iv, _plain), iv);
-}
-
-bytes dev::encryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _plain)
-{
-    if (_k.size() != 16 && _k.size() != 24 && _k.size() != 32)
-        return bytes();
-    CryptoPP::SecByteBlock key(_k.data(), _k.size());
-    try
-    {
-        CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption e;
-        e.SetKeyWithIV(key, key.size(), _iv.data());
-        bytes ret(_plain.size());
-        e.ProcessData(ret.data(), _plain.data(), _plain.size());
-        return ret;
-    }
-    catch (CryptoPP::Exception& _e)
-    {
-        cerr << boost::diagnostic_information(_e) << endl;
-        return bytes();
-    }
-}
-
-bytesSec dev::decryptAES128CTR(bytesConstRef _k, h128 const& _iv, bytesConstRef _cipher)
-{
-    if (_k.size() != 16 && _k.size() != 24 && _k.size() != 32)
-        return bytesSec();
-    CryptoPP::SecByteBlock key(_k.data(), _k.size());
-    try
-    {
-        CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption d;
-        d.SetKeyWithIV(key, key.size(), _iv.data());
-        bytesSec ret(_cipher.size());
-        d.ProcessData(ret.writable().data(), _cipher.data(), _cipher.size());
-        return ret;
-    }
-    catch (CryptoPP::Exception& _e)
-    {
-        cerr << boost::diagnostic_information(_e) << endl;
-        return bytesSec();
-    }
-}
-
 Public dev::recover(Signature const& _sig, h256 const& _message)
 {
     int v = _sig[64];
@@ -379,39 +260,4 @@ Secret Nonce::next()
     }
     m_value = sha3Secure(m_value.ref());
     return sha3(~m_value);
-}
-
-bool dev::crypto::ecdh::agree(Secret const& _s, Public const& _r, Secret& o_s)
-{
-    return Secp256k1PP::get()->agree(_s, _r, o_s);
-}
-
-bytes ecies::kdf(Secret const& _z, bytes const& _s1, unsigned kdByteLen)
-{
-    auto reps = ((kdByteLen + 7) * 8) / 512;
-    // SEC/ISO/Shoup specify counter size SHOULD be equivalent
-    // to size of hash output, however, it also notes that
-    // the 4 bytes is okay. NIST specifies 4 bytes.
-    std::array<byte, 4> ctr{{0, 0, 0, 1}};
-    bytes k;
-    secp256k1_sha256_t ctx;
-    for (unsigned i = 0; i <= reps; i++)
-    {
-        secp256k1_sha256_initialize(&ctx);
-        secp256k1_sha256_write(&ctx, ctr.data(), ctr.size());
-        secp256k1_sha256_write(&ctx, _z.data(), Secret::size);
-        secp256k1_sha256_write(&ctx, _s1.data(), _s1.size());
-        // append hash to k
-        std::array<byte, 32> digest;
-        secp256k1_sha256_finalize(&ctx, digest.data());
-
-        k.reserve(k.size() + h256::size);
-        move(digest.begin(), digest.end(), back_inserter(k));
-
-        if (++ctr[3] || ++ctr[2] || ++ctr[1] || ++ctr[0])
-            continue;
-    }
-
-    k.resize(kdByteLen);
-    return k;
 }

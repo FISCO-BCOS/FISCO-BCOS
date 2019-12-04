@@ -22,8 +22,6 @@
 
 #include "libdevcrypto/AES.h"
 #include "libdevcrypto/Common.h"
-#include "libdevcrypto/CryptoPP.h"
-#include "libdevcrypto/ECDHE.h"
 #include "libdevcrypto/Exceptions.h"
 #include "libdevcrypto/Hash.h"
 #include "libdevcrypto/gm/sm2/sm2.h"
@@ -165,83 +163,6 @@ Address dev::toAddress(Address const& _from, u256 const& _nonce)
     return right160(sha3(rlpList(_from, _nonce)));
 }
 
-/**
- * @brief : encrypt plain text with public key
- * @param _k : public key
- * @param _plain : plain text need to be encrypted
- * @param o_cipher : encrypted ciper text
- */
-void dev::encrypt(Public const&, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-}
-
-/**
- * @brief : decrypt ciper text with secret key
- * @param _k : private key used to decrypt
- * @param _cipher : ciper text
- * @param o_plaintext : decrypted plain text
- * @return true : decrypt succeed
- * @return false : decrypt failed(maybe key or ciper text is invalid)
- */
-bool dev::decrypt(Secret const&, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return true;
-}
-
-void dev::encryptECIES(Public const&, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-}
-
-void dev::encryptECIES(Public const&, bytesConstRef, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-}
-
-bool dev::decryptECIES(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return decryptECIES(_k, bytesConstRef(), _cipher, o_plaintext);
-}
-
-bool dev::decryptECIES(Secret const&, bytesConstRef, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return true;
-}
-
-void dev::encryptSym(Secret const&, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-}
-
-bool dev::decryptSym(Secret const&, bytesConstRef, bytes&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return true;
-}
-
-std::pair<bytes, h128> dev::encryptSymNoAuth(SecureFixedHash<16> const& _k, bytesConstRef _plain)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    h128 iv(Nonce::get().makeInsecure());
-    return make_pair(encryptSymNoAuth(_k, iv, _plain), iv);
-}
-
-bytes dev::encryptAES128CTR(bytesConstRef, h128 const&, bytesConstRef)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return bytes();
-}
-
-bytesSec dev::decryptAES128CTR(bytesConstRef, h128 const&, bytesConstRef)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return bytesSec();
-}
-
 Public dev::recover(Signature const& _sig, h256 const& _message)
 {
     SignatureStruct sign(_sig);
@@ -306,17 +227,4 @@ bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)
     bool lresult = SM2::getInstance().verify(
         signData, signData.length(), (const char*)_hash.data(), h256::size, pub);
     return lresult;
-}
-
-
-bool dev::crypto::ecdh::agree(Secret const&, Public const&, Secret&)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return true;
-}
-
-bytes ecies::kdf(Secret const&, bytes const&, unsigned)
-{
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return bytes();
 }
