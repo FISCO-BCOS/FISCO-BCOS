@@ -70,6 +70,7 @@ enum PrecompiledError : int
     CODE_TABLE_AND_ADDRESS_EXIST = -51000,
 
     // Common error code among all precompiled contracts -50199 ~ -50100
+    CODE_ADDRESS_INVALID = -50102,
     CODE_UNKNOW_FUNCTION_CALL = -50101,
     CODE_TABLE_NOT_EXIST = -50100,
 

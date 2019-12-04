@@ -22,10 +22,14 @@
 
 #pragma once
 #include "Common.h"
-
+#include "SyncMsgPacket.h"
+#include "SyncStatus.h"
+#include "TreeTopology.h"
 #include <libdevcore/Guards.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
+#include <libp2p/P2PInterface.h>
+#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -38,19 +42,29 @@ class DownloadTxsShard
 public:
     DownloadTxsShard(bytesConstRef _txsBytes, NodeID const& _fromPeer)
       : txsBytes(_txsBytes.toBytes()), fromPeer(_fromPeer)
-    {}
+    {
+        forwardNodes = std::make_shared<dev::h512s>();
+    }
+
+    void appendForwardNodes(dev::h512 const& _forwardNode)
+    {
+        forwardNodes->push_back(_forwardNode);
+    }
     bytes txsBytes;
     NodeID fromPeer;
+    std::shared_ptr<dev::h512s> forwardNodes;
 };
 
 class DownloadingTxsQueue
 {
 public:
     DownloadingTxsQueue(PROTOCOL_ID const&, NodeID const& _nodeId)
-      : m_nodeId(_nodeId), m_buffer(std::make_shared<std::vector<DownloadTxsShard>>())
+      : m_nodeId(_nodeId),
+        m_buffer(std::make_shared<std::vector<std::shared_ptr<DownloadTxsShard>>>())
     {}
     // push txs bytes in queue
-    void push(bytesConstRef _txsBytes, NodeID const& _fromPeer);
+    // void push(bytesConstRef _txsBytes, NodeID const& _fromPeer);
+    void push(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer);
 
     // pop all queue into tx pool
     void pop2TxPool(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
@@ -62,10 +76,36 @@ public:
         return m_buffer->size();
     }
 
+    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
+
+    void setTreeRouter(TreeTopology::Ptr _treeRouter) { m_treeRouter = _treeRouter; }
+    void setSyncStatus(SyncMasterStatus::Ptr _syncStatus) { m_syncStatus = _syncStatus; }
+
+    void setService(dev::p2p::P2PInterface::Ptr _service) { m_service = _service; }
+
+    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
+    {
+        if (m_treeRouter)
+        {
+            m_treeRouter->updateConsensusNodeInfo(_consensusNodes);
+        }
+    }
+
+    TreeTopology::Ptr treeRouter() { return m_treeRouter; }
+
 private:
     NodeID m_nodeId;
-    std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
+    std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> m_buffer;
     mutable SharedMutex x_buffer;
+    mutable Mutex m_mutex;
+
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
+    TreeTopology::Ptr m_treeRouter = nullptr;
+    SyncMasterStatus::Ptr m_syncStatus;
+    dev::p2p::P2PInterface::Ptr m_service;
 };
 
 }  // namespace sync

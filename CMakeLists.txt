@@ -66,7 +66,6 @@ include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
 
-
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 
 configure_project(TESTS)

@@ -59,14 +59,10 @@ public:
     DownloadRequest topAndPop();  // Must call use disablePush() before
     bool empty();
 
-    void enablePush() { x_canPush.unlock(); };
-    void disablePush() { x_canPush.lock(); };
-
 private:
     NodeID m_nodeId;
+    mutable SharedMutex x_reqQueue;
     std::priority_queue<DownloadRequest, std::vector<DownloadRequest>, RequestQueueCmp> m_reqQueue;
-    mutable std::mutex x_canPush;  // pop() wait for push(), push() drop when pop()
-    mutable std::mutex x_push;     // To serialize push()
 };
 }  // namespace sync
 }  // namespace dev

@@ -102,7 +102,7 @@ public:
 
     BlockChainPtr getBlockChainPtr() const { return m_txPoolFixture.m_blockChain; }
 
-    Block& getBlock() { return m_fakeBlock.getBlock(); }
+    Block& getBlock() { return *m_fakeBlock.getBlock(); }
 
     P2PSession::Ptr createSession(std::string _ip = "127.0.0.1")
     {

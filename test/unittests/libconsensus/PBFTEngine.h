@@ -107,13 +107,13 @@ void CheckOnRecvPBFTMessage(std::shared_ptr<FakePBFTEngine> pbft,
 {
     P2PMessage::Ptr message_ptr = FakeReqMessage(pbft, req, packetType, ProtocolID::PBFT);
     pbft->onRecvPBFTMessage(NetworkException(), session, message_ptr);
-    std::pair<bool, PBFTMsgPacket> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
+    std::pair<bool, PBFTMsgPacket::Ptr> ret = pbft->mutableMsgQueue().tryPop(unsigned(5));
     if (valid == true)
     {
         BOOST_CHECK(ret.first == true);
-        BOOST_CHECK(ret.second.packet_id == packetType);
+        BOOST_CHECK(ret.second->packet_id == packetType);
         T decoded_req;
-        decoded_req.decode(ref(ret.second.data));
+        decoded_req.decode(ref(ret.second->data));
         BOOST_CHECK(decoded_req == req);
     }
     else
@@ -136,7 +136,7 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTEngine>& fake_pbft, Pre
         prepareReq = FakePrepareReq(key_pair);
         Block block;
         fake_pbft.consensus()->resetBlock(block);
-        block.encode(prepareReq.block);  /// encode block
+        block.encode(*prepareReq.block);  /// encode block
         prepareReq.block_hash = block.header().hash();
         prepareReq.height = block.header().number();
         prepareReq.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
@@ -399,8 +399,8 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     fake_pbft.consensus()->resetBlock(block);
     block.header().setSealerList(fake_pbft.consensus()->sealerList());
     block.header().setSealer(u256(req.idx));
-    block.encode(req.block);
-    block.decode(ref(req.block));
+    block.encode(*req.block);
+    block.decode(ref(*req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));

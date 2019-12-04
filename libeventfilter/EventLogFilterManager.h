@@ -26,6 +26,8 @@
 #include <libdevcore/Worker.h>
 #include <atomic>
 
+#define MAX_BLOCK_PER_PROCESS (3)
+
 namespace Json
 {
 class Value;

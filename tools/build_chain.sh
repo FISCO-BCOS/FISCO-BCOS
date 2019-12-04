@@ -388,9 +388,6 @@ gen_node_cert_with_extensions_gm() {
 }
 
 gen_node_cert_gm() {
-    if [ "" = "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
-        exit_with_clean "openssl don't support secp256k1, please upgrade openssl!"
-    fi
 
     agpath="${1}"
     agency=$(basename "$agpath")
@@ -441,6 +438,7 @@ generate_config_ini()
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
     ;enable_compress=true
+    ;enable_statistic=false
     ; nodes to connect
     $ip_list
 
@@ -524,6 +522,8 @@ function generate_group_ini()
     ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
+    ;enable_ttl_optimization=true
+    ;enable_prepare_with_txsHash=true
 [storage]
     ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended
     type=${storage_type}
@@ -549,6 +549,15 @@ function generate_group_ini()
     limit=150000
 [tx_execute]
     enable_parallel=${enable_parallel}
+[sync]
+    idle_wait_ms=200
+    ; send block status and transaction by tree-topology
+    ; only supported when use pbft
+    sync_by_tree=true
+    ; must between 1000 to 3000
+    ; only enabled when sync_by_tree is true
+    gossip_interval_ms=1000
+    gossip_peers_number=3
 EOF
 }
 
@@ -1022,6 +1031,9 @@ download_bin()
     else
         curl -LO ${Download_Link}
     fi
+    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') < 1048576 ]];then 
+        exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
+    fi
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
 }
@@ -1187,20 +1199,14 @@ for line in ${ip_array[*]};do
             #move origin conf to gm conf
             rm ${node_dir}/${conf_path}/node.nodeid
             cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
-        fi
-
-        if [ -n "$guomi_mode" ]; then
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
-        else
-            nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
-        fi
-
-        if [ -n "$guomi_mode" ]; then
             #remove original cert files
             rm ${node_dir:?}/${conf_path} -rf
             mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
-        fi
 
+        else
+            nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
+        fi
 
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })

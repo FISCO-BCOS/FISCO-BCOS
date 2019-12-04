@@ -37,6 +37,8 @@ namespace eth
 class TransactionReceipt
 {
 public:
+    typedef std::shared_ptr<TransactionReceipt> Ptr;
+
     TransactionReceipt() : m_status(executive::TransactionException::None){};
     TransactionReceipt(bytesConstRef _rlp);
     TransactionReceipt(h256 const& _root, u256 const& _gasUsed, LogEntries const& _log,
@@ -108,7 +110,7 @@ private:
     bytes m_sha3 = bytes();
 };
 
-using TransactionReceipts = std::vector<TransactionReceipt>;
+using TransactionReceipts = std::vector<TransactionReceipt::Ptr>;
 
 std::ostream& operator<<(std::ostream& _out, eth::TransactionReceipt const& _r);
 

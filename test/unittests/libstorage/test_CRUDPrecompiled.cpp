@@ -22,9 +22,9 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/CRUDPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
-#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;

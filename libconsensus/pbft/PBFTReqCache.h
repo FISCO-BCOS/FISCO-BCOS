@@ -41,6 +41,7 @@ public:
     /// @return false : the prepare request doesn't exist in the  raw-prepare-cache
     inline bool isExistPrepare(PrepareReq const& req)
     {
+        ReadGuard l(x_rawPrepareCache);
         return m_rawPrepareCache.block_hash == req.block_hash;
     }
     /// specified SignReq exists in the sign-cache or not?
@@ -87,8 +88,9 @@ public:
         }
         return 0;
     }
-
+    // only used for ut
     inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
+
     inline PrepareReq const& prepareCache() { return m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
@@ -106,11 +108,14 @@ public:
     /// reset the prepare-cache
     inline void addRawPrepare(PrepareReq const& req)
     {
+        auto startT = utcTime();
+        WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = req;
+        m_prepareCache.clear();
         PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
                                << LOG_KV("reqIdx", req.idx)
-                               << LOG_KV("hash", req.block_hash.abridged());
-        m_prepareCache = PrepareReq();
+                               << LOG_KV("hash", req.block_hash.abridged())
+                               << LOG_KV("time", utcTime() - startT);
     }
 
     /// add prepare request to prepare-cache
@@ -122,13 +127,31 @@ public:
         removeInvalidSignCache(req.block_hash, req.view);
         removeInvalidCommitCache(req.block_hash, req.view);
     }
+
     /// add specified signReq to the sign-cache
-    inline void addSignReq(SignReq const& req) { m_signCache[req.block_hash][req.sig.hex()] = req; }
+    inline void addSignReq(SignReq const& req)
+    {
+        auto signature = req.sig.hex();
+        // determine existence: in case of assign overhead
+        if (m_signCache.count(req.block_hash) && m_signCache[req.block_hash].count(signature))
+        {
+            return;
+        }
+        m_signCache[req.block_hash][signature] = req;
+    }
+
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(CommitReq const& req)
     {
-        m_commitCache[req.block_hash][req.sig.hex()] = req;
+        auto signature = req.sig.hex();
+        // determine existence: in case of assign overhead
+        if (m_commitCache.count(req.block_hash) && m_commitCache[req.block_hash].count(signature))
+        {
+            return;
+        }
+        m_commitCache[req.block_hash][signature] = req;
     }
+
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(ViewChangeReq const& req)
     {
@@ -184,7 +207,11 @@ public:
     inline size_t futurePrepareCacheSize() { return m_futurePrepareCache.size(); }
 
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
-    inline void updateCommittedPrepare() { m_committedPrepareCache = m_rawPrepareCache; }
+    inline void updateCommittedPrepare()
+    {
+        ReadGuard l(x_rawPrepareCache);
+        m_committedPrepareCache = m_rawPrepareCache;
+    }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
     bool generateAndSetSigList(dev::eth::Block& block, const IDXTYPE& minSigSize);
     ///  determine can trigger viewchange or not
@@ -195,6 +222,7 @@ public:
     /// trigger viewchange
     inline void triggerViewChange(VIEWTYPE const& curView)
     {
+        WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache.clear();
         m_prepareCache.clear();
         m_signCache.clear();
@@ -206,13 +234,13 @@ public:
     /// update the sign cache and commit cache immediately
     /// in case of that the commit/sign requests with the same hash are solved in
     /// handleCommitMsg/handleSignMsg again
-    void delCache(h256 const& hash);
+    void delCache(dev::eth::BlockHeader const& _highestBlockHeader);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
         /// remove invalid future block cache from cache
-        removeInvalidFutureCache(highestBlockHeader);
+        removeInvalidFutureCache(highestBlockHeader.number());
         /// delete invalid viewchange from cache
         delInvalidViewChange(highestBlockHeader);
     }
@@ -229,10 +257,11 @@ public:
         m_recvViewChangeReq.clear();
     }
 
-    void removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader);
+    virtual void removeInvalidFutureCache(int64_t const& _highestBlockNumber);
 
     inline void clearAll()
     {
+        WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache.clear();
         m_futurePrepareCache.clear();
         clearAllExceptCommitCache();
@@ -256,13 +285,26 @@ public:
     {
         return m_commitCache;
     }
+
     std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>>&
     mutableViewChangeCache()
     {
         return m_recvViewChangeReq;
     }
 
-private:
+    int64_t rawPrepareCacheHeight()
+    {
+        ReadGuard l(x_rawPrepareCache);
+        return m_rawPrepareCache.height;
+    }
+    void setGroupId(dev::GROUP_ID const& _groupId)
+    {
+        m_groupId = _groupId;
+        m_groupIdStr = "g:" + std::to_string(_groupId);
+    }
+
+
+protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
@@ -313,7 +355,7 @@ private:
         return (it->second.find(key)) != (it->second.end());
     }
 
-private:
+protected:
     /// cache for prepare request
     PrepareReq m_prepareCache = PrepareReq();
     /// cache for raw prepare request
@@ -329,6 +371,11 @@ private:
     /// cache for the future prepare cache
     /// key: block hash, value: the cached future prepeare
     std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;
+
+    mutable SharedMutex x_rawPrepareCache;
+
+    dev::GROUP_ID m_groupId;
+    std::string m_groupIdStr;
 };
 }  // namespace consensus
 }  // namespace dev

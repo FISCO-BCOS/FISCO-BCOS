@@ -42,6 +42,7 @@ namespace consensus
 class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusEngineBase>;
     ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -66,6 +67,24 @@ public:
                                   << errinfo_comment("Protocol id must be larger than 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
+        m_lastSealerListUpdateNumber = m_blockChain->number();
+
+        // only send transactions to the current consensus nodes
+        m_blockSync->registerTxsReceiversFilter(
+            [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
+                std::shared_ptr<dev::p2p::NodeIDs> selectedNode =
+                    std::make_shared<dev::p2p::NodeIDs>();
+
+                ReadGuard l(m_sealerListMutex);
+                for (auto const& peer : m_sealerList)
+                {
+                    if (_peers->count(peer))
+                    {
+                        selectedNode->push_back(peer);
+                    }
+                }
+                return selectedNode;
+            });
     }
 
     void start() override;
@@ -144,16 +163,23 @@ public:
         m_allowFutureBlocks = isAllowFutureBlocks;
     }
 
-    IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
+    virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
     virtual void reportBlock(dev::eth::Block const&) override {}
 
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
+    virtual void resetConfig();
+    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory) override
+    {
+        m_blockFactory = _blockFactory;
+    }
 
 protected:
-    virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
-    void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
+    void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
+    {
+        m_txPool->dropBlockTrans(block);
+    }
     /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
@@ -224,7 +250,6 @@ protected:
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P();
 
     /// set the max number of transactions in a block
     virtual void updateMaxBlockTransactions()
@@ -238,8 +263,17 @@ protected:
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
 
+    dev::h512s consensusList() const override
+    {
+        ReadGuard l(m_sealerListMutex);
+        return m_sealerList;
+    }
+
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
+    // record the sealer list has been updated or not
+    std::atomic_bool m_sealerListUpdated = {true};
+    int64_t m_lastSealerListUpdateNumber = 0;
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
@@ -283,6 +317,9 @@ protected:
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
     std::atomic_bool m_cfgErr = {false};
+
+    // block Factory used to create block
+    dev::eth::BlockFactory::Ptr m_blockFactory;
 };
 }  // namespace consensus
 }  // namespace dev

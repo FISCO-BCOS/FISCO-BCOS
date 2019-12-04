@@ -113,7 +113,8 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
         }
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
-    {  // userTransfer(string,string,uint256)
+    {
+        // userTransfer(string,string,uint256)
         std::string fromUser, toUser;
         dev::u256 amount;
 
@@ -145,8 +146,8 @@ Table::Ptr DagTransferPrecompiled::openTable(
     auto table = Precompiled::openTable(context, precompiled::getTableName(DAG_TRANSFER));
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = createTable(context, precompiled::getTableName(DAG_TRANSFER), DAG_TRANSFER_FIELD_NAME,
-            DAG_TRANSFER_FIELD_BALANCE, origin);
+        table = createTable(context, precompiled::getTableName(DAG_TRANSFER),
+            DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");

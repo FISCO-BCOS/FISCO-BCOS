@@ -25,6 +25,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
+#include <libp2p/StatisticHandler.h>
 #include <climits>
 #include <queue>
 #include <set>
@@ -100,6 +101,11 @@ public:
 
     void clearFullQueueIfNotHas(int64_t _blockNumber);
 
+    void setStatHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
+
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
@@ -108,6 +114,7 @@ private:
 
     mutable SharedMutex x_blocks;
     mutable SharedMutex x_buffer;
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
 private:
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);

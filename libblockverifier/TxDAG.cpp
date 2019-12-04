@@ -22,32 +22,50 @@
 
 #include "TxDAG.h"
 #include "Common.h"
+#include <tbb/parallel_for.h>
 #include <map>
 
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::blockverifier;
+using namespace dev::executive;
 
 #define DAG_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("DAG")
 
 // Generate DAG according with given transactions
-void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _blockHeight)
+void TxDAG::init(
+    ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs, int64_t _blockHeight)
 {
     DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("blockHeight", _blockHeight)
-                   << LOG_KV("transactionNum", _txs.size());
+                   << LOG_KV("transactionNum", _txs->size());
 
-    m_txs = make_shared<Transactions const>(_txs);
-    m_dag.init(_txs.size());
+    m_txs = _txs;
+    m_dag.init(_txs->size());
+
+    // get criticals
+    std::vector<std::shared_ptr<std::vector<std::string>>> txsCriticals;
+    auto txsSize = _txs->size();
+    txsCriticals.resize(txsSize);
+    tbb::parallel_for(
+        tbb::blocked_range<uint64_t>(0, txsSize), [&](const tbb::blocked_range<uint64_t>& range) {
+            for (uint64_t i = range.begin(); i < range.end(); i++)
+            {
+                auto& tx = (*_txs)[i];
+                txsCriticals[i] = _ctx->getTxCriticals(*tx);
+            }
+        });
 
     CriticalField<string> latestCriticals;
 
-    for (ID id = 0; id < _txs.size(); ++id)
+    for (ID id = 0; id < txsSize; ++id)
     {
+#if 0
         auto& tx = _txs[id];
-
         // Is para transaction?
         auto criticals = _ctx->getTxCriticals(tx);
+#endif
+        auto criticals = txsCriticals[id];
         if (criticals)
         {
             // DAG transaction: Conflict with certain critical fields
@@ -59,8 +77,6 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _
                 ID pId = latestCriticals.get(c);
                 if (pId != INVALID_ID)
                 {
-                    DAG_LOG(TRACE)
-                        << LOG_DESC("Add edge") << LOG_KV("from", pId) << LOG_KV("to", id);
                     m_dag.addEdge(pId, id);  // add DAG edge
                 }
             }
@@ -88,7 +104,7 @@ void TxDAG::init(ExecutiveContext::Ptr _ctx, Transactions const& _txs, int64_t _
     // Generate DAG
     m_dag.generate();
 
-    m_totalParaTxs = _txs.size();
+    m_totalParaTxs = _txs->size();
 
     DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG") << LOG_KV("blockHeight", _blockHeight);
 }
@@ -99,31 +115,26 @@ void TxDAG::setTxExecuteFunc(ExecuteTxFunc const& _f)
     f_executeTx = _f;
 }
 
-int TxDAG::executeUnit()
+int TxDAG::executeUnit(Executive::Ptr _executive)
 {
     // PARA_LOG(TRACE) << LOG_DESC("executeUnit") << LOG_KV("exeCnt", m_exeCnt)
     //              << LOG_KV("total", m_txs->size());
-    ID id = m_dag.waitPop();
-    if (id == INVALID_ID)
-        return 0;
-
-
     int exeCnt = 0;
-    // PARA_LOG(TRACE) << LOG_DESC("executeUnit transaction") << LOG_KV("txid", id);
-    // TODO catch execute exception
+    ID id = m_dag.waitPop();
     while (id != INVALID_ID)
     {
-        exeCnt += 1;
+        do
         {
-            Guard l(x_exeCnt);
-            m_exeCnt += 1;
-        }
-        f_executeTx((*m_txs)[id], id);
-
-        id = m_dag.consume(id);
-
-        // PARA_LOG(TRACE) << LOG_DESC("executeUnit finish") << LOG_KV("exeCnt", m_exeCnt)
-        //                << LOG_KV("total", m_txs->size());
+            exeCnt += 1;
+            f_executeTx((*m_txs)[id], id, _executive);
+            id = m_dag.consume(id);
+        } while (id != INVALID_ID);
+        id = m_dag.waitPop();
+    }
+    if (exeCnt > 0)
+    {
+        Guard l(x_exeCnt);
+        m_exeCnt += exeCnt;
     }
     return exeCnt;
 }

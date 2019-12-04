@@ -43,6 +43,7 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     m_buffer->emplace_back(blocksShard);
 }
 
+// only used for UT
 void DownloadingBlockQueue::push(BlockPtrVec _blocks)
 {
     RLPStream rlpStream;
@@ -162,6 +163,11 @@ void DownloadingBlockQueue::flushBufferToQueue()
                 {
                     successCnt++;
                     m_blocks.push(block);
+                    // update the downloaded block information
+                    if (m_statisticHandler)
+                    {
+                        m_statisticHandler->updateDownloadedBlockInfo(rlps[i].data().size());
+                    }
                 }
             }
             catch (std::exception& e)

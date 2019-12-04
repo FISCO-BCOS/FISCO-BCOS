@@ -1,6 +1,7 @@
 // "Copyright [2018] <fisco-dev>"
 #include "../libstorage/MemoryStorage.h"
 #include "Common.h"
+#include "MemoryStorage2.h"
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
@@ -27,11 +28,12 @@ struct ConsensusPrecompiledFixture
         blockInfo.number = 0;
         context = std::make_shared<ExecutiveContext>();
         ExecutiveContextFactory factory;
-        auto storage = std::make_shared<MemoryStorage>();
+        // auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
-
+        auto memStorage = std::make_shared<MemoryStorage2>();
         cachedStorage = std::make_shared<CachedStorage>();
+        cachedStorage->setBackend(memStorage);
         tableFactoryFactory->setStorage(cachedStorage);
 
         // factory.setStateStorage(storage);
@@ -122,6 +124,12 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
 
 BOOST_AUTO_TEST_CASE(TestRemoveNode)
 {
+    auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
+    memoryTableFactory->commitDB(h256(0x100), 0);
     eth::ContractABI abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
@@ -145,7 +153,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
-    auto table = memoryTableFactory->openTable(SYS_CONSENSUS);
+    table = memoryTableFactory->openTable(SYS_CONSENSUS);
     auto condition = table->newCondition();
     condition->EQ(NODE_KEY_NODEID, nodeID1);
     auto entries = table->select(PRI_KEY, condition);
@@ -159,7 +167,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
 
     table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
-    auto entry = table->newEntry();
+    entry = table->newEntry();
     entry->setField(SYS_VALUE, "0");
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);
@@ -212,6 +220,12 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
 BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
 {
+    auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    auto entry = table->newEntry();
+    entry->setField(SYS_VALUE, "0");
+    entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+    table->insert(SYS_KEY_CURRENT_NUMBER, entry);
+    memoryTableFactory->commitDB(h256(0x100), 0);
     eth::ContractABI abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
@@ -223,8 +237,8 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
-    auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
-    auto entry = table->newEntry();
+    table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
+    entry = table->newEntry();
     entry->setField(SYS_VALUE, "0");
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);

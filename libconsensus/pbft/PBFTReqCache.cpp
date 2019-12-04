@@ -22,6 +22,8 @@
  * @date: 2018-10-09
  */
 #include "PBFTReqCache.h"
+#include <memory>
+
 using namespace dev::eth;
 namespace dev
 {
@@ -31,8 +33,9 @@ namespace consensus
  * @brief: delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
  * @param hash
  */
-void PBFTReqCache::delCache(h256 const& hash)
+void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
 {
+    auto const& hash = _highestBlockHeader.hash();
     PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache") << LOG_KV("hash", hash.abridged());
     /// delete from sign cache
     auto psign = m_signCache.find(hash);
@@ -47,6 +50,7 @@ void PBFTReqCache::delCache(h256 const& hash)
     {
         m_prepareCache.clear();
     }
+    removeInvalidFutureCache(_highestBlockHeader.number());
 }
 
 /**
@@ -57,15 +61,15 @@ void PBFTReqCache::delCache(h256 const& hash)
  */
 bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& minSigSize)
 {
-    std::vector<std::pair<u256, Signature>> sig_list;
+    auto sig_list = std::make_shared<std::vector<std::pair<u256, Signature>>>();
     if (m_commitCache.count(m_prepareCache.block_hash) > 0)
     {
         for (auto const& item : m_commitCache[m_prepareCache.block_hash])
         {
-            sig_list.push_back(
+            sig_list->push_back(
                 std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
         }
-        if (sig_list.size() < minSigSize)
+        if (sig_list->size() < minSigSize)
         {
             return false;
         }
@@ -191,11 +195,11 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 }
 
 /// clear the cache of future block to solve the memory leak problems
-void PBFTReqCache::removeInvalidFutureCache(dev::eth::BlockHeader const& highestBlockHeader)
+void PBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBlockNumber)
 {
     for (auto pcache = m_futurePrepareCache.begin(); pcache != m_futurePrepareCache.end();)
     {
-        if (pcache->first <= (uint64_t)(highestBlockHeader.number()))
+        if (pcache->first <= (uint64_t)(_highestBlockNumber))
         {
             pcache = m_futurePrepareCache.erase(pcache);
         }

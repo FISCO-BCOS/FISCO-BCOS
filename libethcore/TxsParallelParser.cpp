@@ -30,9 +30,9 @@ namespace dev
 {
 namespace eth
 {
-bytes TxsParallelParser::encode(Transactions& _txs)
+bytes TxsParallelParser::encode(std::shared_ptr<Transactions> _txs)
 {
-    Offset_t txNum = _txs.size();
+    Offset_t txNum = _txs->size();
     if (txNum == 0)
         return bytes();
 
@@ -44,7 +44,7 @@ bytes TxsParallelParser::encode(Transactions& _txs)
         tbb::blocked_range<size_t>(0, txNum), [&](const tbb::blocked_range<size_t>& _r) {
             for (Offset_t i = _r.begin(); i < _r.end(); ++i)
             {
-                bytes txByte = _txs[i].rlp(WithSignature);
+                bytes txByte = (*_txs)[i]->rlp(WithSignature);
 
                 // record bytes size in offsets for caculating real offset
                 offsets[i + 1] = txByte.size();
@@ -112,8 +112,8 @@ inline void throwInvalidBlockFormat(const std::string& _reason)
 }
 
 // parallel decode transactions
-void TxsParallelParser::decode(
-    Transactions& _txs, bytesConstRef _bytes, CheckTransaction _checkSig, bool _withHash)
+void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef _bytes,
+    CheckTransaction _checkSig, bool _withHash)
 {
     try
     {
@@ -133,7 +133,7 @@ void TxsParallelParser::decode(
         vector_ref<Offset_t> offsets(reinterpret_cast<Offset_t*>(const_cast<unsigned char*>(
                                          _bytes.cropped(sizeof(Offset_t)).data())),
             txNum + 1);
-        _txs.resize(txNum);
+        _txs->resize(txNum);
 
         // Get objects space
         bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
@@ -156,11 +156,12 @@ void TxsParallelParser::decode(
                         if (offset > maxOffset)
                             throwInvalidBlockFormat("offset > maxOffset");
 
-                        _txs[i].decode(txBytes.cropped(offset, size), _checkSig);
+                        (*_txs)[i] = std::make_shared<Transaction>();
+                        (*_txs)[i]->decode(txBytes.cropped(offset, size), _checkSig);
                         if (_withHash)
                         {
                             dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
-                            _txs[i].updateTransactionHashWithSig(txHash);
+                            (*_txs)[i]->updateTransactionHashWithSig(txHash);
                         } /*
                          LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i",
                          i)

@@ -58,6 +58,7 @@ public:
             _workers.join_all();
         }
     }
+
     ~ThreadPool() { stop(); }
 
     // Add new work item to the pool.

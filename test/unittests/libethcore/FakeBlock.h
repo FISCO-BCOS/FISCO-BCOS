@@ -23,6 +23,7 @@
 #pragma once
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
@@ -40,28 +41,51 @@ class FakeBlock
 {
 public:
     /// for normal case test
-    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0)
+    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0,
+        std::shared_ptr<BlockFactory> _blockFactory = nullptr)
     {
+        m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+        m_transaction = std::make_shared<Transactions>();
+        m_transactionReceipt = std::make_shared<TransactionReceipts>();
         m_sec = sec;
         FakeBlockHeader(blockNumber);
         FakeSigList(size);
         FakeTransaction(size);
         FakeTransactionReceipt(size);
-        m_block.setSigList(m_sigList);
-        m_block.setTransactions(m_transaction);
-        m_block.setBlockHeader(m_blockHeader);
-        m_block.setTransactionReceipts(m_transactionReceipt);
-        BOOST_CHECK(m_transaction == m_block.transactions());
-        BOOST_CHECK(m_sigList == m_block.sigList());
-        BOOST_CHECK(m_blockHeader = m_block.header());
-        m_block.encode(m_blockData);
+        if (_blockFactory)
+        {
+            m_block = _blockFactory->createBlock();
+        }
+        else
+        {
+            m_block = std::make_shared<Block>();
+        }
+        m_block->setSigList(m_sigList);
+        m_block->setTransactions(m_transaction);
+        m_block->setBlockHeader(m_blockHeader);
+        m_block->setTransactionReceipts(m_transactionReceipt);
+        BOOST_CHECK(*m_transaction == *m_block->transactions());
+        BOOST_CHECK(*m_sigList == *(m_block->sigList()));
+        BOOST_CHECK(m_blockHeader = m_block->header());
+        m_block->encode(m_blockData);
     }
 
     /// for empty case test
-    FakeBlock()
+    FakeBlock(std::shared_ptr<BlockFactory> _blockFactory = nullptr)
     {
-        m_block.setBlockHeader(m_blockHeader);
-        m_block.encode(m_blockData);
+        m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+        m_transaction = std::make_shared<Transactions>();
+        m_transactionReceipt = std::make_shared<TransactionReceipts>();
+        if (_blockFactory)
+        {
+            m_block = _blockFactory->createBlock();
+        }
+        else
+        {
+            m_block = std::make_shared<Block>();
+        }
+        m_block->setBlockHeader(m_blockHeader);
+        m_block->encode(m_blockData);
     }
 
     /// fake invalid block data
@@ -84,7 +108,7 @@ public:
         else
             s.append(ref(m_transactionData));
         s.append(m_blockHeader.hash());
-        s.appendVector(m_sigList);
+        s.appendVector(*m_sigList);
         s.swapOut(result);
         return result;
     }
@@ -93,17 +117,17 @@ public:
     void CheckInvalidBlockData(size_t size)
     {
         FakeBlockHeader(0);
-        m_block.setBlockHeader(m_blockHeader);
-        BOOST_CHECK_THROW(m_block.decode(ref(m_blockHeaderData)), InvalidBlockFormat);
-        BOOST_REQUIRE_NO_THROW(m_block.encode(m_blockData));
-        m_block.header().setGasUsed(u256(3000000000));
+        m_block->setBlockHeader(m_blockHeader);
+        BOOST_CHECK_THROW(m_block->decode(ref(m_blockHeaderData)), InvalidBlockFormat);
+        BOOST_REQUIRE_NO_THROW(m_block->encode(m_blockData));
+        m_block->header().setGasUsed(u256(3000000000));
         m_blockHeader.encode(m_blockHeaderData);
-        BOOST_CHECK_THROW(m_block.encode(m_blockData), TooMuchGasUsed);
+        BOOST_CHECK_THROW(m_block->encode(m_blockData), TooMuchGasUsed);
         /// construct invalid block format
         for (size_t i = 1; i < 3; i++)
         {
             bytes result_bytes = FakeInvalidBlockData(i, size);
-            BOOST_CHECK_THROW(m_block.decode(ref(result_bytes)), InvalidBlockFormat);
+            BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
         }
     }
 
@@ -135,12 +159,12 @@ public:
         /// set sig list
         Signature sig;
         h256 block_hash;
-        m_sigList.clear();
+        m_sigList->clear();
         for (size_t i = 0; i < size; i++)
         {
             block_hash = m_blockHeader.hash();
             sig = sign(m_sec, block_hash);
-            m_sigList.push_back(std::make_pair(u256(i), sig));
+            m_sigList->push_back(std::make_pair(u256(i), sig));
         }
     }
 
@@ -149,21 +173,22 @@ public:
     {
         RLPStream txs;
         txs.appendList(size);
-        m_transaction.resize(size);
+        m_transaction->resize(size);
         fakeSingleTransaction();
         for (size_t i = 0; i < size; i++)
         {
-            m_transaction[i] = m_singleTransaction;
+            (*m_transaction)[i] = std::make_shared<Transaction>(m_singleTransaction);
         }
         m_transactionData = TxsParallelParser::encode(m_transaction);
     }
 
     void FakeTransactionReceipt(size_t size)
     {
-        m_transactionReceipt.resize(size);
+        m_transactionReceipt->resize(size);
         for (size_t i = 0; i < size; ++i)
         {
-            m_transactionReceipt[i] = m_singleTransactionReceipt;
+            (*m_transactionReceipt)[i] =
+                std::make_shared<TransactionReceipt>(m_singleTransactionReceipt);
         }
     }
 
@@ -194,20 +219,20 @@ public:
             TransactionReceipt(root, gasUsed, logEntries, status, outputBytes, address);
     }
 
-    Block& getBlock() { return m_block; }
+    std::shared_ptr<Block> getBlock() { return m_block; }
     BlockHeader& getBlockHeader() { return m_blockHeader; }
     bytes& getBlockHeaderData() { return m_blockHeaderData; }
     bytes& getBlockData() { return m_blockData; }
 
 public:
     Secret m_sec;
-    Block m_block;
+    std::shared_ptr<Block> m_block;
     BlockHeader m_blockHeader;
-    Transactions m_transaction;
+    std::shared_ptr<Transactions> m_transaction;
     Transaction m_singleTransaction;
-    TransactionReceipts m_transactionReceipt;
+    std::shared_ptr<TransactionReceipts> m_transactionReceipt;
     TransactionReceipt m_singleTransactionReceipt;
-    std::vector<std::pair<u256, Signature>> m_sigList;
+    std::shared_ptr<std::vector<std::pair<u256, Signature>>> m_sigList;
     bytes m_blockHeaderData;
     bytes m_blockData;
     bytes m_transactionData;

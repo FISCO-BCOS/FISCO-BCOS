@@ -37,18 +37,18 @@ BOOST_FIXTURE_TEST_SUITE(BlockTest, TestOutputHelperFixture)
 void checkBlock(Block& m_block, FakeBlock const& fake_block, size_t trans_size, size_t sig_size)
 {
     BOOST_CHECK(m_block.blockHeader() == fake_block.m_blockHeader);
-    BOOST_CHECK(m_block.headerHash() == fake_block.m_block.blockHeader().hash());
-    BOOST_CHECK(m_block.transactions() == fake_block.m_transaction);
-    BOOST_CHECK(m_block.transactions().size() == trans_size);
-    BOOST_CHECK(m_block.sigList().size() == sig_size);
-    BOOST_CHECK(m_block.sigList() == fake_block.m_sigList);
+    BOOST_CHECK(m_block.headerHash() == fake_block.m_block->blockHeader().hash());
+    BOOST_CHECK(*m_block.transactions() == *fake_block.m_transaction);
+    BOOST_CHECK(m_block.transactions()->size() == trans_size);
+    BOOST_CHECK(m_block.sigList()->size() == sig_size);
+    BOOST_CHECK(*m_block.sigList() == *fake_block.m_sigList);
 }
 /// test constructors and operators
 BOOST_AUTO_TEST_CASE(testConstructorsAndOperators)
 {
     /// test constructor
     FakeBlock fake_block(5);
-    Block m_block = fake_block.getBlock();
+    Block m_block = *fake_block.getBlock();
     checkBlock(m_block, fake_block, 5, 5);
     /// test copy constructor
     Block copied_block(m_block);
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(testConstructorsAndOperators)
 
     /// test empty case
     FakeBlock fake_block_empty;
-    Block m_empty_block = fake_block_empty.getBlock();
+    Block m_empty_block = *fake_block_empty.getBlock();
     checkBlock(m_empty_block, fake_block_empty, 0, 0);
     m_empty_block = m_block;
     checkBlock(m_empty_block, fake_block, 5, 5);

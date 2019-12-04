@@ -25,6 +25,7 @@
 #include "libconsensus/Common.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libconfig/GlobalConfigure.h>
+#include <libeventfilter/EventLogFilterManager.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/bind.hpp>
 #include <boost/function_output_iterator.hpp>
@@ -85,6 +86,7 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
     s << mutableStateParam().type << "-";
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
+
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", s.str());
     return blockchain::GenesisBlockParam{s.str(), mutableConsensusParam().sealerList,
         mutableConsensusParam().observerList, mutableConsensusParam().consensusType,
@@ -204,12 +206,37 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     {
         mutableConsensusParam().blockSizeIncreaseRatio = 0.5;
     }
+    // set enableTTLOptimize
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", true);
+    }
+    else
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", false);
+    }
+
+    // set enableTxsWithTxsHash
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
+    }
+    else
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", false);
+    }
     LedgerParam_LOG(DEBUG)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
         << LOG_KV("minBlockGenerationTime", mutableConsensusParam().minBlockGenTime)
         << LOG_KV("enablDynamicBlockSize", mutableConsensusParam().enableDynamicBlockSize)
-        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio);
+        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
+        << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize)
+        << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash);
 }
 
 
@@ -223,21 +250,21 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     mutableConsensusParam().consensusType = pt.get<std::string>("consensus.consensus_type", "pbft");
 
     mutableConsensusParam().maxTransactions = pt.get<int64_t>("consensus.max_trans_num", 1000);
-    if (mutableConsensusParam().maxTransactions < 0)
+    if (mutableConsensusParam().maxTransactions <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.max_trans_num to positive !"));
     }
 
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
-    if (mutableConsensusParam().minElectTime < 0)
+    if (mutableConsensusParam().minElectTime <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.min_elect_time to positive !"));
     }
 
     mutableConsensusParam().maxElectTime = pt.get<int64_t>("consensus.max_elect_time", 2000);
-    if (mutableConsensusParam().maxElectTime < 0)
+    if (mutableConsensusParam().maxElectTime <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set consensus.max_elect_time to positive !"));
@@ -253,6 +280,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                            << LOG_KV("type", mutableConsensusParam().consensusType)
                            << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                            << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
+
     std::stringstream nodeListMark;
     try
     {
@@ -283,24 +311,47 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
 void LedgerParam::initSyncConfig(ptree const& pt)
 {
-    try
+    // idleWaitMs: default is 30ms
+    mutableSyncParam().idleWaitMs = pt.get<uint>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
+    if (mutableSyncParam().idleWaitMs < 0)
     {
-        // idleWaitMs: default is 30ms
-        mutableSyncParam().idleWaitMs = pt.get<uint>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
-        if (mutableSyncParam().idleWaitMs < 0)
-        {
-            BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                                  << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
-        }
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
+    }
 
-        LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                               << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
-    }
-    catch (std::exception& e)
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                           << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
+    mutableSyncParam().enableSendBlockStatusByTree = pt.get<bool>("sync.sync_by_tree", true);
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                           << LOG_KV("enableSendBlockStatusByTree",
+                                  mutableSyncParam().enableSendBlockStatusByTree);
+
+    // set gossipInterval for syncMaster, default is 1s
+    mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
+    if (mutableSyncParam().gossipInterval < 1000 || mutableSyncParam().gossipInterval > 3000)
     {
-        mutableSyncParam().idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
-        LedgerParam_LOG(WARNING) << LOG_BADGE("initSyncConfig") << LOG_DESC("idleWaitMs invalid");
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set sync.gossip_interval_ms to between 1000ms-3000ms!"));
     }
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval);
+
+    // set the number of gossip peers for syncMaster, default is 3
+    mutableSyncParam().gossipPeers = pt.get<int64_t>("sync.gossip_peers_number", 3);
+    if (mutableSyncParam().gossipPeers <= 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set sync.gossip_peers_number to positive !"));
+    }
+    // set the sync-tree-width, default is 3
+    // mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
+    mutableSyncParam().syncTreeWidth = 3;
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
+                           << LOG_KV("enableSendBlockStatusByTree",
+                                  mutableSyncParam().enableSendBlockStatusByTree)
+                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
+                           << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
+                           << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)

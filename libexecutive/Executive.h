@@ -63,10 +63,14 @@ class StateFace;
 class Executive
 {
 public:
+    using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
     Executive(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
     {}
+
+    Executive() {}
+
 
     // template <typename T>
     // Executive(T _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
@@ -100,9 +104,10 @@ public:
     /// point following this.
     void initialize(bytesConstRef _transaction)
     {
-        initialize(dev::eth::Transaction(_transaction, dev::eth::CheckTransaction::None));
+        initialize(std::make_shared<dev::eth::Transaction>(
+            _transaction, dev::eth::CheckTransaction::None));
     }
-    void initialize(dev::eth::Transaction const& _transaction);
+    void initialize(dev::eth::Transaction::Ptr _transaction);
     /// Finalise a transaction previously set up with initialize().
     /// @warning Only valid after initialize() and execute(), and possibly go().
     /// @returns true if the outermost execution halted normally, false if exceptionally halted.
@@ -110,13 +115,13 @@ public:
     /// Begins execution of a transaction. You must call finalize() following this.
     /// @returns true if the transaction is done, false if go() must be called.
 
-    void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction const& _t,
+    void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction::Ptr _t,
         dev::eth::BlockHeader const& _header, u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().
     /// @warning Only valid after initialize().
-    dev::eth::Transaction const& t() const { return m_t; }
+    dev::eth::Transaction::Ptr tx() const { return m_t; }
     /// @returns the log entries created by this operation.
     /// @warning Only valid after finalise().
     dev::eth::LogEntries const& logs() const { return m_logs; }
@@ -161,13 +166,37 @@ public:
     TransactionException getException() const noexcept { return m_excepted; }
 
     /// Collect execution results in the result storage provided.
-    void setResultRecipient(ExecutionResult& _res) { m_res = &_res; }
+    // void setResultRecipient(ExecutionResult& _res) { m_res = &_res; }
 
     /// Revert all changes made to the state by this execution.
     void revert();
 
     /// print exception to log
     void loggingException();
+
+    void reset()
+    {
+        m_ext = nullptr;
+        m_output = owning_bytes_ref();
+        m_depth = 0;
+        m_excepted = TransactionException::None;
+        m_exceptionReason.clear();
+        m_baseGasRequired = 0;
+        m_gas = 0;
+        m_refunded = 0;
+        m_gasCost = 0;
+        m_isCreation = false;
+        m_newAddress = Address();
+        m_savepoint = 0;
+        m_tableFactorySavepoint = 0;
+        m_logs.clear();
+        m_t.reset();
+        m_res.reset();
+    }
+
+    void setEnvInfo(dev::eth::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
+
+    void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
 private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
@@ -182,7 +211,7 @@ private:
                                    ///< reference. This field does *NOT* survive this object.
     owning_bytes_ref m_output;     ///< Execution output.
 
-    ExecutionResult* m_res = nullptr;  ///< Optional storage for execution results.
+    ExecutionResult m_res;  ///< Optional storage for execution results.
 
     unsigned m_depth = 0;  ///< The context's call-depth.
     TransactionException m_excepted =
@@ -194,9 +223,9 @@ private:
                           ///< final amount after go() execution.
     u256 m_refunded = 0;  ///< The amount of gas refunded.
 
-    dev::eth::Transaction m_t;    ///< The original transaction. Set by setup().
-    dev::eth::LogEntries m_logs;  ///< The log entries created by this transaction. Set by
-                                  ///< finalize().
+    dev::eth::Transaction::Ptr m_t;  ///< The original transaction. Set by setup().
+    dev::eth::LogEntries m_logs;     ///< The log entries created by this transaction. Set by
+                                     ///< finalize().
 
     u256 m_gasCost;
 

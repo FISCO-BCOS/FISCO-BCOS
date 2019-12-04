@@ -25,7 +25,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/FixedHash.h>
-#include <libethcore/Block.h>
+#include <libethcore/BlockFactory.h>
 
 #define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
 #define ENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ConsensusEngine")
@@ -51,12 +51,23 @@ enum NodeAccountType
     ObserverAccount = 0,
     SealerAccount
 };
-struct Sealing
+
+class Sealing
 {
-    dev::eth::Block block;
+public:
+    Sealing() {}
+    Sealing(dev::eth::BlockFactory::Ptr _blockFactory) { setBlockFactory(_blockFactory); }
+    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    {
+        m_blockFactory = _blockFactory;
+        block = m_blockFactory->createBlock();
+    }
+
+    std::shared_ptr<dev::eth::Block> block;
     /// hash set for filter fetched transactions
     h256Hash m_transactionSet;
     dev::blockverifier::ExecutiveContext::Ptr p_execContext;
+    dev::eth::BlockFactory::Ptr m_blockFactory;
 };
 
 }  // namespace consensus
