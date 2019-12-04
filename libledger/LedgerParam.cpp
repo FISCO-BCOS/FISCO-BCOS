@@ -227,7 +227,7 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     else
     {
         mutableConsensusParam().enablePrepareWithTxsHash =
-            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", false);
     }
     LedgerParam_LOG(DEBUG)
         << LOG_BADGE("initConsensusIniConfig")
