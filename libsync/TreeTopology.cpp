@@ -116,7 +116,7 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
         // the child node exists in the peers
         if (_peers->count(selectedNode))
         {
-            TREE_LOG(TRACE) << LOG_DESC("recursiveSelectChildNodes")
+            TREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
                             << LOG_KV("selectedNode", selectedNode.abridged())
                             << LOG_KV("selectedIndex", expectedIndex);
             _selectedNodeList->push_back(selectedNode);
@@ -160,7 +160,7 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            TREE_LOG(TRACE) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
+            TREE_LOG(DEBUG) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
                             << LOG_KV("selectedNode", selectedNode.abridged())
                             << LOG_KV("idx", m_consIndex);
             break;
