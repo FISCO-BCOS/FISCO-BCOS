@@ -65,6 +65,11 @@ void PBFTEngine::start()
 
 void PBFTEngine::stop()
 {
+    // remove the registered handler when stop the pbftEngine
+    if (m_service)
+    {
+        m_service->removeHandlerByProtocolID(m_protocolId);
+    }
     if (m_threadPool)
     {
         m_threadPool->stop();
@@ -144,10 +149,18 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
         std::make_shared<PrepareReq>(req, m_keyPair, m_view, nodeIdx());
 
     m_threadPool->enqueue([this, prepareReq]() {
-        std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-        // when rehandle the committedPrepareCache, broadcast prepare directly
-        prepareReq->encode(*prepare_data);
-        broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+        try
+        {
+            std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+            // when rehandle the committedPrepareCache, broadcast prepare directly
+            prepareReq->encode(*prepare_data);
+            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+        }
+        catch (std::exception const& e)
+        {
+            PBFTENGINE_LOG(ERROR) << LOG_DESC("broadcastPrepare exceptioned")
+                                  << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
     });
     handlePrepareMsg(*prepareReq);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
@@ -282,8 +295,16 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         std::shared_ptr<bytes> sendedData = std::make_shared<bytes>();
         prepareReq->encode(*sendedData);
         m_threadPool->enqueue([this, prepareReq, sendedData]() {
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*sendedData),
-                PartiallyPreparePacket);
+            try
+            {
+                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*sendedData),
+                    PartiallyPreparePacket);
+            }
+            catch (std::exception const& e)
+            {
+                PBFTENGINE_LOG(ERROR) << LOG_DESC("broadcastPrepare exceptioned")
+                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+            }
         });
         // re-encode the block with completed transactions
         prepareReq->pBlock->encode(*prepareReq->block);
@@ -292,9 +313,17 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     else
     {
         m_threadPool->enqueue([this, prepareReq, engineBlock]() {
-            std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
-            prepareReq->encode(*prepare_data);
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+            try
+            {
+                std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
+                prepareReq->encode(*prepare_data);
+                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+            }
+            catch (std::exception const& e)
+            {
+                PBFTENGINE_LOG(ERROR) << LOG_DESC("broadcastPrepare exceptioned")
+                                      << LOG_KV("errorInfo", boost::diagnostic_information(e));
+            }
         });
     }
     return prepareReq;
@@ -2061,13 +2090,14 @@ void PBFTEngine::onReceiveGetMissedTxsRequest(
 void PBFTEngine::handleP2PMessage(
     NetworkException _exception, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
 {
-    if (!m_enablePrepareWithTxsHash)
-    {
-        onRecvPBFTMessage(_exception, _session, _message);
-        return;
-    }
     try
     {
+        if (!m_enablePrepareWithTxsHash)
+        {
+            onRecvPBFTMessage(_exception, _session, _message);
+            return;
+        }
+        auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
         // update the network-in statistic information
         if (m_statisticHandler && (_message->packetType() != 0))
         {
@@ -2076,18 +2106,44 @@ void PBFTEngine::handleP2PMessage(
         switch (_message->packetType())
         {
         case PartiallyPreparePacket:
-            m_prepareWorker->enqueue(
-                [this, _session, _message]() { handlePartiallyPrepare(_session, _message); });
+            m_prepareWorker->enqueue([self, _session, _message]() {
+                auto pbftEngine = self.lock();
+                if (!pbftEngine)
+                {
+                    return;
+                }
+                try
+                {
+                    pbftEngine->handlePartiallyPrepare(_session, _message);
+                }
+                catch (std::exception const& e)
+                {
+                    PBFTENGINE_LOG(WARNING)
+                        << LOG_DESC("handlePartiallyPrepare exceptioned")
+                        << LOG_KV("peer", _session->nodeID().abridged())
+                        << LOG_KV("errorInfo", boost::diagnostic_information(e));
+                }
+            });
             break;
         // receive getMissedPacket request, response missed transactions
         case GetMissedTxsPacket:
-            m_messageHandler->enqueue(
-                [this, _session, _message]() { onReceiveGetMissedTxsRequest(_session, _message); });
+            m_messageHandler->enqueue([self, _session, _message]() {
+                auto pbftEngine = self.lock();
+                if (pbftEngine)
+                {
+                    pbftEngine->onReceiveGetMissedTxsRequest(_session, _message);
+                }
+            });
             break;
         // receive missed transactions, fill block
         case MissedTxsPacket:
-            m_messageHandler->enqueue(
-                [this, _session, _message]() { onReceiveMissedTxsResponse(_session, _message); });
+            m_messageHandler->enqueue([self, _session, _message]() {
+                auto pbftEngine = self.lock();
+                if (pbftEngine)
+                {
+                    pbftEngine->onReceiveMissedTxsResponse(_session, _message);
+                }
+            });
             break;
         default:
             onRecvPBFTMessage(_exception, _session, _message);

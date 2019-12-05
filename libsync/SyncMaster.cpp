@@ -111,6 +111,11 @@ void SyncMaster::start()
 
 void SyncMaster::stop()
 {
+    // stop SynMsgEngine
+    if (m_msgEngine)
+    {
+        m_msgEngine->stop();
+    }
     if (m_downloadBlockProcessor)
     {
         m_downloadBlockProcessor->stop();
@@ -146,21 +151,30 @@ void SyncMaster::doWork()
     record_time = utcTime();
 
     m_downloadBlockProcessor->enqueue([this]() {
-        // flush downloaded buffer into downloading queue
-        maintainDownloadingQueueBuffer();
-        // Not Idle do
-        if (isSyncing())
+        try
         {
-            // check and commit the downloaded block
-            if (m_syncStatus->state == SyncState::Downloading)
+            // flush downloaded buffer into downloading queue
+            maintainDownloadingQueueBuffer();
+            // Not Idle do
+            if (isSyncing())
             {
-                bool finished = maintainDownloadingQueue();
-                if (finished)
-                    noteDownloadingFinish();
+                // check and commit the downloaded block
+                if (m_syncStatus->state == SyncState::Downloading)
+                {
+                    bool finished = maintainDownloadingQueue();
+                    if (finished)
+                        noteDownloadingFinish();
+                }
             }
+            // send block-download-request to peers if this node is behind others
+            maintainPeersStatus();
         }
-        // send block-download-request to peers if this node is behind others
-        maintainPeersStatus();
+        catch (std::exception const& e)
+        {
+            SYNC_LOG(ERROR) << LOG_DESC(
+                                   "maintainDownloadingQueue or maintainPeersStatus exceptioned")
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
     });
     record_time = utcTime();
 
@@ -171,7 +185,17 @@ void SyncMaster::doWork()
     auto maintainBlockRequest_time_cost = 0;
 
     // send block to other nodes
-    m_sendBlockProcessor->enqueue([this]() { maintainBlockRequest(); });
+    m_sendBlockProcessor->enqueue([this]() {
+        try
+        {
+            maintainBlockRequest();
+        }
+        catch (std::exception const& e)
+        {
+            SYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exceptioned")
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
+    });
     maintainBlockRequest_time_cost = utcTime() - record_time;
 
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")

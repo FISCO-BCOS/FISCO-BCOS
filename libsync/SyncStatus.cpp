@@ -119,6 +119,7 @@ NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_
         selectedSize = selectPeers(_neighborSize, _peers);
     }
     NodeIDs chosen;
+    ReadGuard l(x_peerStatus);
     for (auto const& peer : (*_peers))
     {
         if (m_peersStatus.count(peer) && m_peersStatus[peer] && _allow(m_peersStatus[peer]))

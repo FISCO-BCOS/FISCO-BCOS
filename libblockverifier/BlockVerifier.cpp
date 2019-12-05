@@ -294,7 +294,11 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         BOOST_THROW_EXCEPTION(
             BlockExecutionFailed() << errinfo_comment("Error during parallel block execution"));
     }
-
+    // if the program is going to exit, return nullptr directly
+    if (g_BCOSConfig.shouldExit)
+    {
+        return nullptr;
+    }
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
