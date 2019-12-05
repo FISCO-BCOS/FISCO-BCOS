@@ -62,12 +62,11 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
-        m_txsWorker =
-            std::make_shared<dev::ThreadPool>("SyncMsgEngine-" + std::to_string(_protocolId), 1);
-        m_txsSender = std::make_shared<dev::ThreadPool>(
-            "SyncMsgEngine-sender-" + std::to_string(_protocolId), 1);
-        m_txsReceiver = std::make_shared<dev::ThreadPool>(
-            "SyncMsgEngine-receiver-" + std::to_string(_protocolId), 1);
+        m_txsWorker = std::make_shared<dev::ThreadPool>("SyncMsgE-" + std::to_string(m_groupId), 1);
+        m_txsSender =
+            std::make_shared<dev::ThreadPool>("TxsSender-" + std::to_string(m_groupId), 1);
+        m_txsReceiver =
+            std::make_shared<dev::ThreadPool>("txsRecv-" + std::to_string(m_groupId), 1);
     }
 
     virtual ~SyncMsgEngine()

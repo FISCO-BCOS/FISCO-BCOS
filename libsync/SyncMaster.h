@@ -89,8 +89,10 @@ public:
         // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
         m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_service->statisticHandler());
 
-        m_downloadBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-download", 1);
-        m_sendBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-sender", 1);
+        m_downloadBlockProcessor =
+            std::make_shared<dev::ThreadPool>("Download-" + std::to_string(m_groupId), 1);
+        m_sendBlockProcessor =
+            std::make_shared<dev::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
         if (m_enableSendBlockStatusByTree)
         {
             m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId, _syncTreeWidth);
