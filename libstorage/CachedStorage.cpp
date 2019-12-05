@@ -99,10 +99,11 @@ void Cache::setTableInfo(TableInfo::Ptr tableInfo)
     m_tableInfo = tableInfo;
 }
 
-CachedStorage::CachedStorage()
+CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID)
 {
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
-    m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
+    m_taskThreadPool =
+        std::make_shared<dev::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
 
     m_mruQueue =
         std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();

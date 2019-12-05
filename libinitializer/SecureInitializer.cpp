@@ -71,8 +71,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
     {
         try
         {
-            INITIALIZER_LOG(DEBUG)
-                << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
+                                  << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
             BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
 
@@ -138,8 +138,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
         if (!cert.empty() && !contents(cert).empty())
         {
-            INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer")
-                                   << LOG_DESC("use user certificate") << LOG_KV("file", cert);
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
+                                  << LOG_DESC("use user certificate") << LOG_KV("file", cert);
             sslContext->use_certificate_chain_file(cert);
         }
         else
@@ -154,8 +154,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
         auto caCertContent = contents(caCert);
         if (!caCert.empty() && !caCertContent.empty())
         {
-            INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer")
-                                   << LOG_DESC("use ca certificate") << LOG_KV("file", caCert);
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
+                                  << LOG_DESC("use ca certificate") << LOG_KV("file", caCert);
             sslContext->add_certificate_authority(
                 boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
         }
@@ -170,8 +170,8 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 
         if (!caPath.empty())
         {
-            INITIALIZER_LOG(DEBUG)
-                << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca") << LOG_KV("file", caPath);
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca")
+                                  << LOG_KV("file", caPath);
             sslContext->add_verify_path(caPath);
         }
         sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |

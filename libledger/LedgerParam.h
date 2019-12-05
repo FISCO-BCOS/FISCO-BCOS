@@ -30,7 +30,8 @@
 #include <memory>
 #include <vector>
 
-#define LedgerParam_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LedgerParam")
+#define LedgerParam_LOG(LEVEL) \
+    LOG(LEVEL) << "[g:" << std::to_string(groupId()) << "]" << LOG_BADGE("LedgerParam")
 
 namespace dev
 {

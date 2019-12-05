@@ -80,10 +80,9 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         m_txNonceCheck = std::make_shared<TransactionNonceCheck>(m_blockChain);
         m_txpoolNonceChecker = std::make_shared<CommonTransactionNonceCheck>();
-        m_submitPool =
-            std::make_shared<dev::ThreadPool>("submit-" + std::to_string(_protocolId), 1);
+        m_submitPool = std::make_shared<dev::ThreadPool>("submit-" + std::to_string(m_groupId), 1);
         m_workerPool =
-            std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(_protocolId), workThreads);
+            std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(m_groupId), workThreads);
         m_invalidTxs = std::make_shared<std::map<dev::h256, dev::u256>>();
         m_txsHashFilter = std::make_shared<std::set<h256>>();
     }
