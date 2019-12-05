@@ -94,12 +94,3 @@ std::string initCommandLine(int argc, const char* argv[])
 
     return configPath;
 }
-
-std::string getCurrentDateTime()
-{
-    using std::chrono::system_clock;
-    char buffer[40];
-    auto currentTime = system_clock::to_time_t(system_clock::now());
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
-    return std::string(buffer);
-}

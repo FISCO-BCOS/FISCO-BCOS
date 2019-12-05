@@ -297,12 +297,6 @@ public:
         ReadGuard l(x_rawPrepareCache);
         return m_rawPrepareCache.height;
     }
-    void setGroupId(dev::GROUP_ID const& _groupId)
-    {
-        m_groupId = _groupId;
-        m_groupIdStr = "g:" + std::to_string(_groupId);
-    }
-
 
 protected:
     /// remove invalid requests cached in cache according to current block
@@ -373,9 +367,6 @@ protected:
     std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;
 
     mutable SharedMutex x_rawPrepareCache;
-
-    dev::GROUP_ID m_groupId;
-    std::string m_groupIdStr;
 };
 }  // namespace consensus
 }  // namespace dev

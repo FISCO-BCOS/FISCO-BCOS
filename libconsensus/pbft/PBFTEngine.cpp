@@ -55,8 +55,6 @@ void PBFTEngine::start()
     {
         m_reqCache = std::make_shared<PBFTReqCache>();
     }
-    m_reqCache->setGroupId(m_groupId);
-
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
