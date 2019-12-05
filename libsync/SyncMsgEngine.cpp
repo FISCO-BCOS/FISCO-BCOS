@@ -87,18 +87,26 @@ bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
 bool SyncMsgEngine::interpret(
     SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer)
 {
-    SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                           << LOG_DESC("interpret packet type")
-                           << LOG_KV("type", int(_packet->packetType));
     try
     {
+        SYNC_ENGINE_LOG(TRACE) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
+                               << LOG_DESC("interpret packet type")
+                               << LOG_KV("type", int(_packet->packetType));
+
+        auto self = std::weak_ptr<SyncMsgEngine>(shared_from_this());
         switch (_packet->packetType)
         {
         case StatusPacket:
             onPeerStatus(*_packet);
             break;
         case TransactionsPacket:
-            m_txsReceiver->enqueue([this, _packet, _msg]() { onPeerTransactions(_packet, _msg); });
+            m_txsReceiver->enqueue([self, _packet, _msg]() {
+                auto msgEngine = self.lock();
+                if (msgEngine)
+                {
+                    msgEngine->onPeerTransactions(_packet, _msg);
+                }
+            });
             break;
         case BlocksPacket:
             onPeerBlocks(*_packet);
@@ -108,13 +116,23 @@ bool SyncMsgEngine::interpret(
             break;
         // receive transaction hash, _msg is only used to ensure the life-time for rlps of _packet
         case TxsStatusPacket:
-            m_txsWorker->enqueue(
-                [this, _packet, _peer, _msg]() { onPeerTxsStatus(_packet, _peer, _msg); });
+            m_txsWorker->enqueue([self, _packet, _peer, _msg]() {
+                auto msgEngine = self.lock();
+                if (msgEngine)
+                {
+                    msgEngine->onPeerTxsStatus(_packet, _peer, _msg);
+                }
+            });
             break;
         // receive txs-requests,  _msg is only used to ensure the life-time for rlps of _packet
         case TxsRequestPacekt:
-            m_txsSender->enqueue(
-                [this, _packet, _peer, _msg]() { onReceiveTxsRequest(_packet, _peer, _msg); });
+            m_txsSender->enqueue([self, _packet, _peer, _msg]() {
+                auto msgEngine = self.lock();
+                if (msgEngine)
+                {
+                    msgEngine->onReceiveTxsRequest(_packet, _peer, _msg);
+                }
+            });
             break;
         default:
             return false;
@@ -195,17 +213,25 @@ bool SyncMsgEngine::blockNumberFarBehind() const
 
 void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg)
 {
-    // Note: checkGroupPacket degrade the speed of receiving transactions
-    if (!checkGroupPacket(*_packet))
+    try
     {
-        SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
-                               << LOG_KV("fromNodeId", _packet->nodeId.abridged());
-        return;
+        // Note: checkGroupPacket degrade the speed of receiving transactions
+        if (!checkGroupPacket(*_packet))
+        {
+            SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Drop unknown peer transactions")
+                                   << LOG_KV("fromNodeId", _packet->nodeId.abridged());
+            return;
+        }
+        m_txQueue->push(_packet, _msg, _packet->nodeId);
+        if (m_onNotifySyncTrans)
+        {
+            m_onNotifySyncTrans();
+        }
     }
-    m_txQueue->push(_packet, _msg, _packet->nodeId);
-    if (m_onNotifySyncTrans)
+    catch (std::exception const& e)
     {
-        m_onNotifySyncTrans();
+        SYNC_ENGINE_LOG(ERROR) << LOG_DESC("onPeerTransactions exceptioned")
+                               << LOG_KV("errorInfo", boost::diagnostic_information(e));
     }
 }
 
@@ -405,4 +431,25 @@ void SyncMsgEngine::onReceiveTxsRequest(
                                  << LOG_KV("peer", _peer.abridged())
                                  << LOG_KV("reason", boost::diagnostic_information(_e));
     }
+}
+
+void SyncMsgEngine::stop()
+{
+    if (m_service)
+    {
+        m_service->removeHandlerByProtocolID(m_protocolId);
+    }
+    if (m_txsWorker)
+    {
+        m_txsWorker->stop();
+    }
+    if (m_txsSender)
+    {
+        m_txsSender->stop();
+    }
+    if (m_txsReceiver)
+    {
+        m_txsReceiver->stop();
+    }
+    SYNC_ENGINE_LOG(INFO) << LOG_DESC("SyncMsgEngine stopped");
 }

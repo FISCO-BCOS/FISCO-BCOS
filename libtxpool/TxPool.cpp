@@ -40,29 +40,38 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_submitPool->enqueue([this, _tx]() {
-        // RequestNotBelongToTheGroup: 10004
-        ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
-        if (isSealerOrObserver())
+        try
         {
-            // check sync status failed
-            if (m_syncStatusChecker && !m_syncStatusChecker())
+            // RequestNotBelongToTheGroup: 10004
+            ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
+            if (isSealerOrObserver())
             {
-                TXPOOL_LOG(WARNING)
-                    << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
-                    << LOG_KV("groupId", m_groupId);
-                verifyRet = ImportResult::TransactionRefused;
-            }
-            // check sync status succ
-            else
-            {
-                verifyRet = import(_tx);
-                if (ImportResult::Success == verifyRet)
+                // check sync status failed
+                if (m_syncStatusChecker && !m_syncStatusChecker())
                 {
-                    return;
+                    TXPOOL_LOG(WARNING)
+                        << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
+                        << LOG_KV("groupId", m_groupId);
+                    verifyRet = ImportResult::TransactionRefused;
+                }
+                // check sync status succ
+                else
+                {
+                    verifyRet = import(_tx);
+                    if (ImportResult::Success == verifyRet)
+                    {
+                        return;
+                    }
                 }
             }
+            notifyReceipt(_tx, verifyRet);
         }
-        notifyReceipt(_tx, verifyRet);
+        catch (std::exception const& e)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("submit tx failed")
+                                << LOG_KV("tx", _tx->sha3().abridged())
+                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
     });
     return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }

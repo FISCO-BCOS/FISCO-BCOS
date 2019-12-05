@@ -78,6 +78,10 @@ void SyncTreeTopology::updateStartAndEndIndex()
     {
         m_startIndex = (m_nodeIndex / slotSize) * slotSize;
     }
+    if (m_startIndex > (m_nodeNum - 1))
+    {
+        m_startIndex = m_nodeNum - 1;
+    }
     int64_t endIndex = m_startIndex + slotSize - 1;
     if (endIndex > (m_nodeNum - 1))
     {

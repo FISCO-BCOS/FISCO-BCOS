@@ -700,6 +700,15 @@ void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWit
     }
 }
 
+void Service::removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID)
+{
+    RecursiveGuard l(x_protocolID2Handler);
+    if (m_protocolID2Handler && m_protocolID2Handler->count(_protocolID))
+    {
+        m_protocolID2Handler->erase(_protocolID);
+    }
+}
+
 void Service::registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler)
 {
     RecursiveGuard l(x_topic2Handler);

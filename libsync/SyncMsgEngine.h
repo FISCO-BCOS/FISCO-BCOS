@@ -41,7 +41,7 @@ namespace dev
 {
 namespace sync
 {
-class SyncMsgEngine
+class SyncMsgEngine : public std::enable_shared_from_this<SyncMsgEngine>
 {
 public:
     SyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
@@ -69,21 +69,8 @@ public:
             std::make_shared<dev::ThreadPool>("txsRecv-" + std::to_string(m_groupId), 1);
     }
 
-    virtual ~SyncMsgEngine()
-    {
-        if (m_txsWorker)
-        {
-            m_txsWorker->stop();
-        }
-        if (m_txsSender)
-        {
-            m_txsSender->stop();
-        }
-        if (m_txsReceiver)
-        {
-            m_txsReceiver->stop();
-        }
-    }
+    virtual void stop();
+    virtual ~SyncMsgEngine() { stop(); }
 
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);

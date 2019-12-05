@@ -86,6 +86,9 @@ public:
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+
+    void removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID) override;
+
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }

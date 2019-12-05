@@ -76,9 +76,17 @@ public:
             case TxsRequestPacekt:
                 onReceiveTxsRequest(_packet, _peer, _msg);
                 break;
-            default:
-                SyncMsgEngine::interpret(_packet, _msg, _peer);
+            case StatusPacket:
+                onPeerStatus(*_packet);
                 break;
+            case BlocksPacket:
+                onPeerBlocks(*_packet);
+                break;
+            case ReqBlocskPacket:
+                onPeerRequestBlocks(*_packet);
+                break;
+            default:
+                return false;
             }
         }
         catch (std::exception& e)
