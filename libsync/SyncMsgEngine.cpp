@@ -34,30 +34,40 @@ static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
 void SyncMsgEngine::messageHandler(
     NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
-    if (!checkSession(_session) || !checkMessage(_msg))
+    try
     {
-        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                                 << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
-        return;
-    }
+        if (!checkSession(_session) || !checkMessage(_msg))
+        {
+            SYNC_ENGINE_LOG(WARNING)
+                << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
+                << LOG_DESC("Reject packet: [reason]: session/msg/group illegal");
+            return;
+        }
 
-    SyncMsgPacket::Ptr packet = std::make_shared<SyncMsgPacket>();
-    if (!packet->decode(_session, _msg))
+        SyncMsgPacket::Ptr packet = std::make_shared<SyncMsgPacket>();
+        if (!packet->decode(_session, _msg))
+        {
+            SYNC_ENGINE_LOG(WARNING)
+                << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Reject packet")
+                << LOG_KV("reason", "decode failed")
+                << LOG_KV("nodeId", _session->nodeID().abridged())
+                << LOG_KV("size", _msg->buffer()->size())
+                << LOG_KV("message", toHex(*_msg->buffer()));
+            return;
+        }
+
+        bool ok = interpret(packet, _msg, _session->nodeID());
+        if (!ok)
+            SYNC_ENGINE_LOG(WARNING)
+                << LOG_BADGE("Rcv") << LOG_BADGE("Packet") << LOG_DESC("Reject packet")
+                << LOG_KV("reason", "illegal packet type")
+                << LOG_KV("packetType", int(packet->packetType));
+    }
+    catch (std::exception const& e)
     {
-        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                                 << LOG_DESC("Reject packet") << LOG_KV("reason", "decode failed")
-                                 << LOG_KV("nodeId", _session->nodeID().abridged())
-                                 << LOG_KV("size", _msg->buffer()->size())
-                                 << LOG_KV("message", toHex(*_msg->buffer()));
-        return;
+        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("messageHandler exceptioned")
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(e));
     }
-
-    bool ok = interpret(packet, _msg, _session->nodeID());
-    if (!ok)
-        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Rcv") << LOG_BADGE("Packet")
-                                 << LOG_DESC("Reject packet")
-                                 << LOG_KV("reason", "illegal packet type")
-                                 << LOG_KV("packetType", int(packet->packetType));
 }
 
 bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
