@@ -133,7 +133,7 @@ void SyncMaster::stop()
     stopWorking();
     // will not restart worker, so terminate it
     terminate();
-    SYNC_LOG(INFO) << LOG_DESC("SyncMaster stopped");
+    SYNC_LOG(INFO) << LOG_BADGE("g:" + std::to_string(m_groupId)) << LOG_DESC("SyncMaster stopped");
 }
 
 void SyncMaster::doWork()
