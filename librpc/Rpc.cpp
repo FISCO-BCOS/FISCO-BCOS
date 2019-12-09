@@ -1313,3 +1313,60 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
+
+
+Json::Value Rpc::generateGroup(int _groupID, const std::set<std::string>& _sealerList)
+{
+    try
+    {
+        // Sort nodeid
+
+        std::string ret = std::to_string(_groupID);
+        for (std::string sealer : _sealerList)
+        {
+            ret += sealer;
+        }
+
+
+        Json::Value response;
+        response["code"] = "0x0";
+        response["message"] = ret;
+
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+
+Json::Value Rpc::startGroup(int _groupID)
+{
+    try
+    {
+        // Sort nodeid
+
+        std::string ret = std::to_string(_groupID);
+
+        Json::Value response;
+        response["code"] = "0x0";
+        response["message"] = ret;
+
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}

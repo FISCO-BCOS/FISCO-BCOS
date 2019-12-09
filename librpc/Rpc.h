@@ -109,6 +109,9 @@ public:
     Json::Value getTransactionReceiptByHashWithProof(
         int _groupID, const std::string& _transactionHash) override;
 
+    Json::Value generateGroup(int _groupID, const std::set<std::string>& _sealerList) override;
+    Json::Value startGroup(int _groupID) override;
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
