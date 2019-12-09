@@ -1930,10 +1930,6 @@ void PBFTEngine::resetConfig()
     {
         return;
     }
-    if (m_blockSync->syncTreeRouterEnabled())
-    {
-        m_blockSync->updateConsensusNodeInfo(sealerList());
-    }
     if (!m_enableTTLOptimize)
     {
         return;

@@ -123,7 +123,10 @@ public:
 
     void updateNodeListInfo() { m_syncTreeRouter->updateNodeListInfo(m_nodeList); }
 
-    void updateConsensusNodeInfo() { m_syncTreeRouter->updateConsensusNodeInfo(m_consensusList); }
+    void updateConsensusNodeInfo()
+    {
+        m_syncTreeRouter->updateAllNodeInfo(m_consensusList, m_nodeList);
+    }
     std::shared_ptr<FakeSyncTreeTopology> syncTreeRouter() { return m_syncTreeRouter; }
     dev::h512s const& consensusList() { return m_consensusList; }
     dev::h512s const& nodeList() { return m_nodeList; }
@@ -161,7 +164,8 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
                 fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes());
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     // check node list
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeList() == dev::h512s());
+    BOOST_CHECK(
+        fakeSyncTreeTopology->syncTreeRouter()->nodeList() == fakeSyncTreeTopology->nodeList());
     // check startIndex and endIndex
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
