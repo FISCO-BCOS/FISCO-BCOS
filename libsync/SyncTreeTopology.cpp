@@ -45,6 +45,26 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
     updateStartAndEndIndex();
 }
 
+void SyncTreeTopology::updateAllNodeInfo(
+    dev::h512s const& _consensusNodes, dev::h512s const& _nodeList)
+{
+    Guard l(m_mutex);
+    if (_nodeList == *m_nodeList && _consensusNodes == *m_currentConsensusNodes)
+    {
+        return;
+    }
+    int64_t nodeNum = _nodeList.size();
+    if (m_nodeNum != nodeNum)
+    {
+        m_nodeNum = nodeNum;
+    }
+    *m_nodeList = _nodeList;
+    *m_currentConsensusNodes = _consensusNodes;
+    m_consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, m_nodeId);
+    m_nodeIndex = getNodeIndexByNodeId(m_nodeList, m_nodeId);
+    updateStartAndEndIndex();
+}
+
 void SyncTreeTopology::updateStartAndEndIndex()
 {
     // the currentConsensus node list hasn't been set
@@ -177,6 +197,14 @@ std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
     {
         return selectedNodeList;
     }
+    // find the parent nodes
+    selectParentNodes(selectedNodeList, _peers, m_nodeIndex);
+    // no need to select the child node
+    if (m_startIndex == m_endIndex)
+    {
+        return selectedNodeList;
+    }
+
     // the node is the consensusNode, chose the childNode
     if (m_consIndex >= 0)
     {
@@ -187,7 +215,6 @@ std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
     {
         recursiveSelectChildNodes(selectedNodeList, m_nodeIndex + 1, _peers);
     }
-    // find the parent nodes
-    selectParentNodes(selectedNodeList, _peers, m_nodeIndex);
+
     return selectedNodeList;
 }

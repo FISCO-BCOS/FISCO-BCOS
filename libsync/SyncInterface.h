@@ -66,7 +66,7 @@ public:
             std::shared_ptr<std::set<dev::network::NodeID>>)>)
     {}
     virtual void updateNodeListInfo(dev::h512s const&) {}
-    virtual void updateConsensusNodeInfo(dev::h512s const&) {}
+    virtual void updateConsensusNodeInfo(dev::h512s const&, dev::h512s const&) {}
     virtual bool syncTreeRouterEnabled() { return false; }
     virtual void noteForwardRemainTxs(dev::h512 const&) {}
 };

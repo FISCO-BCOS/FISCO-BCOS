@@ -206,14 +206,15 @@ public:
         m_syncTreeRouter->updateNodeListInfo(_nodeList);
     }
 
-    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
+    void updateConsensusNodeInfo(
+        dev::h512s const& _consensusNodes, dev::h512s const& _nodeList) override
     {
         m_txQueue->updateConsensusNodeInfo(_consensusNodes);
         if (!m_syncTreeRouter)
         {
             return;
         }
-        m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
+        m_syncTreeRouter->updateAllNodeInfo(_consensusNodes, _nodeList);
     }
 
     bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
@@ -231,8 +232,7 @@ private:
         auto observerList = m_blockChain->observerList();
         auto nodeList = sealerList + observerList;
         std::sort(nodeList.begin(), nodeList.end());
-        updateNodeListInfo(nodeList);
-        updateConsensusNodeInfo(sealerList);
+        updateConsensusNodeInfo(sealerList, nodeList);
     }
 
 private:

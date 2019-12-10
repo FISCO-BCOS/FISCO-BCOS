@@ -48,36 +48,18 @@ void SyncTransaction::stop()
 
 void SyncTransaction::doWork()
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    auto printSyncInfo_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     maintainDownloadingTransactions();
-
-    auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    auto maintainTransactions_time_cost = 0;
 
     // only maintain transactions for the nodes inner the group
     if (m_needMaintainTransactions && m_newTransactions && m_txQueue->bufferSize() == 0)
     {
         maintainTransactions();
     }
-    maintainTransactions_time_cost = utcTime() - record_time;
 
     if (m_needForwardRemainTxs)
     {
         forwardRemainingTxs();
     }
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
-                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainDownloadingTransactionsTimeCost",
-                           maintainDownloadingTransactions_time_cost)
-                    << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
-                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
 void SyncTransaction::workLoop()
@@ -109,13 +91,6 @@ void SyncTransaction::maintainTransactions()
 void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
     bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
 {
-    auto pendingSize = m_txPool->pendingSize();
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
-                    << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
-                    << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts->size())
-                    << LOG_KV("totalTxs", pendingSize);
-
     std::shared_ptr<NodeIDs> selectedPeers;
     std::shared_ptr<std::set<dev::h512>> peers = m_syncStatus->peersSet();
     // fastforward remaining transactions
@@ -155,10 +130,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts->size() - 1));
 
     auto randomSelectedPeers = _selectedPeers;
-    if (_fromRpc && m_treeRouter)
-    {
-        randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet());
-    }
+    bool randomSelectedPeersInited = false;
 
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
@@ -181,7 +153,11 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                 selectSize = (selectSize * percent + 99) / 100;
             }
         }
-
+        if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
+        {
+            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet());
+            randomSelectedPeersInited = true;
+        }
         peers = m_syncStatus->filterPeers(
             selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
                 bool unsent =

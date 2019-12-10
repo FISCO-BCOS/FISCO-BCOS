@@ -118,13 +118,25 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
         {
             TREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
                             << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("selectedIndex", expectedIndex);
+                            << LOG_KV("parentIndex", _parentIndex)
+                            << LOG_KV("selectedIndex", expectedIndex)
+                            << LOG_KV("startIndex", m_startIndex) << LOG_KV("endIndex", m_endIndex)
+                            << LOG_KV("consIndex", m_consIndex);
             _selectedNodeList->push_back(selectedNode);
         }
         // the child node doesn't exist in the peers, select the grand child recursively
         else
         {
-            recursiveSelectChildNodes(_selectedNodeList, expectedIndex + m_childOffset, _peers);
+            expectedIndex += m_childOffset;
+            if (expectedIndex < m_endIndex)
+            {
+                recursiveSelectChildNodes(_selectedNodeList, expectedIndex, _peers);
+            }
+        }
+        // the last node
+        if (expectedIndex == m_endIndex)
+        {
+            break;
         }
     }
 }
@@ -162,10 +174,11 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
             _selectedNodeList->push_back(selectedNode);
             TREE_LOG(DEBUG) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
                             << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("idx", m_consIndex);
+                            << LOG_KV("idx", m_consIndex) << LOG_KV("endIndex", m_endIndex)
+                            << LOG_KV("consIndex", m_consIndex);
             break;
         }
-        if (parentIndex == m_startIndex)
+        if (parentIndex <= m_startIndex)
         {
             break;
         }
@@ -177,6 +190,11 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(std::shared_ptr<std::set<d
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    // only one node
+    if (m_startIndex == m_endIndex)
+    {
+        return selectedNodeList;
+    }
     // the node doesn't locate in the consensus node list
     if (m_consIndex < 0)
     {
