@@ -138,18 +138,11 @@ void SyncMaster::stop()
 
 void SyncMaster::doWork()
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
     // Debug print
     if (isSyncing())
         printSyncInfo();
-    auto printSyncInfo_time_cost = utcTime() - record_time;
-    record_time = utcTime();
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    auto maintainPeersConnection_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     m_downloadBlockProcessor->enqueue([this]() {
         try
         {
@@ -176,14 +169,8 @@ void SyncMaster::doWork()
                             << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
-    record_time = utcTime();
-
     // send block-status to other nodes when commit a new block
     maintainBlocks();
-    auto maintainBlocks_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    auto maintainBlockRequest_time_cost = 0;
-
     // send block to other nodes
     m_sendBlockProcessor->enqueue([this]() {
         try
@@ -196,14 +183,6 @@ void SyncMaster::doWork()
                             << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
-    maintainBlockRequest_time_cost = utcTime() - record_time;
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
-                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainPeersConnection", maintainPeersConnection_time_cost)
-                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
-                    << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
-                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
 void SyncMaster::workLoop()

@@ -45,6 +45,8 @@ public:
     virtual ~SyncTreeTopology() {}
     // update corresponding info when the nodes changed
     virtual void updateNodeListInfo(dev::h512s const& _nodeList);
+    // consensus info must be updated with nodeList
+    virtual void updateAllNodeInfo(dev::h512s const& _consensusNodes, dev::h512s const& _nodeList);
     // select the nodes by tree topology
     std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers) override;
 
