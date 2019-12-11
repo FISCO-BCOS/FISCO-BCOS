@@ -1324,21 +1324,6 @@ Json::Value Rpc::generateGroup(
         Json::Value response;
         try
         {
-            if (!dev::initializer::GroupGenerator::checkGroupID(_groupID))
-            {
-                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
-            }
-
-            if (!dev::initializer::GroupGenerator::checkTimestamp(_timestamp))
-            {
-                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
-            }
-
-            if (!dev::initializer::GroupGenerator::checkSealerList(_sealerList))
-            {
-                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
-            }
-
             if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
             {
                 BOOST_THROW_EXCEPTION(dev::initializer::GroupExists());

@@ -1,22 +1,23 @@
 /*
-    This file is part of FISCO-BCOS.
-
-    FISCO-BCOS is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    FISCO-BCOS is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file GroupGenerator.cpp
- *  @author jimmyshi
- *  @date 20191209
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2019 fisco-dev contributors.
+ */
+/**
+ * @brief : Generate group files
+ * @author: jimmyshi
+ * @date: 2019-12-11
  */
 
 #include "GroupGenerator.h"
@@ -74,8 +75,6 @@ public:
 "";
 
         // clang-format on   
-        cout << "Genesis content::" << endl << content.str();
-
         return content.str();     
     }
 };
@@ -85,7 +84,7 @@ class GroupConfigTempate {
 public:
     string newContent()
     {
-       
+        // clang-format off
         std::stringstream content;
         content << "[consensus]\n"
 "    ; the ttl for broadcasting pbft message\n"
@@ -132,10 +131,7 @@ public:
 "";
 
         // clang-format on        
-        cout << "Group config content:" << endl << content.str();
-
         return content.str();
-
     }
 };
 
@@ -213,11 +209,26 @@ void GroupConfigGenerator::check(std::string _filePath, dev::GROUP_ID _groupId)
 
 
 void GroupGenerator::generate(
-    dev::GROUP_ID _groupId, const std::string& _timestamp, const std::set<std::string>& _sealerList)
+    int _groupId, const std::string& _timestamp, const std::set<std::string>& _sealerList)
 {
+    if (!checkGroupID(_groupId))
+    {
+        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+    }
+
+    if (!checkTimestamp(_timestamp))
+    {
+        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+    }
+
+    if (!checkSealerList(_sealerList))
+    {
+        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+    }
+
     std::string confDir = g_BCOSConfig.confDir();
-    GenesisGenerator::generate(confDir, _groupId, _timestamp, _sealerList);
-    GroupConfigGenerator::generate(confDir, _groupId);
+    GenesisGenerator::generate(confDir, GROUP_ID(_groupId), _timestamp, _sealerList);
+    GroupConfigGenerator::generate(confDir, GROUP_ID(_groupId));
 }
 
 bool GroupGenerator::checkGroupID(int _groupId)
@@ -247,6 +258,10 @@ bool GroupGenerator::checkSealerList(const std::set<std::string>& _sealerList)
             return false;
         }
         if (sealer.length() != 128)
+        {
+            return false;
+        }
+        if (sealer.compare(0, 2, "0x") == 0) 
         {
             return false;
         }
