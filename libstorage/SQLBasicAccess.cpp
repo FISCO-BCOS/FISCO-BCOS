@@ -93,8 +93,8 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
 {
     boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
     boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sql = "select * from ";
-    sql.append(_table);
+    std::string sql = "select * from `";
+    sql.append(_table).append("`");
     if (condition)
     {
         uint32_t index = 0;
@@ -460,8 +460,8 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
 
     boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
     boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sqlHeader = "replace into ";
-    sqlHeader.append(_table).append("(");
+    std::string sqlHeader = "replace into `";
+    sqlHeader.append(_table).append("`(");
     sqlHeader.append(_fieldStr);
     sqlHeader.append(") values");
 
@@ -497,7 +497,7 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
                 SQLPlaceHoldItem item;
                 item.sql = sql;
                 item.placeHolerCnt = placeHolderCnt;
-                sqlList.push_back(item);
+                sqlList.emplace_back(item);
                 sql = sqlHeader;
                 placeHolderCnt = 0;
             }
@@ -509,7 +509,7 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
         SQLPlaceHoldItem item;
         item.sql = sql;
         item.placeHolerCnt = placeHolderCnt;
-        sqlList.push_back(item);
+        sqlList.emplace_back(item);
     }
     return sqlList;
 }
