@@ -31,6 +31,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libinitializer/GroupGenerator.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -59,11 +60,11 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
-Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
+Rpc::Rpc(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
-  : m_ledgerManager(_ledgerManager), m_service(_service)
+  : m_service(_service)
 {
-    registerSyncChecker();
+    setLedgerInitializer(_ledgerInitializer);
 }
 
 void Rpc::registerSyncChecker()
@@ -1315,23 +1316,66 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 }
 
 
-Json::Value Rpc::generateGroup(int _groupID, const std::set<std::string>& _sealerList)
+Json::Value Rpc::generateGroup(
+    int _groupID, const std::string& _timestamp, const std::set<std::string>& _sealerList)
 {
     try
     {
-        // Sort nodeid
-
-        std::string ret = std::to_string(_groupID);
-        for (std::string sealer : _sealerList)
-        {
-            ret += sealer;
-        }
-
-
         Json::Value response;
-        response["code"] = "0x0";
-        response["message"] = ret;
+        try
+        {
+            if (!dev::initializer::GroupGenerator::checkGroupID(_groupID))
+            {
+                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
+            }
 
+            if (!dev::initializer::GroupGenerator::checkTimestamp(_timestamp))
+            {
+                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
+            }
+
+            if (!dev::initializer::GroupGenerator::checkSealerList(_sealerList))
+            {
+                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
+            }
+
+            if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
+            {
+                BOOST_THROW_EXCEPTION(dev::initializer::GroupExists());
+            }
+
+            dev::initializer::GroupGenerator::generate(GROUP_ID(_groupID), _timestamp, _sealerList);
+
+            response["code"] = "0x0";
+            response["message"] = "success";
+        }
+        catch (dev::initializer::GroupExists const& _e)
+        {
+            response["code"] = "0x1";
+            response["message"] = "Group " + std::to_string(_groupID) + " is running";
+        }
+        catch (dev::initializer::GenesisExists const& _e)
+        {
+            response["code"] = "0x2";
+            response["message"] = "Group " + std::to_string(_groupID) + " genesis exists";
+        }
+        catch (dev::initializer::GroupConfigExists const& _e)
+        {
+            response["code"] = "0x3";
+            response["message"] = "Group " + std::to_string(_groupID) + " config exists";
+        }
+        catch (dev::initializer::GroupGeneratorException const& _e)
+        {
+            response["code"] = "0x4";
+            response["message"] = "Group generator error: GroupID: " + std::to_string(_groupID) +
+                                  " timestamp: " + _timestamp +
+                                  " sealerlist.size: " + std::to_string(_sealerList.size());
+        }
+        catch (std::exception const& _e)
+        {
+            response["code"] = "0x5";
+            response["message"] = "Internal error";
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -1350,13 +1394,56 @@ Json::Value Rpc::startGroup(int _groupID)
 {
     try
     {
-        // Sort nodeid
-
-        std::string ret = std::to_string(_groupID);
-
         Json::Value response;
-        response["code"] = "0x0";
-        response["message"] = ret;
+        try
+        {
+            if (!dev::initializer::GroupGenerator::checkGroupID(_groupID))
+            {
+                BOOST_THROW_EXCEPTION(dev::initializer::GroupGeneratorException());
+            }
+
+            bool success = m_ledgerInitializer->initLedgerByGroupID(GROUP_ID(_groupID));
+            if (!success)
+            {
+                throw new dev::Exception("Init ledger failed");
+            }
+
+            success = m_ledgerManager->startByGroupID(GROUP_ID(_groupID));
+            if (!success)
+            {
+                m_ledgerManager->removeLedger(GROUP_ID(_groupID));
+                throw new dev::Exception("start ledger failed");
+            }
+
+            response["code"] = "0x0";
+            response["message"] = "success";
+        }
+        catch (dev::initializer::GroupExists const& _e)
+        {
+            response["code"] = "0x1";
+            response["message"] = "Group " + std::to_string(_groupID) + " has been loaded";
+        }
+        catch (dev::initializer::GenesisNotExists const& _e)
+        {
+            response["code"] = "0x2";
+            response["message"] = "Group " + std::to_string(_groupID) + " genesis not exists";
+        }
+        catch (dev::initializer::GroupConfigNotExists const& _e)
+        {
+            response["code"] = "0x3";
+            response["message"] = "success" + std::to_string(_groupID) + " group config not exists";
+        }
+        catch (dev::initializer::GroupGeneratorException const& _e)
+        {
+            response["code"] = "0x6";
+            response["message"] = "Group start error: GroupID: " + std::to_string(_groupID);
+        }
+        catch (std::exception const& _e)
+        {
+            response["code"] = "0x7";
+            response["message"] = _e.what();
+        }
+
 
         return response;
     }
