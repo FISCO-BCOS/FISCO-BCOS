@@ -31,7 +31,6 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
-enable_parallel=true
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
@@ -547,8 +546,6 @@ function generate_group_ini()
     db_name=
 [tx_pool]
     limit=150000
-[tx_execute]
-    enable_parallel=${enable_parallel}
 [sync]
     idle_wait_ms=200
     ; send block status and transaction by tree-topology
