@@ -74,8 +74,6 @@ public:
 "";
 
         // clang-format on   
-        cout << "Genesis content::" << endl << content.str();
-
         return content.str();     
     }
 };
@@ -85,7 +83,7 @@ class GroupConfigTempate {
 public:
     string newContent()
     {
-       
+        // clang-format off
         std::stringstream content;
         content << "[consensus]\n"
 "    ; the ttl for broadcasting pbft message\n"
@@ -132,10 +130,7 @@ public:
 "";
 
         // clang-format on        
-        cout << "Group config content:" << endl << content.str();
-
         return content.str();
-
     }
 };
 
