@@ -37,8 +37,18 @@ DEV_SIMPLE_EXCEPTION(ListenPortIsUsed);
 DEV_SIMPLE_EXCEPTION(ConfigNotExist);
 DEV_SIMPLE_EXCEPTION(InvalidConfig);
 DEV_SIMPLE_EXCEPTION(InitFailed);
+
+
 namespace initializer
 {
+DEV_SIMPLE_EXCEPTION(GroupExists);
+DEV_SIMPLE_EXCEPTION(GenesisNotExists);
+DEV_SIMPLE_EXCEPTION(GroupConfigNotExists);
+
+DEV_SIMPLE_EXCEPTION(GenesisExists);
+DEV_SIMPLE_EXCEPTION(GroupConfigExists);
+DEV_SIMPLE_EXCEPTION(GroupGeneratorException);
+
 inline bool isValidPort(int port)
 {
     if (port <= 1024 || port > 65535)
