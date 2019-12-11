@@ -31,6 +31,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
+#include <libinitializer/GroupGenerator.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -42,6 +43,7 @@ using namespace dev::rpc;
 using namespace dev::sync;
 using namespace dev::ledger;
 using namespace dev::precompiled;
+using namespace dev::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
@@ -59,11 +61,11 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
-Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    std::shared_ptr<dev::p2p::P2PInterface> _service)
-  : m_ledgerManager(_ledgerManager), m_service(_service)
+Rpc::Rpc(
+    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
+  : m_service(_service)
 {
-    registerSyncChecker();
+    setLedgerInitializer(_ledgerInitializer);
 }
 
 void Rpc::registerSyncChecker()
@@ -1315,58 +1317,124 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 }
 
 
-Json::Value Rpc::generateGroup(int _groupID, const std::set<std::string>& _sealerList)
+Json::Value Rpc::generateGroup(
+    int _groupID, const std::string& _timestamp, const std::set<std::string>& _sealerList)
 {
+    RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("query generateGroup")
+                  << LOG_KV("groupID", _groupID) << LOG_KV("timestamp", _timestamp)
+                  << LOG_KV("sealerList.size", _sealerList.size());
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << "generateGroup only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+            "method getTransactionReceiptByHashWithProof not support this version"));
+    }
+
+    Json::Value response;
     try
     {
-        // Sort nodeid
-
-        std::string ret = std::to_string(_groupID);
-        for (std::string sealer : _sealerList)
+        if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
         {
-            ret += sealer;
+            BOOST_THROW_EXCEPTION(GroupExists());
         }
 
+        GroupGenerator::generate(GROUP_ID(_groupID), _timestamp, _sealerList);
 
-        Json::Value response;
-        response["code"] = "0x0";
-        response["message"] = ret;
-
-        return response;
+        response["code"] = GroupGeneratorCode::SUCCESS;
+        response["message"] = "success";
     }
-    catch (JsonRpcException& e)
+    catch (GroupExists const& _e)
     {
-        throw e;
+        response["code"] = GroupGeneratorCode::GROUP_EXIST;
+        response["message"] = "Group " + std::to_string(_groupID) + " is running";
     }
-    catch (std::exception& e)
+    catch (GenesisExists const& _e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+        response["code"] = GroupGeneratorCode::GROUP_GENESIS_FILE_EXIST;
+        response["message"] = "Group " + std::to_string(_groupID) + " genesis exists";
     }
+    catch (GroupConfigExists const& _e)
+    {
+        response["code"] = GroupGeneratorCode::GROUP_CONFIG_FILE_EXIST;
+        response["message"] = "Group " + std::to_string(_groupID) + " config exists";
+    }
+    catch (GroupGeneratorException const& _e)
+    {
+        response["code"] = GroupGeneratorCode::INVALID_PARAMS;
+        response["message"] = "Group generator error: GroupID: " + std::to_string(_groupID) +
+                              " timestamp: " + _timestamp +
+                              " sealerlist.size: " + std::to_string(_sealerList.size());
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = GroupGeneratorCode::OTHER_ERROR;
+        response["message"] = "Internal error";
+    }
+    return response;
 }
 
 
 Json::Value Rpc::startGroup(int _groupID)
 {
+    RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("query startGroup")
+                  << LOG_KV("groupID", _groupID);
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << "startGroup only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+            "method getTransactionReceiptByHashWithProof not support this version"));
+    }
+
+    Json::Value response;
     try
     {
-        // Sort nodeid
+        if (!GroupGenerator::checkGroupID(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(GroupGeneratorException());
+        }
 
-        std::string ret = std::to_string(_groupID);
+        bool success = m_ledgerInitializer->initLedgerByGroupID(GROUP_ID(_groupID));
+        if (!success)
+        {
+            throw new dev::Exception("Init ledger failed");
+        }
 
-        Json::Value response;
-        response["code"] = "0x0";
-        response["message"] = ret;
+        success = m_ledgerManager->startByGroupID(GROUP_ID(_groupID));
+        if (!success)
+        {
+            m_ledgerManager->removeLedger(GROUP_ID(_groupID));
+            throw new dev::Exception("start ledger failed");
+        }
 
-        return response;
+        response["code"] = GroupStarterCode::SUCCESS;
+        response["message"] = "success";
     }
-    catch (JsonRpcException& e)
+    catch (GroupExists const& _e)
     {
-        throw e;
+        response["code"] = GroupStarterCode::GROUP_IS_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " has been loaded";
     }
-    catch (std::exception& e)
+    catch (GenesisNotExists const& _e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+        response["code"] = GroupStarterCode::GROUP_GENESIS_FILE_NOT_EXIST;
+        response["message"] = "Group " + std::to_string(_groupID) + " genesis not exists";
     }
+    catch (GroupConfigNotExists const& _e)
+    {
+        response["code"] = GroupStarterCode::GROUP_CONFIG_FILE_NOT_EXIST;
+        response["message"] = "success" + std::to_string(_groupID) + " group config not exists";
+    }
+    catch (GroupGeneratorException const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "Group start error: GroupID: " + std::to_string(_groupID);
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = GroupStarterCode::OTHER_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
 }

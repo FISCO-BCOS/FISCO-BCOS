@@ -75,7 +75,7 @@ public:
     dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
     void setConfDir(std::string _confDir) { m_confDir = _confDir; }
-    std::string confDir() { return m_confDir; }
+    const std::string& confDir() { return m_confDir; }
 
     struct DiskEncryption
     {

@@ -21,7 +21,8 @@
  */
 
 #pragma once
-#include "Common.h"                             // for INITIALIZER_LOG
+#include "Common.h"  // for INITIALIZER_LOG
+#include "LedgerInitializer.h"
 #include "librpc/ModularServer.h"               // for ModularServer
 #include <libchannelserver/ChannelRPCServer.h>  // for ChannelRPCServer
 #include <boost/property_tree/ptree_fwd.hpp>    // for ptree
@@ -93,9 +94,11 @@ public:
     {
         m_sslContext = sslContext;
     }
-    void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)
+
+    void setLedgerInitializer(LedgerInitializer::Ptr _ledgerInitializer)
     {
-        m_ledgerManager = _ledgerManager;
+        m_ledgerInitializer = _ledgerInitializer;
+        m_ledgerManager = m_ledgerInitializer->ledgerManager();
     }
 
     ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
@@ -104,6 +107,7 @@ public:
 private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
+    LedgerInitializer::Ptr m_ledgerInitializer;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
     std::shared_ptr<dev::rpc::Rpc> m_rpcForChannel;
     std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
