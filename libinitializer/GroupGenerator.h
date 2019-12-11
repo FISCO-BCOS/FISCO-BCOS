@@ -61,18 +61,53 @@ private:
     }
 };
 
-
 class GroupGenerator
 {
 public:
     static void generate(
         int _groupId, const std::string& _timestamp, const std::set<std::string>& _sealerList);
 
-
     static bool checkGroupID(int _groupId);
     static bool checkTimestamp(const std::string& _timestamp);
     static bool checkSealerList(const std::set<std::string>& _sealerList);
 };
+
+namespace GroupGeneratorCode
+{
+// success
+const std::string SUCCESS = "0x0";
+// group already exist
+const std::string GROUP_EXIST = "0x1";
+// group genesis file already exist
+const std::string GROUP_GENESIS_FILE_EXIST = "0x2";
+// group config file already exist
+const std::string GROUP_CONFIG_FILE_EXIST = "0x3";
+// invalid parameters
+const std::string INVALID_PARAMS = "0x4";
+// node inner error
+const std::string OTHER_ERROR = "0x5";
+}  // namespace GroupGeneratorCode
+
+
+namespace GroupStarterCode
+{
+// success
+const std::string SUCCESS = "0x0";
+// group already running
+const std::string GROUP_IS_RUNNING = "0x1";
+// group genesis file not exist
+const std::string GROUP_GENESIS_FILE_NOT_EXIST = "0x2";
+// group config file not exist
+const std::string GROUP_CONFIG_FILE_NOT_EXIST = "0x3";
+// group genesis file invalid
+const std::string GROUP_GENESIS_INVALID = "0x4";
+// group config file invalid
+const std::string GROUP_CONFIG_INVALID = "0x5";
+// invalid parameters
+const std::string INVALID_PARAMS = "0x6";
+// node inner error
+const std::string OTHER_ERROR = "0x7";
+}  // namespace GroupStarterCode
 
 }  // namespace initializer
 }  // namespace dev
