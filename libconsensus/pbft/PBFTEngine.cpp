@@ -446,6 +446,9 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("hash", req.block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        // print the disconnected info
+        getForwardNodes(sessions, true);
     }
 
     bytes view_change_data;
@@ -1841,7 +1844,9 @@ void PBFTEngine::createPBFTMsgFactory()
 }
 
 // get the forwardNodes
-std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions)
+// _printLog is true when viewChangeWarning to show more detailed info
+std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
+    dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog)
 {
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     std::set<h512> consensusNodes;
@@ -1849,11 +1854,16 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfo
         ReadGuard l(x_consensusSet);
         consensusNodes = *m_consensusSet;
     }
+    std::string connectedNodeList = "";
     // select the disconnected consensus nodes
     for (auto const& session : _sessions)
     {
         if (consensusNodes.count(session.nodeID()))
         {
+            if (_printLog)
+            {
+                connectedNodeList += session.nodeIPEndpoint.name() + ", ";
+            }
             consensusNodes.erase(session.nodeID());
         }
     }
@@ -1863,11 +1873,21 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfo
         forwardNodes = std::make_shared<dev::h512s>();
         forwardNodes->resize(consensusNodes.size());
         std::copy(consensusNodes.begin(), consensusNodes.end(), forwardNodes->begin());
-        PBFTENGINE_LOG(DEBUG)
-            << LOG_DESC("forwardPBFTMsgByForwardNodes: get disconnected consensus nodes")
-            << LOG_KV("forwardNodesSize", forwardNodes->size())
-            << LOG_KV("sessionSize", _sessions.size()) << LOG_KV("minValidNodes", minValidNodes())
-            << LOG_KV("idx", nodeIdx());
+        if (_printLog)
+        {
+            std::string disconnectedNode;
+            for (auto const& node : *forwardNodes)
+            {
+                disconnectedNode += node.abridged() + ", ";
+            }
+            PBFTENGINE_LOG(WARNING)
+                << LOG_DESC("Find disconnectedNode")
+                << LOG_KV("disconnectedNodeSize", forwardNodes->size())
+                << LOG_KV("sessionSize", _sessions.size())
+                << LOG_KV("minValidNodes", minValidNodes())
+                << LOG_KV("connectedNodeList", connectedNodeList)
+                << LOG_KV("disconnectedNode", disconnectedNode) << LOG_KV("idx", nodeIdx());
+        }
     }
     return forwardNodes;
 }
@@ -1927,10 +1947,6 @@ void PBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
     if (!m_sealerListUpdated)
-    {
-        return;
-    }
-    if (!m_enableTTLOptimize)
     {
         return;
     }
