@@ -68,6 +68,20 @@ public:
         return ret.second;
     }
 
+    bool removeLedger(dev::GROUP_ID const& _groupId)
+    {
+        bool success = stopByGroupID(_groupId);
+        if (!success)
+        {
+            return false;
+        }
+
+        WriteGuard l(x_groupListCache);
+        m_groupListCache.erase(_groupId);
+        m_ledgerMap.erase(_groupId);
+        return true;
+    }
+
     bool isLedgerExist(dev::GROUP_ID const& _groupId) { return m_ledgerMap.count(_groupId); }
     /**
      * @brief : start a single ledger by groupId
