@@ -43,14 +43,100 @@ public:
 
     void setTimestamp(const string& _timestamp) { m_timestamp = _timestamp; }
 
-    string newContent() { return ""; }
+    string newContent()
+    {
+        // clang-format off
+        std::stringstream content;
+        content << "[consensus]\n"
+"    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)\n"
+"    consensus_type=pbft\n"
+"    ; the max number of transactions of a block\n"
+"    max_trans_num=1000\n"
+"    ; the node id of consensusers\n"
+"";
+
+        int nodeIdx = 0;
+        for (string sealer : m_sealerList)
+        {
+            content << "node." << nodeIdx << "=" << sealer << "\n";
+            nodeIdx++;
+        }
+
+    content << "[state]\n"
+"    ; support mpt/storage\n"
+"    type=storage\n"
+"[tx]\n"
+"    ; transaction gas limit\n"
+"    gas_limit=300000000\n"
+"[group]\n"
+"    id=" << std::to_string(m_groupId) << "\n"
+"    timestamp=" << m_timestamp << "\n"
+"";
+
+        // clang-format on   
+        cout << "Genesis content::" << endl << content.str();
+
+        return content.str();     
+    }
 };
 
 
-class GroupConfigTempate
-{
+class GroupConfigTempate {
 public:
-    string newContent() { return ""; }
+    string newContent()
+    {
+       
+        std::stringstream content;
+        content << "[consensus]\n"
+"    ; the ttl for broadcasting pbft message\n"
+"    ;ttl=2\n"
+"    ; min block generation time(ms), the max block generation time is 1000 ms\n"
+"    ;min_block_generation_time=500\n"
+"    ;enable_dynamic_block_size=true\n"
+"    ;enable_ttl_optimization=true\n"
+"    ;enable_prepare_with_txsHash=true\n"
+"[storage]\n"
+"    ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended\n"
+"    type=rocksdb\n"
+"    ; set true to turn on binary log\n"
+"    binary_log=false\n"
+"    ; scroll_threshold=scroll_threshold_multiple*1000, only for scalable\n"
+"    scroll_threshold_multiple=2\n"
+"    ; set fasle to disable CachedStorage\n"
+"    cached_storage=true\n"
+"    ; max cache memeory, MB\n"
+"    max_capacity=32\n"
+"    max_forward_block=10\n"
+"    ; only for external\n"
+"    max_retry=60\n"
+"    topic=DB\n"
+"    ; only for mysql\n"
+"    db_ip=127.0.0.1\n"
+"    db_port=3306\n"
+"    db_username=\n"
+"    db_passwd=\n"
+"    db_name=\n"
+"[tx_pool]\n"
+"    limit=150000\n"
+"[tx_execute]\n"
+"    enable_parallel=true\n"
+"[sync]\n"
+"    idle_wait_ms=200\n"
+"    ; send block status and transaction by tree-topology\n"
+"    ; only supported when use pbft\n"
+"    sync_by_tree=true\n"
+"    ; must between 1000 to 3000\n"
+"    ; only enabled when sync_by_tree is true\n"
+"    gossip_interval_ms=1000\n"
+"    gossip_peers_number=3\n"
+"";
+
+        // clang-format on        
+        cout << "Group config content:" << endl << content.str();
+
+        return content.str();
+
+    }
 };
 
 void GenesisGenerator::generate(const std::string& _confDir, dev::GROUP_ID _groupId,
