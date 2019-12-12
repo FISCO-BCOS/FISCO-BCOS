@@ -245,6 +245,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 
                     // addtion data
                     std::set<std::string> addtionKey;
+                    std::set<uint64_t> duplicateIDs;
                     tbb::spin_mutex addtionKeyMutex;
 
                     tbb::parallel_for(
@@ -344,6 +345,14 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                                     }
                                                 }
                                             }
+                                            else
+                                            {
+                                                CACHED_STORAGE_LOG(DEBUG)
+                                                    << LOG_BADGE("duplicate entry")
+                                                    << LOG_KV("key", key)
+                                                    << LOG_KV("ID", (*entryIt)->getID());
+                                                duplicateIDs.insert((*entryIt)->getID());
+                                            }
                                         }
                                     }
                                     else
@@ -359,6 +368,17 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
+                    for (auto id : duplicateIDs)
+                    {
+                        for (auto start = requestData->dirtyEntries->size();
+                             start < commitData->dirtyEntries->size(); ++start)
+                        {
+                            if ((*commitData->dirtyEntries)[start]->getID() == id)
+                            {
+                                (*commitData->dirtyEntries)[start]->setDeleted(true);
+                            }
+                        }
+                    }
                     tbb::parallel_sort(commitData->dirtyEntries->begin(),
                         commitData->dirtyEntries->end(), EntryLessNoLock(commitData->info));
                 }

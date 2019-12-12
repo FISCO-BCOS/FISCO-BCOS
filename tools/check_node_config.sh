@@ -4,6 +4,7 @@
 set -e
 
 node_path=./
+cut_range="3-130"
 
 LOG_WARN() {
     local content=${1}
@@ -39,6 +40,12 @@ check_env() {
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         LOG_WARN "OpenSSL is too old, please install openssl 1.0.2 or higher!"
     }
+    if [ ! -z "$(openssl version | grep reSSL)" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+    fi
+    if [ ! -z "$(openssl version | grep 1.1.1)" ];then
+        cut_range="6-133"
+    fi
     # TODO: check hardware requirement
 }
 
@@ -80,7 +87,7 @@ check_cert() {
     LOG_INFO "use ${ca_cert} verify ${node_cert} successful"
 
     # check if the node.nodeid match with node.crt
-    nodeid_from_cert=$(openssl x509  -text -in ${node_cert} | sed -n "15,20p" |  sed "s/://g" | tr "\n" " " | sed "s/ //g" | cut -c 3-130)
+    nodeid_from_cert=$(openssl x509  -text -in ${node_cert} | sed -n "15,20p" |  sed "s/://g" | tr "\n" " " | sed "s/ //g" | cut -c ${cut_range})
     nodeid_from_file=$(cat ${data_path}/node.nodeid)
     if [[ "${nodeid_from_cert}" != "${nodeid_from_file}" ]]; then
         LOG_WARN "nodeid match failed!"
