@@ -1327,8 +1327,8 @@ Json::Value Rpc::generateGroup(
     if (g_BCOSConfig.version() < V2_2_0)
     {
         RPC_LOG(ERROR) << "generateGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-            "method getTransactionReceiptByHashWithProof not support this version"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method generateGroup not support this version"));
     }
 
     Json::Value response;
@@ -1383,8 +1383,8 @@ Json::Value Rpc::startGroup(int _groupID)
     if (g_BCOSConfig.version() < V2_2_0)
     {
         RPC_LOG(ERROR) << "startGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-            "method getTransactionReceiptByHashWithProof not support this version"));
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method startGroup not support this version"));
     }
 
     Json::Value response;
