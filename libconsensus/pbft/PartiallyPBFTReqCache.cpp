@@ -44,23 +44,6 @@ bool PartiallyPBFTReqCache::addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRaw
     return true;
 }
 
-void PartiallyPBFTReqCache::addPartiallyFuturePrepare(PrepareReq::Ptr _partiallyRawPrepare)
-{
-    if (m_partiallyFuturePrepare->size() >= 20)
-    {
-        return;
-    }
-    if (!m_partiallyFuturePrepare->count(_partiallyRawPrepare->height))
-    {
-        PartiallyPBFTReqCache_LOG(INFO)
-            << LOG_DESC("addPartiallyFuturePrepare")
-            << LOG_KV("height", _partiallyRawPrepare->height)
-            << LOG_KV("reqIdx", _partiallyRawPrepare->idx)
-            << LOG_KV("hash", _partiallyRawPrepare->block_hash.abridged());
-        (*m_partiallyFuturePrepare)[_partiallyRawPrepare->height] = _partiallyRawPrepare;
-    }
-}
-
 bool PartiallyPBFTReqCache::fetchMissedTxs(
     std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo)
 {
@@ -115,41 +98,6 @@ bool PartiallyPBFTReqCache::fillBlock(bytesConstRef _txsData)
         << LOG_KV("fetchedTxs", partiallyBlock->missedTransactions()->size());
     return true;
 }
-
-PrepareReq::Ptr PartiallyPBFTReqCache::getPartiallyFuturePrepare(int64_t const& _consensusNumber)
-{
-    if (!m_partiallyFuturePrepare->count(_consensusNumber))
-    {
-        return nullptr;
-    }
-    return (*m_partiallyFuturePrepare)[_consensusNumber];
-}
-
-
-void PartiallyPBFTReqCache::eraseHandledPartiallyFutureReq(int64_t const& _blockNumber)
-{
-    if (m_partiallyFuturePrepare->count(_blockNumber))
-    {
-        m_partiallyFuturePrepare->erase(_blockNumber);
-    }
-}
-
-void PartiallyPBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBlockNumber)
-{
-    PBFTReqCache::removeInvalidFutureCache(_highestBlockNumber);
-    for (auto it = m_partiallyFuturePrepare->begin(); it != m_partiallyFuturePrepare->end();)
-    {
-        if (it->first <= _highestBlockNumber)
-        {
-            it = m_partiallyFuturePrepare->erase(it);
-        }
-        else
-        {
-            it++;
-        }
-    }
-}
-
 
 void PartiallyPBFTReqCache::addPreRawPrepare(PrepareReq::Ptr _preRawPrepare)
 {

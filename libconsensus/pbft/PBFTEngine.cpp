@@ -1721,7 +1721,6 @@ void PBFTEngine::handleFutureBlock()
     // handle the future block with full-txs firstly
     std::shared_ptr<PrepareReq> p_future_prepare =
         m_reqCache->futurePrepareCache(m_consensusBlockNumber);
-    bool succ = false;
     if (p_future_prepare && p_future_prepare->view == m_view)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock")
@@ -1731,28 +1730,8 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        succ = handlePrepareMsg(*p_future_prepare);
+        handlePrepareMsg(*p_future_prepare);
         m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
-    }
-
-    if (!m_enablePrepareWithTxsHash || succ)
-    {
-        return;
-    }
-    // miss the future prepare cache, find from the partially future prepare
-    auto partiallyFuturePrepare =
-        m_partiallyPrepareCache->getPartiallyFuturePrepare(m_consensusBlockNumber);
-    if (partiallyFuturePrepare && partiallyFuturePrepare->view == m_view)
-    {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock: partiallyFuturePrepare")
-                             << LOG_KV("reqNum", partiallyFuturePrepare->height)
-                             << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("view", m_view)
-                             << LOG_KV("conNum", m_consensusBlockNumber)
-                             << LOG_KV("hash", partiallyFuturePrepare->block_hash.abridged())
-                             << LOG_KV("nodeIdx", nodeIdx())
-                             << LOG_KV("myNode", m_keyPair.pub().abridged());
-        handlePartiallyPrepare(partiallyFuturePrepare);
-        m_partiallyPrepareCache->eraseHandledPartiallyFutureReq(partiallyFuturePrepare->height);
     }
 }
 
@@ -1987,17 +1966,26 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
     /// update the view for given idx
     updateViewMap(_prepareReq->idx, _prepareReq->view);
 
+    _prepareReq->pBlock = m_blockFactory->createBlock();
+    assert(_prepareReq->pBlock);
+
     if (ret == CheckResult::FUTURE)
     {
-        m_partiallyPrepareCache->addPartiallyFuturePrepare(_prepareReq);
-        return true;
+        bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
+        // hit all the transactions
+        if (allHit)
+        {
+            // re-encode the block into the completed block(for pbft-backup consideration)
+            _prepareReq->pBlock->encode(*_prepareReq->block);
+            m_partiallyPrepareCache->addFuturePrepareCache(*_prepareReq);
+            return true;
+        }
+        return false;
     }
-    _prepareReq->pBlock = m_blockFactory->createBlock();
     if (!m_partiallyPrepareCache->addPartiallyRawPrepare(_prepareReq))
     {
         return false;
     }
-    assert(_prepareReq->pBlock);
     bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
     // update the totalTxs size and the missedTxs size
     if (m_statisticHandler)

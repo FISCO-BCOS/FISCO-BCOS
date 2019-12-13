@@ -38,14 +38,10 @@ class PartiallyPBFTReqCache : public PBFTReqCache
 public:
     using Ptr = std::shared_ptr<PartiallyPBFTReqCache>;
 
-    PartiallyPBFTReqCache() : PBFTReqCache()
-    {
-        m_partiallyFuturePrepare = std::make_shared<std::unordered_map<int64_t, PrepareReq::Ptr>>();
-    }
-    ~PartiallyPBFTReqCache() override { m_partiallyFuturePrepare->clear(); }
+    PartiallyPBFTReqCache() : PBFTReqCache() {}
+    ~PartiallyPBFTReqCache() override {}
 
     virtual bool addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRawPrepare);
-    virtual void addPartiallyFuturePrepare(PrepareReq::Ptr _partiallyRawPrepare);
     PrepareReq::Ptr partiallyRawPrepare() { return m_partiallyRawPrepare; }
     virtual void transPartiallyPrepareIntoRawPrepare()
     {
@@ -58,13 +54,6 @@ public:
     virtual bool fetchMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo);
     // fill block with fetched transaction
     virtual bool fillBlock(bytesConstRef _txsData);
-
-
-    PrepareReq::Ptr getPartiallyFuturePrepare(int64_t const& _consensusNumber);
-    virtual void eraseHandledPartiallyFutureReq(int64_t const& _blockNumber);
-
-    void removeInvalidFutureCache(int64_t const& _highestBlockNumber) override;
-
     virtual void addPreRawPrepare(PrepareReq::Ptr _preRawPrepare);
 
     virtual void clearPreRawPrepare();
@@ -76,7 +65,6 @@ private:
     // before addRawPrepareReq clear this cache when addRawPrepare
     PrepareReq::Ptr m_preRawPrepare;
     mutable SharedMutex x_preRawPrepare;
-    std::shared_ptr<std::unordered_map<int64_t, PrepareReq::Ptr>> m_partiallyFuturePrepare;
 };
 }  // namespace consensus
 }  // namespace dev
