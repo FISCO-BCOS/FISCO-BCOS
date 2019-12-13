@@ -70,10 +70,18 @@ Entries::Ptr RocksDBStorage::select(
             stringstream ss(value);
             boost::archive::binary_iarchive ia(ss);
             ia >> res;
-
+            std::set<string> duplicateIDs;
             for (auto it = res.begin(); it != res.end(); ++it)
-            {
+            {  // TODO: use tbb parallel_for
                 Entry::Ptr entry = make_shared<Entry>();
+                if (g_BCOSConfig.version() < V2_2_0)
+                {  // fix dirtyEntries duplicate
+                    bool unique = duplicateIDs.insert(it->at(ID_FIELD)).second;
+                    if (!unique)
+                    {
+                        continue;
+                    }
+                }
 
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
                 {
@@ -275,6 +283,10 @@ void RocksDBStorage::processDirtyEntries(int64_t num,
     for (size_t j = 0; j < entries->size(); ++j)
     {
         auto entry = entries->get(j);
+        if (entry->deleted())
+        {
+            continue;
+        }
         auto key = entry->getField(tableInfo->key);
 
         auto it = key2value->find(key);
