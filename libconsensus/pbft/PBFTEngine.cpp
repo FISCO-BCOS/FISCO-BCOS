@@ -82,6 +82,10 @@ void PBFTEngine::stop()
     {
         m_messageHandler->stop();
     }
+    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
+    // been updated
+    m_signalled.notify_all();
+
     ConsensusEngineBase::stop();
 }
 
