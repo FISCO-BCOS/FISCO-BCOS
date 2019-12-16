@@ -375,7 +375,10 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                         {
                             if ((*commitData->dirtyEntries)[start]->getID() == id)
                             {
-                                (*commitData->dirtyEntries)[start]->setDeleted(true);
+                                auto duplicateEntry = make_shared<Entry>();
+                                duplicateEntry->copyFrom((*commitData->dirtyEntries)[start]);
+                                duplicateEntry->setDeleted(true);
+                                (*commitData->dirtyEntries)[start] = duplicateEntry;
                             }
                         }
                     }

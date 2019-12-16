@@ -288,9 +288,8 @@ bool Entry::deleted() const
 }
 
 void Entry::setDeleted(bool deleted)
-{
+{  // FIXME: setDeleted will cause state change, should make a copy
     RWMutexScoped lock(m_data->m_mutex, true);
-
     m_deleted = deleted;
 }
 
