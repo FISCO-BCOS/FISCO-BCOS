@@ -312,6 +312,10 @@ dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
+    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        unsupportedFeatures("RocksDB in RC3");
+    }
     try
     {
         auto rocksdbStorage = createRocksDBStorage(_param->mutableStorageParam().path,
