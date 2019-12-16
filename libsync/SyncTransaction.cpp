@@ -40,6 +40,10 @@ void SyncTransaction::start()
 
 void SyncTransaction::stop()
 {
+    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
+    // been updated
+    m_signalled.notify_all();
+
     doneWorking();
     stopWorking();
     // will not restart worker, so terminate it
