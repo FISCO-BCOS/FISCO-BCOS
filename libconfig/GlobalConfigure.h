@@ -74,6 +74,9 @@ public:
     void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
     dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
+    void setUnCheckRoot(bool check) { m_unCheckRoot = check; }
+    bool unCheckEnable() const { return m_unCheckRoot; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -110,6 +113,7 @@ private:
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
+    bool m_unCheckRoot = false;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

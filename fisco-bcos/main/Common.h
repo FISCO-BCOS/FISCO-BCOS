@@ -52,7 +52,8 @@ std::string initCommandLine(int argc, const char* argv[])
     main_options.add_options()("help,h", "print help information")(
         "version,v", "version of FISCO-BCOS")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
-        "config file path, eg. config.ini");
+        "config file path, eg. config.ini")(
+        "uncheckroot", "uncheck the stateRoot/receiptsRoot after verify transactions");
     boost::program_options::variables_map vm;
     try
     {
@@ -76,6 +77,10 @@ std::string initCommandLine(int argc, const char* argv[])
     {
         dev::version();
         exit(0);
+    }
+    if (vm.count("uncheckroot"))
+    {
+        dev::g_BCOSConfig.setUnCheckRoot(true);
     }
     std::string configPath("./config.ini");
     if (vm.count("config") || vm.count("c"))

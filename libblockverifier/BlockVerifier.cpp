@@ -164,7 +164,8 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
     /// since origin value is empty if executeBlock is called by sync module, need to compare
     /// receiptRoot, stateRoot and dbHash
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    if (!g_BCOSConfig.unCheckEnable() && tmpHeader.receiptsRoot() != h256() &&
+        tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
@@ -321,7 +322,8 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    if (!g_BCOSConfig.unCheckEnable() && tmpHeader.receiptsRoot() != h256() &&
+        tmpHeader.stateRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
