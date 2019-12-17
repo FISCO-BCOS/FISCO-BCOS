@@ -33,8 +33,6 @@ bool PartiallyPBFTReqCache::addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRaw
     {
         return false;
     }
-    // decode the partiallyBlock
-    _partiallyRawPrepare->pBlock->decodeProposal(ref(*_partiallyRawPrepare->block), true);
     m_partiallyRawPrepare = _partiallyRawPrepare;
 
     PartiallyPBFTReqCache_LOG(INFO)

@@ -1975,6 +1975,8 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
 
     if (ret == CheckResult::FUTURE)
     {
+        // decode the partiallyBlock
+        _prepareReq->pBlock->decodeProposal(ref(*_prepareReq->block), true);
         bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
         // hit all the transactions
         if (allHit)
@@ -1990,6 +1992,8 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
     {
         return false;
     }
+    // decode the partiallyBlock
+    _prepareReq->pBlock->decodeProposal(ref(*_prepareReq->block), true);
     bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
     // update the totalTxs size and the missedTxs size
     if (m_statisticHandler)
