@@ -57,8 +57,8 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
-        int64_t const& _gossipPeers = 3, bool const& _enableSendBlockStatusByTree = true,
-        int64_t const& _syncTreeWidth = 3)
+        int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
+        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
@@ -69,6 +69,7 @@ public:
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
+        m_enableSendTxsByTree(_enableSendTxsByTree),
         m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree)
     {
         /// set thread name
@@ -93,12 +94,18 @@ public:
         m_txQueue->setSyncStatus(m_syncStatus);
         m_txQueue->setStatisticHandler(m_statisticHandler);
 
+        if (m_enableSendTxsByTree)
+        {
+            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
+            m_txQueue->setTreeRouter(treeRouter);
+            updateNodeInfo();
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendTxsByTree");
+        }
+
         if (m_enableSendBlockStatusByTree)
         {
             m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId, _syncTreeWidth);
-            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
-            m_txQueue->setTreeRouter(treeRouter);
-
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendBlockStatusByTree");
             // update the nodeInfo for syncTreeRouter
             updateNodeInfo();
 
@@ -262,6 +269,7 @@ private:
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+    bool m_enableSendTxsByTree;
     bool m_enableSendBlockStatusByTree;
 
     int64_t m_maxRequestNumber = 0;

@@ -38,7 +38,6 @@ public:
     SyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 3)
       : TreeTopology(_nodeId, _treeWidth)
     {
-        m_childOffset = 1;
         m_nodeList = std::make_shared<dev::h512s>();
     }
 
@@ -48,22 +47,22 @@ public:
     // consensus info must be updated with nodeList
     virtual void updateAllNodeInfo(dev::h512s const& _consensusNodes, dev::h512s const& _nodeList);
     // select the nodes by tree topology
-    std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers) override;
+    std::shared_ptr<dev::h512s> selectNodes(
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0) override;
 
 protected:
     bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const override;
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex() override;
 
-    ssize_t getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset) override;
-    ssize_t getParentNodeIndex(ssize_t const& _nodeIndex) override;
-
     // select the child nodes by tree
     void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers) override;
+        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _startIndex) override;
     // select the parent nodes by tree
     void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex) override;
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+        int64_t const& _startIndex) override;
 
 private:
     bool locatedInGroup();
@@ -72,7 +71,6 @@ protected:
     mutable Mutex m_mutex;
     // the nodeList include both the consensus nodes and the observer nodes
     std::shared_ptr<dev::h512s> m_nodeList;
-    std::atomic<int64_t> m_nodeNum = {0};
 
     std::atomic<int64_t> m_nodeIndex = {0};
 };
