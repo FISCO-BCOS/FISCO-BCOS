@@ -77,6 +77,8 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    // enable send transactions by tree
+    bool enableSendTxsByTree = false;
     // enable send block status by tree or not
     bool enableSendBlockStatusByTree = true;
     // default block status gossip interval is 1s

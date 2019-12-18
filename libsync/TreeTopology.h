@@ -50,24 +50,33 @@ public:
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
 
     // select the nodes by tree topology
-    virtual std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers);
+    virtual std::shared_ptr<dev::h512s> selectNodes(
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+    virtual int64_t consIndex() const
+    {
+        if (m_consIndex == -1)
+        {
+            std::srand(utcTime());
+            return std::rand() % m_nodeNum;
+        }
+        return m_consIndex;
+    }
 
 protected:
     virtual void updateStartAndEndIndex();
 
     // select the child nodes by tree
     virtual void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers);
+        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _startIndex);
     // select the parent nodes by tree
     virtual void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex);
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+        int64_t const& _startIndex);
 
     virtual bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;
 
-    // get the child node index
-    virtual ssize_t getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset);
-    // get the parent node index
-    virtual ssize_t getParentNodeIndex(ssize_t const& _nodeIndex);
+    virtual ssize_t getSelectedNodeIndex(ssize_t const& _selectedIndex, ssize_t const& _offset);
 
     ssize_t getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512& _nodeId);
 
@@ -75,6 +84,7 @@ protected:
     mutable Mutex m_mutex;
     // the list of the current consensus nodes
     std::shared_ptr<dev::h512s> m_currentConsensusNodes;
+    std::atomic<int64_t> m_nodeNum = {0};
 
     unsigned m_treeWidth;
     dev::h512 m_nodeId;
@@ -82,8 +92,6 @@ protected:
 
     std::atomic<int64_t> m_endIndex = {0};
     std::atomic<int64_t> m_startIndex = {0};
-
-    ssize_t m_childOffset = 0;
 };
 }  // namespace sync
 }  // namespace dev
