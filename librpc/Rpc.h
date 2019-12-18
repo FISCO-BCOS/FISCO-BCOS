@@ -30,6 +30,7 @@
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
 #include <json/value.h>            // for Value
 #include <libethcore/Transaction.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
 
@@ -53,7 +54,7 @@ namespace rpc
 class Rpc : public RpcFace
 {
 public:
-    Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
+    Rpc(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer,
         std::shared_ptr<dev::p2p::P2PInterface> _service);
 
     RPCModules implementedModules() const override
@@ -109,6 +110,10 @@ public:
     Json::Value getTransactionReceiptByHashWithProof(
         int _groupID, const std::string& _transactionHash) override;
 
+    Json::Value generateGroup(int _groupID, const std::string& _timestamp,
+        const std::set<std::string>& _sealerList) override;
+    Json::Value startGroup(int _groupID) override;
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
@@ -117,9 +122,13 @@ public:
         m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
-    void setLedgerManager(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager)
+    void setLedgerInitializer(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer)
     {
-        m_ledgerManager = _ledgerManager;
+        m_ledgerInitializer = _ledgerInitializer;
+        if (_ledgerInitializer != nullptr)
+        {
+            m_ledgerManager = _ledgerInitializer->ledgerManager();
+        }
         registerSyncChecker();
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
@@ -128,6 +137,8 @@ protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
     std::shared_ptr<dev::p2p::P2PInterface> service();
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
+    dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
+
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:

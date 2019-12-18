@@ -133,14 +133,15 @@ public:
 
         auto secureInitializer = initialize->secureInitializer();
         dev::KeyPair key_pair = secureInitializer->keyPair();
+        auto ledgerInitializer = initialize->ledgerInitializer();
         auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
 
         auto p2pInitializer = initialize->p2pInitializer();
         auto p2pService = p2pInitializer->p2pService();
 
-        // auto rpc = new dev::rpc::Rpc(ledgerManager, p2pService);
+        // auto rpc = new dev::rpc::Rpc(ledgerInitializer, p2pService);
 
-        m_rpcFace = std::make_shared<dev::rpc::Rpc>(ledgerManager, p2pService);
+        m_rpcFace = std::make_shared<dev::rpc::Rpc>(ledgerInitializer, p2pService);
 
         setMapRpc();
     }
