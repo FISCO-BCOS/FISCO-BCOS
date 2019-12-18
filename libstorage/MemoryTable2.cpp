@@ -310,7 +310,14 @@ dev::h256 MemoryTable2::hash()
     if (m_isDirty)
     {
         m_tableData.reset(new dev::storage::TableData());
-        dump();
+        if (g_BCOSConfig.version() < V2_2_0)
+        {
+            dumpWithoutOptimize();
+        }
+        else
+        {
+            dump();
+        }
     }
 
     return m_hash;

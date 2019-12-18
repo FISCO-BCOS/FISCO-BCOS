@@ -61,8 +61,8 @@ void TablePrecompiled::checkLengthValidate(
 {
     if (field_value.size() > (size_t)max_length)
     {
-        STORAGE_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
-                           << " greater than " << max_length;
+        PRECOMPILED_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
+                               << " greater than " << max_length;
         BOOST_THROW_EXCEPTION(StorageException(throw_exception,
             std::string("size of value of key greater than") + std::to_string(max_length)));
     }
@@ -71,8 +71,8 @@ void TablePrecompiled::checkLengthValidate(
 bytes TablePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
+                           << LOG_KV("param", toHex(param));
 
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
@@ -150,6 +150,8 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("key", key)
+                               << LOG_KV("result", count);
         out = abi.abiIn("", u256(count));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
@@ -158,7 +160,6 @@ bytes TablePrecompiled::call(
         Address entryAddress;
         Address conditionAddress;
         abi.abiOut(data, key, entryAddress, conditionAddress);
-
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         ConditionPrecompiled::Ptr conditionPrecompiled =
@@ -175,11 +176,14 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("key", key)
+                               << LOG_KV("result", count);
         out = abi.abiIn("", u256(count));
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled")
+                               << LOG_DESC("call undefined function!");
     }
     return out;
 }
