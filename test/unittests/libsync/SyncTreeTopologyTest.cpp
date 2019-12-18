@@ -46,15 +46,26 @@ public:
     void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> selectedNodeList,
         ssize_t const& parentIndex, std::shared_ptr<std::set<dev::h512>> peers)
     {
-        return SyncTreeTopology::recursiveSelectChildNodes(selectedNodeList, parentIndex, peers);
+        int64_t offset = m_startIndex - 1;
+        if (m_consIndex > 0)
+        {
+            return SyncTreeTopology::recursiveSelectChildNodes(selectedNodeList, 0, peers, offset);
+        }
+        else
+        {
+            int64_t nodeIndex = parentIndex + 1 - m_startIndex;
+            return SyncTreeTopology::recursiveSelectChildNodes(
+                selectedNodeList, nodeIndex, peers, offset);
+        }
     }
     // select the parent nodes by tree
     void selectParentNodes(std::shared_ptr<dev::h512s> selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> peers, int64_t const& nodeIndex)
+        std::shared_ptr<std::set<dev::h512>> peers, int64_t const& _nodeIndex)
     {
-        return SyncTreeTopology::selectParentNodes(selectedNodeList, peers, nodeIndex);
+        int64_t offset = m_startIndex - 1;
+        int64_t nodeIndex = _nodeIndex + 1 - m_startIndex;
+        return SyncTreeTopology::selectParentNodes(selectedNodeList, peers, nodeIndex, offset);
     }
-
     virtual int64_t nodeNum() { return m_nodeNum; }
 
     virtual dev::h512 nodeId() { return m_nodeId; }
@@ -215,13 +226,13 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     // select target nodes from peers for this node
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 2 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 2, fakeSyncTreeTopology->peers());
     BOOST_CHECK(*selectedNodeList == dev::h512s());
 
     // select parent for the 2th nodes
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->selectParentNodes(
-        selectedNodeList, fakeSyncTreeTopology->peers(), 2);
+        selectedNodeList, fakeSyncTreeTopology->peers(), 1);
     BOOST_CHECK(*selectedNodeList == dev::h512s());
 
     /// case2: nodeIndex is 0
@@ -238,26 +249,26 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 0);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
+    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 7);
 
     // check and select nodes for the 0th node
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 0 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 0, fakeSyncTreeTopology->peers());
     std::vector<size_t> idxVec = {2, 3};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
 
     // check and select nodes for the 1th node
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 1 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 1, fakeSyncTreeTopology->peers());
     idxVec = {4, 5};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
 
     // check and select nodes for the 2th node
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 2 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 2, fakeSyncTreeTopology->peers());
     idxVec = {6};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
 
@@ -266,7 +277,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     {
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-            selectedNodeList, i + 1, fakeSyncTreeTopology->peers());
+            selectedNodeList, i, fakeSyncTreeTopology->peers());
         checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {});
     }
     /// check parent
@@ -310,12 +321,12 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 12);
+    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
 
     // check the 7th nodes
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 7 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 7, fakeSyncTreeTopology->peers());
     idxVec = {9, 10};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
     // check parent for 9th and 10th
@@ -330,7 +341,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     // check the 8th nodes
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
-        selectedNodeList, 8 + 1, fakeSyncTreeTopology->peers());
+        selectedNodeList, 8, fakeSyncTreeTopology->peers());
     idxVec = {11, 12};
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, idxVec);
     for (size_t i = 11; i <= 12; i++)
@@ -360,12 +371,12 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == 1);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 12);
+    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
 
     // get childNodes and parentNodes for this node
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(selectedNodeList,
-        fakeSyncTreeTopology->syncTreeRouter()->startIndex(), fakeSyncTreeTopology->peers());
+    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
+        selectedNodeList, 0, fakeSyncTreeTopology->peers());
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {7, 8});
 
     // check parent

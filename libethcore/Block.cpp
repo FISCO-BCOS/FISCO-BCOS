@@ -426,6 +426,7 @@ void Block::decode(
     m_transactions->resize(transactions_rlp.itemCount());
     for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
+        (*m_transactions)[i] = std::make_shared<dev::eth::Transaction>();
         (*m_transactions)[i]->decode(transactions_rlp[i], _option);
     }
 

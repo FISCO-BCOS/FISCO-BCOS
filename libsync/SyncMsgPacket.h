@@ -88,8 +88,9 @@ class SyncTransactionsPacket : public SyncMsgPacket
 {
 public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
-    void encode(std::vector<bytes> const& _txRLPs);
-    void encodeRC2(std::vector<bytes> const& _txRLPs);
+    void encode(std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter = false,
+        uint64_t const& _consIndex = 0);
+    void encodeRC2(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize);
     dev::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC = false);
 };
 
