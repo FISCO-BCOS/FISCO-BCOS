@@ -85,13 +85,6 @@ const int CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW = -50004;
 const int CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW = -50005;
 const int CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW = -50006;
 
-inline bool isHashField(const std::string& _key)
-{
-    if (!_key.empty())
-    {
-        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_"));
-    }
-    return false;
-}
+bool isHashField(const std::string& _key);
 }  // namespace storage
 }  // namespace dev
