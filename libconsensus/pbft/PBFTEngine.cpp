@@ -82,6 +82,10 @@ void PBFTEngine::stop()
     {
         m_messageHandler->stop();
     }
+    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
+    // been updated
+    m_signalled.notify_all();
+
     ConsensusEngineBase::stop();
 }
 
@@ -446,6 +450,9 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("hash", req.block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        // print the disconnected info
+        getForwardNodes(sessions, true);
     }
 
     bytes view_change_data;
@@ -1718,7 +1725,6 @@ void PBFTEngine::handleFutureBlock()
     // handle the future block with full-txs firstly
     std::shared_ptr<PrepareReq> p_future_prepare =
         m_reqCache->futurePrepareCache(m_consensusBlockNumber);
-    bool succ = false;
     if (p_future_prepare && p_future_prepare->view == m_view)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock")
@@ -1728,28 +1734,8 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        succ = handlePrepareMsg(*p_future_prepare);
+        handlePrepareMsg(*p_future_prepare);
         m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
-    }
-
-    if (!m_enablePrepareWithTxsHash || succ)
-    {
-        return;
-    }
-    // miss the future prepare cache, find from the partially future prepare
-    auto partiallyFuturePrepare =
-        m_partiallyPrepareCache->getPartiallyFuturePrepare(m_consensusBlockNumber);
-    if (partiallyFuturePrepare && partiallyFuturePrepare->view == m_view)
-    {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("handleFutureBlock: partiallyFuturePrepare")
-                             << LOG_KV("reqNum", partiallyFuturePrepare->height)
-                             << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("view", m_view)
-                             << LOG_KV("conNum", m_consensusBlockNumber)
-                             << LOG_KV("hash", partiallyFuturePrepare->block_hash.abridged())
-                             << LOG_KV("nodeIdx", nodeIdx())
-                             << LOG_KV("myNode", m_keyPair.pub().abridged());
-        handlePartiallyPrepare(partiallyFuturePrepare);
-        m_partiallyPrepareCache->eraseHandledPartiallyFutureReq(partiallyFuturePrepare->height);
     }
 }
 
@@ -1841,7 +1827,9 @@ void PBFTEngine::createPBFTMsgFactory()
 }
 
 // get the forwardNodes
-std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions)
+// _printLog is true when viewChangeWarning to show more detailed info
+std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
+    dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog)
 {
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     std::set<h512> consensusNodes;
@@ -1849,11 +1837,16 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfo
         ReadGuard l(x_consensusSet);
         consensusNodes = *m_consensusSet;
     }
+    std::string connectedNodeList = "";
     // select the disconnected consensus nodes
     for (auto const& session : _sessions)
     {
         if (consensusNodes.count(session.nodeID()))
         {
+            if (_printLog)
+            {
+                connectedNodeList += session.nodeIPEndpoint.name() + ", ";
+            }
             consensusNodes.erase(session.nodeID());
         }
     }
@@ -1863,11 +1856,21 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(dev::p2p::P2PSessionInfo
         forwardNodes = std::make_shared<dev::h512s>();
         forwardNodes->resize(consensusNodes.size());
         std::copy(consensusNodes.begin(), consensusNodes.end(), forwardNodes->begin());
-        PBFTENGINE_LOG(DEBUG)
-            << LOG_DESC("forwardPBFTMsgByForwardNodes: get disconnected consensus nodes")
-            << LOG_KV("forwardNodesSize", forwardNodes->size())
-            << LOG_KV("sessionSize", _sessions.size()) << LOG_KV("minValidNodes", minValidNodes())
-            << LOG_KV("idx", nodeIdx());
+        if (_printLog)
+        {
+            std::string disconnectedNode;
+            for (auto const& node : *forwardNodes)
+            {
+                disconnectedNode += node.abridged() + ", ";
+            }
+            PBFTENGINE_LOG(WARNING)
+                << LOG_DESC("Find disconnectedNode")
+                << LOG_KV("disconnectedNodeSize", forwardNodes->size())
+                << LOG_KV("sessionSize", _sessions.size())
+                << LOG_KV("minValidNodes", minValidNodes())
+                << LOG_KV("connectedNodeList", connectedNodeList)
+                << LOG_KV("disconnectedNode", disconnectedNode) << LOG_KV("idx", nodeIdx());
+        }
     }
     return forwardNodes;
 }
@@ -1930,14 +1933,6 @@ void PBFTEngine::resetConfig()
     {
         return;
     }
-    if (m_blockSync->syncTreeRouterEnabled())
-    {
-        m_blockSync->updateConsensusNodeInfo(sealerList());
-    }
-    if (!m_enableTTLOptimize)
-    {
-        return;
-    }
     // for ttl-optimization
     WriteGuard l(x_consensusSet);
     // m_consensusSet
@@ -1975,17 +1970,30 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
     /// update the view for given idx
     updateViewMap(_prepareReq->idx, _prepareReq->view);
 
+    _prepareReq->pBlock = m_blockFactory->createBlock();
+    assert(_prepareReq->pBlock);
+
     if (ret == CheckResult::FUTURE)
     {
-        m_partiallyPrepareCache->addPartiallyFuturePrepare(_prepareReq);
-        return true;
+        // decode the partiallyBlock
+        _prepareReq->pBlock->decodeProposal(ref(*_prepareReq->block), true);
+        bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
+        // hit all the transactions
+        if (allHit)
+        {
+            // re-encode the block into the completed block(for pbft-backup consideration)
+            _prepareReq->pBlock->encode(*_prepareReq->block);
+            m_partiallyPrepareCache->addFuturePrepareCache(*_prepareReq);
+            return true;
+        }
+        return false;
     }
-    _prepareReq->pBlock = m_blockFactory->createBlock();
     if (!m_partiallyPrepareCache->addPartiallyRawPrepare(_prepareReq))
     {
         return false;
     }
-    assert(_prepareReq->pBlock);
+    // decode the partiallyBlock
+    _prepareReq->pBlock->decodeProposal(ref(*_prepareReq->block), true);
     bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
     // update the totalTxs size and the missedTxs size
     if (m_statisticHandler)

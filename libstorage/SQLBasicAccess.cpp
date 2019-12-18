@@ -25,6 +25,10 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+
+const static char HAS_VAlue = '1';
+const static char NOT_HAS_VAlue = '0';
+
 using namespace dev::storage;
 using namespace std;
 
@@ -93,8 +97,8 @@ std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::
 {
     boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
     boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sql = "select * from ";
-    sql.append(_table);
+    std::string sql = "select * from `";
+    sql.append(_table).append("`");
     if (condition)
     {
         uint32_t index = 0;
@@ -247,47 +251,50 @@ void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const std::string& _num
 void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, const std::string& _num,
     std::map<std::string, std::vector<std::string>>& _fieldValue)
 {
-    std::map<uint64_t, std::vector<size_t>> splitDataItem;
-    std::map<std::string, uint32_t> field2Score;
-    uint32_t scorePower = 0;
+    std::map<std::string, std::vector<size_t>> splitDataItem;
+    std::map<std::string, uint32_t> field2Index;
+    uint32_t fillIndex = 0;
+
+    set<std::string> keySet;
     for (size_t i = 0; i < data->size(); ++i)
     {
-        uint64_t fieldScore = 0;
         const Entry::Ptr& entry = data->get(i);
-        for (auto fieldIt : *entry)
+        for (const auto& fieldIt : *entry)
         {
             if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
                 fieldIt.first == ID_FIELD || fieldIt.first == STATUS)
             {
                 continue;
             }
-            if (field2Score.find(fieldIt.first) == field2Score.end())
+            keySet.insert(fieldIt.first);
+        }
+    }
+
+    for (size_t i = 0; i < data->size(); ++i)
+    {
+        std::string dataValue(keySet.size(), NOT_HAS_VAlue);
+        const Entry::Ptr& entry = data->get(i);
+        for (const auto& fieldIt : *entry)
+        {
+            if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
+                fieldIt.first == ID_FIELD || fieldIt.first == STATUS)
             {
-                field2Score[fieldIt.first] = scorePower;
-                if (scorePower <= 63)
-                {
-                    fieldScore += (1ULL << scorePower);
-                    ++scorePower;
-                }
-                else
-                {
-                    THROW(SQLException, "field count should not greater than 63!");
-                }
+                continue;
+            }
+            if (field2Index.find(fieldIt.first) == field2Index.end())
+            {
+                field2Index[fieldIt.first] = fillIndex;
+                dataValue[fillIndex] = HAS_VAlue;
+                ++fillIndex;
             }
             else
             {
-                uint32_t scoreExist = field2Score[fieldIt.first];
-                if (scorePower <= 63)
-                {
-                    fieldScore += (1ULL << scoreExist);
-                }
-                else
-                {
-                    THROW(SQLException, "field count should not greater than 63!");
-                }
+                uint32_t scoreExist = field2Index[fieldIt.first];
+                dataValue[scoreExist] = HAS_VAlue;
             }
         }
-        splitDataItem[fieldScore].push_back(i);
+        SQLBasicAccess_LOG(DEBUG) << "fieldBuff value:" << dataValue;
+        splitDataItem[dataValue].push_back(i);
     }
     for (const auto& it : splitDataItem)
     {
@@ -460,8 +467,8 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
 
     boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
     boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sqlHeader = "replace into ";
-    sqlHeader.append(_table).append("(");
+    std::string sqlHeader = "replace into `";
+    sqlHeader.append(_table).append("`(");
     sqlHeader.append(_fieldStr);
     sqlHeader.append(") values");
 
@@ -497,7 +504,7 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
                 SQLPlaceHoldItem item;
                 item.sql = sql;
                 item.placeHolerCnt = placeHolderCnt;
-                sqlList.push_back(item);
+                sqlList.emplace_back(item);
                 sql = sqlHeader;
                 placeHolderCnt = 0;
             }
@@ -509,7 +516,7 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
         SQLPlaceHoldItem item;
         item.sql = sql;
         item.placeHolerCnt = placeHolderCnt;
-        sqlList.push_back(item);
+        sqlList.emplace_back(item);
     }
     return sqlList;
 }

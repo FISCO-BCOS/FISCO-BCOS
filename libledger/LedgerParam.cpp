@@ -138,7 +138,7 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
     }
     else
     {

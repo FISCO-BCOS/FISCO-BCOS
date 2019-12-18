@@ -156,11 +156,17 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
-    // block.setStateRootToAllReceipt(stateRoot); no need
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        // when support_version is lower than v2.2.0, doesn't setStateRootToAllReceipt
+        // enable_parallel=true can't be run with enable_parallel=false
+        block.setStateRootToAllReceipt(stateRoot);
+    }
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+
     /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
     /// since origin value is empty if executeBlock is called by sync module, need to compare
     /// receiptRoot, stateRoot and dbHash
