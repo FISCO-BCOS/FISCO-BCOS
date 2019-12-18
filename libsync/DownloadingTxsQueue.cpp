@@ -35,7 +35,12 @@ void DownloadingTxsQueue::push(
     int RPCPacketType = 1;
     if (_msg->packetType() == RPCPacketType && m_treeRouter)
     {
-        auto selectedNodeList = m_treeRouter->selectNodes(m_syncStatus->peersSet());
+        int64_t consIndex = _packet->rlp()[1].toPositiveInt64();
+        SYNC_LOG(DEBUG) << LOG_DESC("receive and send transactions by tree")
+                        << LOG_KV("consIndex", consIndex)
+                        << LOG_KV("fromPeer", _fromPeer.abridged());
+
+        auto selectedNodeList = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
         // forward the received txs
         for (auto const& selectedNode : *selectedNodeList)
         {
@@ -53,7 +58,6 @@ void DownloadingTxsQueue::push(
                             << LOG_KV("selectedNode", selectedNode.abridged());
         }
     }
-
     WriteGuard l(x_buffer);
     m_buffer->emplace_back(txsShard);
     if (m_statisticHandler)
@@ -116,6 +120,7 @@ void DownloadingTxsQueue::pop2TxPool(
             txs->resize(txNum);
             for (unsigned j = 0; j < txNum; j++)
             {
+                (*txs)[j] = std::make_shared<dev::eth::Transaction>();
                 (*txs)[j]->decode(txsBytesRLP[j]);
             }
         }
