@@ -222,6 +222,11 @@ h256 MemoryTableFactory2::hash()
 
                 bytes tableHash = hash.asBytes();
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
+#if 0
+                STORAGE_LOG(TRACE)
+                    << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
+                    << LOG_KV("tableName", table.first) << LOG_KV("hash", hash);
+#endif
             }
         });
 
