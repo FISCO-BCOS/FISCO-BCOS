@@ -376,6 +376,10 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {
             auto entry = tempEntries[i];
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {  // RC2 STATUS is in entry fields
+                entry->setField(STATUS, to_string(entry->getStatus()));
+            }
             for (auto fieldIt : *(entry))
             {
                 if (isHashField(fieldIt.first))
@@ -383,6 +387,10 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
                     allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
                     allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
+            }
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {
+                continue;
             }
             char status = (char)entry->getStatus();
             allData.insert(allData.end(), &status, &status + sizeof(status));
@@ -395,7 +403,6 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         bytesConstRef bR(allData.data(), allData.size());
         m_hash = dev::sha256(bR);
-
         m_isDirty = false;
     }
 
