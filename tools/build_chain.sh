@@ -340,7 +340,7 @@ gen_chain_cert_gm() {
 
     generate_gmsm2_param "gmsm2.param"
 	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     cp gmcert.cnf gmsm2.param $chaindir
 
@@ -365,7 +365,7 @@ gen_agency_cert_gm() {
     mkdir -p $agencydir
 
     $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
     $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
@@ -380,7 +380,7 @@ gen_node_cert_with_extensions_gm() {
     extensions="$5"
 
     $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
     $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
