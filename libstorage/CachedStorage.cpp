@@ -368,20 +368,21 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
-                    for (auto id : duplicateIDs)
-                    {
-                        for (auto start = requestData->dirtyEntries->size();
-                             start < commitData->dirtyEntries->size(); ++start)
-                        {
-                            if ((*commitData->dirtyEntries)[start]->getID() == id)
-                            {
-                                auto duplicateEntry = make_shared<Entry>();
-                                duplicateEntry->copyFrom((*commitData->dirtyEntries)[start]);
-                                duplicateEntry->setDeleted(true);
-                                (*commitData->dirtyEntries)[start] = duplicateEntry;
+                    tbb::parallel_for(tbb::blocked_range<size_t>(requestData->dirtyEntries->size(),
+                                          commitData->dirtyEntries->size()),
+                        [&](const tbb::blocked_range<size_t>& rangeEntries) {
+                            for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
+                            {  // remove duplicate entries
+                                if (duplicateIDs.find((*commitData->dirtyEntries)[i]->getID()) !=
+                                    duplicateIDs.end())
+                                {
+                                    auto duplicateEntry = make_shared<Entry>();
+                                    duplicateEntry->copyFrom((*commitData->dirtyEntries)[i]);
+                                    duplicateEntry->setDeleted(true);
+                                    (*commitData->dirtyEntries)[i] = duplicateEntry;
+                                }
                             }
-                        }
-                    }
+                        });
                     tbb::parallel_sort(commitData->dirtyEntries->begin(),
                         commitData->dirtyEntries->end(), EntryLessNoLock(commitData->info));
                 }
@@ -686,9 +687,9 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache)
 {
     /*
-     If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the cache
-     object which erased in m_caches, the data will lost, to avoid this, re-insert the data into the
-     m_caches
+     If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the
+     cache object which erased in m_caches, the data will lost, to avoid this, re-insert the
+     data into the m_caches
      */
 
     RWMutexScoped lockCache(m_cachesMutex, false);
