@@ -80,11 +80,22 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
-void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
+void SyncTransactionsPacket::encode(
+    std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter, uint64_t const& _consIndex)
 {
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        encodeRC2(_txRLPs);
+        unsigned fieldSize = 1;
+        if (_enableTreeRouter)
+        {
+            fieldSize = 2;
+        }
+        encodeRC2(_txRLPs, fieldSize);
+        // append _consIndex
+        if (_enableTreeRouter)
+        {
+            m_rlpStream << _consIndex;
+        }
         return;
     }
 
@@ -98,11 +109,12 @@ void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
     prep(m_rlpStream, TransactionsPacket, txsSize).appendRaw(txRLPS, txsSize);
 }
 
-void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
+void SyncTransactionsPacket::encodeRC2(
+    std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
 {
     m_rlpStream.clear();
     bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
-    prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
+    prep(m_rlpStream, TransactionsPacket, _fieldSize).append(ref(txsBytes));
 }
 
 P2PMessage::Ptr SyncTransactionsPacket::toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC)

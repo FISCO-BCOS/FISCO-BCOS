@@ -224,6 +224,11 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
         mutableConsensusParam().enablePrepareWithTxsHash =
             pt.get<bool>("consensus.enable_prepare_with_txsHash", false);
     }
+    // only support >= 2.2.0-rc2
+    if (g_BCOSConfig.version() < RC2_VERSION)
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash = false;
+    }
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
@@ -316,8 +321,28 @@ void LedgerParam::initSyncConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
-    mutableSyncParam().enableSendBlockStatusByTree = pt.get<bool>("sync.sync_by_tree", true);
+
+    // send_txs_by_tree only supported after RC2
+    if (g_BCOSConfig.version() < RC2_VERSION)
+    {
+        mutableSyncParam().enableSendTxsByTree = false;
+    }
+    // the support_version is lower than 2.2.0, default disable send_txs_by_tree
+    else if (g_BCOSConfig.version() <= V2_1_0)
+    {
+        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", false);
+        mutableSyncParam().enableSendBlockStatusByTree =
+            pt.get<bool>("sync.sync_block_by_tree", false);
+    }
+    // the supported_version >= v2.2.0, default enable send_txs_by_tree
+    else
+    {
+        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", true);
+        mutableSyncParam().enableSendBlockStatusByTree =
+            pt.get<bool>("sync.sync_block_by_tree", true);
+    }
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("enableSendTxsByTree", mutableSyncParam().enableSendTxsByTree)
                           << LOG_KV("enableSendBlockStatusByTree",
                                  mutableSyncParam().enableSendBlockStatusByTree);
 
