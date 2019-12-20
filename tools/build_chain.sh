@@ -194,10 +194,6 @@ check_env() {
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
-    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
-        # FIXME: offer tassl binary on macOS
-        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
-    fi
     if [ -n "$guomi_mode" ]; then
         check_and_install_tassl
     fi
@@ -207,8 +203,13 @@ check_env() {
 check_and_install_tassl()
 { 
     if [ ! -f "${HOME}/.tassl" ];then
-        curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         LOG_INFO "Downloading tassl binary ..."
+        if [[ ! -z ${macOS} ]];then
+            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            mv tassl_mac.tar.gz tassl.tar.gz
+        else
+            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+        fi
         tar zxvf tassl.tar.gz
         chmod u+x tassl
         mv tassl ${HOME}/.tassl
@@ -1041,6 +1042,9 @@ download_bin()
     package_name="fisco-bcos.tar.gz"
     [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
     [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
+    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
+        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+    fi
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
@@ -1148,9 +1152,9 @@ if [ -n "$guomi_mode" ]; then
 
     echo "Generating Guomi CA key..."
     dir_must_not_exists ${output_dir}/gmchain
-    gen_chain_cert_gm ${output_dir}/gmchain >${output_dir}/build.log 2>&1 || exit_with_clean "openssl error!"  #生成secp256k1算法的CA密钥
+    gen_chain_cert_gm ${output_dir}/gmchain >${logfile} 2>&1 || exit_with_clean "openssl error!"
     mv ${output_dir}/gmchain ${output_dir}/gmcert
-    gen_agency_cert_gm ${output_dir}/gmcert ${output_dir}/gmcert/agency >${output_dir}/build.log 2>&1
+    gen_agency_cert_gm ${output_dir}/gmcert ${output_dir}/gmcert/agency >${logfile} 2>&1
     ca_file="${output_dir}/gmcert/ca.key"    
 fi
 
@@ -1195,7 +1199,7 @@ for line in ${ip_array[*]};do
             fi
 
             if [ -n "$guomi_mode" ]; then
-                gen_node_cert_gm ${output_dir}/gmcert/agency ${node_dir} >${output_dir}/build.log 2>&1
+                gen_node_cert_gm ${output_dir}/gmcert/agency ${node_dir} >${logfile} 2>&1
                 mkdir -p ${gm_conf_path}/
                 mv ./*.* ${gm_conf_path}/
 
@@ -1218,10 +1222,9 @@ for line in ${ip_array[*]};do
 
             #move origin conf to gm conf
             rm ${node_dir}/${conf_path}/node.nodeid
-            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
+            mv ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
             #remove original cert files
-            rm ${node_dir:?}/${conf_path} -rf
             mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
 
         else
