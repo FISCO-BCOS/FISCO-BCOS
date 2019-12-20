@@ -240,12 +240,6 @@ void Sealer::stop()
     }
     SEAL_LOG(INFO) << "Stop sealer module...";
     m_startConsensus = false;
-
-    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
-    // been updated
-    m_signalled.notify_all();
-    m_blockSignalled.notify_all();
-
     doneWorking();
     if (isWorking())
     {
