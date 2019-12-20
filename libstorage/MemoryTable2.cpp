@@ -395,7 +395,26 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
             char status = (char)entry->getStatus();
             allData.insert(allData.end(), &status, &status + sizeof(status));
         }
-
+#if 0
+        auto printEntries = [](tbb::concurrent_vector<Entry::Ptr>& entries) {
+            if (entries.size() == 0)
+            {
+                cout << " is empty!" << endl;
+                return;
+            }
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                auto data = entries[i];
+                cout << endl << "***" << i << " [ id=" << data->getID() << " ]";
+                for (auto& it : *data)
+                {
+                    cout << "[ " << it.first << "=" << it.second << " ]";
+                }
+            }
+            cout << endl;
+        };
+        printEntries(tempEntries);
+#endif
         if (allData.empty())
         {
             m_hash = h256();

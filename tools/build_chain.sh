@@ -56,7 +56,6 @@ Usage:
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
-    -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -111,7 +110,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -126,7 +125,6 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    m) state_type=mpt;;
     s) storage_type=$OPTARG
         if ! echo "${supported_storage[*]}" | grep -i "${storage_type}" &>/dev/null; then
             LOG_WARN "${storage_type} is not supported. Please set one of ${supported_storage[*]}"
@@ -168,7 +166,6 @@ echo "================================================================"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
-LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
@@ -340,7 +337,7 @@ gen_chain_cert_gm() {
 
     generate_gmsm2_param "gmsm2.param"
 	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     cp gmcert.cnf gmsm2.param $chaindir
 
@@ -365,7 +362,7 @@ gen_agency_cert_gm() {
     mkdir -p $agencydir
 
     $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
     $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
@@ -380,7 +377,7 @@ gen_node_cert_with_extensions_gm() {
     extensions="$5"
 
     $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
     $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
@@ -500,7 +497,6 @@ generate_group_genesis()
     ; the node id of consensusers
     ${node_list}
 [state]
-    ; support mpt/storage
     type=${state_type}
 [tx]
     ; transaction gas limit
