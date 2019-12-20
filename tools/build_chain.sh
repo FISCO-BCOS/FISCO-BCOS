@@ -172,8 +172,8 @@ LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "================================================================"
 if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
-LOG_INFO "Execute the following command to get FISCO-BCOS console"
-echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
+LOG_INFO "Execute the download_console.sh script to get FISCO-BCOS console, download_console.sh is in directory named by IP."
+echo " bash download_console.sh"
 echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -194,11 +194,18 @@ check_env() {
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
+    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
+        # FIXME: offer tassl binary on macOS
+        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+    fi
+    if [ -n "$guomi_mode" ]; then
+        check_and_install_tassl
+    fi
 }
 
 # TASSL env
 check_and_install_tassl()
-{
+{ 
     if [ ! -f "${HOME}/.tassl" ];then
         curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         LOG_INFO "Downloading tassl binary ..."
@@ -269,7 +276,7 @@ gen_agency_cert() {
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
     rm -f $agencydir/agency.csr
 
-    echo "build $name agency cert successful!"
+    echo "build $name cert successful!"
 }
 
 gen_cert_secp256k1() {
@@ -893,6 +900,27 @@ fi
 EOF
 }
 
+genDownloadConsole() {
+    local output=$1
+    local file="${output}/download_console.sh"
+    generate_script_template "${file}"
+    cat << EOF > "${file}"
+version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+package_name="console.tar.gz"
+echo "Downloading console \${version}"
+download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
+
+if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
+    curl -LO \${download_link} --speed-time 30 --speed-limit 1024 -m 90 || {
+        echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
+        curl -LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
+    }
+else
+    curl -LO \${download_link}
+fi
+tar -zxf \${package_name} && cd console && chmod +x *.sh
+EOF
+}
 
 genTransTest()
 {
@@ -1013,9 +1041,6 @@ download_bin()
     package_name="fisco-bcos.tar.gz"
     [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
     [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
-        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
-    fi
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
@@ -1117,7 +1142,7 @@ if [ ! -e "$ca_file" ]; then
 fi
 
 if [ -n "$guomi_mode" ]; then
-    check_and_install_tassl
+    #check_and_install_tassl
 
     generate_cert_conf_gm "gmcert.cnf"
 
@@ -1270,6 +1295,7 @@ for line in ${ip_array[*]};do
         set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
+    genDownloadConsole "${output_dir}/${ip}"
     if [ -z ${docker_mode} ];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
@@ -1285,7 +1311,7 @@ fi
 
 }
 
-check_env
 parse_params $@
+check_env
 main
 print_result
