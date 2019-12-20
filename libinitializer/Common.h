@@ -48,6 +48,9 @@ DEV_SIMPLE_EXCEPTION(GroupConfigNotExists);
 DEV_SIMPLE_EXCEPTION(GenesisExists);
 DEV_SIMPLE_EXCEPTION(GroupConfigExists);
 DEV_SIMPLE_EXCEPTION(GroupGeneratorException);
+DEV_SIMPLE_EXCEPTION(InvalidGenesisGroupID);
+DEV_SIMPLE_EXCEPTION(InvalidGenesisTimestamp);
+DEV_SIMPLE_EXCEPTION(InvalidGenesisNodeid);
 
 inline bool isValidPort(int port)
 {

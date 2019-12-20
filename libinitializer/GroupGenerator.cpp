@@ -213,17 +213,17 @@ void GroupGenerator::generate(
 {
     if (!checkGroupID(_groupId))
     {
-        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+        BOOST_THROW_EXCEPTION(InvalidGenesisGroupID());
     }
 
     if (!checkTimestamp(_timestamp))
     {
-        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+        BOOST_THROW_EXCEPTION(InvalidGenesisTimestamp());
     }
 
     if (!checkSealerList(_sealerList))
     {
-        BOOST_THROW_EXCEPTION(GroupGeneratorException());
+        BOOST_THROW_EXCEPTION(InvalidGenesisNodeid());
     }
 
     std::string confDir = g_BCOSConfig.confDir();

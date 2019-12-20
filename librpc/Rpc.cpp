@@ -1332,6 +1332,11 @@ Json::Value Rpc::generateGroup(
     Json::Value response;
     try
     {
+        if (!GroupGenerator::checkGroupID(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(InvalidGroupID());
+        }
+
         if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
         {
             BOOST_THROW_EXCEPTION(GroupExists());
@@ -1364,6 +1369,27 @@ Json::Value Rpc::generateGroup(
                               " timestamp: " + _timestamp +
                               " sealerlist.size: " + std::to_string(_sealerList.size());
     }
+    catch (InvalidGenesisGroupID const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
+    }
+    catch (InvalidGenesisTimestamp const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "Invalid timestamp: " + _timestamp;
+    }
+    catch (InvalidGenesisNodeid const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+
+        std::string nodeIDs;
+        for (auto nodeid : sealerlist)
+        {
+            nodeIDs += nodeid + ",";
+        }
+        response["message"] = "Invalid Nodeids: " + nodeIDs;
+    }
     catch (std::exception const& _e)
     {
         response["code"] = GroupGeneratorCode::OTHER_ERROR;
@@ -1390,7 +1416,7 @@ Json::Value Rpc::startGroup(int _groupID)
     {
         if (!GroupGenerator::checkGroupID(_groupID))
         {
-            BOOST_THROW_EXCEPTION(GroupGeneratorException());
+            BOOST_THROW_EXCEPTION(InvalidGroupID());
         }
 
         bool success = m_ledgerInitializer->initLedgerByGroupID(GROUP_ID(_groupID));
@@ -1428,6 +1454,27 @@ Json::Value Rpc::startGroup(int _groupID)
     {
         response["code"] = GroupStarterCode::INVALID_PARAMS;
         response["message"] = "Group start error: GroupID: " + std::to_string(_groupID);
+    }
+    catch (InvalidGenesisGroupID const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
+    }
+    catch (InvalidGenesisTimestamp const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "Invalid timestamp: " + _timestamp;
+    }
+    catch (InvalidGenesisNodeid const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+
+        std::string nodeIDs;
+        for (auto nodeid : sealerlist)
+        {
+            nodeIDs += nodeid + ",";
+        }
+        response["message"] = "Invalid Nodeids: " + nodeIDs;
     }
     catch (std::exception const& _e)
     {
