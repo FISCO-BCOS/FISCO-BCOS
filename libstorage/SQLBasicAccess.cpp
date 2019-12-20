@@ -293,7 +293,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, const 
                 dataValue[scoreExist] = HAS_VAlue;
             }
         }
-        SQLBasicAccess_LOG(DEBUG) << "fieldBuff value:" << dataValue;
+        // SQLBasicAccess_LOG(DEBUG) << "fieldBuff value:" << dataValue;
         splitDataItem[dataValue].push_back(i);
     }
     for (const auto& it : splitDataItem)
