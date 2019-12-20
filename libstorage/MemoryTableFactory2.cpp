@@ -217,6 +217,10 @@ h256 MemoryTableFactory2::hash()
                 h256 hash = table.second->hash();
                 if (hash == h256())
                 {
+#if 0
+                    cout << LOG_BADGE("MemoryTableFactory2 hash continued ") << it << "/"
+                         << tables.size() << LOG_KV("tableName", table.first) << endl;
+#endif
                     continue;
                 }
 
