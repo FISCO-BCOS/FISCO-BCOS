@@ -383,12 +383,11 @@ Json::Value Rpc::getClientVersion()
     return Json::Value();
 }
 
-Json::Value Rpc::getPeers(int _groupID)
+Json::Value Rpc::getPeers(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
@@ -424,13 +423,12 @@ Json::Value Rpc::getPeers(int _groupID)
     return Json::Value();
 }
 
-Json::Value Rpc::getNodeIDList(int _groupID)
+Json::Value Rpc::getNodeIDList(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
 
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
 
         response.append(service()->id().hex());
