@@ -73,10 +73,6 @@ bool TreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) co
 {
     if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size())
     {
-        // TODO: remove this for performance
-        TREE_LOG(TRACE) << LOG_DESC("getNodeIDByIndex: invalidNode")
-                        << LOG_KV("nodeIndex", _nodeIndex)
-                        << LOG_KV("nodeListSize", m_currentConsensusNodes->size());
         return false;
     }
     _nodeID = (*m_currentConsensusNodes)[_nodeIndex];
@@ -118,13 +114,6 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
         // the child node exists in the peers
         if (_peers->count(selectedNode))
         {
-            TREE_LOG(DEBUG) << LOG_DESC("recursiveSelectChildNodes")
-                            << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("parentIndex", _parentIndex)
-                            << LOG_KV("selectedIndex", selectedIndex)
-                            << LOG_KV("expectedIndex", expectedIndex)
-                            << LOG_KV("startIndex", m_startIndex) << LOG_KV("endIndex", m_endIndex)
-                            << LOG_KV("consIndex", m_consIndex);
             _selectedNodeList->push_back(selectedNode);
         }
         // the child node doesn't exist in the peers, select the grand child recursively
@@ -170,12 +159,6 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         if (getNodeIDByIndex(selectedNode, selectedIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            TREE_LOG(DEBUG) << LOG_DESC("selectParentNodes")
-                            << LOG_KV("selectedIndex", selectedIndex)
-                            << LOG_KV("parentIndex", parentIndex)
-                            << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("idx", m_consIndex) << LOG_KV("endIndex", m_endIndex)
-                            << LOG_KV("consIndex", m_consIndex);
             break;
         }
         if (parentIndex <= 0)
@@ -218,9 +201,6 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
             nodeIndex = (m_consIndex + m_nodeNum - _consIndex) % m_nodeNum;
         }
     }
-
-    TREE_LOG(DEBUG) << LOG_DESC("selectNodes") << LOG_KV("consIndexParam", _consIndex)
-                    << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeIndex", nodeIndex);
     recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
 
     // find the parent nodes

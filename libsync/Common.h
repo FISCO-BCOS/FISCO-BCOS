@@ -54,7 +54,7 @@ static size_t const c_maxDownloadingBlockQueueSize =
 static size_t const c_maxDownloadingBlockQueueBufferSize = c_maxDownloadingBlockQueueSize;
 
 static size_t const c_maxReceivedDownloadRequestPerPeer = 1000;
-static uint64_t const c_respondDownloadRequestTimeout = 200;  // ms
+static uint64_t const c_respondDownloadRequestTimeout = (200 * c_maxRequestBlocks);  // ms
 
 static unsigned const c_syncPacketIDBase = 1;
 
