@@ -198,7 +198,10 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
         }
         else
         {
-            nodeIndex = (m_consIndex + m_nodeNum - _consIndex) % m_nodeNum;
+            // when the node is added into or removed from the sealerList frequently
+            // the consIndex maybe higher than m_consIndex,
+            // and the distance maybe higher than m_nodeNum
+            nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
         }
     }
     recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
