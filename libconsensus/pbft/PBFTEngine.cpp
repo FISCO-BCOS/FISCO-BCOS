@@ -701,8 +701,13 @@ bool PBFTEngine::checkBlock(Block const& block)
     /// check sign
     for (auto const& sign : *sig_list)
     {
-        if (!checkSign(sign.first.convert_to<IDXTYPE>(), block.blockHeader().hash(), sign.second))
+        auto nodeIndex = sign.first.convert_to<IDXTYPE>();
+        if (!checkSign(nodeIndex, block.blockHeader().hash(), sign.second))
         {
+            PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: checkSign failed")
+                                  << LOG_KV("sealerIdx", nodeIndex)
+                                  << LOG_KV("blockHash", block.blockHeader().hash().abridged())
+                                  << LOG_KV("signature", sign.second.abridged());
             return false;
         }
     }  /// end of check sign
@@ -710,6 +715,9 @@ bool PBFTEngine::checkBlock(Block const& block)
     /// Check whether the number of transactions in block exceeds the limit
     if (block.transactions()->size() > maxBlockTransactions())
     {
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: check maxBlockTransactions failed")
+                              << LOG_KV("blkTxsNum", block.transactions()->size())
+                              << LOG_KV("maxBlockTransactions", maxBlockTransactions());
         return false;
     }
     return true;
