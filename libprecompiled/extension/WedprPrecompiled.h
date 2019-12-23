@@ -43,6 +43,10 @@ extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
 extern const char API_VERIFY_VOTE_RESULT[];
 extern const char API_GET_VOTE_RESULT_FROM_REQUEST[];
 
+// anonymous auction
+extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE[];
+extern const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[];
+
 extern const char WEDPR_VERFIY_FAILED[];
 extern const char WEDPR_PRECOMPILED[];
 
@@ -74,6 +78,9 @@ public:
     bytes aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+
+    bytes verifyBidSignature(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data);
 };
 
 }  // namespace precompiled

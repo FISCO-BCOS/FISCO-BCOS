@@ -31,6 +31,8 @@ char* aggregate_h_point(char* h_point_share_cstring, char* h_point_sum_cstring);
 
 char* aggregate_vote_sum_response(char* param_pb, char* vote_storage_part_pb, char* vote_sum_pb);
 
+char* get_bid_storage_from_bid_request(char* bid_request_pb);
+
 char* get_blank_ballot_from_vote_request(char* request_pb);
 
 char* get_blank_ballot_from_vote_storage(char* vote_storage_pb);
@@ -73,6 +75,8 @@ char* get_vote_result_from_request(char* vote_result_request_pb);
 
 char* get_vote_storage_from_vote_request(char* request_pb);
 
+int8_t verify_bid_signature(char* bid_request_pb);
+
 int8_t verify_bounded_vote_request(char* param_pb, char* request_pb);
 
 int8_t verify_count_request(
@@ -90,5 +94,7 @@ int8_t verify_unbounded_vote_request(char* param_pb, char* request_pb);
 
 int8_t verify_vote_result(
     char* param_pb, char* vote_sum_pb, char* count_result_sum_pb, char* vote_result_request_pb);
+
+int8_t verify_winner(char* winner_claim_request_pb, char* all_bid_request_pb);
 
 }  // extern "C"
