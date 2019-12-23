@@ -219,7 +219,8 @@ h256 MemoryTableFactory2::hash()
                 {
 #if 0
                     cout << LOG_BADGE("MemoryTableFactory2 hash continued ") << it << "/"
-                         << tables.size() << LOG_KV("tableName", table.first) << endl;
+                         << tables.size() << LOG_KV("tableName", table.first)
+                         << LOG_KV("blockNum", m_blockNum) << endl;
 #endif
                     continue;
                 }
@@ -227,9 +228,9 @@ h256 MemoryTableFactory2::hash()
                 bytes tableHash = hash.asBytes();
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
 #if 0
-                STORAGE_LOG(TRACE)
-                    << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
-                    << LOG_KV("tableName", table.first) << LOG_KV("hash", hash);
+                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
+                     << LOG_KV("tableName", table.first) << LOG_KV("hash", hash)
+                     << LOG_KV("blockNum", m_blockNum) << endl;
 #endif
             }
         });
