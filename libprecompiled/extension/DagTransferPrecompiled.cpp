@@ -23,6 +23,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -143,11 +144,20 @@ std::string DagTransferPrecompiled::toString()
 Table::Ptr DagTransferPrecompiled::openTable(
     dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    auto table = Precompiled::openTable(context, precompiled::getTableName(DAG_TRANSFER));
+    string dagTableName;
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        dagTableName = "_dag_transfer_";
+    }
+    else
+    {
+        dagTableName = precompiled::getTableName(DAG_TRANSFER);
+    }
+    auto table = Precompiled::openTable(context, dagTableName);
     if (!table)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = createTable(context, precompiled::getTableName(DAG_TRANSFER),
-            DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
+        table = createTable(
+            context, dagTableName, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
                                << LOG_DESC(" create __dag_transfer__ table. ");

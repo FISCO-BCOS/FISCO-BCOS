@@ -385,12 +385,11 @@ Json::Value Rpc::getClientVersion()
     return Json::Value();
 }
 
-Json::Value Rpc::getPeers(int _groupID)
+Json::Value Rpc::getPeers(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
@@ -426,13 +425,12 @@ Json::Value Rpc::getPeers(int _groupID)
     return Json::Value();
 }
 
-Json::Value Rpc::getNodeIDList(int _groupID)
+Json::Value Rpc::getNodeIDList(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
 
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
 
         response.append(service()->id().hex());
@@ -1334,6 +1332,11 @@ Json::Value Rpc::generateGroup(
     Json::Value response;
     try
     {
+        if (!GroupGenerator::checkGroupID(_groupID))
+        {
+            BOOST_THROW_EXCEPTION(InvalidGenesisGroupID());
+        }
+
         if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
         {
             BOOST_THROW_EXCEPTION(GroupExists());
@@ -1366,6 +1369,27 @@ Json::Value Rpc::generateGroup(
                               " timestamp: " + _timestamp +
                               " sealerlist.size: " + std::to_string(_sealerList.size());
     }
+    catch (InvalidGenesisGroupID const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
+    }
+    catch (InvalidGenesisTimestamp const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "Invalid timestamp: " + _timestamp;
+    }
+    catch (InvalidGenesisNodeid const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+
+        std::string nodeIDs;
+        for (auto nodeid : _sealerList)
+        {
+            nodeIDs += nodeid + ",";
+        }
+        response["message"] = "Invalid Nodeids: " + nodeIDs;
+    }
     catch (std::exception const& _e)
     {
         response["code"] = GroupGeneratorCode::OTHER_ERROR;
@@ -1392,7 +1416,7 @@ Json::Value Rpc::startGroup(int _groupID)
     {
         if (!GroupGenerator::checkGroupID(_groupID))
         {
-            BOOST_THROW_EXCEPTION(GroupGeneratorException());
+            BOOST_THROW_EXCEPTION(InvalidGenesisGroupID());
         }
 
         bool success = m_ledgerInitializer->initLedgerByGroupID(GROUP_ID(_groupID));
@@ -1430,6 +1454,11 @@ Json::Value Rpc::startGroup(int _groupID)
     {
         response["code"] = GroupStarterCode::INVALID_PARAMS;
         response["message"] = "Group start error: GroupID: " + std::to_string(_groupID);
+    }
+    catch (InvalidGenesisGroupID const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
     }
     catch (std::exception const& _e)
     {

@@ -129,10 +129,6 @@ void SyncMaster::stop()
     {
         m_blockStatusGossipThread->stop();
     }
-    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
-    // been updated
-    m_signalled.notify_all();
-
     doneWorking();
     stopWorking();
     // will not restart worker, so terminate it
@@ -676,7 +672,9 @@ void SyncMaster::maintainBlockRequest()
             DownloadRequest req = reqQueue.topAndPop();
             int64_t number = req.fromNumber;
             int64_t numberLimit = req.fromNumber + req.size;
-
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
+                            << LOG_KV("from", req.fromNumber) << LOG_KV("size", req.size)
+                            << LOG_KV("numberLimit", numberLimit);
             // Send block at sequence
             for (; number < numberLimit && utcTime() <= timeout; number++)
             {

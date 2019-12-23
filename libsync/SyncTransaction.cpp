@@ -40,10 +40,6 @@ void SyncTransaction::start()
 
 void SyncTransaction::stop()
 {
-    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
-    // been updated
-    m_signalled.notify_all();
-
     doneWorking();
     stopWorking();
     // will not restart worker, so terminate it
@@ -135,6 +131,11 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
     auto randomSelectedPeers = _selectedPeers;
     bool randomSelectedPeersInited = false;
+    int64_t consIndex = 0;
+    if (m_treeRouter)
+    {
+        consIndex = m_treeRouter->consIndex();
+    }
 
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
@@ -159,7 +160,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         }
         if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
         {
-            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet());
+            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
             randomSelectedPeersInited = true;
         }
         peers = m_syncStatus->filterPeers(
@@ -193,7 +194,14 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
 
         std::shared_ptr<SyncTransactionsPacket> packet = std::make_shared<SyncTransactionsPacket>();
-        packet->encode(txRLPs);
+        if (m_treeRouter && _fromRpc)
+        {
+            packet->encode(txRLPs, true, consIndex);
+        }
+        else
+        {
+            packet->encode(txRLPs);
+        }
 
         auto msg = packet->toMessage(m_protocolId, _fromRpc);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());

@@ -82,10 +82,6 @@ void PBFTEngine::stop()
     {
         m_messageHandler->stop();
     }
-    // notify all when stop, in case of the process stucked in 'doWork' when the system-time has
-    // been updated
-    m_signalled.notify_all();
-
     ConsensusEngineBase::stop();
 }
 
@@ -1546,7 +1542,6 @@ void PBFTEngine::checkTimeout()
             if (m_timeManager.m_lastConsensusTime != 0)
             {
                 m_fastViewChange = false;
-                m_timeManager.updateChangeCycle();
                 /// notify sealer that the consensus has been timeout
                 /// and the timeout is not caused by unworked-leader(the case that the node not
                 /// receive the prepare packet)
@@ -1555,6 +1550,7 @@ void PBFTEngine::checkTimeout()
                     m_onTimeout(sealingTxNumber());
                 }
             }
+            m_timeManager.updateChangeCycle();
             Timer t;
             m_toView += 1;
             m_leaderFailed = true;

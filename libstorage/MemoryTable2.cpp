@@ -376,6 +376,10 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
         for (size_t i = 0; i < tempEntries.size(); ++i)
         {
             auto entry = tempEntries[i];
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {  // RC2 STATUS is in entry fields
+                entry->setField(STATUS, to_string(entry->getStatus()));
+            }
             for (auto fieldIt : *(entry))
             {
                 if (isHashField(fieldIt.first))
@@ -384,10 +388,33 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
                     allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
                 }
             }
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {
+                continue;
+            }
             char status = (char)entry->getStatus();
             allData.insert(allData.end(), &status, &status + sizeof(status));
         }
-
+#if 0
+        auto printEntries = [](tbb::concurrent_vector<Entry::Ptr>& entries) {
+            if (entries.size() == 0)
+            {
+                cout << " is empty!" << endl;
+                return;
+            }
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                auto data = entries[i];
+                cout << endl << "***" << i << " [ id=" << data->getID() << " ]";
+                for (auto& it : *data)
+                {
+                    cout << "[ " << it.first << "=" << it.second << " ]";
+                }
+            }
+            cout << endl;
+        };
+        printEntries(tempEntries);
+#endif
         if (allData.empty())
         {
             m_hash = h256();
@@ -395,7 +422,6 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         bytesConstRef bR(allData.data(), allData.size());
         m_hash = dev::sha256(bR);
-
         m_isDirty = false;
     }
 

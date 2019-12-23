@@ -107,7 +107,8 @@ void SyncTreeTopology::updateStartAndEndIndex()
     {
         endIndex = m_nodeNum - 1;
     }
-    m_endIndex = endIndex;
+    // start from 1, so the endIndex should be increase 1
+    m_endIndex = endIndex - m_startIndex + 1;
     SYNCTREE_LOG(DEBUG) << LOG_DESC("updateStartAndEndIndex") << LOG_KV("startIndex", m_startIndex)
                         << LOG_KV("endIndex", m_endIndex) << LOG_KV("slotSize", slotSize)
                         << LOG_KV("nodeNum", m_nodeNum) << LOG_KV("consNum", consensusNodeSize);
@@ -131,20 +132,6 @@ bool SyncTreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex
     return true;
 }
 
-ssize_t SyncTreeTopology::getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset)
-{
-    return (_parentIndex - m_startIndex) * m_treeWidth + _offset + m_startIndex;
-}
-
-// find the parentNode if this node is not the consensus node:
-// {_nodeIndex - m_startIndex} is the ID of the given node in the {m_startIndex}th tree
-// {(_nodeIndex - m_startIndex) / m_treeWidth} is the parent ID of the given node in the
-// {m_startIndex}th tree, parentIndex is the nodeIndex of the parentNode
-ssize_t SyncTreeTopology::getParentNodeIndex(ssize_t const& _nodeIndex)
-{
-    return (_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
-}
-
 bool SyncTreeTopology::locatedInGroup()
 {
     return (m_consIndex != -1) || (m_nodeIndex != -1);
@@ -152,19 +139,22 @@ bool SyncTreeTopology::locatedInGroup()
 
 // select the child nodes by tree
 void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers)
+    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+    int64_t const& _startIndex)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
     {
         return;
     }
-    return TreeTopology::recursiveSelectChildNodes(_selectedNodeList, _parentIndex, _peers);
+    return TreeTopology::recursiveSelectChildNodes(
+        _selectedNodeList, _parentIndex, _peers, _startIndex);
 }
 
 // select the parent nodes by tree
 void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex)
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+    int64_t const& _startIndex)
 {
     // if the node doesn't locate in the group
     if (!locatedInGroup())
@@ -184,11 +174,11 @@ void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNo
         }
         return;
     }
-    return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex);
+    return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex, _startIndex);
 }
 
 std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
-    std::shared_ptr<std::set<dev::h512>> _peers)
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const&)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
@@ -197,23 +187,27 @@ std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
     {
         return selectedNodeList;
     }
+    // here will not overflow
+    // the sync-tree-toplogy is:
+    // consensusNode(0)->{0->{2,3}, 1->{4,5}}
+    // however, the tree-toplogy is:
+    // consensusNode(0)->{1->{3,4}, 2->{5,6}}
+    // so every node of tree-toplogy should decrease 1 to get sync-tree-toplogy
+    int64_t offset = m_startIndex - 1;
+
+    int64_t nodeIndex = m_nodeIndex + 1 - m_startIndex;
     // find the parent nodes
-    selectParentNodes(selectedNodeList, _peers, m_nodeIndex);
-    // no need to select the child node
-    if (m_startIndex == m_endIndex)
-    {
-        return selectedNodeList;
-    }
+    selectParentNodes(selectedNodeList, _peers, nodeIndex, offset);
 
     // the node is the consensusNode, chose the childNode
     if (m_consIndex >= 0)
     {
-        recursiveSelectChildNodes(selectedNodeList, m_startIndex, _peers);
+        recursiveSelectChildNodes(selectedNodeList, 0, _peers, offset);
     }
     // the node is not the consensusNode
     else
     {
-        recursiveSelectChildNodes(selectedNodeList, m_nodeIndex + 1, _peers);
+        recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, offset);
     }
 
     return selectedNodeList;
