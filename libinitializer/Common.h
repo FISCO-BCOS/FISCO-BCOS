@@ -51,6 +51,7 @@ DEV_SIMPLE_EXCEPTION(GroupGeneratorException);
 DEV_SIMPLE_EXCEPTION(InvalidGenesisGroupID);
 DEV_SIMPLE_EXCEPTION(InvalidGenesisTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidGenesisNodeid);
+DEV_SIMPLE_EXCEPTION(NotConnectGenesisNode);
 
 inline bool isValidPort(int port)
 {
