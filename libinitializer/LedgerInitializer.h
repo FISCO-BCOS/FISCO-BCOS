@@ -22,6 +22,7 @@
 
 #pragma once
 #include "Common.h"
+#include <libdevcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
@@ -44,6 +45,10 @@ public:
     void startMoreLedger();
 
     std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
+    void setLedgerManager(std::shared_ptr<LedgerManager> _ledgerManager)
+    {
+        m_ledgerManager = _ledgerManager;
+    }
 
     void setP2PService(std::shared_ptr<dev::p2p::P2PInterface> _p2pService)
     {
@@ -68,6 +73,9 @@ public:
         if (m_ledgerManager)
             m_ledgerManager->stopAll();
     }
+
+    // Init ledger when running
+    bool initLedgerByGroupID(dev::GROUP_ID const& _groupId);
 
 private:
     std::vector<dev::GROUP_ID> initLedgers();
