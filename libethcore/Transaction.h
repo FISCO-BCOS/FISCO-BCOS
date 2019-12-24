@@ -247,6 +247,9 @@ public:
     bool checkChainId(u256 _chainId);
     bool checkGroupId(u256 _groupId);
 
+    void setRpcTx(bool const& _rpcTx) { m_rpcTx = _rpcTx; }
+    bool rpcTx() { return m_rpcTx; }
+
 protected:
     /// Type of transaction.
     enum Type
@@ -302,6 +305,8 @@ protected:
     u256 m_chainId;     /// < The scenario to which the transaction belongs.
     u256 m_groupId;     /// < The group to which the transaction belongs.
     bytes m_extraData;  /// < Reserved fields, distinguished by "##".
+    // used to represent that the transaction is received from rpc
+    bool m_rpcTx = false;
 };
 
 /// Nice name for vector of Transaction.

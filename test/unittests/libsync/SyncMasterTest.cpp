@@ -128,7 +128,7 @@ public:
             KeyPair sigKeyPair = KeyPair::create();
             tx->setNonce(tx->nonce() + u256(rand()) + i);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            tx->setRpcCallback([&](LocalisedTransactionReceipt::Ptr, dev::bytesConstRef) {});
+            tx->setRpcTx(true);
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);
