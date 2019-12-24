@@ -1073,6 +1073,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        // receive transaction from channel or rpc
+        tx->setRpcTx(true);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
 
         uint32_t clientProtocolversion = ProtocolVersion::v1;
