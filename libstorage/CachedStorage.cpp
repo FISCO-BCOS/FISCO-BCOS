@@ -29,6 +29,7 @@
 #include <tbb/parallel_sort.h>
 #include <thread>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 
@@ -98,10 +99,11 @@ void Cache::setTableInfo(TableInfo::Ptr tableInfo)
     m_tableInfo = tableInfo;
 }
 
-CachedStorage::CachedStorage()
+CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID)
 {
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
-    m_taskThreadPool = std::make_shared<dev::ThreadPool>("FlushStorage", 1);
+    m_taskThreadPool =
+        std::make_shared<dev::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
 
     m_mruQueue =
         std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
@@ -224,7 +226,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         std::make_shared<std::vector<TableData::Ptr>>();
 
     commitDatas->resize(datas.size());
-
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
@@ -244,6 +245,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 
                     // addtion data
                     std::set<std::string> addtionKey;
+                    std::set<uint64_t> duplicateIDs;
                     tbb::spin_mutex addtionKeyMutex;
 
                     tbb::parallel_for(
@@ -258,7 +260,14 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 auto id = entry->getID();
 
                                 ssize_t change = 0;
-                                if (id != 0)
+                                if (id == 0)
+                                {
+                                    // impossible, should exit
+                                    CACHED_STORAGE_LOG(FATAL)
+                                        << "Dirty entry id equal to 0, table: "
+                                        << requestData->info->name << LOG_KV("key", key);
+                                }
+                                else
                                 {
                                     auto result = touchCache(requestData->info, key, true);
                                     auto caches = std::get<1>(result);
@@ -282,6 +291,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             {
                                                 totalCapacity += it->capacity();
                                             }
+
 
                                             touchMRU(requestData->info->name, key, totalCapacity);
                                         }
@@ -335,27 +345,46 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                                     }
                                                 }
                                             }
+                                            else
+                                            {
+                                                CACHED_STORAGE_LOG(DEBUG)
+                                                    << LOG_BADGE("duplicate entry")
+                                                    << LOG_KV("key", key)
+                                                    << LOG_KV("ID", (*entryIt)->getID());
+                                                duplicateIDs.insert((*entryIt)->getID());
+                                            }
                                         }
                                     }
                                     else
                                     {
                                         // impossible, should exit
                                         CACHED_STORAGE_LOG(FATAL)
-                                            << "Can not find entry in cache, id:" << entry->getID()
-                                            << " key:" << key;
+                                            << "Can not find entry in cache, key:" << key
+                                            << LOG_KV("num", num) << ",id" << id
+                                            << " != " << (*entryIt)->getID();
                                     }
-                                }
-                                else
-                                {
-                                    // impossible, should exit
-                                    CACHED_STORAGE_LOG(FATAL)
-                                        << "Dirty entry id equal to 0, id: " << id
-                                        << " key: " << key;
                                 }
 
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
+                    tbb::parallel_for(tbb::blocked_range<size_t>(requestData->dirtyEntries->size(),
+                                          commitData->dirtyEntries->size()),
+                        [&](const tbb::blocked_range<size_t>& rangeEntries) {
+                            for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
+                            {  // remove duplicate entries
+                                if (duplicateIDs.find((*commitData->dirtyEntries)[i]->getID()) !=
+                                    duplicateIDs.end())
+                                {
+                                    auto duplicateEntry = make_shared<Entry>();
+                                    duplicateEntry->copyFrom((*commitData->dirtyEntries)[i]);
+                                    duplicateEntry->setDeleted(true);
+                                    (*commitData->dirtyEntries)[i] = duplicateEntry;
+                                }
+                            }
+                        });
+                    tbb::parallel_sort(commitData->dirtyEntries->begin(),
+                        commitData->dirtyEntries->end(), EntryLessNoLock(commitData->info));
                 }
 
                 commitData->newEntries->shallowFrom(requestData->newEntries);
@@ -522,6 +551,11 @@ void CachedStorage::init()
 
 void CachedStorage::stop()
 {
+    if (!m_running)
+    {
+        STORAGE_LOG(INFO) << LOG_DESC("CachedStorage already stopped!");
+        return;
+    }
     STORAGE_LOG(INFO) << "Stopping flushStorage thread";
     m_taskThreadPool->stop();
     m_running->store(false);
@@ -653,9 +687,9 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
 void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache)
 {
     /*
-     If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the cache
-     object which erased in m_caches, the data will lost, to avoid this, re-insert the data into the
-     m_caches
+     If the checkAndClear() run ahead of commit() at same key, commit() may flush data to the
+     cache object which erased in m_caches, the data will lost, to avoid this, re-insert the
+     data into the m_caches
      */
 
     RWMutexScoped lockCache(m_cachesMutex, false);

@@ -55,7 +55,7 @@ enum CheckResult
     FUTURE = 2
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket::Ptr>;
-class PBFTEngine : public ConsensusEngineBase
+class PBFTEngine : public ConsensusEngineBase, public std::enable_shared_from_this<PBFTEngine>
 {
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
@@ -73,8 +73,6 @@ public:
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
 
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-
-        m_groupIdStr = "g:" + std::to_string(m_groupId);
         /// set thread name for PBFTEngine
         std::string threadName = "PBFT-" + std::to_string(m_groupId);
         setName(threadName);
@@ -82,17 +80,18 @@ public:
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
 
-        m_threadPool = std::make_shared<dev::ThreadPool>("pbftPool" + std::to_string(m_groupId), 1);
+        m_threadPool =
+            std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
         // set statisticHandler
         m_statisticHandler = m_service->statisticHandler();
 
         m_consensusSet = std::make_shared<std::set<dev::h512>>();
 
-        m_messageHandler = std::make_shared<dev::ThreadPool>(
-            "PBFT-messageHandler-" + std::to_string(_protocolId), 1);
+        m_messageHandler =
+            std::make_shared<dev::ThreadPool>("PBFTMsg-" + std::to_string(m_groupId), 1);
         m_prepareWorker =
-            std::make_shared<dev::ThreadPool>("PBFT-worker-" + std::to_string(_protocolId), 1);
+            std::make_shared<dev::ThreadPool>("PBFTWork-" + std::to_string(m_groupId), 1);
         m_cachedForwardMsg =
             std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
@@ -225,6 +224,8 @@ public:
     {
         m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
     }
+
+    void stop() override;
 
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
@@ -628,7 +629,8 @@ protected:
 
     virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
         unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType);
-    std::shared_ptr<dev::h512s> getForwardNodes(dev::p2p::P2PSessionInfos const& _sessions);
+    std::shared_ptr<dev::h512s> getForwardNodes(
+        dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog = false);
 
 
     // BIP 152 related logic
@@ -650,6 +652,8 @@ protected:
     void onReceiveMissedTxsResponse(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
     void clearInvalidCachedForwardMsg();
+
+    void clearPreRawPrepare();
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
@@ -714,7 +718,6 @@ protected:
     dev::ThreadPool::Ptr m_prepareWorker;
     dev::ThreadPool::Ptr m_messageHandler;
     bool m_enablePrepareWithTxsHash = false;
-    std::string m_groupIdStr;
 };
 }  // namespace consensus
 }  // namespace dev

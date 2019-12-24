@@ -66,9 +66,6 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     trans[0]->updateSignature(SignatureStruct(sig));
     bytes trans_data;
     trans[0]->encode(trans_data);
-    /// import invalid transaction
-    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
-    BOOST_CHECK(result == ImportResult::TransactionNonceCheckFail);
     /// submit invalid transaction
     Transaction::Ptr tx = std::make_shared<Transaction>(trans_data, CheckTransaction::Everything);
     BOOST_CHECK_THROW(pool_test.m_txPool->submitTransactions(tx), TransactionRefused);
@@ -83,12 +80,11 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         tx->setBlockLimit(pool_test.m_blockChain->number() + u256(1));
         bytes trans_bytes2;
         tx->encode(trans_bytes2);
-        BOOST_CHECK(pool_test.m_txPool->import(ref(trans_bytes2)) == ImportResult::Malformed);
         /// resignature
         sig = sign(pool_test.m_blockChain->m_sec, tx->sha3(WithoutSignature));
         tx->updateSignature(SignatureStruct(sig));
         tx->encode(trans_bytes2);
-        result = pool_test.m_txPool->import(ref(trans_bytes2));
+        auto result = pool_test.m_txPool->import(tx);
         BOOST_CHECK(result == ImportResult::Success);
         i++;
     }
@@ -106,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     tx->updateSignature(SignatureStruct(sig));
     tx->encode(trans_data);
     pool_test.m_txPool->setTxPoolLimit(5);
-    result = pool_test.m_txPool->import(ref(trans_data));
+    auto result = pool_test.m_txPool->import(tx);
     BOOST_CHECK(pool_test.m_txPool->pendingSize() == 5);
     BOOST_CHECK(result == ImportResult::TransactionPoolIsFull);
     /// test status
@@ -146,14 +142,14 @@ BOOST_AUTO_TEST_CASE(BlockLimitCheck)
                 ->transactions());
     bytes trans_data;
     trans[0]->encode(trans_data);
-    Transaction tx(trans_data, CheckTransaction::Everything);
-    tx.setNonce(u256(tx.nonce() + u256(10)));
-    tx.setBlockLimit(pool_test.m_blockChain->number() + u256(10000));
-    Signature sig = sign(pool_test.m_blockChain->m_sec, tx.sha3(WithoutSignature));
-    tx.updateSignature(SignatureStruct(sig));
-    tx.encode(trans_data);
+    Transaction::Ptr tx = std::make_shared<Transaction>(trans_data, CheckTransaction::Everything);
+    tx->setNonce(u256(tx->nonce() + u256(10)));
+    tx->setBlockLimit(pool_test.m_blockChain->number() + u256(10000));
+    Signature sig = sign(pool_test.m_blockChain->m_sec, tx->sha3(WithoutSignature));
+    tx->updateSignature(SignatureStruct(sig));
+    tx->encode(trans_data);
     pool_test.m_txPool->setTxPoolLimit(5);
-    ImportResult result = pool_test.m_txPool->import(ref(trans_data));
+    ImportResult result = pool_test.m_txPool->import(tx);
     BOOST_CHECK(result == ImportResult::BlockLimitCheckFailed);
 }
 

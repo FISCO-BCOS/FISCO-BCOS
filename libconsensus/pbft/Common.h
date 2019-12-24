@@ -28,10 +28,9 @@
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
 
-#define PBFTENGINE_LOG(LEVEL) \
-    LOG(LEVEL) << LOG_BADGE(m_groupIdStr) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
+#define PBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
 #define PBFTSEALER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
-#define PBFTReqCache_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE(m_groupIdStr) << LOG_BADGE("CONSENSUS")
+#define PBFTReqCache_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS")
 namespace dev
 {
 namespace consensus

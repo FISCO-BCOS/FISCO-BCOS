@@ -34,7 +34,7 @@ send_transaction()
     if [ ${is_raft} -eq 0 ];then
         sleep 1.5
     else
-        sleep 4
+        sleep 8
     fi
     LOG_INFO "==============send a transaction is ok"
 }
@@ -101,7 +101,7 @@ check_consensus_and_sync()
     bash stop_all.sh
     rm -rf node0/data/ node*/log
     rm -rf node1/data/block
-    bash start_all.sh && sleep 6
+    bash start_all.sh && sleep 8
     check_reports 1 4 "sync block failed!" "==============check sync block is ok"
     bash stop_all.sh
 }

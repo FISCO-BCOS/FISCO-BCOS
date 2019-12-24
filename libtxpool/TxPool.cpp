@@ -40,29 +40,38 @@ namespace txpool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
     m_submitPool->enqueue([this, _tx]() {
-        // RequestNotBelongToTheGroup: 10004
-        ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
-        if (isSealerOrObserver())
+        try
         {
-            // check sync status failed
-            if (m_syncStatusChecker && !m_syncStatusChecker())
+            // RequestNotBelongToTheGroup: 10004
+            ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
+            if (isSealerOrObserver())
             {
-                TXPOOL_LOG(WARNING)
-                    << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
-                    << LOG_KV("groupId", m_groupId);
-                verifyRet = ImportResult::TransactionRefused;
-            }
-            // check sync status succ
-            else
-            {
-                verifyRet = import(_tx);
-                if (ImportResult::Success == verifyRet)
+                // check sync status failed
+                if (m_syncStatusChecker && !m_syncStatusChecker())
                 {
-                    return;
+                    TXPOOL_LOG(WARNING)
+                        << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
+                        << LOG_KV("groupId", m_groupId);
+                    verifyRet = ImportResult::TransactionRefused;
+                }
+                // check sync status succ
+                else
+                {
+                    verifyRet = import(_tx);
+                    if (ImportResult::Success == verifyRet)
+                    {
+                        return;
+                    }
                 }
             }
+            notifyReceipt(_tx, verifyRet);
         }
-        notifyReceipt(_tx, verifyRet);
+        catch (std::exception const& e)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("submit tx failed")
+                                << LOG_KV("tx", _tx->sha3().abridged())
+                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
     });
     return std::make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
 }
@@ -120,6 +129,9 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
     default:
         txException = TransactionException::TransactionRefused;
     }
+    TXPOOL_LOG(ERROR) << LOG_DESC("notifyReceipt: txException")
+                      << LOG_KV("hash", _tx->sha3().abridged())
+                      << LOG_KV("exception", int(txException));
     dev::eth::LocalisedTransactionReceipt::Ptr receipt =
         std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
     m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
@@ -196,35 +208,6 @@ bool TxPool::isSealerOrObserver()
         return false;
     }
     return true;
-}
-
-/**
- * @brief : veirfy specified transaction (called by libsync)
- *          && insert the valid transaction into the transaction queue
- * @param _txBytes : encoded data of the transaction
- * @param _ik :  Import transaction policy,
- *  1. Ignore: Don't import transaction that was previously dropped
- *  2. Retry: Import transaction even if it was dropped before
- * @return ImportResult : import result, if success, return ImportResult::Success
- */
-ImportResult TxPool::import(bytesConstRef _txBytes, IfDropped _ik)
-{
-    Transaction::Ptr tx = std::make_shared<Transaction>();
-    try
-    {
-        /// only decode, verify transactions later
-        tx->decode(_txBytes, CheckTransaction::None);
-        /// check sha3
-        if (sha3(_txBytes.toBytes()) != tx->sha3())
-            return ImportResult::Malformed;
-    }
-    catch (std::exception& e)
-    {
-        TXPOOL_LOG(ERROR) << LOG_DESC("import transaction failed")
-                          << LOG_KV("EINFO", boost::diagnostic_information(e));
-        return ImportResult::Malformed;
-    }
-    return import(tx, _ik);
 }
 
 /**
@@ -419,6 +402,8 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
                 // transaction refused
                 pReceipt = std::make_shared<LocalisedTransactionReceipt>(
                     TransactionException::TransactionRefused);
+                TXPOOL_LOG(WARNING) << LOG_DESC(
+                    "NotifyReceipt: TransactionRefused, maybe invalid blocklimit or nonce");
             }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
@@ -512,9 +497,9 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
             }
         }
     }
-    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     m_workerPool->enqueue([this, block]() { dropBlockTxsFilter(block); });
     // remove InvalidTxs
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     return succ;
 }
 
@@ -594,11 +579,12 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
     TIME_RECORD(
         "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
 
-    tbb::parallel_invoke([this, block]() { dropTransactions(block, true); },
-        [this, block]() { removeBlockKnowTrans(*block); },
+    tbb::parallel_invoke([this, block]() { removeBlockKnowTrans(*block); },
         [this, block]() {
             // update the Nonces of txs
+            // (must be updated before dropTransactions to in case of sealing the same txs)
             m_txNonceCheck->updateCache(false);
+            dropTransactions(block, true);
             // delete the nonce cache
             m_txpoolNonceChecker->delCache(*(block->transactions()));
         });
@@ -638,16 +624,27 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             {
                 continue;
             }
-            /// check  nonce again when obtain transactions
+            /// check nonce again when obtain transactions
+            // since the invalid nonce has already been checked before the txs import into the
+            // txPool the txs with duplicated nonce here are already-committed, but have not been
+            // dropped, so no need to insert the already-committed transaction into m_invalidTxs
             if (!m_txNonceCheck->isNonceOk(*(*it), false))
             {
-                m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
+                TXPOOL_LOG(DEBUG) << LOG_DESC(
+                                         "Duplicated nonce: transaction maybe already-committed")
+                                  << LOG_KV("nonce", (*it)->nonce())
+                                  << LOG_KV("hash", (*it)->sha3().abridged());
                 continue;
             }
-            // check block limit
+            // check block limit(only insert txs with invalid blockLimit into m_invalidTxs)
             if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>((*it)->sha3(), (*it)->nonce()));
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", (*it)->sha3().abridged())
+                    << LOG_KV("blockLimit", (*it)->blockLimit())
+                    << LOG_KV("blockNumber", m_blockChain->number());
+                ;
                 continue;
             }
             if (!_avoid.count((*it)->sha3()))
@@ -660,7 +657,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
         }
     }
     // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
-
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     return ret;
 }
 

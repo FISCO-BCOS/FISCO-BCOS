@@ -182,24 +182,29 @@ void Block::calTransactionRoot(bool update) const
     }
 }
 
-
 void Block::calTransactionRootV2_2_0(bool update) const
 {
     TIME_RECORD(
         "Calc transaction root, count:" + boost::lexical_cast<std::string>(m_transactions->size()));
-    auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string>>>();
     WriteGuard l(x_txsCache);
     if (m_txsCache == bytes())
     {
-        BytesMap txsMapCache;
-        for (size_t i = 0; i < m_transactions->size(); i++)
-        {
-            RLPStream s;
-            s << i;
-            txsMapCache.insert(std::make_pair(s.out(), (*m_transactions)[i]->sha3().asBytes()));
-        }
+        std::vector<dev::bytes> transactionList;
+        transactionList.resize(m_transactions->size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
+            [&](const tbb::blocked_range<size_t>& _r) {
+                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+                {
+                    RLPStream s;
+                    s << i;
+                    dev::bytes byteValue = s.out();
+                    dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                    byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
+                    transactionList[i] = byteValue;
+                }
+            });
         m_txsCache = TxsParallelParser::encode(m_transactions);
-        m_transRootCache = dev::getHash256(txsMapCache);
+        m_transRootCache = dev::getHash256(transactionList);
     }
     if (update == true)
     {
@@ -217,53 +222,62 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
     }
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
         std::make_shared<std::map<std::string, std::vector<std::string>>>();
-    BytesMap txsMapCache;
-    for (size_t i = 0; i < m_transactions->size(); i++)
-    {
-        RLPStream s;
-        s << i;
-        txsMapCache.insert(std::make_pair(s.out(), (*m_transactions)[i]->sha3().asBytes()));
-    }
-    dev::getHash256(txsMapCache, merklePath);
+    std::vector<dev::bytes> transactionList;
+    transactionList.resize(m_transactions->size());
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
+        [&](const tbb::blocked_range<size_t>& _r) {
+            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            {
+                RLPStream s;
+                s << i;
+                dev::bytes byteValue = s.out();
+                dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
+                transactionList[i] = byteValue;
+            }
+        });
+
+    dev::getMerkleProof(transactionList, merklePath);
     return merklePath;
 }
 
-
-void Block::getReceiptAndSha3(RLPStream& txReceipts, BytesMap& mapCache) const
+void Block::getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const
 {
     txReceipts.appendList(m_transactionReceipts->size());
+    receiptList.resize(m_transactionReceipts->size());
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
         [&](const tbb::blocked_range<size_t>& _r) {
             for (uint32_t i = _r.begin(); i < _r.end(); ++i)
             {
                 (*m_transactionReceipts)[i]->receipt();
-                (*m_transactionReceipts)[i]->sha3();
+                dev::bytes receiptHash = (*m_transactionReceipts)[i]->sha3();
+                RLPStream s;
+                s << i;
+                dev::bytes receiptValue = s.out();
+                receiptValue.insert(receiptValue.end(), receiptHash.begin(), receiptHash.end());
+                receiptList[i] = receiptValue;
             }
         });
-
     for (size_t i = 0; i < m_transactionReceipts->size(); i++)
     {
         txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
-        RLPStream s;
-        s << i;
-        mapCache.insert(std::make_pair(s.out(), (*m_transactionReceipts)[i]->sha3()));
     }
 }
 
 void Block::calReceiptRootV2_2_0(bool update) const
 {
-    TIME_RECORD("Calc transaction root, count:" +
+    TIME_RECORD("Calc receipt root, count:" +
                 boost::lexical_cast<std::string>(m_transactionReceipts->size()));
 
-    auto merklePath = std::make_shared<std::map<std::string, std::vector<std::string>>>();
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes())
     {
         RLPStream txReceipts;
-        BytesMap mapCache;
-        getReceiptAndSha3(txReceipts, mapCache);
+        std::vector<dev::bytes> receiptList;
+        getReceiptAndSha3(txReceipts, receiptList);
         txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = dev::getHash256(mapCache);
+        m_receiptRootCache = dev::getHash256(receiptList);
     }
     if (update == true)
     {
@@ -282,11 +296,11 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getRecei
     }
 
     RLPStream txReceipts;
-    BytesMap mapCache;
-    getReceiptAndSha3(txReceipts, mapCache);
+    std::vector<dev::bytes> receiptList;
+    getReceiptAndSha3(txReceipts, receiptList);
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
         std::make_shared<std::map<std::string, std::vector<std::string>>>();
-    dev::getHash256(mapCache, merklePath);
+    dev::getMerkleProof(receiptList, merklePath);
     return merklePath;
 }
 
@@ -412,6 +426,7 @@ void Block::decode(
     m_transactions->resize(transactions_rlp.itemCount());
     for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
+        (*m_transactions)[i] = std::make_shared<dev::eth::Transaction>();
         (*m_transactions)[i]->decode(transactions_rlp[i], _option);
     }
 

@@ -22,6 +22,7 @@
  */
 #include "Common.h"
 #include <include/BuildInfo.h>
+#include <libdevcore/Common.h>
 #include <libdevcore/FileSignal.h>
 #include <libinitializer/Initializer.h>
 #include <boost/program_options.hpp>
@@ -30,6 +31,7 @@
 #include <memory>
 
 using namespace std;
+using namespace dev;
 using namespace dev::initializer;
 
 void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)

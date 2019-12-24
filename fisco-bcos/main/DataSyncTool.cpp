@@ -54,6 +54,7 @@ uint32_t BigTablePageCount = 50;
 const string SYNCED_BLOCK_NUMBER = "#extra_synce_block_number#";
 const std::vector<std::string> ForceTables = {
     SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES, SYS_TX_HASH_2_BLOCK};
+const std::vector<std::string> HexTables = {SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES};
 
 struct SyncRecorder
 {
@@ -223,9 +224,31 @@ TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
     }
 }
 
-void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
-    const std::string& _dataPath, bool _fullSync)
+void conversionData(
+    const std::string& tableName, const std::string& dbType, TableData::Ptr tableData)
 {
+    // do the conversion from Hex to Byte in following situations:
+    //     table in _sys_hash_2_block_,_sys_block_2_nonces_ and
+    //     support version >= 2.2.0 and
+    //     storage type in rocksdb,scalable
+    if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName) &&
+        g_BCOSConfig.version() >= V2_2_0 && dev::stringCmpIgnoreCase(dbType, "mysql"))
+    {
+        LOG(INFO) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data");
+        for (size_t i = 0; i < tableData->newEntries->size(); i++)
+        {
+            auto entry = tableData->newEntries->get(i);
+            auto dataStr = entry->getField("value");
+            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            entry->setField("value", dataBytes->data(), dataBytes->size());
+        }
+    }
+}
+
+void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
+    std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
+{
+    const std::string& _dataPath = _param->mutableStorageParam().path;
     boost::filesystem::create_directories(_dataPath);
     auto recorder = std::make_shared<SyncRecorder>(_dataPath, _blockNumber);
     auto syncBlock = recorder->syncBlock();
@@ -276,6 +299,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
                      << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
                 break;
             }
+            conversionData(tableInfo->name, _param->mutableStorageParam().type, tableData);
             if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
             {
                 for (size_t i = 0; i < tableData->newEntries->size(); i++)
@@ -314,6 +338,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
         if (!_fullSync)
         {
             auto data = getHashToBlockData(_reader, syncBlock);
+            conversionData(SYS_HASH_2_BLOCK, _param->mutableStorageParam().type, data);
             _writer->commit(syncBlock, vector<TableData::Ptr>{data});
             recorder->markStatus(SYS_HASH_2_BLOCK, make_pair(data->newEntries->size(), true));
         }
@@ -332,12 +357,13 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
             auto data = getBlockToNonceData(_reader, syncBlock);
             if (data)
             {
+                conversionData(SYS_BLOCK_2_NONCES, _param->mutableStorageParam().type, data);
                 _writer->commit(syncBlock, vector<TableData::Ptr>{data});
                 recorder->markStatus(SYS_BLOCK_2_NONCES, make_pair(data->newEntries->size(), true));
             }
             else
             {
-                cout << "block number to nonce is empty at " << syncBlock << endl;
+                cout << ", nonce is empty" << endl;
             }
         }
         else
@@ -417,8 +443,8 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     }
 
     // fast sync data
-    syncData(dynamic_pointer_cast<SQLStorage>(sqlStorage), writerStorage, blockNumber,
-        _param->mutableStorageParam().path, fullSync);
+    syncData(
+        dynamic_pointer_cast<SQLStorage>(sqlStorage), writerStorage, blockNumber, _param, fullSync);
 }
 
 int main(int argc, const char* argv[])

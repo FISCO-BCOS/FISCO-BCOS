@@ -100,7 +100,7 @@ bool Sealer::shouldWait(bool const& wait) const
 void Sealer::doWork(bool wait)
 {
     reportNewBlock();
-    if (shouldSeal())
+    if (shouldSeal() && m_startConsensus.load())
     {
         WriteGuard l(x_sealing);
         {

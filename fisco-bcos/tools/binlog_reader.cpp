@@ -77,8 +77,8 @@ void printBlockData(const std::vector<TableData::Ptr>& blockData)
         }
         for (size_t i = 0; i < entries->size(); ++i)
         {
-            cout << endl << "***" << i << " ";
             auto data = entries->get(i);
+            cout << endl << "***" << i << " [ id=" << data->getID() << " ]";
             for (auto& it : *data)
             {
                 cout << "[ " << it.first << "=" << it.second << " ]";

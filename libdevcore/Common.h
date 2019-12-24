@@ -309,6 +309,9 @@ uint64_t utcTime();
 /// Get the current time in seconds since the epoch in UTC(us)
 uint64_t utcTimeUs();
 
+// get the current datatime
+std::string getCurrentDateTime();
+
 // callback when throw exceptions
 struct Exception;
 void errorExit(std::stringstream& _exitInfo, Exception const& exception);

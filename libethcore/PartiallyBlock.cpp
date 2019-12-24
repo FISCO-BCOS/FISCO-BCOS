@@ -79,9 +79,9 @@ void PartiallyBlock::decodeProposal(bytesConstRef _blockBytes, bool const& _only
     dev::h256 blockHash = blockRlp[2].toHash<h256>(RLP::VeryStrict);
     if (blockHash != m_blockHeader.hash())
     {
-        PartiallyBlock_LOG(ERROR) << LOG_DESC("decodeProposal failed for inconsistent block hash")
-                                  << LOG_KV("proposalHash", blockHash.abridged())
-                                  << LOG_KV("headerHash", m_blockHeader.hash().abridged());
+        PartiallyBlock_LOG(WARNING) << LOG_DESC("decodeProposal failed for inconsistent block hash")
+                                    << LOG_KV("proposalHash", blockHash.abridged())
+                                    << LOG_KV("headerHash", m_blockHeader.hash().abridged());
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     m_transactions->resize(m_txsHash->size());
@@ -93,9 +93,9 @@ void PartiallyBlock::checkBasic(RLP const& rlp, dev::h256 const& _expectedHash)
     int64_t blockNumber = rlp[0].toPositiveInt64();
     if (blockNumber != m_blockHeader.number())
     {
-        PartiallyBlock_LOG(ERROR) << LOG_DESC("checkBasic failed for inconsistent block number")
-                                  << LOG_KV("proposalNumber", blockNumber)
-                                  << LOG_KV("headerNumber", m_blockHeader.number());
+        PartiallyBlock_LOG(WARNING) << LOG_DESC("checkBasic failed for inconsistent block number")
+                                    << LOG_KV("proposalNumber", blockNumber)
+                                    << LOG_KV("headerNumber", m_blockHeader.number());
         BOOST_THROW_EXCEPTION(
             InvalidNumber() << errinfo_comment("checkBasic: invalid block number"));
     }
@@ -104,9 +104,9 @@ void PartiallyBlock::checkBasic(RLP const& rlp, dev::h256 const& _expectedHash)
     auto blockHash = rlp[1].toHash<h256>(RLP::VeryStrict);
     if (blockHash != _expectedHash)
     {
-        PartiallyBlock_LOG(ERROR) << LOG_DESC("checkBasic failed for inconsistent block hash")
-                                  << LOG_KV("expectedHash", _expectedHash.abridged())
-                                  << LOG_KV("proposalHash", blockHash.abridged());
+        PartiallyBlock_LOG(WARNING) << LOG_DESC("checkBasic failed for inconsistent block hash")
+                                    << LOG_KV("expectedHash", _expectedHash.abridged())
+                                    << LOG_KV("proposalHash", blockHash.abridged());
         BOOST_THROW_EXCEPTION(
             ErrorBlockHash() << errinfo_comment("checkBasic: inconsistent block hash"));
     }
@@ -126,9 +126,10 @@ void PartiallyBlock::fillBlock(bytesConstRef _txsData)
 
     if (m_missedTransactions->size() != m_missedTxs->size())
     {
-        PartiallyBlock_LOG(ERROR) << LOG_DESC("fillBlock failed for inconsistent transaction count")
-                                  << LOG_KV("expectedTxsSize", m_missedTxs->size())
-                                  << LOG_KV("fetchedTxsSize", m_missedTransactions->size());
+        PartiallyBlock_LOG(WARNING)
+            << LOG_DESC("fillBlock failed for inconsistent transaction count")
+            << LOG_KV("expectedTxsSize", m_missedTxs->size())
+            << LOG_KV("fetchedTxsSize", m_missedTransactions->size());
         BOOST_THROW_EXCEPTION(InvalidTransaction() << errinfo_comment(
                                   "invalid fetched transactions: inconsistent transaction count"));
     }
@@ -139,7 +140,7 @@ void PartiallyBlock::fillBlock(bytesConstRef _txsData)
     {
         if (tx->sha3() != (*m_missedTxs)[index].first)
         {
-            PartiallyBlock_LOG(ERROR)
+            PartiallyBlock_LOG(WARNING)
                 << LOG_DESC("fillBlock failed for inconsistent transaction hash")
                 << LOG_KV("expectedHash", (*m_missedTxs)[index].first.abridged())
                 << LOG_KV("fetchedHash", tx->sha3().abridged());
@@ -176,7 +177,7 @@ void PartiallyBlock::fetchMissedTxs(
 {
     if (m_missedTransactions->size() > 0)
     {
-        PartiallyBlock_LOG(ERROR) << LOG_DESC(
+        PartiallyBlock_LOG(WARNING) << LOG_DESC(
             "fetchMissedTxs failed for the block-self does not has complete transactions");
         BOOST_THROW_EXCEPTION(
             NotCompleteBlock() << errinfo_comment(
@@ -209,7 +210,7 @@ void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
         auto tx = (*m_transactions)[txsInfo.second];
         if (tx->sha3() != txsInfo.first)
         {
-            PartiallyBlock_LOG(ERROR)
+            PartiallyBlock_LOG(WARNING)
                 << LOG_DESC("fetchMissedTxs failed for inconsistent transaction hash")
                 << LOG_KV("requestHash", txsInfo.first.abridged())
                 << LOG_KV("txHash", tx->sha3().abridged());

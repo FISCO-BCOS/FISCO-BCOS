@@ -47,10 +47,8 @@ namespace ledger
 {
 bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
 {
-#ifndef FISCO_EASYLOG
     BOOST_LOG_SCOPED_THREAD_ATTR(
         "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
-#endif
     if (!_ledgerParams)
     {
         return false;
@@ -88,8 +86,8 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
 bool Ledger::initTxPool()
 {
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool")
-                      << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool")
+                     << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
     if (!m_blockChain)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
@@ -99,14 +97,14 @@ bool Ledger::initTxPool()
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
     m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
     m_txPool->start();
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
 
 /// init blockVerifier
 bool Ledger::initBlockVerifier()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier");
     if (!m_blockChain || !m_dbInitializer->executiveContextFactory())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier Failed");
@@ -125,13 +123,13 @@ bool Ledger::initBlockVerifier()
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
     m_blockVerifier = blockVerifier;
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC");
     return true;
 }
 
 bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
     if (!m_dbInitializer->storage())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")
@@ -150,23 +148,23 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
         !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
-        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
-                          << LOG_KV("version", g_BCOSConfig.version())
-                          << LOG_KV("storageType", m_param->mutableStorageParam().type);
+        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true")
+                         << LOG_KV("version", g_BCOSConfig.version())
+                         << LOG_KV("storageType", m_param->mutableStorageParam().type);
         blockChain->setEnableHexBlock(true);
     }
     // >= v2.2.0
     else if (g_BCOSConfig.version() >= V2_2_0)
     {
-        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be false")
-                          << LOG_KV("version", g_BCOSConfig.version());
+        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be false")
+                         << LOG_KV("version", g_BCOSConfig.version());
         blockChain->setEnableHexBlock(false);
     }
     // < v2.2.0
     else
     {
-        Ledger_LOG(DEBUG) << LOG_DESC("set enableHexBlock to be true")
-                          << LOG_KV("version", g_BCOSConfig.version());
+        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true")
+                         << LOG_KV("version", g_BCOSConfig.version());
         blockChain->setEnableHexBlock(true);
     }
 
@@ -177,8 +175,8 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     if (!ret)
     {
         /// It is a subsequent block without same extra data, so do reset.
-        Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
-                          << LOG_DESC("The configuration item will be reset");
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
+                         << LOG_DESC("The configuration item will be reset");
         m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
         if (g_BCOSConfig.version() <= RC2_VERSION)
         {
@@ -186,7 +184,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
         }
         m_param->mutableStateParam().type = _genesisParam.stateType;
     }
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
 }
 
@@ -207,17 +205,17 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
  */
 std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer");
     if (!m_txPool || !m_blockChain || !m_sync || !m_blockVerifier || !m_dbInitializer)
     {
-        Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("createPBFTSealer Failed");
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("createPBFTSealer Failed");
         return nullptr;
     }
 
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
-                      << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
+                     << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
     std::shared_ptr<PBFTSealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
 
@@ -264,17 +262,17 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer");
     if (!m_txPool || !m_blockChain || !m_sync || !m_blockVerifier || !m_dbInitializer)
     {
-        Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("createRaftSealer Failed");
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("createRaftSealer Failed");
         return nullptr;
     }
 
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::Raft);
     /// create consensus engine according to "consensusType"
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer")
-                      << LOG_KV("Protocol", protocol_id);
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer")
+                     << LOG_KV("Protocol", protocol_id);
     // auto intervalBlockTime = g_BCOSConfig.c_intervalBlockTime;
     // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
     //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
@@ -290,7 +288,7 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
 /// init consensus
 bool Ledger::consensusInitFactory()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
     // create RaftSealer
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
@@ -322,23 +320,36 @@ bool Ledger::consensusInitFactory()
 /// init sync
 bool Ledger::initSync()
 {
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("initSync")
-                      << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs)
-                      << LOG_KV("gossipInterval", m_param->mutableSyncParam().gossipInterval)
-                      << LOG_KV("gossipPeers", m_param->mutableSyncParam().gossipPeers);
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initSync")
+                     << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs)
+                     << LOG_KV("gossipInterval", m_param->mutableSyncParam().gossipInterval)
+                     << LOG_KV("gossipPeers", m_param->mutableSyncParam().gossipPeers);
     if (!m_txPool || !m_blockChain || !m_blockVerifier)
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("#initSync Failed");
         return false;
     }
+    // raft disable enableSendBlockStatusByTree
+    bool enableSendBlockStatusByTree = m_param->mutableSyncParam().enableSendBlockStatusByTree;
+    bool enableSendTxsByTree = m_param->mutableSyncParam().enableSendTxsByTree;
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    {
+        Ledger_LOG(INFO) << LOG_DESC("initLedger: disable send_by_tree when use raft");
+        enableSendBlockStatusByTree = false;
+        enableSendTxsByTree = false;
+    }
+    Ledger_LOG(INFO) << LOG_DESC("Init sync master")
+                     << LOG_KV("enableSendBlockStatusByTree", enableSendBlockStatusByTree)
+                     << LOG_KV("enableSendTxsByTree", enableSendTxsByTree);
+
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
         m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
-        m_param->mutableSyncParam().enableSendBlockStatusByTree,
+        enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }
 
@@ -356,8 +367,8 @@ bool Ledger::initEventLogFilterManager()
         m_param->mutableEventLogFilterManagerParams().maxBlockRange,
         m_param->mutableEventLogFilterManagerParams().maxBlockPerProcess);
 
-    Ledger_LOG(DEBUG) << LOG_BADGE("initEventLogFilterManager")
-                      << LOG_DESC("initEventLogFilterManager SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initEventLogFilterManager")
+                     << LOG_DESC("initEventLogFilterManager SUCC");
     return true;
 }
 }  // namespace ledger

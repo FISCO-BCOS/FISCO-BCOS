@@ -94,8 +94,6 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
     auto peer = m_peersStatus.find(_id);
     if (peer == m_peersStatus.end())
     {
-        SYNC_LOG(WARNING) << LOG_BADGE("Status") << LOG_DESC("Peer data not found")
-                          << LOG_KV("nodeId", _id.abridged());
         return nullptr;
     }
     return peer->second;
@@ -119,9 +117,10 @@ NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_
         selectedSize = selectPeers(_neighborSize, _peers);
     }
     NodeIDs chosen;
+    ReadGuard l(x_peerStatus);
     for (auto const& peer : (*_peers))
     {
-        if (m_peersStatus.count(peer) && _allow(m_peersStatus[peer]))
+        if (m_peersStatus.count(peer) && m_peersStatus[peer] && _allow(m_peersStatus[peer]))
         {
             chosen.push_back(peer);
             if ((int64_t)chosen.size() == selectedSize)
@@ -139,7 +138,7 @@ void SyncMasterStatus::foreachPeer(
     ReadGuard l(x_peerStatus);
     for (auto& peer : m_peersStatus)
     {
-        if (!_f(peer.second))
+        if (peer.second && !_f(peer.second))
             break;
     }
 }
@@ -169,7 +168,7 @@ void SyncMasterStatus::foreachPeerRandom(
         auto const& peer = m_peersStatus.find(nodeId);
         if (peer == m_peersStatus.end())
             continue;
-        if (!_f(peer->second))
+        if (peer->second && !_f(peer->second))
             break;
     }
 }

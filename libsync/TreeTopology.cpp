@@ -26,6 +26,7 @@ using namespace dev;
 using namespace dev::sync;
 void TreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
 {
+    Guard l(m_mutex);
     if (*m_currentConsensusNodes == _consensusNodes)
     {
         return;
@@ -39,6 +40,7 @@ void TreeTopology::updateStartAndEndIndex()
 {
     m_startIndex = 0;
     m_endIndex = (ssize_t)(m_currentConsensusNodes->size() - 1);
+    m_nodeNum = m_currentConsensusNodes->size();
 }
 
 /**
@@ -71,20 +73,15 @@ bool TreeTopology::getNodeIDByIndex(h512& _nodeID, ssize_t const& _nodeIndex) co
 {
     if (_nodeIndex >= (ssize_t)m_currentConsensusNodes->size())
     {
-        // TODO: remove this for performance
-        TREE_LOG(TRACE) << LOG_DESC("getNodeIDByIndex: invalidNode")
-                        << LOG_KV("nodeIndex", _nodeIndex)
-                        << LOG_KV("nodeListSize", m_currentConsensusNodes->size());
         return false;
     }
     _nodeID = (*m_currentConsensusNodes)[_nodeIndex];
     return true;
 }
 
-// the index of the child node:
-ssize_t TreeTopology::getChildNodeIndex(ssize_t const& _parentIndex, ssize_t const& _offset)
+ssize_t TreeTopology::getSelectedNodeIndex(ssize_t const& _selectedIndex, ssize_t const& _offset)
 {
-    return _parentIndex * m_treeWidth + _offset + 1;
+    return (_selectedIndex + _offset) % m_nodeNum;
 }
 
 /**
@@ -96,42 +93,43 @@ ssize_t TreeTopology::getChildNodeIndex(ssize_t const& _parentIndex, ssize_t con
  *  3. _peers: the nodeIDs of peers maintained by syncStatus
  */
 void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNodeList,
-    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers)
+    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+    int64_t const& _startIndex)
 {
     // if the node doesn't locate in the group
     dev::h512 selectedNode;
     for (ssize_t i = 0; i < m_treeWidth; i++)
     {
-        ssize_t expectedIndex = getChildNodeIndex(_parentIndex, i);
+        ssize_t expectedIndex = _parentIndex * m_treeWidth + i + 1;
         // when expectedIndex is bigger than m_currentConsensusNodes.size(), return
         if (expectedIndex > m_endIndex)
         {
             break;
         }
-        if (!getNodeIDByIndex(selectedNode, expectedIndex))
+        auto selectedIndex = getSelectedNodeIndex(expectedIndex, _startIndex);
+        if (!getNodeIDByIndex(selectedNode, selectedIndex))
         {
             continue;
         }
         // the child node exists in the peers
         if (_peers->count(selectedNode))
         {
-            TREE_LOG(TRACE) << LOG_DESC("recursiveSelectChildNodes")
-                            << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("selectedIndex", expectedIndex);
             _selectedNodeList->push_back(selectedNode);
         }
-        // the child node doesn't exit in the peers, select the grand child recursively
+        // the child node doesn't exist in the peers, select the grand child recursively
         else
         {
-            recursiveSelectChildNodes(_selectedNodeList, expectedIndex + m_childOffset, _peers);
+            if (expectedIndex < m_endIndex)
+            {
+                recursiveSelectChildNodes(_selectedNodeList, expectedIndex, _peers, _startIndex);
+            }
+        }
+        // the last node
+        if (expectedIndex == m_endIndex)
+        {
+            break;
         }
     }
-}
-
-// find the parentNode if this node is not the consensus node:
-ssize_t TreeTopology::getParentNodeIndex(ssize_t const& _nodeIndex)
-{
-    return (_nodeIndex - 1) / m_treeWidth;
 }
 
 /**
@@ -144,59 +142,71 @@ ssize_t TreeTopology::getParentNodeIndex(ssize_t const& _nodeIndex)
  *  3. _nodeIndex: the index of the node that need select parent from given peers
  */
 void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex)
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+    int64_t const& _startIndex)
 {
-    ssize_t parentIndex = getParentNodeIndex(_nodeIndex);
+    ssize_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
     // the parentNode is the node-slef
     if (parentIndex == _nodeIndex)
     {
         return;
     }
     dev::h512 selectedNode;
-    while (parentIndex >= m_startIndex)
+    while (parentIndex > 0)
     {
         // find the parentNode from the peers
-        if (getNodeIDByIndex(selectedNode, parentIndex) && _peers->count(selectedNode))
+        auto selectedIndex = getSelectedNodeIndex(parentIndex, _startIndex);
+        if (getNodeIDByIndex(selectedNode, selectedIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            TREE_LOG(TRACE) << LOG_DESC("selectParentNodes") << LOG_KV("parentIndex", parentIndex)
-                            << LOG_KV("selectedNode", selectedNode.abridged())
-                            << LOG_KV("idx", m_consIndex);
             break;
         }
-        if (parentIndex == m_startIndex)
+        if (parentIndex <= 0)
         {
             break;
         }
-        parentIndex = getParentNodeIndex(parentIndex);
+        parentIndex = (parentIndex - 1) / m_treeWidth;
     }
 }
 
-std::shared_ptr<dev::h512s> TreeTopology::selectNodes(std::shared_ptr<std::set<dev::h512>> _peers)
+std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    // the node doesn't locate in the consensus node list
+    int64_t nodeIndex = 0;
+    // the observer nodes
     if (m_consIndex < 0)
     {
         dev::h512 selectedNode;
-        if (getNodeIDByIndex(selectedNode, 0) && _peers->count(selectedNode))
+        if (getNodeIDByIndex(selectedNode, _consIndex) && _peers->count(selectedNode))
         {
             selectedNodeList->push_back(selectedNode);
-            return selectedNodeList;
         }
         else
         {
-            recursiveSelectChildNodes(selectedNodeList, 0, _peers);
+            recursiveSelectChildNodes(selectedNodeList, _consIndex, _peers, _consIndex);
         }
+        return selectedNodeList;
     }
-    // the node locates in the consensus node list
+    // the consensus nodes
     else
     {
-        recursiveSelectChildNodes(selectedNodeList, m_consIndex, _peers);
-        // find the parent nodes
-        selectParentNodes(selectedNodeList, _peers, m_consIndex);
+        if (m_consIndex >= _consIndex)
+        {
+            nodeIndex = m_consIndex - _consIndex;
+        }
+        else
+        {
+            // when the node is added into or removed from the sealerList frequently
+            // the consIndex maybe higher than m_consIndex,
+            // and the distance maybe higher than m_nodeNum
+            nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
+        }
     }
-    // randomSelect(_peers, selectedNodeList);
+    recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
+
+    // find the parent nodes
+    selectParentNodes(selectedNodeList, _peers, nodeIndex, _consIndex);
     return selectedNodeList;
 }

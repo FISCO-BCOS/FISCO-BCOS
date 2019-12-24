@@ -121,7 +121,8 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         }
         else
         {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Tx gas limit is null");
+            EXECUTIVECONTEXT_LOG(WARNING)
+                << LOG_DESC("[setTxGasLimitToContext]Tx gas limit is null");
         }
     }
     catch (std::exception& e)

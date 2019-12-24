@@ -25,9 +25,8 @@
 #include "PBFTReqCache.h"
 #include <libethcore/PartiallyBlock.h>
 
-#define PartiallyPBFTReqCache_LOG(LEVEL)                            \
-    LOG(LEVEL) << LOG_BADGE(m_groupIdStr) << LOG_BADGE("CONSENSUS") \
-               << LOG_BADGE("PartiallyPBFTReqCache")
+#define PartiallyPBFTReqCache_LOG(LEVEL) \
+    LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PartiallyPBFTReqCache")
 
 
 namespace dev
@@ -39,35 +38,33 @@ class PartiallyPBFTReqCache : public PBFTReqCache
 public:
     using Ptr = std::shared_ptr<PartiallyPBFTReqCache>;
 
-    PartiallyPBFTReqCache() : PBFTReqCache()
-    {
-        m_partiallyFuturePrepare = std::make_shared<std::unordered_map<int64_t, PrepareReq::Ptr>>();
-    }
-    ~PartiallyPBFTReqCache() override { m_partiallyFuturePrepare->clear(); }
+    PartiallyPBFTReqCache() : PBFTReqCache() {}
+    ~PartiallyPBFTReqCache() override {}
 
     virtual bool addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRawPrepare);
-    virtual void addPartiallyFuturePrepare(PrepareReq::Ptr _partiallyRawPrepare);
     PrepareReq::Ptr partiallyRawPrepare() { return m_partiallyRawPrepare; }
     virtual void transPartiallyPrepareIntoRawPrepare()
     {
         WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = *m_partiallyRawPrepare;
+        m_rawPrepareCache.pBlock->encode(*m_rawPrepareCache.block);
     }
 
     // fetch missed transaction
     virtual bool fetchMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo);
     // fill block with fetched transaction
     virtual bool fillBlock(bytesConstRef _txsData);
+    virtual void addPreRawPrepare(PrepareReq::Ptr _preRawPrepare);
 
-
-    PrepareReq::Ptr getPartiallyFuturePrepare(int64_t const& _consensusNumber);
-    virtual void eraseHandledPartiallyFutureReq(int64_t const& _blockNumber);
-
-    void removeInvalidFutureCache(int64_t const& _highestBlockNumber) override;
+    virtual void clearPreRawPrepare();
 
 private:
     PrepareReq::Ptr m_partiallyRawPrepare;
-    std::shared_ptr<std::unordered_map<int64_t, PrepareReq::Ptr>> m_partiallyFuturePrepare;
+    // add the prepareReq into m_preRawPrepare once leader generate the prepareReq
+    // this cache is used to response txs to the request-sealers after generate prepareReq while
+    // before addRawPrepareReq clear this cache when addRawPrepare
+    PrepareReq::Ptr m_preRawPrepare;
+    mutable SharedMutex x_preRawPrepare;
 };
 }  // namespace consensus
 }  // namespace dev

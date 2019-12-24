@@ -89,7 +89,7 @@ class CachedStorage : public Storage
 {
 public:
     typedef std::shared_ptr<CachedStorage> Ptr;
-    CachedStorage();
+    CachedStorage(dev::GROUP_ID const& _groupID = 0);
 
     typedef tbb::spin_rw_mutex RWMutex;
     typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
@@ -121,7 +121,6 @@ public:
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     void startClearThread();
-    void setGroupID(dev::GROUP_ID const& groupID) { m_groupID = groupID; }
     dev::GROUP_ID groupID() const { return m_groupID; }
 
 protected:

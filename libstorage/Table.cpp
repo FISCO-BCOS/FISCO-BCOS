@@ -288,9 +288,8 @@ bool Entry::deleted() const
 }
 
 void Entry::setDeleted(bool deleted)
-{
+{  // FIXME: setDeleted will cause state change, should make a copy
     RWMutexScoped lock(m_data->m_mutex, true);
-
     m_deleted = deleted;
 }
 
@@ -826,6 +825,7 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
     {
         tableInfo->key = SYS_KEY;
         tableInfo->fields = vector<string>{"value"};
+        tableInfo->enableConsensus = false;
     }
     else if (tableName == SYS_NUMBER_2_HASH)
     {
