@@ -1330,6 +1330,7 @@ Json::Value Rpc::generateGroup(
     }
 
     Json::Value response;
+    std::string errorInfo;
     try
     {
         if (!GroupGenerator::checkGroupID(_groupID))
@@ -1341,6 +1342,8 @@ Json::Value Rpc::generateGroup(
         {
             BOOST_THROW_EXCEPTION(GroupExists());
         }
+
+        checkPeerlist(_sealerList, errorInfo);
 
         GroupGenerator::generate(GROUP_ID(_groupID), _timestamp, _sealerList);
 
@@ -1390,10 +1393,15 @@ Json::Value Rpc::generateGroup(
         }
         response["message"] = "Invalid Nodeids: " + nodeIDs;
     }
+    catch (NotConnectGenesisNode const& _e)
+    {
+        response["code"] = GroupStarterCode::INVALID_PARAMS;
+        response["message"] = errorInfo;
+    }
     catch (std::exception const& _e)
     {
         response["code"] = GroupGeneratorCode::OTHER_ERROR;
-        response["message"] = "Internal error";
+        response["message"] = _e.what();
     }
     return response;
 }
@@ -1466,4 +1474,37 @@ Json::Value Rpc::startGroup(int _groupID)
         response["message"] = _e.what();
     }
     return response;
+}
+
+void Rpc::checkPeerlist(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+{
+    if (!GroupGenerator::checkSealerList(_sealerList))
+    {
+        BOOST_THROW_EXCEPTION(InvalidGenesisNodeid());
+    }
+
+    std::set<NodeID> peers;
+    auto sessions = service()->sessionInfos();
+    for (auto it = sessions.begin(); it != sessions.end(); ++it)
+    {
+        peers.insert(it->nodeInfo.nodeID);
+    }
+    peers.insert(service()->id());  // Add myself
+
+    bool error = false;
+    std::string errorInfo = "Not connect: ";
+    for (auto const genesisSealer : _sealerList)
+    {
+        if (peers.find(NodeID(genesisSealer)) == peers.end())
+        {
+            error = true;
+            errorInfo += genesisSealer + ", ";
+        }
+    }
+
+    if (error)
+    {
+        _errorInfo = errorInfo;
+        BOOST_THROW_EXCEPTION(NotConnectGenesisNode());
+    }
 }

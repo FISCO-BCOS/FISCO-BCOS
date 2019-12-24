@@ -154,6 +154,8 @@ private:
 
     void checkRequest(int _groupID);
     void checkSyncStatus(int _groupID);
+
+    void checkPeerlist(const std::set<std::string>& _sealerList, std::string& _errorInfo);
 };
 
 }  // namespace rpc
