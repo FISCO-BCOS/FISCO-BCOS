@@ -273,7 +273,6 @@ bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConst
 {
     std::string splitRequest;
     abi.abiOut(data, splitRequest);
-
     char* splitRequestChar = stringToChar(splitRequest);
     if (verify_split_credit(splitRequestChar) != WEDPR_SUCCESS)
     {
@@ -306,8 +305,9 @@ bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, byt
         throwException("verify_vote_request failed");
     }
 
-    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
     std::string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
+    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+
     return abi.abiIn("", blankBallot, voteStoragePart);
 }
 
