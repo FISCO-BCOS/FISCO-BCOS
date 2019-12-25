@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include "SQLConnectionPool.h"
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
@@ -36,6 +35,7 @@ namespace dev
 {
 namespace storage
 {
+class SQLConnectionPool;
 struct SQLPlaceHoldItem
 {
     std::string sql;
@@ -76,10 +76,10 @@ private:
 
 public:
     virtual void ExecuteSql(const std::string& _sql);
-    void setConnPool(SQLConnectionPool::Ptr& _connPool);
+    void setConnPool(std::shared_ptr<SQLConnectionPool>& _connPool);
 
 private:
-    SQLConnectionPool::Ptr m_connPool;
+    std::shared_ptr<SQLConnectionPool> m_connPool;
 };
 
 }  // namespace storage

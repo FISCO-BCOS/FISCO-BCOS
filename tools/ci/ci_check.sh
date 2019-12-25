@@ -17,7 +17,7 @@ init() {
 127.0.0.1:2 agencyB 1
 EOF
     fisco_version=$(../build/bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]")
-    bash build_chain.sh -f ipconf -e ../build/bin/fisco-bcos -v ${fisco_version}
+    bash build_chain.sh -T -f ipconf -e ../build/bin/fisco-bcos -v ${fisco_version}
     bash check_node_config.sh -p nodes/127.0.0.1/node0
     cd nodes/127.0.0.1
 }
