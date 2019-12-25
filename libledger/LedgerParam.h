@@ -30,7 +30,8 @@
 #include <memory>
 #include <vector>
 
-#define LedgerParam_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LedgerParam")
+#define LedgerParam_LOG(LEVEL) \
+    LOG(LEVEL) << "[g:" << std::to_string(groupId()) << "]" << LOG_BADGE("LedgerParam")
 
 namespace dev
 {
@@ -64,6 +65,9 @@ struct ConsensusParam
     int64_t epochSize = 10;
     // rotating interval, default is 10
     int64_t rotatingInterval = 10;
+    // enable optimize ttl or not
+    bool enableTTLOptimize;
+    bool enablePrepareWithTxsHash;
 };
 
 struct AMDBParam
@@ -78,6 +82,8 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    // enable send transactions by tree
+    bool enableSendTxsByTree = false;
     // enable send block status by tree or not
     bool enableSendBlockStatusByTree = true;
     // default block status gossip interval is 1s

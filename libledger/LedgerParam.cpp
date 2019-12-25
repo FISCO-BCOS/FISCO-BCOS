@@ -43,24 +43,24 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
 {
     try
     {
-        LedgerParam_LOG(INFO) << LOG_BADGE("parseGenesisConfig")
-                              << LOG_DESC("initConsensusConfig/initStorageConfig/initTxConfig")
-                              << LOG_KV("configFile", _genesisFile);
         ptree pt;
         // read the configuration file for a specified group
         read_ini(_genesisFile, pt);
+        m_groupID = pt.get<int>("group.id", 0);
+        LedgerParam_LOG(INFO) << LOG_BADGE("parseGenesisConfig")
+                              << LOG_DESC("initConsensusConfig/initStorageConfig/initTxConfig")
+                              << LOG_KV("configFile", _genesisFile);
         initConsensusConfig(pt);
         initEventLogFilterManagerConfig(pt);
         /// use UTCTime directly as timeStamp in case of the clock differences between machines
         mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
-        LedgerParam_LOG(DEBUG) << LOG_BADGE("parseGenesisConfig")
-                               << LOG_KV("timestamp", mutableGenesisParam().timeStamp);
+        LedgerParam_LOG(INFO) << LOG_BADGE("parseGenesisConfig")
+                              << LOG_KV("timestamp", mutableGenesisParam().timeStamp);
         mutableStateParam().type = pt.get<std::string>("state.type", "storage");
         // Compatibility with previous versions RC2/RC1
         mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
-        m_groupID = pt.get<int>("group.id", 0);
     }
     catch (std::exception& e)
     {
@@ -114,14 +114,11 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
                           << LOG_DESC("initTxPoolConfig/initSyncConfig/initTxExecuteConfig")
                           << LOG_KV("configFile", _iniConfigFile);
     ptree pt;
+    // all the configurations related to ini have default value
+    // so here is no need to throw exception when not find _iniConfigFile
     if (boost::filesystem::exists(_iniConfigFile))
     {
         read_ini(_iniConfigFile, pt);
-    }
-    else
-    {
-        BOOST_THROW_EXCEPTION(
-            dev::FileError() << errinfo_comment(_iniConfigFile + "not found, exit"));
     }
     initStorageConfig(pt);
     initTxPoolConfig(pt);
@@ -133,8 +130,6 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
 {
-    LedgerParam_LOG(INFO) << LOG_DESC("LedgerConstructor") << LOG_KV("configPath", _configFilePath)
-                          << LOG_KV("baseDir", baseDir());
     /// The file group.X.genesis is required, otherwise the program terminates.
     /// load genesis config of group
 
@@ -150,14 +145,14 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", false);
+        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
     }
     else
     {
         mutableTxParam().enableParallel = false;
     }
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("InitTxExecuteConfig")
-                           << LOG_KV("enableParallel", mutableTxParam().enableParallel);
+    LedgerParam_LOG(INFO) << LOG_BADGE("InitTxExecuteConfig")
+                          << LOG_KV("enableParallel", mutableTxParam().enableParallel);
 }
 
 void LedgerParam::initTxPoolConfig(ptree const& pt)
@@ -172,8 +167,8 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                 ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
         }
 
-        LedgerParam_LOG(DEBUG) << LOG_BADGE("initTxPoolConfig")
-                               << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit);
+        LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
+                              << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit);
     }
     catch (std::exception& e)
     {
@@ -213,12 +208,42 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     {
         mutableConsensusParam().blockSizeIncreaseRatio = 0.5;
     }
-    LedgerParam_LOG(DEBUG)
+    // set enableTTLOptimize
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", true);
+    }
+    else
+    {
+        mutableConsensusParam().enableTTLOptimize =
+            pt.get<bool>("consensus.enable_ttl_optimization", false);
+    }
+
+    // set enableTxsWithTxsHash
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
+    }
+    else
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash =
+            pt.get<bool>("consensus.enable_prepare_with_txsHash", false);
+    }
+    // only support >= 2.2.0-rc2
+    if (g_BCOSConfig.version() < RC2_VERSION)
+    {
+        mutableConsensusParam().enablePrepareWithTxsHash = false;
+    }
+    LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
         << LOG_KV("minBlockGenerationTime", mutableConsensusParam().minBlockGenTime)
         << LOG_KV("enablDynamicBlockSize", mutableConsensusParam().enableDynamicBlockSize)
-        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio);
+        << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
+        << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize)
+        << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash);
 }
 
 
@@ -258,10 +283,10 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
             ForbidNegativeValue() << errinfo_comment("Please set tx.gas_limit to positive !"));
     }
 
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
-                           << LOG_KV("type", mutableConsensusParam().consensusType)
-                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
-                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
+    LedgerParam_LOG(INFO) << LOG_BADGE("initConsensusConfig")
+                          << LOG_KV("type", mutableConsensusParam().consensusType)
+                          << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
+                          << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
     std::stringstream nodeListMark;
     try
@@ -320,23 +345,42 @@ void LedgerParam::initSyncConfig(ptree const& pt)
             ForbidNegativeValue() << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
     }
 
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                           << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
-    mutableSyncParam().enableSendBlockStatusByTree =
-        pt.get<bool>("sync.send_block_status_by_tree", true);
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                           << LOG_KV("enableSendBlockStatusByTree",
-                                  mutableSyncParam().enableSendBlockStatusByTree);
+    LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
 
-    // set gossipInterval for syncMaster, default is 3s
+    // send_txs_by_tree only supported after RC2
+    if (g_BCOSConfig.version() < RC2_VERSION)
+    {
+        mutableSyncParam().enableSendTxsByTree = false;
+    }
+    // the support_version is lower than 2.2.0, default disable send_txs_by_tree
+    else if (g_BCOSConfig.version() <= V2_1_0)
+    {
+        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", false);
+        mutableSyncParam().enableSendBlockStatusByTree =
+            pt.get<bool>("sync.sync_block_by_tree", false);
+    }
+    // the supported_version >= v2.2.0, default enable send_txs_by_tree
+    else
+    {
+        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", true);
+        mutableSyncParam().enableSendBlockStatusByTree =
+            pt.get<bool>("sync.sync_block_by_tree", true);
+    }
+    LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("enableSendTxsByTree", mutableSyncParam().enableSendTxsByTree)
+                          << LOG_KV("enableSendBlockStatusByTree",
+                                 mutableSyncParam().enableSendBlockStatusByTree);
+
+    // set gossipInterval for syncMaster, default is 1s
     mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
-    if (mutableSyncParam().gossipInterval <= 0)
+    if (mutableSyncParam().gossipInterval < 1000 || mutableSyncParam().gossipInterval > 3000)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set sync.gossip_interval_ms to positive !"));
+                                  "Please set sync.gossip_interval_ms to between 1000ms-3000ms!"));
     }
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval);
+    LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval);
 
     // set the number of gossip peers for syncMaster, default is 3
     mutableSyncParam().gossipPeers = pt.get<int64_t>("sync.gossip_peers_number", 3);
@@ -346,19 +390,14 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "Please set sync.gossip_peers_number to positive !"));
     }
     // set the sync-tree-width, default is 3
-    mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
-    if (mutableSyncParam().syncTreeWidth <= 0)
-    {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
-                              << errinfo_comment("Please set sync.sync_tree_width to positive !"));
-    }
-
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                           << LOG_KV("enableSendBlockStatusByTree",
-                                  mutableSyncParam().enableSendBlockStatusByTree)
-                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
-                           << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
-                           << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth);
+    // mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
+    mutableSyncParam().syncTreeWidth = 3;
+    LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
+                          << LOG_KV("enableSendBlockStatusByTree",
+                                 mutableSyncParam().enableSendBlockStatusByTree)
+                          << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
+                          << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
+                          << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)
@@ -452,11 +491,11 @@ void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree co
     mutableEventLogFilterManagerParams().maxBlockPerProcess =
         pt.get<int64_t>("event_filter.max_block_per_process", MAX_BLOCK_PER_PROCESS);
 
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("max_block_range")
-                           << LOG_KV("maxBlockRange",
-                                  mutableEventLogFilterManagerParams().maxBlockRange)
-                           << LOG_KV("maxBlockPerProcess",
-                                  mutableEventLogFilterManagerParams().maxBlockPerProcess);
+    LedgerParam_LOG(INFO) << LOG_BADGE("max_block_range")
+                          << LOG_KV("maxBlockRange",
+                                 mutableEventLogFilterManagerParams().maxBlockRange)
+                          << LOG_KV("maxBlockPerProcess",
+                                 mutableEventLogFilterManagerParams().maxBlockPerProcess);
 }
 
 }  // namespace ledger

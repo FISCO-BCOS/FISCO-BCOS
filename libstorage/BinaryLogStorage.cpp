@@ -77,5 +77,9 @@ size_t BinaryLogStorage::commit(int64_t num, const std::vector<TableData::Ptr>& 
 
 void BinaryLogStorage::stop()
 {
+    if (m_backend)
+    {
+        m_backend->stop();
+    }
     STORAGE_LOG(INFO) << "Stop BinaryLogStorage";
 }

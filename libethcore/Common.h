@@ -110,9 +110,11 @@ enum class ImportResult
     TransactionNonceCheckFail,
     TxPoolNonceCheckFail,
     TransactionPoolIsFull,
-    InvalidChainIdOrGroupId,
+    InvalidChainId,
+    InvalidGroupId,
     BlockLimitCheckFailed,
-    NotBelongToTheGroup
+    NotBelongToTheGroup,
+    TransactionRefused
 };
 
 struct ImportRequirements

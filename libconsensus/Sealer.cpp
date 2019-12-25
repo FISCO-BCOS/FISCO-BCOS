@@ -100,7 +100,7 @@ bool Sealer::shouldWait(bool const& wait) const
 void Sealer::doWork(bool wait)
 {
     reportNewBlock();
-    if (shouldSeal())
+    if (shouldSeal() && m_startConsensus.load())
     {
         WriteGuard l(x_sealing);
         {
@@ -205,6 +205,8 @@ void Sealer::resetBlock(std::shared_ptr<dev::eth::Block> block, bool resetNextLe
                             << LOG_KV("number", m_blockChain->number());
         }
         block->resetCurrentBlock(highestBlock->blockHeader());
+        SEAL_LOG(DEBUG) << "resetCurrentBlock to"
+                        << LOG_KV("sealingNum", block->blockHeader().number());
     }
 }
 

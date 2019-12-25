@@ -21,7 +21,7 @@
  */
 
 #include "DAG.h"
-
+#include <libconfig/GlobalConfigure.h>
 using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
@@ -107,6 +107,13 @@ ID DAG::waitPop(bool _needWait)
             return true;
         }
         else if (!_needWait)
+        {
+            return true;
+        }
+        // process-exit related:
+        // if the g_BCOSConfig.shouldExit is true (may be the storage has exceptioned)
+        // return true, will pop INVALID_ID
+        else if (g_BCOSConfig.shouldExit.load())
         {
             return true;
         }

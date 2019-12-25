@@ -62,7 +62,32 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
 Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
     std::shared_ptr<dev::p2p::P2PInterface> _service)
   : m_ledgerManager(_ledgerManager), m_service(_service)
-{}
+{
+    registerSyncChecker();
+}
+
+void Rpc::registerSyncChecker()
+{
+    if (m_ledgerManager)
+    {
+        auto groupList = m_ledgerManager->getGroupListForRpc();
+        for (auto const& group : groupList)
+        {
+            auto txPool = m_ledgerManager->txPool(group);
+            txPool->registerSyncStatusChecker([this, group]() {
+                try
+                {
+                    checkSyncStatus(group);
+                }
+                catch (std::exception const& _e)
+                {
+                    return false;
+                }
+                return true;
+            });
+        }
+    }
+}
 
 std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
 {
@@ -113,11 +138,11 @@ void Rpc::checkRequest(int _groupID)
     return;
 }
 
-void Rpc::checkTxReceive(int _groupID)
+void Rpc::checkSyncStatus(int _groupID)
 {
     // Refuse transaction if far syncing
-    auto consEngine = ledgerManager()->consensus(_groupID);
-    if (consEngine->shouldRecvTxs())
+    auto syncModule = ledgerManager()->sync(_groupID);
+    if (syncModule->blockNumberFarBehind())
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));
@@ -359,12 +384,11 @@ Json::Value Rpc::getClientVersion()
     return Json::Value();
 }
 
-Json::Value Rpc::getPeers(int _groupID)
+Json::Value Rpc::getPeers(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
@@ -400,13 +424,12 @@ Json::Value Rpc::getPeers(int _groupID)
     return Json::Value();
 }
 
-Json::Value Rpc::getNodeIDList(int _groupID)
+Json::Value Rpc::getNodeIDList(int)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getNodeIDList") << LOG_DESC("request");
 
-        checkRequest(_groupID);
         Json::Value response = Json::Value(Json::arrayValue);
 
         response.append(service()->id().hex());
@@ -1036,12 +1059,9 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
     try
     {
-// TODO: set checkRequest and checkTxReceive async
 #if 0
         RPC_LOG(TRACE) << LOG_BADGE("sendRawTransaction") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID) << LOG_KV("rlp", _rlp);
-        checkRequest(_groupID);
-        checkTxReceive(_groupID);
 #endif
         auto txPool = ledgerManager()->txPool(_groupID);
         // only check txPool here
@@ -1054,6 +1074,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        // receive transaction from channel or rpc
+        tx->setRpcTx(true);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
 
         uint32_t clientProtocolversion = ProtocolVersion::v1;
@@ -1100,23 +1122,28 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     transactionCallback(receiptContent);
                 });
         }
+        // calculate the sha3 before submit into the transaction pool
+        tx->sha3();
         std::pair<h256, Address> ret;
         switch (clientProtocolversion)
         {
         // the oldest SDK: submit transactions sync
         case ProtocolVersion::v1:
+        case ProtocolVersion::v2:
             checkRequest(_groupID);
+            checkSyncStatus(_groupID);
             ret = txPool->submitTransactions(tx);
             break;
         // TODO: the SDK protocol upgrade to 3,
         // the v2 submit transactions sync
         // and v3 submit transactions async
-        case ProtocolVersion::v2:
+        case ProtocolVersion::v3:
             ret = txPool->submit(tx);
             break;
         // default submit transactions sync
         default:
             checkRequest(_groupID);
+            checkSyncStatus(_groupID);
             ret = txPool->submitTransactions(tx);
             break;
         }

@@ -136,7 +136,7 @@ static void FakeSignAndCommitCache(FakeConsensus<FakePBFTEngine>& fake_pbft, Pre
         prepareReq = FakePrepareReq(key_pair);
         Block block;
         fake_pbft.consensus()->resetBlock(block);
-        block.encode(prepareReq.block);  /// encode block
+        block.encode(*prepareReq.block);  /// encode block
         prepareReq.block_hash = block.header().hash();
         prepareReq.height = block.header().number();
         prepareReq.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
@@ -399,8 +399,8 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     fake_pbft.consensus()->resetBlock(block);
     block.header().setSealerList(fake_pbft.consensus()->sealerList());
     block.header().setSealer(u256(req.idx));
-    block.encode(req.block);
-    block.decode(ref(req.block));
+    block.encode(*req.block);
+    block.decode(ref(*req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));

@@ -40,6 +40,11 @@ using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
+    // return nullptr prepare to exit when g_BCOSConfig.shouldExit is true
+    if (g_BCOSConfig.shouldExit)
+    {
+        return nullptr;
+    }
     if (block.blockHeader().number() < m_executingNumber)
     {
         return nullptr;
@@ -151,11 +156,17 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
-    // block.setStateRootToAllReceipt(stateRoot); no need
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        // when support_version is lower than v2.2.0, doesn't setStateRootToAllReceipt
+        // enable_parallel=true can't be run with enable_parallel=false
+        block.setStateRootToAllReceipt(stateRoot);
+    }
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+
     /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
     /// since origin value is empty if executeBlock is called by sync module, need to compare
     /// receiptRoot, stateRoot and dbHash
@@ -170,6 +181,8 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                 << LOG_KV("curHash", block.header().hash().abridged())
                 << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
                 << LOG_KV("curRecepit", block.header().receiptsRoot().abridged())
+                << LOG_KV("orgTxRoot", tmpHeader.transactionsRoot().abridged())
+                << LOG_KV("curTxRoot", block.header().transactionsRoot().abridged())
                 << LOG_KV("orgState", tmpHeader.stateRoot().abridged())
                 << LOG_KV("curState", block.header().stateRoot().abridged())
                 << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
@@ -186,6 +199,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
                              << LOG_KV("num", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
+                             << LOG_KV("dbHash", block.header().dbHash())
                              << LOG_KV("transactionRoot", block.transactionRoot())
                              << LOG_KV("receiptRoot", block.receiptRoot());
     return executiveContext;
@@ -288,7 +302,11 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
         BOOST_THROW_EXCEPTION(
             BlockExecutionFailed() << errinfo_comment("Error during parallel block execution"));
     }
-
+    // if the program is going to exit, return nullptr directly
+    if (g_BCOSConfig.shouldExit)
+    {
+        return nullptr;
+    }
     auto exe_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -307,7 +325,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(stateRoot);
+    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -322,6 +340,8 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 << LOG_KV("curHash", block.header().hash().abridged())
                 << LOG_KV("orgReceipt", tmpHeader.receiptsRoot().abridged())
                 << LOG_KV("curRecepit", block.header().receiptsRoot().abridged())
+                << LOG_KV("orgTxRoot", tmpHeader.transactionsRoot().abridged())
+                << LOG_KV("curTxRoot", block.header().transactionsRoot().abridged())
                 << LOG_KV("orgState", tmpHeader.stateRoot().abridged())
                 << LOG_KV("curState", block.header().stateRoot().abridged())
                 << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
@@ -336,6 +356,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                              << LOG_KV("blockNumber", block.blockHeader().number())
                              << LOG_KV("blockHash", block.headerHash())
                              << LOG_KV("stateRoot", block.header().stateRoot())
+                             << LOG_KV("dbHash", block.header().dbHash())
                              << LOG_KV("transactionRoot", block.transactionRoot())
                              << LOG_KV("receiptRoot", block.receiptRoot())
                              << LOG_KV("initExeCtxTimeCost", initExeCtx_time_cost)

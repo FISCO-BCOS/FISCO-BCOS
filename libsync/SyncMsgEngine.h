@@ -41,7 +41,7 @@ namespace dev
 {
 namespace sync
 {
-class SyncMsgEngine
+class SyncMsgEngine : public std::enable_shared_from_this<SyncMsgEngine>
 {
 public:
     SyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
@@ -62,20 +62,20 @@ public:
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
-        m_txsWorker =
-            std::make_shared<dev::ThreadPool>("SyncMsgEngine-" + std::to_string(_protocolId), 1);
-        m_txsSender = std::make_shared<dev::ThreadPool>(
-            "SyncMsgEngine-sender-" + std::to_string(_protocolId), 1);
-        m_txsReceiver = std::make_shared<dev::ThreadPool>(
-            "SyncMsgEngine-receiver-" + std::to_string(_protocolId), 1);
+        m_txsWorker = std::make_shared<dev::ThreadPool>("SyncMsgE-" + std::to_string(m_groupId), 1);
+        m_txsSender =
+            std::make_shared<dev::ThreadPool>("TxsSender-" + std::to_string(m_groupId), 1);
+        m_txsReceiver =
+            std::make_shared<dev::ThreadPool>("txsRecv-" + std::to_string(m_groupId), 1);
     }
 
-    virtual ~SyncMsgEngine() {}
+    virtual void stop();
+    virtual ~SyncMsgEngine() { stop(); }
 
     void messageHandler(dev::p2p::NetworkException _e,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg);
 
-    bool isFarSyncing() const;
+    bool blockNumberFarBehind() const;
 
     void onNotifyWorker(std::function<void()> const& _f) { m_onNotifyWorker = _f; }
     void onNotifySyncTrans(std::function<void()> const& _f) { m_onNotifySyncTrans = _f; }

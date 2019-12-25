@@ -21,12 +21,12 @@
 
 #include "StorageException.h"
 
-#include <libchannelserver/ChannelRPCServer.h>
-
 #include "Common.h"
 #include "SQLStorage.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
+#include <libchannelserver/ChannelRPCServer.h>
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 
 using namespace dev;
@@ -455,6 +455,8 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             STORAGE_EXTERNAL_LOG(ERROR) << "SQLStorage unreachable" << LOG_KV("maxRetry", retry);
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
+            // output the exit time
+            std::cout << "[" << dev::getCurrentDateTime() << "] ";
             std::cout << "The sqlstorage doesn't work well,"
                       << "the fisco-bcos will exit." << std::endl;
 

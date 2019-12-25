@@ -60,7 +60,7 @@ void Worker::startWorking()
                 if (fields.size() > 1)
                 {
                     boost::log::core::get()->add_thread_attribute(
-                        "ThreadName", boost::log::attributes::constant<std::string>(fields[1]));
+                        "GroupId", boost::log::attributes::constant<std::string>(fields[1]));
                 }
             }
 #endif

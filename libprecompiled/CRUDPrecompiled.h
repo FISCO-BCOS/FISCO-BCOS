@@ -39,6 +39,13 @@ contract CRUD
     function remove(string tableName, string key, string condition, string optional) public returns(int);
     function select(string tableName, string key, string condition, string optional) public constant returns(string);
 }
+{
+    "efc81a8c": "create()",
+    "ebf3b24f": "insert(string,int256,string)",
+    "c4f41ab3": "remove(string,int256)",
+    "fcd7e3c1": "select(string)",
+    "487a5a10": "update(string,int256,string)"
+}
 #endif
 
 class CRUDPrecompiled : public dev::blockverifier::Precompiled

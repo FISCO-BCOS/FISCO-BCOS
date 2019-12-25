@@ -254,7 +254,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash, i
                 auto entry = entries->get(0);
 
                 record_time = utcTime();
-                auto blockRLP = getBlockRLP(entry);
+                auto blockRLP = getDataBytes(entry, SYS_VALUE);
                 auto blockRLP_time_cost = utcTime() - record_time;
 
                 BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
@@ -320,9 +320,8 @@ std::shared_ptr<std::vector<dev::eth::NonceKeyType>> BlockChainImp::getNonces(in
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            std::string nonce_vector_str = entry->getField(SYS_VALUE);
-            bytes ret = fromHex(nonce_vector_str);
-            RLP rlp(ret);
+            auto nonceRLPData = getDataBytes(entry, SYS_VALUE);
+            RLP rlp(*nonceRLPData);
             return std::make_shared<std::vector<dev::eth::NonceKeyType>>(
                 rlp.toVector<dev::eth::NonceKeyType>());
         }
@@ -924,13 +923,13 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
     // get merkle from  parent2ChildList and child2Parent
     bytes txData;
     tx->encode(txData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
+    auto hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
     this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
 
-dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& data)
+dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& data)
 {
     RLPStream s;
     s << index;
@@ -942,7 +941,8 @@ dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& dat
     BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
                           << " bytesHash:" << toHex(bytesHash)
                           << " hashWithIndex:" << hashWithIndex.hex();
-    return hashWithIndex;
+
+    return bytesHash;
 }
 
 void BlockChainImp::parseMerkleMap(
@@ -961,12 +961,12 @@ void BlockChainImp::parseMerkleMap(
     }
 }
 
-void BlockChainImp::getMerkleProof(dev::h256 const& _txHash,
+void BlockChainImp::getMerkleProof(dev::bytes const& _txHash,
     const std::map<std::string, std::vector<std::string>>& parent2ChildList,
     const std::map<std::string, std::string>& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {
-    std::string merkleNode = _txHash.hex();
+    std::string merkleNode = toHex(_txHash);
     auto itChild2Parent = child2Parent.find(merkleNode);
     while (itChild2Parent != child2Parent.end())
     {
@@ -1089,7 +1089,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     // get receipt hash with index
     bytes receiptData;
     txReceipt->encode(receiptData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
+    auto hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
     this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(txReceipt, merkleProof);
@@ -1244,7 +1244,12 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         record_time = utcTime();
 
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
-        entry_tb2nonces->setField(SYS_VALUE, toHex(rs.out()));
+        // store nonce directly >= v2.2.0
+        // store the hex string < 2.2.0
+        std::shared_ptr<bytes> nonceData = std::make_shared<bytes>();
+        rs.swapOut(*nonceData);
+        writeBytesToField(nonceData, entry_tb2nonces, SYS_VALUE);
+
         entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
@@ -1455,40 +1460,48 @@ std::shared_ptr<Block> BlockChainImp::decodeBlock(dev::storage::Entry::ConstPtr 
     return block;
 }
 
-// get blockRLP from the block data fetched from the system table
-std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::storage::Entry::ConstPtr _entry)
+// get data from the system table
+std::shared_ptr<bytes> BlockChainImp::getDataBytes(
+    dev::storage::Entry::ConstPtr _entry, std::string const& _fieldName)
 {
-    std::shared_ptr<bytes> blockRlp = nullptr;
+    std::shared_ptr<bytes> dataRlp = nullptr;
     // >= v2.2.0
     if (!m_enableHexBlock)
     {
-        auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
-        blockRlp = std::make_shared<bytes>(bytesBlock.begin(), bytesBlock.end());
+        auto dataBytes = _entry->getFieldConst(_fieldName);
+        dataRlp = std::make_shared<bytes>(dataBytes.begin(), dataBytes.end());
     }
     else
     {
         // < v2.2.0 or use mysql, external
-        auto strBlock = _entry->getField(SYS_VALUE);
-        blockRlp = std::make_shared<bytes>(fromHex(strBlock.c_str()));
+        auto dataStr = _entry->getField(_fieldName);
+        dataRlp = std::make_shared<bytes>(fromHex(dataStr.c_str()));
     }
 
-    return blockRlp;
+    return dataRlp;
 }
 
 // write block data into the system table
 void BlockChainImp::writeBlockToField(
     dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry)
 {
-    bytes out;
-    _block.encode(out);
+    std::shared_ptr<bytes> out = std::make_shared<bytes>();
+    _block.encode(*out);
+    writeBytesToField(out, _entry, SYS_VALUE);
+}
+
+// write bytes to the SYS_VALUE field
+void BlockChainImp::writeBytesToField(std::shared_ptr<dev::bytes> _data,
+    dev::storage::Entry::Ptr _entry, std::string const& _fieldName)
+{
     // >= v2.2.0
     if (!m_enableHexBlock)
     {
-        _entry->setField(SYS_VALUE, out.data(), out.size());
+        _entry->setField(_fieldName, _data->data(), _data->size());
     }
     // < v2.2.0
     else
     {
-        _entry->setField(SYS_VALUE, toHex(out));
+        _entry->setField(_fieldName, toHexPrefixed(*_data));
     }
 }

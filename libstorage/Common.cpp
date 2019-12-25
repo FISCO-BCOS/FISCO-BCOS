@@ -12,22 +12,30 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2019 fisco-dev contributors.
  */
-/** @file ECDHE.cpp
- * @author Asherli
- * @date 2018
+/** @file Common.cpp
+ *  @author bxq
+ *  @date 20191218
  */
-
-#include "libdevcrypto/ECDHE.h"
-#include "libdevcrypto/Exceptions.h"
-#include "libdevcrypto/Hash.h"
+#include "Common.h"
+#include "libconfig/GlobalConfigure.h"
+#include <string>
 
 using namespace std;
 using namespace dev;
-using namespace dev::crypto;
-bool ECDHE::agree(Public const&, Secret&) const
+using namespace dev::storage;
+
+bool dev::storage::isHashField(const std::string& _key)
 {
-    BOOST_THROW_EXCEPTION(GmCryptoException() << errinfo_comment("GM not surrpot this algorithm"));
-    return true;
+    if (!_key.empty())
+    {
+        if (g_BCOSConfig.version() < RC3_VERSION)
+        {
+            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
+                    (_key == STATUS));
+        }
+        return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_"));
+    }
+    return false;
 }

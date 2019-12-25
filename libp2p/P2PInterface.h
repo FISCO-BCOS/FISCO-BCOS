@@ -72,6 +72,8 @@ public:
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
 
+    virtual void removeHandlerByProtocolID(PROTOCOL_ID const&) {}
+
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
     virtual P2PSessionInfos sessionInfos() = 0;
@@ -83,7 +85,7 @@ public:
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
-    virtual void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) = 0;
+    virtual void setNodeListByGroupID(GROUP_ID _groupID, const dev::h512s& _nodeList) = 0;
 
     virtual void setTopics(std::shared_ptr<std::set<std::string>> _topics) = 0;
 

@@ -310,14 +310,127 @@ dev::h256 MemoryTable2::hash()
     if (m_isDirty)
     {
         m_tableData.reset(new dev::storage::TableData());
-        dump();
+        if (g_BCOSConfig.version() < V2_2_0)
+        {
+            dumpWithoutOptimize();
+        }
+        else
+        {
+            dump();
+        }
     }
 
     return m_hash;
 }
 
+dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
+{
+    TIME_RECORD("MemoryTable2 Dump");
+    if (m_isDirty)
+    {
+        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData->info = m_tableInfo;
+        m_tableData->dirtyEntries = std::make_shared<Entries>();
+
+        auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
+
+        tbb::parallel_for(m_dirty.range(),
+            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    if (!it->second->deleted())
+                    {
+                        m_tableData->dirtyEntries->addEntry(it->second);
+                        tempEntries.push_back(it->second);
+                    }
+                }
+            });
+
+        m_tableData->newEntries = std::make_shared<Entries>();
+        tbb::parallel_for(m_newEntries.range(),
+            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
+                        [&](tbb::blocked_range<size_t>& rangeIndex) {
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            {
+                                if (!it->second->get(i)->deleted())
+                                {
+                                    m_tableData->newEntries->addEntry(it->second->get(i));
+                                    tempEntries.push_back(it->second->get(i));
+                                }
+                            }
+                        });
+                }
+            });
+
+        TIME_RECORD("Sort data");
+        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
+        tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
+            EntryLessNoLock(m_tableInfo));
+        tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
+            EntryLessNoLock(m_tableInfo));
+        TIME_RECORD("Submmit data");
+        bytes allData;
+        for (size_t i = 0; i < tempEntries.size(); ++i)
+        {
+            auto entry = tempEntries[i];
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {  // RC2 STATUS is in entry fields
+                entry->setField(STATUS, to_string(entry->getStatus()));
+            }
+            for (auto fieldIt : *(entry))
+            {
+                if (isHashField(fieldIt.first))
+                {
+                    allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                    allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
+                }
+            }
+            if (g_BCOSConfig.version() < RC3_VERSION)
+            {
+                continue;
+            }
+            char status = (char)entry->getStatus();
+            allData.insert(allData.end(), &status, &status + sizeof(status));
+        }
+#if 0
+        auto printEntries = [](tbb::concurrent_vector<Entry::Ptr>& entries) {
+            if (entries.size() == 0)
+            {
+                cout << " is empty!" << endl;
+                return;
+            }
+            for (size_t i = 0; i < entries.size(); ++i)
+            {
+                auto data = entries[i];
+                cout << endl << "***" << i << " [ id=" << data->getID() << " ]";
+                for (auto& it : *data)
+                {
+                    cout << "[ " << it.first << "=" << it.second << " ]";
+                }
+            }
+            cout << endl;
+        };
+        printEntries(tempEntries);
+#endif
+        if (allData.empty())
+        {
+            m_hash = h256();
+        }
+
+        bytesConstRef bR(allData.data(), allData.size());
+        m_hash = dev::sha256(bR);
+        m_isDirty = false;
+    }
+
+    return m_tableData;
+}
+
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
+    // >= v2.2.0
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
     if (m_isDirty)
     {
