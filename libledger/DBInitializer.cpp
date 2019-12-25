@@ -26,6 +26,7 @@
 #include "libstorage/BinLogHandler.h"
 #include "libstorage/BinaryLogStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
+#include "libstorage/SQLConnectionPool.h"
 #include "libstorage/ScalableStorage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"

@@ -1,0 +1,50 @@
+name: FISCO-BCOS GitHub Actions
+on:
+  push:
+    branches-ignore:
+      - "**-1.3"
+      - "**-1.5"
+    tags-ignore:
+      - v1.*
+    paths-ignore:
+      - "docs/**"
+      - "Changelog.md"
+      - "README.md"
+  pull_request:
+    # branches:
+    #     - '**'
+  release:
+    types: [published, created, edited]
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-16.04, ubuntu-18.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          fetch-depth: 1
+      - uses: actions/cache@v1
+        id: cache
+        with:
+          path: deps/
+          key: deps-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-${{ runner.os }}-${{ github.ref }}
+            deps-${{ runner.os }}-
+      - name: install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install openssl ccache
+      - name: install Ubuntu dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache
+      - name: configure
+        run: cmake -DTESTS=on .
+      - name: compile
+        run: make -j2
+      - name: run uint tests
+        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test

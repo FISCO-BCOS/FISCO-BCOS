@@ -52,7 +52,7 @@ public:
 
 
 public:
-    void setConnPool(SQLConnectionPool::Ptr& _connPool);
+    void setConnPool(std::shared_ptr<SQLConnectionPool>& _connPool);
     void SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc);
     void initSysTables();
 

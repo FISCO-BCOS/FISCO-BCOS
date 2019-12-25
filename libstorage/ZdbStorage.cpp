@@ -69,7 +69,7 @@ Entries::Ptr ZdbStorage::select(
     return entries;
 }
 
-void ZdbStorage::setConnPool(SQLConnectionPool::Ptr& _connPool)
+void ZdbStorage::setConnPool(std::shared_ptr<SQLConnectionPool>& _connPool)
 {
     m_sqlBasicAcc->setConnPool(_connPool);
     this->initSysTables();
