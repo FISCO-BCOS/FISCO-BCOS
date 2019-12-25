@@ -323,7 +323,9 @@ bool Ledger::consensusInitFactory()
         m_sealer = createRaftSealer();
     }
     // create PBFTSealer
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 || isRotatingPBFTEnabled())
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
+                 0 ||
+             isRotatingPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
     }

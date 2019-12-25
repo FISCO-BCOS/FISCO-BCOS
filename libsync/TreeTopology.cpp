@@ -161,10 +161,6 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
             _selectedNodeList->push_back(selectedNode);
             break;
         }
-        if (parentIndex <= 0)
-        {
-            break;
-        }
         parentIndex = (parentIndex - 1) / m_treeWidth;
     }
 }

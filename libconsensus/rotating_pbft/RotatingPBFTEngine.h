@@ -21,7 +21,6 @@
  * @date: 2019-09-11
  */
 #pragma once
-#include "RPBFTMsgFactory.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
@@ -74,13 +73,6 @@ public:
         m_rotatingInterval = _rotatingInterval;
     }
 
-    bool shouldRecvTxs() const override
-    {
-        // only the real consensusNode is far syncing, forbid send transactions to the node
-        // the real observer node can receive messages
-        return m_blockSync->isFarSyncing() && m_locatedInConsensusNodes;
-    }
-
     /// get sealer list
     dev::h512s consensusList() const override
     {
@@ -109,19 +101,6 @@ protected:
 
     virtual bool updateEpochSize();
     virtual bool updateRotatingInterval();
-    void createPBFTMsgFactory() override { m_pbftMsgFactory = std::make_shared<RPBFTMsgFactory>(); }
-
-    // get the disconnected node list
-    void getForwardNodes(dev::h512s& _forwardNodes, dev::p2p::P2PSessionInfos const& _sessions);
-
-    void forwardMsg(
-        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const&) override;
-
-    PBFTMsgPacket::Ptr createPBFTMsgPacket(bytesConstRef _data, PACKET_TYPE const& _packetType,
-        unsigned const& _ttl, dev::h512s const& _forwardNodes) override;
-
-    void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl) override;
 
 protected:
     // configured epoch size

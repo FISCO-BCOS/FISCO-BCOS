@@ -60,7 +60,6 @@ void Executive::initialize(Transaction::Ptr _transaction)
 
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t->gas() * m_t->gasPrice();
-        bigint totalCost = m_t->value() + gasCost;
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
 }
