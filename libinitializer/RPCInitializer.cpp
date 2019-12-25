@@ -114,7 +114,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     try
     {
         // m_rpcForChannel is created in initChannelRPCServer, now complete m_rpcForChannel
-        m_rpcForChannel->setLedgerManager(m_ledgerManager);
+        m_rpcForChannel->setLedgerInitializer(m_ledgerInitializer);
         m_rpcForChannel->setService(m_p2pService);
         // event log filter callback
         m_channelRPCServer->setEventFilterCallback(
@@ -168,7 +168,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             });
 
         // Don't to set destructor, the ModularServer will destruct.
-        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
         m_safeHttpServer.reset(
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
