@@ -113,13 +113,12 @@ public:
         PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
-    P2PMessage::Ptr transDataToMessage(bytesConstRef data, PACKET_TYPE const& packetType,
+    P2PMessage::Ptr transDataToMessageWrapper(bytesConstRef data, PACKET_TYPE const& packetType,
         PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         return PBFTEngine::transDataToMessage(data, packetType, protocolId, ttl);
     }
-
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    bool broadcastMsgWrapper(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
         unsigned const& ttl = 0)
     {
@@ -205,7 +204,7 @@ public:
     }
 
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
-    inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
+    inline std::pair<bool, IDXTYPE> getLeader() const override { return PBFTEngine::getLeader(); }
 
     void handleMsg(PBFTMsgPacket const& pbftMsg)
     {

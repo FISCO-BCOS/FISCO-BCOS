@@ -20,6 +20,7 @@
  */
 
 #include "SQLBasicAccess.h"
+#include "SQLConnectionPool.h"
 #include "StorageException.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
