@@ -88,16 +88,16 @@ void errorExit(std::stringstream& _exitInfo, Exception const& exception)
 }
 
 thread_local std::string TimeRecorder::m_name;
-thread_local std::chrono::system_clock::time_point TimeRecorder::m_timePoint;
+thread_local std::chrono::steady_clock::time_point TimeRecorder::m_timePoint;
 thread_local size_t TimeRecorder::m_heapCount = 0;
-thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point> >
+thread_local std::vector<std::pair<std::string, std::chrono::steady_clock::time_point> >
     TimeRecorder::m_record;
 
 TimeRecorder::TimeRecorder(const std::string& function, const std::string& name)
   : m_function(function)
 {
-    auto now = std::chrono::system_clock::now();
-    if (m_timePoint == std::chrono::system_clock::time_point())
+    auto now = std::chrono::steady_clock::now();
+    if (m_timePoint == std::chrono::steady_clock::time_point())
     {
         m_name = name;
         m_timePoint = now;
@@ -118,9 +118,9 @@ TimeRecorder::~TimeRecorder()
 {
     --m_heapCount;
 
-    if (!m_heapCount && m_timePoint != std::chrono::system_clock::time_point())
+    if (!m_heapCount && m_timePoint != std::chrono::steady_clock::time_point())
     {
-        auto now = std::chrono::system_clock::now();
+        auto now = std::chrono::steady_clock::now();
         auto end = now;
         m_record.push_back(std::make_pair(m_name, m_timePoint));
 
@@ -147,7 +147,7 @@ TimeRecorder::~TimeRecorder()
                    << totalElapsed.count() << ss.str();
 
         m_name = "";
-        m_timePoint = std::chrono::system_clock::time_point();
+        m_timePoint = std::chrono::steady_clock::time_point();
         m_record.clear();
     }
 }

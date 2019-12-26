@@ -1511,7 +1511,7 @@ void PBFTEngine::collectGarbage()
         return;
     }
     Timer t;
-    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
     {

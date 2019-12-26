@@ -135,7 +135,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 
 static void startExecute(int _totalUser, int _totalTxs)
 {
-    auto start = chrono::system_clock::now();
+    auto start = chrono::steady_clock::now();
 
     boost::property_tree::ptree pt;
     LogInitializer log;
@@ -196,7 +196,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     {
         blockVerifier->parallelExecuteBlock(*block, parentBlockInfo);
     }
-    auto end = chrono::system_clock::now();
+    auto end = chrono::steady_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
     exit(0);
