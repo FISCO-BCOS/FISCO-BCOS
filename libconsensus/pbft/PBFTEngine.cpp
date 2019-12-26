@@ -1718,8 +1718,8 @@ void PBFTEngine::workLoop()
 
 void PBFTEngine::waitSignal()
 {
-    std::unique_lock<std::mutex> l(x_signalled);
-    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+    boost::unique_lock<boost::mutex> l(x_signalled);
+    m_signalled.wait_for(l, boost::chrono::milliseconds(5));
 }
 
 /// handle the prepareReq cached in the futurePrepareCache

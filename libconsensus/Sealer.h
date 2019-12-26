@@ -198,11 +198,11 @@ protected:
 
     /// atomic value represents that whether is calling syncTransactionQueue now
     /// signal to notify all thread to work
-    std::condition_variable m_signalled;
-    std::condition_variable m_blockSignalled;
+    boost::condition_variable m_signalled;
+    boost::condition_variable m_blockSignalled;
     /// mutex to access m_signalled
-    Mutex x_signalled;
-    Mutex x_blocksignalled;
+    boost::mutex x_signalled;
+    boost::mutex x_blocksignalled;
     std::atomic<bool> m_syncTxPool = {false};
     /// a new block has been submitted to the blockchain
     std::atomic<bool> m_syncBlock = {false};
