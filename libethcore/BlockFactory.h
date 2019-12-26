@@ -16,27 +16,35 @@
  */
 
 /**
- * @file: RPBFTMsgFactory.h
+ * @brief block factory
  * @author: yujiechen
- *
- * @date: 2019-10-28
- *
+ * @date: 2019-11-12
  */
+
 #pragma once
-#include "RPBFTMsgPacket.h"
-#include <libconsensus/pbft/PBFTMsgFactory.h>
+#include "Block.h"
+#include "PartiallyBlock.h"
 
 namespace dev
 {
-namespace consensus
+namespace eth
 {
-class RPBFTMsgFactory : public PBFTMsgFactory
+class BlockFactory
 {
 public:
-    using Ptr = std::shared_ptr<RPBFTMsgFactory>;
-    RPBFTMsgFactory() = default;
-    virtual ~RPBFTMsgFactory() {}
-    PBFTMsgPacket::Ptr createPBFTMsgPacket() override { return std::make_shared<RPBFTMsgPacket>(); }
+    using Ptr = std::shared_ptr<BlockFactory>;
+    BlockFactory() = default;
+    virtual ~BlockFactory() {}
+    virtual Block::Ptr createBlock() { return std::make_shared<Block>(); }
 };
-}  // namespace consensus
+
+class PartiallyBlockFactory : public BlockFactory
+{
+public:
+    PartiallyBlockFactory() = default;
+    ~PartiallyBlockFactory() override {}
+    Block::Ptr createBlock() override { return std::make_shared<PartiallyBlock>(); }
+};
+
+}  // namespace eth
 }  // namespace dev

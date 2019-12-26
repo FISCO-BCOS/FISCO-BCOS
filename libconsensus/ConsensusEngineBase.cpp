@@ -135,7 +135,10 @@ void ConsensusEngineBase::updateConsensusNodeList()
         std::stringstream s2;
         s2 << "[updateConsensusNodeList] Sealers:";
         {
+            /// to make sure the index of all sealers are consistent
             auto sealerList = m_blockChain->sealerList();
+            std::sort(sealerList.begin(), sealerList.end());
+
             UpgradableGuard l(m_sealerListMutex);
             if (sealerList != m_sealerList)
             {
@@ -148,8 +151,6 @@ void ConsensusEngineBase::updateConsensusNodeList()
             {
                 m_sealerListUpdated = false;
             }
-            /// to make sure the index of all sealers are consistent
-            std::sort(m_sealerList.begin(), m_sealerList.end());
             for (dev::h512 node : m_sealerList)
                 s2 << node.abridged() << ",";
         }
@@ -157,24 +158,31 @@ void ConsensusEngineBase::updateConsensusNodeList()
         dev::h512s observerList = m_blockChain->observerList();
         for (dev::h512 node : observerList)
             s2 << node.abridged() << ",";
-        ENGINE_LOG(TRACE) << s2.str();
 
         if (m_lastNodeList != s2.str())
         {
-            ENGINE_LOG(TRACE) << "[updateConsensusNodeList] update P2P List done.";
+            ENGINE_LOG(DEBUG) << LOG_DESC(
+                                     "updateConsensusNodeList: nodeList updated, updated nodeList:")
+                              << s2.str();
 
             // get all nodes
             auto sealerList = m_blockChain->sealerList();
             dev::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
-            std::sort(sealerList.begin(), sealerList.end());
             if (m_blockSync->syncTreeRouterEnabled())
             {
-                // update the nodeList
-                m_blockSync->updateNodeListInfo(nodeList);
+                if (m_sealerListUpdated)
+                {
+                    m_blockSync->updateConsensusNodeInfo(sealerList, nodeList);
+                }
+                else
+                {
+                    // update the nodeList
+                    m_blockSync->updateNodeListInfo(nodeList);
+                }
             }
+            m_service->setNodeListByGroupID(m_groupId, nodeList);
 
-            updateNodeListInP2P(nodeList);
             m_lastNodeList = s2.str();
         }
     }
@@ -184,12 +192,6 @@ void ConsensusEngineBase::updateConsensusNodeList()
             << "[updateConsensusNodeList] update consensus node list failed [EINFO]:  "
             << boost::diagnostic_information(e);
     }
-}
-
-void ConsensusEngineBase::updateNodeListInP2P(dev::h512s const& _nodeList)
-{
-    std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
-    m_service->setNodeListByGroupID(ret.first, _nodeList);
 }
 
 void ConsensusEngineBase::resetConfig()

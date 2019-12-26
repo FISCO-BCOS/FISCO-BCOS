@@ -48,36 +48,18 @@ void SyncTransaction::stop()
 
 void SyncTransaction::doWork()
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    auto printSyncInfo_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     maintainDownloadingTransactions();
-
-    auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
-    auto maintainTransactions_time_cost = 0;
 
     // only maintain transactions for the nodes inner the group
     if (m_needMaintainTransactions && m_newTransactions && m_txQueue->bufferSize() == 0)
     {
         maintainTransactions();
     }
-    maintainTransactions_time_cost = utcTime() - record_time;
 
     if (m_needForwardRemainTxs)
     {
         forwardRemainingTxs();
     }
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
-                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainDownloadingTransactionsTimeCost",
-                           maintainDownloadingTransactions_time_cost)
-                    << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
-                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
 }
 
 void SyncTransaction::workLoop()
@@ -109,13 +91,6 @@ void SyncTransaction::maintainTransactions()
 void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
     bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
 {
-    auto pendingSize = m_txPool->pendingSize();
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
-                    << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
-                    << LOG_KV("startIndex", _startIndex) << LOG_KV("txs", _ts->size())
-                    << LOG_KV("totalTxs", pendingSize);
-
     std::shared_ptr<NodeIDs> selectedPeers;
     std::shared_ptr<std::set<dev::h512>> peers = m_syncStatus->peersSet();
     // fastforward remaining transactions
@@ -155,9 +130,11 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         std::min((int64_t)(_startIndex + c_maxSendTransactions - 1), (int64_t)(_ts->size() - 1));
 
     auto randomSelectedPeers = _selectedPeers;
-    if (_fromRpc && m_treeRouter)
+    bool randomSelectedPeersInited = false;
+    int64_t consIndex = 0;
+    if (m_treeRouter)
     {
-        randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet());
+        consIndex = m_treeRouter->consIndex();
     }
 
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
@@ -168,7 +145,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
         int64_t selectSize = _selectedPeers->size();
         // add redundancy when receive transactions from P2P
-        if ((!t->rpcCallback() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
+        if ((!t->rpcTx() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
             !_fastForwardRemainTxs)
         {
             if (_fromRpc)
@@ -181,7 +158,11 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                 selectSize = (selectSize * percent + 99) / 100;
             }
         }
-
+        if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
+        {
+            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
+            randomSelectedPeersInited = true;
+        }
         peers = m_syncStatus->filterPeers(
             selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
                 bool unsent =
@@ -213,7 +194,14 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
 
         std::shared_ptr<SyncTransactionsPacket> packet = std::make_shared<SyncTransactionsPacket>();
-        packet->encode(txRLPs);
+        if (m_treeRouter && _fromRpc)
+        {
+            packet->encode(txRLPs, true, consIndex);
+        }
+        else
+        {
+            packet->encode(txRLPs);
+        }
 
         auto msg = packet->toMessage(m_protocolId, _fromRpc);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());

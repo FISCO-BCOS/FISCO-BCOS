@@ -76,9 +76,17 @@ public:
             case TxsRequestPacekt:
                 onReceiveTxsRequest(_packet, _peer, _msg);
                 break;
-            default:
-                SyncMsgEngine::interpret(_packet, _msg, _peer);
+            case StatusPacket:
+                onPeerStatus(*_packet);
                 break;
+            case BlocksPacket:
+                onPeerBlocks(*_packet);
+                break;
+            case ReqBlocskPacket:
+                onPeerRequestBlocks(*_packet);
+                break;
+            default:
+                return false;
             }
         }
         catch (std::exception& e)
@@ -169,7 +177,7 @@ public:
 
     dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
     void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
-    void setNodeListByGroupID(GROUP_ID, dev::h512s) override{};
+    void setNodeListByGroupID(GROUP_ID, const h512s&) override{};
 
     void setTopics(std::shared_ptr<std::set<std::string>>) override{};
 

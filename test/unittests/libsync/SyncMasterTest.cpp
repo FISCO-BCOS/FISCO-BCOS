@@ -51,9 +51,11 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
-        int64_t const& _gossipPeers = 3, bool const& _enableSendBlockStatusByTree = false)
+        int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
+        bool const& _enableSendBlockStatusByTree = false)
       : SyncMaster(_service, _txPool, _blockChain, _blockVerifier, _protocolId, _nodeId,
-            _genesisHash, _idleWaitMs, _gossipInterval, _gossipPeers, _enableSendBlockStatusByTree)
+            _genesisHash, _idleWaitMs, _gossipInterval, _gossipPeers, _enableSendTxsByTree,
+            _enableSendBlockStatusByTree)
     {}
 
     /// start blockSync
@@ -124,9 +126,9 @@ public:
             bytes data(str.begin(), str.end());
             Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             KeyPair sigKeyPair = KeyPair::create();
-            tx->setNonce(tx->nonce() + u256(rand()));
+            tx->setNonce(tx->nonce() + u256(rand()) + i);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            tx->setRpcCallback([&](LocalisedTransactionReceipt::Ptr, dev::bytesConstRef) {});
+            tx->setRpcTx(true);
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);

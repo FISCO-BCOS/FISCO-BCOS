@@ -29,6 +29,7 @@
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
@@ -77,12 +78,9 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
-#ifndef FISCO_EASYLOG
         /// tag this scope with GroupId
         BOOST_LOG_SCOPED_THREAD_ATTR(
             "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
-#endif
-
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();
@@ -158,6 +156,7 @@ protected:
 
     dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
         dev::PROTOCOL_ID const& _protocolId);
+    dev::eth::BlockFactory::Ptr createBlockFactory();
     void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
     void initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 

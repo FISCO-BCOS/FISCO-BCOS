@@ -52,7 +52,7 @@ public:
     virtual bool isSyncing() const = 0;
 
     // is my number is far smaller than max block number of this block chain
-    virtual bool isFarSyncing() const = 0;
+    virtual bool blockNumberFarBehind() const = 0;
 
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const = 0;
@@ -66,7 +66,7 @@ public:
             std::shared_ptr<std::set<dev::network::NodeID>>)>)
     {}
     virtual void updateNodeListInfo(dev::h512s const&) {}
-    virtual void updateConsensusNodeInfo(dev::h512s const&) {}
+    virtual void updateConsensusNodeInfo(dev::h512s const&, dev::h512s const&) {}
     virtual bool syncTreeRouterEnabled() { return false; }
     virtual void noteForwardRemainTxs(dev::h512 const&) {}
 };

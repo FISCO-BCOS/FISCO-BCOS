@@ -53,11 +53,14 @@ public:
     std::pair<bool, _T> tryPop(int milliseconds)
     {
         std::unique_lock<std::mutex> lock{x_mutex};
-        auto ret = m_cv.wait_for(
-            lock, std::chrono::milliseconds(milliseconds), [this] { return !m_queue.empty(); });
-        if (!ret)
+        // if g_BCOSConfig.shouldExit is true, should return directly
+        // in consideration that when the system time has been changed,
+        // the process maybe stucked in 'wait_for'
+        auto ret = m_cv.wait_for(lock, std::chrono::milliseconds(milliseconds),
+            [this] { return !m_queue.empty() || g_BCOSConfig.shouldExit; });
+        if (!ret || g_BCOSConfig.shouldExit)
         {
-            return std::make_pair(ret, _T());
+            return std::make_pair(false, _T());
         }
         auto item = std::move(m_queue.front());
         m_queue.pop();

@@ -117,6 +117,12 @@ public:
         m_consensusEngine = _consensusEngine;
     }
 
+    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    {
+        m_sealing.setBlockFactory(_blockFactory);
+        m_consensusEngine->setBlockFactory(_blockFactory);
+    }
+
 protected:
     void reportNewBlock();
     /// sealing block
@@ -204,7 +210,7 @@ protected:
     ///< Has the remote worker recently been reset?
     bool m_remoteWorking = false;
     /// True if we /should/ be sealing.
-    bool m_startConsensus = false;
+    std::atomic_bool m_startConsensus = {false};
 
     /// handler
     Handler<> m_tqReady;

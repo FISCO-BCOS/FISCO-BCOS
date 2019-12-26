@@ -60,7 +60,6 @@ void Executive::initialize(Transaction::Ptr _transaction)
 
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t->gas() * m_t->gasPrice();
-        bigint totalCost = m_t->value() + gasCost;
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
 }
@@ -520,7 +519,7 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                   << LOG_KV("hash", (!m_t->hasZeroSignature()) ? m_t->sha3().abridged() : "call")
+                   << LOG_KV("hash", (m_t->hasSignature()) ? m_t->sha3().abridged() : "call")
                    << m_exceptionReason.str();
     }
 }

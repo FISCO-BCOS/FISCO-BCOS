@@ -25,6 +25,7 @@
 #include "Common.h"
 #include "PBFTMsgCache.h"
 #include "PBFTReqCache.h"
+#include "PartiallyPBFTReqCache.h"
 #include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libdevcore/FileSystem.h>
@@ -54,7 +55,7 @@ enum CheckResult
     FUTURE = 2
 };
 using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket::Ptr>;
-class PBFTEngine : public ConsensusEngineBase
+class PBFTEngine : public ConsensusEngineBase, public std::enable_shared_from_this<PBFTEngine>
 {
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
@@ -72,8 +73,6 @@ public:
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
 
         m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
-        m_reqCache = std::make_shared<PBFTReqCache>();
-
         /// set thread name for PBFTEngine
         std::string threadName = "PBFT-" + std::to_string(m_groupId);
         setName(threadName);
@@ -81,10 +80,20 @@ public:
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
 
-        m_threadPool = std::make_shared<dev::ThreadPool>("pbftPool" + std::to_string(m_groupId), 1);
+        m_threadPool =
+            std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
         // set statisticHandler
         m_statisticHandler = m_service->statisticHandler();
+
+        m_consensusSet = std::make_shared<std::set<dev::h512>>();
+
+        m_messageHandler =
+            std::make_shared<dev::ThreadPool>("PBFTMsg-" + std::to_string(m_groupId), 1);
+        m_prepareWorker =
+            std::make_shared<dev::ThreadPool>("PBFTWork-" + std::to_string(m_groupId), 1);
+        m_cachedForwardMsg =
+            std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -157,7 +166,7 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block const& block);
+    bool generatePrepare(dev::eth::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -205,7 +214,18 @@ public:
 
     VIEWTYPE view() const override { return m_view; }
     VIEWTYPE toView() const override { return m_toView; }
-    bool shouldRecvTxs() const override { return m_blockSync->isFarSyncing(); }
+    void resetConfig() override;
+    void setEnableTTLOptimize(bool const& _enableTTLOptimize)
+    {
+        m_enableTTLOptimize = _enableTTLOptimize;
+    }
+
+    void setEnablePrepareWithTxsHash(bool const& _enablePrepareWithTxsHash)
+    {
+        m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
+    }
+
+    void stop() override;
 
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
@@ -226,22 +246,24 @@ protected:
 
     // broadcast given messages to all-peers with cache-filter and specified filter
     virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
-        bytesConstRef _data, std::unordered_set<dev::network::NodeID> const& _filter,
-        unsigned const& _ttl,
+        bytesConstRef _data, PACKET_TYPE const& _p2pPacketType,
+        std::unordered_set<dev::network::NodeID> const& _filter, unsigned const& _ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
 
     bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
+        PACKET_TYPE const& _p2pPacketType = 0,
         std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
         unsigned const& _ttl = 0)
     {
-        return broadcastMsg(_packetType, _key, _data, _filter, _ttl, m_broacastTargetsFilter);
+        return broadcastMsg(
+            _packetType, _key, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
     }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
     bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
         std::string const& key, bytesConstRef data, unsigned const& ttl = 1,
-        dev::h512s const& forwardNodes = dev::h512s());
+        std::shared_ptr<dev::h512s> forwardNodes = nullptr);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -257,6 +279,7 @@ protected:
     bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
@@ -336,41 +359,20 @@ protected:
         return dev::network::NodeID();
     }
 
-    virtual PBFTMsgPacket::Ptr createPBFTMsgPacket(
-        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl, dev::h512s const&)
-    {
-        PBFTMsgPacket::Ptr pbftPacket = m_pbftMsgFactory->createPBFTMsgPacket();
-        pbftPacket->data = data.toBytes();
-        pbftPacket->packet_id = packetType;
-        if (ttl == 0)
-            pbftPacket->ttl = maxTTL;
-        else
-            pbftPacket->ttl = ttl;
-        return pbftPacket;
-    }
+    virtual PBFTMsgPacket::Ptr createPBFTMsgPacket(bytesConstRef data,
+        PACKET_TYPE const& packetType, unsigned const& ttl,
+        std::shared_ptr<dev::h512s> _forwardNodes);
 
     /// trans data into message
-    virtual dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
-        PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl,
-        dev::h512s const& forwardNodes = dev::h512s())
-    {
-        dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-            m_service->p2pMessageFactory()->buildMessage());
-        // std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>();
-        bytes ret_data;
-        PBFTMsgPacket::Ptr pbftPacket = createPBFTMsgPacket(data, packetType, ttl, forwardNodes);
-        pbftPacket->encode(ret_data);
-        std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
-        message->setBuffer(p_data);
-        message->setProtocolID(protocolId);
-        return message;
-    }
+    virtual dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
+        PACKET_TYPE const& _packetType, PROTOCOL_ID const& _protocolId, unsigned const& _ttl,
+        std::shared_ptr<dev::h512s> _forwardNodes = nullptr);
 
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
-        PACKET_TYPE const& packetType, unsigned const& ttl,
-        dev::h512s const& forwardNodes = dev::h512s())
+    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
+        PACKET_TYPE const& _packetType, unsigned const& _ttl,
+        std::shared_ptr<dev::h512s> _forwardNodes = nullptr)
     {
-        return transDataToMessage(data, packetType, m_protocolId, ttl, forwardNodes);
+        return transDataToMessage(_data, _packetType, m_protocolId, _ttl, _forwardNodes);
     }
 
     /**
@@ -612,15 +614,46 @@ protected:
         return valid;
     }
 
+    // ttl opitimize related
     virtual bool needForwardMsg(bool const& _valid, std::string const& _key,
         PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
-
+    // forward message
     virtual void forwardMsg(
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
-    virtual void createPBFTMsgFactory() { m_pbftMsgFactory = std::make_shared<PBFTMsgFactory>(); }
+    void forwardMsgByTTL(std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket,
+        PBFTMsg const& _pbftMsg, bytesConstRef _data);
+    void forwardMsgByNodeInfo(
+        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data);
+
+    virtual void createPBFTMsgFactory();
 
     virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl);
+        unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType);
+    std::shared_ptr<dev::h512s> getForwardNodes(
+        dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog = false);
+
+
+    // BIP 152 related logic
+    void handleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
+    virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
+    virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
+        std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
+
+    bool handlePartiallyPrepare(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
+
+    bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& _oss);
+    void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
+    void onReceiveGetMissedTxsRequest(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    void onReceiveMissedTxsResponse(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    void clearInvalidCachedForwardMsg();
+
+    void clearPreRawPrepare();
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};
@@ -674,6 +707,17 @@ protected:
     std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
+    // ttl-optimize related logic
+    bool m_enableTTLOptimize = false;
+    mutable SharedMutex x_consensusSet;
+    std::shared_ptr<std::set<dev::h512>> m_consensusSet;
+
+    // bip 152 related logic
+    PartiallyPBFTReqCache::Ptr m_partiallyPrepareCache = nullptr;
+    std::shared_ptr<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>> m_cachedForwardMsg;
+    dev::ThreadPool::Ptr m_prepareWorker;
+    dev::ThreadPool::Ptr m_messageHandler;
+    bool m_enablePrepareWithTxsHash = false;
 };
 }  // namespace consensus
 }  // namespace dev

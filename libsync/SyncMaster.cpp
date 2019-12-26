@@ -111,6 +111,19 @@ void SyncMaster::start()
 
 void SyncMaster::stop()
 {
+    // stop SynMsgEngine
+    if (m_msgEngine)
+    {
+        m_msgEngine->stop();
+    }
+    if (m_downloadBlockProcessor)
+    {
+        m_downloadBlockProcessor->stop();
+    }
+    if (m_sendBlockProcessor)
+    {
+        m_sendBlockProcessor->stop();
+    }
     m_syncTrans->stop();
     if (m_blockStatusGossipThread)
     {
@@ -120,58 +133,56 @@ void SyncMaster::stop()
     stopWorking();
     // will not restart worker, so terminate it
     terminate();
-    SYNC_LOG(INFO) << LOG_DESC("SyncMaster stopped");
+    SYNC_LOG(INFO) << LOG_BADGE("g:" + std::to_string(m_groupId)) << LOG_DESC("SyncMaster stopped");
 }
 
 void SyncMaster::doWork()
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
     // Debug print
     if (isSyncing())
         printSyncInfo();
-    auto printSyncInfo_time_cost = utcTime() - record_time;
-    record_time = utcTime();
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    auto maintainPeersConnection_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-
     m_downloadBlockProcessor->enqueue([this]() {
-        // flush downloaded buffer into downloading queue
-        maintainDownloadingQueueBuffer();
-        // Not Idle do
-        if (isSyncing())
+        try
         {
-            // check and commit the downloaded block
-            if (m_syncStatus->state == SyncState::Downloading)
+            // flush downloaded buffer into downloading queue
+            maintainDownloadingQueueBuffer();
+            // Not Idle do
+            if (isSyncing())
             {
-                bool finished = maintainDownloadingQueue();
-                if (finished)
-                    noteDownloadingFinish();
+                // check and commit the downloaded block
+                if (m_syncStatus->state == SyncState::Downloading)
+                {
+                    bool finished = maintainDownloadingQueue();
+                    if (finished)
+                        noteDownloadingFinish();
+                }
             }
+            // send block-download-request to peers if this node is behind others
+            maintainPeersStatus();
         }
-        // send block-download-request to peers if this node is behind others
-        maintainPeersStatus();
+        catch (std::exception const& e)
+        {
+            SYNC_LOG(ERROR) << LOG_DESC(
+                                   "maintainDownloadingQueue or maintainPeersStatus exceptioned")
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
     });
-    record_time = utcTime();
-
     // send block-status to other nodes when commit a new block
     maintainBlocks();
-    auto maintainBlocks_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    auto maintainBlockRequest_time_cost = 0;
-
     // send block to other nodes
-    m_sendBlockProcessor->enqueue([this]() { maintainBlockRequest(); });
-    maintainBlockRequest_time_cost = utcTime() - record_time;
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
-                    << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainPeersConnection", maintainPeersConnection_time_cost)
-                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
-                    << LOG_KV("maintainBlockRequestTimeCost", maintainBlockRequest_time_cost)
-                    << LOG_KV("syncTotalTimeCost", utcTime() - start_time);
+    m_sendBlockProcessor->enqueue([this]() {
+        try
+        {
+            maintainBlockRequest();
+        }
+        catch (std::exception const& e)
+        {
+            SYNC_LOG(ERROR) << LOG_DESC("maintainBlockRequest exceptioned")
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
+    });
 }
 
 void SyncMaster::workLoop()
@@ -201,9 +212,9 @@ bool SyncMaster::isSyncing() const
 }
 
 // is my number is far smaller than max block number of this block chain
-bool SyncMaster::isFarSyncing() const
+bool SyncMaster::blockNumberFarBehind() const
 {
-    return m_msgEngine->isFarSyncing();
+    return m_msgEngine->blockNumberFarBehind();
 }
 
 void SyncMaster::maintainBlocks()
@@ -241,6 +252,9 @@ void SyncMaster::maintainBlocks()
 void SyncMaster::sendSyncStatusByTree(BlockNumber const& _blockNumber, h256 const& _currentHash)
 {
     auto selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
+    SYNC_LOG(DEBUG) << LOG_BADGE("sendSyncStatusByTree") << LOG_KV("blockNumber", _blockNumber)
+                    << LOG_KV("currentHash", _currentHash.abridged())
+                    << LOG_KV("selectedNodes", selectedNodes->size());
     for (auto const& nodeId : *selectedNodes)
     {
         sendSyncStatusByNodeId(_blockNumber, _currentHash, nodeId);
@@ -627,7 +641,8 @@ void SyncMaster::maintainPeersConnection()
     m_syncTrans->updateNeedMaintainTransactions(hasMyself);
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
-    m_needSendStatus = hasMyself;
+    m_needSendStatus = m_isGroupMember || hasMyself;  // need to send if last time is in group
+    m_isGroupMember = hasMyself;
 }
 
 void SyncMaster::maintainDownloadingQueueBuffer()
@@ -657,7 +672,9 @@ void SyncMaster::maintainBlockRequest()
             DownloadRequest req = reqQueue.topAndPop();
             int64_t number = req.fromNumber;
             int64_t numberLimit = req.fromNumber + req.size;
-
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
+                            << LOG_KV("from", req.fromNumber) << LOG_KV("size", req.size)
+                            << LOG_KV("numberLimit", numberLimit);
             // Send block at sequence
             for (; number < numberLimit && utcTime() <= timeout; number++)
             {
@@ -753,6 +770,10 @@ void SyncMaster::sendBlockStatus(int64_t const& _gossipPeersNumber)
     auto blockNumber = m_blockChain->number();
     auto currentHash = m_blockChain->numberHash(blockNumber);
     m_syncStatus->forRandomPeers(_gossipPeersNumber, [&](std::shared_ptr<SyncPeerStatus> _p) {
-        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        if (_p)
+        {
+            return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+        }
+        return true;
     });
 }

@@ -68,6 +68,23 @@ public:
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
         m_lastSealerListUpdateNumber = m_blockChain->number();
+
+        // only send transactions to the current consensus nodes
+        m_blockSync->registerTxsReceiversFilter(
+            [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
+                std::shared_ptr<dev::p2p::NodeIDs> selectedNode =
+                    std::make_shared<dev::p2p::NodeIDs>();
+
+                ReadGuard l(m_sealerListMutex);
+                for (auto const& peer : m_sealerList)
+                {
+                    if (_peers->count(peer))
+                    {
+                        selectedNode->push_back(peer);
+                    }
+                }
+                return selectedNode;
+            });
     }
 
     void start() override;
@@ -153,6 +170,10 @@ public:
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
     virtual void resetConfig();
+    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory) override
+    {
+        m_blockFactory = _blockFactory;
+    }
 
 protected:
     void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
@@ -229,7 +250,6 @@ protected:
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P(dev::h512s const& _nodeList);
 
     /// set the max number of transactions in a block
     virtual void updateMaxBlockTransactions()
@@ -297,6 +317,9 @@ protected:
     /// whether to omit empty block
     bool m_omitEmptyBlock = true;
     std::atomic_bool m_cfgErr = {false};
+
+    // block Factory used to create block
+    dev::eth::BlockFactory::Ptr m_blockFactory;
 };
 }  // namespace consensus
 }  // namespace dev

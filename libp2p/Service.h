@@ -86,6 +86,9 @@ public:
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+
+    void removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID) override;
+
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
@@ -107,7 +110,7 @@ public:
         m_groupID2NodeList = _groupID2NodeList;
     }
 
-    void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
+    void setNodeListByGroupID(GROUP_ID _groupID, const h512s& _nodeList) override
     {
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;

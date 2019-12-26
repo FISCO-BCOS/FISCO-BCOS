@@ -134,7 +134,11 @@ private:
         dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
 
     std::shared_ptr<dev::eth::Block> decodeBlock(dev::storage::Entry::ConstPtr _entry);
-    std::shared_ptr<dev::bytes> getBlockRLP(dev::storage::Entry::ConstPtr _entry);
+    std::shared_ptr<dev::bytes> getDataBytes(
+        dev::storage::Entry::ConstPtr _entry, std::string const& _fieldName);
+
+    void writeBytesToField(std::shared_ptr<dev::bytes> _data, dev::storage::Entry::Ptr _entry,
+        std::string const& _fieldName = dev::storage::SYS_VALUE);
     void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
 
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
@@ -161,12 +165,12 @@ private:
         std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
         std::map<std::string, std::string>& child2Parent);
 
-    void getMerkleProof(dev::h256 const& _txHash,
+    void getMerkleProof(dev::bytes const& _txHash,
         const std::map<std::string, std::vector<std::string>>& parent2ChildList,
         const std::map<std::string, std::string>& child2Parent,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
 
-    dev::h256 getHashNeed2Proof(uint32_t index, const dev::bytes& data);
+    dev::bytes getHashNeed2Proof(uint32_t index, const dev::bytes& data);
     bool getBlockAndIndexByTxHash(const dev::h256& _txHash,
         std::pair<std::shared_ptr<dev::eth::Block>, std::string>& blockInfoWithTxIndex);
 

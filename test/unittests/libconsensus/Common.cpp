@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     checkPBFTMsg(prepare_req, key_pair, 1000, 1, 134, prepare_req.timestamp, block_hash);
     FakeBlock fake_block(5);
-    prepare_req.block = fake_block.m_blockData;
+    *(prepare_req.block) = fake_block.m_blockData;
 
     /// test encode && decode
     bytes prepare_req_data;
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     decode_prepare.decode(ref(prepare_req_data));
     BOOST_REQUIRE_NO_THROW(decode_prepare.decode(ref(prepare_req_data)));
     checkPBFTMsg(decode_prepare, key_pair, 1000, 1, 134, prepare_req.timestamp, block_hash);
-    BOOST_CHECK(decode_prepare.block == fake_block.m_blockData);
+    BOOST_CHECK(*decode_prepare.block == fake_block.m_blockData);
     /// test exception case
     prepare_req_data[0] += 1;
     BOOST_CHECK_THROW(decode_prepare.decode(ref(prepare_req_data)), std::exception);
@@ -126,10 +126,10 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     checkPBFTMsg(
         constructed_prepare, key_pair2, 1000, 2, 135, constructed_prepare.timestamp, block_hash);
     BOOST_CHECK(constructed_prepare.timestamp >= decode_prepare.timestamp);
-    BOOST_CHECK(decode_prepare.block == constructed_prepare.block);
+    BOOST_CHECK(*decode_prepare.block == *constructed_prepare.block);
 
     /// test construct prepare from given block
-    PrepareReq block_populated_prepare(*fake_block.m_block, key_pair2, 2, 135);
+    PrepareReq block_populated_prepare(fake_block.m_block, key_pair2, 2, 135);
     checkPBFTMsg(block_populated_prepare, key_pair2, fake_block.m_block->blockHeader().number(), 2,
         135, block_populated_prepare.timestamp, fake_block.m_block->header().hash());
     BOOST_CHECK(block_populated_prepare.timestamp >= constructed_prepare.timestamp);
@@ -140,13 +140,13 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     checkPBFTMsg(tmp_req, key_pair2, fake_block.m_block->blockHeader().number(), 2, 135,
         block_populated_prepare.timestamp, fake_block.m_block->header().hash());
     Block tmp_block;
-    BOOST_REQUIRE_NO_THROW(tmp_block.decode(ref(tmp_req.block)));
+    BOOST_REQUIRE_NO_THROW(tmp_block.decode(ref(*tmp_req.block)));
     BOOST_CHECK(tmp_block.equalAll(*fake_block.m_block));
 
     /// test updatePrepareReq
     Sealing sealing;
     sealing.block = fake_block.m_block;
-    block_populated_prepare.block = bytes();
+    *block_populated_prepare.block = bytes();
     sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);

@@ -446,8 +446,7 @@ public:
     {
         return ImportResult::Success;
     }
-    dev::eth::ImportResult import(
-        bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
+    dev::eth::ImportResult import(bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore)
     {
         return ImportResult::Success;
     }
@@ -496,7 +495,7 @@ public:
         return syncStatus;
     }
     bool isSyncing() const override { return m_isSyncing; }
-    bool isFarSyncing() const override { return false; }
+    bool blockNumberFarBehind() const override { return false; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};

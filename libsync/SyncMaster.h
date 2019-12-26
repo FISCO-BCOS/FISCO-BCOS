@@ -57,46 +57,55 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
-        int64_t const& _gossipPeers = 3, bool const& _enableSendBlockStatusByTree = true,
-        int64_t const& _syncTreeWidth = 3)
+        int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
+        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
-        m_txQueue(std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId)),
         m_protocolId(_protocolId),
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
+        m_enableSendTxsByTree(_enableSendTxsByTree),
         m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree)
     {
-        m_syncStatus =
-            std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
-        m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
-            m_txQueue, _protocolId, _nodeId, _genesisHash);
-        m_msgEngine->onNotifyWorker([&]() { m_signalled.notify_all(); });
-
-        // signal registration
-        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
-
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
+        // signal registration
+        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
+        m_downloadBlockProcessor =
+            std::make_shared<dev::ThreadPool>("Download-" + std::to_string(m_groupId), 1);
+        m_sendBlockProcessor =
+            std::make_shared<dev::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
 
-
+        m_statisticHandler = m_service->statisticHandler();
+        // syncStatus should be initialized firstly since it should be deconstruct at final
+        m_syncStatus =
+            std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
         // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
-        m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_service->statisticHandler());
+        m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_statisticHandler);
 
-        m_downloadBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-download", 1);
-        m_sendBlockProcessor = std::make_shared<dev::ThreadPool>(threadName + "-sender", 1);
+        m_txQueue = std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId);
+        m_txQueue->setService(_service);
+        m_txQueue->setSyncStatus(m_syncStatus);
+        m_txQueue->setStatisticHandler(m_statisticHandler);
+
+        if (m_enableSendTxsByTree)
+        {
+            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
+            m_txQueue->setTreeRouter(treeRouter);
+            updateNodeInfo();
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendTxsByTree");
+        }
+
         if (m_enableSendBlockStatusByTree)
         {
             m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId, _syncTreeWidth);
-            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
-            m_txQueue->setTreeRouter(treeRouter);
-
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendBlockStatusByTree");
             // update the nodeInfo for syncTreeRouter
             updateNodeInfo();
 
@@ -106,11 +115,11 @@ public:
             m_blockStatusGossipThread->registerGossipHandler(
                 boost::bind(&SyncMaster::sendBlockStatus, this, _1));
         }
-        m_txQueue->setService(_service);
-        m_txQueue->setSyncStatus(m_syncStatus);
-        m_statisticHandler = m_service->statisticHandler();
+        m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
+            m_txQueue, _protocolId, _nodeId, _genesisHash);
+        m_msgEngine->onNotifyWorker([&]() { m_signalled.notify_all(); });
         m_msgEngine->setStatisticHandler(m_statisticHandler);
-        m_txQueue->setStatisticHandler(m_statisticHandler);
+
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
             _nodeId, m_syncStatus, m_msgEngine, _blockChain, _idleWaitMs);
         m_syncTrans->setStatisticHandler(m_statisticHandler);
@@ -132,7 +141,7 @@ public:
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // is my number is far smaller than max block number of this block chain
-    bool isFarSyncing() const override;
+    bool blockNumberFarBehind() const override;
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
@@ -204,14 +213,15 @@ public:
         m_syncTreeRouter->updateNodeListInfo(_nodeList);
     }
 
-    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
+    void updateConsensusNodeInfo(
+        dev::h512s const& _consensusNodes, dev::h512s const& _nodeList) override
     {
         m_txQueue->updateConsensusNodeInfo(_consensusNodes);
         if (!m_syncTreeRouter)
         {
             return;
         }
-        m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
+        m_syncTreeRouter->updateAllNodeInfo(_consensusNodes, _nodeList);
     }
 
     bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
@@ -229,8 +239,7 @@ private:
         auto observerList = m_blockChain->observerList();
         auto nodeList = sealerList + observerList;
         std::sort(nodeList.begin(), nodeList.end());
-        updateNodeListInfo(nodeList);
-        updateConsensusNodeInfo(sealerList);
+        updateConsensusNodeInfo(sealerList, nodeList);
     }
 
 private:
@@ -260,6 +269,7 @@ private:
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+    bool m_enableSendTxsByTree;
     bool m_enableSendBlockStatusByTree;
 
     int64_t m_maxRequestNumber = 0;
@@ -281,6 +291,7 @@ private:
     std::atomic_bool m_newBlocks = {false};
     uint64_t m_maintainBlocksTimeout = 0;
     bool m_needSendStatus = true;
+    bool m_isGroupMember = false;
 
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;

@@ -59,7 +59,7 @@ using namespace dev::storagestate;
 
 void DBInitializer::initStorageDB()
 {
-    DBInitializer_LOG(DEBUG) << LOG_BADGE("initStorageDB");
+    DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB");
     if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
         initLevelDBStorage();
@@ -110,7 +110,7 @@ void DBInitializer::initLevelDBStorage()
         if (g_BCOSConfig.diskEncryption.enable)
         {
             // Use disk encryption
-            DBInitializer_LOG(DEBUG) << LOG_DESC("open encrypted leveldb handler");
+            DBInitializer_LOG(INFO) << LOG_DESC("open encrypted leveldb handler");
             status =
                 EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb),
                     g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
@@ -118,7 +118,7 @@ void DBInitializer::initLevelDBStorage()
         else
         {
             // Not to use disk encryption
-            DBInitializer_LOG(DEBUG) << LOG_DESC("open leveldb handler");
+            DBInitializer_LOG(INFO) << LOG_DESC("open leveldb handler");
             status =
                 BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
         }
@@ -127,8 +127,7 @@ void DBInitializer::initLevelDBStorage()
         {
             BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment(status.ToString()));
         }
-        DBInitializer_LOG(DEBUG) << LOG_BADGE("initLevelDBStorage")
-                                 << LOG_KV("status", status.ok());
+        DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage") << LOG_KV("status", status.ok());
         std::shared_ptr<LevelDBStorage> leveldbStorage = std::make_shared<LevelDBStorage>();
         std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
             std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
@@ -208,8 +207,8 @@ void DBInitializer::recoverFromBinaryLog(
                         }
                     }
                     _storage->commit(num + i, blockData);
-                    DBInitializer_LOG(DEBUG) << LOG_DESC("recover from binary logs succeed")
-                                             << LOG_KV("blockNumber", num + i);
+                    DBInitializer_LOG(INFO) << LOG_DESC("recover from binary logs succeed")
+                                            << LOG_KV("blockNumber", num + i);
                 }
             }
         }
@@ -222,9 +221,8 @@ void DBInitializer::initTableFactory2(
     auto backendStorage = _backend;
     if (_param->mutableStorageParam().CachedStorage)
     {
-        auto cachedStorage = std::make_shared<CachedStorage>();
+        auto cachedStorage = std::make_shared<CachedStorage>(m_groupID);
         cachedStorage->setBackend(_backend);
-        cachedStorage->setGroupID(m_groupID);
         cachedStorage->setMaxCapacity(
             _param->mutableStorageParam().maxCapacity * 1024 * 1024);  // Bytes
         cachedStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
@@ -314,6 +312,10 @@ dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
+    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        unsupportedFeatures("RocksDB in RC3");
+    }
     try
     {
         auto rocksdbStorage = createRocksDBStorage(_param->mutableStorageParam().path,
@@ -458,21 +460,21 @@ void DBInitializer::createExecutiveContext()
         return;
     }
 
-    DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext...");
+    DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext...");
     m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
     /// storage
     m_executiveContextFactory->setStateStorage(m_storage);
     // mpt or storage
     m_executiveContextFactory->setStateFactory(m_stateFactory);
     m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
-    DBInitializer_LOG(DEBUG) << LOG_DESC("createExecutiveContext SUCC");
+    DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext SUCC");
 }
 
 /// create stateFactory
 void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 {
-    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory")
-                             << LOG_KV("type", m_param->mutableStateParam().type);
+    DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory")
+                            << LOG_KV("type", m_param->mutableStateParam().type);
     if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
         createMptState(genesisHash);
     else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") ==
@@ -485,14 +487,14 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
             << LOG_DESC("only support storage and mpt now, create storage by default");
         createStorageState();
     }
-    DBInitializer_LOG(DEBUG) << LOG_BADGE("createStateFactory SUCC");
+    DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory SUCC");
 }
 
 /// TOCHECK: create the stateStorage with AMDB
 void DBInitializer::createStorageState()
 {
     m_stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
-    DBInitializer_LOG(DEBUG) << LOG_DESC("createStorageState SUCC");
+    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
 }
 
 /// create the mptState
@@ -500,7 +502,7 @@ void DBInitializer::createMptState(dev::h256 const& genesisHash)
 {
     m_stateFactory = std::make_shared<MPTStateFactory>(
         u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
-    DBInitializer_LOG(DEBUG) << LOG_DESC("createMptState SUCC");
+    DBInitializer_LOG(INFO) << LOG_DESC("createMptState SUCC");
 }
 
 Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,

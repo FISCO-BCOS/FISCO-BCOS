@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
     BOOST_CHECK(req_cache.futurePrepareCacheSize() == 12);
     BlockHeader highest;
     highest.setNumber(10);
-    req_cache.removeInvalidFutureCache(highest);
+    req_cache.removeInvalidFutureCache(highest.number());
     BOOST_CHECK(req_cache.futurePrepareCacheSize() == 1);
 }
 /// test generateAndSetSigList
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == validNum);
     BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash) == 0);
     /// test delCache
-    req_cache.delCache(req.block_hash);
+    req_cache.delCache(highest);
     BOOST_CHECK(req_cache.getSigCacheSize(req.block_hash) == 0);
     BOOST_CHECK(req_cache.getCommitCacheSize(req.block_hash) == 0);
 }
