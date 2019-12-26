@@ -28,7 +28,6 @@
 #include "Common.h"
 #include "SocketFace.h"
 #include <libdevcore/FileSystem.h>
-#include <libdevcore/easylog.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
 #include <boost/beast.hpp>

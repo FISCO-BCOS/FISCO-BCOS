@@ -17,7 +17,6 @@
 
 #include "Common.h"
 #include <libdevcore/FixedHash.h>
-#include <libdevcore/easylog.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>
@@ -41,15 +40,13 @@ public:
 
 
     virtual Entries::Ptr select(
-        h256, int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
+        int64_t, TableInfo::Ptr, const std::string&, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
         return entries;
     }
 
-    size_t commit(h256, int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
-
-    bool onlyDirty() override { return false; }
+    size_t commit(int64_t, const std::vector<TableData::Ptr>&) override { return 0; }
 };
 
 struct MemoryTableFactoryFixture

@@ -45,6 +45,7 @@ void P2PMessageRC2::encode(bytes& buffer)
         }
     }
     buffer = *m_cache;
+    m_deliveredLength = buffer.size();
 }
 
 /**
@@ -100,6 +101,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     {
         return dev::network::PACKET_INCOMPLETE;
     }
+    m_deliveredLength = size;
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
@@ -108,6 +110,10 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     {
         return dev::network::PACKET_INCOMPLETE;
     }
+
+    m_cache->clear();
+    m_cache->insert(m_cache->end(), buffer, buffer + size);
+
     /// get version
     offset += sizeof(m_length);
     m_version = ntohs(*((VERSION_TYPE*)&buffer[offset]));
@@ -129,6 +135,8 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
         SnappyCompress::uncompress(
             bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
             *m_buffer);
+        // reset version
+        m_version &= (~dev::eth::CompressFlag);
     }
     else
     {

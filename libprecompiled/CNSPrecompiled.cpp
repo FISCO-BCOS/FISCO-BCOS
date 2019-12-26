@@ -21,10 +21,9 @@
 #include "CNSPrecompiled.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/TableFactoryPrecompiled.h>
+#include <libprecompiled/EntriesPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -62,12 +61,25 @@ bytes CNSPrecompiled::call(
     bytes out;
 
     if (func == name2Selector[CNS_METHOD_INS_STR4])
-    {
-        // insert(string,string,string,string)
+    {  // FIXME: modify insert(string,string,string,string) ==> insert(string,string,address,string)
         // insert(name, version, address, abi), 4 fields in table, the key of table is name field
         std::string contractName, contractVersion, contractAddress, contractAbi;
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
         Table::Ptr table = openTable(context, SYS_CNS);
+
+        bool isValidAddress = true;
+        if (g_BCOSConfig.version() >= V2_2_0)
+        {
+            try
+            {
+                Address address(contractAddress);
+                (void)address;
+            }
+            catch (...)
+            {
+                isValidAddress = false;
+            }
+        }
 
         // check exist or not
         bool exist = false;
@@ -89,9 +101,17 @@ bytes CNSPrecompiled::call(
         int result = 0;
         if (exist)
         {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist");
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist")
+                << LOG_KV("contractName", contractName) << LOG_KV("address", contractAddress)
+                << LOG_KV("version", contractVersion);
             result = CODE_ADDRESS_AND_VERSION_EXIST;
+        }
+        else if (!isValidAddress)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address invalid")
+                                   << LOG_KV("address", contractAddress);
+            result = CODE_ADDRESS_INVALID;
         }
         else
         {

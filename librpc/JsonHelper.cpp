@@ -21,7 +21,6 @@
 
 #include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 

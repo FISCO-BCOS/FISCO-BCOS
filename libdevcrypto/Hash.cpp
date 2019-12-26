@@ -21,7 +21,6 @@
 
 #include "Hash.h"
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>

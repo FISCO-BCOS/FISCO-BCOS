@@ -23,9 +23,9 @@
 
 #include "Fake.h"
 #include "SyncParamParse.h"
+
 #include <fisco-bcos/Fake.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
@@ -92,7 +92,8 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             "a1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719bedee212b7972f775");
     }
 #endif
-    Transaction tx(ref(rlpBytes), CheckTransaction::Everything);
+    Transaction::Ptr tx =
+        std::make_shared<Transaction>(ref(rlpBytes), CheckTransaction::Everything);
     Secret sec = KeyPair::create().secret();
     string noncePrefix = to_string(time(NULL));
 
@@ -109,10 +110,10 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         {
             try
             {
-                tx.setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
-                tx.setBlockLimit(u256(_blockChain->number()) + 50);
-                dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
-                tx.updateSignature(SignatureStruct(sig));
+                tx->setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
+                tx->setBlockLimit(u256(_blockChain->number()) + 50);
+                dev::Signature sig = sign(sec, tx->sha3(WithoutSignature));
+                tx->updateSignature(SignatureStruct(sig));
                 _txPool->submit(tx);
             }
             catch (std::exception& e)

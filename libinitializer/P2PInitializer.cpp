@@ -25,9 +25,9 @@
 #include "libnetwork/ASIOInterface.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
-#include <libdevcore/easylog.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
+#include <libp2p/StatisticHandler.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -155,6 +155,16 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
         m_p2pService->setKeyPair(m_keyPair);
         m_p2pService->setP2PMessageFactory(messageFactory);
         m_p2pService->setWhitelist(whitelist);
+
+        // set statisticHandler for p2pService according to configuration
+        bool enableNetworkStatistic = _pt.get<bool>("p2p.enable_statistic", true);
+        if (enableNetworkStatistic)
+        {
+            StatisticHandler::Ptr statisticHandler = std::make_shared<StatisticHandler>();
+            m_p2pService->setStatisticHandler(statisticHandler);
+        }
+
+        // start the p2pService
         m_p2pService->start();
     }
     catch (std::exception& e)

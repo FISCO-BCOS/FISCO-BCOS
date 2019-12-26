@@ -17,6 +17,9 @@
  * @file Rpc.h
  * @author: caryliao
  * @date 2018-10-25
+ * @author:darrenyin
+ * @date  2019-09-20 add getTransactionByHashWithProof,getTransactionReceiptByHashWithProof for
+ * wecross
  */
 
 #pragma once
@@ -99,6 +102,13 @@ public:
     Json::Value call(int _groupID, const Json::Value& request) override;
     std::string sendRawTransaction(int _groupID, const std::string& _rlp) override;
 
+    // Get transaction with merkle proof by hash
+    Json::Value getTransactionByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+    // Get receipt with merkle proof by hash
+    Json::Value getTransactionReceiptByHashWithProof(
+        int _groupID, const std::string& _transactionHash) override;
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
@@ -110,6 +120,7 @@ public:
     void setLedgerManager(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager)
     {
         m_ledgerManager = _ledgerManager;
+        registerSyncChecker();
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
@@ -120,22 +131,18 @@ protected:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:
+    void registerSyncChecker();
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
 
-    std::string buildReceipt(uint32_t clientProtocolVersion, int errorCode,
-        const std::string& errorMessage, const bytes& input,
-        dev::eth::LocalisedTransactionReceipt::Ptr receipt);
-
     /// transaction callback related
-    std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
     boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
 
     void checkRequest(int _groupID);
-    void checkTxReceive(int _groupID);
+    void checkSyncStatus(int _groupID);
 };
 
 }  // namespace rpc

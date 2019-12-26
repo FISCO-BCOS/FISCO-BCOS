@@ -33,8 +33,20 @@ enum VERSION : uint32_t
     RC2_VERSION = 2,
     RC3_VERSION = 3,
     V2_0_0 = 0x02000000,
-    V2_1_0 = 0x02010000
+    V2_1_0 = 0x02010000,
+    V2_2_0 = 0x02020000,
 };
+
+enum ProtocolVersion : uint32_t
+{
+    v1 = 1,
+    v2 = 2,
+    // TODO: update SDK protocol to V3 after sdk-2.1.1 released
+    v3 = 3,
+    maxVersion = v3,
+    minVersion = v1,
+};
+
 class GlobalConfigure
 {
 public:
@@ -71,15 +83,24 @@ public:
         std::string dataKey;
     } diskEncryption;
 
+    struct Binary
+    {
+        std::string version;
+        std::string buildTime;
+        std::string buildInfo;
+        std::string gitBranch;
+        std::string gitCommitHash;
+    } binaryInfo;
+
     /// default block time
     const unsigned c_intervalBlockTime = 1000;
     /// omit empty block or not
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
-
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
+    const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
 
     std::atomic_bool shouldExit;
 

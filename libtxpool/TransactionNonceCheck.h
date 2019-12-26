@@ -48,15 +48,15 @@ public:
     }
     ~TransactionNonceCheck() {}
     void init();
-    bool ok(dev::eth::Transaction const& _transaction, bool _needinsert = false);
+    bool ok(dev::eth::Transaction const& _transaction);
     void updateCache(bool _rebuild = false);
     unsigned const& maxBlockLimit() const { return m_maxBlockLimit; }
     void setBlockLimit(unsigned const& limit) { m_maxBlockLimit = limit; }
 
     bool isBlockLimitOk(dev::eth::Transaction const& _trans);
 
-    void getNonceAndUpdateCache(
-        NonceVec& nonceVec, int64_t const& blockNumber, bool const& update = true);
+    std::shared_ptr<dev::txpool::NonceVec> getNonceAndUpdateCache(
+        int64_t const& blockNumber, bool const& update = true);
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
@@ -65,7 +65,7 @@ private:
     /// key: block number
     /// value: all the nonces of a given block
     /// we cache at most m_maxBlockLimit entries(occuppy about 32KB)
-    std::map<int64_t, NonceVec> m_blockNonceCache;
+    std::map<int64_t, std::shared_ptr<NonceVec> > m_blockNonceCache;
 
     int64_t m_startblk;
     int64_t m_endblk;

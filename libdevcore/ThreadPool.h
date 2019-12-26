@@ -24,7 +24,9 @@
  */
 
 #pragma once
-#include "easylog.h"
+#include "Log.h"
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/thread/thread.hpp>
@@ -41,10 +43,21 @@ public:
     explicit ThreadPool(const std::string& threadName, size_t size) : m_work(_ioService)
     {
         _threadName = threadName;
+        std::shared_ptr<std::vector<std::string>> fields =
+            std::make_shared<std::vector<std::string>>();
+        if (boost::log::core::get())
+        {
+            boost::split(*fields, _threadName, boost::is_any_of("-"), boost::token_compress_on);
+        }
 
         for (size_t i = 0; i < size; ++i)
         {
-            _workers.create_thread([&] {
+            _workers.create_thread([this, fields] {
+                if (fields->size() > 1)
+                {
+                    boost::log::core::get()->add_thread_attribute(
+                        "GroupId", boost::log::attributes::constant<std::string>((*fields)[1]));
+                }
                 dev::pthread_setThreadName(_threadName);
                 _ioService.run();
             });
@@ -58,6 +71,7 @@ public:
             _workers.join_all();
         }
     }
+
     ~ThreadPool() { stop(); }
 
     // Add new work item to the pool.

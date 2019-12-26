@@ -33,7 +33,7 @@ namespace storage
 class MemoryTableFactoryFactory : public TableFactoryFactory
 {
 public:
-    virtual TableFactory::Ptr newTableFactory(dev::h256 hash, int64_t number) override
+    TableFactory::Ptr newTableFactory(dev::h256 const& hash, int64_t number) override
     {
         MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(m_stroage);

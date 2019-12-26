@@ -30,14 +30,12 @@
 #include "libchannelserver/ChannelServer.h"     // for ChannelServer
 #include "libchannelserver/ChannelSession.h"    // for ChannelSessio...
 #include "libdevcore/Common.h"                  // for bytes, byte
-#include "libdevcore/Log.h"                     // for LOG
 #include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
-#include <libdevcore/easylog.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
 #include <unistd.h>
@@ -248,13 +246,14 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     for (auto session : activedSessions)
     {
         message->clearData();
-        if (session->protocolVersion() == ProtocolVersion::v2)
+        // default is v1
+        if (session->protocolVersion() == dev::ProtocolVersion::v1)
         {
-            message->setTopicData(topic, (const byte*)resp.data(), resp.size());
+            message->setTopicData(topic, (const byte*)content.data(), content.size());
         }
         else
-        {  // default is v1
-            message->setTopicData(topic, (const byte*)content.data(), content.size());
+        {
+            message->setTopicData(topic, (const byte*)resp.data(), resp.size());
         }
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
@@ -557,7 +556,7 @@ void dev::ChannelRPCServer::onClientHandshake(
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
         CHANNEL_LOG(INFO) << "onClientHandshake" << LOG_KV("ProtocolVersion", response["protocol"])
                           << LOG_KV("clientType", clientType) << LOG_KV("endpoint", session->host())
-                          << session->port();
+                          << ":" << session->port();
     }
     catch (std::exception& e)
     {
@@ -569,7 +568,18 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
     std::string data((char*)message->data(), message->dataSize());
-    if (session->protocolVersion() == ProtocolVersion::v2)
+    if (session->protocolVersion() == ProtocolVersion::v1)
+    {
+        // default is ProtocolVersion::v1
+        if (data == "0")
+        {
+            data = "1";
+            message->setData((const byte*)data.data(), data.size());
+            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+        }
+    }
+    // v2 and v3 for now
+    else
     {
         Json::Value response;
         response["heartBeat"] = 1;
@@ -577,15 +587,6 @@ void dev::ChannelRPCServer::onClientHeartbeat(
         auto resp = writer.write(response);
         message->setData((const byte*)resp.data(), resp.size());
         session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-    }
-    else
-    {  // default is ProtocolVersion::v1
-        if (data == "0")
-        {
-            data = "1";
-            message->setData((const byte*)data.data(), data.size());
-            session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
-        }
     }
 }
 

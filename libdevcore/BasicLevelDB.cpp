@@ -22,7 +22,6 @@
 
 
 #include "BasicLevelDB.h"
-#include <libdevcore/easylog.h>
 
 using namespace dev;
 using namespace dev::db;

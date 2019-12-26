@@ -22,7 +22,6 @@
 #include "libdevcrypto/AES.h"
 #include "libdevcrypto/Exceptions.h"
 #include "sm4/sm4.h"
-#include <libdevcore/easylog.h>
 #include <openssl/sm4.h>
 #include <stdlib.h>
 #include <string.h>

@@ -21,7 +21,6 @@
 #include "Common.h"
 #include "MemoryStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
-#include <libdevcore/easylog.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>

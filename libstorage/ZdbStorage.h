@@ -40,10 +40,10 @@ public:
     ZdbStorage();
     virtual ~ZdbStorage(){};
 
-    Entries::Ptr select(h256 _hash, int64_t _num, TableInfo::Ptr _tableInfo,
-        const std::string& _key, Condition::Ptr _condition = nullptr) override;
-    size_t commit(h256 _hash, int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
-    bool onlyDirty() override;
+    Entries::Ptr select(int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key,
+        Condition::Ptr _condition = nullptr) override;
+    size_t commit(int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
+    bool onlyCommitDirty() override { return true; }
 
     virtual void setFatalHandler(std::function<void(std::exception&)> fatalHandler)
     {
@@ -52,7 +52,7 @@ public:
 
 
 public:
-    void setConnPool(SQLConnectionPool::Ptr& _connPool);
+    void setConnPool(std::shared_ptr<SQLConnectionPool>& _connPool);
     void SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc);
     void initSysTables();
 
@@ -62,6 +62,7 @@ private:
 
 
 private:
+    std::string getCommonFileds();
     void createSysTables();
     void createSysConsensus();
     void createAccessTables();

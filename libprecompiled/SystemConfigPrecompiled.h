@@ -30,6 +30,7 @@ const char* const SYSTEM_CONFIG_ENABLENUM = "enable_num";
 const char* const SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 const char* const SYSTEM_INIT_VALUE_TX_COUNT_LIMIT = "1000";
 const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
+
 const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 
 const int TX_COUNT_LIMIT_MIN = 1;

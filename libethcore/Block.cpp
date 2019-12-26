@@ -25,8 +25,12 @@
 #include "TxsParallelParser.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 #include <tbb/parallel_for.h>
+
+
+#define BLOCK_LOG(LEVEL)    \
+    LOG(LEVEL) << "[Block]" \
+               << "[line:" << __LINE__ << "]"
 
 namespace dev
 {
@@ -35,20 +39,28 @@ namespace eth
 Block::Block(
     bytesConstRef _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
+    m_transactions = std::make_shared<Transactions>();
+    m_transactionReceipts = std::make_shared<TransactionReceipts>();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+
     decode(_data, _option, _withReceipt, _withTxHash);
 }
 
 Block::Block(
     bytes const& _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
 {
+    m_transactions = std::make_shared<Transactions>();
+    m_transactionReceipts = std::make_shared<TransactionReceipts>();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+
     decode(ref(_data), _option, _withReceipt, _withTxHash);
 }
 
 Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
-    m_transactions(_block.transactions()),
-    m_transactionReceipts(_block.transactionReceipts()),
-    m_sigList(_block.sigList()),
+    m_transactions(std::make_shared<Transactions>(*_block.transactions())),
+    m_transactionReceipts(std::make_shared<TransactionReceipts>(*_block.transactionReceipts())),
+    m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>>>(*_block.sigList())),
     m_txsCache(_block.m_txsCache),
     m_tReceiptsCache(_block.m_tReceiptsCache),
     m_transRootCache(_block.m_transRootCache),
@@ -59,11 +71,11 @@ Block& Block::operator=(Block const& _block)
 {
     m_blockHeader = _block.blockHeader();
     /// init transactions
-    m_transactions = _block.transactions();
+    m_transactions = std::make_shared<Transactions>(*_block.transactions());
     /// init transactionReceipts
-    m_transactionReceipts = _block.transactionReceipts();
+    m_transactionReceipts = std::make_shared<TransactionReceipts>(*_block.transactionReceipts());
     /// init sigList
-    m_sigList = _block.sigList();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>(*_block.sigList());
     m_txsCache = _block.m_txsCache;
     m_tReceiptsCache = _block.m_tReceiptsCache;
     m_transRootCache = _block.m_transRootCache;
@@ -104,7 +116,7 @@ void Block::encode(bytes& _out) const
     // append block hash
     block_stream.append(m_blockHeader.hash());
     // append sig_list
-    block_stream.appendVector(m_sigList);
+    block_stream.appendVector(*m_sigList);
     block_stream.swapOut(_out);
 }
 
@@ -125,7 +137,7 @@ void Block::encodeRC2(bytes& _out) const
     // append block hash
     block_stream.append(m_blockHeader.hash());
     // append sig_list
-    block_stream.appendVector(m_sigList);
+    block_stream.appendVector(*m_sigList);
     // append transactionReceipts list
     block_stream.appendRaw(m_tReceiptsCache);
     block_stream.swapOut(_out);
@@ -135,6 +147,11 @@ void Block::encodeRC2(bytes& _out) const
 /// encode transactions to bytes using rlp-encoding when transaction list has been changed
 void Block::calTransactionRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        calTransactionRootV2_2_0(update);
+        return;
+    }
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         calTransactionRootRC2(update);
@@ -143,16 +160,16 @@ void Block::calTransactionRoot(bool update) const
 
     WriteGuard l(x_txsCache);
     RLPStream txs;
-    txs.appendList(m_transactions.size());
+    txs.appendList(m_transactions->size());
     if (m_txsCache == bytes())
     {
         BytesMap txsMapCache;
-        for (size_t i = 0; i < m_transactions.size(); i++)
+        for (size_t i = 0; i < m_transactions->size(); i++)
         {
             RLPStream s;
             s << i;
             bytes trans_data;
-            m_transactions[i].encode(trans_data);
+            (*m_transactions)[i]->encode(trans_data);
             txs.appendRaw(trans_data);
             txsMapCache.insert(std::make_pair(s.out(), trans_data));
         }
@@ -164,6 +181,129 @@ void Block::calTransactionRoot(bool update) const
         m_blockHeader.setTransactionsRoot(m_transRootCache);
     }
 }
+
+void Block::calTransactionRootV2_2_0(bool update) const
+{
+    TIME_RECORD(
+        "Calc transaction root, count:" + boost::lexical_cast<std::string>(m_transactions->size()));
+    WriteGuard l(x_txsCache);
+    if (m_txsCache == bytes())
+    {
+        std::vector<dev::bytes> transactionList;
+        transactionList.resize(m_transactions->size());
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
+            [&](const tbb::blocked_range<size_t>& _r) {
+                for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+                {
+                    RLPStream s;
+                    s << i;
+                    dev::bytes byteValue = s.out();
+                    dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                    byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
+                    transactionList[i] = byteValue;
+                }
+            });
+        m_txsCache = TxsParallelParser::encode(m_transactions);
+        m_transRootCache = dev::getHash256(transactionList);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setTransactionsRoot(m_transRootCache);
+    }
+}
+
+std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTransactionProof() const
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCK_LOG(ERROR) << "calTransactionRootV2_2_0 only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
+        std::make_shared<std::map<std::string, std::vector<std::string>>>();
+    std::vector<dev::bytes> transactionList;
+    transactionList.resize(m_transactions->size());
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
+        [&](const tbb::blocked_range<size_t>& _r) {
+            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            {
+                RLPStream s;
+                s << i;
+                dev::bytes byteValue = s.out();
+                dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
+                transactionList[i] = byteValue;
+            }
+        });
+
+    dev::getMerkleProof(transactionList, merklePath);
+    return merklePath;
+}
+
+void Block::getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const
+{
+    txReceipts.appendList(m_transactionReceipts->size());
+    receiptList.resize(m_transactionReceipts->size());
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactionReceipts->size()),
+        [&](const tbb::blocked_range<size_t>& _r) {
+            for (uint32_t i = _r.begin(); i < _r.end(); ++i)
+            {
+                (*m_transactionReceipts)[i]->receipt();
+                dev::bytes receiptHash = (*m_transactionReceipts)[i]->sha3();
+                RLPStream s;
+                s << i;
+                dev::bytes receiptValue = s.out();
+                receiptValue.insert(receiptValue.end(), receiptHash.begin(), receiptHash.end());
+                receiptList[i] = receiptValue;
+            }
+        });
+    for (size_t i = 0; i < m_transactionReceipts->size(); i++)
+    {
+        txReceipts.appendRaw((*m_transactionReceipts)[i]->receipt());
+    }
+}
+
+void Block::calReceiptRootV2_2_0(bool update) const
+{
+    TIME_RECORD("Calc receipt root, count:" +
+                boost::lexical_cast<std::string>(m_transactionReceipts->size()));
+
+    WriteGuard l(x_txReceiptsCache);
+    if (m_tReceiptsCache == bytes())
+    {
+        RLPStream txReceipts;
+        std::vector<dev::bytes> receiptList;
+        getReceiptAndSha3(txReceipts, receiptList);
+        txReceipts.swapOut(m_tReceiptsCache);
+        m_receiptRootCache = dev::getHash256(receiptList);
+    }
+    if (update == true)
+    {
+        m_blockHeader.setReceiptsRoot(m_receiptRootCache);
+    }
+}
+
+
+std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getReceiptProof() const
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCK_LOG(ERROR) << "calReceiptRootV2_2_0 only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
+    RLPStream txReceipts;
+    std::vector<dev::bytes> receiptList;
+    getReceiptAndSha3(txReceipts, receiptList);
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
+        std::make_shared<std::map<std::string, std::vector<std::string>>>();
+    dev::getMerkleProof(receiptList, merklePath);
+    return merklePath;
+}
+
 
 void Block::calTransactionRootRC2(bool update) const
 {
@@ -182,6 +322,11 @@ void Block::calTransactionRootRC2(bool update) const
 /// encode transactionReceipts to bytes using rlp-encoding when transaction list has been changed
 void Block::calReceiptRoot(bool update) const
 {
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        calReceiptRootV2_2_0(update);
+        return;
+    }
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         calReceiptRootRC2(update);
@@ -191,14 +336,14 @@ void Block::calReceiptRoot(bool update) const
     if (m_tReceiptsCache == bytes())
     {
         RLPStream txReceipts;
-        txReceipts.appendList(m_transactionReceipts.size());
+        txReceipts.appendList(m_transactionReceipts->size());
         BytesMap mapCache;
-        for (size_t i = 0; i < m_transactionReceipts.size(); i++)
+        for (size_t i = 0; i < m_transactionReceipts->size(); i++)
         {
             RLPStream s;
             s << i;
             bytes tranReceipts_data;
-            m_transactionReceipts[i].encode(tranReceipts_data);
+            (*m_transactionReceipts)[i]->encode(tranReceipts_data);
             txReceipts.appendRaw(tranReceipts_data);
             mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
         }
@@ -216,7 +361,7 @@ void Block::calReceiptRootRC2(bool update) const
     WriteGuard l(x_txReceiptsCache);
     if (m_tReceiptsCache == bytes())
     {
-        size_t receiptsNum = m_transactionReceipts.size();
+        size_t receiptsNum = m_transactionReceipts->size();
 
         std::vector<dev::bytes> receiptsRLPs(receiptsNum, bytes());
         tbb::parallel_for(
@@ -226,7 +371,7 @@ void Block::calReceiptRootRC2(bool update) const
                     RLPStream s;
                     s << i;
                     dev::bytes receiptRLP;
-                    m_transactionReceipts[i].encode(receiptRLP);
+                    (*m_transactionReceipts)[i]->encode(receiptRLP);
                     receiptsRLPs[i] = receiptRLP;
                 }
             });
@@ -278,10 +423,11 @@ void Block::decode(
     /// get transaction list
     RLP transactions_rlp = block_rlp[1];
 
-    m_transactions.resize(transactions_rlp.itemCount());
+    m_transactions->resize(transactions_rlp.itemCount());
     for (size_t i = 0; i < transactions_rlp.itemCount(); i++)
     {
-        m_transactions[i].decode(transactions_rlp[i], _option);
+        (*m_transactions)[i] = std::make_shared<dev::eth::Transaction>();
+        (*m_transactions)[i]->decode(transactions_rlp[i], _option);
     }
 
     /// get txsCache
@@ -289,10 +435,11 @@ void Block::decode(
 
     /// get transactionReceipt list
     RLP transactionReceipts_rlp = block_rlp[2];
-    m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
+    m_transactionReceipts->resize(transactionReceipts_rlp.itemCount());
     for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
     {
-        m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
+        (*m_transactionReceipts)[i] = std::make_shared<dev::eth::TransactionReceipt>();
+        (*m_transactionReceipts)[i]->decode(transactionReceipts_rlp[i]);
     }
     /// get hash
     h256 hash = block_rlp[3].toHash<h256>();
@@ -301,7 +448,8 @@ void Block::decode(
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     /// get sig_list
-    m_sigList = block_rlp[4].toVector<std::pair<u256, Signature>>();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>(
+        block_rlp[4].toVector<std::pair<u256, Signature>>());
 }
 
 void Block::decodeRC2(
@@ -328,18 +476,30 @@ void Block::decodeRC2(
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     /// get sig_list
-    m_sigList = block_rlp[3].toVector<std::pair<u256, Signature>>();
+    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>(
+        block_rlp[3].toVector<std::pair<u256, Signature>>());
 
     /// get transactionReceipt list
     if (_withReceipt)
     {
         RLP transactionReceipts_rlp = block_rlp[4];
-        m_transactionReceipts.resize(transactionReceipts_rlp.itemCount());
+        m_transactionReceipts->resize(transactionReceipts_rlp.itemCount());
         for (size_t i = 0; i < transactionReceipts_rlp.itemCount(); i++)
         {
-            m_transactionReceipts[i].decode(transactionReceipts_rlp[i]);
+            (*m_transactionReceipts)[i] = std::make_shared<TransactionReceipt>();
+            (*m_transactionReceipts)[i]->decode(transactionReceipts_rlp[i]);
         }
     }
+}
+
+void Block::encodeProposal(std::shared_ptr<bytes> _out, bool const&)
+{
+    encode(*_out);
+}
+
+void Block::decodeProposal(bytesConstRef _block, bool const&)
+{
+    decode(_block);
 }
 
 }  // namespace eth

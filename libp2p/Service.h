@@ -27,6 +27,7 @@
 #include "P2PInterface.h"
 #include "P2PMessageFactory.h"
 #include "P2PSession.h"
+#include "StatisticHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
@@ -85,6 +86,9 @@ public:
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
+
+    void removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID) override;
+
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
@@ -106,7 +110,7 @@ public:
         m_groupID2NodeList = _groupID2NodeList;
     }
 
-    void setNodeListByGroupID(GROUP_ID _groupID, dev::h512s _nodeList) override
+    void setNodeListByGroupID(GROUP_ID _groupID, const h512s& _nodeList) override
     {
         RecursiveGuard l(x_nodeList);
         m_groupID2NodeList[_groupID] = _nodeList;
@@ -162,6 +166,13 @@ public:
         return nullptr;
     }
 
+    void setStatisticHandler(StatisticHandler::Ptr _statisticHandler)
+    {
+        m_statisticHandler = _statisticHandler;
+    }
+
+    StatisticHandler::Ptr statisticHandler() override { return m_statisticHandler; }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
@@ -202,6 +213,7 @@ private:
     bool m_run = false;
 
     PeerWhitelist::Ptr m_whitelist;
+    StatisticHandler::Ptr m_statisticHandler = nullptr;
 };
 
 }  // namespace p2p

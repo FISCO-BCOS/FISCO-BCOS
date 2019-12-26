@@ -23,8 +23,10 @@
  */
 #include "Common.h"
 #include "Exceptions.h"
-#include "easylog.h"
 #include <csignal>
+#ifdef __APPLE__
+#include <pthread.h>
+#endif
 
 using namespace std;
 
@@ -66,6 +68,15 @@ uint64_t utcTimeUs()
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+std::string getCurrentDateTime()
+{
+    using std::chrono::system_clock;
+    char buffer[40];
+    auto currentTime = system_clock::to_time_t(system_clock::now());
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&currentTime));
+    return std::string(buffer);
 }
 
 void errorExit(std::stringstream& _exitInfo, Exception const& exception)
@@ -151,3 +162,12 @@ std::string newSeq()
 }
 
 }  // namespace dev
+
+void dev::pthread_setThreadName(std::string const& _n)
+{
+#if defined(__GLIBC__)
+    pthread_setname_np(pthread_self(), _n.c_str());
+#elif defined(__APPLE__)
+    pthread_setname_np(_n.c_str());
+#endif
+}

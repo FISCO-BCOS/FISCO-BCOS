@@ -29,6 +29,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/TrieHash.h>
+#include <libdevcore/TrieHash2.h>
 
 namespace dev
 {
@@ -37,8 +38,14 @@ namespace eth
 class Block
 {
 public:
+    using Ptr = std::shared_ptr<Block>;
     ///-----constructors of Block
-    Block() = default;
+    Block()
+    {
+        m_transactions = std::make_shared<Transactions>();
+        m_transactionReceipts = std::make_shared<TransactionReceipts>();
+        m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+    }
     explicit Block(bytesConstRef _data,
         CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
         bool _withTxHash = false);
@@ -49,18 +56,29 @@ public:
     Block(Block const& _block);
     /// assignment operator
     Block& operator=(Block const& _block);
-    ~Block() {}
+    virtual ~Block() {}
     ///-----opearator overloads of Block
     /// operator ==
+    // only use for UT
     bool equalAll(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_sigList == _block.sigList() &&
-               m_transactions == _block.transactions();
+        // check transaction
+        size_t i = 0;
+        for (auto tx : *_block.transactions())
+        {
+            if (*tx != (*(*m_transactions)[i]))
+            {
+                return false;
+            }
+            i++;
+        }
+        return m_blockHeader == _block.blockHeader() && *m_sigList == *_block.sigList();
     }
 
+    // only used for UT
     bool equalWithoutSig(Block const& _block) const
     {
-        return m_blockHeader == _block.blockHeader() && m_transactions == _block.transactions();
+        return m_blockHeader == _block.blockHeader() && *m_transactions == *_block.transactions();
     }
 
     bool equalHeader(Block const& _block) const { return m_blockHeader == _block.blockHeader(); }
@@ -78,6 +96,11 @@ public:
         CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
         bool _withTxHash = false);
 
+    virtual void encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash = false);
+
+    virtual void decodeProposal(bytesConstRef _block, bool const& _onlyTxsHash = false);
+    virtual bool txsAllHit() { return true; }
+
     /// @returns the RLP serialisation of this block.
     bytes rlp() const
     {
@@ -94,61 +117,67 @@ public:
     }
 
     ///-----get interfaces
-    Transactions const& transactions() const { return m_transactions; }
-    TransactionReceipts const& transactionReceipts() const { return m_transactionReceipts; }
-    Transaction const& transaction(size_t const _index) const { return m_transactions[_index]; }
+    std::shared_ptr<Transactions> transactions() const { return m_transactions; }
+    std::shared_ptr<TransactionReceipts> transactionReceipts() const
+    {
+        return m_transactionReceipts;
+    }
+    Transaction::Ptr transaction(size_t const _index) const { return (*m_transactions)[_index]; }
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
     h256 headerHash() const { return m_blockHeader.hash(); }
-    std::vector<std::pair<u256, Signature>> const& sigList() const { return m_sigList; }
+    std::shared_ptr<std::vector<std::pair<u256, Signature>>> sigList() const { return m_sigList; }
 
-    std::vector<u256> getAllNonces() const
+    std::shared_ptr<std::vector<u256>> getAllNonces() const
     {
-        std::vector<u256> nonce_vec;
-        for (auto const& trans : m_transactions)
+        std::shared_ptr<std::vector<dev::u256>> nonce_vec =
+            std::make_shared<std::vector<dev::u256>>();
+        for (auto const& trans : *m_transactions)
         {
-            nonce_vec.push_back(trans.nonce());
+            nonce_vec->push_back(trans->nonce());
         }
         return nonce_vec;
     }
 
     ///-----set interfaces
     /// set m_transactions
-    void setTransactions(Transactions const& _trans)
+    void setTransactions(std::shared_ptr<Transactions> _trans)
     {
         m_transactions = _trans;
         noteChange();
     }
     /// set m_transactionReceipts
-    void setTransactionReceipts(TransactionReceipts const& transReceipt)
+    void setTransactionReceipts(std::shared_ptr<TransactionReceipts> transReceipt)
     {
         m_transactionReceipts = transReceipt;
         noteReceiptChange();
     }
     /// append a single transaction to m_transactions
-    void appendTransaction(Transaction const& _trans)
+    void appendTransaction(Transaction::Ptr _trans)
     {
-        m_transactions.push_back(_trans);
+        m_transactions->push_back(_trans);
         noteChange();
     }
     /// append transactions
-    void appendTransactions(Transactions const& _trans_array)
+    void appendTransactions(std::shared_ptr<Transactions> _trans_array)
     {
-        for (auto const& trans : _trans_array)
-            m_transactions.push_back(trans);
+        for (auto const& trans : *_trans_array)
+        {
+            m_transactions->push_back(trans);
+        }
         noteChange();
     }
     /// set block header
     void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
     /// set sig list
-    void inline setSigList(std::vector<std::pair<u256, Signature>> const& _sigList)
+    void inline setSigList(std::shared_ptr<std::vector<std::pair<u256, Signature>>> _sigList)
     {
         m_sigList = _sigList;
     }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
     bool isSealed() const { return (m_blockHeader.sealer() != Invalid256); }
-    size_t getTransactionSize() const { return m_transactions.size(); }
+    size_t getTransactionSize() const { return m_transactions->size(); }
 
     /// get transactionRoot
     h256 const transactionRoot() { return header().transactionsRoot(); }
@@ -170,9 +199,9 @@ public:
         }
         /// sealer must be reseted since it's used to decide a block is valid or not
         m_blockHeader.setSealer(Invalid256);
-        m_transactions.clear();
-        m_transactionReceipts.clear();
-        m_sigList.clear();
+        m_transactions->clear();
+        m_transactionReceipts->clear();
+        m_sigList->clear();
         m_txsCache.clear();
         m_tReceiptsCache.clear();
         noteChange();
@@ -189,44 +218,44 @@ public:
         noteReceiptChange();
     }
 
-    void appendTransactionReceipt(TransactionReceipt const& _tran)
+    void appendTransactionReceipt(TransactionReceipt::Ptr const& _tran)
     {
-        m_transactionReceipts.push_back(_tran);
+        m_transactionReceipts->push_back(_tran);
         noteReceiptChange();
     }
 
     void resizeTransactionReceipt(size_t _totalReceipt)
     {
-        m_transactionReceipts.resize(_totalReceipt);
+        m_transactionReceipts->resize(_totalReceipt);
         noteReceiptChange();
     }
 
-    void setTransactionReceipt(size_t _receiptId, TransactionReceipt const& _tran)
+    void setTransactionReceipt(size_t _receiptId, TransactionReceipt::Ptr const& _tran)
     {
-        m_transactionReceipts[_receiptId] = _tran;
+        (*m_transactionReceipts)[_receiptId] = _tran;
         noteReceiptChange();
     }
 
     void updateSequenceReceiptGas()
     {
         u256 totalGas = 0;
-        for (auto& receipt : m_transactionReceipts)
+        for (auto& receipt : *m_transactionReceipts)
         {
-            totalGas += receipt.gasUsed();
-            receipt.setGasUsed(totalGas);
+            totalGas += receipt->gasUsed();
+            receipt->setGasUsed(totalGas);
         }
     }
 
     void setStateRootToAllReceipt(h256 const& _stateRoot)
     {
-        for (auto& receipt : m_transactionReceipts)
-            receipt.setStateRoot(_stateRoot);
+        for (auto& receipt : *m_transactionReceipts)
+            receipt->setStateRoot(_stateRoot);
         noteReceiptChange();
     }
 
     void clearAllReceipts()
     {
-        m_transactionReceipts.clear();
+        m_transactionReceipts->clear();
         noteReceiptChange();
     }
 
@@ -234,6 +263,12 @@ public:
     void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
     void calReceiptRootRC2(bool update = true) const;
+    void calTransactionRootV2_2_0(bool update) const;
+    void getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const;
+    void calReceiptRootV2_2_0(bool update) const;
+
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> getReceiptProof() const;
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> getTransactionProof() const;
 
     /**
      * @brief: set sender for specified transaction, if the sender hasn't been set, then recover
@@ -247,15 +282,15 @@ public:
         if (sender == ZeroAddress)
         {
             /// verify signature and recover sender from the signature
-            m_transactions[index].sender();
+            (*m_transactions)[index]->sender();
         }
         else
         {
-            m_transactions[index].forceSender(sender);
+            (*m_transactions)[index]->forceSender(sender);
         }
     }
 
-private:
+protected:
     /// callback this function when transaction has been changed
     void noteChange()
     {
@@ -270,14 +305,14 @@ private:
         m_tReceiptsCache = bytes();
     }
 
-private:
+protected:
     /// block header of the block (field 0)
     mutable BlockHeader m_blockHeader;
     /// transaction list (field 1)
-    mutable Transactions m_transactions;
-    TransactionReceipts m_transactionReceipts;
+    mutable std::shared_ptr<Transactions> m_transactions;
+    std::shared_ptr<TransactionReceipts> m_transactionReceipts;
     /// sig list (field 3)
-    std::vector<std::pair<u256, Signature>> m_sigList;
+    std::shared_ptr<std::vector<std::pair<u256, Signature>>> m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
 

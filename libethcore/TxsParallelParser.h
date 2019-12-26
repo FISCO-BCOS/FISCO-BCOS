@@ -26,7 +26,6 @@
 #include "Transaction.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/easylog.h>
 
 namespace dev
 {
@@ -43,9 +42,9 @@ class TxsParallelParser
     using Offset_t = uint32_t;
 
 public:
-    static bytes encode(Transactions& _txs);
+    static bytes encode(std::shared_ptr<Transactions> _txs);
     static bytes encode(std::vector<bytes> const& _txs);
-    static void decode(Transactions& _txs, bytesConstRef _bytes,
+    static void decode(std::shared_ptr<Transactions> _txs, bytesConstRef _bytes,
         CheckTransaction _checkSig = CheckTransaction::Everything, bool _withHash = false);
 
 private:

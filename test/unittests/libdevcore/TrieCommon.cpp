@@ -17,7 +17,6 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/TrieCommon.h>
-#include <libdevcore/easylog.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

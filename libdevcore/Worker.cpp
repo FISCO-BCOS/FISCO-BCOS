@@ -20,7 +20,6 @@
  */
 #include "Worker.h"
 #include "Common.h"
-#include "easylog.h"
 #include <pthread.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -61,7 +60,7 @@ void Worker::startWorking()
                 if (fields.size() > 1)
                 {
                     boost::log::core::get()->add_thread_attribute(
-                        "ThreadName", boost::log::attributes::constant<std::string>(fields[1]));
+                        "GroupId", boost::log::attributes::constant<std::string>(fields[1]));
                 }
             }
 #endif

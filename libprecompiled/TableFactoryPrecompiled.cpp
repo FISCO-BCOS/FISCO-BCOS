@@ -1,0 +1,247 @@
+/*
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2018 fisco-dev contributors.
+ */
+/** @file TableFactoryPrecompiled.h
+ *  @author ancelmo
+ *  @date 20180921
+ */
+#include "TableFactoryPrecompiled.h"
+#include "Common.h"
+#include "TablePrecompiled.h"
+#include "libstorage/StorageException.h"
+#include "libstorage/Table.h"
+#include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
+#include <libdevcrypto/Common.h>
+#include <libdevcrypto/Hash.h>
+#include <libethcore/ABI.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/throw_exception.hpp>
+
+
+using namespace dev;
+using namespace dev::blockverifier;
+using namespace std;
+using namespace dev::storage;
+using namespace dev::precompiled;
+
+const char* const TABLE_METHOD_OPT_STR = "openTable(string)";
+const char* const TABLE_METHOD_CRT_STR_STR = "createTable(string,string,string)";
+
+TableFactoryPrecompiled::TableFactoryPrecompiled()
+{
+    name2Selector[TABLE_METHOD_OPT_STR] = getFuncSelector(TABLE_METHOD_OPT_STR);
+    name2Selector[TABLE_METHOD_CRT_STR_STR] = getFuncSelector(TABLE_METHOD_CRT_STR_STR);
+}
+
+std::string TableFactoryPrecompiled::toString()
+{
+    return "TableFactory";
+}
+
+void TableFactoryPrecompiled::checkNameValidate(
+    const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList)
+{
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        set<string> valueFieldSet;
+        boost::trim(keyField);
+        valueFieldSet.insert(keyField);
+
+        std::vector<char> allowChar = {'$', '_', '@'};
+
+        auto checkTableNameValidate = [allowChar](const std::string& tableName) {
+            size_t iSize = tableName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(tableName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate tablename") << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_INVALIDATE_FIELD,
+                        std::string("invalidate tablename:") + tableName));
+                }
+            }
+        };
+        auto checkFieldNameValidate = [allowChar](const std::string& tableName,
+                                          const std::string& fieldName) {
+            if (fieldName.size() == 0 || fieldName[0] == '_')
+            {
+                STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
+                                   << LOG_KV("table name", tableName);
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+            }
+            size_t iSize = fieldName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(fieldName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate fieldname") << LOG_KV("field name", fieldName)
+                        << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+                }
+            }
+        };
+
+        checkTableNameValidate(tableName);
+        checkFieldNameValidate(tableName, keyField);
+
+        for (auto& valueField : valueFieldList)
+        {
+            auto ret = valueFieldSet.insert(valueField);
+            if (!ret.second)
+            {
+                STORAGE_LOG(ERROR)
+                    << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
+                    << LOG_KV("table name", tableName);
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_DUMPLICATE_FIELD, std::string("dumplicate field:") + valueField));
+            }
+            checkFieldNameValidate(tableName, valueField);
+        }
+    }
+}
+
+
+bytes TableFactoryPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+{
+    STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
+                       << LOG_KV("param", toHex(param));
+
+    uint32_t func = getParamFunc(param);
+    bytesConstRef data = getParamData(param);
+
+    dev::eth::ContractABI abi;
+    bytes out;
+
+    if (func == name2Selector[TABLE_METHOD_OPT_STR])
+    {  // openTable(string)
+        string tableName;
+        abi.abiOut(data, tableName);
+        tableName = precompiled::getTableName(tableName);
+
+        Address address;
+        auto table = m_memoryTableFactory->openTable(tableName);
+        if (table)
+        {
+            TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
+            tablePrecompiled->setTable(table);
+            address = context->registerPrecompiled(tablePrecompiled);
+        }
+        else
+        {
+            STORAGE_LOG(WARNING) << LOG_BADGE("TableFactoryPrecompiled")
+                                 << LOG_DESC("Open new table failed")
+                                 << LOG_KV("table name", tableName);
+        }
+
+        out = abi.abiIn("", address);
+    }
+    else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
+    {  // createTable(string,string,string)
+        string tableName;
+        string keyField;
+        string valueFiled;
+
+        abi.abiOut(data, tableName, keyField, valueFiled);
+        vector<string> fieldNameList;
+        boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
+        boost::trim(keyField);
+        if (keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
+        {  // mysql TableName and fieldName length limit is 64
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW,
+                std::string("table field name length overflow ") +
+                    std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+        }
+        for (auto& str : fieldNameList)
+        {
+            boost::trim(str);
+            if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
+            {  // mysql TableName and fieldName length limit is 64
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW,
+                    std::string("table field name length overflow ") +
+                        std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+            }
+        }
+
+        checkNameValidate(tableName, keyField, fieldNameList);
+
+        valueFiled = boost::join(fieldNameList, ",");
+        if (valueFiled.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
+        {
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW,
+                std::string("total table field name length overflow ") +
+                    std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
+        }
+
+        tableName = precompiled::getTableName(tableName);
+        if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH ||
+            (g_BCOSConfig.version() > V2_1_0 &&
+                tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
+        {  // mysql TableName and fieldName length limit is 64
+           // 2.2.0 user tableName length limit is 50-2=48
+            BOOST_THROW_EXCEPTION(StorageException(
+                CODE_TABLE_NAME_LENGTH_OVERFLOW, std::string("tableName length overflow ") +
+                                                     std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+        }
+
+        int result = 0;
+
+        if (g_BCOSConfig.version() < RC2_VERSION)
+        {  // RC1 success result is 1
+            result = 1;
+        }
+        try
+        {
+            auto table =
+                m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+            if (!table)
+            {  // table already exist
+                result = CODE_TABLE_NAME_ALREADY_EXIST;
+                /// RC1 table already exist: 0
+                if (g_BCOSConfig.version() < RC2_VERSION)
+                {
+                    result = 0;
+                }
+            }
+        }
+        catch (dev::storage::StorageException& e)
+        {
+            STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
+            result = e.errorCode();
+        }
+        getErrorCodeOut(out, result);
+    }
+    else
+    {
+        STORAGE_LOG(ERROR) << LOG_BADGE("TableFactoryPrecompiled")
+                           << LOG_DESC("call undefined function!");
+    }
+    return out;
+}
+
+h256 TableFactoryPrecompiled::hash()
+{
+    return m_memoryTableFactory->hash();
+}

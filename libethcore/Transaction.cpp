@@ -293,7 +293,7 @@ void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) 
     {
         if (m_rpcCallback)
         {
-            m_rpcCallback(pReceipt, bytes());
+            m_rpcCallback(pReceipt, bytesConstRef());
         }
     }
     catch (std::exception& e)
@@ -303,11 +303,23 @@ void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) 
     }
 }
 
-bool Transaction::checkChainIdAndGroupId(u256 _chainId, u256 _groupId)
+bool Transaction::checkChainId(u256 _chainId)
 {
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        return (_chainId == m_chainId && _groupId == m_groupId);
+        return (_chainId == m_chainId);
+    }
+    else
+    {
+        return true;
+    }
+}
+
+bool Transaction::checkGroupId(u256 _groupId)
+{
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        return (_groupId == m_groupId);
     }
     else
     {

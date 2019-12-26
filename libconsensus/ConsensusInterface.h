@@ -22,6 +22,7 @@
  */
 #pragma once
 #include "Common.h"
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Protocol.h>
 namespace dev
 {
@@ -30,6 +31,7 @@ namespace consensus
 class ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusInterface>;
     ConsensusInterface() = default;
     virtual ~ConsensusInterface(){};
 
@@ -40,6 +42,7 @@ public:
 
     /// get sealer list
     virtual h512s sealerList() const = 0;
+    virtual h512s consensusList() const = 0;
     /// set the sealer list
     /// virtual void setSealerList(h512s const& _sealerList) = 0;
     virtual void appendSealer(h512 const& _sealer) = 0;
@@ -59,6 +62,7 @@ public:
     virtual uint64_t maxBlockTransactions() { return 1000; }
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
+    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
 };
 }  // namespace consensus
 }  // namespace dev

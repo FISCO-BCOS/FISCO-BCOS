@@ -21,13 +21,12 @@
 
 #include "StorageException.h"
 
-#include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/easylog.h>
-
 #include "Common.h"
 #include "SQLStorage.h"
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
+#include <libchannelserver/ChannelRPCServer.h>
+#include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 
 using namespace dev;
@@ -36,8 +35,8 @@ using namespace dev::storage;
 
 SQLStorage::SQLStorage() {}
 
-Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo,
-    const std::string& key, Condition::Ptr condition)
+Entries::Ptr SQLStorage::select(
+    int64_t num, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -51,8 +50,8 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
         {
             requestJson["op"] = "select2";
         }
-
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: remove params blockhash
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
         requestJson["params"]["table"] = tableInfo->name;
         requestJson["params"]["key"] = key;
@@ -180,7 +179,6 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
                 }
             }
         }
-        entries->setDirty(false);
         return entries;
     }
     catch (std::exception& e)
@@ -194,7 +192,7 @@ Entries::Ptr SQLStorage::select(h256 hash, int64_t num, TableInfo::Ptr tableInfo
     return Entries::Ptr();
 }
 
-size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::Ptr>& datas)
+size_t SQLStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
     try
     {
@@ -210,7 +208,8 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
         Json::Value requestJson;
 
         requestJson["op"] = "commit";
-        requestJson["params"]["blockHash"] = hash.hex();
+        // TODO: check if this param used
+        requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
 
         for (auto it : datas)
@@ -285,9 +284,82 @@ size_t SQLStorage::commit(h256 hash, int64_t num, const std::vector<TableData::P
     return 0;
 }
 
-bool SQLStorage::onlyDirty()
+TableData::Ptr SQLStorage::selectTableDataByNum(
+    int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts)
 {
-    return true;
+    try
+    {
+        STORAGE_EXTERNAL_LOG(INFO) << LOG_DESC("Query AMOPDB data call selectTableDataByNum")
+                                   << LOG_KV("tableName", tableInfo->name) << LOG_KV("num", num)
+                                   << LOG_KV("start", start) << LOG_KV("counts", counts);
+        Json::Value requestJson;
+        requestJson["op"] = "selectbynum";
+        requestJson["params"]["tableName"] = tableInfo->name;
+        requestJson["params"]["num"] = num;
+        requestJson["params"]["preIndex"] = start;
+        requestJson["params"]["pageSize"] = counts;
+
+        Json::Value responseJson = requestDB(requestJson);
+        int code = responseJson["code"].asInt();
+        std::string message = responseJson["message"].asString();
+        if (code != 0)
+        {
+            STORAGE_EXTERNAL_LOG(ERROR) << LOG_KV("Remote database return error code", code)
+                                        << LOG_KV("error message", message);
+            BOOST_THROW_EXCEPTION(StorageException(-1, "Remote database return error:" + message));
+        }
+
+        TableData::Ptr tableData = std::make_shared<TableData>();
+        tableInfo->fields.emplace_back(tableInfo->key);
+        tableInfo->fields.emplace_back(STATUS);
+        tableInfo->fields.emplace_back(NUM_FIELD);
+        tableInfo->fields.emplace_back(ID_FIELD);
+        tableInfo->fields.emplace_back("_hash_");
+        tableData->info = tableInfo;
+        STORAGE_EXTERNAL_LOG(TRACE)
+            << LOG_DESC("fields in table") << LOG_KV("table", tableInfo->name)
+            << LOG_KV("size", tableInfo->fields.size());
+        for (Json::ArrayIndex i = 0; i < responseJson["result"].size(); ++i)
+        {
+            Json::Value line = responseJson["result"][i];
+            Entry::Ptr entry = std::make_shared<Entry>();
+            for (auto key : line.getMemberNames())
+            {
+                if (std::find(tableInfo->fields.begin(), tableInfo->fields.end(), key) !=
+                    tableInfo->fields.end())
+                {
+                    entry->setField(key, line.get(key, "").asString());
+                }
+                else
+                {
+                    STORAGE_EXTERNAL_LOG(ERROR)
+                        << LOG_DESC("Invalid key in table") << LOG_KV("table", tableInfo->name)
+                        << LOG_KV("key", key);
+                    // BOOST_THROW_EXCEPTION(runtime_error("Invalid key in table"));
+                }
+            }
+            entry->setID(line.get(ID_FIELD, "").asString());
+            entry->setNum(line.get(NUM_FIELD, "").asString());
+            entry->setStatus(line.get(STATUS, "").asString());
+
+            if (entry->getStatus() == 0)
+            {
+                entry->setDirty(false);
+                tableData->newEntries->addEntry(entry);
+            }
+        }
+        tableData->dirtyEntries = std::make_shared<Entries>();
+        return tableData;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_EXTERNAL_LOG(ERROR) << "Query database error:" << e.what();
+
+        BOOST_THROW_EXCEPTION(
+            StorageException(-1, std::string("Query database error:") + e.what()));
+    }
+
+    return TableData::Ptr();
 }
 
 Json::Value SQLStorage::requestDB(const Json::Value& value)
@@ -383,8 +455,10 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             STORAGE_EXTERNAL_LOG(ERROR) << "SQLStorage unreachable" << LOG_KV("maxRetry", retry);
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
+            // output the exit time
+            std::cout << "[" << dev::getCurrentDateTime() << "] ";
             std::cout << "The sqlstorage doesn't work well,"
-                      << "the program will exit with abnormal status" << std::endl;
+                      << "the fisco-bcos will exit." << std::endl;
 
             m_fatalHandler(e);
 

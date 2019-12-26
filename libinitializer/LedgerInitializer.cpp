@@ -32,7 +32,7 @@ using namespace dev::initializer;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    INITIALIZER_LOG(DEBUG) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initConfig");
+    INITIALIZER_LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initConfig");
 
     m_groupDataDir = _pt.get<string>("group.group_data_path", "data/");
     m_groupConfigPath = _pt.get<string>("group.group_config_path", "conf/");
@@ -78,10 +78,6 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
                     BOOST_THROW_EXCEPTION(InitLedgerConfigFailed());
                     return false;
                 }
-                h512s sealerList = m_ledgerManager->getParamByGroupId(_groupID)
-                                       ->mutableConsensusParam()
-                                       .sealerList;
-                m_p2pService->setNodeListByGroupID(_groupID, sealerList);
                 LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
                           << LOG_KV("groupID", _groupID);
                 return true;
@@ -158,11 +154,14 @@ bool LedgerInitializer::initLedger(
                                << std::to_string(_groupId);
         return false;
     }
-    std::shared_ptr<LedgerInterface> ledger =
-        std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair, _dataDir);
-    INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId]:  " << std::to_string(_groupId);
+    INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId], LedgerConstructor:  "
+                          << std::to_string(_groupId) << LOG_KV("configFileName", _configFileName)
+                          << LOG_KV("dataDir", _dataDir);
+    auto ledger = std::make_shared<Ledger>(m_p2pService, _groupId, m_keyPair);
     ledger->setChannelRPCServer(m_channelRPCServer);
-    bool succ = ledger->initLedger(_configFileName);
+    auto ledgerParams = std::make_shared<LedgerParam>();
+    ledgerParams->init(_configFileName, _dataDir);
+    bool succ = ledger->initLedger(ledgerParams);
     if (!succ)
         return false;
     m_ledgerManager->insertLedger(_groupId, ledger);

@@ -22,6 +22,7 @@
 
 
 #include "GlobalConfigureInitializer.h"
+#include "include/BuildInfo.h"
 #include "libsecurity/KeyCenter.h"
 #include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
@@ -63,7 +64,7 @@ uint32_t dev::initializer::getVersionNumber(const string& _version)
 void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 {
     /// default version is RC1
-    std::string version = _pt.get<std::string>("compatibility.supported_version", "2.0.0-rc1");
+    string version = _pt.get<string>("compatibility.supported_version", "2.0.0-rc1");
     uint32_t versionNumber = 0;
     if (dev::stringCmpIgnoreCase(version, "2.0.0-rc1") == 0)
     {
@@ -93,16 +94,21 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV2);
     }
 
+    g_BCOSConfig.binaryInfo.version = FISCO_BCOS_PROJECT_VERSION;
+    g_BCOSConfig.binaryInfo.buildTime = FISCO_BCOS_BUILD_TIME;
+    g_BCOSConfig.binaryInfo.buildInfo =
+        string(FISCO_BCOS_BUILD_PLATFORM) + "/" + string(FISCO_BCOS_BUILD_TYPE);
+    g_BCOSConfig.binaryInfo.gitBranch = FISCO_BCOS_BUILD_BRANCH;
+    g_BCOSConfig.binaryInfo.gitCommitHash = FISCO_BCOS_COMMIT_HASH;
 
-    std::string sectionName = "data_secure";
+    string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
     {
         sectionName = "storage_security";
     }
 
     g_BCOSConfig.diskEncryption.enable = _pt.get<bool>(sectionName + ".enable", false);
-    g_BCOSConfig.diskEncryption.keyCenterIP =
-        _pt.get<std::string>(sectionName + ".key_manager_ip", "");
+    g_BCOSConfig.diskEncryption.keyCenterIP = _pt.get<string>(sectionName + ".key_manager_ip", "");
     g_BCOSConfig.diskEncryption.keyCenterPort =
         _pt.get<int>(sectionName + ".key_manager_port", 20000);
     if (!isValidPort(g_BCOSConfig.diskEncryption.keyCenterPort))
@@ -128,7 +134,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 
     if (g_BCOSConfig.diskEncryption.enable)
     {
-        auto cipherDataKey = _pt.get<std::string>(sectionName + ".cipher_data_key", "");
+        auto cipherDataKey = _pt.get<string>(sectionName + ".cipher_data_key", "");
         if (cipherDataKey.empty())
         {
             BOOST_THROW_EXCEPTION(
@@ -142,7 +148,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
                               << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
                               << LOG_KV("url.port",
-                                     std::to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
+                                     to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
     }
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
@@ -150,4 +156,14 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                           << LOG_KV("compatibilityVersion", version)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("chainId", g_BCOSConfig.chainId());
+}
+
+void dev::version()
+{
+    std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
+    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
+    std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
+              << FISCO_BCOS_BUILD_TYPE << std::endl;
+    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
+    std::cout << "Git Commit Hash    : " << FISCO_BCOS_COMMIT_HASH << std::endl;
 }

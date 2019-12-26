@@ -61,26 +61,27 @@ BOOST_AUTO_TEST_CASE(updateTest)
     Transactions txs;
     for (size_t i = 0; i < 2; i++)
     {
-        txs.emplace_back(fakeTransaction(i));
+        std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(fakeTransaction(i));
+        txs.emplace_back(p_tx);
     }
 
     CommonTransactionNonceCheck cache;
 
-    BOOST_CHECK(cache.isNonceOk(txs[0]));
+    BOOST_CHECK(cache.isNonceOk(*txs[0]));
 
-    cache.insertCache(txs[0]);
-    BOOST_CHECK(!cache.isNonceOk(txs[0]));
+    cache.insertCache(*txs[0]);
+    BOOST_CHECK(!cache.isNonceOk(*txs[0]));
 
-    BOOST_CHECK(cache.isNonceOk(txs[1]));
-    BOOST_CHECK(cache.isNonceOk(txs[1], true));  // insert cache if true
-    BOOST_CHECK(!cache.isNonceOk(txs[1]));
+    BOOST_CHECK(cache.isNonceOk(*txs[1]));
+    BOOST_CHECK(cache.isNonceOk(*txs[1], true));  // insert cache if true
+    BOOST_CHECK(!cache.isNonceOk(*txs[1]));
 
-    dev::eth::NonceKeyType nonce = cache.generateKey(txs[0]);
+    dev::eth::NonceKeyType nonce = txs[0]->nonce();
     cache.delCache(nonce);
-    BOOST_CHECK(cache.isNonceOk(txs[0]));
+    BOOST_CHECK(cache.isNonceOk(*txs[0]));
 
     cache.delCache(txs);
-    BOOST_CHECK(cache.isNonceOk(txs[1]));
+    BOOST_CHECK(cache.isNonceOk(*txs[1]));
 }
 
 

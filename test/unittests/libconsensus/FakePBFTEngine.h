@@ -26,6 +26,7 @@
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libdevcore/TopicInfo.h>
+#include <libethcore/BlockFactory.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -52,7 +53,7 @@ public:
         PROTOCOL_ID const& _protocolId, h512s const& _sealerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _sealerList)
+            _key_pair, _sealerList)
     {
         setLeaderFailed(false);
         BlockHeader highest = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
@@ -61,7 +62,11 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         setNodeNum(3);
+        setBaseDir(_baseDir);
         setMaxBlockTransactions(300000000);
+        createPBFTMsgFactory();
+        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+        m_reqCache = std::make_shared<PBFTReqCache>();
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }
@@ -108,17 +113,16 @@ public:
         PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
-    P2PMessage::Ptr transDataToMessage(bytesConstRef data, PACKET_TYPE const& packetType,
+    P2PMessage::Ptr transDataToMessageWrapper(bytesConstRef data, PACKET_TYPE const& packetType,
         PROTOCOL_ID const& protocolId, unsigned const& ttl)
     {
         return PBFTEngine::transDataToMessage(data, packetType, protocolId, ttl);
     }
-
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    bool broadcastMsgWrapper(unsigned const& packetType, std::string const& key, bytesConstRef data,
         std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
         unsigned const& ttl = 0)
     {
-        return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl);
+        return PBFTEngine::broadcastMsg(packetType, key, data, 0, filter, ttl);
     }
 
     bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)
@@ -143,7 +147,7 @@ public:
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
-    VIEWTYPE view() { return m_view; }
+    VIEWTYPE view() const override { return m_view; }
     void setView(VIEWTYPE const& _view) { m_view = _view; }
     void checkAndSave() { return PBFTEngine::checkAndSave(); }
 
@@ -200,9 +204,14 @@ public:
     }
 
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
-    inline std::pair<bool, IDXTYPE> getLeader() const { return PBFTEngine::getLeader(); }
+    inline std::pair<bool, IDXTYPE> getLeader() const override { return PBFTEngine::getLeader(); }
 
-    void handleMsg(PBFTMsgPacket const& pbftMsg) { return PBFTEngine::handleMsg(pbftMsg); }
+    void handleMsg(PBFTMsgPacket const& pbftMsg)
+    {
+        std::shared_ptr<PBFTMsgPacket> pbftMsgPtr = std::make_shared<PBFTMsgPacket>(pbftMsg);
+        return PBFTEngine::handleMsg(pbftMsgPtr);
+    }
+
     void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
     {
@@ -315,12 +324,13 @@ public:
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
         KeyPair const& _key_pair = KeyPair::create(), h512s const& _sealerList = h512s())
-      : PBFTSealer(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _baseDir, _key_pair, _sealerList)
+      : PBFTSealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<FakePBFTEngine>(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _sealerList, _baseDir, _key_pair);
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+        auto blockFactory = std::make_shared<BlockFactory>();
+        setBlockFactory(blockFactory);
     }
 
     void loadTransactions(uint64_t const& transToFetch)
@@ -345,7 +355,7 @@ public:
     bool getStartConsensus() { return m_startConsensus; }
 
     bool syncBlock() { return m_syncBlock; }
-    uint64_t getSealingBlockNumber() { return m_sealing.block.blockHeader().number(); }
+    uint64_t getSealingBlockNumber() { return m_sealing.block->blockHeader().number(); }
     Sealing const& sealing() const { return m_sealing; }
     void reportNewBlock() { return PBFTSealer::reportNewBlock(); }
     bool shouldSeal() override { return Sealer::shouldSeal(); }
@@ -362,7 +372,8 @@ public:
     }
     void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
     {
-        return PBFTSealer::resetBlock(block, resetNextLeader);
+        std::shared_ptr<dev::eth::Block> p_block = std::make_shared<dev::eth::Block>(block);
+        return PBFTSealer::resetBlock(p_block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }
     void start() override { return Sealer::start(); }

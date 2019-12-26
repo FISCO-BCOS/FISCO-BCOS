@@ -314,6 +314,13 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             return;
         }
 
+        // update the network-in packets information
+        if (m_statisticHandler)
+        {
+            auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+            m_statisticHandler->updateServiceInPackets(p2pMessage);
+        }
+
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
@@ -452,6 +459,11 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             else
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
+            }
+            // update the network-out packets information
+            if (m_statisticHandler)
+            {
+                m_statisticHandler->updateServiceOutPackets(message);
             }
         }
         else
@@ -685,6 +697,15 @@ void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWit
     else
     {
         it->second = handler;
+    }
+}
+
+void Service::removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID)
+{
+    RecursiveGuard l(x_protocolID2Handler);
+    if (m_protocolID2Handler && m_protocolID2Handler->count(_protocolID))
+    {
+        m_protocolID2Handler->erase(_protocolID);
     }
 }
 

@@ -37,6 +37,8 @@ namespace eth
 class TransactionReceipt
 {
 public:
+    typedef std::shared_ptr<TransactionReceipt> Ptr;
+
     TransactionReceipt() : m_status(executive::TransactionException::None){};
     TransactionReceipt(bytesConstRef _rlp);
     TransactionReceipt(h256 const& _root, u256 const& _gasUsed, LogEntries const& _log,
@@ -62,6 +64,24 @@ public:
         s.swapOut(receipt);
     }
 
+    const bytes& receipt()
+    {
+        if (m_receipt == bytes())
+        {
+            encode(m_receipt);
+        }
+        return m_receipt;
+    }
+
+    const bytes& sha3()
+    {
+        if (m_sha3 == bytes())
+        {
+            m_sha3 = dev::sha3(receipt()).asBytes();
+        }
+        return m_sha3;
+    }
+
     bytes rlp() const
     {
         RLPStream s;
@@ -84,9 +104,13 @@ protected:
 private:
     bytes m_outputBytes;
     LogEntries m_log;
+
+private:
+    bytes m_receipt = bytes();
+    bytes m_sha3 = bytes();
 };
 
-using TransactionReceipts = std::vector<TransactionReceipt>;
+using TransactionReceipts = std::vector<TransactionReceipt::Ptr>;
 
 std::ostream& operator<<(std::ostream& _out, eth::TransactionReceipt const& _r);
 

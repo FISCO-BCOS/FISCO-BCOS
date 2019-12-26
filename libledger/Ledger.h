@@ -29,6 +29,7 @@
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
@@ -67,15 +68,9 @@ public:
      * by the param ${configFileName}
      */
     Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const& _baseDir)
+        dev::KeyPair const& _keyPair)
       : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
     {
-        m_param = std::make_shared<LedgerParam>();
-        std::string prefix = _baseDir + "/group" + std::to_string(_groupId);
-        if (_baseDir == "")
-            prefix = "./group" + std::to_string(_groupId);
-        m_param->setBaseDir(prefix);
-        // m_keyPair = _keyPair;
         assert(m_service);
     }
 
@@ -83,12 +78,9 @@ public:
     void startAll() override
     {
         assert(m_sync && m_sealer);
-#ifndef FISCO_EASYLOG
         /// tag this scope with GroupId
         BOOST_LOG_SCOPED_THREAD_ATTR(
             "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
-#endif
-
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
         m_sync->start();
         m_sealer->start();
@@ -107,11 +99,12 @@ public:
         m_eventLogFilterManger->stop();
         Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
                          << LOG_KV("groupID", groupId());
+        m_txPool->stop();
     }
 
     virtual ~Ledger(){};
 
-    bool initLedger(const std::string& _configFilePath = "config.ini") override;
+    bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override;
 
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
@@ -145,8 +138,6 @@ public:
     }
 
 protected:
-    /// load genesis config of group
-    void initGenesisConfig(std::string const& configPath) override;
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
@@ -163,32 +154,22 @@ protected:
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
 
+    dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
+        dev::PROTOCOL_ID const& _protocolId);
+    dev::eth::BlockFactory::Ptr createBlockFactory();
+    void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+
 private:
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
-    /// init configurations
-    void initCommonConfig(boost::property_tree::ptree const& pt);
-    void initTxPoolConfig(boost::property_tree::ptree const& pt);
-    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
-
-    void initConsensusConfig(boost::property_tree::ptree const& pt);
-
-    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
-    void initSyncConfig(boost::property_tree::ptree const& pt);
-
-    void initTxConfig(boost::property_tree::ptree const& pt);
-
-    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
     dev::GROUP_ID m_groupId;
-    std::string m_postfixGenesis = ".genesis";
-    std::string m_postfixIni = ".ini";
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;

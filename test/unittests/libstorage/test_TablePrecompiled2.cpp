@@ -18,12 +18,12 @@
 #include "Common.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
-#include <libstorage/ConditionPrecompiled.h>
-#include <libstorage/EntriesPrecompiled.h>
-#include <libstorage/EntryPrecompiled.h>
+#include <libprecompiled/ConditionPrecompiled.h>
+#include <libprecompiled/EntriesPrecompiled.h>
+#include <libprecompiled/EntryPrecompiled.h>
+#include <libprecompiled/TablePrecompiled.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/Table.h>
-#include <libstorage/TablePrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;

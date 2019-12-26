@@ -29,12 +29,13 @@
 
 #include "Common.h"
 #include "Table.h"
-#include <libdevcore/easylog.h>
+#include <libdevcore/Common.h>
 #include <tbb/pipeline.h>
 #include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev::storage;
+using namespace std;
 
 Entry::Entry() : m_data(std::make_shared<EntryData>())
 {
@@ -76,6 +77,21 @@ void Entry::setID(const std::string& id)
     m_dirty = true;
 }
 
+dev::bytesConstRef Entry::getFieldConst(const std::string& key) const
+{
+    RWMutexScoped lock(m_data->m_mutex, false);
+
+    auto it = m_data->m_fields.find(key);
+
+    if (it != m_data->m_fields.end())
+    {
+        return dev::bytesConstRef(it->second);
+    }
+
+    STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
+    return dev::bytesConstRef();
+}
+
 std::string Entry::getField(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
@@ -93,19 +109,6 @@ std::string Entry::getField(const std::string& key) const
 
 void Entry::setField(const std::string& key, const std::string& value)
 {
-#if 0
-    if (key == ID_FIELD)
-    {
-        return;
-    }
-
-    if (key == STATUS)
-    {
-        setStatus(value);
-        return;
-    }
-#endif
-
     auto lock = checkRef();
 
     auto it = m_data->m_fields.find(key);
@@ -120,6 +123,29 @@ void Entry::setField(const std::string& key, const std::string& value)
     {
         m_data->m_fields.insert(std::make_pair(key, value));
         m_capacity += (key.size() + value.size());
+    }
+
+    assert(m_capacity >= 0);
+    m_dirty = true;
+}
+
+void Entry::setField(const std::string& key, const byte* value, size_t size)
+{
+    auto lock = checkRef();
+
+    auto it = m_data->m_fields.find(key);
+
+    if (it != m_data->m_fields.end())
+    {
+        m_capacity -= (key.size() + it->second.size());
+        it->second.assign((char*)value, (char*)value + size);
+        m_capacity += (key.size() + size);
+    }
+    else
+    {
+        m_data->m_fields.emplace(key, std::string((char*)value, size));
+        // m_data->m_fields.insert(std::make_pair(key, std::string(value, size)));
+        m_capacity += (key.size() + size);
     }
 
     assert(m_capacity >= 0);
@@ -262,9 +288,8 @@ bool Entry::deleted() const
 }
 
 void Entry::setDeleted(bool deleted)
-{
+{  // FIXME: setDeleted will cause state change, should make a copy
     RWMutexScoped lock(m_data->m_mutex, true);
-
     m_deleted = deleted;
 }
 
@@ -274,7 +299,7 @@ ssize_t Entry::capacity() const
     return m_capacity;
 }
 
-void Entry::copyFrom(Entry::Ptr entry)
+void Entry::copyFrom(Entry::ConstPtr entry)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
 
@@ -775,4 +800,66 @@ bool Condition::related(Condition::Ptr condition)
     (void)condition;
 
     return false;
+}
+
+TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
+{
+    auto tableInfo = make_shared<storage::TableInfo>();
+    tableInfo->name = tableName;
+    if (tableName == SYS_CONSENSUS)
+    {
+        tableInfo->key = "name";
+        tableInfo->fields = vector<string>{"type", "node_id", "enable_num"};
+    }
+    else if (tableName == SYS_TABLES)
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{"key_field", "value_field"};
+    }
+    else if (tableName == SYS_ACCESS_TABLE)
+    {
+        tableInfo->key = "table_name";
+        tableInfo->fields = vector<string>{"address", "enable_num"};
+    }
+    else if (tableName == SYS_CURRENT_STATE)
+    {
+        tableInfo->key = SYS_KEY;
+        tableInfo->fields = vector<string>{"value"};
+        tableInfo->enableConsensus = false;
+    }
+    else if (tableName == SYS_NUMBER_2_HASH)
+    {
+        tableInfo->key = "number";
+        tableInfo->fields = vector<string>{"value"};
+    }
+    else if (tableName == SYS_TX_HASH_2_BLOCK)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = vector<string>{"value", "index"};
+        tableInfo->enableConsensus = false;
+        tableInfo->enableCache = false;
+    }
+    else if (tableName == SYS_HASH_2_BLOCK)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = vector<string>{"value"};
+        tableInfo->enableConsensus = false;
+    }
+    else if (tableName == SYS_CNS)
+    {
+        tableInfo->key = "name";
+        tableInfo->fields = vector<string>{"version", "address", "abi"};
+    }
+    else if (tableName == SYS_CONFIG)
+    {
+        tableInfo->key = "key";
+        tableInfo->fields = vector<string>{"value", "enable_num"};
+    }
+    else if (tableName == SYS_BLOCK_2_NONCES)
+    {
+        tableInfo->key = "number";
+        tableInfo->fields = vector<string>{SYS_VALUE};
+        tableInfo->enableConsensus = false;
+    }
+    return tableInfo;
 }

@@ -20,9 +20,8 @@
  */
 #include "SystemConfigPrecompiled.h"
 
-#include "libstorage/EntriesPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
-#include <libdevcore/easylog.h>
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
@@ -153,6 +152,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    // only can insert tx_count_limit and tx_gas_limit as system config
+    // only can insert tx_count_limit and tx_gas_limit
+    // as system config
     return false;
 }

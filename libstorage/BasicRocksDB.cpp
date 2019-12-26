@@ -22,13 +22,41 @@
 
 #include "BasicRocksDB.h"
 #include <libdevcore/Exceptions.h>
+#include <boost/filesystem.hpp>
+
 using namespace dev;
+using namespace dev::storage;
 using namespace rocksdb;
 
-namespace dev
+rocksdb::Options dev::storage::getRocksDBOptions()
 {
-namespace db
+    /// open and init the rocksDB
+    rocksdb::Options options;
+
+    // set Parallelism to the hardware concurrency
+    // This option will increase much memory
+    // options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+
+    // options.OptimizeLevelStyleCompaction();  // This option will increase much memory too
+    options.create_if_missing = true;
+    options.max_open_files = 200;
+    options.compression = rocksdb::kSnappyCompression;
+    return options;
+}
+
+void BasicRocksDB::flush()
 {
+    if (m_db)
+    {
+        FlushOptions flushOption;
+        flushOption.wait = false;
+        m_db->Flush(flushOption);
+    }
+}
+void BasicRocksDB::closeDB()
+{
+    m_db.reset();
+}
 /**
  * @brief: open rocksDB
  *
@@ -40,7 +68,8 @@ namespace db
  */
 std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const std::string& dbname)
 {
-    ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler");
+    ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler") << LOG_KV("path", dbname);
+    boost::filesystem::create_directories(dbname);
     DB* db = nullptr;
     auto status = DB::Open(options, dbname, &db);
     checkStatus(status, dbname);
@@ -142,6 +171,3 @@ Status BasicRocksDB::Write(WriteOptions const& options, WriteBatch& batch)
     checkStatus(status);
     return status;
 }
-
-}  // namespace db
-}  // namespace dev

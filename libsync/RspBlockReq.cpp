@@ -29,39 +29,33 @@ using namespace dev::sync;
 
 void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 {
-    Guard l(x_push);
-    if (!x_canPush.try_lock())
     {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Drop request when responding blocks")
-                        << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
-                        << LOG_KV("nodeId", m_nodeId.abridged());
-        return;
-    }
+        ReadGuard l(x_reqQueue);
+        if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                            << LOG_DESC("Drop request for reqQueue full")
+                            << LOG_KV("reqQueueSize", m_reqQueue.size())
+                            << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
+                            << LOG_KV("nodeId", m_nodeId.abridged());
 
-    if (m_reqQueue.size() >= c_maxReceivedDownloadRequestPerPeer)
+            return;
+        }
+    }
     {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                        << LOG_DESC("Drop request for reqQueue full")
-                        << LOG_KV("reqQueueSize", m_reqQueue.size())
-                        << LOG_KV("fromNumber", _fromNumber) << LOG_KV("size", _size)
-                        << LOG_KV("nodeId", m_nodeId.abridged());
+        WriteGuard l(x_reqQueue);
+        m_reqQueue.push(DownloadRequest(_fromNumber, _size));
 
-        x_canPush.unlock();
-        return;
+        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                        << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
+                        << LOG_KV("to", _fromNumber + _size - 1)
+                        << LOG_KV("peer", m_nodeId.abridged());
     }
-
-    m_reqQueue.push(DownloadRequest(_fromNumber, _size));
-
-    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                    << LOG_DESC("Push request in reqQueue req") << LOG_KV("from", _fromNumber)
-                    << LOG_KV("to", _fromNumber + _size - 1) << LOG_KV("peer", m_nodeId.abridged());
-
-    x_canPush.unlock();
 }
 
 DownloadRequest DownloadRequestQueue::topAndPop()
 {
+    WriteGuard l(x_reqQueue);
     if (m_reqQueue.empty())
         return DownloadRequest(0, 0);
 
@@ -95,5 +89,6 @@ DownloadRequest DownloadRequestQueue::topAndPop()
 
 bool DownloadRequestQueue::empty()
 {
+    ReadGuard l(x_reqQueue);
     return m_reqQueue.empty();
 }

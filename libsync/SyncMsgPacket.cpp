@@ -22,6 +22,7 @@
  */
 
 #include "SyncMsgPacket.h"
+#include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
 
@@ -79,11 +80,22 @@ void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 co
     prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
 }
 
-void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
+void SyncTransactionsPacket::encode(
+    std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter, uint64_t const& _consIndex)
 {
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
-        encodeRC2(_txRLPs);
+        unsigned fieldSize = 1;
+        if (_enableTreeRouter)
+        {
+            fieldSize = 2;
+        }
+        encodeRC2(_txRLPs, fieldSize);
+        // append _consIndex
+        if (_enableTreeRouter)
+        {
+            m_rlpStream << _consIndex;
+        }
         return;
     }
 
@@ -97,11 +109,19 @@ void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs)
     prep(m_rlpStream, TransactionsPacket, txsSize).appendRaw(txRLPS, txsSize);
 }
 
-void SyncTransactionsPacket::encodeRC2(std::vector<bytes> const& _txRLPs)
+void SyncTransactionsPacket::encodeRC2(
+    std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
 {
     m_rlpStream.clear();
     bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
-    prep(m_rlpStream, TransactionsPacket, 1).append(ref(txsBytes));
+    prep(m_rlpStream, TransactionsPacket, _fieldSize).append(ref(txsBytes));
+}
+
+P2PMessage::Ptr SyncTransactionsPacket::toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC)
+{
+    auto msg = SyncMsgPacket::toMessage(_protocolId);
+    msg->setPacketType((int)(_fromRPC));
+    return msg;
 }
 
 void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
@@ -124,4 +144,19 @@ void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
 {
     m_rlpStream.clear();
     prep(m_rlpStream, ReqBlocskPacket, 2) << _from << _size;
+}
+
+void SyncTxsStatusPacket::encode(
+    int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash)
+{
+    m_rlpStream.clear();
+    auto& retRlp = prep(m_rlpStream, packetType, 2);
+    retRlp << _number;
+    retRlp.append(*_txsHash);
+}
+
+void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs)
+{
+    m_rlpStream.clear();
+    prep(m_rlpStream, packetType, 1).append(*_requestedTxs);
 }

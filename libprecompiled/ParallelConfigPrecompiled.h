@@ -43,6 +43,7 @@ struct ParallelConfig
 };
 
 const std::string PARA_CONFIG_TABLE_PREFIX = "_contract_parafunc_";
+const std::string PARA_CONFIG_TABLE_PREFIX_SHORT = "cp_";
 
 class ParallelConfigPrecompiled : public dev::blockverifier::Precompiled
 {

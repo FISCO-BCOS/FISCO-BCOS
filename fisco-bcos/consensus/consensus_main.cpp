@@ -22,8 +22,8 @@
  */
 
 #include "ParamParse.h"
+
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
@@ -87,7 +87,8 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             "a1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719bedee212b7972f775");
     }
 #endif
-    dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::None);
+    dev::eth::Transaction::Ptr tx =
+        std::make_shared<dev::eth::Transaction>(ref(rlpBytes), dev::eth::CheckTransaction::None);
 
     /// Transaction tx(value, gasPrice, gas, dst, data);
     Secret sec = KeyPair::create().secret();
@@ -103,15 +104,15 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             /// set default RPC callback
             if (count % u256(50) == u256(0))
             {
-                tx.setRpcCallback(boost::bind(rpcCallbackTest, _1));
+                tx->setRpcCallback(boost::bind(rpcCallbackTest, _1));
             }
             try
             {
-                tx.setNonce(tx.nonce() + u256(utcTime()));
-                tx.setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
+                tx->setNonce(tx->nonce() + u256(utcTime()));
+                tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
                 sec = KeyPair::create().secret();
-                dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
-                tx.updateSignature(SignatureStruct(sig));
+                dev::Signature sig = sign(sec, tx->sha3(WithoutSignature));
+                tx->updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }
             catch (std::exception& e)

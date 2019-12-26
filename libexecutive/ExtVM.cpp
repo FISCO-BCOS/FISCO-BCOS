@@ -24,7 +24,6 @@
 
 #include "ExtVM.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <boost/thread.hpp>
 #include <exception>

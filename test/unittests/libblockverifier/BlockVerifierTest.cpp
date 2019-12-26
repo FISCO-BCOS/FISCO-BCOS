@@ -20,10 +20,10 @@
  * @author:
  * @date 2018-09-21
  */
+
 #include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/ABI.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>
@@ -61,7 +61,7 @@ class FakeVerifierWithDagTransfer
 public:
     void genTxUserAddBlock(Block& _block, size_t _userNum)
     {
-        Transactions txs;
+        std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
         // Generate user + receiver = _userNum
         for (size_t i = 0; i < _userNum; i++)
         {
@@ -75,15 +75,16 @@ public:
             bytes data =
                 abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
             u256 nonce = u256(i);
-            Transaction tx(value, gasPrice, gas, dest, data, nonce);
-            tx.setBlockLimit(250);
-            tx.forceSender(Address(0x2333));
-            txs.push_back(tx);
+            Transaction::Ptr tx =
+                std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+            tx->setBlockLimit(250);
+            tx->forceSender(Address(0x2333));
+            txs->push_back(tx);
         }
 
         _block.setTransactions(txs);
-        for (auto& tx : _block.transactions())
-            tx.sender();
+        for (auto& tx : *_block.transactions())
+            tx->sender();
     }
 
     void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
@@ -96,12 +97,13 @@ public:
 
         genTxUserAddBlock(userAddReqBlock, _userNum);
         auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
-        _blockChain->commitBlock(userAddReqBlock, exeCtx);
+        std::shared_ptr<dev::eth::Block> block = std::make_shared<dev::eth::Block>(userAddReqBlock);
+        _blockChain->commitBlock(block, exeCtx);
     }
 
     void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
     {
-        Transactions txs;
+        std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
         for (size_t i = 0; i < _txNum; i++)
         {
             u256 value = 0;
@@ -128,15 +130,16 @@ public:
             bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                 money);  // add 1000000000 to user i
             u256 nonce = u256(i);
-            Transaction tx(value, gasPrice, gas, dest, data, nonce);
-            tx.setBlockLimit(250);
-            tx.forceSender(Address(0x2333));
-            txs.push_back(tx);
+            Transaction::Ptr tx =
+                std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+            tx->setBlockLimit(250);
+            tx->forceSender(Address(0x2333));
+            txs->push_back(tx);
         }
 
         _block.setTransactions(txs);
-        for (auto& tx : _block.transactions())
-            tx.sender();
+        for (auto tx : *_block.transactions())
+            tx->sender();
     }
 
     void canCallUserBalance(
@@ -154,9 +157,10 @@ public:
             dev::eth::ContractABI abi;
             bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
             u256 nonce = u256(i);
-            Transaction tx(value, gasPrice, gas, dest, data, nonce);
-            tx.setBlockLimit(250);
-            tx.forceSender(Address(0x2333));
+            Transaction::Ptr tx =
+                std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+            tx->setBlockLimit(250);
+            tx->forceSender(Address(0x2333));
             BOOST_CHECK_NO_THROW(_verifier->executeTransaction(_block.header(), tx));
         }
     }
@@ -176,7 +180,7 @@ public:
         /// set state db related param
         params->mutableStateParam().type = "storage";
 
-        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params);
+        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params, 1);
         dbInitializer->initStorageDB();
         std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
         blockChain->setStateStorage(dbInitializer->storage());

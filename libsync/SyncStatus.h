@@ -30,6 +30,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <map>
 #include <queue>
@@ -89,6 +90,7 @@ public:
 class SyncMasterStatus
 {
 public:
+    using Ptr = std::shared_ptr<SyncMasterStatus>;
     SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, h256 const& _genesisHash, NodeID const& _nodeId)
       : genesisHash(_genesisHash),
@@ -114,13 +116,21 @@ public:
 
     void deletePeer(NodeID const& _id);
 
-    NodeIDs peers();
+    std::shared_ptr<NodeIDs> peers();
+    std::shared_ptr<std::set<NodeID>> peersSet();
+
+    NodeIDs filterPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _peers,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 
     void foreachPeerRandom(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
+    // select neighborSize peers
+    // call _f for each selected peers
+    void forRandomPeers(int64_t const& _neighborSize,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f);
 
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
@@ -131,6 +141,14 @@ public:
         size_t _maxChosenSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
+
+    void setStatHandlerForDownloadingBlockQueue(dev::p2p::StatisticHandler::Ptr _statisticHandler)
+    {
+        m_downloadingBlockQueue.setStatHandler(_statisticHandler);
+    }
+
+private:
+    int64_t selectPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds);
 
 public:
     h256 genesisHash;

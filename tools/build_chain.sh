@@ -15,10 +15,12 @@ output_dir=nodes
 port_start=(30300 20200 8545)
 state_type=storage 
 storage_type=rocksdb
+supported_storage=(rocksdb mysql external scalable)
 conf_path="conf"
 bin_path=
 make_tar=
 debug_log="false"
+binary_log="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -29,16 +31,15 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 TASSL_CMD="${HOME}"/.tassl
-enable_parallel=true
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.1.0"
+default_version="2.2.0"
 macOS=""
 x86_64_arch="true"
-download_timeout=60
+download_timeout=240
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 
 help() {
@@ -52,10 +53,9 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
-    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / external, rocksdb is recommended
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
-    -m <MPT State type>                 Default storageState. if set -m, use mpt state
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -110,7 +110,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -125,10 +125,9 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
-    m) state_type=mpt;;
     s) storage_type=$OPTARG
-        if [ -z "${storage_type}" ];then
-            LOG_WARN "${storage_type} is not supported storage."
+        if ! echo "${supported_storage[*]}" | grep -i "${storage_type}" &>/dev/null; then
+            LOG_WARN "${storage_type} is not supported. Please set one of ${supported_storage[*]}"
             exit 1;
         fi
     ;;
@@ -152,27 +151,30 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgmTFd" option;do
     h) help;;
     esac
 done
+if [ "${storage_type}" == "scalable" ]; then
+    echo "use scalable storage, so turn on binary log"
+    binary_log="true"
+fi
 }
 
 print_result()
 {
-echo "================================================================"
+echo "=============================================================="
 [ -z ${docker_mode} ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
 [ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
 [ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
-LOG_INFO "State Type        : ${state_type}"
 LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
-echo "================================================================"
+echo "=============================================================="
 if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
-LOG_INFO "Execute the following command to get FISCO-BCOS console"
-echo " bash <(curl -s https://raw.githubusercontent.com/FISCO-BCOS/console/master/tools/download_console.sh)"
-echo "================================================================"
+LOG_INFO "Execute the download_console.sh script to get FISCO-BCOS console, download_console.sh is in directory named by IP."
+echo " bash download_console.sh"
+echo "=============================================================="
 LOG_INFO "All completed. Files in ${output_dir}"
 }
 
@@ -192,14 +194,22 @@ check_env() {
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
+    if [ -n "$guomi_mode" ]; then
+        check_and_install_tassl
+    fi
 }
 
 # TASSL env
 check_and_install_tassl()
-{
+{ 
     if [ ! -f "${HOME}/.tassl" ];then
-        curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         LOG_INFO "Downloading tassl binary ..."
+        if [[ ! -z ${macOS} ]];then
+            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            mv tassl_mac.tar.gz tassl.tar.gz
+        else
+            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+        fi
         tar zxvf tassl.tar.gz
         chmod u+x tassl
         mv tassl ${HOME}/.tassl
@@ -267,7 +277,7 @@ gen_agency_cert() {
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
     rm -f $agencydir/agency.csr
 
-    echo "build $name agency cert successful!"
+    echo "build $name cert successful!"
 }
 
 gen_cert_secp256k1() {
@@ -335,7 +345,7 @@ gen_chain_cert_gm() {
 
     generate_gmsm2_param "gmsm2.param"
 	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=$name/O=fiscobcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
     cp gmcert.cnf gmsm2.param $chaindir
 
@@ -360,7 +370,7 @@ gen_agency_cert_gm() {
     mkdir -p $agencydir
 
     $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
     $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
 
     cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
@@ -375,16 +385,13 @@ gen_node_cert_with_extensions_gm() {
     extensions="$5"
 
     $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
     $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
 }
 
 gen_node_cert_gm() {
-    if [ "" = "$(openssl ecparam -list_curves 2>&1 | grep secp256k1)" ]; then
-        exit_with_clean "openssl don't support secp256k1, please upgrade openssl!"
-    fi
 
     agpath="${1}"
     agency=$(basename "$agpath")
@@ -435,6 +442,7 @@ generate_config_ini()
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
     ;enable_compress=true
+    ;enable_statistic=false
     ; nodes to connect
     $ip_list
 
@@ -497,7 +505,6 @@ generate_group_genesis()
     ; the node id of consensusers
     ${node_list}
 [state]
-    ; support mpt/storage
     type=${state_type}
 [tx]
     ; transaction gas limit
@@ -518,13 +525,21 @@ function generate_group_ini()
     ; min block generation time(ms), the max block generation time is 1000 ms
     ;min_block_generation_time=500
     ;enable_dynamic_block_size=true
+    ;enable_ttl_optimization=true
+    ;enable_prepare_with_txsHash=true
 [storage]
-    ; storage db type, rocksdb / mysql / external, rocksdb is recommended
+    ; storage db type, rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
     type=${storage_type}
+    ; set true to turn on binary log
+    binary_log=${binary_log}
+    ; scroll_threshold=scroll_threshold_multiple*1000, only for scalable
+    scroll_threshold_multiple=2
+    ; set fasle to disable CachedStorage
+    cached_storage=true
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10
-    ; only for external
+    ; only for external, external will be deprecated in v2.3.0
     max_retry=60
     topic=DB
     ; only for mysql
@@ -535,8 +550,17 @@ function generate_group_ini()
     db_name=
 [tx_pool]
     limit=150000
-[tx_execute]
-    enable_parallel=${enable_parallel}
+[sync]
+    idle_wait_ms=200
+    ; send block status by tree-topology, only supported when use pbft
+    sync_block_by_tree=true
+    ; send transaction by tree-topology, only supported when use pbft
+    ; recommend to use when deploy many consensus nodes
+    send_txs_by_tree=true
+    ; must between 1000 to 3000
+    ; only enabled when sync_by_tree is true
+    gossip_interval_ms=1000
+    gossip_peers_number=3
 EOF
 }
 
@@ -877,6 +901,27 @@ fi
 EOF
 }
 
+genDownloadConsole() {
+    local output=$1
+    local file="${output}/download_console.sh"
+    generate_script_template "${file}"
+    cat << EOF > "${file}"
+version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+package_name="console.tar.gz"
+echo "Downloading console \${version}"
+download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
+
+if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
+    curl -LO \${download_link} --speed-time 30 --speed-limit 1024 -m 90 || {
+        echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
+        curl -LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
+    }
+else
+    curl -LO \${download_link}
+fi
+tar -zxf \${package_name} && cd console && chmod +x *.sh
+EOF
+}
 
 genTransTest()
 {
@@ -1010,6 +1055,9 @@ download_bin()
     else
         curl -LO ${Download_Link}
     fi
+    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') < 1048576 ]];then 
+        exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
+    fi
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
     chmod a+x ${bin_path}
 }
@@ -1098,15 +1146,15 @@ if [ ! -e "$ca_file" ]; then
 fi
 
 if [ -n "$guomi_mode" ]; then
-    check_and_install_tassl
+    #check_and_install_tassl
 
     generate_cert_conf_gm "gmcert.cnf"
 
     echo "Generating Guomi CA key..."
     dir_must_not_exists ${output_dir}/gmchain
-    gen_chain_cert_gm ${output_dir}/gmchain >${output_dir}/build.log 2>&1 || exit_with_clean "openssl error!"  #生成secp256k1算法的CA密钥
+    gen_chain_cert_gm ${output_dir}/gmchain >${logfile} 2>&1 || exit_with_clean "openssl error!"
     mv ${output_dir}/gmchain ${output_dir}/gmcert
-    gen_agency_cert_gm ${output_dir}/gmcert ${output_dir}/gmcert/agency >${output_dir}/build.log 2>&1
+    gen_agency_cert_gm ${output_dir}/gmcert ${output_dir}/gmcert/agency >${logfile} 2>&1
     ca_file="${output_dir}/gmcert/ca.key"    
 fi
 
@@ -1151,7 +1199,7 @@ for line in ${ip_array[*]};do
             fi
 
             if [ -n "$guomi_mode" ]; then
-                gen_node_cert_gm ${output_dir}/gmcert/agency ${node_dir} >${output_dir}/build.log 2>&1
+                gen_node_cert_gm ${output_dir}/gmcert/agency ${node_dir} >${logfile} 2>&1
                 mkdir -p ${gm_conf_path}/
                 mv ./*.* ${gm_conf_path}/
 
@@ -1174,21 +1222,14 @@ for line in ${ip_array[*]};do
 
             #move origin conf to gm conf
             rm ${node_dir}/${conf_path}/node.nodeid
-            cp ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert -r
-        fi
-
-        if [ -n "$guomi_mode" ]; then
+            mv ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
+            #remove original cert files
+            mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
+
         else
             nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
-
-        if [ -n "$guomi_mode" ]; then
-            #remove original cert files
-            rm ${node_dir:?}/${conf_path} -rf
-            mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
-        fi
-
 
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })
@@ -1257,6 +1298,7 @@ for line in ${ip_array[*]};do
         set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
+    genDownloadConsole "${output_dir}/${ip}"
     if [ -z ${docker_mode} ];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
@@ -1272,7 +1314,7 @@ fi
 
 }
 
-check_env
 parse_params $@
+check_env
 main
 print_result

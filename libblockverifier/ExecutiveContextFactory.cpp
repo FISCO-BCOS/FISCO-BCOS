@@ -27,9 +27,9 @@
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
+#include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
-#include <libstorage/TableFactoryPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -37,7 +37,7 @@ using namespace dev::executive;
 using namespace dev::precompiled;
 
 void ExecutiveContextFactory::initExecutiveContext(
-    BlockInfo blockInfo, h256 stateRoot, ExecutiveContext::Ptr context)
+    BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context)
 {
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
@@ -94,8 +94,7 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
 
         auto condition = std::make_shared<dev::storage::Condition>();
         condition->EQ("key", key);
-        auto values =
-            m_stateStorage->select(blockInfo.hash, blockInfo.number, tableInfo, key, condition);
+        auto values = m_stateStorage->select(blockInfo.number, tableInfo, key, condition);
         if (!values || values->size() != 1)
         {
             EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Select error");
@@ -122,7 +121,8 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
         }
         else
         {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Tx gas limit is null");
+            EXECUTIVECONTEXT_LOG(WARNING)
+                << LOG_DESC("[setTxGasLimitToContext]Tx gas limit is null");
         }
     }
     catch (std::exception& e)

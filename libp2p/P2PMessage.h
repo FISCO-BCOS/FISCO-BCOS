@@ -91,6 +91,8 @@ public:
     }
     bool dirty() const { return m_dirty; }
 
+    virtual uint32_t deliveredLength() { return m_length; }
+
 protected:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when

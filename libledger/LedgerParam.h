@@ -23,9 +23,15 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
+#include "libblockchain/BlockChainInterface.h"
+#include "libethcore/Protocol.h"
 #include <libdevcore/FixedHash.h>
+#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
+
+#define LedgerParam_LOG(LEVEL) \
+    LOG(LEVEL) << "[g:" << std::to_string(groupId()) << "]" << LOG_BADGE("LedgerParam")
 
 namespace dev
 {
@@ -34,7 +40,6 @@ namespace ledger
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
-#define MAX_BLOCK_PER_PROCESS (3)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
@@ -55,6 +60,9 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+    // enable optimize ttl or not
+    bool enableTTLOptimize;
+    bool enablePrepareWithTxsHash;
 };
 
 struct AMDBParam
@@ -69,12 +77,21 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    // enable send transactions by tree
+    bool enableSendTxsByTree = false;
+    // enable send block status by tree or not
+    bool enableSendBlockStatusByTree = true;
+    // default block status gossip interval is 1s
+    int64_t gossipInterval = 1000;
+    // default gossip peers is 3
+    int64_t gossipPeers = 3;
+    // default syncTreeWidth is 3
+    int64_t syncTreeWidth = 3;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam
 struct GenesisParam
 {
-    std::string genesisMark;
     std::string nodeListMark;
     uint64_t timeStamp;
 };
@@ -86,16 +103,18 @@ struct EventLogFilterManagerParams
 };
 struct StorageParam
 {
-    std::string type;
-    std::string path;
-
+    std::string type = "storage";
+    std::string path = "data/";
+    bool binaryLog = false;
+    bool CachedStorage = true;
     // for amop storage
     std::string topic;
     size_t timeout;
     int maxRetry;
     // MB
-    int maxCapacity;
+    int64_t maxCapacity;
 
+    int64_t scrollThreshold = 2000;
     // for zdb storage
     std::string dbType;
     std::string dbIP;
@@ -134,8 +153,28 @@ public:
     {
         return m_eventLogFilterParams;
     }
+    blockchain::GenesisBlockParam& mutableGenesisBlockParam() override
+    {
+        return m_genesisBlockParam;
+    }
+    void parseGenesisConfig(const std::string& _genesisFile);
+    void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath = "data/");
+    void init(const std::string& _configFilePath, const std::string& _dataPath = "data/");
+    const dev::GROUP_ID& groupId() const { return m_groupID; }
+
+    blockchain::GenesisBlockParam generateGenesisMark();
 
 private:
+    void initStorageConfig(boost::property_tree::ptree const& pt);
+    void initTxPoolConfig(boost::property_tree::ptree const& pt);
+    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
+    void initConsensusConfig(boost::property_tree::ptree const& pt);
+    void initConsensusIniConfig(boost::property_tree::ptree const& pt);
+    void initSyncConfig(boost::property_tree::ptree const& pt);
+    void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+
+private:
+    dev::GROUP_ID m_groupID;
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     SyncParam m_syncParam;
@@ -146,6 +185,10 @@ private:
     StateParam m_stateParam;
     TxParam m_txParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
+    dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+
+private:
+    std::string uriEncode(const std::string& keyWord);
 };
 }  // namespace ledger
 }  // namespace dev

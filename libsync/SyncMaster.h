@@ -23,13 +23,17 @@
 #pragma once
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
+#include "GossipBlockStatus.h"
 #include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
+#include "SyncTransaction.h"
+#include "SyncTreeTopology.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
+#include <libdevcore/ThreadPool.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
@@ -52,31 +56,73 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
-        unsigned _idleWaitMs = 200)
+        unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
+        int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
+        bool const& _enableSendBlockStatusByTree = true, int64_t const& _syncTreeWidth = 3)
       : SyncInterface(),
         Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
-        m_txQueue(std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId)),
         m_protocolId(_protocolId),
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
-        m_genesisHash(_genesisHash)
+        m_genesisHash(_genesisHash),
+        m_enableSendTxsByTree(_enableSendTxsByTree),
+        m_enableSendBlockStatusByTree(_enableSendBlockStatusByTree)
     {
-        m_syncStatus =
-            std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
-        m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
-            m_txQueue, _protocolId, _nodeId, _genesisHash);
-
-        // signal registration
-        m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
-        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
-
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
+        // signal registration
+        m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
+        m_downloadBlockProcessor =
+            std::make_shared<dev::ThreadPool>("Download-" + std::to_string(m_groupId), 1);
+        m_sendBlockProcessor =
+            std::make_shared<dev::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
+
+        m_statisticHandler = m_service->statisticHandler();
+        // syncStatus should be initialized firstly since it should be deconstruct at final
+        m_syncStatus =
+            std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
+        // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
+        m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_statisticHandler);
+
+        m_txQueue = std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId);
+        m_txQueue->setService(_service);
+        m_txQueue->setSyncStatus(m_syncStatus);
+        m_txQueue->setStatisticHandler(m_statisticHandler);
+
+        if (m_enableSendTxsByTree)
+        {
+            auto treeRouter = std::make_shared<TreeTopology>(m_nodeId, _syncTreeWidth);
+            m_txQueue->setTreeRouter(treeRouter);
+            updateNodeInfo();
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendTxsByTree");
+        }
+
+        if (m_enableSendBlockStatusByTree)
+        {
+            m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId, _syncTreeWidth);
+            SYNC_LOG(DEBUG) << LOG_DESC("enableSendBlockStatusByTree");
+            // update the nodeInfo for syncTreeRouter
+            updateNodeInfo();
+
+            // create thread to gossip block status
+            m_blockStatusGossipThread =
+                std::make_shared<GossipBlockStatus>(_protocolId, _gossipInterval, _gossipPeers);
+            m_blockStatusGossipThread->registerGossipHandler(
+                boost::bind(&SyncMaster::sendBlockStatus, this, _1));
+        }
+        m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
+            m_txQueue, _protocolId, _nodeId, _genesisHash);
+        m_msgEngine->onNotifyWorker([&]() { m_signalled.notify_all(); });
+        m_msgEngine->setStatisticHandler(m_statisticHandler);
+
+        m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
+            _nodeId, m_syncStatus, m_msgEngine, _blockChain, _idleWaitMs);
+        m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -95,7 +141,7 @@ public:
     virtual void noteSealingBlockNumber(int64_t _number) override;
     virtual bool isSyncing() const override;
     // is my number is far smaller than max block number of this block chain
-    bool isFarSyncing() const override;
+    bool blockNumberFarBehind() const override;
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
@@ -110,11 +156,7 @@ public:
         fp_isConsensusOk = _handler;
     };
 
-    void noteNewTransactions()
-    {
-        m_newTransactions = true;
-        m_signalled.notify_all();
-    }
+    void noteNewTransactions() { m_syncTrans->noteNewTransactions(); }
 
     void noteNewBlocks()
     {
@@ -144,6 +186,62 @@ public:
 
     std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
 
+    void maintainTransactions() { m_syncTrans->maintainTransactions(); }
+    void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
+    void broadcastSyncStatus(
+        dev::eth::BlockNumber const& _blockNumber, dev::h256 const& _currentHash);
+
+    void sendSyncStatusByTree(dev::eth::BlockNumber const& _blockNumber, h256 const& _currentHash);
+
+    bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
+        dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
+    void sendBlockStatus(int64_t const& _gossipPeersNumber);
+
+    void registerTxsReceiversFilter(
+        std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+            _handler) override
+    {
+        m_syncTrans->registerTxsReceiversFilter(_handler);
+    }
+
+    void updateNodeListInfo(dev::h512s const& _nodeList) override
+    {
+        if (!m_syncTreeRouter)
+        {
+            return;
+        }
+        m_syncTreeRouter->updateNodeListInfo(_nodeList);
+    }
+
+    void updateConsensusNodeInfo(
+        dev::h512s const& _consensusNodes, dev::h512s const& _nodeList) override
+    {
+        m_txQueue->updateConsensusNodeInfo(_consensusNodes);
+        if (!m_syncTreeRouter)
+        {
+            return;
+        }
+        m_syncTreeRouter->updateAllNodeInfo(_consensusNodes, _nodeList);
+    }
+
+    bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
+    void noteForwardRemainTxs(dev::h512 const& _targetNodeId) override
+    {
+        m_syncTrans->noteForwardRemainTxs(_targetNodeId);
+    }
+
+private:
+    // init via blockchain when the sync thread started
+    void updateNodeInfo()
+    {
+        auto sealerList = m_blockChain->sealerList();
+        std::sort(sealerList.begin(), sealerList.end());
+        auto observerList = m_blockChain->observerList();
+        auto nodeList = sealerList + observerList;
+        std::sort(nodeList.begin(), nodeList.end());
+        updateConsensusNodeInfo(sealerList, nodeList);
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -153,22 +251,32 @@ private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// block verifier
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
-    /// Block queue and peers
-    std::shared_ptr<SyncMasterStatus> m_syncStatus;
-    /// Message handler of p2p
-    std::shared_ptr<SyncMsgEngine> m_msgEngine;
+
     /// Downloading txs queue
     std::shared_ptr<DownloadingTxsQueue> m_txQueue;
+
+    /// Block queue and peers
+    std::shared_ptr<SyncMasterStatus> m_syncStatus;
+
+    /// Message handler of p2p
+    std::shared_ptr<SyncMsgEngine> m_msgEngine;
+
+    dev::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
+    dev::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
 
     // Internal data
     PROTOCOL_ID m_protocolId;
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
     h256 m_genesisHash;
+    bool m_enableSendTxsByTree;
+    bool m_enableSendBlockStatusByTree;
 
     int64_t m_maxRequestNumber = 0;
     uint64_t m_lastDownloadingRequestTime = 0;
+    int64_t m_lastDownloadingBlockNumber = 0;
     int64_t m_currentSealingNumber = 0;
+    int64_t m_eachBlockDownloadingRequestTimeout = 1000;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -180,22 +288,30 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    std::atomic_bool m_newTransactions = {false};
     std::atomic_bool m_newBlocks = {false};
     uint64_t m_maintainBlocksTimeout = 0;
-    bool m_needMaintainTransactions = false;
     bool m_needSendStatus = true;
+    bool m_isGroupMember = false;
+
+    // sync transactions
+    SyncTransaction::Ptr m_syncTrans = nullptr;
+
+    // statisticHandler
+    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
+
+    // handler for find the tree router
+    SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
+
+    // thread to gossip block status
+    GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
-    dev::eth::Handler<> m_tqReady;
     dev::eth::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
 
 public:
-    void maintainTransactions();
-    void maintainDownloadingTransactions();
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish

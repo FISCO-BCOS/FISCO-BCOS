@@ -47,8 +47,8 @@ BOOST_AUTO_TEST_CASE(AllTest)
         for (auto i = start; i < end; ++i)
         {
             FakeBlock fakeBlock;
-            fakeBlock.getBlock().header().setNumber(static_cast<int64_t>(i));
-            shared_ptr<Block> blockPtr = make_shared<Block>(fakeBlock.getBlock());
+            fakeBlock.getBlock()->header().setNumber(static_cast<int64_t>(i));
+            shared_ptr<Block> blockPtr = make_shared<Block>(*fakeBlock.getBlock());
             blocks.emplace_back(blockPtr);
         }
         fakeQueue.push(blocks);

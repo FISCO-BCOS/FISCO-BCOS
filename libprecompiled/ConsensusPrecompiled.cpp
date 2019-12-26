@@ -20,9 +20,8 @@
  */
 
 #include "ConsensusPrecompiled.h"
-#include "libstorage/EntriesPrecompiled.h"
-#include "libstorage/TableFactoryPrecompiled.h"
-#include <libdevcore/easylog.h>
+#include "libprecompiled/EntriesPrecompiled.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
@@ -112,9 +111,10 @@ bytes ConsensusPrecompiled::call(
                     }
                     else
                     {
-                        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                               << LOG_DESC("addSealer successfully");
                         result = count;
+                        PRECOMPILED_LOG(DEBUG)
+                            << LOG_BADGE("ConsensusPrecompiled")
+                            << LOG_DESC("addSealer successfully") << LOG_KV("result", result);
                     }
                 }
                 else
@@ -129,9 +129,10 @@ bytes ConsensusPrecompiled::call(
                     }
                     else
                     {
-                        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                               << LOG_DESC("addSealer successfully");
                         result = count;
+                        PRECOMPILED_LOG(DEBUG)
+                            << LOG_BADGE("ConsensusPrecompiled")
+                            << LOG_DESC("addSealer successfully") << LOG_KV("result", result);
                     }
                 }
             }
@@ -177,9 +178,10 @@ bytes ConsensusPrecompiled::call(
                 }
                 else
                 {
-                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully insert");
                     result = count;
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled")
+                        << LOG_DESC("addObserver successfully insert") << LOG_KV("result", result);
                 }
             }
             else if (!checkIsLastSealer(table, nodeID))
@@ -188,15 +190,17 @@ bytes ConsensusPrecompiled::call(
                     PRI_KEY, entry, condition, std::make_shared<AccessOptions>(origin));
                 if (count == storage::CODE_NO_AUTHORIZED)
                 {
-                    PRECOMPILED_LOG(DEBUG)
-                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
                     result = storage::CODE_NO_AUTHORIZED;
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied")
+                        << LOG_KV("result", result);
                 }
                 else
                 {
-                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                                           << LOG_DESC("addObserver successfully update");
                     result = count;
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled")
+                        << LOG_DESC("addObserver successfully update") << LOG_KV("result", result);
                 }
             }
             else
@@ -231,15 +235,17 @@ bytes ConsensusPrecompiled::call(
                 count = table->remove(PRI_KEY, condition, std::make_shared<AccessOptions>(origin));
                 if (count == storage::CODE_NO_AUTHORIZED)
                 {
-                    PRECOMPILED_LOG(DEBUG)
-                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied");
                     result = storage::CODE_NO_AUTHORIZED;
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("permission denied")
+                        << LOG_KV("result", result);
                 }
                 else
                 {
-                    PRECOMPILED_LOG(DEBUG)
-                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully");
                     result = count;
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove successfully")
+                        << LOG_KV("result", result);
                 }
             }
             else

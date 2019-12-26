@@ -28,7 +28,6 @@
 #include <libconsensus/ConsensusInterface.h>
 #include <libdevcore/CommonData.h>
 #include <libdevcore/TopicInfo.h>
-#include <libdevcore/easylog.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
@@ -147,7 +146,9 @@ public:
         blockHeader.setTimestamp(9);
 
         createTransaction();
-        transactions.push_back(transaction);
+        std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(transaction);
+        transactions = std::make_shared<Transactions>();
+        transactions->push_back(p_tx);
 
         block.setBlockHeader(blockHeader);
         block.setTransactions(transactions);
@@ -167,8 +168,12 @@ public:
     {
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
-    void getNonces(std::vector<dev::eth::NonceKeyType>&, int64_t) override {}
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam) override
+
+    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t) override
+    {
+        return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
+    }
+    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool = true) override
     {
         m_initParam = initParam;
         return true;
@@ -228,29 +233,25 @@ public:
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::eth::Block> getBlockByHash(
+        dev::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
-    {
-        return getBlockByHash(_blockHash)->rlpP();
-    }
-
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
     {
-        return getBlockRLPByHash(numberHash(_i));
+        return getBlockByHash(numberHash(_i))->rlpP();
     }
 
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
+    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const&) override
     {
-        return LocalisedTransaction(transaction, blockHash, 0, 0);
+        return std::make_shared<LocalisedTransaction>(transaction, blockHash, 0, 0);
     }
 
-    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+    dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
         if (_txHash ==
@@ -258,18 +259,21 @@ public:
         {
             auto tx = getLocalisedTxByHash(_txHash);
             auto txReceipt = getTransactionReceiptByHash(_txHash);
-            return LocalisedTransactionReceipt(txReceipt, _txHash, tx.blockHash(), tx.blockNumber(),
-                tx.from(), tx.to(), tx.transactionIndex(), txReceipt.gasUsed(),
-                txReceipt.contractAddress());
+            return std::make_shared<LocalisedTransactionReceipt>(*txReceipt, _txHash,
+                tx->blockHash(), tx->blockNumber(), tx->from(), tx->to(), tx->transactionIndex(),
+                txReceipt->gasUsed(), txReceipt->contractAddress());
         }
         else
-            return LocalisedTransactionReceipt(
+            return std::make_shared<LocalisedTransactionReceipt>(
                 TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
+    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const&) override
+    {
+        return std::make_shared<Transaction>();
+    }
 
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
+    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const&) override
     {
         LogEntries entries;
         LogEntry entry;
@@ -277,7 +281,7 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return TransactionReceipt(h256(0x3), u256(8), entries,
+        return std::make_shared<TransactionReceipt>(h256(0x3), u256(8), entries,
             executive::TransactionException::None, bytes(), Address(0x1000));
     }
 
@@ -285,14 +289,29 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
-
-    CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+    std::pair<LocalisedTransaction::Ptr,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionByHashWithProof(dev::h256 const& _txHash) override
     {
-        m_blockHash[block.blockHeader().hash()] = block.blockHeader().number();
-        m_blockChain.push_back(std::make_shared<Block>(block));
-        m_blockNumber = block.blockHeader().number() + 1;
-        m_totalTransactionCount += block.transactions().size();
+        (void)_txHash;
+        return std::make_pair(std::make_shared<LocalisedTransaction>(),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
+        std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
+    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
+    {
+        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
+                                  dev::executive::TransactionException::None),
+            std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
+    }
+    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+    {
+        m_blockHash[block->blockHeader().hash()] = block->blockHeader().number();
+        m_blockChain.push_back(std::make_shared<Block>(*block));
+        m_blockNumber = block->blockHeader().number() + 1;
+        m_totalTransactionCount += block->transactions()->size();
         m_onReady(m_blockNumber);
         return CommitResult::OK;
     }
@@ -300,7 +319,7 @@ public:
     dev::bytes getCode(dev::Address) override { return bytes(); }
 
     BlockHeader blockHeader;
-    Transactions transactions;
+    std::shared_ptr<Transactions> transactions;
     Transaction transaction;
     bytes extraData;
     Block block;
@@ -328,12 +347,11 @@ public:
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
-    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt> executeTransaction(
-        const dev::eth::BlockHeader&, dev::eth::Transaction const&) override
+    dev::eth::TransactionReceipt::Ptr executeTransaction(
+        const dev::eth::BlockHeader&, dev::eth::Transaction::Ptr) override
     {
-        dev::executive::ExecutionResult res;
-        dev::eth::TransactionReceipt reciept;
-        return std::make_pair(res, reciept);
+        dev::eth::TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>();
+        return receipt;
     }
 
 private:
@@ -388,18 +406,24 @@ public:
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
-        transactions.push_back(transaction);
+        transactions = std::make_shared<dev::eth::Transactions>();
+        std::shared_ptr<Transaction> tx = std::make_shared<Transaction>(transaction);
+        transactions->push_back(tx);
     };
     virtual ~MockTxPool(){};
-    dev::eth::Transactions pendingList() const override { return transactions; };
+    std::shared_ptr<dev::eth::Transactions> pendingList() const override { return transactions; };
     size_t pendingSize() override { return 1; }
-    dev::eth::Transactions topTransactions(uint64_t const&, h256Hash&, bool = false) override
+    std::shared_ptr<dev::eth::Transactions> topTransactions(
+        uint64_t const&, h256Hash&, bool = false) override
     {
         return transactions;
     }
-    dev::eth::Transactions topTransactions(uint64_t const&) override { return transactions; }
+    std::shared_ptr<dev::eth::Transactions> topTransactions(uint64_t const&) override
+    {
+        return transactions;
+    }
     bool drop(h256 const&) override { return true; }
-    bool dropBlockTrans(dev::eth::Block const&) override { return true; }
+    bool dropBlockTrans(std::shared_ptr<dev::eth::Block>) override { return true; }
     bool handleBadBlock(Block const&) override { return true; }
     PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     TxPoolStatus status() const override
@@ -409,17 +433,20 @@ public:
         status.dropped = 0;
         return status;
     }
-    std::pair<h256, Address> submit(dev::eth::Transaction& _tx) override
+    std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override
     {
-        return make_pair(_tx.sha3(), toAddress(_tx.from(), _tx.nonce()));
+        return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+    }
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
+    {
+        return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
     }
     dev::eth::ImportResult import(
-        dev::eth::Transaction&, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
+        dev::eth::Transaction::Ptr, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
-    dev::eth::ImportResult import(
-        bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override
+    dev::eth::ImportResult import(bytesConstRef, dev::eth::IfDropped = dev::eth::IfDropped::Ignore)
     {
         return ImportResult::Success;
     }
@@ -427,7 +454,7 @@ public:
     SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
 
 private:
-    Transactions transactions;
+    std::shared_ptr<Transactions> transactions;
     Transaction transaction;
     PROTOCOL_ID protocolId = 0;
     mutable dev::SharedMutex x_transactionKnownBy;
@@ -468,7 +495,7 @@ public:
         return syncStatus;
     }
     bool isSyncing() const override { return m_isSyncing; }
-    bool isFarSyncing() const override { return false; }
+    bool blockNumberFarBehind() const override { return false; }
     PROTOCOL_ID const& protocolId() const override { return m_protocolId; };
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
@@ -500,8 +527,7 @@ public:
         /// init
         initLedgerParam();
     }
-    bool initLedger(const std::string&) override { return true; };
-    void initGenesisConfig(std::string const&) override{};
+    bool initLedger(std::shared_ptr<LedgerParamInterface>) override { return true; };
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {

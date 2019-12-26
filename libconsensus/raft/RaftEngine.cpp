@@ -173,7 +173,7 @@ void RaftEngine::reportBlock(dev::eth::Block const& _block)
 
         resetConfig();
         RAFTENGINE_LOG(INFO) << LOG_DESC("[#reportBlock]^^^^^^^^Report Block")
-                             << LOG_KV("number", m_highestBlock.number())
+                             << LOG_KV("num", m_highestBlock.number())
                              << LOG_KV("sealer", m_highestBlock.sealer())
                              << LOG_KV("hash", m_highestBlock.hash().abridged())
                              << LOG_KV("next", m_consensusBlockNumber)
@@ -1471,7 +1471,7 @@ bool RaftEngine::commit(Block const& _block)
 
 bool RaftEngine::checkAndExecute(Block const& _block)
 {
-    Sealing workingSealing;
+    Sealing workingSealing(m_blockFactory);
     try
     {
         execBlock(workingSealing, _block);
@@ -1489,14 +1489,14 @@ bool RaftEngine::checkAndExecute(Block const& _block)
 
 void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
 {
-    Block working_block(_block);
+    auto working_block = std::make_shared<Block>(_block);
     RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#execBlock]")
-                          << LOG_KV("number", working_block.header().number())
-                          << LOG_KV("hash", working_block.header().hash().abridged());
+                          << LOG_KV("number", working_block->header().number())
+                          << LOG_KV("hash", working_block->header().hash().abridged());
 
-    checkBlockValid(working_block);
-    m_blockSync->noteSealingBlockNumber(working_block.header().number());
-    _sealing.p_execContext = executeBlock(working_block);
+    checkBlockValid(*working_block);
+    m_blockSync->noteSealingBlockNumber(working_block->header().number());
+    _sealing.p_execContext = executeBlock(*working_block);
     _sealing.block = working_block;
 }
 
@@ -1542,12 +1542,12 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
     {
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkAndSave]Commit block failed")
                               << LOG_KV("highestNum", m_highestBlock.number())
-                              << LOG_KV("sealingNum", _sealing.block.blockHeader().number())
-                              << LOG_KV(
-                                     "sealingHash", _sealing.block.blockHeader().hash().abridged());
+                              << LOG_KV("sealingNum", _sealing.block->blockHeader().number())
+                              << LOG_KV("sealingHash",
+                                     _sealing.block->blockHeader().hash().abridged());
         /// note blocksync to sync
         // m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-        m_txPool->handleBadBlock(_sealing.block);
+        m_txPool->handleBadBlock(*(_sealing.block));
     }
 }
 
