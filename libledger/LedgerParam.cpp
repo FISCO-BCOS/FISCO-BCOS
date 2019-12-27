@@ -145,7 +145,16 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
     if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
+        // enable parallel since v2.3.0 when stateType is storage
+        if (g_BCOSConfig.version() >= V2_3_0)
+        {
+            mutableTxParam().enableParallel = true;
+        }
+        // can configure enable_parallel before v2.3.0
+        else
+        {
+            mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
+        }
     }
     else
     {

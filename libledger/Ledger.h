@@ -59,10 +59,10 @@ public:
      * @param _baseDir: baseDir used to place the data of the ledger
      *                  (1) if _baseDir not empty, the group data is placed in
      * ${_baseDir}/group${_groupId}/${data_dir},
-     *                  ${data_dir} configurated by the configuration of the ledger, default is
+     *                  ${data_dir} configured by the configuration of the ledger, default is
      * "data" (2) if _baseDir is empty, the group data is placed in ./group${_groupId}/${data_dir}
      *
-     * @param configFileName: the configuration file path of the ledger, configurated by the
+     * @param configFileName: the configuration file path of the ledger, configured by the
      * main-configuration (1) if configFileName is empty, the configuration path is
      * ./group${_groupId}.ini, (2) if configFileName is not empty, the configuration path is decided
      * by the param ${configFileName}
