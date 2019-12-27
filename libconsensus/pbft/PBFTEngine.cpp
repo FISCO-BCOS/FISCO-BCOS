@@ -1053,7 +1053,7 @@ void PBFTEngine::checkAndCommit()
             PBFTENGINE_LOG(WARNING) << LOG_DESC("checkAndCommit: broadcastCommitReq failed");
         }
 
-        m_timeManager.m_lastSignTime = utcTime();
+        m_timeManager.m_lastSignTime = utcSteadyTime();
         checkAndSave();
     }
 }
@@ -1169,7 +1169,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         {
             m_view = m_toView = 0;
             m_leaderFailed = false;
-            m_timeManager.m_lastConsensusTime = utcTime();
+            m_timeManager.m_lastConsensusTime = utcSteadyTime();
             m_timeManager.m_changeCycle = 0;
             m_consensusBlockNumber = m_highestBlock.number() + 1;
             /// delete invalid view change requests from the cache
@@ -1494,7 +1494,7 @@ void PBFTEngine::checkAndChangeView()
 
 
         m_leaderFailed = false;
-        m_timeManager.m_lastConsensusTime = utcTime();
+        m_timeManager.m_lastConsensusTime = utcSteadyTime();
         m_view = m_toView.load();
         m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view);
@@ -1563,7 +1563,7 @@ void PBFTEngine::checkTimeout()
             m_toView += 1;
             m_leaderFailed = true;
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-            m_timeManager.m_lastConsensusTime = utcTime();
+            m_timeManager.m_lastConsensusTime = utcSteadyTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
 

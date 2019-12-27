@@ -85,25 +85,25 @@ BOOST_AUTO_TEST_CASE(testLoadTransactions)
     ///< Load 4 transactions in txpool.
     fake_pbft->loadTransactions(4);
     ///< The following two checks ensure that the size of transactions is 4.
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     BOOST_CHECK(fake_pbft->checkTxsEnough(4) == true);
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     BOOST_CHECK(fake_pbft->checkTxsEnough(5) == false);
     ///< Load 10 transactions in txpool, critical magnitude.
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     fake_pbft->loadTransactions(10);
     ///< The following two checks ensure that the size of transactions is 10.
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     BOOST_CHECK(fake_pbft->checkTxsEnough(10) == true);
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     /// the transaction pool is empty, stop sealing
     BOOST_CHECK(fake_pbft->checkTxsEnough(11) == false);
     ///< Load 12 transactions in txpool, actually only 10.
     fake_pbft->loadTransactions(12);
     ///< The following two checks ensure that the size of transactions is 10.
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     BOOST_CHECK(fake_pbft->checkTxsEnough(10) == true);
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime();
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime();
     /// the transaction pool is empty, stop sealing
     BOOST_CHECK(fake_pbft->checkTxsEnough(11) == false);
 }
@@ -212,14 +212,14 @@ BOOST_AUTO_TEST_CASE(testReachBlockIntervalTime)
     BOOST_CHECK(fake_pbft->reachBlockIntervalTime() == true);
 
     /// test reach the min block generation time, while transaction num is 0
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime() - 600;
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime() - 600;
     BOOST_CHECK(fake_pbft->reachBlockIntervalTime() == false);
     /// load one transaction
     fake_pbft->loadTransactions(1);
     BOOST_CHECK(fake_pbft->reachBlockIntervalTime() == true);
 
     /// test not reach the min block generation time
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime() - 100;
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime() - 100;
     BOOST_CHECK(fake_pbft->reachBlockIntervalTime() == false);
 }
 
@@ -231,7 +231,7 @@ BOOST_AUTO_TEST_CASE(testDoWork)
     /// set this node to be the leader
     fake_pbft->engine()->setNodeIdx(fake_pbft->engine()->getLeader().second);
     fake_pbft->setStartConsensus(true);
-    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcTime() - 600;
+    fake_pbft->engine()->mutableTimeManager().m_lastConsensusTime = utcSteadyTime() - 600;
     /// m_sealing has not been sealed yet
     fake_pbft->resetSealingBlock();
     fake_pbft->engine()->setAccountType(NodeAccountType::SealerAccount);

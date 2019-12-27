@@ -264,7 +264,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    auto parallelTimeOut = utcTime() + 30000;  // 30 timeout
+    auto parallelTimeOut = utcSteadyTime() + 30000;  // 30 timeout
 
     try
     {
@@ -280,7 +280,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
                 while (!txDag->hasFinished())
                 {
-                    if (!isWarnedTimeout.load() && utcTime() >= parallelTimeOut)
+                    if (!isWarnedTimeout.load() && utcSteadyTime() >= parallelTimeOut)
                     {
                         isWarnedTimeout.store(true);
                         BLOCKVERIFIER_LOG(WARNING)

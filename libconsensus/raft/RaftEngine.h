@@ -103,7 +103,7 @@ public:
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
-    void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
+    void resetLastBlockTime() { m_lastBlockTime = dev::utcSteadyTime(); }
     const std::string consensusStatus() override;
 
 protected:

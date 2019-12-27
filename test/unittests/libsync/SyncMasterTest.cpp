@@ -114,6 +114,7 @@ public:
 
     shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)
     {
+        std::srand(utcTime());
         shared_ptr<Transactions> txs = make_shared<Transactions>();
         for (size_t i = 0; i < _num; ++i)
         {
@@ -126,7 +127,7 @@ public:
             bytes data(str.begin(), str.end());
             Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             KeyPair sigKeyPair = KeyPair::create();
-            tx->setNonce(tx->nonce() + u256(rand()) + i);
+            tx->setNonce(tx->nonce() + u256(rand()) + i + utcTime());
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));

@@ -62,6 +62,14 @@ uint64_t utcTime()
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
+// getSteadyTime(ms)
+uint64_t utcSteadyTime()
+{
+    // trans (ns) into (ms)
+    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000000;
+}
+
+
 /// get utc time(us)
 uint64_t utcTimeUs()
 {

@@ -130,7 +130,8 @@ public:
         /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
         /// handled before the current leader generate a new block, it's no need to add other
         /// conditions to enforce this striction
-        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_minBlockGenTime;
+        return (utcSteadyTime() - m_timeManager.m_lastConsensusTime) >=
+               m_timeManager.m_minBlockGenTime;
     }
 
     virtual bool reachBlockIntervalTime()
@@ -138,7 +139,8 @@ public:
         /// since canHandleBlockForNextLeader has enforced the  next leader sealed block can't be
         /// handled before the current leader generate a new block, the conditions before can be
         /// deleted
-        return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
+        return (utcSteadyTime() - m_timeManager.m_lastConsensusTime) >=
+               m_timeManager.m_emptyBlockGenTime;
     }
 
     /// in case of the next leader packeted the number of maxTransNum transactions before the last

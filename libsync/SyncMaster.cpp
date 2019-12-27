@@ -224,13 +224,13 @@ void SyncMaster::maintainBlocks()
         return;
     }
 
-    if (!m_newBlocks && utcTime() <= m_maintainBlocksTimeout)
+    if (!m_newBlocks && utcSteadyTime() <= m_maintainBlocksTimeout)
     {
         return;
     }
 
     m_newBlocks = false;
-    m_maintainBlocksTimeout = utcTime() + c_maintainBlocksTimeout;
+    m_maintainBlocksTimeout = utcSteadyTime() + c_maintainBlocksTimeout;
 
 
     int64_t number = m_blockChain->number();
@@ -658,7 +658,7 @@ void SyncMaster::maintainDownloadingQueueBuffer()
 
 void SyncMaster::maintainBlockRequest()
 {
-    uint64_t timeout = utcTime() + c_respondDownloadRequestTimeout;
+    uint64_t timeout = utcSteadyTime() + c_respondDownloadRequestTimeout;
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
@@ -667,7 +667,7 @@ void SyncMaster::maintainBlockRequest()
         // Just select one peer per maintain
         DownloadBlocksContainer blockContainer(m_service, m_protocolId, _p->nodeId);
 
-        while (!reqQueue.empty() && utcTime() <= timeout)
+        while (!reqQueue.empty() && utcSteadyTime() <= timeout)
         {
             DownloadRequest req = reqQueue.topAndPop();
             int64_t number = req.fromNumber;
@@ -676,7 +676,7 @@ void SyncMaster::maintainBlockRequest()
                             << LOG_KV("from", req.fromNumber) << LOG_KV("size", req.size)
                             << LOG_KV("numberLimit", numberLimit);
             // Send block at sequence
-            for (; number < numberLimit && utcTime() <= timeout; number++)
+            for (; number < numberLimit && utcSteadyTime() <= timeout; number++)
             {
                 auto start_get_block_time = utcTime();
                 shared_ptr<bytes> blockRLP = m_blockChain->getBlockRLPByNumber(number);
