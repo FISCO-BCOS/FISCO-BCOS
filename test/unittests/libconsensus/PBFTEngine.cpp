@@ -234,12 +234,12 @@ BOOST_AUTO_TEST_CASE(testTimeout)
     unsigned oriChangeCycle = timeManager.m_changeCycle;
 
     ///< expect to no timeout
-    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime();
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime();
     fake_pbft.consensus()->checkTimeout();
     BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView);
 
     ///< expect to timeout, first timeout interval is 3000 because m_changeCycle is 0
-    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime() - 5000;
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime() - 5000;
     fake_pbft.consensus()->checkTimeout();
     BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
     BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
     VIEWTYPE oriToView = fake_pbft.consensus()->toView();
     TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
     unsigned oriChangeCycle = timeManager.m_changeCycle;
-    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcTime() - 5000;
+    timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime() - 5000;
     fake_pbft.consensus()->checkTimeout();
     BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
     BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);

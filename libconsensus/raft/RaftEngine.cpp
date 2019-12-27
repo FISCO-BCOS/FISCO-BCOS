@@ -147,7 +147,7 @@ void RaftEngine::reportBlock(dev::eth::Block const& _block)
                         m_highestBlock.number() < _block.blockHeader().number());
         if (shouldReport)
         {
-            m_lastBlockTime = utcTime();
+            m_lastBlockTime = utcSteadyTime();
             m_highestBlock = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         }
     }
@@ -1553,7 +1553,7 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
 
 bool RaftEngine::reachBlockIntervalTime()
 {
-    auto nowTime = utcTime();
+    auto nowTime = utcSteadyTime();
     auto parentTime = m_lastBlockTime;
 
     return nowTime - parentTime >= g_BCOSConfig.c_intervalBlockTime;
