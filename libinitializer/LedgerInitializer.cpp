@@ -51,7 +51,33 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
                               << errinfo_comment("[LedgerInitializer]: Should init at least one "
                                                  "group! Please check configuration!"));
     }
+
+    g_BCOSConfig.setConfDir(m_groupConfigPath);
 }
+
+
+bool LedgerInitializer::initLedgerByGroupID(dev::GROUP_ID const& _groupId)
+{
+    namespace fs = boost::filesystem;
+    fs::path genesisPath(m_groupConfigPath + "/" + "group." + to_string(_groupId) + ".genesis");
+    fs::path groupConfigPath(m_groupConfigPath + "/" + "group." + to_string(_groupId) + ".ini");
+
+    if (m_ledgerManager->isLedgerExist(_groupId))
+    {
+        BOOST_THROW_EXCEPTION(GroupExists());
+    }
+    if (!fs::exists(genesisPath.string()))
+    {
+        BOOST_THROW_EXCEPTION(GenesisNotExists());
+    }
+    if (!fs::exists(groupConfigPath.string()))
+    {
+        BOOST_THROW_EXCEPTION(GroupConfigNotExists());
+    }
+
+    return initLedger(_groupId, m_groupDataDir, genesisPath.string());
+}
+
 
 vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
 {

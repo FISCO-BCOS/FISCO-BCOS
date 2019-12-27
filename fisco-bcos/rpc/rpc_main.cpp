@@ -63,12 +63,12 @@ int main()
 
     auto secureInitializer = initialize->secureInitializer();
     // KeyPair key_pair = secureInitializer->keyPair();
-    auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
+    auto ledgerInitializer = initialize->ledgerInitializer();
 
     auto p2pInitializer = initialize->p2pInitializer();
     auto p2pService = p2pInitializer->p2pService();
 
-    auto rpc = new Rpc(ledgerManager, p2pService);
+    auto rpc = new Rpc(ledgerInitializer, p2pService);
 
     ModularServer<>* jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpc);
     std::string listenIP = "127.0.0.1";
