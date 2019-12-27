@@ -1511,7 +1511,7 @@ void PBFTEngine::collectGarbage()
         return;
     }
     Timer t;
-    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
     {
@@ -1718,8 +1718,8 @@ void PBFTEngine::workLoop()
 
 void PBFTEngine::waitSignal()
 {
-    std::unique_lock<std::mutex> l(x_signalled);
-    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+    boost::unique_lock<boost::mutex> l(x_signalled);
+    m_signalled.wait_for(l, boost::chrono::milliseconds(5));
 }
 
 /// handle the prepareReq cached in the futurePrepareCache

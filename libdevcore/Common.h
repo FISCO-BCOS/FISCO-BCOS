@@ -417,9 +417,9 @@ public:
 private:
     std::string m_function;
     static thread_local std::string m_name;
-    static thread_local std::chrono::system_clock::time_point m_timePoint;
+    static thread_local std::chrono::steady_clock::time_point m_timePoint;
     static thread_local size_t m_heapCount;
-    static thread_local std::vector<std::pair<std::string, std::chrono::system_clock::time_point>>
+    static thread_local std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>>
         m_record;
 };
 

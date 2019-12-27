@@ -41,7 +41,7 @@ struct TimeManager
     unsigned m_minBlockGenTime = 500;
 
     /// time point of last signature collection
-    std::chrono::system_clock::time_point m_lastGarbageCollection;
+    std::chrono::steady_clock::time_point m_lastGarbageCollection;
     const unsigned kMaxChangeCycle = 20;
     const unsigned CollectInterval = 60;
 
@@ -51,7 +51,7 @@ struct TimeManager
         m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;
-        m_lastGarbageCollection = std::chrono::system_clock::now();
+        m_lastGarbageCollection = std::chrono::steady_clock::now();
     }
 
     inline void changeView()

@@ -730,7 +730,7 @@ bool CachedStorage::disabled()
 
 bool CachedStorage::commitBackend(Task::Ptr task)
 {
-    auto now = std::chrono::system_clock::now();
+    auto now = std::chrono::steady_clock::now();
 
     STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
@@ -739,7 +739,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
 
         setSyncNum(task->num);
 
-        std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - now;
+        std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - now;
         STORAGE_LOG(INFO)
             << "[g:" << std::to_string(groupID()) << "]"
             << "\n---------------------------------------------------------------------\n"

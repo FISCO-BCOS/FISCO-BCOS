@@ -70,8 +70,8 @@ void SyncTransaction::workLoop()
         // no new transactions and the size of transactions need to be broadcasted is zero
         if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {
-            std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
+            boost::unique_lock<boost::mutex> l(x_signalled);
+            m_signalled.wait_for(l, boost::chrono::milliseconds(idleWaitMs()));
         }
     }
 }

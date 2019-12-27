@@ -676,8 +676,8 @@ protected:
     PBFTMsgQueue m_msgQueue;
     mutable Mutex m_mutex;
 
-    std::condition_variable m_signalled;
-    Mutex x_signalled;
+    boost::condition_variable m_signalled;
+    boost::mutex x_signalled;
 
 
     std::function<void()> m_onViewChange = nullptr;
