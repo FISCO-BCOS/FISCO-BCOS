@@ -44,7 +44,8 @@ extern const char API_VERIFY_VOTE_RESULT[];
 extern const char API_GET_VOTE_RESULT_FROM_REQUEST[];
 
 // anonymous auction
-extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE[];
+extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[];
+extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST[];
 extern const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[];
 
 extern const char WEDPR_VERFIY_FAILED[];
@@ -79,7 +80,9 @@ public:
     bytes verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
 
-    bytes verifyBidSignature(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyBidSignatureFromBidRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes VerifyBidSignatureFromBidComparisonRequest(
+        dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data);
 };
 

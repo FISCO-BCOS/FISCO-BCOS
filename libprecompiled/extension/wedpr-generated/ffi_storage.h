@@ -3,6 +3,10 @@
 #include <cstdlib>
 #include <new>
 
+static const int8_t FAILURE = -1;
+
+static const int8_t SUCCESS = 0;
+
 struct backtrace_state;
 
 using backtrace_error_callback = void (*)(void* data, const char* msg, int errnum);
@@ -33,6 +37,8 @@ char* aggregate_vote_sum_response(char* param_pb, char* vote_storage_part_pb, ch
 
 char* get_bid_storage_from_bid_request(char* bid_request_pb);
 
+int32_t get_bid_value_from_bid_winner_claim_request(char* bid_winner_claim_request_pb);
+
 char* get_blank_ballot_from_vote_request(char* request_pb);
 
 char* get_blank_ballot_from_vote_storage(char* vote_storage_pb);
@@ -61,6 +67,8 @@ char* get_new_current_credit2_by_split_request(char* split_request_pb);
 
 char* get_new_current_credit_by_transfer_request(char* transfer_request_pb);
 
+char* get_public_key_from_bid_winner_claim_request(char* bid_winner_claim_request_pb);
+
 char* get_spent_credit_storage_by_split_request(char* split_request_pb);
 
 char* get_spent_credit_storage_by_transfer_request(char* transfer_request_pb);
@@ -75,7 +83,9 @@ char* get_vote_result_from_request(char* vote_result_request_pb);
 
 char* get_vote_storage_from_vote_request(char* request_pb);
 
-int8_t verify_bid_signature(char* bid_request_pb);
+int8_t verify_bid_signature_from_bid_comparison_request(char* bid_comparison_request_pb);
+
+int8_t verify_bid_signature_from_bid_request(char* bid_request_pb);
 
 int8_t verify_bounded_vote_request(char* param_pb, char* request_pb);
 
@@ -95,6 +105,6 @@ int8_t verify_unbounded_vote_request(char* param_pb, char* request_pb);
 int8_t verify_vote_result(
     char* param_pb, char* vote_sum_pb, char* count_result_sum_pb, char* vote_result_request_pb);
 
-int8_t verify_winner(char* winner_claim_request_pb, char* all_bid_request_pb);
+int8_t verify_winner(char* winner_claim_request_pb, char* all_bid_storage_request_pb);
 
 }  // extern "C"

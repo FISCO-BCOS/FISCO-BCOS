@@ -66,8 +66,10 @@ const char API_VERIFY_VOTE_RESULT[] =
 const char API_GET_VOTE_RESULT_FROM_REQUEST[] = "anonymousVotingGetVoteResultFromRequest(string)";
 
 // anonymous auction
-const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE[] =
-    "anonymousAuctionVerifyBidSignature(string)";
+const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[] =
+    "anonymousAuctionVerifyBidSignatureFromBidRequest(string)";
+const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST[] =
+    "anonymousAuctionVerifyBidSignatureFromBidComparisonRequest(string)";
 const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[] = "anonymousAuctionVerifyWinner(string,string)";
 
 const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
@@ -107,8 +109,10 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_GET_VOTE_RESULT_FROM_REQUEST);
 
     // anonymous auction
-    name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE] =
-        getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE);
+    name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST] =
+        getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST);
+    name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST] =
+        getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST);
     name2Selector[API_ANONYMOUS_AUCTION_VERIFY_WINNER] =
         getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_WINNER);
 }
@@ -192,9 +196,14 @@ bytes WedprPrecompiled::call(
     {
         out = getVoteResultFromRequest(abi, data);
     }
-    else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE])
+    else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST])
     {
-        out = verifyBidSignature(abi, data);
+        out = verifyBidSignatureFromBidRequest(abi, data);
+    }
+    else if (func ==
+             name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST])
+    {
+        out = VerifyBidSignatureFromBidComparisonRequest(abi, data);
     }
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_WINNER])
     {
@@ -430,18 +439,33 @@ bytes WedprPrecompiled::getVoteResultFromRequest(dev::eth::ContractABI& abi, byt
 
     return abi.abiIn("", voteResultStorage);
 }
-bytes WedprPrecompiled::verifyBidSignature(dev::eth::ContractABI& abi, bytesConstRef& data)
+bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     std::string bidRequest;
     abi.abiOut(data, bidRequest);
     char* bidRequestChar = stringToChar(bidRequest);
-    if (verify_bid_signature(bidRequestChar) != WEDPR_SUCCESS)
+    if (verify_bid_signature_from_bid_request(bidRequestChar) != WEDPR_SUCCESS)
     {
-        logError(WEDPR_PRECOMPILED, "verify_bid_signature", WEDPR_VERFIY_FAILED);
-        throwException("verify_bid_signature failed");
+        logError(WEDPR_PRECOMPILED, "verify_bid_signature_from_bid_request", WEDPR_VERFIY_FAILED);
+        throwException("verify_bid_signature_from_bid_request failed");
     }
     std::string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
     return abi.abiIn("", bidStorage);
+}
+bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    std::string bidComparisonRequest;
+    abi.abiOut(data, bidComparisonRequest);
+    char* bidComparisonRequestChar = stringToChar(bidComparisonRequest);
+    if (verify_bid_signature_from_bid_comparison_request(bidComparisonRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_bid_signature_from_bid_comparison_request",
+            WEDPR_VERFIY_FAILED);
+        throwException("verify_bid_signature_from_bid_comparison_request failed");
+    }
+    return abi.abiIn("", WEDPR_SUCCESS);
 }
 bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
@@ -455,7 +479,9 @@ bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& 
         logError(WEDPR_PRECOMPILED, "verify_winner", WEDPR_VERFIY_FAILED);
         throwException("verify_winner failed");
     }
-    return abi.abiIn("", WEDPR_SUCCESS);
+    int bidValue = get_bid_value_from_bid_winner_claim_request(winnerClaimRequestChar);
+    std::string publicKey = get_public_key_from_bid_winner_claim_request(winnerClaimRequestChar);
+    return abi.abiIn("", bidValue, publicKey);
 }
 
 }  // namespace precompiled
