@@ -28,6 +28,7 @@
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
@@ -121,7 +122,7 @@ private:
     std::shared_ptr<ChannelRPCServer> m_channelRPCServer;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
-    bool m_enableCachedStorage = false;
+    std::shared_ptr<dev::storage::CachedStorage> m_cacheStorage;
 };
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 std::function<void(std::string&)> getDecryptHandler();

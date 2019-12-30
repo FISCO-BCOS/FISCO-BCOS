@@ -37,7 +37,6 @@
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/BasicRocksDB.h>
-#include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
@@ -218,12 +217,9 @@ void DBInitializer::recoverFromBinaryLog(
 
 void DBInitializer::setSyncNumForCachedStorage(int64_t const& _syncNum)
 {
-    if (m_enableCachedStorage)
+    if (m_cacheStorage)
     {
-        std::shared_ptr<CachedStorage> cachedStorage =
-            std::dynamic_pointer_cast<CachedStorage>(m_storage);
-        assert(cachedStorage);
-        cachedStorage->setSyncNum(_syncNum);
+        m_cacheStorage->setSyncNum(_syncNum);
         DBInitializer_LOG(INFO) << LOG_BADGE("setSyncNumForCachedStorage")
                                 << LOG_KV("syncNum", _syncNum);
     }
@@ -242,7 +238,7 @@ void DBInitializer::initTableFactory2(
         cachedStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
         cachedStorage->init();
         backendStorage = cachedStorage;
-        m_enableCachedStorage = true;
+        m_cacheStorage = cachedStorage;
         DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
                                 << LOG_KV("maxCapacity", _param->mutableStorageParam().maxCapacity)
                                 << LOG_KV("maxForwardBlock",
