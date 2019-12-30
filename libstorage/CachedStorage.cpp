@@ -795,7 +795,6 @@ void CachedStorage::checkAndClear()
     do
     {
         needClear = false;
-
         if (m_syncNum > 0)
         {
             if (m_capacity > m_maxCapacity && !m_mru->empty())

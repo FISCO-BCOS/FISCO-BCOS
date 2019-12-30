@@ -216,6 +216,19 @@ void DBInitializer::recoverFromBinaryLog(
     }
 }
 
+void DBInitializer::setSyncNumForCachedStorage(int64_t const& _syncNum)
+{
+    if (m_enableCachedStorage)
+    {
+        std::shared_ptr<CachedStorage> cachedStorage =
+            std::dynamic_pointer_cast<CachedStorage>(m_storage);
+        assert(cachedStorage);
+        cachedStorage->setSyncNum(_syncNum);
+        DBInitializer_LOG(INFO) << LOG_BADGE("setSyncNumForCachedStorage")
+                                << LOG_KV("syncNum", _syncNum);
+    }
+}
+
 void DBInitializer::initTableFactory2(
     Storage::Ptr _backend, std::shared_ptr<LedgerParamInterface> _param)
 {
@@ -229,6 +242,7 @@ void DBInitializer::initTableFactory2(
         cachedStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
         cachedStorage->init();
         backendStorage = cachedStorage;
+        m_enableCachedStorage = true;
         DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
                                 << LOG_KV("maxCapacity", _param->mutableStorageParam().maxCapacity)
                                 << LOG_KV("maxForwardBlock",

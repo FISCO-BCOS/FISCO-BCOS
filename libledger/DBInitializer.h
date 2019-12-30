@@ -85,6 +85,8 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
+    void setSyncNumForCachedStorage(int64_t const& _syncNum);
+
 protected:
     dev::GROUP_ID m_groupID = 0;
     /// create stateStorage (mpt or storageState options)
@@ -119,6 +121,7 @@ private:
     std::shared_ptr<ChannelRPCServer> m_channelRPCServer;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+    bool m_enableCachedStorage = false;
 };
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 std::function<void(std::string&)> getDecryptHandler();
