@@ -160,8 +160,12 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
                         (*_txs)[i]->decode(txBytes.cropped(offset, size), _checkSig);
                         if (_withHash)
                         {
-                            dev::h256 txHash = dev::sha3(txBytes.cropped(offset, size));
-                            (*_txs)[i]->updateTransactionHashWithSig(txHash);
+                            // cache the sha3
+                            // Note: can't calculate sha3 with sha3(txBytes.cropped(offset, size))
+                            // directly
+                            //       considering that some cases the encodedData is not
+                            //       equal to txBytes.cropped(offset, size)
+                            (*_txs)[i]->sha3();
                         } /*
                          LOG(DEBUG) << LOG_BADGE("DECODE") << LOG_DESC("decode tx:") << LOG_KV("i",
                          i)
