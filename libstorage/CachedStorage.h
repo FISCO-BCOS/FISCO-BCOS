@@ -168,7 +168,6 @@ private:
     // config
     uint64_t m_maxForwardBlock = 10;
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
-    uint64_t m_maxPopMRU = 100000;
     uint64_t m_clearInterval = 1000;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
