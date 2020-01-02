@@ -56,11 +56,6 @@ public:
     // override the virtual function
     std::pair<bool, IDXTYPE> getLeader() const override { return RotatingPBFTEngine::getLeader(); }
 
-    bool locatedInChosedConsensensusNodes() const
-    {
-        return RotatingPBFTEngine::locatedInChosedConsensensusNodes();
-    }
-
     void resetChosedConsensusNodes() override
     {
         return RotatingPBFTEngine::resetChosedConsensusNodes();
@@ -92,7 +87,7 @@ public:
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     void updateConsensusNodeList() override {}
 
-    void resetConfig() { return RotatingPBFTEngine::resetConfig(); }
+    void resetConfigWrapper() { return RotatingPBFTEngine::resetConfig(); }
 
     void setSealersNum(int64_t const& _sealersNum) { m_sealersNum = _sealersNum; }
 
@@ -154,7 +149,7 @@ void checkResetConfig(RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _r
     {
         // update the blockNumber
         _fixture->rotatingPBFT()->fakedBlockChain()->setBlockNumber(i + 1);
-        _fixture->rotatingPBFT()->resetConfig();
+        _fixture->rotatingPBFT()->resetConfigWrapper();
         BOOST_CHECK(_fixture->rotatingPBFT()->sealersNum() == _sealersNum);
         BOOST_CHECK(_fixture->rotatingPBFT()->startNodeIdx() == _round % _sealersNum);
         BOOST_CHECK(_fixture->rotatingPBFT()->rotatingRound() == _round);
@@ -174,7 +169,7 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
     // case1: eight sealers with two groups(every group with four members), rotating interval is 10
     auto fixture = std::make_shared<RotatingPBFTEngineFixture>(8);
     fixture->rotatingPBFT()->setSealersNum(8);
-    fixture->rotatingPBFT()->resetConfig();
+    fixture->rotatingPBFT()->resetConfigWrapper();
     int64_t rotatingInterval = 10;
     for (auto epochSize = 4; epochSize < 10; epochSize++)
     {
