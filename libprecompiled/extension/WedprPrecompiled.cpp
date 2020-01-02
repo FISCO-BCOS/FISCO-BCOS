@@ -444,6 +444,8 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
 {
     std::string bidRequest;
     abi.abiOut(data, bidRequest);
+    std::cout << "###bidRequest" << bidRequest << std::endl;
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidRequest", bidRequest);
     char* bidRequestChar = stringToChar(bidRequest);
     if (verify_bid_signature_from_bid_request(bidRequestChar) != WEDPR_SUCCESS)
     {
@@ -451,6 +453,8 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
         throwException("verify_bid_signature_from_bid_request failed");
     }
     std::string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
+    std::cout << "###bidStorage" << bidStorage << std::endl;
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidStorage", bidStorage);
     return abi.abiIn("", bidStorage);
 }
 bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
@@ -458,6 +462,9 @@ bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
 {
     std::string bidComparisonRequest;
     abi.abiOut(data, bidComparisonRequest);
+    std::cout << "###bidComparisonRequest" << bidComparisonRequest << std::endl;
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
+                          << LOG_KV("bidComparisonRequest", bidComparisonRequest);
     char* bidComparisonRequestChar = stringToChar(bidComparisonRequest);
     if (verify_bid_signature_from_bid_comparison_request(bidComparisonRequestChar) != WEDPR_SUCCESS)
     {
@@ -474,6 +481,9 @@ bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& 
     abi.abiOut(data, winnerClaimRequest, allBidRequest);
     char* winnerClaimRequestChar = stringToChar(winnerClaimRequest);
     char* allBidRequestChar = stringToChar(allBidRequest);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
+                          << LOG_KV("winnerClaimRequest", winnerClaimRequest)
+                          << LOG_KV("allBidRequest", allBidRequest);
     if (verify_winner(winnerClaimRequestChar, allBidRequestChar) != WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_winner", WEDPR_VERFIY_FAILED);
@@ -481,6 +491,8 @@ bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& 
     }
     int bidValue = get_bid_value_from_bid_winner_claim_request(winnerClaimRequestChar);
     std::string publicKey = get_public_key_from_bid_winner_claim_request(winnerClaimRequestChar);
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidValue", bidValue)
+                          << LOG_KV("publicKey", publicKey);
     return abi.abiIn("", bidValue, publicKey);
 }
 
