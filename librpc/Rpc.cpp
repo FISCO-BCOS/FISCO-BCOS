@@ -1128,7 +1128,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
         {
         // the oldest SDK: submit transactions sync
         case ProtocolVersion::v1:
-        // case ProtocolVersion::v2:
+            // case ProtocolVersion::v2:
             checkRequest(_groupID);
             checkSyncStatus(_groupID);
             ret = txPool->submitTransactions(tx);

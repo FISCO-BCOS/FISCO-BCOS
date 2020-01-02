@@ -174,7 +174,7 @@ echo "=============================================================="
 if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
 LOG_INFO "Execute the download_console.sh script to get FISCO-BCOS console, download_console.sh is in directory named by IP."
 echo " bash download_console.sh"
-echo "=============================================================="
+echo "================================================================"
 LOG_INFO "All completed. Files in ${output_dir}"
 }
 
