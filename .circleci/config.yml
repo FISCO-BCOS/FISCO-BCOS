@@ -56,7 +56,7 @@ jobs:
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-
       - compile:
-          options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
+          options: "-DBUILD_STATIC=ON -DWEDPR_EXTENSION=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
@@ -68,6 +68,20 @@ jobs:
             cd build
             CTEST_OUTPUT_ON_FAILURE=TRUE make test
             rm -rf /FISCO-BCOS/deps
+      - run:
+          name: Upload binary
+          command: |
+            cd build/bin
+            tar -zcf fisco-bcos-withSymbols.tar.gz fisco-bcos
+            strip fisco-bcos
+            tar -zcf fisco-bcos.tar.gz fisco-bcos
+      - store_artifacts:
+          path: /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
+          destination: wedpr-fisco-withSymbol.tar.gz
+      - store_artifacts:
+          path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
+          destination: mini-wedpr-fisco-bcos.tar.gz
+
       - persist_to_workspace:
           root: /
           paths:
@@ -90,7 +104,7 @@ jobs:
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-
       - compile:
-          options: "-DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWEDPR_EXTENSION=ON"
+          options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug -DWEDPR_EXTENSION=ON"
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
