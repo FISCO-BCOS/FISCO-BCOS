@@ -33,6 +33,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>
 
+
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
@@ -53,7 +54,7 @@ std::string TableFactoryPrecompiled::toString()
     return "TableFactory";
 }
 
-void TableFactoryPrecompiled::checkFieldNameValidate(
+void TableFactoryPrecompiled::checkNameValidate(
     const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList)
 {
     if (g_BCOSConfig.version() >= V2_2_0)
@@ -62,8 +63,24 @@ void TableFactoryPrecompiled::checkFieldNameValidate(
         boost::trim(keyField);
         valueFieldSet.insert(keyField);
 
-        auto checkFieldNameHasUnderline = [](const std::string& tableName,
-                                              const std::string& fieldName) {
+        std::vector<char> allowChar = {'$', '_', '@'};
+
+        auto checkTableNameValidate = [allowChar](const std::string& tableName) {
+            size_t iSize = tableName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(tableName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate tablename") << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_INVALIDATE_FIELD,
+                        std::string("invalidate tablename:") + tableName));
+                }
+            }
+        };
+        auto checkFieldNameValidate = [allowChar](const std::string& tableName,
+                                          const std::string& fieldName) {
             if (fieldName.size() == 0 || fieldName[0] == '_')
             {
                 STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
@@ -71,8 +88,23 @@ void TableFactoryPrecompiled::checkFieldNameValidate(
                 BOOST_THROW_EXCEPTION(StorageException(
                     CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
             }
+            size_t iSize = fieldName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(fieldName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate fieldname") << LOG_KV("field name", fieldName)
+                        << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+                }
+            }
         };
-        checkFieldNameHasUnderline(tableName, keyField);
+
+        checkTableNameValidate(tableName);
+        checkFieldNameValidate(tableName, keyField);
 
         for (auto& valueField : valueFieldList)
         {
@@ -85,7 +117,7 @@ void TableFactoryPrecompiled::checkFieldNameValidate(
                 BOOST_THROW_EXCEPTION(StorageException(
                     CODE_TABLE_DUMPLICATE_FIELD, std::string("dumplicate field:") + valueField));
             }
-            checkFieldNameHasUnderline(tableName, valueField);
+            checkFieldNameValidate(tableName, valueField);
         }
     }
 }
@@ -153,7 +185,7 @@ bytes TableFactoryPrecompiled::call(
             }
         }
 
-        checkFieldNameValidate(tableName, keyField, fieldNameList);
+        checkNameValidate(tableName, keyField, fieldNameList);
 
         valueFiled = boost::join(fieldNameList, ",");
         if (valueFiled.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
