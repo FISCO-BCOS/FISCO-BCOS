@@ -33,6 +33,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>
 
+
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace std;
@@ -52,6 +53,75 @@ std::string TableFactoryPrecompiled::toString()
 {
     return "TableFactory";
 }
+
+void TableFactoryPrecompiled::checkNameValidate(
+    const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList)
+{
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        set<string> valueFieldSet;
+        boost::trim(keyField);
+        valueFieldSet.insert(keyField);
+
+        std::vector<char> allowChar = {'$', '_', '@'};
+
+        auto checkTableNameValidate = [allowChar](const std::string& tableName) {
+            size_t iSize = tableName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(tableName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate tablename") << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_INVALIDATE_FIELD,
+                        std::string("invalidate tablename:") + tableName));
+                }
+            }
+        };
+        auto checkFieldNameValidate = [allowChar](const std::string& tableName,
+                                          const std::string& fieldName) {
+            if (fieldName.size() == 0 || fieldName[0] == '_')
+            {
+                STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
+                                   << LOG_KV("table name", tableName);
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+            }
+            size_t iSize = fieldName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(fieldName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalidate fieldname") << LOG_KV("field name", fieldName)
+                        << LOG_KV("table name", tableName);
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+                }
+            }
+        };
+
+        checkTableNameValidate(tableName);
+        checkFieldNameValidate(tableName, keyField);
+
+        for (auto& valueField : valueFieldList)
+        {
+            auto ret = valueFieldSet.insert(valueField);
+            if (!ret.second)
+            {
+                STORAGE_LOG(ERROR)
+                    << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
+                    << LOG_KV("table name", tableName);
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_DUMPLICATE_FIELD, std::string("dumplicate field:") + valueField));
+            }
+            checkFieldNameValidate(tableName, valueField);
+        }
+    }
+}
+
 
 bytes TableFactoryPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
@@ -97,6 +167,13 @@ bytes TableFactoryPrecompiled::call(
         abi.abiOut(data, tableName, keyField, valueFiled);
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
+        boost::trim(keyField);
+        if (keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
+        {  // mysql TableName and fieldName length limit is 64
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW,
+                std::string("table field name length overflow ") +
+                    std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+        }
         for (auto& str : fieldNameList)
         {
             boost::trim(str);
@@ -107,6 +184,9 @@ bytes TableFactoryPrecompiled::call(
                         std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
             }
         }
+
+        checkNameValidate(tableName, keyField, fieldNameList);
+
         valueFiled = boost::join(fieldNameList, ",");
         if (valueFiled.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
         {
