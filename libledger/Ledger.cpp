@@ -77,6 +77,9 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockChain->setStateFactory(m_dbInitializer->stateFactory());
+    // setSyncNum for cachedStorage
+    m_dbInitializer->setSyncNumForCachedStorage(m_blockChain->number());
+
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());

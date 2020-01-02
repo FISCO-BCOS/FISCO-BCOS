@@ -769,7 +769,9 @@ bool CachedStorage::commitBackend(Task::Ptr task)
 void CachedStorage::checkAndClear()
 {
     uint64_t count = 0;
-    while (count < m_maxPopMRU)
+    // calculate and calculate m_capacity with all elements of m_mruQueue
+    // since inner loop will break once m_mruQueue is empty, here use while(true)
+    while (true)
     {
         std::tuple<std::string, std::string, ssize_t> mru;
         auto result = m_mruQueue->try_pop(mru);
@@ -795,7 +797,6 @@ void CachedStorage::checkAndClear()
     do
     {
         needClear = false;
-
         if (m_syncNum > 0)
         {
             if (m_capacity > m_maxCapacity && !m_mru->empty())
