@@ -145,7 +145,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
         int64_t selectSize = _selectedPeers->size();
         // add redundancy when receive transactions from P2P
-        if ((!t->rpcCallback() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
+        if ((!t->rpcTx() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
             !_fastForwardRemainTxs)
         {
             if (_fromRpc)

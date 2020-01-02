@@ -339,9 +339,12 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                                 {
                                                     if (it != entryIt)
                                                     {  // This addEntry is necessary, because
-                                                       // backend storage processDirtyEntries() will
-                                                       // not get data from real DB
-                                                        commitData->dirtyEntries->addEntry(*it);
+                                                        // backend storage processDirtyEntries()
+                                                        // will not get data from real DB
+                                                        auto copyLostEntry = make_shared<Entry>();
+                                                        copyLostEntry->copyFrom(*it);
+                                                        commitData->dirtyEntries->addEntry(
+                                                            copyLostEntry);
                                                     }
                                                 }
                                             }
@@ -520,8 +523,8 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         {
             if (!commitBackend(task))
             {
-                m_taskThreadPool->stop();
                 m_running->store(false);
+                m_taskThreadPool->stop();
                 raise(SIGTERM);
                 BOOST_THROW_EXCEPTION(StorageException(-1, std::string("backend DB dead!")));
             }
@@ -557,8 +560,8 @@ void CachedStorage::stop()
         return;
     }
     STORAGE_LOG(INFO) << "Stopping flushStorage thread";
-    m_taskThreadPool->stop();
     m_running->store(false);
+    m_taskThreadPool->stop();
 
     if (m_clearThread)
     {
@@ -754,8 +757,8 @@ bool CachedStorage::commitBackend(Task::Ptr task)
     catch (std::exception& e)
     {
         // stop() commit thread to exit
-        m_taskThreadPool->stop();
         m_running->store(false);
+        m_taskThreadPool->stop();
         raise(SIGTERM);
         STORAGE_LOG(ERROR) << "Stop commit thread. Fail to commit data: " << e.what();
         return false;
