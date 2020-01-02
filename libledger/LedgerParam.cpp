@@ -399,14 +399,25 @@ void LedgerParam::initSyncConfig(ptree const& pt)
                                   "Please set sync.gossip_peers_number to positive !"));
     }
     // set the sync-tree-width, default is 3
-    // mutableSyncParam().syncTreeWidth = pt.get<int64_t>("sync.sync_tree_width", 3);
     mutableSyncParam().syncTreeWidth = 3;
+    // max_block_sync_queue_size, default is 512MB
+    mutableSyncParam().maxQueueSizeForBlockSync =
+        pt.get<int>("sync.max_block_sync_memory_size", 512);
+    if (mutableSyncParam().maxQueueSizeForBlockSync <= 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set sync.max_block_sync_memory_size to positive !"));
+    }
+    mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
+
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("enableSendBlockStatusByTree",
                                  mutableSyncParam().enableSendBlockStatusByTree)
                           << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
                           << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
-                          << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth);
+                          << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
+                          << LOG_KV("maxQueueSizeForBlockSync",
+                                 mutableSyncParam().maxQueueSizeForBlockSync);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)

@@ -183,6 +183,7 @@ public:
     h256 const transactionRoot() { return header().transactionsRoot(); }
     h256 const receiptRoot() { return header().receiptsRoot(); }
 
+    int64_t const& blockSize() const { return m_blockSize; }
     /**
      * @brief: reset the current block
      *  1. if the blockHeader param has been set, then populate a new block header from the
@@ -324,6 +325,8 @@ protected:
 
     mutable dev::h256 m_transRootCache;
     mutable dev::h256 m_receiptRootCache;
+
+    int64_t m_blockSize = 0;
 };
 }  // namespace eth
 }  // namespace dev

@@ -42,6 +42,7 @@ Block::Block(
     m_transactionReceipts(std::make_shared<TransactionReceipts>()),
     m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>>>())
 {
+    m_blockSize = _data.size();
     decode(_data, _option, _withReceipt, _withTxHash);
 }
 
@@ -51,6 +52,7 @@ Block::Block(
     m_transactionReceipts(std::make_shared<TransactionReceipts>()),
     m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>>>())
 {
+    m_blockSize = _data.size();
     decode(ref(_data), _option, _withReceipt, _withTxHash);
 }
 

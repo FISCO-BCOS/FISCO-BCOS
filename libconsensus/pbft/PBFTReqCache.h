@@ -153,31 +153,7 @@ public:
     }
 
     /// add specified viewchange cache to the viewchange-cache
-    inline void addViewChangeReq(ViewChangeReq const& req)
-    {
-        auto it = m_recvViewChangeReq.find(req.view);
-        if (it != m_recvViewChangeReq.end())
-        {
-            auto itv = it->second.find(req.idx);
-            if (itv != it->second.end())
-            {
-                itv->second = req;
-            }
-            else
-            {
-                it->second.insert(std::make_pair(req.idx, req));
-            }
-        }
-        else
-        {
-            std::unordered_map<IDXTYPE, ViewChangeReq> viewMap;
-            viewMap.insert(std::make_pair(req.idx, req));
-
-            m_recvViewChangeReq.insert(std::make_pair(req.view, viewMap));
-        }
-
-        // m_recvViewChangeReq[req.view][req.idx] = req;
-    }
+    void addViewChangeReq(ViewChangeReq const& req, int64_t const& _blockNumber = 0);
 
     template <typename T, typename S>
     inline void addReq(T const& req, S& cache)
@@ -225,6 +201,13 @@ public:
         WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache.clear();
         m_prepareCache.clear();
+// TODO: check this logic
+#if 0
+        for (auto const& signCacheIterator : m_signCache)
+        {
+            removeInvalidSignCache(signCacheIterator.first, curView);
+        }
+#endif
         m_signCache.clear();
         m_commitCache.clear();
         m_futurePrepareCache.clear();
@@ -358,6 +341,7 @@ protected:
     std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;
     /// cache for received-viewChange requests(maps between view and view change requests)
     std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>> m_recvViewChangeReq;
+
     /// cache for commited requests(maps between hash and commited requests)
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq>> m_commitCache;
     /// cache for prepare request need to be backup and saved

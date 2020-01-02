@@ -106,6 +106,14 @@ public:
         m_statisticHandler = _statisticHandler;
     }
 
+    void setMaxBlockQueueSize(int64_t const& _maxBlockQueueSize)
+    {
+        m_maxBlockQueueSize = _maxBlockQueueSize;
+    }
+
+    int64_t maxRequestBlocks() const { return m_maxRequestBlocks; }
+    void adjustMaxRequestBlocks();
+
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
@@ -115,6 +123,16 @@ private:
     mutable SharedMutex x_blocks;
     mutable SharedMutex x_buffer;
     dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
+    // default max block buffer size is 512MB
+    int64_t m_maxBlockQueueSize = 512 * 1024 * 1024;
+    // the memory size occupied by the sync module
+    std::atomic<int64_t> m_blockQueueSize = {0};
+    // the max number of blocks this node can requested to
+    std::atomic<int64_t> m_maxRequestBlocks = {32};
+    // the average size of synced blocks
+    std::atomic<int64_t> m_averageBlockSize = {0};
+    // the expand coeff of memory-size after block-decode
+    int64_t m_blockSizeExpandCoeff = 3;
 
 private:
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);

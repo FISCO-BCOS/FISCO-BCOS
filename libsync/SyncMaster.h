@@ -125,6 +125,11 @@ public:
         m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
+    virtual void setMaxBlockQueueSize(int64_t const& _maxBlockQueueSize)
+    {
+        m_syncStatus->bq().setMaxBlockQueueSize(_maxBlockQueueSize);
+    }
+
     virtual ~SyncMaster() { stop(); };
     /// start blockSync
     virtual void start() override;
