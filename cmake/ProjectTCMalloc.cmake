@@ -1,12 +1,8 @@
 include(ExternalProject)
 
-set(TCMALLOC_CONFIG ./configure  --disable-shared --disable-tests CXXFLAGS=-DHAVE_POSIX_MEMALIGN_SYMBOL=1 --enable-frame-pointers --disable-cpu-profiler --disable-heap-profiler --disable-heap-checker --disable-debugalloc --enable-minimal)
+set(TCMALLOC_CONFIG ./configure  --disable-shared CXXFLAGS=-DHAVE_POSIX_MEMALIGN_SYMBOL=1 --enable-frame-pointers --disable-cpu-profiler --disable-heap-profiler --disable-heap-checker --disable-debugalloc --enable-minimal --prefix=${CMAKE_SOURCE_DIR}/deps/src/gperftools)
 
-if (APPLE)
-    set(TCMALLOC_MAKE make)
-else()
-    set(TCMALLOC_MAKE make)
-endif()
+set(TCMALLOC_MAKE make install)
 
 ExternalProject_Add(gperftools
     PREFIX ${CMAKE_SOURCE_DIR}/deps/
