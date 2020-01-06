@@ -22,7 +22,6 @@
  */
 
 #include "BlockChainImp.h"
-
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>

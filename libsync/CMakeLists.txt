@@ -5,4 +5,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(sync ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(sync PUBLIC blockchain txpool p2p)
+target_link_libraries(sync PUBLIC blockchain txpool p2p TCMalloc)
