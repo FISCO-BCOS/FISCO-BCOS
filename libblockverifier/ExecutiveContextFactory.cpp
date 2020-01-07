@@ -28,6 +28,7 @@
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprecompiled/UpdateContractStatusPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -58,6 +59,8 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+    context->setAddress2Precompiled(
+        Address(0x1007), std::make_shared<dev::precompiled::UpdateContractStatusPrecompiled>());
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);

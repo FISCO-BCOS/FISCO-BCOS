@@ -41,6 +41,9 @@ namespace precompiled
 
 enum PrecompiledError : int
 {
+    // ContractStatusPrecompiled -51999 ~ -51900
+    CODE_INVALID_CONTRACT_KILLED = -51900,
+
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,
 
@@ -89,6 +92,7 @@ enum PrecompiledError : int
 
 void getErrorCodeOut(bytes& out, int const& result);
 std::string getTableName(const std::string& _tableName);
+std::string getContractTableName(Address const& _contractAddress);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;

@@ -39,6 +39,7 @@ const char* const ACCOUNT_CODE_HASH = "codeHash";
 const char* const ACCOUNT_CODE = "code";
 const char* const ACCOUNT_NONCE = "nonce";
 const char* const ACCOUNT_ALIVE = "alive";
+const char* const ACCOUNT_FROZEN = "frozen";
 
 class StorageState : public dev::executive::StateFace
 {
@@ -120,6 +121,10 @@ public:
     /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
     /// with the address.
     h256 codeHash(Address const& _contract) const override;
+
+    /// Get the frozen status of an account.
+    /// @returns ture if the account is frozen.
+    bool frozen(Address const& _contract) const override;
 
     /// Get the byte-size of the code of an account.
     /// @returns code(_contract).size(), but utilizes CodeSizeHash.

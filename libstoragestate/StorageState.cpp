@@ -280,6 +280,27 @@ h256 StorageState::codeHash(Address const& _address) const
     return EmptySHA3;
 }
 
+bool StorageState::frozen(Address const& _contract) const
+{
+    auto table = getTable(_contract);
+    if (table)
+    {
+        auto entries = table->select(ACCOUNT_FROZEN, table->newCondition());
+        if (entries->size() != 0u)
+        {
+            return (entries->get(0)->getField(STORAGE_VALUE) == "true");
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        return false;
+    }
+}
+
 size_t StorageState::codeSize(Address const& _address) const
 {
     return code(_address).size();
