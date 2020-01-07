@@ -183,7 +183,7 @@ public:
     h256 const transactionRoot() { return header().transactionsRoot(); }
     h256 const receiptRoot() { return header().receiptsRoot(); }
 
-    int64_t const& blockSize() const { return m_blockSize; }
+    int64_t blockSize() const { return m_blockSize; }
     /**
      * @brief: reset the current block
      *  1. if the blockHeader param has been set, then populate a new block header from the

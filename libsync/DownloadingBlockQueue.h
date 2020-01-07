@@ -132,7 +132,7 @@ private:
     // the average size of synced blocks
     std::atomic<int64_t> m_averageBlockSize = {0};
     // the expand coeff of memory-size after block-decode
-    int64_t m_blockSizeExpandCoeff = 3;
+    int64_t const m_blockSizeExpandCoeff = 3;
 
 private:
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);

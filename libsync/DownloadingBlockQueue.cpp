@@ -66,6 +66,7 @@ void DownloadingBlockQueue::adjustMaxRequestBlocks()
     int64_t maxRequestBlocks = freeQueueSize / (m_averageBlockSize.load() * c_maxRequestShards);
     if (maxRequestBlocks > c_maxRequestBlocks)
     {
+        m_maxRequestBlocks = c_maxRequestBlocks;
         return;
     }
     m_maxRequestBlocks = std::max((int64_t)1, maxRequestBlocks);

@@ -551,7 +551,7 @@ function generate_group_ini()
 [tx_pool]
     limit=150000
 [sync]
-    ; max memory size used for block sync, MB
+    ; max memory size used for block sync, must be no smaller than 32, MB
     max_block_sync_memory_size=512
     idle_wait_ms=200
     ; send block status by tree-topology, only supported when use pbft

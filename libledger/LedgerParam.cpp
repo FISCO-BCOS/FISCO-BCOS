@@ -408,6 +408,11 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
                                   "Please set sync.max_block_sync_memory_size to positive !"));
     }
+    if (mutableSyncParam().maxQueueSizeForBlockSync < 32)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "Please set max_block_sync_memory_size no more than 32"));
+    }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
