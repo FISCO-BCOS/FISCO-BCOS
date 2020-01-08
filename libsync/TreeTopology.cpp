@@ -205,8 +205,5 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
         }
     }
     recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
-
-    // find the parent nodes
-    selectParentNodes(selectedNodeList, _peers, nodeIndex, _consIndex);
     return selectedNodeList;
 }
