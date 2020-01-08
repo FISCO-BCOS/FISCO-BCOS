@@ -92,6 +92,8 @@ struct SyncParam
     int64_t gossipPeers = 3;
     // default syncTreeWidth is 3
     int64_t syncTreeWidth = 3;
+    // max queue size for block sync (default is 512 MB)
+    int64_t maxQueueSizeForBlockSync = 512 * 1024 * 1024;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam

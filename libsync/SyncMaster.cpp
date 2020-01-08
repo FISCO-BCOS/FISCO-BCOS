@@ -374,9 +374,16 @@ void SyncMaster::maintainPeersStatus()
         return;  // no need to send request block packet
     }
 
+    // adjust maxRequestBlocksSize before request blocks
+    m_syncStatus->bq().adjustMaxRequestBlocks();
     // Sharding by c_maxRequestBlocks to request blocks
+    auto requestBlocksSize = m_syncStatus->bq().maxRequestBlocks();
+    if (requestBlocksSize <= 0)
+    {
+        return;
+    }
     size_t shardNumber =
-        (maxRequestNumber - currentNumber + c_maxRequestBlocks - 1) / c_maxRequestBlocks;
+        (maxRequestNumber - currentNumber + requestBlocksSize - 1) / requestBlocksSize;
     size_t shard = 0;
 
     m_maxRequestNumber = 0;  // each request turn has new m_maxRequestNumber
@@ -392,8 +399,8 @@ void SyncMaster::maintainPeersStatus()
             }
 
             // shard: [from, to]
-            int64_t from = currentNumber + 1 + shard * c_maxRequestBlocks;
-            int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
+            int64_t from = currentNumber + 1 + shard * requestBlocksSize;
+            int64_t to = min(from + requestBlocksSize - 1, maxRequestNumber);
             if (_p->number < to)
                 return true;  // exit, to next peer
 
@@ -419,8 +426,8 @@ void SyncMaster::maintainPeersStatus()
 
         if (!thisTurnFound)
         {
-            int64_t from = currentNumber + shard * c_maxRequestBlocks;
-            int64_t to = min(from + c_maxRequestBlocks - 1, maxRequestNumber);
+            int64_t from = currentNumber + shard * requestBlocksSize;
+            int64_t to = min(from + requestBlocksSize - 1, maxRequestNumber);
 
             SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("Request")
                               << LOG_DESC("Couldn't find any peers to request blocks")

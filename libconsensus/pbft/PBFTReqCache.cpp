@@ -80,6 +80,31 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& 
     return false;
 }
 
+void PBFTReqCache::addViewChangeReq(ViewChangeReq const& req, int64_t const&)
+{
+    // insert the viewchangeReq with newer start
+    auto it = m_recvViewChangeReq.find(req.view);
+    if (it != m_recvViewChangeReq.end())
+    {
+        auto itv = it->second.find(req.idx);
+        if (itv != it->second.end())
+        {
+            itv->second = req;
+        }
+        else
+        {
+            it->second.insert(std::make_pair(req.idx, req));
+        }
+    }
+    else
+    {
+        std::unordered_map<IDXTYPE, ViewChangeReq> viewMap;
+        viewMap.insert(std::make_pair(req.idx, req));
+
+        m_recvViewChangeReq.insert(std::make_pair(req.view, viewMap));
+    }
+}
+
 /**
  * @brief: determine can trigger viewchange or not
  * @param minView: return value, the min view of the received-viewchange requests

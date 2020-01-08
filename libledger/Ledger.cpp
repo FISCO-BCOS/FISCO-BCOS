@@ -377,11 +377,14 @@ bool Ledger::initSync()
 
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
-    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
-        m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
-        enableSendTxsByTree, enableSendBlockStatusByTree,
+    auto syncMaster = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain,
+        m_blockVerifier, protocol_id, m_keyPair.pub(), genesisHash,
+        m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
+        m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
+    // set the max block queue size for sync module(bytes)
+    syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
+    m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

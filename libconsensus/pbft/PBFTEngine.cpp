@@ -546,12 +546,6 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     }
     /// send messages according to node id
     broadcastMsg(nodeIdList, data, packetType, ttl, _p2pPacketType);
-
-    // update the network-out statistic information
-    if (m_statisticHandler)
-    {
-        m_statisticHandler->updateConsOutPacketsInfo(packetType, nodeIdList.size(), data.size());
-    }
     return true;
 }
 
@@ -1364,7 +1358,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacke
         return false;
     }
 
-    m_reqCache->addViewChangeReq(viewChange_req);
+    m_reqCache->addViewChangeReq(viewChange_req, m_blockChain->number());
     if (viewChange_req.view == m_toView)
     {
         checkAndChangeView();
