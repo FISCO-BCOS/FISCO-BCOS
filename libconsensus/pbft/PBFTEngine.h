@@ -278,17 +278,17 @@ protected:
     /// handler called when receiving data from the network
     void onRecvPBFTMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
-    bool handlePrepareMsg(PrepareReq const& prepare_req, std::string const& endpoint = "self");
+    bool handlePrepareMsg(PrepareReq::Ptr prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
-    bool handlePrepareMsg(PrepareReq& prepareReq, PBFTMsgPacket const& pbftMsg);
+    bool handlePrepareMsg(PrepareReq::Ptr prepareReq, PBFTMsgPacket const& pbftMsg);
 
     /// 1. decode the network-received PBFTMsgPacket to signReq
     /// 2. check the validation of the signReq
     /// add the signReq to the cache and
     /// heck the size of the collected signReq is over 2/3 or not
-    bool handleSignMsg(SignReq& signReq, PBFTMsgPacket const& pbftMsg);
-    bool handleCommitMsg(CommitReq& commitReq, PBFTMsgPacket const& pbftMsg);
-    bool handleViewChangeMsg(ViewChangeReq& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+    bool handleSignMsg(SignReq::Ptr signReq, PBFTMsgPacket const& pbftMsg);
+    bool handleCommitMsg(CommitReq::Ptr commitReq, PBFTMsgPacket const& pbftMsg);
+    bool handleViewChangeMsg(ViewChangeReq::Ptr viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket::Ptr pbftMsg);
     void catchupView(ViewChangeReq const& req, std::ostringstream& oss);
     void checkAndCommit();
@@ -485,8 +485,8 @@ protected:
         return CheckResult::VALID;
     }
 
-    CheckResult isValidSignReq(SignReq const& req, std::ostringstream& oss) const;
-    CheckResult isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const;
+    CheckResult isValidSignReq(SignReq::Ptr req, std::ostringstream& oss) const;
+    CheckResult isValidCommitReq(CommitReq::Ptr req, std::ostringstream& oss) const;
     bool isValidViewChangeReq(
         ViewChangeReq const& req, IDXTYPE const& source, std::ostringstream& oss);
 
@@ -647,7 +647,7 @@ protected:
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
     bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
 
-    bool execPrepareAndGenerateSignMsg(PrepareReq const& _prepareReq, std::ostringstream& _oss);
+    bool execPrepareAndGenerateSignMsg(PrepareReq::Ptr _prepareReq, std::ostringstream& _oss);
     void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
     void onReceiveGetMissedTxsRequest(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);

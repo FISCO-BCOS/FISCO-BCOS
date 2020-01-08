@@ -64,12 +64,12 @@ bool PartiallyPBFTReqCache::fetchMissedTxs(
         // changed
         ReadGuard l(x_rawPrepareCache);
         // maybe the request-node falls behind
-        if (!m_rawPrepareCache.pBlock)
+        if (!m_rawPrepareCache->pBlock)
         {
             return false;
         }
-        partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(m_rawPrepareCache.pBlock);
-        expectedHash = m_rawPrepareCache.block_hash;
+        partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(m_rawPrepareCache->pBlock);
+        expectedHash = m_rawPrepareCache->block_hash;
     }
     assert(partiallyBlock);
     partiallyBlock->fetchMissedTxs(_encodedBytes, _missInfo, expectedHash);
