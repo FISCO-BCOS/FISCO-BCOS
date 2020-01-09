@@ -319,6 +319,7 @@ struct PBFTMsg
 /// definition of the prepare requests
 struct PrepareReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<PrepareReq>;
     /// block data
     std::shared_ptr<bytes> block;
     std::shared_ptr<dev::eth::Block> pBlock = nullptr;
@@ -326,7 +327,6 @@ struct PrepareReq : public PBFTMsg
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
 
-    using Ptr = std::shared_ptr<PrepareReq>;
     /// default constructor
     PrepareReq() { block = std::make_shared<dev::bytes>(); }
     virtual ~PrepareReq() {}
@@ -442,6 +442,7 @@ struct PrepareReq : public PBFTMsg
 /// signature request
 struct SignReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<SignReq>;
     SignReq() = default;
 
     /**
@@ -466,6 +467,7 @@ struct SignReq : public PBFTMsg
 /// commit request
 struct CommitReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<CommitReq>;
     CommitReq() = default;
     /**
      * @brief: populate the CommitReq from given PrepareReq and node index
@@ -489,6 +491,7 @@ struct CommitReq : public PBFTMsg
 /// view change request
 struct ViewChangeReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<ViewChangeReq>;
     ViewChangeReq() = default;
     /**
      * @brief: generate ViewChangeReq from given params

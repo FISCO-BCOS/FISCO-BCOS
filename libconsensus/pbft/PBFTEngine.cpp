@@ -162,7 +162,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                                   << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
-    handlePrepareMsg(*prepareReq);
+    handlePrepareMsg(prepareReq);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
     m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -343,7 +343,7 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
         m_timeManager.m_changeCycle = 0;
         return true;
     }
-    handlePrepareMsg(*prepareReq);
+    handlePrepareMsg(prepareReq);
 
     /// reset the block according to broadcast result
     PBFTENGINE_LOG(INFO) << LOG_DESC("generateLocalPrepare")
@@ -361,10 +361,10 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
  */
 bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 {
-    SignReq sign_req(req, m_keyPair, nodeIdx());
+    SignReq::Ptr sign_req = std::make_shared<SignReq>(req, m_keyPair, nodeIdx());
     bytes sign_req_data;
-    sign_req.encode(sign_req_data);
-    bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
+    sign_req->encode(sign_req_data);
+    bool succ = broadcastMsg(SignReqPacket, sign_req->uniqueKey(), ref(sign_req_data));
     m_reqCache->addSignReq(sign_req);
     return succ;
 }
@@ -400,10 +400,10 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
  */
 bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 {
-    CommitReq commit_req(req, m_keyPair, nodeIdx());
+    CommitReq::Ptr commit_req = std::make_shared<CommitReq>(req, m_keyPair, nodeIdx());
     bytes commit_req_data;
-    commit_req.encode(commit_req_data);
-    bool succ = broadcastMsg(CommitReqPacket, commit_req.uniqueKey(), ref(commit_req_data));
+    commit_req->encode(commit_req_data);
+    bool succ = broadcastMsg(CommitReqPacket, commit_req->uniqueKey(), ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -888,9 +888,9 @@ void PBFTEngine::onRecvPBFTMessage(
     }
 }
 
-bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepare_req, PBFTMsgPacket const& pbftMsg)
 {
-    bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*prepare_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
@@ -918,24 +918,24 @@ void PBFTEngine::clearPreRawPrepare()
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
  */
-bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
+bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const& endpoint)
 {
     std::ostringstream oss;
-    oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq.idx)
-        << LOG_KV("view", prepareReq.view) << LOG_KV("reqNum", prepareReq.height)
+    oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq->idx)
+        << LOG_KV("view", prepareReq->view) << LOG_KV("reqNum", prepareReq->height)
         << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("consNum", m_consensusBlockNumber)
-        << LOG_KV("fromIp", endpoint) << LOG_KV("hash", prepareReq.block_hash.abridged())
+        << LOG_KV("fromIp", endpoint) << LOG_KV("hash", prepareReq->block_hash.abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
     /// check the prepare request is valid or not
-    auto valid_ret = isValidPrepare(prepareReq, oss);
+    auto valid_ret = isValidPrepare(*prepareReq, oss);
     if (valid_ret == CheckResult::INVALID)
     {
         clearPreRawPrepare();
         return false;
     }
     /// update the view for given idx
-    updateViewMap(prepareReq.idx, prepareReq.view);
+    updateViewMap(prepareReq->idx, prepareReq->view);
 
     if (valid_ret == CheckResult::FUTURE)
     {
@@ -951,13 +951,13 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
 }
 
 bool PBFTEngine::execPrepareAndGenerateSignMsg(
-    PrepareReq const& _prepareReq, std::ostringstream& _oss)
+    PrepareReq::Ptr _prepareReq, std::ostringstream& _oss)
 {
     Timer t;
     Sealing workingSealing(m_blockFactory);
     try
     {
-        execBlock(workingSealing, _prepareReq, _oss);
+        execBlock(workingSealing, *_prepareReq, _oss);
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)
@@ -982,18 +982,19 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     auto startT = utcTime();
-    PrepareReq sign_prepare(_prepareReq, workingSealing, m_keyPair);
+    PrepareReq::Ptr sign_prepare =
+        std::make_shared<PrepareReq>(*_prepareReq, workingSealing, m_keyPair);
     m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
-                          << LOG_KV("reqNum", sign_prepare.height)
-                          << LOG_KV("hash", sign_prepare.block_hash.abridged())
+                          << LOG_KV("reqNum", sign_prepare->height)
+                          << LOG_KV("hash", sign_prepare->block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("addPrepareTime", utcTime() - startT)
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     /// broadcast the re-generated signReq(add the signReq to cache)
-    broadcastSignReq(sign_prepare);
+    broadcastSignReq(*sign_prepare);
 
     checkAndCommit();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
@@ -1198,27 +1199,27 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
  * @param sign_req: return value, the decoded signReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*sign_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req.height)
-        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req.idx)
-        << LOG_KV("Sview", sign_req.view) << LOG_KV("view", m_view)
+    oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req->idx)
+        << LOG_KV("Sview", sign_req->view) << LOG_KV("view", m_view)
         << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
-        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", sign_req.block_hash.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", sign_req->block_hash.abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
     auto check_ret = isValidSignReq(sign_req, oss);
     if (check_ret == CheckResult::INVALID)
     {
         return false;
     }
-    updateViewMap(sign_req.idx, sign_req.view);
+    updateViewMap(sign_req->idx, sign_req->view);
 
     if (check_ret == CheckResult::FUTURE)
     {
@@ -1241,25 +1242,25 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
  * @return true: check succeed
  * @return false: check failed
  */
-CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidSignReq(SignReq::Ptr req, std::ostringstream& oss) const
 {
-    if (m_reqCache->isExistSign(req))
+    if (m_reqCache->isExistSign(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InValidSignReq: Duplicated sign")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    if (hasConsensused(req))
+    if (hasConsensused(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    CheckResult result = checkReq(req, oss);
+    CheckResult result = checkReq(*req, oss);
     /// to ensure that the collected signature size is equal to minValidNodes
     /// so that checkAndCommit can be called, and the committed request backup can be stored
     if ((result == CheckResult::FUTURE) &&
-        m_reqCache->getSigCacheSize(req.block_hash) < (size_t)(minValidNodes() - 1))
+        m_reqCache->getSigCacheSize(req->block_hash) < (size_t)(minValidNodes() - 1))
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());
@@ -1275,20 +1276,20 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
  * @param commit_req: return value, the decoded commitReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*commit_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_DESC("handleCommitMsg") << LOG_KV("reqNum", commit_req.height)
-        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req.idx)
-        << LOG_KV("Cview", commit_req.view) << LOG_KV("view", m_view)
+    oss << LOG_DESC("handleCommitMsg") << LOG_KV("reqNum", commit_req->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req->idx)
+        << LOG_KV("Cview", commit_req->view) << LOG_KV("view", m_view)
         << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
-        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", commit_req.block_hash.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", commit_req->block_hash.abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
     auto valid_ret = isValidCommitReq(commit_req, oss);
     if (valid_ret == CheckResult::INVALID)
@@ -1296,7 +1297,7 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         return false;
     }
     /// update the view for given idx
-    updateViewMap(commit_req.idx, commit_req.view);
+    updateViewMap(commit_req->idx, commit_req->view);
 
     if (valid_ret == CheckResult::FUTURE)
     {
@@ -1316,21 +1317,21 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
  * @return true: the given commitReq is valid
  * @return false: the given commitReq is invalid
  */
-CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidCommitReq(CommitReq::Ptr req, std::ostringstream& oss) const
 {
-    if (m_reqCache->isExistCommit(req))
+    if (m_reqCache->isExistCommit(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: Duplicated")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    if (hasConsensused(req))
+    if (hasConsensused(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    CheckResult result = checkReq(req, oss);
+    CheckResult result = checkReq(*req, oss);
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addCommitReq(req);
@@ -1338,28 +1339,29 @@ CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstrea
     return result;
 }
 
-bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleViewChangeMsg(
+    ViewChangeReq::Ptr viewChange_req, PBFTMsgPacket const& pbftMsg)
 {
-    bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*viewChange_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_KV("reqNum", viewChange_req.height) << LOG_KV("curNum", m_highestBlock.number())
-        << LOG_KV("GenIdx", viewChange_req.idx) << LOG_KV("Cview", viewChange_req.view)
+    oss << LOG_KV("reqNum", viewChange_req->height) << LOG_KV("curNum", m_highestBlock.number())
+        << LOG_KV("GenIdx", viewChange_req->idx) << LOG_KV("Cview", viewChange_req->view)
         << LOG_KV("view", m_view) << LOG_KV("fromIdx", pbftMsg.node_idx)
         << LOG_KV("fromNode", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
-        << LOG_KV("hash", viewChange_req.block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("hash", viewChange_req->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
         << LOG_KV("myNode", m_keyPair.pub().abridged());
-    valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
+    valid = isValidViewChangeReq(*viewChange_req, pbftMsg.node_idx, oss);
     if (!valid)
     {
         return false;
     }
 
     m_reqCache->addViewChangeReq(viewChange_req, m_blockChain->number());
-    if (viewChange_req.view == m_toView)
+    if (viewChange_req->view == m_toView)
     {
         checkAndChangeView();
     }
@@ -1581,40 +1583,40 @@ void PBFTEngine::checkTimeout()
 void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 {
     Guard l(m_mutex);
-    PBFTMsg pbft_msg;
+    std::shared_ptr<PBFTMsg> pbft_msg;
     std::string key;
     bool succ = false;
     switch (pbftMsg->packet_id)
     {
     case PrepareReqPacket:
     {
-        PrepareReq prepare_req;
+        PrepareReq::Ptr prepare_req = std::make_shared<PrepareReq>();
         succ = handlePrepareMsg(prepare_req, *pbftMsg);
-        key = prepare_req.uniqueKey();
+        key = prepare_req->uniqueKey();
         pbft_msg = prepare_req;
         break;
     }
     case SignReqPacket:
     {
-        SignReq req;
+        SignReq::Ptr req = std::make_shared<SignReq>();
         succ = handleSignMsg(req, *pbftMsg);
-        key = req.uniqueKey();
+        key = req->uniqueKey();
         pbft_msg = req;
         break;
     }
     case CommitReqPacket:
     {
-        CommitReq req;
+        CommitReq::Ptr req = std::make_shared<CommitReq>();
         succ = handleCommitMsg(req, *pbftMsg);
-        key = req.uniqueKey();
+        key = req->uniqueKey();
         pbft_msg = req;
         break;
     }
     case ViewChangeReqPacket:
     {
-        ViewChangeReq req;
+        std::shared_ptr<ViewChangeReq> req = std::make_shared<ViewChangeReq>();
         succ = handleViewChangeMsg(req, *pbftMsg);
-        key = req.uniqueKey();
+        key = req->uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -1627,11 +1629,11 @@ void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
     }
     }
 
-    if (!needForwardMsg(succ, key, pbftMsg, pbft_msg))
+    if (!needForwardMsg(succ, key, pbftMsg, *pbft_msg))
     {
         return;
     }
-    forwardMsg(key, pbftMsg, pbft_msg);
+    forwardMsg(key, pbftMsg, *pbft_msg);
 }
 
 // should forward message or not
@@ -1732,7 +1734,7 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        handlePrepareMsg(*p_future_prepare);
+        handlePrepareMsg(p_future_prepare);
         m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
     }
 }
@@ -1981,7 +1983,7 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
         {
             // re-encode the block into the completed block(for pbft-backup consideration)
             _prepareReq->pBlock->encode(*_prepareReq->block);
-            m_partiallyPrepareCache->addFuturePrepareCache(*_prepareReq);
+            m_partiallyPrepareCache->addFuturePrepareCache(_prepareReq);
             return true;
         }
         return false;
@@ -2009,7 +2011,7 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
                               << LOG_KV("txsSize", _prepareReq->pBlock->transactions()->size());
         m_partiallyPrepareCache->transPartiallyPrepareIntoRawPrepare();
         // begin to handlePrepare
-        return execPrepareAndGenerateSignMsg(*_prepareReq, oss);
+        return execPrepareAndGenerateSignMsg(_prepareReq, oss);
     }
     // can't find the node that generate the prepareReq
     h512 targetNode;
@@ -2220,7 +2222,7 @@ void PBFTEngine::onReceiveMissedTxsResponse(
         auto prepareReq = m_partiallyPrepareCache->partiallyRawPrepare();
         // re-encode the block into the completed block(for pbft-backup consideration)
         prepareReq->pBlock->encode(*prepareReq->block);
-        bool ret = handlePrepareMsg(*prepareReq);
+        bool ret = handlePrepareMsg(prepareReq);
         // forward the completed prepare message
         if (ret && m_cachedForwardMsg->count(prepareReq->block_hash))
         {

@@ -213,20 +213,20 @@ public:
     }
 
     void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
-    bool handlePrepareMsg(PrepareReq const& prepareReq, std::string const& ip = "self")
+    bool handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
 
     /// handle sign
-    bool handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+    bool handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleSignMsg(sign_req, pbftMsg);
     }
 
     /// handle viewchange
-    bool handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    bool handleViewChangeMsg(ViewChangeReq::Ptr viewChange_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleViewChangeMsg(viewChange_req, pbftMsg);
     }
@@ -234,15 +234,17 @@ public:
     CheckResult isValidSignReq(SignReq const& req) const
     {
         std::ostringstream oss;
-        return PBFTEngine::isValidSignReq(req, oss);
+        SignReq::Ptr signReq = std::make_shared<SignReq>(req);
+        return PBFTEngine::isValidSignReq(signReq, oss);
     }
     CheckResult isValidCommitReq(CommitReq const& req) const
     {
         std::ostringstream oss;
-        return PBFTEngine::isValidCommitReq(req, oss);
+        CommitReq::Ptr commitReq = std::make_shared<CommitReq>(req);
+        return PBFTEngine::isValidCommitReq(commitReq, oss);
     }
 
-    bool handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+    bool handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const& pbftMsg)
     {
         return PBFTEngine::handleCommitMsg(commit_req, pbftMsg);
     }

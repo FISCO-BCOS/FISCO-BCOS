@@ -33,7 +33,10 @@ namespace consensus
 class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 {
 public:
-    PBFTReqCache() {}
+    PBFTReqCache()
+      : m_prepareCache(std::make_shared<PrepareReq>()),
+        m_rawPrepareCache(std::make_shared<PrepareReq>())
+    {}
 
     virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
     /// specified prepareRequest exists in raw-prepare-cache or not?
@@ -42,7 +45,11 @@ public:
     inline bool isExistPrepare(PrepareReq const& req)
     {
         ReadGuard l(x_rawPrepareCache);
-        return m_rawPrepareCache.block_hash == req.block_hash;
+        if (!m_rawPrepareCache)
+        {
+            return false;
+        }
+        return m_rawPrepareCache->block_hash == req.block_hash;
     }
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
@@ -89,9 +96,9 @@ public:
         return 0;
     }
     // only used for ut
-    inline PrepareReq const& rawPrepareCache() { return m_rawPrepareCache; }
+    inline PrepareReq const& rawPrepareCache() { return *m_rawPrepareCache; }
 
-    inline PrepareReq const& prepareCache() { return m_prepareCache; }
+    inline PrepareReq const& prepareCache() { return *m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
     /// get the future prepare according to specified block hash
@@ -106,76 +113,76 @@ public:
     }
     /// add specified raw-prepare-request into the raw-prepare-cache
     /// reset the prepare-cache
-    inline void addRawPrepare(PrepareReq const& req)
+    inline void addRawPrepare(PrepareReq::Ptr req)
     {
         auto startT = utcTime();
         WriteGuard l(x_rawPrepareCache);
         m_rawPrepareCache = req;
-        m_prepareCache.clear();
-        PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req.height)
-                               << LOG_KV("reqIdx", req.idx)
-                               << LOG_KV("hash", req.block_hash.abridged())
+        m_prepareCache->clear();
+        PBFTReqCache_LOG(INFO) << LOG_DESC("addRawPrepare") << LOG_KV("height", req->height)
+                               << LOG_KV("reqIdx", req->idx)
+                               << LOG_KV("hash", req->block_hash.abridged())
                                << LOG_KV("time", utcTime() - startT);
     }
 
     /// add prepare request to prepare-cache
     /// remove cached request with the same block_hash but inconsistent view compaired with the
     /// specified prepare-request from the sign-cache and commit-cache
-    inline void addPrepareReq(PrepareReq const& req)
+    inline void addPrepareReq(PrepareReq::Ptr req)
     {
         m_prepareCache = req;
-        removeInvalidSignCache(req.block_hash, req.view);
-        removeInvalidCommitCache(req.block_hash, req.view);
+        removeInvalidSignCache(req->block_hash, req->view);
+        removeInvalidCommitCache(req->block_hash, req->view);
     }
 
     /// add specified signReq to the sign-cache
-    inline void addSignReq(SignReq const& req)
+    inline void addSignReq(SignReq::Ptr req)
     {
-        auto signature = req.sig.hex();
+        auto signature = req->sig.hex();
         // determine existence: in case of assign overhead
-        if (m_signCache.count(req.block_hash) && m_signCache[req.block_hash].count(signature))
+        if (m_signCache.count(req->block_hash) && m_signCache[req->block_hash].count(signature))
         {
             return;
         }
-        m_signCache[req.block_hash][signature] = req;
+        m_signCache[req->block_hash][signature] = req;
     }
 
     /// add specified commit cache to the commit-cache
-    inline void addCommitReq(CommitReq const& req)
+    inline void addCommitReq(CommitReq::Ptr req)
     {
-        auto signature = req.sig.hex();
+        auto signature = req->sig.hex();
         // determine existence: in case of assign overhead
-        if (m_commitCache.count(req.block_hash) && m_commitCache[req.block_hash].count(signature))
+        if (m_commitCache.count(req->block_hash) && m_commitCache[req->block_hash].count(signature))
         {
             return;
         }
-        m_commitCache[req.block_hash][signature] = req;
+        m_commitCache[req->block_hash][signature] = req;
     }
 
     /// add specified viewchange cache to the viewchange-cache
-    void addViewChangeReq(ViewChangeReq const& req, int64_t const& _blockNumber = 0);
+    void addViewChangeReq(ViewChangeReq::Ptr req, int64_t const& _blockNumber = 0);
 
     template <typename T, typename S>
-    inline void addReq(T const& req, S& cache)
+    inline void addReq(std::shared_ptr<T> req, S& cache)
     {
-        cache[req.block_hash][req.sig.hex()] = req;
+        cache[req->block_hash][req->sig.hex()] = req;
     }
 
     /// add future-prepare cache
-    inline void addFuturePrepareCache(PrepareReq const& req)
+    inline void addFuturePrepareCache(PrepareReq::Ptr req)
     {
         /// at most 20 future prepare cache
-        if (m_futurePrepareCache.size() >= 20)
+        if (m_futurePrepareCache.size() >= m_maxFuturePrepareCacheSize)
         {
             return;
         }
-        auto it = m_futurePrepareCache.find(req.height);
+        auto it = m_futurePrepareCache.find(req->height);
         if (it == m_futurePrepareCache.end())
         {
             PBFTReqCache_LOG(INFO)
-                << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req.height)
-                << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", req.block_hash.abridged());
-            m_futurePrepareCache[req.height] = std::make_shared<PrepareReq>(std::move(req));
+                << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req->height)
+                << LOG_KV("reqIdx", req->idx) << LOG_KV("hash", req->block_hash.abridged());
+            m_futurePrepareCache[req->height] = req;
         }
     }
 
@@ -186,7 +193,7 @@ public:
     inline void updateCommittedPrepare()
     {
         ReadGuard l(x_rawPrepareCache);
-        m_committedPrepareCache = m_rawPrepareCache;
+        m_committedPrepareCache = *m_rawPrepareCache;
     }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
     bool generateAndSetSigList(dev::eth::Block& block, const IDXTYPE& minSigSize);
@@ -199,9 +206,8 @@ public:
     inline void triggerViewChange(VIEWTYPE const& curView)
     {
         WriteGuard l(x_rawPrepareCache);
-        m_rawPrepareCache.clear();
-        m_prepareCache.clear();
-// TODO: check this logic
+        m_rawPrepareCache->clear();
+        m_prepareCache->clear();
 #if 0
         for (auto const& signCacheIterator : m_signCache)
         {
@@ -235,17 +241,18 @@ public:
     }
     inline void clearAllExceptCommitCache()
     {
-        m_prepareCache.clear();
+        m_prepareCache->clear();
         m_signCache.clear();
         m_recvViewChangeReq.clear();
     }
 
     virtual void removeInvalidFutureCache(int64_t const& _highestBlockNumber);
 
+    // only used for UT
     inline void clearAll()
     {
         WriteGuard l(x_rawPrepareCache);
-        m_rawPrepareCache.clear();
+        m_rawPrepareCache->clear();
         m_futurePrepareCache.clear();
         clearAllExceptCommitCache();
         m_commitCache.clear();
@@ -260,16 +267,16 @@ public:
         }
     }
     /// complemented functions for UTs
-    std::unordered_map<h256, std::unordered_map<std::string, SignReq>>& mutableSignCache()
+    std::unordered_map<h256, std::unordered_map<std::string, SignReq::Ptr>>& mutableSignCache()
     {
         return m_signCache;
     }
-    std::unordered_map<h256, std::unordered_map<std::string, CommitReq>>& mutableCommitCache()
+    std::unordered_map<h256, std::unordered_map<std::string, CommitReq::Ptr>>& mutableCommitCache()
     {
         return m_commitCache;
     }
 
-    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>>&
+    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>>&
     mutableViewChangeCache()
     {
         return m_recvViewChangeReq;
@@ -278,7 +285,7 @@ public:
     int64_t rawPrepareCacheHeight()
     {
         ReadGuard l(x_rawPrepareCache);
-        return m_rawPrepareCache.height;
+        return m_rawPrepareCache->height;
     }
 
 protected:
@@ -292,11 +299,11 @@ protected:
             for (auto cache_entry = it->second.begin(); cache_entry != it->second.end();)
             {
                 /// delete expired cache
-                if (cache_entry->second.height < highestBlockHeader.number())
+                if (cache_entry->second->height < highestBlockHeader.number())
                     cache_entry = it->second.erase(cache_entry);
                 /// in case of faked block hash
-                else if (cache_entry->second.height == highestBlockHeader.number() &&
-                         cache_entry->second.block_hash != highestBlockHeader.hash())
+                else if (cache_entry->second->height == highestBlockHeader.number() &&
+                         cache_entry->second->block_hash != highestBlockHeader.hash())
                     cache_entry = it->second.erase(cache_entry);
                 else
                     cache_entry++;
@@ -334,21 +341,24 @@ protected:
 
 protected:
     /// cache for prepare request
-    PrepareReq m_prepareCache = PrepareReq();
+    PrepareReq::Ptr m_prepareCache;
     /// cache for raw prepare request
-    PrepareReq m_rawPrepareCache;
+    PrepareReq::Ptr m_rawPrepareCache;
     /// cache for signReq(maps between hash and sign requests)
-    std::unordered_map<h256, std::unordered_map<std::string, SignReq>> m_signCache;
+    std::unordered_map<h256, std::unordered_map<std::string, SignReq::Ptr>> m_signCache;
     /// cache for received-viewChange requests(maps between view and view change requests)
-    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq>> m_recvViewChangeReq;
+    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>>
+        m_recvViewChangeReq;
+    // std::unordered_map<>
 
     /// cache for commited requests(maps between hash and commited requests)
-    std::unordered_map<h256, std::unordered_map<std::string, CommitReq>> m_commitCache;
+    std::unordered_map<h256, std::unordered_map<std::string, CommitReq::Ptr>> m_commitCache;
     /// cache for prepare request need to be backup and saved
     PrepareReq m_committedPrepareCache;
     /// cache for the future prepare cache
     /// key: block hash, value: the cached future prepeare
     std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;
+    const unsigned m_maxFuturePrepareCacheSize = 10;
 
     mutable SharedMutex x_rawPrepareCache;
 };
