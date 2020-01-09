@@ -76,10 +76,11 @@ void Executive::verifyTransaction(
         _t->baseGasRequired(schedule) > (bigint)txGasLimit)
     {
         m_excepted = TransactionException::OutOfGasIntrinsic;
-        m_exceptionReason
-            << LOG_KV("reason",
-                   "The gas required by deploying this contract is more than tx_gas_limit")
-            << LOG_KV("limit", txGasLimit) << LOG_KV("require", _t->baseGasRequired(schedule));
+        m_exceptionReason << LOG_KV("reason",
+                                 "The gas required by deploying/accessing this contract is more "
+                                 "than tx_gas_limit")
+                          << LOG_KV("limit", txGasLimit)
+                          << LOG_KV("require", _t->baseGasRequired(schedule));
         BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
                                   (bigint)(_t->baseGasRequired(schedule)), (bigint)txGasLimit));
     }
@@ -94,10 +95,11 @@ bool Executive::execute()
         if (txGasLimit < (u256)m_baseGasRequired)
         {
             m_excepted = TransactionException::OutOfGasBase;
-            m_exceptionReason
-                << LOG_KV("reason",
-                       "The gas required by deploying this contract is more than tx_gas_limit")
-                << LOG_KV("limit", txGasLimit) << LOG_KV("require", m_baseGasRequired);
+            m_exceptionReason << LOG_KV("reason",
+                                     "The gas required by deploying/accessing this contract is "
+                                     "more than tx_gas_limit")
+                              << LOG_KV("limit", txGasLimit)
+                              << LOG_KV("require", m_baseGasRequired);
             BOOST_THROW_EXCEPTION(
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
