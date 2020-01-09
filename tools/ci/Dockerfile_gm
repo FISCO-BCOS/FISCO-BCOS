@@ -12,7 +12,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git \
     && cd FISCO-BCOS && git checkout master \
-    && cmake . && make && make install \
+    && cmake . -DBUILD_GM=ON && make && make install \
     && cd / && rm -rf FISCO-BCOS \
     && apt-get purge git cmake build-essential -y \ 
     && apt-get autoremove -y \
