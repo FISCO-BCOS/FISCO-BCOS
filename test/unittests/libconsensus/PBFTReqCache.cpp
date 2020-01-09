@@ -248,7 +248,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     FakeInvalidReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     /// trigger viewChange
-    req_cache.triggerViewChange(0);
+    req_cache.triggerViewChange(0, 0);
     BOOST_CHECK(req_cache.isExistViewChange(*viewChange_req3));
     BOOST_CHECK(req_cache.mutableSignCache().size() == 0);
     BOOST_CHECK(req_cache.mutableCommitCache().size() == 0);
