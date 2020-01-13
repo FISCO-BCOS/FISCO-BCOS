@@ -435,7 +435,8 @@ generate_config_ini()
     fi
     cat << EOF > ${output}
 [rpc]
-    listen_ip=${listen_ip}
+    channel_listen_ip=0.0.0.0
+    jsonrpc_listen_ip=127.0.0.1
     channel_listen_port=$(( offset + port_start[1] ))
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]

@@ -37,6 +37,9 @@ using namespace dev::initializer;
 void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt)
 {
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    // listen ip for channel service, load from rpc.listen_ip if rpc.channel_listen_ip is not setted
+    listenIP = _pt.get<std::string>("rpc.channel_listen_ip", listenIP);
+
     int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
 
@@ -100,6 +103,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    // listen ip for jsonrpc, load from rpc.listen ip if rpc.jsonrpc_listen_ip is not setted
+    listenIP = _pt.get<std::string>("rpc.jsonrpc_listen_ip", listenIP);
+
     int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
@@ -182,7 +188,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("check jsonrpc_listen_port", httpListenPort) << std::endl;
             BOOST_THROW_EXCEPTION(ListenPortIsUsed());
         }
-        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer") << LOG_KV("rpcListenIp", listenIP)
+                              << LOG_KV("rpcListenPort", httpListenPort)
                               << LOG_DESC("JsonrpcHttpServer started.");
     }
     catch (std::exception& e)
