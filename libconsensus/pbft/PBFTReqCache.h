@@ -35,7 +35,9 @@ class PBFTReqCache : public std::enable_shared_from_this<PBFTReqCache>
 public:
     PBFTReqCache()
       : m_prepareCache(std::make_shared<PrepareReq>()),
-        m_rawPrepareCache(std::make_shared<PrepareReq>())
+        m_rawPrepareCache(std::make_shared<PrepareReq>()),
+        m_latestViewChangeReqCache(
+            std::make_shared<std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>>())
     {}
 
     virtual ~PBFTReqCache() { m_futurePrepareCache.clear(); }
@@ -160,7 +162,9 @@ public:
     }
 
     /// add specified viewchange cache to the viewchange-cache
-    void addViewChangeReq(ViewChangeReq::Ptr req, int64_t const& _blockNumber = 0);
+    bool checkViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber);
+    void eraseExpiredViewChange(ViewChangeReq::Ptr _req, int64_t const& _blockNumber);
+    void addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber = 0);
 
     template <typename T, typename S>
     inline void addReq(std::shared_ptr<T> req, S& cache)
@@ -203,22 +207,8 @@ public:
         int64_t const& consensusBlockNumber);
 
     /// trigger viewchange
-    inline void triggerViewChange(VIEWTYPE const& curView)
-    {
-        WriteGuard l(x_rawPrepareCache);
-        m_rawPrepareCache->clear();
-        m_prepareCache->clear();
-#if 0
-        for (auto const& signCacheIterator : m_signCache)
-        {
-            removeInvalidSignCache(signCacheIterator.first, curView);
-        }
-#endif
-        m_signCache.clear();
-        m_commitCache.clear();
-        m_futurePrepareCache.clear();
-        removeInvalidViewChange(curView);
-    }
+    void triggerViewChange(VIEWTYPE const& curView, int64_t const& _highestBlockNumber);
+
     /// delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
     /// update the sign cache and commit cache immediately
     /// in case of that the commit/sign requests with the same hash are solved in
@@ -232,9 +222,12 @@ public:
         removeInvalidFutureCache(highestBlockHeader.number());
         /// delete invalid viewchange from cache
         delInvalidViewChange(highestBlockHeader);
+        removeInvalidLatestViewChangeReq(highestBlockHeader);
     }
     /// remove invalid view-change requests according to view and the current block header
     void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
+    void removeInvalidLatestViewChangeReq(dev::eth::BlockHeader const& highestBlock);
+
     inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
         removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
@@ -324,6 +317,19 @@ protected:
             else
                 it++;
         }
+        // remove invalid viewchange req from m_latestViewChangeReqCache
+        for (auto it = m_latestViewChangeReqCache->begin();
+             it != m_latestViewChangeReqCache->end();)
+        {
+            if (it->second->view <= curView)
+            {
+                it = m_latestViewChangeReqCache->erase(it);
+            }
+            else
+            {
+                it++;
+            }
+        }
     }
     /// remove sign cache according to block hash and view
     void removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const& view);
@@ -346,10 +352,12 @@ protected:
     PrepareReq::Ptr m_rawPrepareCache;
     /// cache for signReq(maps between hash and sign requests)
     std::unordered_map<h256, std::unordered_map<std::string, SignReq::Ptr>> m_signCache;
+
     /// cache for received-viewChange requests(maps between view and view change requests)
     std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>>
         m_recvViewChangeReq;
-    // std::unordered_map<>
+    // only record the latest view of all the nodes
+    std::shared_ptr<std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>> m_latestViewChangeReqCache;
 
     /// cache for commited requests(maps between hash and commited requests)
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq::Ptr>> m_commitCache;

@@ -1493,7 +1493,7 @@ void PBFTEngine::checkAndChangeView()
         m_timeManager.m_lastConsensusTime = utcSteadyTime();
         m_view = m_toView.load();
         m_notifyNextLeaderSeal = false;
-        m_reqCache->triggerViewChange(m_view);
+        m_reqCache->triggerViewChange(m_view, m_blockChain->number());
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
 }
