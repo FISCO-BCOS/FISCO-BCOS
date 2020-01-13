@@ -22,6 +22,7 @@
  */
 #pragma once
 #include <libconsensus/pbft/PBFTEngine.h>
+#include <libdevcore/TreeTopology.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
 
@@ -43,6 +44,7 @@ public:
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
     {
+        m_chosedConsensusNodes = std::make_shared<std::set<dev::h512>>();
         // only broadcast PBFT message to the current consensus nodes
         m_broacastTargetsFilter =
             boost::bind(&RotatingPBFTEngine::filterBroadcastTargets, this, _1);
@@ -53,12 +55,22 @@ public:
                     std::make_shared<dev::p2p::NodeIDs>();
                 for (auto const& peer : *_peers)
                 {
-                    if (m_chosedConsensusNodes.count(peer))
+                    if (m_chosedConsensusNodes->count(peer))
                         selectedNode->push_back(peer);
                 }
                 return selectedNode;
             });
         m_chosedSealerList = std::make_shared<dev::h512s>();
+    }
+
+    // create TreeTopology to forward prepare message
+    void createTreeTopology(unsigned const& _treeWidth)
+    {
+        m_treeRouter = std::make_shared<dev::sync::TreeTopology>(m_keyPair.pub(), _treeWidth);
+        if (m_chosedSealerList->size() > 0)
+        {
+            m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
+        }
     }
 
     void setEpochSize(int64_t const& _epochSize)
@@ -86,6 +98,19 @@ protected:
     bool locatedInChosedConsensensusNodes() const override;
     dev::network::NodeID getSealerByIndex(size_t const& _index) const override;
     dev::network::NodeID getNodeIDByIndex(size_t const& _index) const;
+
+    void sendPrepareMsgFromLeader(PrepareReq::Ptr _prepareReq, bytesConstRef _data,
+        dev::PACKET_TYPE const& _p2pPacketType = 0) override;
+    // forward the received prepare message by tree
+    virtual void forwardReceivedPrepareMsgByTree(std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _prepareMsg, PBFTMsgPacket::Ptr _pbftMsg);
+
+    void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message) override;
+
+    bool handlePartiallyPrepare(std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message) override;
 
     // TODO: select nodes with VRF algorithm
     IDXTYPE VRFSelection() const;
@@ -116,7 +141,7 @@ protected:
 
     std::atomic_bool m_chosedConsNodeChanged = {false};
     mutable SharedMutex x_chosedConsensusNodes;
-    std::set<dev::h512> m_chosedConsensusNodes;
+    std::shared_ptr<std::set<dev::h512>> m_chosedConsensusNodes;
 
     mutable SharedMutex x_chosedSealerList;
     std::shared_ptr<dev::h512s> m_chosedSealerList;
@@ -124,6 +149,8 @@ protected:
     // used to record the rotatingIntervalEnableNumber changed or not
     dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
     bool m_rotatingIntervalUpdated = false;
+
+    std::shared_ptr<dev::sync::TreeTopology> m_treeRouter;
 };
 }  // namespace consensus
 }  // namespace dev

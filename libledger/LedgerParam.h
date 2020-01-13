@@ -68,6 +68,9 @@ struct ConsensusParam
     // enable optimize ttl or not
     bool enableTTLOptimize;
     bool enablePrepareWithTxsHash;
+
+    bool broadcastPrepareByTree;
+    unsigned treeWidth = 3;
 };
 
 struct AMDBParam

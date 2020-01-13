@@ -276,8 +276,13 @@ protected:
     bool shouldBroadcastViewChange();
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void onRecvPBFTMessage(dev::p2p::NetworkException exception,
-        std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
+    void pushValidPBFTMsgIntoQueue(dev::p2p::NetworkException exception,
+        std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message,
+        std::function<void(PBFTMsgPacket::Ptr)> const& _f);
+
+    virtual void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
     bool handlePrepareMsg(PrepareReq::Ptr prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
     bool handlePrepareMsg(PrepareReq::Ptr prepareReq, PBFTMsgPacket const& pbftMsg);
@@ -636,15 +641,23 @@ protected:
 
 
     // BIP 152 related logic
-    void handleP2PMessage(dev::p2p::NetworkException _exception,
+    virtual void handleP2PMessage(dev::p2p::NetworkException _exception,
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
 
+
     virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
+    virtual void sendPrepareMsgFromLeader(PrepareReq::Ptr _prepareReq, bytesConstRef _data,
+        dev::PACKET_TYPE const& _p2pPacketType = 0);
+
     virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
         std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
 
-    bool handlePartiallyPrepare(
+    bool handleReceivedPartiallyPrepare(std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message, std::function<void(PBFTMsgPacket::Ptr)> const& _f);
+
+    virtual bool handlePartiallyPrepare(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
     bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
 
     bool execPrepareAndGenerateSignMsg(PrepareReq::Ptr _prepareReq, std::ostringstream& _oss);

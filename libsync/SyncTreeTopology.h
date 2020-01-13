@@ -21,7 +21,7 @@
  * @date: 2019-09-19
  */
 #pragma once
-#include "TreeTopology.h"
+#include <libdevcore/TreeTopology.h>
 
 #define SYNCTREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \

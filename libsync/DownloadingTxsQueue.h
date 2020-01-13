@@ -24,8 +24,8 @@
 #include "Common.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
-#include "TreeTopology.h"
 #include <libdevcore/Guards.h>
+#include <libdevcore/TreeTopology.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>

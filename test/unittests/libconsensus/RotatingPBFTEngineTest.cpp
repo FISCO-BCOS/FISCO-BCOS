@@ -71,7 +71,7 @@ public:
 
     int64_t epochSize() { return m_epochSize; }
     int64_t rotatingInterval() { return m_rotatingInterval; }
-    std::set<dev::h512> chosedConsensusNodes() { return m_chosedConsensusNodes; }
+    std::set<dev::h512> chosedConsensusNodes() { return *m_chosedConsensusNodes; }
     IDXTYPE startNodeIdx() { return m_startNodeIdx; }
     int64_t rotatingRound() { return m_rotatingRound; }
     int64_t sealersNum() { return m_sealersNum; }
