@@ -160,17 +160,17 @@ void RotatingPBFTEngine::resetChosedConsensusNodes()
 
     // update m_chosedConsensusNodes
     UpgradableGuard lock(x_chosedConsensusNodes);
-    if (chosedConsensusNodes != m_chosedConsensusNodes)
+    if (chosedConsensusNodes != *m_chosedConsensusNodes)
     {
         UpgradeGuard ul(lock);
-        m_chosedConsensusNodes = chosedConsensusNodes;
+        *m_chosedConsensusNodes = chosedConsensusNodes;
         m_chosedConsNodeChanged = true;
     }
     RPBFTENGINE_LOG(DEBUG)
         << LOG_DESC("resetChosedConsensusNodes for sealerList changed or epoch size changed")
         << LOG_KV("epochUpdated", epochUpdated) << LOG_KV("updatedSealersNum", m_sealersNum)
         << LOG_KV("updatedStartNodeIdx", m_startNodeIdx)
-        << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes.size())
+        << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes->size())
         << LOG_KV("blockNumber", blockNumber) << LOG_KV("rotatingRound", m_rotatingRound)
         << LOG_KV("idx", m_idx) << LOG_KV("nodeId", m_keyPair.pub().abridged());
 }
@@ -202,13 +202,13 @@ void RotatingPBFTEngine::chooseConsensusNodes()
                                << LOG_KV("chosedOutNodeIdx", chosedOutIdx)
                                << LOG_KV("chosedOutNode", chosedOutNodeId.abridged())
                                << LOG_KV("rotatingRound", m_rotatingRound)
-                               << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes.size())
+                               << LOG_KV("chosedConsensusNodesNum", m_chosedConsensusNodes->size())
                                << LOG_KV("sealersNum", m_sealersNum) << LOG_KV("idx", m_idx)
                                << LOG_KV("nodeId", m_keyPair.pub().abridged());
     }
     {
         WriteGuard l(x_chosedConsensusNodes);
-        m_chosedConsensusNodes.erase(chosedOutNodeId);
+        m_chosedConsensusNodes->erase(chosedOutNodeId);
     }
     m_chosedConsNodeChanged = true;
     // update the startIndex
@@ -233,8 +233,8 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     size_t chosedConsensusNodesSize = 0;
     {
         WriteGuard l(x_chosedConsensusNodes);
-        m_chosedConsensusNodes.insert(chosedInNodeId);
-        chosedConsensusNodesSize = m_chosedConsensusNodes.size();
+        m_chosedConsensusNodes->insert(chosedInNodeId);
+        chosedConsensusNodesSize = m_chosedConsensusNodes->size();
     }
 
     // noteNewTransaction to send the remaining transactions to the inserted consensus nodes
@@ -267,12 +267,12 @@ void RotatingPBFTEngine::updateConsensusInfo()
         return;
     }
     ReadGuard l(x_chosedConsensusNodes);
-    if (m_chosedConsensusNodes.size() > 0)
+    if (m_chosedConsensusNodes->size() > 0)
     {
         WriteGuard l(x_chosedSealerList);
-        m_chosedSealerList->resize(m_chosedConsensusNodes.size());
+        m_chosedSealerList->resize(m_chosedConsensusNodes->size());
 
-        std::copy(m_chosedConsensusNodes.begin(), m_chosedConsensusNodes.end(),
+        std::copy(m_chosedConsensusNodes->begin(), m_chosedConsensusNodes->end(),
             m_chosedSealerList->begin());
         std::sort(m_chosedSealerList->begin(), m_chosedSealerList->end());
         // update consensus node info
@@ -281,6 +281,10 @@ void RotatingPBFTEngine::updateConsensusInfo()
             dev::h512s nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
             std::sort(nodeList.begin(), nodeList.end());
             m_blockSync->updateConsensusNodeInfo(*m_chosedSealerList, nodeList);
+        }
+        if (m_treeRouter)
+        {
+            m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
         }
         RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusInfo")
                                << LOG_KV("chosedSealerList", m_chosedSealerList->size());
@@ -296,7 +300,7 @@ ssize_t RotatingPBFTEngine::filterBroadcastTargets(dev::network::NodeID const& _
         return -1;
     }
     // the node should be located in the chosed consensus node list
-    if (!m_chosedConsensusNodes.count(_nodeId))
+    if (!m_chosedConsensusNodes->count(_nodeId))
     {
         return -1;
     }
@@ -307,7 +311,7 @@ ssize_t RotatingPBFTEngine::filterBroadcastTargets(dev::network::NodeID const& _
 void RotatingPBFTEngine::resetLocatedInConsensusNodes()
 {
     ReadGuard l(x_chosedConsensusNodes);
-    if (m_chosedConsensusNodes.count(m_keyPair.pub()))
+    if (m_chosedConsensusNodes->count(m_keyPair.pub()))
     {
         m_locatedInConsensusNodes = true;
         return;
@@ -321,7 +325,7 @@ dev::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) 
     if (nodeId != dev::network::NodeID())
     {
         ReadGuard l(x_chosedConsensusNodes);
-        if (m_chosedConsensusNodes.count(nodeId))
+        if (m_chosedConsensusNodes->count(nodeId))
         {
             return nodeId;
         }
@@ -332,4 +336,118 @@ dev::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) 
 dev::network::NodeID RotatingPBFTEngine::getNodeIDByIndex(size_t const& _index) const
 {
     return PBFTEngine::getSealerByIndex(_index);
+}
+
+// the leader forward prepareMsg to other nodes
+void RotatingPBFTEngine::sendPrepareMsgFromLeader(
+    PrepareReq::Ptr _prepareReq, bytesConstRef _data, dev::PACKET_TYPE const& _p2pPacketType)
+{
+    // the tree-topology has been disabled
+    if (!m_treeRouter)
+    {
+        return PBFTEngine::sendPrepareMsgFromLeader(_prepareReq, _data, _p2pPacketType);
+    }
+    // send prepareReq by tree
+    std::shared_ptr<dev::h512s> selectedNodes;
+    {
+        ReadGuard l(x_chosedConsensusNodes);
+        selectedNodes = m_treeRouter->selectNodes(m_chosedConsensusNodes, m_idx);
+    }
+    for (auto const& targetNode : *selectedNodes)
+    {
+        auto p2pMessage = transDataToMessage(_data, PrepareReqPacket, 0);
+        p2pMessage->setPacketType(_p2pPacketType);
+        m_service->asyncSendMessageByNodeID(targetNode, p2pMessage, nullptr);
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
+        }
+        RPBFTENGINE_LOG(DEBUG)
+            << LOG_DESC("sendPrepareMsgFromLeader: The leader forward prepare message")
+            << LOG_KV("prepHash", _prepareReq->block_hash.abridged())
+            << LOG_KV("height", _prepareReq->height) << LOG_KV("prepView", _prepareReq->view)
+            << LOG_KV("curView", m_view) << LOG_KV("consensusNumber", m_consensusBlockNumber)
+            << LOG_KV("targetNode", targetNode.abridged())
+            << LOG_KV("packetSize", p2pMessage->length())
+            << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("idx", nodeIdx());
+    }
+}
+
+// forward the received prepare message by tree-topology
+void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
+    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _prepareMsg, PBFTMsgPacket::Ptr _pbftMsg)
+{
+    if (!m_treeRouter)
+    {
+        return;
+    }
+    m_threadPool->enqueue([this, _session, _prepareMsg, _pbftMsg]() {
+        // get leader idx
+        std::shared_ptr<PBFTMsg> decodedPrepareMsg = std::make_shared<PBFTMsg>();
+        decodedPrepareMsg->decode(ref(_pbftMsg->data));
+        auto leaderIdx = decodedPrepareMsg->idx;
+
+        // select the nodes that should forward the prepareMsg
+        std::shared_ptr<dev::h512s> selectedNodes;
+        {
+            ReadGuard l(x_chosedConsensusNodes);
+            selectedNodes = m_treeRouter->selectNodes(m_chosedConsensusNodes, leaderIdx);
+            RPBFTENGINE_LOG(DEBUG)
+                << LOG_DESC("Rcv prepare message") << LOG_KV("peer", _session->nodeID().abridged())
+                << LOG_KV("packetSize", _prepareMsg->length()) << LOG_KV("_leaderIdx", leaderIdx)
+                << LOG_KV("selectedNodesSize", selectedNodes->size())
+                << LOG_KV("prepHeight", decodedPrepareMsg->height)
+                << LOG_KV("prepHash", decodedPrepareMsg->block_hash.abridged())
+                << LOG_KV("prepView", decodedPrepareMsg->view) << LOG_KV("curView", m_view)
+                << LOG_KV("consNumber", m_consensusBlockNumber)
+                << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("idx", nodeIdx());
+        }
+        // forward the message
+        for (auto const& targetNode : *selectedNodes)
+        {
+            m_service->asyncSendMessageByNodeID(targetNode, _prepareMsg, nullptr);
+            if (m_statisticHandler)
+            {
+                m_statisticHandler->updateConsOutPacketsInfo(
+                    PrepareReqPacket, 1, _prepareMsg->length());
+            }
+            RPBFTENGINE_LOG(DEBUG)
+                << LOG_DESC("forward Prepare message")
+                << LOG_KV("targetNode", targetNode.abridged())
+                << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("idx", nodeIdx());
+        }
+    });
+}
+
+void RotatingPBFTEngine::onRecvPBFTMessage(
+    NetworkException _exception, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    if (!m_treeRouter)
+    {
+        return PBFTEngine::pushValidPBFTMsgIntoQueue(_exception, _session, _message, nullptr);
+    }
+    return PBFTEngine::pushValidPBFTMsgIntoQueue(
+        _exception, _session, _message, [&](PBFTMsgPacket::Ptr _pbftMsg) {
+            if (_pbftMsg->packet_id == PrepareReqPacket)
+            {
+                forwardReceivedPrepareMsgByTree(_session, _message, _pbftMsg);
+            }
+        });
+}
+
+
+bool RotatingPBFTEngine::handlePartiallyPrepare(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    if (!m_treeRouter)
+    {
+        return PBFTEngine::handleReceivedPartiallyPrepare(_session, _message, nullptr);
+    }
+    return PBFTEngine::handleReceivedPartiallyPrepare(
+        _session, _message, [&](PBFTMsgPacket::Ptr _pbftMsg) {
+            if (_pbftMsg->packet_id == PrepareReqPacket)
+            {
+                forwardReceivedPrepareMsgByTree(_session, _message, _pbftMsg);
+            }
+        });
 }

@@ -251,13 +251,18 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
 dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 ||
-        !m_param->mutableConsensusParam().enablePrepareWithTxsHash)
+    if (!m_param->mutableConsensusParam().enablePrepareWithTxsHash)
     {
         return std::make_shared<dev::eth::BlockFactory>();
     }
-    // only create PartiallyBlockFactory for PBFT when enablePrepareWithTxsHash
-    return std::make_shared<dev::eth::PartiallyBlockFactory>();
+    // only create PartiallyBlockFactory when using pbft or rotating_pbft
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
+        dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") ==
+            0)
+    {
+        return std::make_shared<dev::eth::PartiallyBlockFactory>();
+    }
+    return std::make_shared<dev::eth::BlockFactory>();
 }
 
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
@@ -289,6 +294,12 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     assert(rotatingPBFT);
     rotatingPBFT->setEpochSize(m_param->mutableConsensusParam().epochSize);
     rotatingPBFT->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
+    if (m_param->mutableConsensusParam().broadcastPrepareByTree)
+    {
+        rotatingPBFT->createTreeTopology(m_param->mutableConsensusParam().treeWidth);
+        Ledger_LOG(INFO) << LOG_DESC("createTreeTopology")
+                         << LOG_KV("treeWidth", m_param->mutableConsensusParam().treeWidth);
+    }
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()

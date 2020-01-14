@@ -23,9 +23,8 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include "FixedHash.h"
+#include "Guards.h"
 
 #define TREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \

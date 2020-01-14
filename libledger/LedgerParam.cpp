@@ -245,6 +245,8 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     {
         mutableConsensusParam().enablePrepareWithTxsHash = false;
     }
+    mutableConsensusParam().broadcastPrepareByTree =
+        pt.get<bool>("consensus.broadcast_prepare_by_tree", true);
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
@@ -252,7 +254,8 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
         << LOG_KV("enablDynamicBlockSize", mutableConsensusParam().enableDynamicBlockSize)
         << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
         << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize)
-        << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash);
+        << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash)
+        << LOG_KV("broadcastPrepareByTree", mutableConsensusParam().broadcastPrepareByTree);
 }
 
 

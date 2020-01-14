@@ -107,8 +107,8 @@ public:
 
     IDXTYPE f() const { return m_f; }
     PBFTMsgQueue& mutableMsgQueue() { return m_msgQueue; }
-    void onRecvPBFTMessage(
-        NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
+    void onRecvPBFTMessage(NetworkException exception, std::shared_ptr<P2PSession> session,
+        P2PMessage::Ptr message) override
     {
         PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }

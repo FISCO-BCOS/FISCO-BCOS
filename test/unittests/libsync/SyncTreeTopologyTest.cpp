@@ -20,6 +20,7 @@
  * @author: yujiechen
  * @date: 2019-9-29
  */
+#include <libdevcrypto/Common.h>
 #include <libsync/SyncTreeTopology.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

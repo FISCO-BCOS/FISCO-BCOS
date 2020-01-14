@@ -297,8 +297,7 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         m_threadPool->enqueue([this, prepareReq, sendedData]() {
             try
             {
-                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*sendedData),
-                    PartiallyPreparePacket);
+                sendPrepareMsgFromLeader(prepareReq, ref(*sendedData), PartiallyPreparePacket);
             }
             catch (std::exception const& e)
             {
@@ -317,7 +316,7 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
             {
                 std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
                 prepareReq->encode(*prepare_data);
-                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+                sendPrepareMsgFromLeader(prepareReq, ref(*prepare_data));
             }
             catch (std::exception const& e)
             {
@@ -327,6 +326,13 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         });
     }
     return prepareReq;
+}
+
+// broadcast prepare message to all the other nodes
+void PBFTEngine::sendPrepareMsgFromLeader(
+    PrepareReq::Ptr _prepareReq, bytesConstRef _data, dev::PACKET_TYPE const& _p2pPacketType)
+{
+    broadcastMsg(PrepareReqPacket, _prepareReq->uniqueKey(), _data, _p2pPacketType);
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
@@ -850,8 +856,8 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
  * @param session: the session related to the network data(can get informations about the sender)
  * @param message: message constructed from data received from the network
  */
-void PBFTEngine::onRecvPBFTMessage(
-    NetworkException, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
+void PBFTEngine::pushValidPBFTMsgIntoQueue(NetworkException, std::shared_ptr<P2PSession> session,
+    P2PMessage::Ptr message, std::function<void(PBFTMsgPacket::Ptr)> const& _f)
 {
     if (nodeIdx() == MAXIDX)
     {
@@ -865,6 +871,11 @@ void PBFTEngine::onRecvPBFTMessage(
     if (!valid)
     {
         return;
+    }
+    // calls callback if _f is not null
+    if (_f)
+    {
+        _f(pbft_msg);
     }
     if (pbft_msg->packet_id <= ViewChangeReqPacket)
     {
@@ -886,6 +897,12 @@ void PBFTEngine::onRecvPBFTMessage(
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
+}
+
+void PBFTEngine::onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    return pushValidPBFTMsgIntoQueue(_exception, _session, _message, nullptr);
 }
 
 bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepare_req, PBFTMsgPacket const& pbftMsg)
@@ -2166,15 +2183,26 @@ void PBFTEngine::handleP2PMessage(
     }
 }
 
-// handle Partially prepare
+
 bool PBFTEngine::handlePartiallyPrepare(
-    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    return handleReceivedPartiallyPrepare(_session, _message, nullptr);
+}
+
+// handle Partially prepare
+bool PBFTEngine::handleReceivedPartiallyPrepare(std::shared_ptr<P2PSession> _session,
+    P2PMessage::Ptr _message, std::function<void(PBFTMsgPacket::Ptr)> const& _f)
 {
     // decode the _message into prepareReq
     PBFTMsgPacket::Ptr pbftMsg = m_pbftMsgFactory->createPBFTMsgPacket();
     if (!decodePBFTMsgPacket(pbftMsg, _message, _session))
     {
         return false;
+    }
+    if (_f)
+    {
+        _f(pbftMsg);
     }
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     if (!decodeToRequests(*prepareReq, ref(pbftMsg->data)))
