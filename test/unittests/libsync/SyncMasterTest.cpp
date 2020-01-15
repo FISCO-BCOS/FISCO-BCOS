@@ -126,7 +126,7 @@ public:
             bytes data(str.begin(), str.end());
             Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             KeyPair sigKeyPair = KeyPair::create();
-            tx->setNonce(tx->nonce() + u256(rand()) + i);
+            tx->setNonce(tx->nonce() + utcTime() + m_nonceBase);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
             SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
@@ -134,6 +134,7 @@ public:
             tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
             txs->emplace_back(tx);
+            m_nonceBase++;
         }
         return txs;
     }
@@ -141,6 +142,7 @@ public:
 public:
     Secret m_sec;
     h256 m_genesisHash;
+    size_t m_nonceBase = 0;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
