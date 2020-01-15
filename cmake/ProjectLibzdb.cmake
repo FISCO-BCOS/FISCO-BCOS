@@ -8,7 +8,7 @@ ExternalProject_Add(mysqlclient
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    URL https://downloads.mysql.com/archives/get/file/mysql-connector-c-6.1.11-src.tar.gz
+    URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-src.tar.gz
     URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
     #please make sure MYSQL_TCP_PORT is set and not equal to 3306
     CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
