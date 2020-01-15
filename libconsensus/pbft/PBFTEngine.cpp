@@ -45,6 +45,17 @@ void PBFTEngine::start()
 {
     // create PBFTMsgFactory
     createPBFTMsgFactory();
+    createPBFTReqCache();
+    // register P2P callback after create PBFTMsgFactory
+    m_service->registerHandlerByProtoclID(
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
+    initPBFTEnv(3 * getEmptyBlockGenTime());
+    ConsensusEngineBase::start();
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
+}
+
+void PBFTEngine::createPBFTReqCache()
+{
     // init enablePrepareWithTxsHash
     if (m_enablePrepareWithTxsHash)
     {
@@ -55,12 +66,6 @@ void PBFTEngine::start()
     {
         m_reqCache = std::make_shared<PBFTReqCache>();
     }
-    // register P2P callback after create PBFTMsgFactory
-    m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
-    initPBFTEnv(3 * getEmptyBlockGenTime());
-    ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::stop()

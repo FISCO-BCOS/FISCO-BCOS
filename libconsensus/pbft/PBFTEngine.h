@@ -229,6 +229,8 @@ public:
 
     void stop() override;
 
+    virtual void createPBFTReqCache();
+
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);

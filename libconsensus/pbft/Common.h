@@ -45,6 +45,11 @@ enum P2PPacketType : uint32_t
     GetMissedTxsPacket = 0x2,
     // represent that the node receives the missed transaction data
     MissedTxsPacket = 0x3,
+    // status of RawPrepareReq
+    P2PRawPrepareStatusPacket = 0x4,
+    // represent that the node should response the RawPrepareReq to the requested node
+    RequestRawPreparePacket = 0x5,
+    RawPrepareResponse = 0x6,
 };
 
 // for pbft
@@ -194,6 +199,7 @@ public:
 /// the base class of PBFT message
 struct PBFTMsg
 {
+    using Ptr = std::shared_ptr<PBFTMsg>;
     /// the number of the block that is handling
     int64_t height = -1;
     /// view when construct this PBFTMsg
@@ -208,6 +214,7 @@ struct PBFTMsg
     Signature sig = Signature();
     /// signature to the hash of other fields except block_hash, sig and sig2
     Signature sig2 = Signature();
+
     PBFTMsg() = default;
     PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
         IDXTYPE const& _idx, h256 const _blockHash)
@@ -220,6 +227,7 @@ struct PBFTMsg
         sig = signHash(block_hash, _keyPair);
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
+
     virtual ~PBFTMsg() = default;
 
     bool operator==(PBFTMsg const& req) const
@@ -336,7 +344,6 @@ struct PrepareReq : public PBFTMsg
     {
         block = std::make_shared<dev::bytes>();
     }
-
     /**
      * @brief: populate the prepare request from specified prepare request,
      *         given view and node index
