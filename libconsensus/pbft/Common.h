@@ -208,6 +208,7 @@ struct PBFTMsg
     Signature sig = Signature();
     /// signature to the hash of other fields except block_hash, sig and sig2
     Signature sig2 = Signature();
+    using Ptr = std::shared_ptr<PBFTMsg>;
     PBFTMsg() = default;
     PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
         IDXTYPE const& _idx, h256 const _blockHash)
