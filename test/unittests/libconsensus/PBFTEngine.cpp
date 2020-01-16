@@ -808,6 +808,154 @@ BOOST_AUTO_TEST_CASE(testHandleMsg)
         }
     }
 }
+
+BOOST_AUTO_TEST_CASE(testCreatePBFTReqCache)
+{
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
+    // create PartiallyPrepareReq
+    fake_pbft.consensus()->setEnablePrepareWithTxsHash(true);
+    fake_pbft.consensus()->createPBFTReqCache();
+    BOOST_CHECK(std::dynamic_pointer_cast<PartiallyPBFTReqCache>(
+                    fake_pbft.consensus()->reqCache()) != nullptr);
+
+    // create reqCache
+    fake_pbft.consensus()->setEnablePrepareWithTxsHash(false);
+    fake_pbft.consensus()->createPBFTReqCache();
+    BOOST_CHECK(std::dynamic_pointer_cast<PartiallyPBFTReqCache>(
+                    fake_pbft.consensus()->reqCache()) == nullptr);
+}
+
+void checkPrepareReqEqual(PrepareReq::Ptr _first, PrepareReq::Ptr _second)
+{
+    BOOST_CHECK(_first->block_hash == _second->block_hash);
+    BOOST_CHECK(_first->height == _second->height);
+    BOOST_CHECK(_first->idx == _second->idx);
+    BOOST_CHECK(_first->sig == _second->sig);
+    BOOST_CHECK(_first->timestamp == _second->timestamp);
+    BOOST_CHECK(_first->view == _second->view);
+    BOOST_CHECK(_first->sig2 == _second->sig2);
+}
+
+BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
+{
+    std::shared_ptr<FakeConsensus<FakePBFTEngine>> leaderPBFT =
+        std::make_shared<FakeConsensus<FakePBFTEngine>>(4, ProtocolID::PBFT);
+    std::shared_ptr<FakeConsensus<FakePBFTEngine>> followerPBFT =
+        std::make_shared<FakeConsensus<FakePBFTEngine>>(4, ProtocolID::PBFT);
+
+    followerPBFT->m_sealerList = leaderPBFT->m_sealerList = leaderPBFT->consensus()->sealerList();
+    followerPBFT->m_keyPair = leaderPBFT->m_keyPair;
+    followerPBFT->consensus()->setSealerList(leaderPBFT->consensus()->sealerList());
+
+    // init for the leaderPBFT: create blockFactory, PartiallyPBFTReqCache for the consensus engine
+    std::shared_ptr<BlockFactory> blockFactory = std::make_shared<PartiallyBlockFactory>();
+    leaderPBFT->consensus()->setBlockFactory(blockFactory);
+    leaderPBFT->consensus()->setEnablePrepareWithTxsHash(true);
+    leaderPBFT->consensus()->createPBFTReqCache();
+
+    // init for the followerPBFT
+    followerPBFT->consensus()->setBlockFactory(blockFactory);
+    followerPBFT->consensus()->setEnablePrepareWithTxsHash(true);
+    followerPBFT->consensus()->createPBFTReqCache();
+
+    // the leader construct prepareReq
+    PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
+    TestIsValidPrepare(*followerPBFT, prepareReq, true);
+    leaderPBFT->consensus()->setNodeIdx(prepareReq->idx);
+    leaderPBFT->consensus()->setKeyPair(leaderPBFT->m_keyPair[prepareReq->idx]);
+    leaderPBFT->consensus()->setView(prepareReq->view);
+
+    auto followIdx = (prepareReq->idx + 1) % 4;
+    followerPBFT->consensus()->setNodeIdx(followIdx);
+    followerPBFT->consensus()->setKeyPair(leaderPBFT->m_keyPair[followIdx]);
+
+    std::shared_ptr<FakeBlock> fakedBlock = std::make_shared<FakeBlock>();
+    prepareReq->pBlock->setTransactions(fakedBlock->fakeTransactions(1, prepareReq->height));
+    auto sendedPrepare = leaderPBFT->consensus()->constructPrepareReq(prepareReq->pBlock);
+    BOOST_CHECK(sendedPrepare->idx == prepareReq->idx);
+    BOOST_CHECK(sendedPrepare->view == prepareReq->view);
+
+    // get the broadcasted p2p message
+    std::shared_ptr<FakeService> leaderService =
+        std::dynamic_pointer_cast<FakeService>(leaderPBFT->consensus()->mutableService());
+    std::shared_ptr<P2PMessage> receivedP2pMsg = nullptr;
+    // wait broadcast enqueue finished
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg =
+            leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    for (auto const& nodeId : leaderPBFT->m_sealerList)
+    {
+        compareAndClearAsyncSendTime(*leaderPBFT, nodeId, 1);
+    }
+    BOOST_CHECK(receivedP2pMsg != nullptr);
+
+    // test handleP2PMessage(handlePartiallyPrepare)
+    std::shared_ptr<FakeSession> session =
+        std::make_shared<FakeSession>(leaderPBFT->consensus()->keyPair().pub());
+
+    dev::p2p::NetworkException _exception;
+    followerPBFT->consensus()->wrapperHandleP2PMessage(_exception, session, receivedP2pMsg);
+
+    // the follower handlePartiallyPrepare and request missed transactions to the leader
+    std::shared_ptr<FakeService> followService =
+        std::dynamic_pointer_cast<FakeService>(followerPBFT->consensus()->mutableService());
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg =
+            followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    // the follower handlePartiallyPrepare and request missed transactions to the leader
+    compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 1);
+
+    BOOST_CHECK(receivedP2pMsg != nullptr);
+
+    checkPrepareReqEqual(
+        followerPBFT->consensus()->partiallyReqCache()->partiallyRawPrepare(), sendedPrepare);
+
+    // the leader response the requested-transactions
+    session->m_id = followerPBFT->consensus()->keyPair().pub();
+    leaderPBFT->consensus()->wrapperHandleP2PMessage(_exception, session, receivedP2pMsg);
+
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg =
+            leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    compareAndClearAsyncSendTime(*leaderPBFT, followerPBFT->consensus()->keyPair().pub(), 2);
+    BOOST_CHECK(receivedP2pMsg != nullptr);
+
+    // the follower get missed transaction from the leader and fill the block and addRawPrepare
+    session->m_id = leaderPBFT->consensus()->keyPair().pub();
+    followerPBFT->consensus()->wrapperHandleP2PMessage(_exception, session, receivedP2pMsg);
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg =
+            followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 2);
+    checkPrepareReqEqual(
+        followerPBFT->consensus()->partiallyReqCache()->rawPrepareCachePtr(), sendedPrepare);
+
+    // check transactions of the blocks
+    size_t i = 0;
+    for (auto tx : *(followerPBFT->consensus()
+                         ->partiallyReqCache()
+                         ->rawPrepareCachePtr()
+                         ->pBlock->transactions()))
+    {
+        BOOST_CHECK(*tx == *(*sendedPrepare->pBlock->transactions())[i]);
+        i++;
+    }
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

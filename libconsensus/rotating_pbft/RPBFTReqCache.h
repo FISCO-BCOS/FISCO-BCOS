@@ -64,6 +64,11 @@ public:
     // check the given raw-prepare-request has been sent or not
     bool isRequestedPrepare(dev::h256 const& _hash);
 
+    void setMaxRequestedPrepareQueueSize(size_t const& _maxRequestedPrepareQueueSize)
+    {
+        m_maxRequestedPrepareQueueSize = _maxRequestedPrepareQueueSize;
+    }
+
 private:
     bool findTheRequestedRawPrepare(PBFTMsg::Ptr _rawPrepareRequestMsg);
     // compare _cachedRawPrepareStatus and _receivedRawPrepareStatus
@@ -74,7 +79,7 @@ private:
 private:
     // record the requested rawPrepareReq
     std::shared_ptr<QueueSet<dev::h256>> m_requestedPrepareQueue;
-    size_t const m_maxRequestedPrepareQueueSize = 1024;
+    size_t m_maxRequestedPrepareQueueSize = 1024;
     mutable SharedMutex x_requestedPrepareQueue;
 };
 }  // namespace consensus

@@ -75,6 +75,14 @@ public:
         return msg->second;
     }
 
+    void clearMessageByNodeID(NodeID const& nodeID)
+    {
+        if (m_asyncSendMsgs.count(nodeID))
+        {
+            m_asyncSendMsgs.erase(nodeID);
+        }
+    }
+
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
     std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override

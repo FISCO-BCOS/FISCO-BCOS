@@ -53,6 +53,8 @@ public:
         }
         return m_rawPrepareCache->block_hash == req.block_hash;
     }
+
+    PrepareReq::Ptr rawPrepareCachePtr() { return m_rawPrepareCache; }
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {

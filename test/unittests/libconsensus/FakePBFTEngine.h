@@ -144,6 +144,7 @@ public:
         return ret;
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
+
     std::shared_ptr<BlockChainInterface> blockChain() { return m_blockChain; }
     std::shared_ptr<TxPoolInterface> txPool() { return m_txPool; }
     bool broadcastSignReq(PrepareReq const& req) { return PBFTEngine::broadcastSignReq(req); }
@@ -217,6 +218,19 @@ public:
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
     }
+
+    void setEnablePrepareWithTxsHash(bool const& _enablePrepareWithTxsHash)
+    {
+        m_enablePrepareWithTxsHash = _enablePrepareWithTxsHash;
+    }
+
+    std::shared_ptr<PBFTReqCache> reqCache() { return m_reqCache; }
+
+    PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block)
+    {
+        return PBFTEngine::constructPrepareReq(_block);
+    }
+
     void setOmitEmpty(bool value) { m_omitEmptyBlock = value; }
 
     /// handle sign
@@ -259,6 +273,15 @@ public:
 
     bool notifyNextLeaderSeal() { return m_notifyNextLeaderSeal; }
     IDXTYPE getNextLeader() const { return PBFTEngine::getNextLeader(); }
+    void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
+
+    PartiallyPBFTReqCache::Ptr partiallyReqCache() { return m_partiallyPrepareCache; }
+
+    void wrapperHandleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    {
+        return PBFTEngine::handleP2PMessage(_exception, _session, _message);
+    }
 };
 
 template <typename T>
@@ -302,6 +325,7 @@ public:
             KeyPair key_pair = KeyPair::create();
             m_sealerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
+            m_keyPair.push_back(key_pair);
             m_consensus->appendSealer(key_pair.pub());
         }
     }
@@ -310,6 +334,7 @@ public:
 public:
     h512s m_sealerList;
     std::vector<Secret> m_secrets;
+    std::vector<KeyPair> m_keyPair;
 
 private:
     std::shared_ptr<T> m_consensus;

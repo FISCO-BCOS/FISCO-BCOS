@@ -66,6 +66,7 @@ struct transactionCompare
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
+    TxPool() = default;
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 32)
