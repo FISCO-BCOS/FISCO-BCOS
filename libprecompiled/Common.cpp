@@ -55,3 +55,8 @@ std::string dev::precompiled::getTableName(const std::string& _tableName)
     }
     return USER_TABLE_PREFIX_SHORT + _tableName;
 }
+
+std::string dev::precompiled::getContractTableName(Address const& _contractAddress)
+{
+    return std::string("c_" + _contractAddress.hex());
+}

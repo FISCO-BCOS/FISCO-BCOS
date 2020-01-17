@@ -180,7 +180,11 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         else
         {
             m_gas = _p.gas;
-            if (m_s->addressHasCode(_p.codeAddress))
+            if (m_s->frozen(_p.codeAddress))
+            {
+                m_excepted = TransactionException::ContractFrozen;
+            }
+            else if (m_s->addressHasCode(_p.codeAddress))
             {
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
@@ -246,6 +250,10 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             revert();
             m_excepted = TransactionException::Unknown;
         }
+    }
+    else if (m_s->frozen(_p.codeAddress))
+    {
+        m_excepted = TransactionException::ContractFrozen;
     }
     else if (m_s->addressHasCode(_p.codeAddress))
     {
