@@ -33,12 +33,14 @@ using namespace dev::precompiled;
 const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
 const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
 const char* const CNS_METHOD_SLT_STR2 = "selectByNameAndVersion(string,string)";
+const char* const CNS_METHOD_SLT_STR3 = "getAddressByNameAndVersion(string,string)";
 
 CNSPrecompiled::CNSPrecompiled()
 {
     name2Selector[CNS_METHOD_INS_STR4] = getFuncSelector(CNS_METHOD_INS_STR4);
     name2Selector[CNS_METHOD_SLT_STR] = getFuncSelector(CNS_METHOD_SLT_STR);
     name2Selector[CNS_METHOD_SLT_STR2] = getFuncSelector(CNS_METHOD_SLT_STR2);
+    name2Selector[CNS_METHOD_SLT_STR3] = getFuncSelector(CNS_METHOD_SLT_STR3);
 }
 
 
@@ -196,6 +198,31 @@ bytes CNSPrecompiled::call(
         Json::FastWriter fastWriter;
         std::string str = fastWriter.write(CNSInfos);
         out = abi.abiIn("", str);
+    }
+     else if (func == name2Selector[CNS_METHOD_SLT_STR3])
+    {
+        // getAddressByNameAndVersion(string,string) returns(address)
+        std::string contractName, contractVersion;
+        abi.abiOut(data, contractName, contractVersion);
+        Table::Ptr table = openTable(context, SYS_CNS);
+        
+        std::string value = "0x0";
+        auto entries = table->select(contractName, table->newCondition());
+        if (entries.get())
+        {
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                auto entry = entries->get(i);
+                if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
+                {
+                    value = entry->getField(SYS_CNS_FIELD_ADDRESS);
+                    // Only one
+                    break;
+                }
+            }
+        }
+        Address ret = Address(value);
+        out = abi.abiIn("", ret);
     }
     else
     {
