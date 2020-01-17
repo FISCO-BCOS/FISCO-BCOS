@@ -48,6 +48,18 @@ public:
 
 private:
     bool checkAddress(Address const& contractAddress);
+    ContractStatus getContractStatus(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
+    void kill(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
+        std::string const& tableName, std::string const& frozen, Address const& origin);
+    void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void query(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
 };
 
 }  // namespace precompiled

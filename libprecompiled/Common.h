@@ -42,6 +42,8 @@ namespace precompiled
 enum PrecompiledError : int
 {
     // ContractStatusPrecompiled -51999 ~ -51900
+    CODE_INVALID_CONTRACT_AVAILABLE = -51902,
+    CODE_INVALID_CONTRACT_FEOZEN = -51901,
     CODE_INVALID_CONTRACT_KILLED = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
