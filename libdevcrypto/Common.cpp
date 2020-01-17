@@ -131,6 +131,12 @@ bool dev::SignatureStruct::isValid() const noexcept
     return (v <= 1 && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
+NumberVType dev::getVFromRLP(RLP const& _txRLPField)
+{
+    NumberVType v = _txRLPField.toInt<NumberVType>() - VBase;
+    return v;
+}
+
 /**
  * @brief : obtain public key according to secret key
  * @param _secret : the data of secret key

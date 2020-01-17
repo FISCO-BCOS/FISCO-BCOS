@@ -78,6 +78,9 @@ struct SignatureStruct
 /// A vector of secrets.
 using Secrets = std::vector<Secret>;
 
+
+NumberVType getVFromRLP(RLP const& _txRLPField);
+
 /// Convert a secret key into the public key equivalent.
 /// if convert failed, assertion failed
 Public toPublic(Secret const& _secret);
