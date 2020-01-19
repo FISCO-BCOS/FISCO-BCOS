@@ -33,25 +33,36 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 
 // precompiled contract function
-const char* const METHOD_FROZEN_STR = "setFrozenStatus(address,bool)";
+/*
+contract Frozen {
+    function kill(address addr) public returns(int);
+    function freeze(address addr) public returns(int);
+    function unfreeze(address addr) public returns(int);
+    function queryStatus(address addr) public constant returns(uint,string);
+}
+*/
+
 const char* const METHOD_KILL_STR = "kill(address)";
-const char* const METHOD_QUERY_STR = "query(address)";
+const char* const METHOD_FREEZE_STR = "freeze(address)";
+const char* const METHOD_UNFREEZE_STR = "unfreeze(address)";
+const char* const METHOD_QUERY_STR = "queryStatus(address)";
 
 // contract state
 // available,frozen,killed
 
 // state-transition matrix
 /*
-                                available frozen    killed
-   setFrozenStatus(addr,true)   frozen    frozen    ×
-   setFrozenStatus(addr,false)  available available ×
-   kill(addr)                   killed    killed    killed
+            available frozen    killed
+   freeze   frozen    ×         ×
+   unfreeze ×         available ×
+   kill     killed    killed    ×
 */
 
 UpdateContractStatusPrecompiled::UpdateContractStatusPrecompiled()
 {
-    name2Selector[METHOD_FROZEN_STR] = getFuncSelector(METHOD_FROZEN_STR);
     name2Selector[METHOD_KILL_STR] = getFuncSelector(METHOD_KILL_STR);
+    name2Selector[METHOD_FREEZE_STR] = getFuncSelector(METHOD_FREEZE_STR);
+    name2Selector[METHOD_UNFREEZE_STR] = getFuncSelector(METHOD_UNFREEZE_STR);
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
 }
 
@@ -65,31 +76,236 @@ bool UpdateContractStatusPrecompiled::checkAddress(Address const& contractAddres
     }
     catch (...)
     {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                               << LOG_DESC("address invalid") << LOG_KV("address", contractAddress);
         isValidAddress = false;
     }
     return isValidAddress;
 }
 
+ContractStatus UpdateContractStatusPrecompiled::getContractStatus(
+    ExecutiveContext::Ptr context, std::string const& tableName)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        ContractStatus status = ContractStatus::Available;
+        auto entries = table->select(storagestate::ACCOUNT_ALIVE, table->newCondition());
+        if (entries->size() > 0 && entries->get(0) &&
+            "true" == entries->get(0)->getField(storagestate::STORAGE_VALUE))
+        {
+            status = ContractStatus::Killed;
+        }
+        else
+        {  // query only in alive
+            auto entries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
+            if (entries->size() > 0 && entries->get(0) &&
+                "true" == entries->get(0)->getField(storagestate::STORAGE_VALUE))
+            {
+                status = ContractStatus::Frozen;
+            }
+        }
+        return status;
+    }
+    return ContractStatus::Killed;
+}
+
+void UpdateContractStatusPrecompiled::kill(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+{
+    dev::eth::ContractABI abi;
+    Address contractAddress;
+    abi.abiOut(data, contractAddress);
+    int result = 0;
+    // check address valid
+    if (!checkAddress(contractAddress))
+    {
+        result = CODE_ADDRESS_INVALID;
+    }
+    else
+    {
+        std::string tableName = precompiled::getContractTableName(contractAddress);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                               << LOG_KV("kill contract", tableName);
+
+        if (getContractStatus(context, tableName) == ContractStatus::Killed)
+        {
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else
+        {
+            Table::Ptr table = openTable(context, tableName);
+            if (table)
+            {
+                auto entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, "");
+                table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin));
+                entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
+                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin));
+                entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, "false");
+                result = table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin));
+
+                if (result == storage::CODE_NO_AUTHORIZED)
+                {
+                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                                           << LOG_DESC("permission denied");
+                }
+            }
+        }
+    }
+
+    getErrorCodeOut(out, result);
+}
+
+int UpdateContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
+    std::string const& tableName, std::string const& frozen, Address const& origin)
+{
+    int result = 0;
+
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
+        auto entry = table->newEntry();
+        entry->setField(storagestate::STORAGE_VALUE, frozen);
+        if (entries->size() != 0u)
+        {
+            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
+                std::make_shared<AccessOptions>(origin));
+        }
+        else
+        {
+            result = table->insert(
+                storagestate::ACCOUNT_FROZEN, entry, std::make_shared<AccessOptions>(origin));
+        }
+
+        if (result == storage::CODE_NO_AUTHORIZED)
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("UpdateContractStatusPrecompiled") << LOG_DESC("permission denied");
+        }
+    }
+
+    return result;
+}
+
+void UpdateContractStatusPrecompiled::freeze(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+{
+    dev::eth::ContractABI abi;
+    Address contractAddress;
+    abi.abiOut(data, contractAddress);
+    int result = 0;
+    // check address valid and status(available)
+    if (!checkAddress(contractAddress))
+    {
+        result = CODE_ADDRESS_INVALID;
+    }
+    else
+    {
+        std::string tableName = precompiled::getContractTableName(contractAddress);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                               << LOG_KV("freeze contract", tableName);
+
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
+        {
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Frozen == status)
+        {
+            result = CODE_INVALID_CONTRACT_FEOZEN;
+        }
+        else
+        {
+            result = updateFrozenStatus(context, tableName, "true", origin);
+        }
+    }
+    getErrorCodeOut(out, result);
+}
+
+void UpdateContractStatusPrecompiled::unfreeze(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+{
+    dev::eth::ContractABI abi;
+    Address contractAddress;
+    abi.abiOut(data, contractAddress);
+    int result = 0;
+
+    if (!checkAddress(contractAddress))
+    {
+        result = CODE_ADDRESS_INVALID;
+    }
+    else
+    {
+        std::string tableName = precompiled::getContractTableName(contractAddress);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                               << LOG_KV("unfreeze contract", tableName);
+
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
+        {
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Available == status)
+        {
+            result = CODE_INVALID_CONTRACT_AVAILABLE;
+        }
+        else
+        {
+            result = updateFrozenStatus(context, tableName, "false", origin);
+        }
+    }
+    getErrorCodeOut(out, result);
+}
+
+void UpdateContractStatusPrecompiled::query(
+    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+{
+    dev::eth::ContractABI abi;
+
+    Address contractAddress;
+    abi.abiOut(data, contractAddress);
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled") << LOG_DESC("call query")
+                           << LOG_KV("contract table name", tableName);
+
+    int status = getContractStatus(context, tableName);
+    out = abi.abiIn("", (u256)status, CONTRACT_STATUS_DESC[status]);
+}
+
 bytes UpdateContractStatusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    (void)context;
-    (void)origin;
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
                            << LOG_KV("call param", toHex(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);
+    bytesConstRef data = getParamData(param);
     bytes out;
 
     if (func == name2Selector[METHOD_KILL_STR])
     {
+        kill(context, data, origin, out);
     }
-    else if (func == name2Selector[METHOD_FROZEN_STR])
+    else if (func == name2Selector[METHOD_FREEZE_STR])
     {
+        freeze(context, data, origin, out);
+    }
+    else if (func == name2Selector[METHOD_UNFREEZE_STR])
+    {
+        unfreeze(context, data, origin, out);
     }
     else if (func == name2Selector[METHOD_QUERY_STR])
     {
+        query(context, data, out);
     }
     else
     {
