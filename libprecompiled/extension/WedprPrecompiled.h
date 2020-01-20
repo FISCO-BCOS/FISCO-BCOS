@@ -27,11 +27,11 @@ namespace dev
 {
 namespace precompiled
 {
-// hidden asset
-extern const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[];
-extern const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[];
-extern const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[];
-extern const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[];
+// hidden payment
+extern const char API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT[];
+extern const char API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT[];
+extern const char API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT[];
+extern const char API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT[];
 
 // anonymous voting
 extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];

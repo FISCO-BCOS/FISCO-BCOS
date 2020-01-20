@@ -111,9 +111,6 @@ jobs:
             strip fisco-bcos
             tar -zcf fisco-bcos.tar.gz fisco-bcos
       - store_artifacts:
-          path: /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
-          destination: wedpr-fisco-withSymbol.tar.gz
-      - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
           destination: mini-wedpr-fisco-bcos.tar.gz
 

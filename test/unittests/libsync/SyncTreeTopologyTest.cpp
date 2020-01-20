@@ -390,4 +390,4 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace de
+}  // namespace dev
