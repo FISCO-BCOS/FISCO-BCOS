@@ -51,6 +51,10 @@ public:
     // select the nodes by tree topology
     virtual std::shared_ptr<dev::h512s> selectNodes(
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+
+    virtual std::shared_ptr<dev::h512s> selectParent(
+        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+
     virtual int64_t consIndex() const
     {
         if (m_consIndex == -1)
@@ -72,6 +76,8 @@ protected:
     virtual void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
         int64_t const& _startIndex);
+
+    int64_t getNodeIndex(int64_t const& _consIndex);
 
     virtual bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;
 
