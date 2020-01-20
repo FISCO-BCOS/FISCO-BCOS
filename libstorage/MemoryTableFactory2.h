@@ -62,12 +62,15 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 
 private:
+    h256 calcualteDBHashWithNonEmptyHashData(
+        std::shared_ptr<std::vector<std::pair<std::string, Table::Ptr>>> _tables);
+
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
     uint64_t m_ID = 1;
     // this map can't be changed, hash() need ordered data
     tbb::concurrent_unordered_map<std::string, Table::Ptr> m_name2Table;
-    tbb::enumerable_thread_specific<std::vector<Change> > s_changeLog;
+    tbb::enumerable_thread_specific<std::vector<Change>> s_changeLog;
     h256 m_hash;
     std::vector<std::string> m_sysTables;
 

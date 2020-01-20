@@ -396,6 +396,7 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
             allData.insert(allData.end(), &status, &status + sizeof(status));
         }
 #if 0
+// for tracking storage bug
         auto printEntries = [](tbb::concurrent_vector<Entry::Ptr>& entries) {
             if (entries.size() == 0)
             {

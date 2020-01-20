@@ -194,32 +194,39 @@ void MemoryTableFactory2::commit()
 
 h256 MemoryTableFactory2::hash()
 {
-    std::vector<std::pair<std::string, Table::Ptr> > tables;
+    std::shared_ptr<std::vector<std::pair<std::string, Table::Ptr>>> tables =
+        std::make_shared<std::vector<std::pair<std::string, Table::Ptr>>>();
     for (auto& it : m_name2Table)
     {
         if (it.second->tableInfo()->enableConsensus)
         {
-            tables.push_back(std::make_pair(it.first, it.second));
+            tables->push_back(std::make_pair(it.first, it.second));
         }
     }
 
-    tbb::parallel_sort(tables.begin(), tables.end(),
-        [](const std::pair<std::string, Table::Ptr>& lhs,
-            const std::pair<std::string, Table::Ptr>& rhs) { return lhs.first < rhs.first; });
+    // only calculate dbHash with non-empty-hash
+    if (g_BCOSConfig.version() >= V2_3_0)
+    {
+        return calcualteDBHashWithNonEmptyHashData(tables);
+    }
 
     bytes data;
-    data.resize(tables.size() * 32);
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, tables.size()), [&](const tbb::blocked_range<size_t>& range) {
+    tbb::parallel_sort(tables->begin(), tables->end(),
+        [](const std::pair<std::string, Table::Ptr>& lhs,
+            const std::pair<std::string, Table::Ptr>& rhs) { return lhs.first < rhs.first; });
+    data.resize(tables->size() * 32);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, tables->size()),
+        [&](const tbb::blocked_range<size_t>& range) {
             for (auto it = range.begin(); it != range.end(); ++it)
             {
-                auto table = tables[it];
+                auto table = (*tables)[it];
                 h256 hash = table.second->hash();
                 if (hash == h256())
                 {
 #if 0
+                    // for tracking storage bug
                     cout << LOG_BADGE("MemoryTableFactory2 hash continued ") << it << "/"
-                         << tables.size() << LOG_KV("tableName", table.first)
+                         << tables->size() << LOG_KV("tableName", table.first)
                          << LOG_KV("blockNum", m_blockNum) << endl;
 #endif
                     continue;
@@ -227,8 +234,10 @@ h256 MemoryTableFactory2::hash()
 
                 bytes tableHash = hash.asBytes();
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
+
 #if 0
-                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
+                // for tracking storage bug
+                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables->size()
                      << LOG_KV("tableName", table.first) << LOG_KV("hash", hash)
                      << LOG_KV("blockNum", m_blockNum) << endl;
 #endif
@@ -239,7 +248,67 @@ h256 MemoryTableFactory2::hash()
     {
         return h256();
     }
+
+#if 0
+    // for track storage bug
+    cout << LOG_BADGE("MemoryTableFactory2 data used to calculate dbHash") << toHex(data);
+#endif
+
     m_hash = dev::sha256(&data);
+    return m_hash;
+}
+
+h256 MemoryTableFactory2::calcualteDBHashWithNonEmptyHashData(
+    std::shared_ptr<std::vector<std::pair<std::string, Table::Ptr>>> _tables)
+{
+    // calculate hash for each table in parallel
+    tbb::concurrent_vector<dev::h256> tablesHash;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, _tables->size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                auto table = (*_tables)[it];
+                h256 hash = table.second->hash();
+                if (hash == h256())
+                {
+                    continue;
+                }
+                tablesHash.push_back(hash);
+
+#if 0
+                // for tracking storage bug
+                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << _tables->size()
+                     << LOG_KV("tableName", table.first) << LOG_KV("hash", hash)
+                     << LOG_KV("blockNum", m_blockNum) << endl;
+#endif
+            }
+        });
+
+    tbb::parallel_sort(tablesHash.begin(), tablesHash.end());
+
+    // convert tablesHash into bytes
+    std::shared_ptr<bytes> hashData = std::make_shared<bytes>();
+    hashData->resize(tablesHash.size() * 32);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, tablesHash.size()),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (auto it = range.begin(); it != range.end(); ++it)
+            {
+                bytes tableHash = tablesHash[it].asBytes();
+                memcpy(&(*hashData)[it * 32], &tableHash[0], tableHash.size());
+            }
+        });
+    if (hashData->empty())
+    {
+        return h256();
+    }
+
+#if 0
+    // for track storage bug
+    cout << LOG_BADGE("MemoryTableFactory2 data used to calculate dbHash")
+         << toHex(*hashData);
+#endif
+
+    m_hash = dev::sha256(ref(*hashData));
     return m_hash;
 }
 
