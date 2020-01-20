@@ -163,6 +163,11 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
             randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
             randomSelectedPeersInited = true;
         }
+        // the randomSelectedPeers is empty, continue without setTransactionIsKnownBy
+        if (randomSelectedPeers->size() == 0)
+        {
+            continue;
+        }
         peers = m_syncStatus->filterPeers(
             selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
                 bool unsent =
