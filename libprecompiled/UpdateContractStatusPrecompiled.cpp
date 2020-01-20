@@ -86,28 +86,39 @@ bool UpdateContractStatusPrecompiled::checkAddress(Address const& contractAddres
 ContractStatus UpdateContractStatusPrecompiled::getContractStatus(
     ExecutiveContext::Ptr context, std::string const& tableName)
 {
+    ContractStatus status = ContractStatus::Invalid;
+
     Table::Ptr table = openTable(context, tableName);
     if (table)
     {
-        ContractStatus status = ContractStatus::Available;
         auto entries = table->select(storagestate::ACCOUNT_ALIVE, table->newCondition());
-        if (entries->size() > 0 && entries->get(0) &&
-            "true" == entries->get(0)->getField(storagestate::STORAGE_VALUE))
+        if (entries->size() > 0 &&
+            STATUS_FALSE == entries->get(0)->getField(storagestate::STORAGE_VALUE))
         {
             status = ContractStatus::Killed;
         }
         else
         {  // query only in alive
             auto entries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
-            if (entries->size() > 0 && entries->get(0) &&
-                "true" == entries->get(0)->getField(storagestate::STORAGE_VALUE))
+            if (entries->size() > 0 &&
+                STATUS_TRUE == entries->get(0)->getField(storagestate::STORAGE_VALUE))
             {
                 status = ContractStatus::Frozen;
             }
+            else
+            {
+                status = ContractStatus::Available;
+            }
         }
-        return status;
     }
-    return ContractStatus::Killed;
+
+    if (ContractStatus::Invalid == status)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("UpdateContractStatusPrecompiled")
+                               << LOG_DESC("getContractStatus error")
+                               << LOG_KV("table name", tableName);
+    }
+    return status;
 }
 
 void UpdateContractStatusPrecompiled::kill(
@@ -146,7 +157,7 @@ void UpdateContractStatusPrecompiled::kill(
                 table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin));
                 entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, "false");
+                entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 result = table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin));
 
@@ -223,7 +234,7 @@ void UpdateContractStatusPrecompiled::freeze(
         }
         else
         {
-            result = updateFrozenStatus(context, tableName, "true", origin);
+            result = updateFrozenStatus(context, tableName, STATUS_TRUE, origin);
         }
     }
     getErrorCodeOut(out, result);
@@ -258,7 +269,7 @@ void UpdateContractStatusPrecompiled::unfreeze(
         }
         else
         {
-            result = updateFrozenStatus(context, tableName, "false", origin);
+            result = updateFrozenStatus(context, tableName, STATUS_FALSE, origin);
         }
     }
     getErrorCodeOut(out, result);
