@@ -65,6 +65,16 @@ static void compareAsyncSendTime(
     BOOST_CHECK(service->getAsyncSendSizeByNodeID(nodeID) == asyncSendTime);
 }
 
+static void compareAndClearAsyncSendTime(
+    FakeConsensus<FakePBFTEngine>& fake_pbft, dev::h512 const& nodeID, size_t asyncSendTime)
+{
+    FakeService* service =
+        dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
+    BOOST_CHECK(service->getAsyncSendSizeByNodeID(nodeID) == asyncSendTime);
+    service->clearMessageByNodeID(nodeID);
+}
+
+
 /// Fake sessionInfosByProtocolID
 static void appendSessionInfo(FakeConsensus<FakePBFTEngine>& fake_pbft, Public const& node_id)
 {
@@ -410,7 +420,7 @@ static void fakeValidPrepare(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareRe
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
-    Secret sec = fake_pbft.m_secrets[req.idx];
+    Secret sec = fake_pbft.m_keyPair[req.idx].secret();
     req.sig = dev::sign(sec, req.block_hash);
     req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
 }

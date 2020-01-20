@@ -49,6 +49,10 @@ public:
         m_rawPrepareCache = m_partiallyRawPrepare;
         m_partiallyRawPrepare.reset();
         m_rawPrepareCache->pBlock->encode(*m_rawPrepareCache->block);
+        if (m_randomSendRawPrepareStatusCallback)
+        {
+            m_randomSendRawPrepareStatusCallback(m_rawPrepareCache);
+        }
     }
 
     // fetch missed transaction

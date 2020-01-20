@@ -45,6 +45,17 @@ void PBFTEngine::start()
 {
     // create PBFTMsgFactory
     createPBFTMsgFactory();
+    createPBFTReqCache();
+    // register P2P callback after create PBFTMsgFactory
+    m_service->registerHandlerByProtoclID(
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
+    initPBFTEnv(3 * getEmptyBlockGenTime());
+    ConsensusEngineBase::start();
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
+}
+
+void PBFTEngine::createPBFTReqCache()
+{
     // init enablePrepareWithTxsHash
     if (m_enablePrepareWithTxsHash)
     {
@@ -55,12 +66,6 @@ void PBFTEngine::start()
     {
         m_reqCache = std::make_shared<PBFTReqCache>();
     }
-    // register P2P callback after create PBFTMsgFactory
-    m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
-    initPBFTEnv(3 * getEmptyBlockGenTime());
-    ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::stop()
@@ -941,8 +946,9 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
     oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq->idx)
         << LOG_KV("view", prepareReq->view) << LOG_KV("reqNum", prepareReq->height)
         << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("consNum", m_consensusBlockNumber)
-        << LOG_KV("fromIp", endpoint) << LOG_KV("hash", prepareReq->block_hash.abridged())
-        << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("curView", m_view) << LOG_KV("fromIp", endpoint)
+        << LOG_KV("hash", prepareReq->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
     /// check the prepare request is valid or not
     auto valid_ret = isValidPrepare(*prepareReq, oss);

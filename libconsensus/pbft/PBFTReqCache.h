@@ -53,6 +53,8 @@ public:
         }
         return m_rawPrepareCache->block_hash == req.block_hash;
     }
+
+    PrepareReq::Ptr rawPrepareCachePtr() { return m_rawPrepareCache; }
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {
@@ -115,7 +117,7 @@ public:
     }
     /// add specified raw-prepare-request into the raw-prepare-cache
     /// reset the prepare-cache
-    inline void addRawPrepare(PrepareReq::Ptr req)
+    virtual void addRawPrepare(PrepareReq::Ptr req)
     {
         auto startT = utcTime();
         WriteGuard l(x_rawPrepareCache);
@@ -125,6 +127,10 @@ public:
                                << LOG_KV("reqIdx", req->idx)
                                << LOG_KV("hash", req->block_hash.abridged())
                                << LOG_KV("time", utcTime() - startT);
+        if (m_randomSendRawPrepareStatusCallback)
+        {
+            m_randomSendRawPrepareStatusCallback(m_rawPrepareCache);
+        }
     }
 
     /// add prepare request to prepare-cache
@@ -213,7 +219,7 @@ public:
     /// update the sign cache and commit cache immediately
     /// in case of that the commit/sign requests with the same hash are solved in
     /// handleCommitMsg/handleSignMsg again
-    void delCache(dev::eth::BlockHeader const& _highestBlockHeader);
+    virtual void delCache(dev::eth::BlockHeader const& _highestBlockHeader);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
@@ -369,6 +375,8 @@ protected:
     const unsigned m_maxFuturePrepareCacheSize = 10;
 
     mutable SharedMutex x_rawPrepareCache;
+
+    std::function<void(PBFTMsg::Ptr)> m_randomSendRawPrepareStatusCallback;
 };
 }  // namespace consensus
 }  // namespace dev

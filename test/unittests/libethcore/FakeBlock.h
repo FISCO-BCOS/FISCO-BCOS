@@ -31,6 +31,7 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
+using namespace std;
 using namespace dev::eth;
 
 namespace dev
@@ -219,6 +220,34 @@ public:
             TransactionReceipt(root, gasUsed, logEntries, status, outputBytes, address);
     }
 
+    shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)
+    {
+        std::srand(utcTime());
+        shared_ptr<Transactions> txs = make_shared<Transactions>();
+        for (size_t i = 0; i < _num; ++i)
+        {
+            /// Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
+            u256 value = u256(100);
+            u256 gas = u256(100000000);
+            u256 gasPrice = u256(0);
+            Address dst = toAddress(KeyPair::create().pub());
+            std::string str = "test transaction";
+            bytes data(str.begin(), str.end());
+            Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
+            KeyPair sigKeyPair = KeyPair::create();
+            tx->setNonce(tx->nonce() + utcTime() + m_nonceBase);
+            tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
+            tx->setRpcTx(true);
+            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
+            /// update the signature of transaction
+            tx->updateSignature(sig);
+            // std::pair<h256, Address> ret = txPool->submit(tx);
+            txs->emplace_back(tx);
+            m_nonceBase++;
+        }
+        return txs;
+    }
+
     std::shared_ptr<Block> getBlock() { return m_block; }
     BlockHeader& getBlockHeader() { return m_blockHeader; }
     bytes& getBlockHeaderData() { return m_blockHeaderData; }
@@ -236,6 +265,8 @@ public:
     bytes m_blockHeaderData;
     bytes m_blockData;
     bytes m_transactionData;
+    size_t m_nonceBase = 0;
+    const u256 c_maxBlockLimit = u256(1000);
 };
 
 }  // namespace test
