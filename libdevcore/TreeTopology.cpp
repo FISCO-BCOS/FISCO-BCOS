@@ -165,12 +165,28 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
     }
 }
 
+int64_t TreeTopology::getNodeIndex(int64_t const& _consIndex)
+{
+    int64_t nodeIndex = 0;
+    if (m_consIndex >= _consIndex)
+    {
+        nodeIndex = m_consIndex - _consIndex;
+    }
+    else
+    {
+        // when the node is added into or removed from the sealerList frequently
+        // the consIndex maybe higher than m_consIndex,
+        // and the distance maybe higher than m_nodeNum
+        nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
+    }
+    return nodeIndex;
+}
+
 std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
     std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    int64_t nodeIndex = 0;
     // the observer nodes
     if (m_consIndex < 0)
     {
@@ -188,18 +204,25 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
     // the consensus nodes
     else
     {
-        if (m_consIndex >= _consIndex)
-        {
-            nodeIndex = m_consIndex - _consIndex;
-        }
-        else
-        {
-            // when the node is added into or removed from the sealerList frequently
-            // the consIndex maybe higher than m_consIndex,
-            // and the distance maybe higher than m_nodeNum
-            nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
-        }
+        auto nodeIndex = getNodeIndex(_consIndex);
+        recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
     }
-    recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
     return selectedNodeList;
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectParent(
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
+{
+    Guard l(m_mutex);
+    std::shared_ptr<dev::h512s> selectedParentNodeList = std::make_shared<dev::h512s>();
+    if (m_consIndex < 0)
+    {
+        return selectedParentNodeList;
+    }
+    else
+    {
+        auto nodeIndex = getNodeIndex(_consIndex);
+        selectParentNodes(selectedParentNodeList, _peers, nodeIndex, _consIndex);
+    }
+    return selectedParentNodeList;
 }
