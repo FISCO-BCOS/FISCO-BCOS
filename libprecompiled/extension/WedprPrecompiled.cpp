@@ -40,12 +40,13 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-// hidden asset
-const char API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT[] = "hiddenAssetVerifyIssuedCredit(string)";
-const char API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT[] = "hiddenAssetVerifyFulfilledCredit(string)";
-const char API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT[] =
-    "hiddenAssetVerifyTransferredCredit(string)";
-const char API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT[] = "hiddenAssetVerifySplitCredit(string)";
+// hidden payment
+const char API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT[] = "hiddenPaymentVerifyIssuedCredit(string)";
+const char API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT[] =
+    "hiddenPaymentVerifyFulfilledCredit(string)";
+const char API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT[] =
+    "hiddenPaymentVerifyTransferredCredit(string)";
+const char API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT[] = "hiddenPaymentVerifySplitCredit(string)";
 
 // anonymous voting
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
@@ -81,15 +82,15 @@ const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
 
 WedprPrecompiled::WedprPrecompiled()
 {
-    // hidden asset
-    name2Selector[API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT] =
-        getFuncSelector(API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT);
-    name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT] =
-        getFuncSelector(API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT);
-    name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT] =
-        getFuncSelector(API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT);
-    name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT] =
-        getFuncSelector(API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT);
+    // hidden payment
+    name2Selector[API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT] =
+        getFuncSelector(API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT);
+    name2Selector[API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT] =
+        getFuncSelector(API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT);
+    name2Selector[API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT] =
+        getFuncSelector(API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT);
+    name2Selector[API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT] =
+        getFuncSelector(API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT);
 
     // anonymous voting
     name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST] =
@@ -135,23 +136,23 @@ bytes WedprPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    // hiddenAssetVerifyIssuedCredit(string issueArgument)
-    if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_ISSUED_CREDIT])
+    // hiddenPaymentVerifyIssuedCredit(string issueArgument)
+    if (func == name2Selector[API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT])
     {
         out = verifyIssuedCredit(abi, data);
     }
-    // hiddenAssetVerifyFulfilledCredit(string fulfillArgument)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_FULFILLED_CREDIT])
+    // hiddenPaymentVerifyFulfilledCredit(string fulfillArgument)
+    else if (func == name2Selector[API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT])
     {
         out = verifyFulfilledCredit(abi, data);
     }
-    // hiddenAssetVerifyTransferredCredit(string transferRequest)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_TRANSFERRED_CREDIT])
+    // hiddenPaymentVerifyTransferredCredit(string transferRequest)
+    else if (func == name2Selector[API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT])
     {
         out = verifyTransferredCredit(abi, data);
     }
-    // hiddenAssetVerifySplitCredit(string splitRequest)
-    else if (func == name2Selector[API_HIDDEN_ASSET_VERIFY_SPLIT_CREDIT])
+    // hiddenPaymentVerifySplitCredit(string splitRequest)
+    else if (func == name2Selector[API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT])
     {
         out = verifySplitCredit(abi, data);
     }
