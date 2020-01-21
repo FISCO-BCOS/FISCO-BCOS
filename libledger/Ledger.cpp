@@ -297,6 +297,8 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     if (m_param->mutableConsensusParam().broadcastPrepareByTree)
     {
         rotatingPBFT->createTreeTopology(m_param->mutableConsensusParam().treeWidth);
+        rotatingPBFT->setPrepareStatusBroadcastPercent(
+            m_param->mutableConsensusParam().prepareStatusBroadcastPercent);
         Ledger_LOG(INFO) << LOG_DESC("createTreeTopology")
                          << LOG_KV("treeWidth", m_param->mutableConsensusParam().treeWidth);
     }

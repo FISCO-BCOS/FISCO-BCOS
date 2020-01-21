@@ -347,6 +347,8 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
     {
         return PBFTEngine::sendPrepareMsgFromLeader(_prepareReq, _data, _p2pPacketType);
     }
+    m_rpbftReqCache->insertRequestedRawPrepare(_prepareReq->block_hash);
+
     // send prepareReq by tree
     std::shared_ptr<dev::h512s> selectedNodes;
     {
@@ -386,6 +388,7 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
         std::shared_ptr<PBFTMsg> decodedPrepareMsg = std::make_shared<PBFTMsg>();
         decodedPrepareMsg->decode(ref(_pbftMsg->data));
         auto leaderIdx = decodedPrepareMsg->idx;
+        m_rpbftReqCache->insertRequestedRawPrepare(decodedPrepareMsg->block_hash);
 
         // select the nodes that should forward the prepareMsg
         std::shared_ptr<dev::h512s> selectedNodes;
@@ -435,7 +438,6 @@ void RotatingPBFTEngine::onRecvPBFTMessage(
         });
 }
 
-
 bool RotatingPBFTEngine::handlePartiallyPrepare(
     std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
 {
@@ -450,4 +452,259 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(
                 forwardReceivedPrepareMsgByTree(_session, _message, _pbftMsg);
             }
         });
+}
+
+void RotatingPBFTEngine::createPBFTReqCache()
+{
+    m_rpbftReqCache = std::make_shared<RPBFTReqCache>();
+    // only broadcast rawPrepareStatus randomly when broadcast prepare by tree
+    if (m_treeRouter)
+    {
+        m_rpbftReqCache->setRandomSendRawPrepareStatusCallback(
+            boost::bind(&RotatingPBFTEngine::sendRawPrepareStatusRandomly, this, _1));
+    }
+    m_reqCache = m_rpbftReqCache;
+    if (m_enablePrepareWithTxsHash)
+    {
+        m_partiallyPrepareCache = m_rpbftReqCache;
+    }
+}
+
+// send the rawPrepareReq status to other nodes after addRawPrepare
+void RotatingPBFTEngine::sendRawPrepareStatusRandomly(PBFTMsg::Ptr _rawPrepareReq)
+{
+    std::shared_ptr<bytes> rawPrepareReqData = std::make_shared<bytes>();
+    _rawPrepareReq->encodeStatus(*rawPrepareReqData);
+
+    // only chose 25% peers to broadcast RPBFTRawPrepareStatusPacket
+    std::shared_ptr<P2PSessionInfos> sessions = std::make_shared<P2PSessionInfos>();
+    *sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    size_t selectedSize = std::min(sessions->size(),
+        (m_prepareStatusBroadcastPercent * m_chosedConsensusNodes->size() + 99) / 100);
+    if (selectedSize < sessions->size())
+    {
+        std::srand(utcTime());
+        for (size_t i = 0; i < selectedSize; i++)
+        {
+            size_t randomValue = (std::rand() + selectedSize * nodeIdx()) % sessions->size();
+            std::swap((*sessions)[i], (*sessions)[randomValue]);
+        }
+    }
+    auto p2pMessage = toP2PMessage(rawPrepareReqData, P2PRawPrepareStatusPacket);
+    for (size_t i = 0; i < selectedSize; i++)
+    {
+        auto const& targetNode = (*sessions)[i].nodeID();
+        m_service->asyncSendMessageByNodeID(targetNode, p2pMessage, nullptr);
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("sendRawPrepareStatusRandomly")
+                               << LOG_KV("targetNode", targetNode.abridged());
+    }
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("sendRawPrepareStatusRandomly")
+                           << LOG_KV("peers", selectedSize)
+                           << LOG_KV("rawPrepHeight", _rawPrepareReq->height)
+                           << LOG_KV("rawPrepHash", _rawPrepareReq->block_hash.abridged())
+                           << LOG_KV("rawPrepView", _rawPrepareReq->view)
+                           << LOG_KV("rawPrepIdx", _rawPrepareReq->idx)
+                           << LOG_KV("packetSize", p2pMessage->length())
+                           << LOG_KV("idx", nodeIdx());
+}
+
+PBFTMsg::Ptr RotatingPBFTEngine::decodeP2PMsgIntoPBFTMsg(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    ssize_t consIndex = 0;
+    bool valid = isValidReq(_message, _session, consIndex);
+    if (!valid)
+    {
+        return nullptr;
+    }
+    PBFTMsg::Ptr pbftMsg = std::make_shared<PBFTMsg>();
+    pbftMsg->decodeStatus(ref(*(_message->buffer())));
+    return pbftMsg;
+}
+
+// receive the rawPrepareReqStatus packet and update the cachedRawPrepareStatus
+void RotatingPBFTEngine::onReceiveRawPrepareStatus(
+    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    try
+    {
+        auto pbftMsg = decodeP2PMsgIntoPBFTMsg(_session, _message);
+        if (!pbftMsg)
+        {
+            return;
+        }
+        if (!m_rpbftReqCache->checkReceivedRawPrepareStatus(
+                _session->nodeID(), pbftMsg, m_view, m_blockChain->number()))
+        {
+            return;
+        }
+        // request rawPreparePacket to the selectedNode
+        auto parentNodeList = m_treeRouter->selectParent(m_chosedConsensusNodes, pbftMsg->idx);
+        // the root node of the tree-topology
+        if (parentNodeList->size() == 0)
+        {
+            return;
+        }
+        std::shared_ptr<std::set<dev::h512>> parentNodeSet =
+            std::make_shared<std::set<dev::h512>>(parentNodeList->begin(), parentNodeList->end());
+        auto sessionsInfo = m_service->sessionInfosByProtocolID(m_protocolId);
+
+        bool connectedWithParent = false;
+        for (auto const& sessionInfo : sessionsInfo)
+        {
+            if (parentNodeSet->count(sessionInfo.nodeID()))
+            {
+                connectedWithParent = true;
+                break;
+            }
+        }
+        // the node disconnected with the parent node
+        if (!connectedWithParent)
+        {
+            if (!m_rpbftReqCache->checkAndRequestRawPrepare(pbftMsg))
+            {
+                return;
+            }
+            requestRawPreparePacket(_session->nodeID(), pbftMsg);
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveRawPrepareStatus exceptioned")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+// request rawPreparePacket from other node when the local rawPrepareReq is empty
+void RotatingPBFTEngine::requestRawPreparePacket(
+    dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus)
+{
+    // encode and send the _requestedRawPrepareStatus to targetNode
+    std::shared_ptr<bytes> rawPrepareStatusData = std::make_shared<bytes>();
+    _requestedRawPrepareStatus->encodeStatus(*rawPrepareStatusData);
+    auto p2pMessage = toP2PMessage(rawPrepareStatusData, RequestRawPreparePacket);
+    m_service->asyncSendMessageByNodeID(_targetNode, p2pMessage, nullptr);
+    if (m_statisticHandler)
+    {
+        m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
+    }
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("requestRawPreparePacket for disconnect with parentNodeList")
+                           << LOG_KV("targetNode", _targetNode.abridged())
+                           << LOG_KV("hash", _requestedRawPrepareStatus->block_hash.abridged())
+                           << LOG_KV("height", _requestedRawPrepareStatus->height)
+                           << LOG_KV("view", _requestedRawPrepareStatus->view)
+                           << LOG_KV("consNumber", m_consensusBlockNumber)
+                           << LOG_KV("curView", m_view)
+                           << LOG_KV("packetSize", p2pMessage->length()) << LOG_KV("idx", m_idx);
+}
+
+// receive rawPrepare request
+void RotatingPBFTEngine::onReceiveRawPrepareRequest(
+    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    try
+    {
+        PBFTMsg::Ptr pbftMsg = decodeP2PMsgIntoPBFTMsg(_session, _message);
+        if (!pbftMsg)
+        {
+            return;
+        }
+        std::shared_ptr<bytes> encodedRawPrepare = std::make_shared<bytes>();
+        m_rpbftReqCache->responseRawPrepare(encodedRawPrepare, pbftMsg);
+        // response the rawPrepare
+        auto p2pMessage = transDataToMessage(ref(*encodedRawPrepare), PrepareReqPacket, 0);
+        p2pMessage->setPacketType(RawPrepareResponse);
+        m_service->asyncSendMessageByNodeID(_session->nodeID(), p2pMessage, nullptr);
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
+        }
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveRawPrepareRequest and responseRawPrepare")
+                               << LOG_KV("peer", _session->nodeID().abridged())
+                               << LOG_KV("hash", pbftMsg->block_hash.abridged())
+                               << LOG_KV("view", pbftMsg->view) << LOG_KV("height", pbftMsg->height)
+                               << LOG_KV("prepIdx", pbftMsg->idx)
+                               << LOG_KV("packetSize", p2pMessage->length())
+                               << LOG_KV("idx", nodeIdx());
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveRawPrepareRequest exceptioned")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+
+void RotatingPBFTEngine::onReceiveRawPrepareResponse(
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    PBFTMsgPacket::Ptr pbftMsgPacket = m_pbftMsgFactory->createPBFTMsgPacket();
+    // invalid pbftMsgPacket
+    if (!decodePBFTMsgPacket(pbftMsgPacket, _message, _session))
+    {
+        return;
+    }
+    PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
+    prepareReq->decode(ref(pbftMsgPacket->data));
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveRawPrepareResponse")
+                           << LOG_KV("respHash", prepareReq->block_hash.abridged())
+                           << LOG_KV("respHeight", prepareReq->height)
+                           << LOG_KV("respView", prepareReq->view)
+                           << LOG_KV("respIdx", prepareReq->idx)
+                           << LOG_KV("consNumber", m_consensusBlockNumber)
+                           << LOG_KV("curView", m_view) << LOG_KV("idx", m_idx);
+
+    Guard l(m_mutex);
+    handlePrepareMsg(prepareReq, pbftMsgPacket->endpoint);
+}
+
+void RotatingPBFTEngine::handleP2PMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    try
+    {
+        switch (_message->packetType())
+        {
+        // status of RawPrepareReq
+        case P2PRawPrepareStatusPacket:
+            m_rawPrepareStatusReceiver->enqueue([this, _session, _message]() {
+                this->onReceiveRawPrepareStatus(_session, _message);
+            });
+            break;
+        // receive raw prepare request from other node
+        case RequestRawPreparePacket:
+            m_requestRawPrepareWorker->enqueue([this, _session, _message]() {
+                this->onReceiveRawPrepareRequest(_session, _message);
+            });
+            break;
+        // receive raw prepare response from the other node
+        case RawPrepareResponse:
+            m_rawPrepareResponse->enqueue([this, _exception, _session, _message]() {
+                try
+                {
+                    this->onReceiveRawPrepareResponse(_session, _message);
+                }
+                catch (std::exception const& _e)
+                {
+                    RPBFTENGINE_LOG(WARNING)
+                        << LOG_DESC("handle RawPrepareResponse exceptioned")
+                        << LOG_KV("peer", _session->nodeID().abridged())
+                        << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+                }
+            });
+
+            break;
+        default:
+            PBFTEngine::handleP2PMessage(_exception, _session, _message);
+            break;
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("handleP2PMessage: invalid message")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
 }

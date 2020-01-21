@@ -735,8 +735,8 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
 
         auto transactions = block->transactions();
-        unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions->size())
+        int64_t txIndex = jsToInt(_transactionIndex);
+        if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
@@ -788,8 +788,8 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         auto transactions = block->transactions();
-        unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions->size())
+        int64_t txIndex = jsToInt(_transactionIndex);
+        if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 

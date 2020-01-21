@@ -21,6 +21,7 @@
  * @date: 2019-09-11
  */
 #pragma once
+#include "RPBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libdevcore/TreeTopology.h>
 
@@ -61,6 +62,13 @@ public:
                 return selectedNode;
             });
         m_chosedSealerList = std::make_shared<dev::h512s>();
+
+        m_requestRawPrepareWorker =
+            std::make_shared<dev::ThreadPool>("prepRequest-" + std::to_string(m_groupId), 1);
+        m_rawPrepareStatusReceiver =
+            std::make_shared<dev::ThreadPool>("prepRecv-" + std::to_string(m_groupId), 1);
+        m_rawPrepareResponse =
+            std::make_shared<dev::ThreadPool>("prepResp-" + std::to_string(m_groupId), 1);
     }
 
     // create TreeTopology to forward prepare message
@@ -92,6 +100,11 @@ public:
         return *m_chosedSealerList;
     }
 
+    void setPrepareStatusBroadcastPercent(unsigned const& _prepareStatusBroadcastPercent)
+    {
+        m_prepareStatusBroadcastPercent = _prepareStatusBroadcastPercent;
+    }
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
@@ -112,6 +125,18 @@ protected:
     bool handlePartiallyPrepare(std::shared_ptr<dev::p2p::P2PSession> _session,
         dev::p2p::P2PMessage::Ptr _message) override;
 
+    // fault-tolerant logic for broadcast-prepare-by-tree
+    virtual void sendRawPrepareStatusRandomly(PBFTMsg::Ptr _rawPrepareReq);
+    virtual void onReceiveRawPrepareStatus(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
+    // receive the requested rawPreparePacket
+    virtual void onReceiveRawPrepareRequest(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
+    virtual void onReceiveRawPrepareResponse(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
     // TODO: select nodes with VRF algorithm
     IDXTYPE VRFSelection() const;
 
@@ -126,6 +151,20 @@ protected:
 
     virtual bool updateEpochSize();
     virtual bool updateRotatingInterval();
+
+    void createPBFTReqCache() override;
+
+    void handleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message) override;
+
+private:
+    PBFTMsg::Ptr decodeP2PMsgIntoPBFTMsg(
+        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+
+    // request RawPrepare packet to the _targetNode
+    void requestRawPreparePacket(
+        dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus);
 
 protected:
     // configured epoch size
@@ -151,6 +190,13 @@ protected:
     bool m_rotatingIntervalUpdated = false;
 
     std::shared_ptr<dev::sync::TreeTopology> m_treeRouter;
+    std::shared_ptr<RPBFTReqCache> m_rpbftReqCache;
+
+    dev::ThreadPool::Ptr m_requestRawPrepareWorker;
+    dev::ThreadPool::Ptr m_rawPrepareStatusReceiver;
+    dev::ThreadPool::Ptr m_rawPrepareResponse;
+
+    unsigned m_prepareStatusBroadcastPercent = 33;
 };
 }  // namespace consensus
 }  // namespace dev

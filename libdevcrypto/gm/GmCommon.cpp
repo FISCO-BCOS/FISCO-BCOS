@@ -101,6 +101,16 @@ bool dev::SignatureStruct::isValid() const noexcept
     return (v >= h512(1) && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
+NumberVType dev::getVFromRLP(RLP const& _txRLPField)
+{
+    // Note: Since sdk encode v into bytes in sdk, the nodes must decode the v into bytes
+    // firstly, otherwise the transaction will decode failed in some cases
+    VType vBytes = _txRLPField.toHash<VType>();
+    NumberVType v = NumberVType(vBytes) - VBase;
+    return v;
+}
+
+
 /**
  * @brief : obtain public key according to secret key
  * @param _secret : the data of secret key
@@ -173,7 +183,6 @@ Signature dev::sign(Secret const& _k, h256 const& _hash)
     // std::cout <<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
     return Signature{byteSign};
 }
-
 
 KeyPair KeyPair::create()
 {

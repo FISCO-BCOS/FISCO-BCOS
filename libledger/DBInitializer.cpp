@@ -66,8 +66,22 @@ void DBInitializer::initStorageDB()
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
     {
-        auto storage = initSQLStorage();
-        initTableFactory2(storage, m_param);
+        // only support external when "supported_version < 2.3.0"
+        if (g_BCOSConfig.version() < V2_3_0)
+        {
+            auto storage = initSQLStorage();
+            initTableFactory2(storage, m_param);
+        }
+        else
+        {
+            DBInitializer_LOG(ERROR)
+                << LOG_DESC("Only support external when supported_version is lower than 2.3.0")
+                << LOG_KV("storage_type", m_param->mutableStorageParam().type)
+                << LOG_KV("supported_version", g_BCOSConfig.version());
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFeature() << errinfo_comment(
+                    "Only support external when supported_version is lower than 2.3.0"));
+        }
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
