@@ -71,6 +71,7 @@ struct ConsensusParam
 
     bool broadcastPrepareByTree;
     unsigned treeWidth = 3;
+    unsigned prepareStatusBroadcastPercent;
 };
 
 struct AMDBParam

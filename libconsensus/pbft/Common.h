@@ -250,6 +250,25 @@ struct PBFTMsg
         list_rlp.swapOut(encodedBytes);
     }
 
+    virtual void encodeStatus(bytes& encodedBytes) const
+    {
+        RLPStream tmp;
+        tmp << height << view << idx << block_hash;
+        RLPStream list_rlp;
+        list_rlp.appendList(1).append(tmp.out());
+        list_rlp.swapOut(encodedBytes);
+    }
+
+    virtual void decodeStatus(bytesConstRef _data)
+    {
+        RLP rlp(_data);
+        RLP const& statusRlp = rlp[0];
+        height = statusRlp[0].toInt<int64_t>();
+        view = statusRlp[1].toInt<VIEWTYPE>();
+        idx = statusRlp[2].toInt<IDXTYPE>();
+        block_hash = statusRlp[3].toHash<h256>(RLP::VeryStrict);
+    }
+
     /**
      * @brief : decode the bytes received from network into PBFTMsg object
      * @param data : network-received data to be decoded

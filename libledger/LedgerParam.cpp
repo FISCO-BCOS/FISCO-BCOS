@@ -247,6 +247,16 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     }
     mutableConsensusParam().broadcastPrepareByTree =
         pt.get<bool>("consensus.broadcast_prepare_by_tree", true);
+
+    mutableConsensusParam().prepareStatusBroadcastPercent =
+        pt.get<signed>("consensus.prepare_status_broadcast_percent", 33);
+    if (mutableConsensusParam().prepareStatusBroadcastPercent < 25 ||
+        mutableConsensusParam().prepareStatusBroadcastPercent > 100)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment(
+                "consensus.prepare_status_broadcast_percent must between 25 and 100"));
+    }
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
@@ -255,7 +265,9 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
         << LOG_KV("blockSizeIncreaseRatio", mutableConsensusParam().blockSizeIncreaseRatio)
         << LOG_KV("enableTTLOptimize", mutableConsensusParam().enableTTLOptimize)
         << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash)
-        << LOG_KV("broadcastPrepareByTree", mutableConsensusParam().broadcastPrepareByTree);
+        << LOG_KV("broadcastPrepareByTree", mutableConsensusParam().broadcastPrepareByTree)
+        << LOG_KV("prepareStatusBroadcastPercent",
+               mutableConsensusParam().prepareStatusBroadcastPercent);
 }
 
 
