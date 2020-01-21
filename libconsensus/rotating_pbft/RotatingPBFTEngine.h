@@ -154,6 +154,10 @@ protected:
 
     void createPBFTReqCache() override;
 
+    void handleP2PMessage(dev::p2p::NetworkException _exception,
+        std::shared_ptr<dev::p2p::P2PSession> _session,
+        dev::p2p::P2PMessage::Ptr _message) override;
+
 private:
     PBFTMsg::Ptr decodeP2PMsgIntoPBFTMsg(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);

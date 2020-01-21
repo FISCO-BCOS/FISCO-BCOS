@@ -659,3 +659,52 @@ void RotatingPBFTEngine::onReceiveRawPrepareResponse(
     Guard l(m_mutex);
     handlePrepareMsg(prepareReq, pbftMsgPacket->endpoint);
 }
+
+void RotatingPBFTEngine::handleP2PMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    try
+    {
+        switch (_message->packetType())
+        {
+        // status of RawPrepareReq
+        case P2PRawPrepareStatusPacket:
+            m_rawPrepareStatusReceiver->enqueue([this, _session, _message]() {
+                this->onReceiveRawPrepareStatus(_session, _message);
+            });
+            break;
+        // receive raw prepare request from other node
+        case RequestRawPreparePacket:
+            m_requestRawPrepareWorker->enqueue([this, _session, _message]() {
+                this->onReceiveRawPrepareRequest(_session, _message);
+            });
+            break;
+        // receive raw prepare response from the other node
+        case RawPrepareResponse:
+            m_rawPrepareResponse->enqueue([this, _exception, _session, _message]() {
+                try
+                {
+                    this->onReceiveRawPrepareResponse(_session, _message);
+                }
+                catch (std::exception const& _e)
+                {
+                    RPBFTENGINE_LOG(WARNING)
+                        << LOG_DESC("handle RawPrepareResponse exceptioned")
+                        << LOG_KV("peer", _session->nodeID().abridged())
+                        << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+                }
+            });
+
+            break;
+        default:
+            PBFTEngine::handleP2PMessage(_exception, _session, _message);
+            break;
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("handleP2PMessage: invalid message")
+                                 << LOG_KV("peer", _session->nodeID().abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
