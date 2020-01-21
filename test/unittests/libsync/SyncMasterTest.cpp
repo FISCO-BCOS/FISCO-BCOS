@@ -115,6 +115,7 @@ public:
 public:
     Secret m_sec;
     h256 m_genesisHash;
+    size_t m_nonceBase = 0;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SyncMasterTest, SyncFixture)
