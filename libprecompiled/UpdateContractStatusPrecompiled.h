@@ -26,15 +26,20 @@ namespace precompiled
 {
 enum ContractStatus
 {
-    Available = 0,
+    Invalid = 0,
+    Available,
     Frozen,
     Killed,
     Count
 };
 
-const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"The contract is available.",
+const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
+    "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfrozening it.",
     "The contract has been killed. You can no longer invoke this contract."};
+
+const std::string STATUS_TRUE = "true";
+const std::string STATUS_FALSE = "false";
 
 class UpdateContractStatusPrecompiled : public dev::blockverifier::Precompiled
 {
