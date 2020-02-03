@@ -185,10 +185,8 @@ check_env() {
         echo "use \"openssl version\" command to check."
         exit 1
     }
-    if [ ! -z "$(openssl version | grep reSSL)" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
-    fi
     if [ "$(uname)" == "Darwin" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
     if [ "$(uname -m)" != "x86_64" ];then
