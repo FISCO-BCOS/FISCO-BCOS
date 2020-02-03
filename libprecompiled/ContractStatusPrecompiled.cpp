@@ -14,11 +14,11 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file UpdateContractStatusPrecompiled.cpp
+/** @file ContractStatusPrecompiled.cpp
  *  @author chaychen
  *  @date 20190106
  */
-#include "UpdateContractStatusPrecompiled.h"
+#include "ContractStatusPrecompiled.h"
 
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
@@ -58,7 +58,7 @@ const char* const METHOD_QUERY_STR = "queryStatus(address)";
    kill     killed    killed    ×
 */
 
-UpdateContractStatusPrecompiled::UpdateContractStatusPrecompiled()
+ContractStatusPrecompiled::ContractStatusPrecompiled()
 {
     name2Selector[METHOD_KILL_STR] = getFuncSelector(METHOD_KILL_STR);
     name2Selector[METHOD_FREEZE_STR] = getFuncSelector(METHOD_FREEZE_STR);
@@ -66,7 +66,7 @@ UpdateContractStatusPrecompiled::UpdateContractStatusPrecompiled()
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
 }
 
-bool UpdateContractStatusPrecompiled::checkAddress(Address const& contractAddress)
+bool ContractStatusPrecompiled::checkAddress(Address const& contractAddress)
 {
     bool isValidAddress = true;
     try
@@ -76,14 +76,14 @@ bool UpdateContractStatusPrecompiled::checkAddress(Address const& contractAddres
     }
     catch (...)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_DESC("address invalid") << LOG_KV("address", contractAddress);
         isValidAddress = false;
     }
     return isValidAddress;
 }
 
-ContractStatus UpdateContractStatusPrecompiled::getContractStatus(
+ContractStatus ContractStatusPrecompiled::getContractStatus(
     ExecutiveContext::Ptr context, std::string const& tableName)
 {
     ContractStatus status = ContractStatus::Invalid;
@@ -118,14 +118,14 @@ ContractStatus UpdateContractStatusPrecompiled::getContractStatus(
 
     if (ContractStatus::Invalid == status)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_DESC("getContractStatus error")
                                << LOG_KV("table name", tableName);
     }
     return status;
 }
 
-void UpdateContractStatusPrecompiled::kill(
+void ContractStatusPrecompiled::kill(
     ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -140,7 +140,7 @@ void UpdateContractStatusPrecompiled::kill(
     else
     {
         std::string tableName = precompiled::getContractTableName(contractAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_KV("kill contract", tableName);
 
         ContractStatus status = getContractStatus(context, tableName);
@@ -172,8 +172,8 @@ void UpdateContractStatusPrecompiled::kill(
 
                 if (result == storage::CODE_NO_AUTHORIZED)
                 {
-                    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
-                                           << LOG_DESC("permission denied");
+                    PRECOMPILED_LOG(DEBUG)
+                        << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
                 }
             }
         }
@@ -182,7 +182,7 @@ void UpdateContractStatusPrecompiled::kill(
     getErrorCodeOut(out, result);
 }
 
-int UpdateContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
+int ContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
     std::string const& tableName, std::string const& frozen, Address const& origin)
 {
     int result = 0;
@@ -207,14 +207,14 @@ int UpdateContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr co
         if (result == storage::CODE_NO_AUTHORIZED)
         {
             PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("UpdateContractStatusPrecompiled") << LOG_DESC("permission denied");
+                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
         }
     }
 
     return result;
 }
 
-void UpdateContractStatusPrecompiled::freeze(
+void ContractStatusPrecompiled::freeze(
     ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -229,7 +229,7 @@ void UpdateContractStatusPrecompiled::freeze(
     else
     {
         std::string tableName = precompiled::getContractTableName(contractAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_KV("freeze contract", tableName);
 
         ContractStatus status = getContractStatus(context, tableName);
@@ -253,7 +253,7 @@ void UpdateContractStatusPrecompiled::freeze(
     getErrorCodeOut(out, result);
 }
 
-void UpdateContractStatusPrecompiled::unfreeze(
+void ContractStatusPrecompiled::unfreeze(
     ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -268,7 +268,7 @@ void UpdateContractStatusPrecompiled::unfreeze(
     else
     {
         std::string tableName = precompiled::getContractTableName(contractAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_KV("unfreeze contract", tableName);
 
         ContractStatus status = getContractStatus(context, tableName);
@@ -292,8 +292,7 @@ void UpdateContractStatusPrecompiled::unfreeze(
     getErrorCodeOut(out, result);
 }
 
-void UpdateContractStatusPrecompiled::query(
-    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+void ContractStatusPrecompiled::query(ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
 {
     dev::eth::ContractABI abi;
 
@@ -301,17 +300,17 @@ void UpdateContractStatusPrecompiled::query(
     abi.abiOut(data, contractAddress);
 
     std::string tableName = precompiled::getContractTableName(contractAddress);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled") << LOG_DESC("call query")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("call query")
                            << LOG_KV("contract table name", tableName);
 
     int status = getContractStatus(context, tableName);
     out = abi.abiIn("", (u256)status, CONTRACT_STATUS_DESC[status]);
 }
 
-bytes UpdateContractStatusPrecompiled::call(
+bytes ContractStatusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("call param", toHex(param));
 
     // parse function name
@@ -337,7 +336,7 @@ bytes UpdateContractStatusPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("UpdateContractStatusPrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractStatusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
 

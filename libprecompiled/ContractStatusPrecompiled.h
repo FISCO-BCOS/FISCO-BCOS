@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file UpdateContractStatusPrecompiled.h
+/** @file ContractStatusPrecompiled.h
  *  @author chaychen
  *  @date 20190106
  */
@@ -43,12 +43,12 @@ const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
 
-class UpdateContractStatusPrecompiled : public dev::blockverifier::Precompiled
+class ContractStatusPrecompiled : public dev::blockverifier::Precompiled
 {
 public:
-    typedef std::shared_ptr<UpdateContractStatusPrecompiled> Ptr;
-    UpdateContractStatusPrecompiled();
-    virtual ~UpdateContractStatusPrecompiled(){};
+    typedef std::shared_ptr<ContractStatusPrecompiled> Ptr;
+    ContractStatusPrecompiled();
+    virtual ~ContractStatusPrecompiled(){};
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address());
