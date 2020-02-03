@@ -231,6 +231,25 @@ public:
 
     virtual void createPBFTReqCache();
 
+    /// get the index of specified sealer according to its node id
+    /// @param nodeId: the node id of the sealer
+    /// @return : 1. >0: the index of the sealer
+    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
+    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
+    {
+        ReadGuard l(m_sealerListMutex);
+        ssize_t index = -1;
+        for (size_t i = 0; i < m_sealerList.size(); ++i)
+        {
+            if (m_sealerList[i] == nodeId)
+            {
+                index = i;
+                break;
+            }
+        }
+        return index;
+    }
+
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -338,24 +357,7 @@ protected:
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
-    /// get the index of specified sealer according to its node id
-    /// @param nodeId: the node id of the sealer
-    /// @return : 1. >0: the index of the sealer
-    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
-    {
-        ReadGuard l(m_sealerListMutex);
-        ssize_t index = -1;
-        for (size_t i = 0; i < m_sealerList.size(); ++i)
-        {
-            if (m_sealerList[i] == nodeId)
-            {
-                index = i;
-                break;
-            }
-        }
-        return index;
-    }
+
     /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list

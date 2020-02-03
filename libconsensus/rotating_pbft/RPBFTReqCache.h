@@ -69,6 +69,8 @@ public:
         m_maxRequestedPrepareQueueSize = _maxRequestedPrepareQueueSize;
     }
 
+    std::shared_ptr<QueueSet<dev::h256>> requestedPrepareQueue() { return m_requestedPrepareQueue; }
+
 private:
     bool findTheRequestedRawPrepare(PBFTMsg::Ptr _rawPrepareRequestMsg);
     // compare _cachedRawPrepareStatus and _receivedRawPrepareStatus

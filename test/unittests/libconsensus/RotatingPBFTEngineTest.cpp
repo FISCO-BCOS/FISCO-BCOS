@@ -12,114 +12,18 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2019 fisco-dev contributors.
+ * (c) 2016-2020 fisco-dev contributors.
  */
 
 /**
  * @brief : RotatingPBFTEngineTest
  * @author: yujiechen
- * @date: 2019-10-12
+ * @date: 2020-01-21
  */
-#include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
-#include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libconsensus/FakePBFTEngine.h>
-#include <test/unittests/libtxpool/FakeBlockChain.h>
-#include <boost/test/unit_test.hpp>
 
-using namespace dev::consensus;
-using namespace dev::p2p;
-using namespace dev::txpool;
-using namespace dev::sync;
-using namespace dev::blockchain;
-using namespace dev::blockverifier;
-using namespace dev;
+#include "RotatingPBFTEngineTest.h"
 
-namespace dev
-{
-namespace test
-{
-// override RotatingPBFTEngine to expose the protected interfaces
-class FakeRotatingPBFTEngine : public RotatingPBFTEngine
-{
-public:
-    using Ptr = std::shared_ptr<FakeRotatingPBFTEngine>;
-    FakeRotatingPBFTEngine(P2PInterface::Ptr _service, TxPoolInterface::Ptr _txPool,
-        BlockChainInterface::Ptr _blockChain, SyncInterface::Ptr _blockSync,
-        BlockVerifierInterface::Ptr _blockVerifier, PROTOCOL_ID const& _protocolId,
-        h512s const& _sealerList = h512s(), KeyPair const& _keyPair = KeyPair::create())
-      : RotatingPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _sealerList),
-        m_fakedBlockChain(std::dynamic_pointer_cast<FakeBlockChain>(m_blockChain))
-    {
-        m_rotatingIntervalEnableNumber = 0;
-    }
-    // override the virtual function
-    std::pair<bool, IDXTYPE> getLeader() const override { return RotatingPBFTEngine::getLeader(); }
-
-    void resetChosedConsensusNodes() override
-    {
-        return RotatingPBFTEngine::resetChosedConsensusNodes();
-    }
-
-    void chooseConsensusNodes() override { return RotatingPBFTEngine::chooseConsensusNodes(); }
-
-    void updateConsensusInfo() override { return RotatingPBFTEngine::updateConsensusInfo(); }
-
-    IDXTYPE minValidNodes() const override { return RotatingPBFTEngine::minValidNodes(); }
-    bool updateEpochSize() override { return false; }
-    bool updateRotatingInterval() override { return false; }
-
-    int64_t epochSize() { return m_epochSize; }
-    int64_t rotatingInterval() { return m_rotatingInterval; }
-    std::set<dev::h512> chosedConsensusNodes() { return *m_chosedConsensusNodes; }
-    IDXTYPE startNodeIdx() { return m_startNodeIdx; }
-    int64_t rotatingRound() { return m_rotatingRound; }
-    int64_t sealersNum() { return m_sealersNum; }
-    // called when the node set up or the sealer list are updated
-    void setSealerListUpdated(bool const& _sealerListUpdated)
-    {
-        m_sealerListUpdated = _sealerListUpdated;
-    }
-
-    std::shared_ptr<FakeBlockChain> fakedBlockChain() { return m_fakedBlockChain; }
-    void setNodeIdx(IDXTYPE const& _idx) { m_idx = _idx; }
-    IDXTYPE f() const { return m_f; }
-    std::shared_ptr<P2PInterface> mutableService() { return m_service; }
-    void updateConsensusNodeList() override {}
-
-    void resetConfigWrapper() { return RotatingPBFTEngine::resetConfig(); }
-
-    void setSealersNum(int64_t const& _sealersNum) { m_sealersNum = _sealersNum; }
-
-    void clearStartIdx() { m_startNodeIdx = -1; }
-
-private:
-    std::shared_ptr<FakeBlockChain> m_fakedBlockChain;
-};
-
-// fixture to create the FakeRotatingPBFTEngine(with faked service, sync, txPool, etc.)
-class RotatingPBFTEngineFixture
-{
-public:
-    using Ptr = std::shared_ptr<RotatingPBFTEngineFixture>;
-    // create the PBFTEngine with {_sealersNum} sealers
-    explicit RotatingPBFTEngineFixture(size_t const& _sealersNum) : m_sealersNum(_sealersNum)
-    {
-        m_fakePBFT = std::make_shared<FakeConsensus<FakeRotatingPBFTEngine> >(
-            m_sealersNum, ProtocolID::PBFT);
-        m_rotatingPBFT = std::dynamic_pointer_cast<FakeRotatingPBFTEngine>(m_fakePBFT->consensus());
-    }
-
-    FakeRotatingPBFTEngine::Ptr rotatingPBFT() { return m_rotatingPBFT; }
-
-    // get sealersNum
-    size_t sealersNum() { return m_sealersNum; }
-
-private:
-    FakeRotatingPBFTEngine::Ptr m_rotatingPBFT;
-    std::shared_ptr<FakeConsensus<FakeRotatingPBFTEngine> > m_fakePBFT;
-    size_t m_sealersNum = 4;
-};
+using namespace dev::test;
 
 std::set<dev::h512> getExpectedSelectedNodes(
     RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _round, int64_t const& _epochSize)
@@ -205,6 +109,213 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
                     (tmpEpochSize - fixture->rotatingPBFT()->f()));
     }
 }
+
+// test for broadcasting rawPrepare by tree
+BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
+{
+    // create RotatingPBFTEngineFixture for the leader
+    auto leaderRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
+    auto followRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
+
+    leaderRPBFT->fakePBFTSuite()->consensus()->setLocatedInConsensusNodes(true);
+    followRPBFT->fakePBFTSuite()->consensus()->setLocatedInConsensusNodes(true);
+    // create RotatingPBFTEngineFixture for the follow
+    std::shared_ptr<BlockFactory> blockFactory = std::make_shared<BlockFactory>();
+    std::shared_ptr<PrepareReq> prepareReq = std::make_shared<PrepareReq>();
+
+    // fake prepare message
+    fakePrepareMsg(leaderRPBFT->fakePBFTSuite(), followRPBFT->fakePBFTSuite(), prepareReq,
+        blockFactory, false);
+
+    std::shared_ptr<FakeService> leaderService = std::dynamic_pointer_cast<FakeService>(
+        leaderRPBFT->fakePBFTSuite()->consensus()->mutableService());
+    /// case 1: tree-topology has been disabled, broadcast rawprepare request to all the sealers
+    // the leader construct and broadcast the prepareReq
+    leaderRPBFT->fakePBFTSuite()->consensus()->wrapperConstructPrepareReq(prepareReq->pBlock);
+    leaderRPBFT->fakePBFTSuite()->consensus()->reqCache()->addRawPrepare(prepareReq);
+    checkPrepareReqEqual(
+        leaderRPBFT->fakePBFTSuite()->consensus()->reqCache()->rawPrepareCachePtr(), prepareReq);
+
+    std::shared_ptr<P2PMessage> receivedP2pMsg = nullptr;
+    // wait broadcast enqueue finished
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
+            followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    for (auto const& node : leaderRPBFT->fakePBFTSuite()->consensus()->sealerList())
+    {
+        compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
+    }
+
+    // the follower receive rawPrepare message from the leader, no forward
+    // fake session for the leader
+    std::shared_ptr<FakeSession> leaderSession =
+        std::make_shared<FakeSession>(leaderRPBFT->rotatingPBFT()->keyPair().pub());
+
+    NetworkException networkException;
+    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
+        networkException, leaderSession, receivedP2pMsg);
+    for (auto const& node : followRPBFT->fakePBFTSuite()->consensus()->sealerList())
+    {
+        compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()), node, 0);
+    }
+
+    followRPBFT->fakePBFTSuite()->consensus()->reqCache()->clearAll();
+
+    leaderRPBFT->fakePBFTSuite()->consensus()->clearAllMsgCache();
+    followRPBFT->fakePBFTSuite()->consensus()->clearAllMsgCache();
+    // enable tree-topology, only broadcast rawprepare request to the children
+    leaderRPBFT->fakePBFTSuite()->consensus()->createTreeTopology(3);
+    followRPBFT->fakePBFTSuite()->consensus()->createTreeTopology(3);
+    auto sealerList = leaderRPBFT->fakePBFTSuite()->consensus()->sealerList();
+    // the leader only broadcast rawprepare request to the selected child nodes
+    std::shared_ptr<std::set<dev::h512>> sealerSet =
+        std::make_shared<std::set<dev::h512>>(sealerList.begin(), sealerList.end());
+    leaderRPBFT->fakePBFTSuite()->consensus()->setChosedConsensusNodes(sealerSet);
+    followRPBFT->fakePBFTSuite()->consensus()->setChosedConsensusNodes(sealerSet);
+
+    leaderRPBFT->fakePBFTSuite()->consensus()->treeRouter()->updateConsensusNodeInfo(sealerList);
+    followRPBFT->fakePBFTSuite()->consensus()->treeRouter()->updateConsensusNodeInfo(sealerList);
+
+    leaderRPBFT->fakePBFTSuite()->consensus()->wrapperConstructPrepareReq(prepareReq->pBlock);
+    auto selectedNodes = leaderRPBFT->fakePBFTSuite()->consensus()->treeRouter()->selectNodes(
+        sealerSet, leaderRPBFT->fakePBFTSuite()->consensus()->nodeIdx());
+    BOOST_CHECK(selectedNodes->size() == 3);
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
+        sleep(1);
+    }
+    for (auto const& node : *selectedNodes)
+    {
+        compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
+    }
+
+    // check the follow forward and handle the message
+    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
+        networkException, leaderSession, receivedP2pMsg);
+
+    selectedNodes = followRPBFT->fakePBFTSuite()->consensus()->treeRouter()->selectNodes(
+        sealerSet, prepareReq->idx);
+    // should forward the message
+    std::shared_ptr<FakeService> followService = std::dynamic_pointer_cast<FakeService>(
+        followRPBFT->fakePBFTSuite()->consensus()->mutableService());
+    if (selectedNodes->size() == 0)
+    {
+        for (auto const& node : sealerList)
+        {
+            compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()), node, 0);
+        }
+    }
+    else
+    {
+        receivedP2pMsg = nullptr;
+        while (!receivedP2pMsg)
+        {
+            receivedP2pMsg = followService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
+            sleep(1);
+        }
+
+        for (auto const& node : *selectedNodes)
+        {
+            compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()), node, 1);
+        }
+    }
+
+    followRPBFT->fakePBFTSuite()->consensus()->reqCache()->clearAll();
+    // the leader sendRawPrepareStatusRandomly
+    leaderRPBFT->fakePBFTSuite()->consensus()->setNodeIdx(0);
+    leaderRPBFT->fakePBFTSuite()->consensus()->setKeyPair(
+        leaderRPBFT->fakePBFTSuite()->m_keyPair[0]);
+
+    leaderRPBFT->fakePBFTSuite()->consensus()->wrapperSendRawPrepareStatusRandomly(prepareReq);
+    auto chosedConsensusNodeSize =
+        leaderRPBFT->fakePBFTSuite()->consensus()->chosedConsensusNodes().size();
+    size_t selectedSize =
+        (leaderRPBFT->fakePBFTSuite()->consensus()->prepareStatusBroadcastPercent() *
+                chosedConsensusNodeSize +
+            99) /
+        100;
+    size_t sendedSize = 0;
+    std::vector<std::pair<dev::h512, IDXTYPE>> chosedNodes;
+    ssize_t index = 0;
+    for (auto const& node : sealerList)
+    {
+        if (leaderService->getAsyncSendSizeByNodeID(node) == 1)
+        {
+            chosedNodes.push_back(std::make_pair(node, index));
+            receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(node);
+            compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
+            sendedSize++;
+        }
+        index++;
+    }
+    BOOST_CHECK(sendedSize == selectedSize);
+
+    // the chosed node receive rawPrepareStatus and request the rawPrepareReq
+    // make sure the followRPBFT is not the child of the leaderRPBFT
+    do
+    {
+        std::srand(utcTime());
+        index = std::rand() % chosedNodes.size();
+    } while (index >= 0 && index <= 3);
+
+    followRPBFT->fakePBFTSuite()->consensus()->setKeyPair(
+        followRPBFT->fakePBFTSuite()->m_keyPair[chosedNodes[index].second]);
+    followRPBFT->fakePBFTSuite()->consensus()->setNodeIdx(chosedNodes[index].second);
+
+    std::shared_ptr<FakeSession> leaderSession2 =
+        std::make_shared<FakeSession>(leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+
+    // onReceiveRawPrepareStatus
+    followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
+    leaderRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
+    // case1: connect with all the node
+    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareStatus(
+        leaderSession2, receivedP2pMsg);
+    compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
+        leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 0);
+
+    // case2: only connect with the leaderRPBFT
+    followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
+    leaderRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
+    followService->clearSessionInfo();
+    appendSessionInfo(*(followRPBFT->fakePBFTSuite()),
+        leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+    followRPBFT->fakePBFTSuite()->consensus()->wrapperHandleP2PMessage(
+        networkException, leaderSession2, receivedP2pMsg);
+
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg = followService->getAsyncSendMessageByNodeID(
+            leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+        sleep(1);
+    }
+    compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
+        leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
+
+    // receive the rawPrepareRequest and response the rawPrepareReq
+    // onReceiveRawPrepareRequest
+    std::shared_ptr<FakeSession> followSession =
+        std::make_shared<FakeSession>(followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+    leaderRPBFT->fakePBFTSuite()->consensus()->wrapperHandleP2PMessage(
+        networkException, followSession, receivedP2pMsg);
+    receivedP2pMsg = nullptr;
+    while (!receivedP2pMsg)
+    {
+        receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
+            followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+        sleep(1);
+    }
+
+    // onReceiveRawPrepareResponse
+    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareResponse(
+        leaderSession2, receivedP2pMsg);
+    checkPrepareReqEqual(
+        followRPBFT->fakePBFTSuite()->consensus()->reqCache()->rawPrepareCachePtr(), prepareReq);
+}
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace test
-}  // namespace dev

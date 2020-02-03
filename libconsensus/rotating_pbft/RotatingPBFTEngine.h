@@ -105,6 +105,8 @@ public:
         m_prepareStatusBroadcastPercent = _prepareStatusBroadcastPercent;
     }
 
+    void createPBFTReqCache() override;
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
@@ -151,8 +153,6 @@ protected:
 
     virtual bool updateEpochSize();
     virtual bool updateRotatingInterval();
-
-    void createPBFTReqCache() override;
 
     void handleP2PMessage(dev::p2p::NetworkException _exception,
         std::shared_ptr<dev::p2p::P2PSession> _session,

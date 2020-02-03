@@ -226,7 +226,7 @@ public:
 
     std::shared_ptr<PBFTReqCache> reqCache() { return m_reqCache; }
 
-    PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block)
+    PrepareReq::Ptr wrapperConstructPrepareReq(dev::eth::Block::Ptr _block)
     {
         return PBFTEngine::constructPrepareReq(_block);
     }

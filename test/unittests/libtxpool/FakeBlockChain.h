@@ -81,6 +81,7 @@ public:
         {
             m_asyncSendMsgs.erase(nodeID);
         }
+        m_asyncSend.erase(nodeID);
     }
 
     void setConnected() { m_connected = true; }
