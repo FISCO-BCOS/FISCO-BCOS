@@ -30,13 +30,15 @@ enum ContractStatus
     Available,
     Frozen,
     Killed,
+    Nonexistent,
     Count
 };
 
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfrozening it.",
-    "The contract has been killed. You can no longer invoke this contract."};
+    "The contract has been killed. You can no longer invoke this contract.",
+    "The contract is nonexistent."};
 
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";

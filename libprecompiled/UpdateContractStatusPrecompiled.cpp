@@ -111,6 +111,10 @@ ContractStatus UpdateContractStatusPrecompiled::getContractStatus(
             }
         }
     }
+    else
+    {  // valid address but nonexistent
+        status = ContractStatus::Nonexistent;
+    }
 
     if (ContractStatus::Invalid == status)
     {
@@ -139,9 +143,14 @@ void UpdateContractStatusPrecompiled::kill(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("UpdateContractStatusPrecompiled")
                                << LOG_KV("kill contract", tableName);
 
-        if (getContractStatus(context, tableName) == ContractStatus::Killed)
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
         {
             result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
         else
         {
@@ -232,6 +241,10 @@ void UpdateContractStatusPrecompiled::freeze(
         {
             result = CODE_INVALID_CONTRACT_FEOZEN;
         }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
         else
         {
             result = updateFrozenStatus(context, tableName, STATUS_TRUE, origin);
@@ -266,6 +279,10 @@ void UpdateContractStatusPrecompiled::unfreeze(
         else if (ContractStatus::Available == status)
         {
             result = CODE_INVALID_CONTRACT_AVAILABLE;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
         else
         {
