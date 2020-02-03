@@ -24,11 +24,11 @@
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/ContractStatusPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libprecompiled/UpdateContractStatusPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -60,7 +60,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setAddress2Precompiled(
         Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1007), std::make_shared<dev::precompiled::UpdateContractStatusPrecompiled>());
+        Address(0x1007), std::make_shared<dev::precompiled::ContractStatusPrecompiled>());
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
