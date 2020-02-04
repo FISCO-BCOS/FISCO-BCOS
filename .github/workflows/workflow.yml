@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-16.04, ubuntu-18.04, macos-latest]
+        os: [ubuntu-18.04, macos-latest]
     steps:
       - uses: actions/checkout@v1
         with:
@@ -31,11 +31,11 @@ jobs:
         id: cache
         with:
           path: deps/
-          key: deps-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-${{ runner.os }}-${{ github.ref }}
-            deps-${{ runner.os }}-
+            ${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ${{ runner.os }}-${{ github.ref }}
+            ${{ runner.os }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl ccache
