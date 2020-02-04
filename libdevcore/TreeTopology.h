@@ -52,6 +52,12 @@ public:
     virtual std::shared_ptr<dev::h512s> selectNodes(
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
 
+    virtual std::shared_ptr<dev::h512s> selectNodesByNodeID(
+        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);
+
+    virtual std::shared_ptr<dev::h512s> selectParentByNodeID(
+        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);
+
     virtual std::shared_ptr<dev::h512s> selectParent(
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
 
@@ -83,7 +89,7 @@ protected:
 
     virtual ssize_t getSelectedNodeIndex(ssize_t const& _selectedIndex, ssize_t const& _offset);
 
-    ssize_t getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512& _nodeId);
+    ssize_t getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512 const& _nodeId);
 
 protected:
     mutable Mutex m_mutex;

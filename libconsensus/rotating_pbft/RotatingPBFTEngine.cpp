@@ -353,7 +353,12 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
     std::shared_ptr<dev::h512s> selectedNodes;
     {
         ReadGuard l(x_chosedConsensusNodes);
-        selectedNodes = m_treeRouter->selectNodes(m_chosedConsensusNodes, m_idx);
+        NodeID leaderNodeID = getNodeIDByIndex(m_idx);
+        if (leaderNodeID == dev::h512())
+        {
+            return;
+        }
+        selectedNodes = m_treeRouter->selectNodesByNodeID(m_chosedConsensusNodes, leaderNodeID);
     }
     for (auto const& targetNode : *selectedNodes)
     {
@@ -394,7 +399,12 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
         std::shared_ptr<dev::h512s> selectedNodes;
         {
             ReadGuard l(x_chosedConsensusNodes);
-            selectedNodes = m_treeRouter->selectNodes(m_chosedConsensusNodes, leaderIdx);
+            auto leaderNodeId = getNodeIDByIndex(leaderIdx);
+            if (leaderNodeId == dev::h512())
+            {
+                return;
+            }
+            selectedNodes = m_treeRouter->selectNodesByNodeID(m_chosedConsensusNodes, leaderNodeId);
             RPBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("Rcv prepare message") << LOG_KV("peer", _session->nodeID().abridged())
                 << LOG_KV("packetSize", _prepareMsg->length()) << LOG_KV("_leaderIdx", leaderIdx)
@@ -539,7 +549,13 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
             return;
         }
         // request rawPreparePacket to the selectedNode
-        auto parentNodeList = m_treeRouter->selectParent(m_chosedConsensusNodes, pbftMsg->idx);
+        NodeID leaderNodeID = getNodeIDByIndex(pbftMsg->idx);
+        if (leaderNodeID == dev::h512())
+        {
+            return;
+        }
+        auto parentNodeList =
+            m_treeRouter->selectParentByNodeID(m_chosedConsensusNodes, leaderNodeID);
         // the root node of the tree-topology
         if (parentNodeList->size() == 0)
         {

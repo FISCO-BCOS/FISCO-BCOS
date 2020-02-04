@@ -41,6 +41,8 @@ void TreeTopology::updateStartAndEndIndex()
     m_startIndex = 0;
     m_endIndex = (ssize_t)(m_currentConsensusNodes->size() - 1);
     m_nodeNum = m_currentConsensusNodes->size();
+    TREE_LOG(DEBUG) << LOG_DESC("updateConsensusNodeInfo") << LOG_KV("consIndex", m_consIndex)
+                    << LOG_KV("endIndex", m_endIndex) << LOG_KV("nodeNum", m_nodeNum);
 }
 
 /**
@@ -49,7 +51,8 @@ void TreeTopology::updateStartAndEndIndex()
  *  -1: the given _nodeId doesn't exist in _findSet
  *   >=0 : the index of the given node
  */
-ssize_t TreeTopology::getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512& _nodeId)
+ssize_t TreeTopology::getNodeIndexByNodeId(
+    std::shared_ptr<dev::h512s> _findSet, dev::h512 const& _nodeId)
 {
     ssize_t nodeIndex = -1;
     for (ssize_t i = 0; i < (ssize_t)_findSet->size(); i++)
@@ -225,4 +228,18 @@ std::shared_ptr<dev::h512s> TreeTopology::selectParent(
         selectParentNodes(selectedParentNodeList, _peers, nodeIndex, _consIndex);
     }
     return selectedParentNodeList;
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectNodesByNodeID(
+    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID)
+{
+    auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
+    return selectNodes(_peers, consIndex);
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectParentByNodeID(
+    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID)
+{
+    auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
+    return selectParent(_peers, consIndex);
 }
