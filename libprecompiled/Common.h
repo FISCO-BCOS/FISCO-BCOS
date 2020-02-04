@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "libblockverifier/Precompiled.h"
+#include "libdevcore/Exceptions.h"
 #include <memory>
 #include <string>
 
@@ -92,9 +93,19 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
+class PrecompiledException : public dev::Exception
+{
+public:
+    PrecompiledException(const std::string& what) : dev::Exception(what) {}
+};
+
 void getErrorCodeOut(bytes& out, int const& result);
 std::string getTableName(const std::string& _tableName);
 std::string getContractTableName(Address const& _contractAddress);
+void checkNameValidate(
+    const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList);
+int checkLengthValidate(const std::string& field_value, int32_t max_length, int32_t errorCode,
+    bool throwStorageException = true);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;

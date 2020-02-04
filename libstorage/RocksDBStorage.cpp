@@ -74,7 +74,7 @@ Entries::Ptr RocksDBStorage::select(
             {  // TODO: use tbb parallel_for
                 Entry::Ptr entry = make_shared<Entry>();
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
-                {
+                {  // FIXME: ID_FIELD/NUM_FIELD/STATUS should not expose to user
                     entry->setField(valueIt->first, valueIt->second);
                 }
                 entry->setID(it->at(ID_FIELD));
