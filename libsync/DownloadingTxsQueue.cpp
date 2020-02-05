@@ -92,7 +92,11 @@ void DownloadingTxsQueue::pop2TxPool(
         m_buffer = std::make_shared<std::vector<std::shared_ptr<DownloadTxsShard>>>();
         newBuffer_time_cost = utcTime() - record_time;
     }
-
+    // the node is not the group member, return without submit the transaction to the txPool
+    if (!m_needImportToTxPool)
+    {
+        return;
+    }
     auto maintainBuffer_start_time = utcTime();
     int64_t decode_time_cost = 0;
     int64_t verifySig_time_cost = 0;

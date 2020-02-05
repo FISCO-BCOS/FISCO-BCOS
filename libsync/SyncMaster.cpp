@@ -649,6 +649,7 @@ void SyncMaster::maintainPeersConnection()
 
     // If myself is not in group, no need to maintain blocks(send sync status to peers)
     m_needSendStatus = m_isGroupMember || hasMyself;  // need to send if last time is in group
+    m_txQueue->setNeedImportToTxPool(m_needSendStatus);
     m_isGroupMember = hasMyself;
 }
 
