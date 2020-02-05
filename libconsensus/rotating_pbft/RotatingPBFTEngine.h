@@ -107,6 +107,8 @@ public:
 
     void createPBFTReqCache() override;
 
+    dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq) override;
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
@@ -165,6 +167,8 @@ private:
     // request RawPrepare packet to the _targetNode
     void requestRawPreparePacket(
         dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus);
+
+    std::shared_ptr<dev::h512s> getParentNode(PBFTMsg::Ptr _pbftMsg);
 
 protected:
     // configured epoch size

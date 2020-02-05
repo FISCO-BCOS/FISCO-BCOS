@@ -464,6 +464,42 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(
         });
 }
 
+// select node to request missed transactions when enable bip 152
+dev::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
+{
+    if (m_treeRouter)
+    {
+        return RotatingPBFTEngine::selectNodeToRequestMissedTxs(_prepareReq);
+    }
+    auto parentNodeList = getParentNode(_prepareReq);
+    std::stringstream oss;
+    oss << LOG_KV("reqHeight", _prepareReq->height)
+        << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
+        << LOG_KV("reqIdx", _prepareReq->idx) << LOG_KV("idx", nodeIdx());
+    // has no parent, request missed transactions to the leader directly
+    if (!parentNodeList || parentNodeList->size() == 0)
+    {
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC(
+                                      "selectNodeToRequestMissedTxs: request to leader for missed "
+                                      "txs because of getParentNode failed")
+                               << oss.str();
+        return PBFTEngine::selectNodeToRequestMissedTxs(_prepareReq);
+    }
+    auto expectedNodeId = (*parentNodeList)[0];
+    auto selectedNode = m_rpbftReqCache->selectNodeToRequestTxs(expectedNodeId, _prepareReq);
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("selectNodeToRequestMissedTxs")
+                           << LOG_KV("parentNodeID", expectedNodeId.abridged())
+                           << LOG_KV("selectedNode", selectedNode.abridged()) << oss.str();
+    if (selectedNode == dev::h512())
+    {
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC(
+            "selectNodeToRequestMissedTxs: request to leader for missed txs because of no required "
+            "node found");
+        return PBFTEngine::selectNodeToRequestMissedTxs(_prepareReq);
+    }
+    return selectedNode;
+}
+
 void RotatingPBFTEngine::createPBFTReqCache()
 {
     m_rpbftReqCache = std::make_shared<RPBFTReqCache>();
@@ -532,6 +568,16 @@ PBFTMsg::Ptr RotatingPBFTEngine::decodeP2PMsgIntoPBFTMsg(
     return pbftMsg;
 }
 
+std::shared_ptr<dev::h512s> RotatingPBFTEngine::getParentNode(PBFTMsg::Ptr _pbftMsg)
+{
+    NodeID leaderNodeID = getNodeIDByIndex(_pbftMsg->idx);
+    if (leaderNodeID == dev::h512())
+    {
+        return nullptr;
+    }
+    return m_treeRouter->selectParentByNodeID(m_chosedConsensusNodes, leaderNodeID);
+}
+
 // receive the rawPrepareReqStatus packet and update the cachedRawPrepareStatus
 void RotatingPBFTEngine::onReceiveRawPrepareStatus(
     std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
@@ -548,16 +594,11 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
         {
             return;
         }
+        m_rpbftReqCache->updateRawPrepareStatusCache(_session->nodeID(), pbftMsg);
         // request rawPreparePacket to the selectedNode
-        NodeID leaderNodeID = getNodeIDByIndex(pbftMsg->idx);
-        if (leaderNodeID == dev::h512())
-        {
-            return;
-        }
-        auto parentNodeList =
-            m_treeRouter->selectParentByNodeID(m_chosedConsensusNodes, leaderNodeID);
+        auto parentNodeList = getParentNode(pbftMsg);
         // the root node of the tree-topology
-        if (parentNodeList->size() == 0)
+        if (!parentNodeList || parentNodeList->size() == 0)
         {
             return;
         }

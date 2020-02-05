@@ -152,3 +152,75 @@ bool RPBFTReqCache::findTheRequestedRawPrepare(PBFTMsg::Ptr _rawPrepareRequestMs
     }
     return true;
 }
+
+// update rawPrepare cache when receive _receivedRawPrepareStatus
+void RPBFTReqCache::updateRawPrepareStatusCache(
+    dev::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus)
+{
+    UpgradableGuard l(x_nodeIDToPrepareStatus);
+    if (!m_nodeIDToPrepareStatus->count(_nodeId) ||
+        checkRawPrepareStatus((*m_nodeIDToPrepareStatus)[_nodeId], _receivedRawPrepareStatus))
+    {
+        UpgradeGuard ul(l);
+        // erase the expired cache from m_hashToPrepareInfo
+        if (m_nodeIDToPrepareStatus->count(_nodeId))
+        {
+            m_prepareHashToNodeID->erase((*m_nodeIDToPrepareStatus)[_nodeId]->block_hash);
+        }
+        m_nodeIDToPrepareStatus->insert(std::make_pair(_nodeId, _receivedRawPrepareStatus));
+
+        auto blockHash = _receivedRawPrepareStatus->block_hash;
+        if (!m_prepareHashToNodeID->count(blockHash))
+        {
+            (*m_prepareHashToNodeID)[blockHash] = std::make_shared<std::set<dev::h512>>();
+        }
+        (*m_prepareHashToNodeID)[blockHash]->insert(_nodeId);
+        m_signalled.notify_all();
+        RPBFTReqCache_LOG(TRACE) << LOG_DESC("updateRawPrepareStatusCache")
+                                 << LOG_KV("hash", blockHash.abridged())
+                                 << LOG_KV("height", _receivedRawPrepareStatus->height)
+                                 << LOG_KV("idx", _receivedRawPrepareStatus->idx)
+                                 << LOG_KV("prepareHashToNodeIDSize",
+                                        (*m_prepareHashToNodeID)[blockHash]->size());
+    }
+}
+
+dev::h512 RPBFTReqCache::selectNodeToRequestTxs(
+    dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
+{
+    auto startTime = utcSteadyTime();
+    do
+    {
+        auto selectedNode =
+            selectRequiredNodeToRequestTxs(_expectedNodeID, _receivedRawPrepareStatus);
+        if (selectedNode != dev::h512())
+        {
+            return selectedNode;
+        }
+        boost::unique_lock<boost::mutex> l(x_signalled);
+        m_signalled.wait_for(l, boost::chrono::milliseconds(5));
+    } while (utcSteadyTime() - startTime < m_maxRequestMissedTxsWaitTime);
+    return dev::h512();
+}
+
+// select required node to request txs
+dev::h512 RPBFTReqCache::selectRequiredNodeToRequestTxs(
+    dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
+{
+    ReadGuard l(x_nodeIDToPrepareStatus);
+    auto blockHash = _receivedRawPrepareStatus->block_hash;
+    if (!m_prepareHashToNodeID->count(blockHash) ||
+        (*m_prepareHashToNodeID)[blockHash]->size() == 0)
+    {
+        return dev::h512();
+    }
+    // try to find the expected node
+    if ((*m_prepareHashToNodeID)[blockHash]->count(_expectedNodeID))
+    {
+        return _expectedNodeID;
+    }
+    std::srand(utcTime());
+    auto iterator = (*m_prepareHashToNodeID)[blockHash]->begin();
+    std::advance(iterator, std::rand() % (*m_prepareHashToNodeID)[blockHash]->size());
+    return *iterator;
+}

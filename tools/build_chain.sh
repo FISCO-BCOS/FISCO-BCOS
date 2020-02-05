@@ -495,12 +495,15 @@ generate_group_genesis()
     local output=$1
     local index=$2
     local node_list=$3
+    local sealer_size=$4
     cat << EOF > ${output} 
 [consensus]
     ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
+    epoch_size=${sealer_size}
+    rotating_interval=1000
     ; the node id of consensusers
     ${node_list}
 [state]
@@ -526,6 +529,11 @@ function generate_group_ini()
     ;enable_dynamic_block_size=true
     ;enable_ttl_optimization=true
     ;enable_prepare_with_txsHash=true
+    ; set true to enable broadcast prepare request by tree
+    ;broadcast_prepare_by_tree=true
+    ; percent of selected nodes to receive prepare status
+    ; must be no smaller than 25 and no larger than 100
+    ;prepare_status_broadcast_percent=33
 [storage]
     ; storage db type, rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
     type=${storage_type}
@@ -1244,6 +1252,7 @@ for line in ${ip_array[*]};do
         else
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
+    ((++groups_count[j]))
         fi
         
         ip_list=$"${ip_list}node.${count}="${ip}:$(( $(get_value ${ip//./}_count) + port_start[0] ))"
@@ -1288,11 +1297,11 @@ for line in ${ip_array[*]};do
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}"
+                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}" "${groups_count[${j}]}"
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}" "${groups_count[${j}]}"
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"

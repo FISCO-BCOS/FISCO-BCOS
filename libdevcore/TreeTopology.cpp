@@ -155,13 +155,17 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         return;
     }
     dev::h512 selectedNode;
-    while (parentIndex > 0)
+    while (parentIndex >= 0)
     {
         // find the parentNode from the peers
         auto selectedIndex = getSelectedNodeIndex(parentIndex, _startIndex);
         if (getNodeIDByIndex(selectedNode, selectedIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
+            break;
+        }
+        if (parentIndex == 0)
+        {
             break;
         }
         parentIndex = (parentIndex - 1) / m_treeWidth;
