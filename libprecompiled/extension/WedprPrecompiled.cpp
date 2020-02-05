@@ -445,7 +445,6 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
 {
     std::string bidRequest;
     abi.abiOut(data, bidRequest);
-    std::cout << "###bidRequest" << bidRequest << std::endl;
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidRequest", bidRequest);
     char* bidRequestChar = stringToChar(bidRequest);
     if (verify_bid_signature_from_bid_request(bidRequestChar) != WEDPR_SUCCESS)
@@ -454,7 +453,6 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
         throwException("verify_bid_signature_from_bid_request failed");
     }
     std::string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
-    std::cout << "###bidStorage" << bidStorage << std::endl;
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidStorage", bidStorage);
     return abi.abiIn("", bidStorage);
 }
@@ -463,7 +461,6 @@ bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
 {
     std::string bidComparisonRequest;
     abi.abiOut(data, bidComparisonRequest);
-    std::cout << "###bidComparisonRequest" << bidComparisonRequest << std::endl;
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
                           << LOG_KV("bidComparisonRequest", bidComparisonRequest);
     char* bidComparisonRequestChar = stringToChar(bidComparisonRequest);
