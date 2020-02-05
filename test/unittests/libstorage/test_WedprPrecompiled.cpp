@@ -79,7 +79,7 @@ struct WedprPrecompiledFixture
 
 BOOST_FIXTURE_TEST_SUITE(WedprPrecompiled, WedprPrecompiledFixture)
 
-BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyIssuedCredit)
+BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyIssuedCredit)
 {
     dev::eth::ContractABI abi;
     std::string issueArgument =
@@ -89,8 +89,8 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyIssuedCredit)
         "ZKVGFqNGgvT2ljc25NMGNHQWNlOGNNSVFyVXRtZGZaRVpXYUNYSVFvPRIYcGFZTEt5L2RRSTJvUVlrOVRBWVZjdz09"
         "IkgKLDlCZkpUYWo0aC9PaWNzbk0wY0dBY2U4Y01JUXJVdG1kZlpFWldhQ1hJUW89EhhwYVlMS3kvZFFJMm9RWWs5VE"
         "FZVmN3PT0SLHRMbVBuK1ZMWEsrTW5NZ3Q4L0Rsei9DNEc4bmMydVROdnlwUWdXRHcyeVk9GgIIZA==";
-    bytes param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT, issueArgument);
-    // hiddenPaymentVerifyIssuedCredit(string issueArgument)
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT, issueArgument);
+    // confidentialPaymentVerifyIssuedCredit(string issueArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string currentCredit;
@@ -109,11 +109,11 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyIssuedCredit)
                "JUW89EhhwYVlMS3kvZFFJMm9RWWs5VEFZVmN3PT0=");
 
     std::string errorIssueArgument = "123";
-    param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_ISSUED_CREDIT, errorIssueArgument);
+    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT, errorIssueArgument);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
-BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyFulfilledCredit)
+BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyFulfilledCredit)
 {
     dev::eth::ContractABI abi;
     std::string fulfillArgument =
@@ -125,8 +125,8 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyFulfilledCredit)
         "hBaXlRPT0SjwErM3gzTDZDWFR2Qm1OeFFZM2drV1hRaXJHM21aMm1ocjE3cmxYZkh0dHdZPXwrM3NiRUkwdGd4MVFP"
         "RWVvSDRTNUdBTkh0NjlLNlNMRS9Pc2QxWFZLTHdNPXxPUG5nc05OUUhtbzN1YkpBbnVMY0NpcnkxT2VzOXFDUTlMZW"
         "8vRzJDamdNPXw1ZDllYjU3Mw==";
-    bytes param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT, fulfillArgument);
-    // hiddenPaymentVerifyFulfilledCredit(string fulfillArgument)
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT, fulfillArgument);
+    // confidentialPaymentVerifyFulfilledCredit(string fulfillArgument)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string currentCredit;
@@ -145,11 +145,11 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyFulfilledCredit)
                "4aDg9EhhJL253RklTYVQ5U2liWm1BL2hBaXlRPT0=");
 
     std::string errorFulfillArgument = "123";
-    param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_FULFILLED_CREDIT, errorFulfillArgument);
+    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT, errorFulfillArgument);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
-BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyTransferredCredit)
+BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyTransferredCredit)
 {
     dev::eth::ContractABI abi;
     std::string transferRequest =
@@ -169,8 +169,8 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyTransferredCredit)
         "9zNUVjcm5GeGk4NUVCcmp5SjVaQS9JMDRoRXRlMVRmajBmaEd6TzdaZ2M9Oo8BUUljVC9Fb21VWFBzeUdYaFZIYVZI"
         "alhTMmxkbW9ubTFJMXpkRmpPaTNRbz18Z3Jma3VsQTU1RHJPT1IrdE9PdDBKTEs5UlM1WnVGREFQZ3ZVeHEvd1lRUT"
         "18VllWVGQ3QU9SU3Bic0o3RzJ2Y1VTbUZrMnVKeFZTWmgzWGo0eE5YcG1Bbz18NWQ5ZWI1NzMiCHRyYW5zZmVy";
-    bytes param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT, transferRequest);
-    // hiddenPaymentVerifyTransferredCredit(string transferRequest)
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT, transferRequest);
+    // confidentialPaymentVerifyTransferredCredit(string transferRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string spentCurrentCredit;
@@ -201,11 +201,11 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifyTransferredCredit)
                "4aDg9EhhJL253RklTYVQ5U2liWm1BL2hBaXlRPT0=");
 
     std::string errorTransferRequest = "123";
-    param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_TRANSFERRED_CREDIT, errorTransferRequest);
+    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT, errorTransferRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
-BOOST_AUTO_TEST_CASE(hiddenPaymentVerifySplitCredit)
+BOOST_AUTO_TEST_CASE(confidentialPaymentVerifySplitCredit)
 {
     dev::eth::ContractABI abi;
     std::string splitRequest =
@@ -254,8 +254,8 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifySplitCredit)
         "TjNGckY4MHVTOTh2NURzcSt1NUNkelBtbGQ4aWpITFQ4NDJ4bGtrVDNrY3dyVFYvNDE4ajl1TU1TZHJXbVFwRXlNaU"
         "JtQUlkKzVGY2VNV3ZKeDB0SVlCUT09QkgKLDVqbG1KVUhLSURKQkJZYU1VQjBrZ3U1NWlOZ2dsLzI4eGJUbkhUdFZT"
         "QUU9EhhZajN1TFNxVFRsaXcvOWVRVFNkczhBPT0aBXNwbGl0";
-    bytes param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT, splitRequest);
-    // hiddenPaymentVerifySplitCredit(string splitRequest)
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, splitRequest);
+    // confidentialPaymentVerifySplitCredit(string splitRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
 
     std::string spentCurrentCredit;
@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE(hiddenPaymentVerifySplitCredit)
                "kbE09EhhvMHZSWjQzalI1V1hUWEdDTGZvbHZRPT0=");
 
     std::string errorSplitRequest = "123";
-    param = abi.abiIn(API_HIDDEN_PAYMENT_VERIFY_SPLIT_CREDIT, errorSplitRequest);
+    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, errorSplitRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
