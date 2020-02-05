@@ -95,6 +95,10 @@ public:
     }
 
     TreeTopology::Ptr treeRouter() { return m_treeRouter; }
+    void setNeedImportToTxPool(bool const& _needImportToTxPool)
+    {
+        m_needImportToTxPool = _needImportToTxPool;
+    }
 
 private:
     NodeID m_nodeId;
@@ -106,6 +110,7 @@ private:
     TreeTopology::Ptr m_treeRouter = nullptr;
     SyncMasterStatus::Ptr m_syncStatus;
     dev::p2p::P2PInterface::Ptr m_service;
+    std::atomic_bool m_needImportToTxPool = {true};
 };
 
 }  // namespace sync

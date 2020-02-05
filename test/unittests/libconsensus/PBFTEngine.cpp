@@ -632,6 +632,8 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
                 fake_pbft.consensus()->reqCache()->committedPrepareCache());
     bytes data;
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
+    // since commit backup pbft asyncly, need to sleep 1s before checkBackupMsg
+    sleep(1);
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);

@@ -273,11 +273,18 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         BOOST_CHECK(data.empty() == true);
     else
     {
+        if (data != toHex(msgData))
+        {
+            std::cout << "error: PBFTBackup: Queried Data:" << data << std::endl;
+            std::cout << "error: PBFTBackup: Expected Data:" << toHex(msgData) << std::endl;
+        }
         BOOST_CHECK(data == toHex(msgData));
         /// remove the key
         std::string empty = "";
         if (shouldClean)
+        {
             fake_pbft.consensus()->backupDB()->insert(key, empty);
+        }
     }
 }
 
