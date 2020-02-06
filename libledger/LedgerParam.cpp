@@ -255,8 +255,18 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfiguration() << errinfo_comment(
-                "consensus.prepare_status_broadcast_percent must between 25 and 100"));
+                "consensus.prepare_status_broadcast_percent must be between 25 and 100"));
     }
+    mutableConsensusParam().maxRequestMissedTxsWaitTime =
+        pt.get<int64_t>("consensus.max_request_missedTxs_waitTime", 100);
+    if (mutableConsensusParam().maxRequestMissedTxsWaitTime < 5 ||
+        mutableConsensusParam().maxRequestMissedTxsWaitTime > 1000)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration()
+            << errinfo_comment("consensus.max_request_missedTxs_waitTime must between 5 and 1000"));
+    }
+    // maxRequestMissedTxsWaitTime
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
         << LOG_KV("maxTTL", std::to_string(mutableConsensusParam().maxTTL))
@@ -267,7 +277,9 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
         << LOG_KV("enablePrepareWithTxsHash", mutableConsensusParam().enablePrepareWithTxsHash)
         << LOG_KV("broadcastPrepareByTree", mutableConsensusParam().broadcastPrepareByTree)
         << LOG_KV("prepareStatusBroadcastPercent",
-               mutableConsensusParam().prepareStatusBroadcastPercent);
+               mutableConsensusParam().prepareStatusBroadcastPercent)
+        << LOG_KV(
+               "maxRequestMissedTxsWaitTime", mutableConsensusParam().maxRequestMissedTxsWaitTime);
 }
 
 

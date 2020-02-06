@@ -534,6 +534,9 @@ function generate_group_ini()
     ; percent of selected nodes to receive prepare status
     ; must be no smaller than 25 and no larger than 100
     ;prepare_status_broadcast_percent=33
+    ; max wait time before request missed transactions to the leader, ms
+    ; must be no smaller than 5ms and no larger than 1000ms
+    ;max_request_missedTxs_waitTime=100
 [storage]
     ; storage db type, rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
     type=${storage_type}
@@ -1252,7 +1255,6 @@ for line in ${ip_array[*]};do
         else
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
-    ((++groups_count[j]))
         fi
         
         ip_list=$"${ip_list}node.${count}="${ip}:$(( $(get_value ${ip//./}_count) + port_start[0] ))"
@@ -1301,7 +1303,7 @@ for line in ${ip_array[*]};do
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}" "${groups_count[${j}]}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}" "${count}"
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"

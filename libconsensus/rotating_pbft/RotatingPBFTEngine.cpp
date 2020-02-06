@@ -467,9 +467,9 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(
 // select node to request missed transactions when enable bip 152
 dev::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
 {
-    if (m_treeRouter)
+    if (!m_treeRouter)
     {
-        return RotatingPBFTEngine::selectNodeToRequestMissedTxs(_prepareReq);
+        return PBFTEngine::selectNodeToRequestMissedTxs(_prepareReq);
     }
     auto parentNodeList = getParentNode(_prepareReq);
     std::stringstream oss;
@@ -503,6 +503,7 @@ dev::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prep
 void RotatingPBFTEngine::createPBFTReqCache()
 {
     m_rpbftReqCache = std::make_shared<RPBFTReqCache>();
+    m_rpbftReqCache->setMaxRequestMissedTxsWaitTime(m_maxRequestMissedTxsWaitTime);
     // only broadcast rawPrepareStatus randomly when broadcast prepare by tree
     if (m_treeRouter)
     {

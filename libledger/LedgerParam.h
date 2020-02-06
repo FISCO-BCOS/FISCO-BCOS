@@ -72,6 +72,7 @@ struct ConsensusParam
     bool broadcastPrepareByTree;
     unsigned treeWidth = 3;
     unsigned prepareStatusBroadcastPercent;
+    int64_t maxRequestMissedTxsWaitTime;
 };
 
 struct AMDBParam

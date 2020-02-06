@@ -109,6 +109,11 @@ public:
 
     dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq) override;
 
+    void setMaxRequestMissedTxsWaitTime(uint64_t const& _maxRequestMissedTxsWaitTime)
+    {
+        m_maxRequestMissedTxsWaitTime = _maxRequestMissedTxsWaitTime;
+    }
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
@@ -201,6 +206,7 @@ protected:
     dev::ThreadPool::Ptr m_rawPrepareResponse;
 
     unsigned m_prepareStatusBroadcastPercent = 33;
+    uint64_t m_maxRequestMissedTxsWaitTime = 100;
 };
 }  // namespace consensus
 }  // namespace dev
