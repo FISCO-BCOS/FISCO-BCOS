@@ -314,7 +314,6 @@ int main(int argc, char* argv[])
             // u256 maxBlockLimit = u256(1000);
             // tx.setNonce(tx.nonce() + u256(1));
             // tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
-            // dev::Signature sig = sign(sec, tx.sha3(dev::eth::WithoutSignature));
             // tx.updateSignature(SignatureStruct(sig));
             LOG(INFO) << "Tx " << *tx;
 

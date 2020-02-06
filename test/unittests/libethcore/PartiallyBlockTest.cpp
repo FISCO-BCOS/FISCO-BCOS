@@ -49,7 +49,7 @@ public:
         {
             tx->setNonce(utcTime() + index);
             tx->setBlockLimit(200);
-            SignatureStruct sig = dev::sign(fakedBlock->m_sec, tx->sha3(WithoutSignature));
+            SignatureStruct sig = dev::sign(fakedBlock->m_keyPair, tx->sha3(WithoutSignature));
             tx->updateSignature(sig);
             index++;
         }

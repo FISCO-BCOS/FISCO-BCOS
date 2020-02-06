@@ -107,10 +107,12 @@ Address toAddress(Address const& _from, u256 const& _nonce);
 /// Recovers Public key from signed message hash.
 Public recover(Signature const& _sig, h256 const& _hash);
 
+class KeyPair;
+
 /// Returns siganture of message hash.
 // SM2 is a non-deterministic signature algorithm. Even with the same hash and private key, will
 // obtained different [r] and [s] values.
-Signature sign(Secret const& _k, h256 const& _hash);
+Signature sign(KeyPair const& _keyPair, h256 const& _hash);
 
 /// Verify signature.
 

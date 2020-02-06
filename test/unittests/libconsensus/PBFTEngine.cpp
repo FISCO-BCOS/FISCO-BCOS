@@ -50,9 +50,9 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::INVALID);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
-        copiedReq.sig = dev::sign(fake_pbft.m_secrets[copiedReq.idx], copiedReq.block_hash);
+        copiedReq.sig = dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash);
         copiedReq.sig2 =
-            dev::sign(fake_pbft.m_secrets[copiedReq.idx], copiedReq.fieldsWithoutBlock());
+            dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock());
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
 
@@ -114,9 +114,9 @@ void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq
     req.block_hash = highest.hash();
     req.height = highest.number();
     fake_pbft.consensus()->setConsensusBlockNumber(req.height + 1);
-    Secret sec = fake_pbft.m_secrets[req.idx];
-    req.sig = dev::sign(sec, req.block_hash);
-    req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
+    auto keyPair = fake_pbft.m_keyPair[req.idx];
+    req.sig = dev::sign(keyPair, req.block_hash);
+    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
 }
 
 void testIsExistCommit(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prepareReq,

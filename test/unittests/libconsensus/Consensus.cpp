@@ -53,14 +53,14 @@ public:
         std::string str = "transaction";
         bytes data(str.begin(), str.end());
         Transaction tx(value, gasPrice, gas, dst, data);
-        Secret sec = KeyPair::create().secret();
+        auto keyPair = KeyPair::create();
         ///< Summit 10 transactions to txpool.
         const size_t txCnt = 10;
         for (size_t i = 0; i < txCnt; i++)
         {
             tx.setNonce(tx.nonce() + u256(i));
             tx.setBlockLimit(m_txpoolCreator->m_blockChain->number() + 2);
-            dev::Signature sig = sign(sec, tx.sha3(WithoutSignature));
+            dev::Signature sig = sign(keyPair, tx.sha3(WithoutSignature));
             tx.updateSignature(SignatureStruct(sig));
             std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(tx);
             m_txpoolCreator->m_txPool->submitTransactions(p_tx);

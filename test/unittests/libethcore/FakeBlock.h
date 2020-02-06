@@ -42,13 +42,13 @@ class FakeBlock
 {
 public:
     /// for normal case test
-    FakeBlock(size_t size, Secret const& sec = KeyPair::create().secret(), uint64_t blockNumber = 0,
+    FakeBlock(size_t size, KeyPair const& keyPair = KeyPair::create(), uint64_t blockNumber = 0,
         std::shared_ptr<BlockFactory> _blockFactory = nullptr)
     {
         m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
         m_transaction = std::make_shared<Transactions>();
         m_transactionReceipt = std::make_shared<TransactionReceipts>();
-        m_sec = sec;
+        m_keyPair = keyPair;
         FakeBlockHeader(blockNumber);
         FakeSigList(size);
         FakeTransaction(size);
@@ -149,7 +149,7 @@ public:
         for (unsigned int i = 0; i < 13; i++)
         {
             /// sealer_list.push_back(toPublic(Secret(h256(i))));
-            sealer_list.push_back(toPublic(m_sec));
+            sealer_list.push_back(m_keyPair.pub());
         }
         m_blockHeader.setSealerList(sealer_list);
     }
@@ -164,7 +164,7 @@ public:
         for (size_t i = 0; i < size; i++)
         {
             block_hash = m_blockHeader.hash();
-            sig = sign(m_sec, block_hash);
+            sig = sign(m_keyPair, block_hash);
             m_sigList->push_back(std::make_pair(u256(i), sig));
         }
     }
@@ -203,7 +203,7 @@ public:
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
-        SignatureStruct sig = dev::sign(m_sec, m_singleTransaction.sha3(WithoutSignature));
+        SignatureStruct sig = dev::sign(m_keyPair, m_singleTransaction.sha3(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction.updateSignature(sig);
     }
@@ -254,7 +254,7 @@ public:
     bytes& getBlockData() { return m_blockData; }
 
 public:
-    Secret m_sec;
+    KeyPair m_keyPair;
     std::shared_ptr<Block> m_block;
     BlockHeader m_blockHeader;
     std::shared_ptr<Transactions> m_transaction;
