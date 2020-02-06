@@ -43,7 +43,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 
 
-static shared_ptr<Secret> sec;
+static shared_ptr<KeyPair> keyPair;
 
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
@@ -64,8 +64,7 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
         tx->updateSignature(SignatureStruct(sig));
         txs->push_back(tx);
     }
@@ -121,8 +120,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
         tx->updateSignature(SignatureStruct(sig));
         txs->push_back(tx);
     }
@@ -210,7 +208,7 @@ int main(int argc, const char* argv[])
         std::cout << "Example: mini-para 1000 10000" << std::endl;
         return 0;
     }
-    sec = make_shared<Secret>(KeyPair::create().secret());
+    keyPair = make_shared<KeyPair>(KeyPair::create());
     int totalUser = atoi(argv[1]);
     int totalTxs = atoi(argv[2]);
     startExecute(totalUser, totalTxs);

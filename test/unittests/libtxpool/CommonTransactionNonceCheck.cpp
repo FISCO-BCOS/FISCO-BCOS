@@ -47,8 +47,8 @@ Transaction fakeTransaction(size_t _idx = 0)
     u256 const& nonce = u256(utcTime() + _idx);
     Transaction fakeTx(value, gasPrice, gas, dst, data, nonce);
 
-    Secret sec = KeyPair::create().secret();
-    SignatureStruct sig = dev::sign(sec, fakeTx.sha3(WithoutSignature));
+    auto keyPair = KeyPair::create();
+    SignatureStruct sig = dev::sign(keyPair, fakeTx.sha3(WithoutSignature));
     /// update the signature of transaction
     fakeTx.updateSignature(sig);
     return fakeTx;

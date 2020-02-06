@@ -46,6 +46,7 @@ static void FakePBFTSealerByKeyPair(FakeConsensus<T>& fake_pbft, KeyPair const& 
 {
     fake_pbft.m_sealerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
+    fake_pbft.m_keyPair.push_back(key_pair);
     fake_pbft.consensus()->appendSealer(key_pair.pub());
     fake_pbft.resetSessionInfo();
 }
@@ -437,9 +438,9 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
-    Secret sec = fake_pbft.m_keyPair[req.idx].secret();
-    req.sig = dev::sign(sec, req.block_hash);
-    req.sig2 = dev::sign(sec, req.fieldsWithoutBlock());
+    auto keyPair = fake_pbft.m_keyPair[req.idx];
+    req.sig = dev::sign(keyPair, req.block_hash);
+    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
 }
 
 /// test isValidPrepare

@@ -91,7 +91,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
         std::make_shared<dev::eth::Transaction>(ref(rlpBytes), dev::eth::CheckTransaction::None);
 
     /// Transaction tx(value, gasPrice, gas, dst, data);
-    Secret sec = KeyPair::create().secret();
+    auto keyPair = KeyPair::create();
     u256 maxBlockLimit = u256(500);
     /// get the consensus status
     /// m_txSpeed default is 10
@@ -110,8 +110,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             {
                 tx->setNonce(tx->nonce() + u256(utcTime()));
                 tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
-                sec = KeyPair::create().secret();
-                dev::Signature sig = sign(sec, tx->sha3(WithoutSignature));
+                dev::Signature sig = sign(keyPair, tx->sha3(WithoutSignature));
                 tx->updateSignature(SignatureStruct(sig));
                 ledgerManager->txPool(group)->submit(tx);
             }

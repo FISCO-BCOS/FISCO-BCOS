@@ -120,11 +120,11 @@ public:
 class FakeBlockChain : public BlockChainInterface
 {
 public:
-    FakeBlockChain(uint64_t _blockNum, size_t const& transSize = 5,
-        Secret const& sec = KeyPair::create().secret())
+    FakeBlockChain(
+        uint64_t _blockNum, size_t const& transSize = 5, KeyPair const& keyPair = KeyPair::create())
       : m_blockNumber(_blockNum)
     {
-        m_sec = sec;
+        m_keyPair = keyPair;
         FakeTheBlockChain(_blockNum, transSize);
     }
 
@@ -136,7 +136,7 @@ public:
         m_blockHash.clear();
         for (uint64_t blockHeight = 0; blockHeight < _blockNum; blockHeight++)
         {
-            FakeBlock fake_block(trans_size, m_sec);
+            FakeBlock fake_block(trans_size, m_keyPair);
             if (blockHeight > 0)
             {
                 fake_block.m_block->header().setParentHash(
@@ -262,7 +262,7 @@ public:
     std::vector<std::shared_ptr<Block>> m_blockChain;
     int64_t m_blockNumber;
     int64_t m_totalTransactionCount;
-    Secret m_sec;
+    KeyPair m_keyPair;
     dev::h512s m_sealerList = dev::h512s();
     dev::h512s m_observerList = dev::h512s();
 };

@@ -337,7 +337,7 @@ struct PBFTMsg
      */
     Signature signHash(h256 const& hash, KeyPair const& keyPair) const
     {
-        return dev::sign(keyPair.secret(), hash);
+        return dev::sign(keyPair, hash);
     }
 
     std::string uniqueKey() const { return sig.hex() + sig2.hex(); }

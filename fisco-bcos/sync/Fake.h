@@ -166,11 +166,11 @@ private:
         /// set sig list
         dev::Signature sig;
         dev::h256 block_hash;
-        dev::Secret sec = dev::KeyPair::create().secret();
+        auto keyPair = dev::KeyPair::create();
         for (size_t i = 0; i < _size; i++)
         {
             block_hash = dev::sha3("block " + std::to_string(i));
-            sig = dev::sign(sec, block_hash);
+            sig = dev::sign(keyPair, block_hash);
             retList->push_back(std::make_pair(dev::u256(block_hash), sig));
         }
         return retList;
