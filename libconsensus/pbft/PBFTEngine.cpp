@@ -1974,6 +1974,17 @@ dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
     return message;
 }
 
+dev::h512 PBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
+{
+    // can't find the node that generate the prepareReq
+    h512 targetNode;
+    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    {
+        return dev::h512();
+    }
+    return targetNode;
+}
+
 bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
 {
     std::ostringstream oss;
@@ -2037,8 +2048,8 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
         return execPrepareAndGenerateSignMsg(_prepareReq, oss);
     }
     // can't find the node that generate the prepareReq
-    h512 targetNode;
-    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    h512 targetNode = selectNodeToRequestMissedTxs(_prepareReq);
+    if (targetNode == dev::h512())
     {
         return false;
     }

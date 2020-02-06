@@ -37,6 +37,9 @@ public:
     RPBFTReqCache() : PartiallyPBFTReqCache()
     {
         m_requestedPrepareQueue = std::make_shared<QueueSet<dev::h256>>();
+        m_nodeIDToPrepareStatus = std::make_shared<std::map<dev::h512, PBFTMsg::Ptr>>();
+        m_prepareHashToNodeID =
+            std::make_shared<std::map<dev::h256, std::shared_ptr<std::set<dev::h512>>>>();
     }
 
     ~RPBFTReqCache() override {}
@@ -71,6 +74,16 @@ public:
 
     std::shared_ptr<QueueSet<dev::h256>> requestedPrepareQueue() { return m_requestedPrepareQueue; }
 
+    void updateRawPrepareStatusCache(
+        dev::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus);
+
+    dev::h512 selectNodeToRequestTxs(
+        dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
+    void setMaxRequestMissedTxsWaitTime(uint64_t const& _maxRequestMissedTxsWaitTime)
+    {
+        m_maxRequestMissedTxsWaitTime = _maxRequestMissedTxsWaitTime;
+    }
+
 private:
     bool findTheRequestedRawPrepare(PBFTMsg::Ptr _rawPrepareRequestMsg);
     // compare _cachedRawPrepareStatus and _receivedRawPrepareStatus
@@ -78,11 +91,26 @@ private:
     bool checkRawPrepareStatus(
         PBFTMsg::Ptr _cachedRawPrepareStatus, PBFTMsg::Ptr _receivedRawPrepareStatus);
 
+    dev::h512 selectRequiredNodeToRequestTxs(
+        dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
+
 private:
     // record the requested rawPrepareReq
     std::shared_ptr<QueueSet<dev::h256>> m_requestedPrepareQueue;
     size_t m_maxRequestedPrepareQueueSize = 1024;
     mutable SharedMutex x_requestedPrepareQueue;
+
+    boost::condition_variable m_signalled;
+    boost::mutex x_signalled;
+
+    // maps between nodeID and prepare status
+    std::shared_ptr<std::map<dev::h512, PBFTMsg::Ptr>> m_nodeIDToPrepareStatus;
+    // maps between block hash and nodeID set
+    std::shared_ptr<std::map<dev::h256, std::shared_ptr<std::set<dev::h512>>>>
+        m_prepareHashToNodeID;
+    mutable SharedMutex x_nodeIDToPrepareStatus;
+
+    uint64_t m_maxRequestMissedTxsWaitTime = 50;
 };
 }  // namespace consensus
 }  // namespace dev

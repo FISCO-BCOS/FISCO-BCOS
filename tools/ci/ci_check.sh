@@ -138,15 +138,6 @@ check_rpbft()
     local sed_cmd="sed -i"
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
-        ${sed_cmd} '/max_trans_num/ a\
-        epoch_size=4 \
-        ' node*/conf/group.1.genesis
-        ${sed_cmd} '/max_trans_num/ a\
-        rotating_interval=10 \
-        ' node*/conf/group.1.genesis
-    else
-        ${sed_cmd} '/max_trans_num/a epoch_size=4' node*/conf/group.1.genesis
-        ${sed_cmd} '/max_trans_num/a rotating_interval=10' node*/conf/group.1.genesis
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rotating_pbft/" node*/conf/group.1.genesis
     check_consensus_and_sync

@@ -107,6 +107,13 @@ public:
 
     void createPBFTReqCache() override;
 
+    dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq) override;
+
+    void setMaxRequestMissedTxsWaitTime(uint64_t const& _maxRequestMissedTxsWaitTime)
+    {
+        m_maxRequestMissedTxsWaitTime = _maxRequestMissedTxsWaitTime;
+    }
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
@@ -166,6 +173,8 @@ private:
     void requestRawPreparePacket(
         dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus);
 
+    std::shared_ptr<dev::h512s> getParentNode(PBFTMsg::Ptr _pbftMsg);
+
 protected:
     // configured epoch size
     std::atomic<int64_t> m_epochSize = {-1};
@@ -197,6 +206,7 @@ protected:
     dev::ThreadPool::Ptr m_rawPrepareResponse;
 
     unsigned m_prepareStatusBroadcastPercent = 33;
+    uint64_t m_maxRequestMissedTxsWaitTime = 100;
 };
 }  // namespace consensus
 }  // namespace dev
