@@ -61,6 +61,14 @@ void dev::precompiled::logError(const std::string& precompiled_name, const std::
     PRECOMPILED_LOG(ERROR) << LOG_BADGE(precompiled_name) << LOG_DESC(op) << LOG_KV(_key, _value);
 }
 
+void dev::precompiled::logError(const std::string& precompiled_name, const std::string& op,
+    const std::string& key1, const std::string& value1, const std::string& key2,
+    const std::string& value2)
+{
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE(precompiled_name) << LOG_DESC(op) << LOG_KV(key1, value1)
+                           << LOG_KV(key2, value2);
+}
+
 void dev::precompiled::throwException(const std::string& msg)
 {
     BOOST_THROW_EXCEPTION(dev::eth::TransactionRefused() << dev::errinfo_comment(msg));

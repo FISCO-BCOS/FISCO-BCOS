@@ -3,10 +3,6 @@
 #include <cstdlib>
 #include <new>
 
-static const int8_t FAILURE = -1;
-
-static const int8_t SUCCESS = 0;
-
 struct backtrace_state;
 
 using backtrace_error_callback = void (*)(void* data, const char* msg, int errnum);
@@ -34,6 +30,10 @@ char* aggregate_decrypted_part_sum(
 char* aggregate_h_point(char* h_point_share_cstring, char* h_point_sum_cstring);
 
 char* aggregate_vote_sum_response(char* param_pb, char* vote_storage_part_pb, char* vote_sum_pb);
+
+char* confidential_payment_get_version();
+
+int8_t confidential_payment_is_compatible(const char* target_version);
 
 char* get_bid_storage_from_bid_request(char* bid_request_pb);
 

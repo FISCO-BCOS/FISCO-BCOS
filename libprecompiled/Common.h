@@ -94,6 +94,9 @@ void logError(const std::string& precompiled_name, const std::string& op, const 
 void logError(const std::string& precompiled_name, const std::string& op, const std::string& key,
     const std::string& value);
 
+void logError(const std::string& precompiled_name, const std::string& op, const std::string& key1,
+    const std::string& value1, const std::string& key2, const std::string& value2);
+
 void throwException(const std::string& msg);
 
 char* stringToChar(std::string& params);

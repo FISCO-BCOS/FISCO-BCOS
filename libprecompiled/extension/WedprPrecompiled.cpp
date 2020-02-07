@@ -82,9 +82,21 @@ const int WEDPR_FAILURE = -1;
 
 const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
 
+const char CONFIDENTIAL_PAYMENT_VERSION[] = "v0.2-generic";
+const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
+const char ANONYMOUS_AUCTION_VERSION[] = "v0.2-generic";
+
 WedprPrecompiled::WedprPrecompiled()
 {
     // confidential payment
+    if (confidential_payment_is_compatible(CONFIDENTIAL_PAYMENT_VERSION) == WEDPR_FAILURE)
+    {
+        std::string version = confidential_payment_get_version();
+        logError(WEDPR_PRECOMPILED, "Confidential payment compatible error", "Node",
+            CONFIDENTIAL_PAYMENT_VERSION, "Wedpr storage", version);
+        throwException("Confidential payment compatible error");
+    }
+
     name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT] =
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT);
     name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT] =
