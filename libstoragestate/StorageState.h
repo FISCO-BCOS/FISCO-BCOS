@@ -39,6 +39,7 @@ const char* const ACCOUNT_CODE_HASH = "codeHash";
 const char* const ACCOUNT_CODE = "code";
 const char* const ACCOUNT_NONCE = "nonce";
 const char* const ACCOUNT_ALIVE = "alive";
+const char* const ACCOUNT_AUTHORITY = "authority";
 const char* const ACCOUNT_FROZEN = "frozen";
 
 class StorageState : public dev::executive::StateFace

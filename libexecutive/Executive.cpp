@@ -338,28 +338,30 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // account if it does not exist yet.
     m_s->transferBalance(_sender, m_newAddress, _endowment);
 
-    if (g_BCOSConfig.version() >= V2_3_0)
-    {
-        Table::Ptr table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-        if (table)
-        {
-            std::string tableName = precompiled::getContractTableName(m_newAddress);
-            auto entry = table->newEntry();
-            entry->setField("table_name", tableName);
-            entry->setField("address", _origin.hex());
-            entry->setField("enable_num", boost::lexical_cast<std::string>(m_envInfo.number() + 1));
-            int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(_origin));
-            LOG(TRACE) << LOG_BADGE("PermissionPrecompiled")
-                       << LOG_KV("contract table name", tableName) << LOG_KV("sender", _origin)
-                       << LOG_KV("insert_success",
-                              (count == storage::CODE_NO_AUTHORIZED ? false : true));
-        }
-    }
-
     u256 newNonce = m_s->requireAccountStartNonce();
     // if (m_envInfo.number() >= m_sealEngine.chainParams().EIP158ForkBlock)
     // newNonce += 1;
     m_s->setNonce(m_newAddress, newNonce);
+
+    if (g_BCOSConfig.version() >= V2_3_0)
+    {
+        std::string tableName = precompiled::getContractTableName(m_newAddress);
+        auto table = memoryTableFactory->openTable(tableName);
+        if (table)
+        {
+            auto entry = table->newEntry();
+            entry->setField("key", "authority");
+            entry->setField("value", _origin.hex());
+            int count = table->insert("authority", entry);
+            LOG(TRACE) << LOG_DESC("recordDeployer") << LOG_KV("contract", m_newAddress)
+                       << LOG_KV("origin account", _origin) << LOG_KV("sender account", _sender)
+                       << LOG_KV("success", (1 == count ? true : false));
+        }
+        else
+        {
+            LOG(ERROR) << LOG_DESC("recordDeployer") << LOG_DESC("get table error!");
+        }
+    }
 
     // Schedule _init execution if not empty.
     if (!_init.empty())

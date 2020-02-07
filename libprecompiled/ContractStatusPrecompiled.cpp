@@ -83,6 +83,38 @@ bool ContractStatusPrecompiled::checkAddress(Address const& contractAddress)
     return isValidAddress;
 }
 
+bool ContractStatusPrecompiled::checkPermission(
+    ExecutiveContext::Ptr context, std::string const& tableName, Address const& origin)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+        if (entries->size() == 0u)
+        {
+            // the key of authority would not be set when support version < 2.3.0
+            return true;
+        }
+        else
+        {
+            // the key of authority would be set when support version >= 2.3.0
+            auto entry = entries->get(0);
+            if (!entry)
+            {
+                return false;
+            }
+            std::string value = entry->getField(storagestate::STORAGE_VALUE);
+            std::vector<std::string> vec;
+            boost::split(vec, value, boost::is_any_of(","));
+            return (std::find(vec.begin(), vec.end(), origin.hex()) != vec.end());
+        }
+    }
+    else
+    {
+        return false;
+    }
+}
+
 ContractStatus ContractStatusPrecompiled::getContractStatus(
     ExecutiveContext::Ptr context, std::string const& tableName)
 {
@@ -152,7 +184,7 @@ void ContractStatusPrecompiled::kill(
         {
             result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
-        else
+        else if (checkPermission(context, tableName, origin))
         {
             Table::Ptr table = openTable(context, tableName);
             if (table)
@@ -163,27 +195,25 @@ void ContractStatusPrecompiled::kill(
                     std::make_shared<AccessOptions>(origin));
                 entry = table->newEntry();
                 entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
-                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition(),
-                    std::make_shared<AccessOptions>(origin));
+                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition());
                 entry = table->newEntry();
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
-                result = table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
-                    std::make_shared<AccessOptions>(origin));
-
-                if (result == storage::CODE_NO_AUTHORIZED)
-                {
-                    PRECOMPILED_LOG(DEBUG)
-                        << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
-                }
+                table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition());
             }
+        }
+        else
+        {
+            result = storage::CODE_NO_AUTHORIZED;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
         }
     }
 
     getErrorCodeOut(out, result);
 }
 
-int ContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
-    std::string const& tableName, std::string const& frozen, Address const& origin)
+int ContractStatusPrecompiled::updateFrozenStatus(
+    ExecutiveContext::Ptr context, std::string const& tableName, std::string const& frozen)
 {
     int result = 0;
 
@@ -195,13 +225,11 @@ int ContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
         entry->setField(storagestate::STORAGE_VALUE, frozen);
         if (entries->size() != 0u)
         {
-            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
-                std::make_shared<AccessOptions>(origin));
+            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition());
         }
         else
         {
-            result = table->insert(
-                storagestate::ACCOUNT_FROZEN, entry, std::make_shared<AccessOptions>(origin));
+            result = table->insert(storagestate::ACCOUNT_FROZEN, entry);
         }
 
         if (result == storage::CODE_NO_AUTHORIZED)
@@ -245,9 +273,15 @@ void ContractStatusPrecompiled::freeze(
         {
             result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
+        else if (checkPermission(context, tableName, origin))
+        {
+            result = updateFrozenStatus(context, tableName, STATUS_TRUE);
+        }
         else
         {
-            result = updateFrozenStatus(context, tableName, STATUS_TRUE, origin);
+            result = storage::CODE_NO_AUTHORIZED;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
         }
     }
     getErrorCodeOut(out, result);
@@ -284,9 +318,15 @@ void ContractStatusPrecompiled::unfreeze(
         {
             result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
         }
+        else if (checkPermission(context, tableName, origin))
+        {
+            result = updateFrozenStatus(context, tableName, STATUS_FALSE);
+        }
         else
         {
-            result = updateFrozenStatus(context, tableName, STATUS_FALSE, origin);
+            result = storage::CODE_NO_AUTHORIZED;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
         }
     }
     getErrorCodeOut(out, result);
