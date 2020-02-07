@@ -68,9 +68,6 @@ public:
 
 private:
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
-
-    void checkNameValidate(const std::string& tableName, std::string& keyField,
-        std::vector<std::string>& valueFieldList);
 };
 
 }  // namespace blockverifier

@@ -63,8 +63,6 @@ public:
 private:
     int parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
     int parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition);
-    void checkLengthValidate(
-        const std::string& field_value, int32_t max_length, int32_t throw_exception);
 };
 
 }  // namespace precompiled
