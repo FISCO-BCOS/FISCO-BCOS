@@ -274,6 +274,12 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         BOOST_CHECK(data.empty() == true);
     else
     {
+        // wait the prepare commit to the backupDB
+        while (data.empty())
+        {
+            data = fake_pbft.consensus()->backupDB()->lookup(key);
+            sleep(1);
+        }
         if (data != toHex(msgData))
         {
             std::cout << "error: PBFTBackup: Queried Data:" << data << std::endl;

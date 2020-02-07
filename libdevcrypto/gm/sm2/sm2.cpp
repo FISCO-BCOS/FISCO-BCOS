@@ -21,9 +21,18 @@
  * @date: 2018
  */
 #include "sm2.h"
+#include <libdevcore/Guards.h>
 
 #define SM3_DIGEST_LENGTH 32
+
 using namespace std;
+using namespace dev;
+
+// cache for sign
+static dev::Mutex c_zValueCacheMutex;
+static unsigned char c_zValueCache[SM3_DIGEST_LENGTH];
+static size_t c_zValueLenCache;
+static std::string c_privateKeyCache;
 
 bool SM2::genKey()
 {
@@ -113,6 +122,7 @@ bool SM2::sign(
     SM3_CTX sm3Ctx;
     EC_KEY* sm2Key = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
+
     size_t zValueLen;
     ECDSA_SIG* signData = NULL;
     char* rData = NULL;
@@ -132,7 +142,7 @@ bool SM2::sign(
     EC_KEY_set_private_key(sm2Key, res);
 
     zValueLen = sizeof(zValue);
-    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
+    if (!sm2GetZ(privateKey, (const EC_KEY*)sm2Key, zValue, zValueLen))
     {
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of Compute Z";
         goto err;
@@ -276,6 +286,23 @@ err:
     if (sm2Group)
         EC_GROUP_free(sm2Group);
     return lresult;
+}
+
+int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned char* _zValue,
+    size_t& _zValueLen)
+{
+    Guard l(c_zValueCacheMutex);
+    if (_privateKey == c_privateKeyCache)
+    {
+        memcpy(_zValue, c_zValueCache, c_zValueLenCache);
+        _zValueLen = c_zValueLenCache;
+        return 1;
+    }
+    auto ret = ECDSA_sm2_get_Z(_ecKey, NULL, NULL, 0, _zValue, &_zValueLen);
+    memset(c_zValueCache, 0, c_zValueLenCache);
+    memcpy(c_zValueCache, _zValue, _zValueLen);
+    c_zValueLenCache = _zValueLen;
+    return ret;
 }
 
 string SM2::priToPub(const string& pri)
