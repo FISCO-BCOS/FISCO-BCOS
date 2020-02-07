@@ -15,7 +15,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file SimpleTablePrecompiled.h
+/** @file KVTablePrecompiled.h
  *  @author xingqiangbai
  *  @date 20200206
  */
@@ -28,19 +28,19 @@ namespace dev
 namespace precompiled
 {
 #if 0
-contract SimpleTable {
+contract KVTable {
     function get(string) public constant returns(bool, Entry);
     function set(string, Entry) public returns(bool, int);
     function newEntry() public constant returns(Entry);
 }
 #endif
 
-class SimpleTablePrecompiled : public dev::blockverifier::Precompiled
+class KVTablePrecompiled : public dev::blockverifier::Precompiled
 {
 public:
-    typedef std::shared_ptr<SimpleTablePrecompiled> Ptr;
-    SimpleTablePrecompiled();
-    virtual ~SimpleTablePrecompiled(){};
+    typedef std::shared_ptr<KVTablePrecompiled> Ptr;
+    KVTablePrecompiled();
+    virtual ~KVTablePrecompiled(){};
 
 
     std::string toString() override;

@@ -14,11 +14,11 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file SimpleTablePrecompiled.h
+/** @file KVTablePrecompiled.h
  *  @author xingqiangbai
  *  @date 20200206
  */
-#include "SimpleTablePrecompiled.h"
+#include "KVTablePrecompiled.h"
 #include "Common.h"
 #include "ConditionPrecompiled.h"
 #include "EntriesPrecompiled.h"
@@ -33,40 +33,38 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 using namespace dev::blockverifier;
 
-const char* const SIMPLETABLE_METHOD_GET = "get(string)";
-const char* const SIMPLETABLE_METHOD_SET = "set(string,address)";
-const char* const SIMPLETABLE_METHOD_NEWENT = "newEntry()";
+const char* const KVTABLE_METHOD_GET = "get(string)";
+const char* const KVTABLE_METHOD_SET = "set(string,address)";
+const char* const KVTABLE_METHOD_NEWENT = "newEntry()";
 
 
-SimpleTablePrecompiled::SimpleTablePrecompiled()
+KVTablePrecompiled::KVTablePrecompiled()
 {
-    name2Selector[SIMPLETABLE_METHOD_GET] = getFuncSelector(SIMPLETABLE_METHOD_GET);
-    name2Selector[SIMPLETABLE_METHOD_SET] = getFuncSelector(SIMPLETABLE_METHOD_SET);
-    name2Selector[SIMPLETABLE_METHOD_NEWENT] = getFuncSelector(SIMPLETABLE_METHOD_NEWENT);
+    name2Selector[KVTABLE_METHOD_GET] = getFuncSelector(KVTABLE_METHOD_GET);
+    name2Selector[KVTABLE_METHOD_SET] = getFuncSelector(KVTABLE_METHOD_SET);
+    name2Selector[KVTABLE_METHOD_NEWENT] = getFuncSelector(KVTABLE_METHOD_NEWENT);
 }
 
-std::string SimpleTablePrecompiled::toString()
+std::string KVTablePrecompiled::toString()
 {
-    return "SimpleTable";
+    return "KVTable";
 }
 
-bytes SimpleTablePrecompiled::call(
+bytes KVTablePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("SimpleTablePrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_DESC("call") << LOG_KV("func", func);
     dev::eth::ContractABI abi;
 
     bytes out;
 
-    if (func == name2Selector[SIMPLETABLE_METHOD_GET])
+    if (func == name2Selector[KVTABLE_METHOD_GET])
     {  // get(string)
         std::string key;
         abi.abiOut(data, key);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("get", key);
 
         auto entries = m_table->select(key, m_table->newCondition());
         if (entries->size() == 0)
@@ -83,12 +81,12 @@ bytes SimpleTablePrecompiled::call(
             out = abi.abiIn("", true, newAddress);
         }
     }
-    else if (func == name2Selector[SIMPLETABLE_METHOD_SET])
+    else if (func == name2Selector[KVTABLE_METHOD_SET])
     {  // set(string,address)
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
-
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("set", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
@@ -118,7 +116,7 @@ bytes SimpleTablePrecompiled::call(
         }
         out = abi.abiIn("", s256(count));
     }
-    else if (func == name2Selector[SIMPLETABLE_METHOD_NEWENT])
+    else if (func == name2Selector[KVTABLE_METHOD_NEWENT])
     {  // newEntry()
         auto entry = m_table->newEntry();
         auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
@@ -129,13 +127,13 @@ bytes SimpleTablePrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SimpleTablePrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTablePrecompiled")
                                << LOG_DESC("call undefined function!");
     }
     return out;
 }
 
-h256 SimpleTablePrecompiled::hash()
+h256 KVTablePrecompiled::hash()
 {
     return m_table->hash();
 }
