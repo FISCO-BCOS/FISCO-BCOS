@@ -119,7 +119,7 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
-    i) listen_ip="0.0.0.0";;
+    i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
     v) compatibility_version="$OPTARG";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
@@ -166,14 +166,12 @@ echo "=============================================================="
 # [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
 LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
-LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
 [ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "=============================================================="
-if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
-LOG_INFO "Execute the download_console.sh script to get FISCO-BCOS console, download_console.sh is in directory named by IP."
-echo " bash download_console.sh"
+LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
+echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh"
 echo "=============================================================="
 LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -434,7 +432,7 @@ generate_config_ini()
     cat << EOF > ${output}
 [rpc]
     channel_listen_ip=0.0.0.0
-    jsonrpc_listen_ip=127.0.0.1
+    jsonrpc_listen_ip=${listen_ip}
     channel_listen_port=$(( offset + port_start[1] ))
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
