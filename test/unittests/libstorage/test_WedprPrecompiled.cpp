@@ -744,8 +744,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteResult)
     std::string voteResultRequest =
         "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnVubnkQDA"
         "==";
-    bytes param = abi.abiIn(API_VERIFY_VOTE_RESULT, systemParameters, voteStorageSum,
-        decryptedResultPartStorageSum, voteResultRequest);
+    bytes param = abi.abiIn(API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT, systemParameters,
+        voteStorageSum, decryptedResultPartStorageSum, voteResultRequest);
     // anonymousVotingVerifyVoteResult(string systemParameters, string voteStorageSum, string
     // decryptedResultPartStorageSum, string voteResultRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
@@ -757,8 +757,8 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteResult)
     std::string errorVoteStorageSum = "123";
     std::string errorDecryptedResultPartStorageSum = "123";
     std::string errorVoteResultRequest = "123";
-    param = abi.abiIn(API_VERIFY_VOTE_RESULT, errorSystemParameters, errorVoteStorageSum,
-        errorDecryptedResultPartStorageSum, errorVoteResultRequest);
+    param = abi.abiIn(API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT, errorSystemParameters,
+        errorVoteStorageSum, errorDecryptedResultPartStorageSum, errorVoteResultRequest);
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
@@ -768,7 +768,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingGetVoteResultFromRequest)
     std::string voteResultRequest =
         "CkEKHgoaV2VkcHJfdm90aW5nX3RvdGFsX2JhbGxvdHMQPAoKCgZLaXR0ZW4QBgoICgREb2dlEAkKCQoFQnVubnkQDA"
         "==";
-    bytes param = abi.abiIn(API_GET_VOTE_RESULT_FROM_REQUEST, voteResultRequest);
+    bytes param = abi.abiIn(API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST, voteResultRequest);
     // anonymousVotingGetVoteResultFromRequest(string voteResultRequest)
     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
     std::string voteResultStorage;

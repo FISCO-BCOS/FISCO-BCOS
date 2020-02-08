@@ -36,16 +36,20 @@ extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[];
 
 // anonymous voting
+extern const char API_ANONYMOUS_VOTING_IS_COMPATIBLE[];
+extern const char API_ANONYMOUS_VOTING_GET_VERSION[];
 extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_HPOINT[];
 extern const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[];
 extern const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[];
-extern const char API_VERIFY_VOTE_RESULT[];
-extern const char API_GET_VOTE_RESULT_FROM_REQUEST[];
+extern const char API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT[];
+extern const char API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST[];
 
 // anonymous auction
+extern const char API_ANONYMOUS_AUCTION_IS_COMPATIBLE[];
+extern const char API_ANONYMOUS_AUCTION_GET_VERSION[];
 extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[];
 extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST[];
 extern const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[];
@@ -75,6 +79,8 @@ public:
     bytes verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
 
+    bytes anonymousVotingIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes anonymousVotingGetVersion(dev::eth::ContractABI& abi);
     bytes verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
@@ -84,10 +90,16 @@ public:
     bytes verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
 
+    bytes anonymousAuctionIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes anonymousAuctionGetVersion(dev::eth::ContractABI& abi);
     bytes verifyBidSignatureFromBidRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes VerifyBidSignatureFromBidComparisonRequest(
         dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data);
+
+private:
+    int isCompatible(const std::string& targetVersion, const std::string& regexWhitelist,
+        const std::string& regexBlacklist);
 };
 
 }  // namespace precompiled

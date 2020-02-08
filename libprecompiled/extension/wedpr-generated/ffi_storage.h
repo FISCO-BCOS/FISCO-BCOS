@@ -31,6 +31,14 @@ char* aggregate_h_point(char* h_point_share_cstring, char* h_point_sum_cstring);
 
 char* aggregate_vote_sum_response(char* param_pb, char* vote_storage_part_pb, char* vote_sum_pb);
 
+char* anonymous_auction_get_version();
+
+int8_t anonymous_auction_is_compatible(const char* target_version);
+
+char* anonymous_voting_get_version();
+
+int8_t anonymous_voting_is_compatible(const char* target_version);
+
 char* confidential_payment_get_version();
 
 int8_t confidential_payment_is_compatible(const char* target_version);
