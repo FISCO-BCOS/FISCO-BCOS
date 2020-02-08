@@ -53,9 +53,10 @@ const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[] =
     "confidentialPaymentVerifySplitCredit(string)";
 
 // anonymous voting
+const char API_ANONYMOUS_VOTING_IS_COMPATIBLE[] = "anonymousVotingIsCompatible(string)";
+const char API_ANONYMOUS_VOTING_GET_VERSION[] = "anonymousVotingGetVersion()";
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyBoundedVoteRequest(string,string)";
-// anonymous voting
 const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyUnboundedVoteRequest(string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
@@ -66,11 +67,14 @@ const char API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST[] =
     "anonymousVotingVerifyCountRequest(string,string,string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM[] =
     "anonymousVotingAggregateDecryptedPartSum(string,string,string)";
-const char API_VERIFY_VOTE_RESULT[] =
+const char API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT[] =
     "anonymousVotingVerifyVoteResult(string,string,string,string)";
-const char API_GET_VOTE_RESULT_FROM_REQUEST[] = "anonymousVotingGetVoteResultFromRequest(string)";
+const char API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST[] =
+    "anonymousVotingGetVoteResultFromRequest(string)";
 
 // anonymous auction
+const char API_ANONYMOUS_AUCTION_IS_COMPATIBLE[] = "anonymousAuctionIsCompatible(string)";
+const char API_ANONYMOUS_AUCTION_GET_VERSION[] = "anonymousAuctionGetVersion()";
 const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[] =
     "anonymousAuctionVerifyBidSignatureFromBidRequest(string)";
 const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST[] =
@@ -86,10 +90,16 @@ const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
 
 const char CONFIDENTIAL_PAYMENT_VERSION[] = "v0.2-generic";
 const string CONFIDENTIAL_PAYMENT_REGEX_WHITELIST = "^v0.2-generic$";
+// This is an empty blacklist.
 const string CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST = "^$";
 
 const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
+const string ANONYMOUS_VOTING_REGEX_WHITELIST = "^v0.2-generic$";
+const string ANONYMOUS_VOTING_REGEX_BLACKLIST = "^$";
+
 const char ANONYMOUS_AUCTION_VERSION[] = "v0.2-generic";
+const string ANONYMOUS_AUCTION_REGEX_WHITELIST = "^v0.2-generic$";
+const string ANONYMOUS_AUCTION_REGEX_BLACKLIST = "^$";
 
 
 WedprPrecompiled::WedprPrecompiled()
@@ -97,12 +107,11 @@ WedprPrecompiled::WedprPrecompiled()
     // confidential payment
     if (confidential_payment_is_compatible(CONFIDENTIAL_PAYMENT_VERSION) == WEDPR_FAILURE)
     {
-        std::string version = confidential_payment_get_version();
+        string version = confidential_payment_get_version();
         logError(WEDPR_PRECOMPILED, "Confidential payment compatible error", "Node",
             CONFIDENTIAL_PAYMENT_VERSION, "Wedpr storage", version);
         throwException("Confidential payment compatible error");
     }
-
     name2Selector[API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE] =
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE);
     name2Selector[API_CONFIDENTIAL_PAYMENT_GET_VERSION] =
@@ -117,6 +126,13 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT);
 
     // anonymous voting
+    if (anonymous_voting_is_compatible(ANONYMOUS_VOTING_VERSION) == WEDPR_FAILURE)
+    {
+        string version = anonymous_voting_get_version();
+        logError(WEDPR_PRECOMPILED, "Anonymous voting compatible error", "Node",
+            ANONYMOUS_VOTING_VERSION, "Wedpr storage", version);
+        throwException("Anonymous voting compatible error");
+    }
     name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST] =
         getFuncSelector(API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST] =
@@ -129,11 +145,19 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM] =
         getFuncSelector(API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM);
-    name2Selector[API_VERIFY_VOTE_RESULT] = getFuncSelector(API_VERIFY_VOTE_RESULT);
-    name2Selector[API_GET_VOTE_RESULT_FROM_REQUEST] =
-        getFuncSelector(API_GET_VOTE_RESULT_FROM_REQUEST);
+    name2Selector[API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT] =
+        getFuncSelector(API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT);
+    name2Selector[API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST] =
+        getFuncSelector(API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST);
 
     // anonymous auction
+    if (anonymous_auction_is_compatible(ANONYMOUS_AUCTION_VERSION) == WEDPR_FAILURE)
+    {
+        string version = anonymous_auction_get_version();
+        logError(WEDPR_PRECOMPILED, "Anonymous auction compatible error", "Node",
+            ANONYMOUS_AUCTION_VERSION, "Wedpr storage", version);
+        throwException("Anonymous auction compatible error");
+    }
     name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST] =
         getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST);
     name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST] =
@@ -142,7 +166,7 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_WINNER);
 }
 
-std::string WedprPrecompiled::toString()
+string WedprPrecompiled::toString()
 {
     return WEDPR_PRECOMPILED;
 }
@@ -160,15 +184,17 @@ bytes WedprPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    // confidentialPaymentVerifyIssuedCredit(string issueArgument)
+    // confidentialPaymentIsCompatible(string targetVersion)
     if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE])
     {
         out = confidentialPaymentIsCompatible(abi, data);
     }
+    // confidentialPaymentGetVersion()
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_GET_VERSION])
     {
         out = confidentialPaymentGetVersion(abi);
     }
+    // confidentialPaymentVerifyIssuedCredit(string issueArgument)
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT])
     {
         out = verifyIssuedCredit(abi, data);
@@ -187,6 +213,17 @@ bytes WedprPrecompiled::call(
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT])
     {
         out = verifySplitCredit(abi, data);
+    }
+
+    // anonymousVotingIsCompatible(string targetVersion)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_IS_COMPATIBLE])
+    {
+        out = anonymousVotingIsCompatible(abi, data);
+    }
+    // anonymousVotingGetVersion()
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_GET_VERSION])
+    {
+        out = anonymousVotingGetVersion(abi);
     }
     // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST])
@@ -221,30 +258,47 @@ bytes WedprPrecompiled::call(
     {
         out = aggregateDecryptedPartSum(abi, data);
     }
-    else if (func == name2Selector[API_VERIFY_VOTE_RESULT])
+    // anonymousVotingVerifyVoteResult(string systemParameters, string voteStorageSum, string
+    // decryptedResultPartStorageSum, string voteResultRequest)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT])
     {
         out = verifyVoteResult(abi, data);
     }
-    else if (func == name2Selector[API_GET_VOTE_RESULT_FROM_REQUEST])
+    // anonymousVotingGetVoteResultFromRequest(string voteResultRequest)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST])
     {
         out = getVoteResultFromRequest(abi, data);
     }
+
+    // anonymousAuctionIsCompatible(string targetVersion)
+    else if (func == name2Selector[API_ANONYMOUS_AUCTION_IS_COMPATIBLE])
+    {
+        out = anonymousAuctionIsCompatible(abi, data);
+    }
+    // anonymousAuctionGetVersion()
+    else if (func == name2Selector[API_ANONYMOUS_AUCTION_GET_VERSION])
+    {
+        out = anonymousAuctionGetVersion(abi);
+    }
+    // anonymousAuctionVerifyBidSignatureFromBidRequest(string bidRequest)
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST])
     {
         out = verifyBidSignatureFromBidRequest(abi, data);
     }
+    // anonymousAuctionVerifyBidSignatureFromBidComparisonRequest(string bidComparisonRequest)
     else if (func ==
              name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST])
     {
         out = VerifyBidSignatureFromBidComparisonRequest(abi, data);
     }
+    // nonymousAuctionVerifyWinner(string winnerClaimRequest, string allBidStorageRequest)
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_WINNER])
     {
         out = verifyWinner(abi, data);
     }
+    // unknown function call
     else
     {
-        // unknown function call
         logError(WEDPR_PRECOMPILED, "unknown func", "func", std::to_string(func));
         throwException("unknown func");
     }
@@ -255,29 +309,37 @@ bytes WedprPrecompiled::confidentialPaymentIsCompatible(
     dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     // parse parameter
-    std::string targetVersion;
+    string targetVersion;
     abi.abiOut(data, targetVersion);
-    std::regex whitelist(CONFIDENTIAL_PAYMENT_REGEX_WHITELIST);
-    std::regex blacklist(CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST);
+    int result = isCompatible(
+        targetVersion, CONFIDENTIAL_PAYMENT_REGEX_WHITELIST, CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST);
+    return abi.abiIn("", result);
+}
+
+int WedprPrecompiled::isCompatible(
+    const string& targetVersion, const string& regexWhitelist, const string& regexBlacklist)
+{
+    std::regex whitelist(regexWhitelist);
+    std::regex blacklist(regexBlacklist);
     if (std::regex_match(targetVersion, whitelist) && !std::regex_match(targetVersion, blacklist))
     {
-        return abi.abiIn("", WEDPR_SUCCESS);
+        return WEDPR_SUCCESS;
     }
     else
     {
-        return abi.abiIn("", WEDPR_FAILURE);
+        return WEDPR_FAILURE;
     }
 }
 
 bytes WedprPrecompiled::confidentialPaymentGetVersion(dev::eth::ContractABI& abi)
 {
-    return abi.abiIn("", std::string(CONFIDENTIAL_PAYMENT_VERSION));
+    return abi.abiIn("", string(CONFIDENTIAL_PAYMENT_VERSION));
 }
 
 bytes WedprPrecompiled::verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
     // parse parameter
-    std::string issueArgument;
+    string issueArgument;
     abi.abiOut(data, issueArgument);
 
     // verify issued credit
@@ -288,15 +350,15 @@ bytes WedprPrecompiled::verifyIssuedCredit(dev::eth::ContractABI& abi, bytesCons
         throwException("verify_issued_credit failed");
     }
 
-    std::string currentCredit = get_current_credit_by_issue_argument(issueArgumentChar);
-    std::string creditStorage = get_storage_credit_by_issue_argument(issueArgumentChar);
+    string currentCredit = get_current_credit_by_issue_argument(issueArgumentChar);
+    string creditStorage = get_storage_credit_by_issue_argument(issueArgumentChar);
 
     return abi.abiIn("", currentCredit, creditStorage);
 }
 
 bytes WedprPrecompiled::verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string fulfillArgument;
+    string fulfillArgument;
     abi.abiOut(data, fulfillArgument);
     char* fulfillArgumentChar = stringToChar(fulfillArgument);
     if (verify_fulfilled_credit(fulfillArgumentChar) != WEDPR_SUCCESS)
@@ -305,15 +367,15 @@ bytes WedprPrecompiled::verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesC
         throwException("verify_fulfilled_credit failed");
     }
 
-    std::string currentCredit = get_current_credit_by_fulfill_argument(fulfillArgumentChar);
-    std::string creditStorage = get_credit_storage_by_fulfill_argument(fulfillArgumentChar);
+    string currentCredit = get_current_credit_by_fulfill_argument(fulfillArgumentChar);
+    string creditStorage = get_credit_storage_by_fulfill_argument(fulfillArgumentChar);
 
     return abi.abiIn("", currentCredit, creditStorage);
 }
 
 bytes WedprPrecompiled::verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string transferRequest;
+    string transferRequest;
     abi.abiOut(data, transferRequest);
 
     char* transferRequestChar = stringToChar(transferRequest);
@@ -323,12 +385,10 @@ bytes WedprPrecompiled::verifyTransferredCredit(dev::eth::ContractABI& abi, byte
         throwException("verify_transfer_credit failed");
     }
 
-    std::string spentCurrentCredit =
-        get_spent_current_credit_by_transfer_request(transferRequestChar);
-    std::string spentCreditStorage =
-        get_spent_credit_storage_by_transfer_request(transferRequestChar);
-    std::string newCurrentCredit = get_new_current_credit_by_transfer_request(transferRequestChar);
-    std::string newCreditStorage = get_new_credit_storage_by_transfer_request(transferRequestChar);
+    string spentCurrentCredit = get_spent_current_credit_by_transfer_request(transferRequestChar);
+    string spentCreditStorage = get_spent_credit_storage_by_transfer_request(transferRequestChar);
+    string newCurrentCredit = get_new_current_credit_by_transfer_request(transferRequestChar);
+    string newCreditStorage = get_new_credit_storage_by_transfer_request(transferRequestChar);
 
     return abi.abiIn(
         "", spentCurrentCredit, spentCreditStorage, newCurrentCredit, newCreditStorage);
@@ -336,7 +396,7 @@ bytes WedprPrecompiled::verifyTransferredCredit(dev::eth::ContractABI& abi, byte
 
 bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string splitRequest;
+    string splitRequest;
     abi.abiOut(data, splitRequest);
     char* splitRequestChar = stringToChar(splitRequest);
     if (verify_split_credit(splitRequestChar) != WEDPR_SUCCESS)
@@ -345,21 +405,36 @@ bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConst
         throwException("verify_split_credit failed");
     }
 
-    std::string spentCurrentCredit = get_spent_current_credit_by_split_request(splitRequestChar);
-    std::string spentCreditStorage = get_spent_credit_storage_by_split_request(splitRequestChar);
-    std::string newCurrentCredit1 = get_new_current_credit1_by_split_request(splitRequestChar);
-    std::string newCreditStorage1 = get_new_credit_storage1_by_split_request(splitRequestChar);
-    std::string newCurrentCredit2 = get_new_current_credit2_by_split_request(splitRequestChar);
-    std::string newCreditStorage2 = get_new_credit_storage2_by_split_request(splitRequestChar);
+    string spentCurrentCredit = get_spent_current_credit_by_split_request(splitRequestChar);
+    string spentCreditStorage = get_spent_credit_storage_by_split_request(splitRequestChar);
+    string newCurrentCredit1 = get_new_current_credit1_by_split_request(splitRequestChar);
+    string newCreditStorage1 = get_new_credit_storage1_by_split_request(splitRequestChar);
+    string newCurrentCredit2 = get_new_current_credit2_by_split_request(splitRequestChar);
+    string newCreditStorage2 = get_new_credit_storage2_by_split_request(splitRequestChar);
 
     return abi.abiIn("", spentCurrentCredit, spentCreditStorage, newCurrentCredit1,
         newCreditStorage1, newCurrentCredit2, newCreditStorage2);
 }
 
+bytes WedprPrecompiled::anonymousVotingIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    // parse parameter
+    string targetVersion;
+    abi.abiOut(data, targetVersion);
+    int result = isCompatible(
+        targetVersion, ANONYMOUS_VOTING_REGEX_WHITELIST, ANONYMOUS_VOTING_REGEX_BLACKLIST);
+    return abi.abiIn("", result);
+}
+
+bytes WedprPrecompiled::anonymousVotingGetVersion(dev::eth::ContractABI& abi)
+{
+    return abi.abiIn("", string(ANONYMOUS_VOTING_VERSION));
+}
+
 bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string voteRequest;
+    string systemParameters;
+    string voteRequest;
     abi.abiOut(data, systemParameters, voteRequest);
 
     char* systemParametersChar = stringToChar(systemParameters);
@@ -370,16 +445,16 @@ bytes WedprPrecompiled::verifyBoundedVoteRequest(dev::eth::ContractABI& abi, byt
         throwException("verify_vote_request failed");
     }
 
-    std::string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
-    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+    string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
+    string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
 
     return abi.abiIn("", blankBallot, voteStoragePart);
 }
 
 bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string voteRequest;
+    string systemParameters;
+    string voteRequest;
     abi.abiOut(data, systemParameters, voteRequest);
 
     char* systemParametersChar = stringToChar(systemParameters);
@@ -389,24 +464,24 @@ bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, b
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
         throwException("verify_vote_request failed");
     }
-    std::string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
-    std::string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
+    string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+    string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
 
     return abi.abiIn("", blankBallot, voteStoragePart);
 }
 
 bytes WedprPrecompiled::aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string voteStoragePart;
-    std::string voteStorage;
+    string systemParameters;
+    string voteStoragePart;
+    string voteStorage;
     abi.abiOut(data, systemParameters, voteStoragePart, voteStorage);
 
     char* systemParametersChar = stringToChar(systemParameters);
     char* voteStorageChar = stringToChar(voteStorage);
     char* voteStoragePartChar = stringToChar(voteStoragePart);
 
-    std::string voteStorageSum =
+    string voteStorageSum =
         aggregate_vote_sum_response(systemParametersChar, voteStoragePartChar, voteStorageChar);
 
     return abi.abiIn("", voteStorageSum);
@@ -414,23 +489,23 @@ bytes WedprPrecompiled::aggregateVoteSumResponse(dev::eth::ContractABI& abi, byt
 
 bytes WedprPrecompiled::aggregateHPoint(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string hPointShare;
-    std::string hPointSum;
+    string hPointShare;
+    string hPointSum;
     abi.abiOut(data, hPointShare, hPointSum);
 
     char* hPointShareChar = stringToChar(hPointShare);
     char* hPointSumChar = stringToChar(hPointSum);
-    std::string newHPointSum = aggregate_h_point(hPointShareChar, hPointSumChar);
+    string newHPointSum = aggregate_h_point(hPointShareChar, hPointSumChar);
 
     return abi.abiIn("", newHPointSum);
 }
 
 bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string voteStorage;
-    std::string hPointShare;
-    std::string decryptedRequest;
+    string systemParameters;
+    string voteStorage;
+    string hPointShare;
+    string decryptedRequest;
     abi.abiOut(data, systemParameters, voteStorage, hPointShare, decryptedRequest);
 
     char* systemParametersChar = stringToChar(systemParameters);
@@ -443,33 +518,35 @@ bytes WedprPrecompiled::verifyCountRequest(dev::eth::ContractABI& abi, bytesCons
         logError(WEDPR_PRECOMPILED, "verify_count_request", WEDPR_VERFIY_FAILED);
         throwException("verify_count_request failed");
     }
-    std::string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
-    std::string decryptedResultPartStoragePart =
+    string counterId = get_counter_id_from_decrypted_result_part_request(decryptedRequestChar);
+    string decryptedResultPartStoragePart =
         get_decrypted_result_part_storage_from_decrypted_result_part_request(decryptedRequestChar);
 
     return abi.abiIn("", counterId, decryptedResultPartStoragePart);
 }
+
 bytes WedprPrecompiled::aggregateDecryptedPartSum(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string decryptedResultPartStoragePart;
-    std::string decryptedResultPartStorage;
+    string systemParameters;
+    string decryptedResultPartStoragePart;
+    string decryptedResultPartStorage;
     abi.abiOut(data, systemParameters, decryptedResultPartStoragePart, decryptedResultPartStorage);
     char* systemParametersChar = stringToChar(systemParameters);
     char* decryptedResultPartStoragePartChar = stringToChar(decryptedResultPartStoragePart);
     char* decryptedResultPartStorageChar = stringToChar(decryptedResultPartStorage);
 
-    std::string decryptedResultPartStorageSum = aggregate_decrypted_part_sum(
+    string decryptedResultPartStorageSum = aggregate_decrypted_part_sum(
         systemParametersChar, decryptedResultPartStoragePartChar, decryptedResultPartStorageChar);
 
     return abi.abiIn("", decryptedResultPartStorageSum);
 }
+
 bytes WedprPrecompiled::verifyVoteResult(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string systemParameters;
-    std::string voteStorageSum;
-    std::string decryptedResultPartStorageSum;
-    std::string voteResultRequest;
+    string systemParameters;
+    string voteStorageSum;
+    string decryptedResultPartStorageSum;
+    string voteResultRequest;
     abi.abiOut(
         data, systemParameters, voteStorageSum, decryptedResultPartStorageSum, voteResultRequest);
     char* systemParametersChar = stringToChar(systemParameters);
@@ -486,19 +563,37 @@ bytes WedprPrecompiled::verifyVoteResult(dev::eth::ContractABI& abi, bytesConstR
 
     return abi.abiIn("", WEDPR_SUCCESS);
 }
+
 bytes WedprPrecompiled::getVoteResultFromRequest(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string voteResultRequest;
+    string voteResultRequest;
     abi.abiOut(data, voteResultRequest);
     char* voteResultRequestChar = stringToChar(voteResultRequest);
-    std::string voteResultStorage = get_vote_result_from_request(voteResultRequestChar);
+    string voteResultStorage = get_vote_result_from_request(voteResultRequestChar);
 
     return abi.abiIn("", voteResultStorage);
 }
+
+bytes WedprPrecompiled::anonymousAuctionIsCompatible(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    // parse parameter
+    string targetVersion;
+    abi.abiOut(data, targetVersion);
+    int result = isCompatible(
+        targetVersion, ANONYMOUS_AUCTION_REGEX_WHITELIST, ANONYMOUS_AUCTION_REGEX_BLACKLIST);
+    return abi.abiIn("", result);
+}
+
+bytes WedprPrecompiled::anonymousAuctionGetVersion(dev::eth::ContractABI& abi)
+{
+    return abi.abiIn("", string(ANONYMOUS_AUCTION_VERSION));
+}
+
 bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
     dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string bidRequest;
+    string bidRequest;
     abi.abiOut(data, bidRequest);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidRequest", bidRequest);
     char* bidRequestChar = stringToChar(bidRequest);
@@ -507,14 +602,14 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
         logError(WEDPR_PRECOMPILED, "verify_bid_signature_from_bid_request", WEDPR_VERFIY_FAILED);
         throwException("verify_bid_signature_from_bid_request failed");
     }
-    std::string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
+    string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidStorage", bidStorage);
     return abi.abiIn("", bidStorage);
 }
 bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
     dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string bidComparisonRequest;
+    string bidComparisonRequest;
     abi.abiOut(data, bidComparisonRequest);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
                           << LOG_KV("bidComparisonRequest", bidComparisonRequest);
@@ -529,8 +624,8 @@ bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
 }
 bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
-    std::string winnerClaimRequest;
-    std::string allBidRequest;
+    string winnerClaimRequest;
+    string allBidRequest;
     abi.abiOut(data, winnerClaimRequest, allBidRequest);
     char* winnerClaimRequestChar = stringToChar(winnerClaimRequest);
     char* allBidRequestChar = stringToChar(allBidRequest);
@@ -543,7 +638,7 @@ bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& 
         throwException("verify_winner failed");
     }
     int bidValue = get_bid_value_from_bid_winner_claim_request(winnerClaimRequestChar);
-    std::string publicKey = get_public_key_from_bid_winner_claim_request(winnerClaimRequestChar);
+    string publicKey = get_public_key_from_bid_winner_claim_request(winnerClaimRequestChar);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidValue", bidValue)
                           << LOG_KV("publicKey", publicKey);
     return abi.abiIn("", bidValue, publicKey);
