@@ -28,7 +28,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Log.h>
 #include <libdevcrypto/Hash.h>
-
+#include <regex>
 
 namespace dev
 {
@@ -41,6 +41,8 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 
 // confidential payment
+const char API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE[] = "confidentialPaymentIsCompatible(string)";
+const char API_CONFIDENTIAL_PAYMENT_GET_VERSION[] = "confidentialPaymentGetVersion()";
 const char API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT[] =
     "confidentialPaymentVerifyIssuedCredit(string)";
 const char API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT[] =
@@ -83,8 +85,12 @@ const int WEDPR_FAILURE = -1;
 const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
 
 const char CONFIDENTIAL_PAYMENT_VERSION[] = "v0.2-generic";
+const string CONFIDENTIAL_PAYMENT_REGEX_WHITELIST = "^v0.2-generic$";
+const string CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST = "^$";
+
 const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
 const char ANONYMOUS_AUCTION_VERSION[] = "v0.2-generic";
+
 
 WedprPrecompiled::WedprPrecompiled()
 {
@@ -97,6 +103,10 @@ WedprPrecompiled::WedprPrecompiled()
         throwException("Confidential payment compatible error");
     }
 
+    name2Selector[API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE] =
+        getFuncSelector(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE);
+    name2Selector[API_CONFIDENTIAL_PAYMENT_GET_VERSION] =
+        getFuncSelector(API_CONFIDENTIAL_PAYMENT_GET_VERSION);
     name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT] =
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT);
     name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT] =
@@ -151,7 +161,15 @@ bytes WedprPrecompiled::call(
     bytes out;
 
     // confidentialPaymentVerifyIssuedCredit(string issueArgument)
-    if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT])
+    if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE])
+    {
+        out = confidentialPaymentIsCompatible(abi, data);
+    }
+    else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_GET_VERSION])
+    {
+        out = confidentialPaymentGetVersion(abi);
+    }
+    else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT])
     {
         out = verifyIssuedCredit(abi, data);
     }
@@ -231,6 +249,29 @@ bytes WedprPrecompiled::call(
         throwException("unknown func");
     }
     return out;
+}
+
+bytes WedprPrecompiled::confidentialPaymentIsCompatible(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    // parse parameter
+    std::string targetVersion;
+    abi.abiOut(data, targetVersion);
+    std::regex whitelist(CONFIDENTIAL_PAYMENT_REGEX_WHITELIST);
+    std::regex blacklist(CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST);
+    if (std::regex_match(targetVersion, whitelist) && !std::regex_match(targetVersion, blacklist))
+    {
+        return abi.abiIn("", WEDPR_SUCCESS);
+    }
+    else
+    {
+        return abi.abiIn("", WEDPR_FAILURE);
+    }
+}
+
+bytes WedprPrecompiled::confidentialPaymentGetVersion(dev::eth::ContractABI& abi)
+{
+    return abi.abiIn("", std::string(CONFIDENTIAL_PAYMENT_VERSION));
 }
 
 bytes WedprPrecompiled::verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data)

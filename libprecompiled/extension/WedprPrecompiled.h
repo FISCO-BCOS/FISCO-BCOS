@@ -28,6 +28,8 @@ namespace dev
 namespace precompiled
 {
 // confidential payment
+extern const char API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE[];
+extern const char API_CONFIDENTIAL_PAYMENT_GET_VERSION[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT[];
@@ -66,6 +68,8 @@ public:
     bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
         Address const& _origin = Address()) override;
 
+    bytes confidentialPaymentIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes confidentialPaymentGetVersion(dev::eth::ContractABI& abi);
     bytes verifyIssuedCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
