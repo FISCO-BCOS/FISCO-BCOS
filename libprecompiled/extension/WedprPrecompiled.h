@@ -28,6 +28,9 @@ namespace dev
 namespace precompiled
 {
 // confidential payment
+extern const char CONFIDENTIAL_PAYMENT_VERSION[];
+extern const char CONFIDENTIAL_PAYMENT_REGEX_WHITELIST[];
+extern const char CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST[];
 extern const char API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE[];
 extern const char API_CONFIDENTIAL_PAYMENT_GET_VERSION[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT[];
@@ -36,6 +39,9 @@ extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[];
 
 // anonymous voting
+extern const char ANONYMOUS_VOTING_VERSION[];
+extern const char ANONYMOUS_VOTING_REGEX_WHITELIST[];
+extern const char ANONYMOUS_VOTING_REGEX_BLACKLIST[];
 extern const char API_ANONYMOUS_VOTING_IS_COMPATIBLE[];
 extern const char API_ANONYMOUS_VOTING_GET_VERSION[];
 extern const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[];
@@ -48,6 +54,9 @@ extern const char API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT[];
 extern const char API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST[];
 
 // anonymous auction
+extern const char ANONYMOUS_AUCTION_VERSION[];
+extern const char ANONYMOUS_AUCTION_REGEX_WHITELIST[];
+extern const char ANONYMOUS_AUCTION_REGEX_BLACKLIST[];
 extern const char API_ANONYMOUS_AUCTION_IS_COMPATIBLE[];
 extern const char API_ANONYMOUS_AUCTION_GET_VERSION[];
 extern const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[];
@@ -98,8 +107,10 @@ public:
     bytes verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data);
 
 private:
-    int isCompatible(const std::string& targetVersion, const std::string& regexWhitelist,
-        const std::string& regexBlacklist);
+    // int isCompatible(const std::string& targetVersion, const std::string& regexWhitelist,
+    //     const std::string& regexBlacklist);
+    int isCompatible(
+        const std::string& targetVersion, const char regexWhitelist[], const char regexBlacklist[]);
 };
 
 }  // namespace precompiled
