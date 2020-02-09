@@ -1879,6 +1879,81 @@ BOOST_AUTO_TEST_CASE(anonymousAuctionVerifyWinner)
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
+BOOST_AUTO_TEST_CASE(confidentialPaymentIsCompatible)
+{
+    dev::eth::ContractABI abi;
+    std::string targetVersion = CONFIDENTIAL_PAYMENT_VERSION;
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE, targetVersion);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    s256 result;
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_SUCCESS);
+
+    std::string errorTargetVersion = "errorVersion";
+    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE, errorTargetVersion);
+    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_FAILURE);
+}
+BOOST_AUTO_TEST_CASE(anonymousVotingIsCompatible)
+{
+    dev::eth::ContractABI abi;
+    std::string targetVersion = ANONYMOUS_VOTING_VERSION;
+    bytes param = abi.abiIn(API_ANONYMOUS_VOTING_IS_COMPATIBLE, targetVersion);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    s256 result;
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_SUCCESS);
+
+    std::string errorTargetVersion = "errorVersion";
+    param = abi.abiIn(API_ANONYMOUS_VOTING_IS_COMPATIBLE, errorTargetVersion);
+    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_FAILURE);
+}
+BOOST_AUTO_TEST_CASE(anonymousAuctionIsCompatible)
+{
+    dev::eth::ContractABI abi;
+    std::string targetVersion = ANONYMOUS_AUCTION_VERSION;
+    bytes param = abi.abiIn(API_ANONYMOUS_AUCTION_IS_COMPATIBLE, targetVersion);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    s256 result;
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_SUCCESS);
+
+    std::string errorTargetVersion = "errorVersion";
+    param = abi.abiIn(API_ANONYMOUS_AUCTION_IS_COMPATIBLE, errorTargetVersion);
+    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == WEDPR_FAILURE);
+}
+BOOST_AUTO_TEST_CASE(confidentialPaymentGetVersion)
+{
+    dev::eth::ContractABI abi;
+    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_GET_VERSION);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    std::string version;
+    abi.abiOut(&out, version);
+    BOOST_TEST(version == CONFIDENTIAL_PAYMENT_VERSION);
+}
+BOOST_AUTO_TEST_CASE(anonymousVotingGetVersion)
+{
+    dev::eth::ContractABI abi;
+    bytes param = abi.abiIn(API_ANONYMOUS_VOTING_GET_VERSION);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    std::string version;
+    abi.abiOut(&out, version);
+    BOOST_TEST(version == ANONYMOUS_VOTING_VERSION);
+}
+BOOST_AUTO_TEST_CASE(anonymousAuctionGetVersion)
+{
+    dev::eth::ContractABI abi;
+    bytes param = abi.abiIn(API_ANONYMOUS_AUCTION_GET_VERSION);
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    std::string version;
+    abi.abiOut(&out, version);
+    BOOST_TEST(version == ANONYMOUS_AUCTION_VERSION);
+}
 BOOST_AUTO_TEST_CASE(unKnownFunc)
 {
     // function not exist

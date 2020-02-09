@@ -41,6 +41,10 @@ using namespace dev::storage;
 using namespace dev::precompiled;
 
 // confidential payment
+const char CONFIDENTIAL_PAYMENT_VERSION[] = "v0.2-generic";
+const char CONFIDENTIAL_PAYMENT_REGEX_WHITELIST[] = "^v0.2-generic$";
+// This is an empty blacklist.
+const char CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST[] = "^$";
 const char API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE[] = "confidentialPaymentIsCompatible(string)";
 const char API_CONFIDENTIAL_PAYMENT_GET_VERSION[] = "confidentialPaymentGetVersion()";
 const char API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT[] =
@@ -53,6 +57,9 @@ const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[] =
     "confidentialPaymentVerifySplitCredit(string)";
 
 // anonymous voting
+const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
+const char ANONYMOUS_VOTING_REGEX_WHITELIST[] = "^v0.2-generic$";
+const char ANONYMOUS_VOTING_REGEX_BLACKLIST[] = "^$";
 const char API_ANONYMOUS_VOTING_IS_COMPATIBLE[] = "anonymousVotingIsCompatible(string)";
 const char API_ANONYMOUS_VOTING_GET_VERSION[] = "anonymousVotingGetVersion()";
 const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
@@ -73,6 +80,9 @@ const char API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST[] =
     "anonymousVotingGetVoteResultFromRequest(string)";
 
 // anonymous auction
+const char ANONYMOUS_AUCTION_VERSION[] = "v0.2-generic";
+const char ANONYMOUS_AUCTION_REGEX_WHITELIST[] = "^v0.2-generic$";
+const char ANONYMOUS_AUCTION_REGEX_BLACKLIST[] = "^$";
 const char API_ANONYMOUS_AUCTION_IS_COMPATIBLE[] = "anonymousAuctionIsCompatible(string)";
 const char API_ANONYMOUS_AUCTION_GET_VERSION[] = "anonymousAuctionGetVersion()";
 const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[] =
@@ -87,20 +97,6 @@ const int WEDPR_SUCCESS = 0;
 const int WEDPR_FAILURE = -1;
 
 const char WEDPR_PRECOMPILED[] = "WedprPrecompiled";
-
-const char CONFIDENTIAL_PAYMENT_VERSION[] = "v0.2-generic";
-const string CONFIDENTIAL_PAYMENT_REGEX_WHITELIST = "^v0.2-generic$";
-// This is an empty blacklist.
-const string CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST = "^$";
-
-const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
-const string ANONYMOUS_VOTING_REGEX_WHITELIST = "^v0.2-generic$";
-const string ANONYMOUS_VOTING_REGEX_BLACKLIST = "^$";
-
-const char ANONYMOUS_AUCTION_VERSION[] = "v0.2-generic";
-const string ANONYMOUS_AUCTION_REGEX_WHITELIST = "^v0.2-generic$";
-const string ANONYMOUS_AUCTION_REGEX_BLACKLIST = "^$";
-
 
 WedprPrecompiled::WedprPrecompiled()
 {
@@ -133,6 +129,10 @@ WedprPrecompiled::WedprPrecompiled()
             ANONYMOUS_VOTING_VERSION, "Wedpr storage", version);
         throwException("Anonymous voting compatible error");
     }
+    name2Selector[API_ANONYMOUS_VOTING_IS_COMPATIBLE] =
+        getFuncSelector(API_ANONYMOUS_VOTING_IS_COMPATIBLE);
+    name2Selector[API_ANONYMOUS_VOTING_GET_VERSION] =
+        getFuncSelector(API_ANONYMOUS_VOTING_GET_VERSION);
     name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST] =
         getFuncSelector(API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST] =
@@ -158,6 +158,10 @@ WedprPrecompiled::WedprPrecompiled()
             ANONYMOUS_AUCTION_VERSION, "Wedpr storage", version);
         throwException("Anonymous auction compatible error");
     }
+    name2Selector[API_ANONYMOUS_AUCTION_IS_COMPATIBLE] =
+        getFuncSelector(API_ANONYMOUS_AUCTION_IS_COMPATIBLE);
+    name2Selector[API_ANONYMOUS_AUCTION_GET_VERSION] =
+        getFuncSelector(API_ANONYMOUS_AUCTION_GET_VERSION);
     name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST] =
         getFuncSelector(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST);
     name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST] =
@@ -313,11 +317,11 @@ bytes WedprPrecompiled::confidentialPaymentIsCompatible(
     abi.abiOut(data, targetVersion);
     int result = isCompatible(
         targetVersion, CONFIDENTIAL_PAYMENT_REGEX_WHITELIST, CONFIDENTIAL_PAYMENT_REGEX_BLACKLIST);
-    return abi.abiIn("", result);
+    return abi.abiIn("", s256(result));
 }
 
 int WedprPrecompiled::isCompatible(
-    const string& targetVersion, const string& regexWhitelist, const string& regexBlacklist)
+    const string& targetVersion, const char regexWhitelist[], const char regexBlacklist[])
 {
     std::regex whitelist(regexWhitelist);
     std::regex blacklist(regexBlacklist);
@@ -423,7 +427,7 @@ bytes WedprPrecompiled::anonymousVotingIsCompatible(dev::eth::ContractABI& abi, 
     abi.abiOut(data, targetVersion);
     int result = isCompatible(
         targetVersion, ANONYMOUS_VOTING_REGEX_WHITELIST, ANONYMOUS_VOTING_REGEX_BLACKLIST);
-    return abi.abiIn("", result);
+    return abi.abiIn("", s256(result));
 }
 
 bytes WedprPrecompiled::anonymousVotingGetVersion(dev::eth::ContractABI& abi)
@@ -582,7 +586,7 @@ bytes WedprPrecompiled::anonymousAuctionIsCompatible(
     abi.abiOut(data, targetVersion);
     int result = isCompatible(
         targetVersion, ANONYMOUS_AUCTION_REGEX_WHITELIST, ANONYMOUS_AUCTION_REGEX_BLACKLIST);
-    return abi.abiIn("", result);
+    return abi.abiIn("", s256(result));
 }
 
 bytes WedprPrecompiled::anonymousAuctionGetVersion(dev::eth::ContractABI& abi)
