@@ -184,6 +184,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
         return;
     }
 
+    // update the safety info when receive new peer status
+    m_syncStatus->updateSafetyInfo(info);
     int64_t currentNumber = m_blockChain->number();
     if (status == nullptr)
     {

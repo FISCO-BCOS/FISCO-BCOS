@@ -259,3 +259,86 @@ NodeIDs SyncMasterStatus::randomSelectionSize(
     }
     return chosen;
 }
+
+void SyncMasterStatus::updateConsensusInfo(
+    std::shared_ptr<std::set<NodeID>> _chosedConsensusInfo, dev::h512s const& _allSealerList)
+{
+    if (!m_chosedConsensusNodes || !m_candidateConsensusNodes)
+    {
+        return;
+    }
+    Guard l(m_mutex);
+    m_chosedConsensusNodes->clear();
+    m_candidateConsensusNodes->clear();
+    ReadGuard lPeerStatus(x_peerStatus);
+    for (auto const& _nodeID : _allSealerList)
+    {
+        auto blockNumber = (m_peersStatus.count(_nodeID) ? m_peersStatus[_nodeID]->number : -1);
+        if (_nodeID == m_nodeId)
+        {
+            blockNumber = m_downloadingBlockQueue.number();
+        }
+        if (_chosedConsensusInfo->count(_nodeID))
+        {
+            (*m_chosedConsensusNodes)[_nodeID] = blockNumber;
+        }
+        else
+        {
+            (*m_candidateConsensusNodes)[_nodeID] = blockNumber;
+        }
+    }
+    calForSafetyEnsurance();
+    SYNC_LOG(DEBUG) << LOG_DESC("updateConsensusInfo: the chosed consensus nodes updated")
+                    << LOG_KV("validSelectedNode", m_validSelectedNode)
+                    << LOG_KV("maxCandidateConsNodesNumber", m_maxCandidateConsNodesNumber);
+}
+
+void SyncMasterStatus::updateSafetyInfo(const SyncPeerInfo& _info)
+{
+    if (!m_chosedConsensusNodes || !m_candidateConsensusNodes)
+    {
+        return;
+    }
+    Guard l(m_mutex);
+    bool updated = false;
+    if (m_chosedConsensusNodes->count(_info.nodeId) &&
+        (*m_chosedConsensusNodes)[_info.nodeId] != _info.number)
+    {
+        (*m_chosedConsensusNodes)[_info.nodeId] = _info.number;
+        updated = true;
+    }
+    if (m_candidateConsensusNodes->count(_info.nodeId) &&
+        (*m_candidateConsensusNodes)[_info.nodeId] != _info.number)
+    {
+        (*m_candidateConsensusNodes)[_info.nodeId] = _info.number;
+        updated = true;
+    }
+    if (updated)
+    {
+        calForSafetyEnsurance();
+        SYNC_LOG(DEBUG) << LOG_DESC("updateSafetyInfo") << LOG_KV("infoNumber", _info.number)
+                        << LOG_KV("infoNodeID", _info.nodeId.abridged())
+                        << LOG_KV("validSelectedNode", m_validSelectedNode)
+                        << LOG_KV("maxCandidateConsNodesNumber", m_maxCandidateConsNodesNumber);
+    }
+}
+
+void SyncMasterStatus::calForSafetyEnsurance()
+{
+    m_validSelectedNode = 0;
+    m_maxCandidateConsNodesNumber = -1;
+    for (auto const& it : *m_candidateConsensusNodes)
+    {
+        if (m_maxCandidateConsNodesNumber < it.second)
+        {
+            m_maxCandidateConsNodesNumber = it.second;
+        }
+    }
+    for (auto const& it : *m_chosedConsensusNodes)
+    {
+        if (it.second >= m_maxCandidateConsNodesNumber)
+        {
+            m_validSelectedNode++;
+        }
+    }
+}

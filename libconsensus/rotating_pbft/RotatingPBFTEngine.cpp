@@ -29,6 +29,10 @@ using namespace dev::p2p;
 using namespace dev::network;
 std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
 {
+    if (!checkSafety())
+    {
+        return std::make_pair(false, MAXIDX);
+    }
     // this node doesn't located in the chosed consensus node list
     if (!locatedInChosedConsensensusNodes())
     {
@@ -41,6 +45,18 @@ std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
     }
     auto leaderIdx = VRFSelection();
     return std::make_pair(true, leaderIdx);
+}
+
+bool RotatingPBFTEngine::checkSafety() const
+{
+    if (m_epochSize >= m_sealersNum ||
+        m_blockSync->syncStatus()->isSafety([&](int64_t const& _validSelectedNode) {
+            return _validSelectedNode >= std::min(int64_t(m_f + 1), m_sealersNum.load());
+        }))
+    {
+        return true;
+    }
+    return false;
 }
 
 // TODO: chose leader by VRF algorithm
@@ -76,6 +92,10 @@ void RotatingPBFTEngine::resetConfig()
     updateConsensusInfo();
 
     resetLocatedInConsensusNodes();
+    if (m_blockSync->syncStatus() && m_epochSize < m_sealersNum)
+    {
+        m_blockSync->syncStatus()->updateConsensusInfo(m_chosedConsensusNodes, sealerList());
+    }
 }
 
 bool RotatingPBFTEngine::updateEpochSize()

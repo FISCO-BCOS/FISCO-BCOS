@@ -62,6 +62,10 @@ public:
                 return selectedNode;
             });
         m_chosedSealerList = std::make_shared<dev::h512s>();
+        if (m_blockSync->syncStatus())
+        {
+            m_blockSync->syncStatus()->initConsensusInfo();
+        }
 
         m_requestRawPrepareWorker =
             std::make_shared<dev::ThreadPool>("prepRequest-" + std::to_string(m_groupId), 1);
@@ -164,6 +168,8 @@ protected:
     void handleP2PMessage(dev::p2p::NetworkException _exception,
         std::shared_ptr<dev::p2p::P2PSession> _session,
         dev::p2p::P2PMessage::Ptr _message) override;
+
+    virtual bool checkSafety() const;
 
 private:
     PBFTMsg::Ptr decodeP2PMsgIntoPBFTMsg(

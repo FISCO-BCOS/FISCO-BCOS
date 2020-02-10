@@ -187,7 +187,7 @@ public:
 
     h256 genesisHash() { return m_genesisHash; }
 
-    std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
+    std::shared_ptr<SyncMasterStatus> syncStatus() override { return m_syncStatus; }
 
     std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
 

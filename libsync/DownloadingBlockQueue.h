@@ -113,6 +113,7 @@ public:
 
     int64_t maxRequestBlocks() const { return m_maxRequestBlocks; }
     void adjustMaxRequestBlocks();
+    int64_t number() { return m_blockChain->number(); }
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;

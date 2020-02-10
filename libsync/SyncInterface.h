@@ -28,6 +28,8 @@ namespace dev
 namespace sync
 {
 struct SyncStatus;
+class SyncMasterStatus;
+
 class SyncInterface : public std::enable_shared_from_this<SyncInterface>
 {
 public:
@@ -69,6 +71,7 @@ public:
     virtual void updateConsensusNodeInfo(dev::h512s const&, dev::h512s const&) {}
     virtual bool syncTreeRouterEnabled() { return false; }
     virtual void noteForwardRemainTxs(dev::h512 const&) {}
+    virtual std::shared_ptr<SyncMasterStatus> syncStatus() { return nullptr; }
 };
 
 }  // namespace sync

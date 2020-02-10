@@ -187,6 +187,8 @@ public:
         return RotatingPBFTEngine::onReceiveRawPrepareResponse(_session, _message);
     }
 
+    bool checkSafety() const override { return true; }
+
 private:
     std::shared_ptr<FakeBlockChain> m_fakedBlockChain;
 };

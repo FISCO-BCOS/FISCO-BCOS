@@ -110,6 +110,14 @@ public:
         m_downloadingBlockQueue(nullptr, 0, NodeID())
     {}
 
+    virtual ~SyncMasterStatus() {}
+
+    virtual void initConsensusInfo()
+    {
+        m_chosedConsensusNodes = std::make_shared<std::map<NodeID, int64_t>>();
+        m_candidateConsensusNodes = std::make_shared<std::map<NodeID, int64_t>>();
+    }
+
     bool hasPeer(NodeID const& _id);
 
     bool newSyncPeerStatus(SyncPeerInfo const& _info);
@@ -147,8 +155,29 @@ public:
         m_downloadingBlockQueue.setStatHandler(_statisticHandler);
     }
 
+    // update m_validSelectedNode when the
+    // chosed consensus nodes have been changed to ensure safety when use RPBFT
+    virtual void updateConsensusInfo(
+        std::shared_ptr<std::set<NodeID>> _chosedConsensusInfo, dev::h512s const& _allSealerList);
+
+    // update m_validSelectedNode when the syncInfo changed
+    // to ensure safety for RPBFT
+    virtual void updateSafetyInfo(const SyncPeerInfo& _info);
+
+    virtual bool isSafety(std::function<bool(uint64_t const& _validSelectedNode)> const& _f)
+    {
+        Guard l(m_mutex);
+        // safety requirement:
+        // 1. at least one consensus node start started
+        // 2. the block number of at least (f+1) chosedConsensusNodes is no smaller than the
+        // max-block-number of candidateConsensusNodes
+        return (m_maxCandidateConsNodesNumber != -1 && _f(m_validSelectedNode));
+    }
+
 private:
     int64_t selectPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds);
+    // get m_validSelectedNode for safety check
+    void calForSafetyEnsurance();
 
 public:
     h256 genesisHash;
@@ -162,6 +191,18 @@ private:
     NodeID m_nodeId;
     mutable SharedMutex x_peerStatus;
     std::map<NodeID, std::shared_ptr<SyncPeerStatus>> m_peersStatus;
+
+    mutable Mutex m_mutex;
+    // map between node id of chosed consensus nodes and the blockNumber
+    std::shared_ptr<std::map<NodeID, int64_t>> m_chosedConsensusNodes;
+    // map between node id of the candidated consensus nodes and the block number
+    std::shared_ptr<std::map<NodeID, int64_t>> m_candidateConsensusNodes;
+    // the number of chosed consensus nodes whose block number are no smaller than max block number
+    // of the candidate consensus node
+    std::atomic<int64_t> m_validSelectedNode = {-1};
+    // the max block number of all the candidated consensus node
+    std::atomic<int64_t> m_maxCandidateConsNodesNumber = {-1};
+
     DownloadingBlockQueue m_downloadingBlockQueue;
 };
 
