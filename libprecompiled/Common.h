@@ -97,13 +97,14 @@ class PrecompiledException : public dev::Exception
 {
 public:
     PrecompiledException(const std::string& what) : dev::Exception(what) {}
+    bytes ToOutput();
 };
 
 void getErrorCodeOut(bytes& out, int const& result);
 std::string getTableName(const std::string& _tableName);
 std::string getContractTableName(Address const& _contractAddress);
-void checkNameValidate(
-    const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList);
+void checkNameValidate(const std::string& tableName, std::string& keyField,
+    std::vector<std::string>& valueFieldList, bool throwStorageException = true);
 int checkLengthValidate(const std::string& field_value, int32_t max_length, int32_t errorCode,
     bool throwStorageException = true);
 

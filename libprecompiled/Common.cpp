@@ -64,8 +64,8 @@ std::string dev::precompiled::getContractTableName(Address const& _contractAddre
 }
 
 
-void dev::precompiled::checkNameValidate(
-    const std::string& tableName, std::string& keyField, std::vector<std::string>& valueFieldList)
+void dev::precompiled::checkNameValidate(const string& tableName, string& keyField,
+    vector<string>& valueFieldList, bool throwStorageException)
 {
     if (g_BCOSConfig.version() >= V2_2_0)
     {
@@ -73,9 +73,9 @@ void dev::precompiled::checkNameValidate(
         boost::trim(keyField);
         valueFieldSet.insert(keyField);
 
-        std::vector<char> allowChar = {'$', '_', '@'};
+        vector<char> allowChar = {'$', '_', '@'};
 
-        auto checkTableNameValidate = [allowChar](const std::string& tableName) {
+        auto checkTableNameValidate = [allowChar, throwStorageException](const string& tableName) {
             size_t iSize = tableName.size();
             for (size_t i = 0; i < iSize; i++)
             {
@@ -83,20 +83,36 @@ void dev::precompiled::checkNameValidate(
                     (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
                 {
                     STORAGE_LOG(ERROR)
-                        << LOG_DESC("invalidate tablename") << LOG_KV("table name", tableName);
-                    BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_INVALIDATE_FIELD,
-                        std::string("invalidate tablename:") + tableName));
+                        << LOG_DESC("invalid tablename") << LOG_KV("table name", tableName);
+                    if (throwStorageException)
+                    {
+                        BOOST_THROW_EXCEPTION(StorageException(
+                            CODE_TABLE_INVALIDATE_FIELD, string("invalid tablename:") + tableName));
+                    }
+                    else
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            PrecompiledException(string("invalid tablename:") + tableName));
+                    }
                 }
             }
         };
-        auto checkFieldNameValidate = [allowChar](const std::string& tableName,
-                                          const std::string& fieldName) {
+        auto checkFieldNameValidate = [allowChar, throwStorageException](
+                                          const string& tableName, const string& fieldName) {
             if (fieldName.size() == 0 || fieldName[0] == '_')
             {
                 STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
                                    << LOG_KV("table name", tableName);
-                BOOST_THROW_EXCEPTION(StorageException(
-                    CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+                if (throwStorageException)
+                {
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledException(string("invalid field:") + fieldName));
+                }
             }
             size_t iSize = fieldName.size();
             for (size_t i = 0; i < iSize; i++)
@@ -105,10 +121,18 @@ void dev::precompiled::checkNameValidate(
                     (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
                 {
                     STORAGE_LOG(ERROR)
-                        << LOG_DESC("invalidate fieldname") << LOG_KV("field name", fieldName)
+                        << LOG_DESC("invalid fieldname") << LOG_KV("field name", fieldName)
                         << LOG_KV("table name", tableName);
-                    BOOST_THROW_EXCEPTION(StorageException(
-                        CODE_TABLE_INVALIDATE_FIELD, std::string("invalidate field:") + fieldName));
+                    if (throwStorageException)
+                    {
+                        BOOST_THROW_EXCEPTION(StorageException(
+                            CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                    }
+                    else
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            PrecompiledException(string("invalid field:") + fieldName));
+                    }
                 }
             }
         };
@@ -124,8 +148,16 @@ void dev::precompiled::checkNameValidate(
                 STORAGE_LOG(ERROR)
                     << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
                     << LOG_KV("table name", tableName);
-                BOOST_THROW_EXCEPTION(StorageException(
-                    CODE_TABLE_DUMPLICATE_FIELD, std::string("dumplicate field:") + valueField));
+                if (throwStorageException)
+                {
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_DUMPLICATE_FIELD, string("dumplicate field:") + valueField));
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledException(string("dumplicate field:") + valueField));
+                }
             }
             checkFieldNameValidate(tableName, valueField);
         }
@@ -133,7 +165,7 @@ void dev::precompiled::checkNameValidate(
 }
 
 int dev::precompiled::checkLengthValidate(
-    const std::string& fieldValue, int32_t maxLength, int32_t errorCode, bool throwStorageException)
+    const string& fieldValue, int32_t maxLength, int32_t errorCode, bool throwStorageException)
 {
     if (fieldValue.size() > (size_t)maxLength)
     {
@@ -141,16 +173,22 @@ int dev::precompiled::checkLengthValidate(
                                << " greater than " << maxLength;
         if (throwStorageException)
         {
-            BOOST_THROW_EXCEPTION(StorageException(errorCode,
-                std::string("size of value/key greater than") + std::to_string(maxLength)));
+            BOOST_THROW_EXCEPTION(StorageException(
+                errorCode, string("size of value/key greater than") + to_string(maxLength)));
         }
         else
         {
             BOOST_THROW_EXCEPTION(PrecompiledException(
-                std::string("size of value/key greater than") + std::to_string(maxLength)));
+                string("size of value/key greater than") + to_string(maxLength)));
         }
 
         return errorCode;
     }
     return 0;
+}
+
+bytes precompiled::PrecompiledException::ToOutput()
+{
+    eth::ContractABI abi;
+    return abi.abiIn("Error(string)", string(what()));
 }
