@@ -21,7 +21,7 @@
 #include <libprecompiled/ConditionPrecompiled.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
-#include <libprecompiled/SimpleTablePrecompiled.h>
+#include <libprecompiled/KVTablePrecompiled.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -32,7 +32,7 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::precompiled;
 
-namespace test_SimpleTablePrecompiled
+namespace test_KVTablePrecompiled
 {
 class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
 {
@@ -51,7 +51,7 @@ struct TablePrecompiledFixture2
     TablePrecompiledFixture2()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        tablePrecompiled = std::make_shared<precompiled::SimpleTablePrecompiled>();
+        tablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>();
         auto memStorage = std::make_shared<MemoryStorage2>();
         auto table = std::make_shared<MockMemoryDB>();
         table->setStateStorage(memStorage);
@@ -70,14 +70,14 @@ struct TablePrecompiledFixture2
 
     ~TablePrecompiledFixture2() {}
 
-    precompiled::SimpleTablePrecompiled::Ptr tablePrecompiled;
+    precompiled::KVTablePrecompiled::Ptr tablePrecompiled;
     ExecutiveContext::Ptr context;
     BlockInfo blockInfo;
     Address okAddress;
     int addressCount = 0x10000;
 };
 
-BOOST_FIXTURE_TEST_SUITE(SimpleTablePrecompiled, TablePrecompiledFixture2)
+BOOST_FIXTURE_TEST_SUITE(KVTablePrecompiled, TablePrecompiledFixture2)
 
 BOOST_AUTO_TEST_CASE(getDB)
 {
@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(clear)
 
 BOOST_AUTO_TEST_CASE(toString)
 {
-    BOOST_CHECK_EQUAL(tablePrecompiled->toString(), "SimpleTable");
+    BOOST_CHECK_EQUAL(tablePrecompiled->toString(), "KVTable");
 }
 
 BOOST_AUTO_TEST_CASE(call_get_set)
@@ -161,4 +161,4 @@ BOOST_AUTO_TEST_CASE(call_newEntry)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace test_SimpleTablePrecompiled
+}  // namespace test_KVTablePrecompiled

@@ -55,13 +55,13 @@ contract Table {
     function newCondition() public constant returns (Condition);
 }
 
-contract SimpleTableFactory {
-    function openTable(string) public constant returns (SimpleTable);
+contract KVTableFactory {
+    function openTable(string) public constant returns (KVTable);
     function createTable(string, string, string) public returns (int256);
 }
 
-//SimpleTable per permiary key has only one Entry
-contract SimpleTable {
+//KVTable per permiary key has only one Entry
+contract KVTable {
     function get(string) public constant returns (bool, Entry);
     function set(string, Entry) public returns (int256);
     function newEntry() public constant returns (Entry);

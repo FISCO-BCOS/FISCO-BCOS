@@ -25,6 +25,7 @@
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/ContractStatusPrecompiled.h>
+#include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
@@ -45,7 +46,9 @@ void ExecutiveContextFactory::initExecutiveContext(
 
     auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-
+    auto kvTableFactoryPrecompiled =
+        std::make_shared<dev::precompiled::KVTableFactoryPrecompiled>();
+    kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
     context->setAddress2Precompiled(
         Address(0x1000), std::make_shared<dev::precompiled::SystemConfigPrecompiled>());
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
@@ -61,6 +64,7 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1007), std::make_shared<dev::precompiled::ContractStatusPrecompiled>());
+    context->setAddress2Precompiled(Address(0x1010), kvTableFactoryPrecompiled);
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);

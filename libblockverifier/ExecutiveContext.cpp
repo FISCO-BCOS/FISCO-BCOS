@@ -52,6 +52,12 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
         }
     }
+    catch (dev::precompiled::PrecompiledException& e)
+    {
+        EXECUTIVECONTEXT_LOG(ERROR)
+            << "PrecompiledException" << LOG_KV("address", address) << LOG_KV("message:", e.what());
+        BOOST_THROW_EXCEPTION(e);
+    }
     catch (dev::storage::StorageException& e)
     {
         EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)

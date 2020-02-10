@@ -240,6 +240,13 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             size_t outputSize = result.size();
             m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         }
+        catch (dev::precompiled::PrecompiledException& e)
+        {
+            revert();
+            m_excepted = TransactionException::PrecompiledError;
+            auto output = e.ToOutput();
+            m_output = owning_bytes_ref{std::move(output), 0, output.size()};
+        }
         catch (dev::Exception& e)
         {
             revert();
