@@ -30,9 +30,10 @@ using namespace dev;
 
 // cache for sign
 static dev::Mutex c_zValueCacheMutex;
-static unsigned char c_zValueCache[SM3_DIGEST_LENGTH];
-static size_t c_zValueLenCache;
-static std::string c_privateKeyCache;
+// map between privateKey to {zValueCache, zValueLen}
+static std::map<std::string, std::pair<std::shared_ptr<unsigned char>, size_t>> c_mapTozValueCache;
+// max size of c_mapTozValueCache
+static const int64_t c_maxMapTozValueCacheSize = 1000;
 
 bool SM2::genKey()
 {
@@ -292,16 +293,26 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     size_t& _zValueLen)
 {
     Guard l(c_zValueCacheMutex);
-    if (_privateKey == c_privateKeyCache)
+    // get zValue from the cache
+    if (c_mapTozValueCache.count(_privateKey))
     {
-        memcpy(_zValue, c_zValueCache, c_zValueLenCache);
-        _zValueLen = c_zValueLenCache;
+        auto cache = c_mapTozValueCache[_privateKey];
+        memcpy(_zValue, cache.first.get(), cache.second);
+        _zValueLen = cache.second;
         return 1;
     }
     auto ret = ECDSA_sm2_get_Z(_ecKey, NULL, NULL, 0, _zValue, &_zValueLen);
-    memset(c_zValueCache, 0, c_zValueLenCache);
-    memcpy(c_zValueCache, _zValue, _zValueLen);
-    c_zValueLenCache = _zValueLen;
+    // clear the cache if over the capacity limit
+    if (c_mapTozValueCache.size() >= c_maxMapTozValueCacheSize)
+    {
+        c_mapTozValueCache.clear();
+    }
+    // update the zValue cache
+    std::shared_ptr<unsigned char> zValueCache(new unsigned char[SM3_DIGEST_LENGTH]);
+    memcpy(zValueCache.get(), _zValue, _zValueLen);
+    std::pair<std::shared_ptr<unsigned char>, size_t> cache =
+        std::make_pair(zValueCache, _zValueLen);
+    c_mapTozValueCache[_privateKey] = cache;
     return ret;
 }
 
