@@ -89,30 +89,21 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
         std::string("item_name,item_id"));
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     abi.abiOut(&out, errCode);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
-    }
-    else
-    {
-        BOOST_TEST(errCode == -CODE_TABLE_NAME_ALREADY_EXIST);
-    }
+
+    BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
 
     // openTable not exist
     param.clear();
     out.clear();
     param = abi.abiIn("openTable(string)", std::string("t_poor"));
-    out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
-    Address addressOut;
-    addressOut.clear();
-    abi.abiOut(&out, addressOut);
-    BOOST_TEST(addressOut == Address(0x0));
+    BOOST_CHECK_THROW(
+        tableFactoryPrecompiled->call(context, bytesConstRef(&param)), PrecompiledException);
 
     param.clear();
     out.clear();
     param = abi.abiIn("openTable(string)", std::string("t_test"));
     out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
-    addressOut.clear();
+    Address addressOut;
     abi.abiOut(&out, addressOut);
     BOOST_TEST(addressOut == Address(++addressCount));
 }
