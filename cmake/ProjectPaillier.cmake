@@ -4,7 +4,7 @@ if (CRYPTO_EXTENSION)
     ExternalProject_Add(paillier
      PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
-        GIT_REPOSITORY https://github.com/FISCO-BCOS/paillier.git
+        GIT_REPOSITORY https://github.com/FISCO-BCOS/paillier-lib.git
 	    GIT_TAG 0803857fbb09c6625246cdb4c92087f0349ef703
         BUILD_IN_SOURCE 1
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>

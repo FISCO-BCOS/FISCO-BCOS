@@ -6,7 +6,7 @@ if (CRYPTO_EXTENSION)
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NAME group_sig_lib.tgz
         DOWNLOAD_NO_PROGRESS 1
-        GIT_REPOSITORY https://github.com/FISCO-BCOS/Group-Signature.git
+        GIT_REPOSITORY https://github.com/FISCO-BCOS/group-signature-lib.git
         GIT_TAG 6c5e7d47cb4cb43b15da064e3793727dd1b59192
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         -DCMAKE_POSITION_INDEPENDENT_CODE=on
