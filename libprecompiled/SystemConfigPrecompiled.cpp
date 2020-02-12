@@ -66,8 +66,7 @@ bytes SystemConfigPrecompiled::call(
         if (!checkValueValid(configKey, configValue))
         {
             PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("SystemConfigPrecompiled")
-                << LOG_DESC("SystemConfigPrecompiled set invalid value")
+                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
             getErrorCodeOut(out, CODE_INVALID_CONFIGURATION_VALUES);
             return out;
@@ -132,7 +131,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= TX_COUNT_LIMIT_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -144,7 +143,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= TX_GAS_LIMIT_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -156,7 +155,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= RPBFT_EPOCH_SIZE_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_SIZE_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -169,7 +168,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= RPBFT_ROTATING_INTERVAL_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_ROTATING_INTERVAL_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {

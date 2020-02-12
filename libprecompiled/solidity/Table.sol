@@ -1,7 +1,7 @@
 pragma solidity ^0.4.24;
 
 contract TableFactory {
-    function openTable(string) public constant returns (Table); //open table
+    function openTable(string) public view returns (Table); //open table
     function createTable(string, string, string) public returns (int256); //create table
 }
 
@@ -25,12 +25,12 @@ contract Condition {
 
 //one record
 contract Entry {
-    function getInt(string) public constant returns (int256);
-    function getUInt(string) public constant returns (int256);
-    function getAddress(string) public constant returns (address);
-    function getBytes64(string) public constant returns (bytes1[64]);
-    function getBytes32(string) public constant returns (bytes32);
-    function getString(string) public constant returns (string);
+    function getInt(string) public view returns (int256);
+    function getUInt(string) public view returns (int256);
+    function getAddress(string) public view returns (address);
+    function getBytes64(string) public view returns (bytes1[64]);
+    function getBytes32(string) public view returns (bytes32);
+    function getString(string) public view returns (string);
 
     function set(string, int256) public;
     function set(string, uint256) public;
@@ -40,29 +40,29 @@ contract Entry {
 
 //record sets
 contract Entries {
-    function get(int256) public constant returns (Entry);
-    function size() public constant returns (int256);
+    function get(int256) public view returns (Entry);
+    function size() public view returns (int256);
 }
 
 //Table main contract
 contract Table {
-    function select(string, Condition) public constant returns (Entries);
+    function select(string, Condition) public view returns (Entries);
     function insert(string, Entry) public returns (int256);
     function update(string, Entry, Condition) public returns (int256);
     function remove(string, Condition) public returns (int256);
 
-    function newEntry() public constant returns (Entry);
-    function newCondition() public constant returns (Condition);
+    function newEntry() public view returns (Entry);
+    function newCondition() public view returns (Condition);
 }
 
 contract KVTableFactory {
-    function openTable(string) public constant returns (KVTable);
+    function openTable(string) public view returns (KVTable);
     function createTable(string, string, string) public returns (int256);
 }
 
 //KVTable per permiary key has only one Entry
 contract KVTable {
-    function get(string) public constant returns (bool, Entry);
+    function get(string) public view returns (bool, Entry);
     function set(string, Entry) public returns (int256);
-    function newEntry() public constant returns (Entry);
+    function newEntry() public view returns (Entry);
 }

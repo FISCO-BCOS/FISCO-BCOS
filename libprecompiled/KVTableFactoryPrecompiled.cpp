@@ -85,6 +85,7 @@ bytes KVTableFactoryPrecompiled::call(
             STORAGE_LOG(WARNING) << LOG_BADGE("KVTableFactoryPrecompiled")
                                  << LOG_DESC("Open new table failed")
                                  << LOG_KV("table name", tableName);
+            BOOST_THROW_EXCEPTION(PrecompiledException(tableName + " does not exist"));
         }
 
         out = abi.abiIn("", address);
@@ -138,7 +139,6 @@ bytes KVTableFactoryPrecompiled::call(
         }
 
         int result = 0;
-
         try
         {
             auto table =
@@ -152,6 +152,10 @@ bytes KVTableFactoryPrecompiled::call(
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
+            if (e.errorCode() == storage::CODE_NO_AUTHORIZED)
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied")));
+            }
         }
         getErrorCodeOut(out, result);
     }
