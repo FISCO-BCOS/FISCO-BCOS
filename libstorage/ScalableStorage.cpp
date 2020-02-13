@@ -33,8 +33,8 @@ using namespace boost;
 using namespace dev;
 using namespace dev::storage;
 
-const char* const TABLE_BLOCK_TO_DB_NAME = "_extra_block_to_dbname_";
-const char* const DB_NAME = "dbName";
+const string TABLE_BLOCK_TO_DB_NAME = "s_block_to_dbname";
+const string DB_NAME = "dbName";
 
 ScalableStorage::ScalableStorage(int64_t _scrollThreshold)
   : m_scrollThreshold(_scrollThreshold), m_remoteBlockNumber(-1)
@@ -52,7 +52,8 @@ int64_t ScalableStorage::setRemoteBlockNumber(int64_t _blockNumber)
         return m_remoteBlockNumber.load();
     }
     m_remoteBlockNumber.store(_blockNumber);
-    SCALABLE_STORAGE_LOG(DEBUG) << LOG_KV("remoteNumber", _blockNumber);
+    SCALABLE_STORAGE_LOG(DEBUG) << "setRemoteBlockNumber"
+                                << LOG_KV("remoteNumber", m_remoteBlockNumber.load());
     return m_remoteBlockNumber.load();
 }
 
@@ -86,7 +87,7 @@ Entries::Ptr ScalableStorage::selectFromArchive(
         auto dataStorage = m_storageFactory->getStorage(to_string(dbName), false);
         if (!dataStorage)
         {
-            SCALABLE_STORAGE_LOG(DEBUG)
+            SCALABLE_STORAGE_LOG(ERROR)
                 << "archive DB not exists" << LOG_KV("currentDBName", m_archiveDBName)
                 << LOG_KV("dbName", dbName) << LOG_KV("key", key);
             return std::make_shared<Entries>();
@@ -106,21 +107,6 @@ Entries::Ptr ScalableStorage::selectFromArchive(
     return nullptr;
 }
 
-int64_t ScalableStorage::getBlockNumberByHash(std::string _blockHash)
-{
-    TableInfo::Ptr tableInfo = std::make_shared<TableInfo>();
-    tableInfo->name = SYS_HASH_2_BLOCK;
-    auto entries = m_state->select(0, tableInfo, _blockHash, nullptr);
-    if (entries && entries->size() > 0)
-    {
-        auto entry = entries->get(0);
-        string remoteNumber = entry->getField(SYS_VALUE);
-        return lexical_cast<int64_t>(remoteNumber);
-    }
-    SCALABLE_STORAGE_LOG(FATAL) << "Can't find block number by hash!" << LOG_KV("hash", _blockHash);
-    return 0;
-}
-
 Entries::Ptr ScalableStorage::select(
     int64_t num, TableInfo::Ptr tableInfo, const string& key, Condition::Ptr condition)
 {
@@ -134,7 +120,12 @@ Entries::Ptr ScalableStorage::select(
         {
             SCALABLE_STORAGE_LOG(DEBUG) << "select from remote" << LOG_KV("table", tableInfo->name)
                                         << LOG_KV("key", key) << LOG_KV("number", num);
-            return m_remote->select(num, tableInfo, key, condition);
+            auto entries = m_remote->select(num, tableInfo, key, condition);
+            if (num > 0 && entries->size() == 0)
+            {
+                SCALABLE_STORAGE_LOG(FATAL) << "select from remote DB failed";
+            }
+            return entries;
         }
         else if (m_archive)
         {
@@ -181,12 +172,11 @@ TableData::Ptr ScalableStorage::getNumberToDBNameData(int64_t _blockNumber)
 
 size_t ScalableStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
 {
-    SCALABLE_STORAGE_LOG(DEBUG) << "ScalableStorage commit" << LOG_KV("size", datas.size())
-                                << LOG_KV("block", num) << LOG_KV("dbName", m_archiveDBName);
+    SCALABLE_STORAGE_LOG(DEBUG) << "commit" << LOG_KV("size", datas.size()) << LOG_KV("block", num)
+                                << LOG_KV("dbName", m_archiveDBName);
     vector<TableData::Ptr> archiveData;
     archiveData.reserve(m_archiveTables.size());
     vector<TableData::Ptr> stateData;
-    stateData.reserve(datas.size() - m_archiveTables.size() + 1);
     separateData(datas, stateData, archiveData);
     size_t size = 0;
     stateData.push_back(getNumberToDBNameData(num));
@@ -209,5 +199,5 @@ void ScalableStorage::stop()
     {
         m_remote->stop();
     }
-    SCALABLE_STORAGE_LOG(INFO) << "ScalableStorage stopped";
+    SCALABLE_STORAGE_LOG(INFO) << "stopped";
 }

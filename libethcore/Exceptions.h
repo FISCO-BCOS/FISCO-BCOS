@@ -64,7 +64,7 @@ DEV_SIMPLE_EXCEPTION(InvalidTransactionFormat);
 DEV_SIMPLE_EXCEPTION(TransactionIsUnsigned);
 DEV_SIMPLE_EXCEPTION(TransactionRefused);
 DEV_SIMPLE_EXCEPTION(TransactionAlreadyInChain);
-DEV_SIMPLE_EXCEPTION(InconsistentTransactionSha3);
+DEV_SIMPLE_EXCEPTION(InvalidTransaction);
 DEV_SIMPLE_EXCEPTION(P2pEnqueueTransactionFailed);
 
 /// state trie related
@@ -80,7 +80,8 @@ DEV_SIMPLE_EXCEPTION(UnknownParent);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
-DEV_SIMPLE_EXCEPTION_RLP(ErrorBlockHash);
+DEV_SIMPLE_EXCEPTION(ErrorBlockHash);
+DEV_SIMPLE_EXCEPTION(NotCompleteBlock);
 
 /// block execution related
 DEV_SIMPLE_EXCEPTION(BlockExecutionFailed);
@@ -97,6 +98,7 @@ DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
 DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
 DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
 DEV_SIMPLE_EXCEPTION(EmptySealers);
+DEV_SIMPLE_EXCEPTION(MethodNotSupport);
 
 struct VMException : Exception
 {

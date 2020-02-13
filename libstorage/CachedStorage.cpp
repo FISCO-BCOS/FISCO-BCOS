@@ -155,6 +155,28 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 {
     (void)condition;
 
+    if (!tableInfo->enableCache)
+    {
+        std::shared_ptr<RWMutexScoped> emptyScoped;
+        auto cache = std::make_shared<Cache>();
+
+        if (m_backend)
+        {
+            auto conditionKey = std::make_shared<Condition>();
+            conditionKey->EQ(tableInfo->key, key);
+            auto backendData = m_backend->select(num, tableInfo, key, conditionKey);
+
+            cache->setEntries(backendData);
+            cache->setEmpty(false);
+        }
+        else
+        {
+            CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
+        }
+
+        return std::make_tuple(emptyScoped, cache);
+    }
+
     auto result = touchCache(tableInfo, key, true);
     auto caches = std::get<1>(result);
 
@@ -208,143 +230,135 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
             for (size_t idx = range.begin(); idx < range.end(); ++idx)
             {
                 auto requestData = datas[idx];
+
                 auto commitData = std::make_shared<TableData>();
                 commitData->info = requestData->info;
-                commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
 
-                // addtion data
-                std::set<std::string> addtionKey;
-                tbb::spin_mutex addtionKeyMutex;
+                if (!commitData->info->enableCache)
+                {
+                    commitData->dirtyEntries->shallowFrom(requestData->dirtyEntries);
+                }
+                else
+                {
+                    commitData->dirtyEntries->resize(requestData->dirtyEntries->size());
 
-                tbb::parallel_for(tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
-                    [&](const tbb::blocked_range<size_t>& rangeEntries) {
-                        for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
-                        {
-                            ++total;
+                    // addtion data
+                    std::set<std::string> addtionKey;
+                    tbb::spin_mutex addtionKeyMutex;
 
-                            auto entry = requestData->dirtyEntries->get(i);
-                            auto key = entry->getField(requestData->info->key);
-                            auto id = entry->getID();
-
-                            ssize_t change = 0;
-                            if (id != 0)
+                    tbb::parallel_for(
+                        tbb::blocked_range<size_t>(0, requestData->dirtyEntries->size()),
+                        [&](const tbb::blocked_range<size_t>& rangeEntries) {
+                            for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
                             {
-                                auto result = touchCache(requestData->info, key, true);
-                                auto caches = std::get<1>(result);
-                                if (caches->empty())
+                                ++total;
+
+                                auto entry = requestData->dirtyEntries->get(i);
+                                auto key = entry->getField(requestData->info->key);
+                                auto id = entry->getID();
+
+                                ssize_t change = 0;
+                                if (id != 0)
                                 {
-                                    if (m_backend)
+                                    auto result = touchCache(requestData->info, key, true);
+                                    auto caches = std::get<1>(result);
+                                    if (caches->empty())
                                     {
-                                        auto conditionKey = std::make_shared<Condition>();
-                                        conditionKey->EQ(requestData->info->key, key);
-                                        auto backendData = m_backend->select(
-                                            num, requestData->info, key, conditionKey);
-
-                                        CACHED_STORAGE_LOG(DEBUG)
-                                            << requestData->info->name << "-" << key
-                                            << " miss the cache while commit dirty entries";
-
-                                        caches->setEntries(backendData);
-
-                                        size_t totalCapacity = 0;
-                                        for (auto it : *backendData)
+                                        if (m_backend)
                                         {
-                                            totalCapacity += it->capacity();
-                                        }
-#if 0
-                                        CACHED_STORAGE_LOG(TRACE)
-                                            << "backend capacity: " << requestData->info->name
-                                            << "-" << key << ", capacity: " << totalCapacity;
-#endif
-                                        touchMRU(requestData->info->name, key, totalCapacity);
-                                    }
+                                            auto conditionKey = std::make_shared<Condition>();
+                                            conditionKey->EQ(requestData->info->key, key);
+                                            auto backendData = m_backend->select(
+                                                num, requestData->info, key, conditionKey);
 
-                                    restoreCache(requestData->info, key, caches);
-                                }
+                                            CACHED_STORAGE_LOG(DEBUG)
+                                                << requestData->info->name << "-" << key
+                                                << " miss the cache while commit dirty entries";
 
-                                caches->setNum(num);
-                                caches->setEmpty(false);
+                                            caches->setEntries(backendData);
 
-                                auto entryIt = std::lower_bound(caches->entries()->begin(),
-                                    caches->entries()->end(), entry,
-                                    [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
-                                        return lhs->getID() < rhs->getID();
-                                    });
-
-                                if (entryIt != caches->entries()->end() &&
-                                    (*entryIt)->getID() == id)
-                                {
-                                    auto oldSize = (*entryIt)->capacity();
-
-                                    for (auto fieldIt : *entry)
-                                    {
-                                        (*entryIt)->setField(fieldIt.first, fieldIt.second);
-                                    }
-                                    (*entryIt)->setStatus(entry->getStatus());
-#if 0
-                                    CACHED_STORAGE_LOG(TRACE)
-                                        << "update capacity: " << commitData->info->name << "-"
-                                        << key << ", from capacity: " << oldSize
-                                        << " to capacity: " << (*entryIt)->capacity();
-#endif
-                                    change = (ssize_t)(
-                                        (ssize_t)(*entryIt)->capacity() - (ssize_t)oldSize);
-
-                                    (*entryIt)->setNum(num);
-
-                                    auto commitEntry = std::make_shared<Entry>();
-                                    commitEntry->copyFrom(*entryIt);
-                                    (*commitData->dirtyEntries)[i] = commitEntry;
-                                    if (m_backend && !m_backend->onlyCommitDirty())
-                                    {  // Only for RocksDB
-                                        tbb::spin_mutex::scoped_lock lock(addtionKeyMutex);
-                                        auto inserted = addtionKey.insert(key).second;
-
-                                        if (inserted)
-                                        {
-                                            for (auto it = caches->entries()->begin();
-                                                 it != caches->entries()->end(); ++it)
+                                            size_t totalCapacity = 0;
+                                            for (auto it : *backendData)
                                             {
-                                                if (it != entryIt)
-                                                {  // This addEntry is necessary, because backend
-                                                   // storage processDirtyEntries() will not get
-                                                   // data from real DB
-                                                    commitData->dirtyEntries->addEntry(*it);
+                                                totalCapacity += it->capacity();
+                                            }
+
+                                            touchMRU(requestData->info->name, key, totalCapacity);
+                                        }
+
+                                        restoreCache(requestData->info, key, caches);
+                                    }
+
+                                    caches->setNum(num);
+                                    caches->setEmpty(false);
+
+                                    auto entryIt = std::lower_bound(caches->entries()->begin(),
+                                        caches->entries()->end(), entry,
+                                        [](const Entry::Ptr& lhs, const Entry::Ptr& rhs) {
+                                            return lhs->getID() < rhs->getID();
+                                        });
+
+                                    if (entryIt != caches->entries()->end() &&
+                                        (*entryIt)->getID() == id)
+                                    {
+                                        auto oldSize = (*entryIt)->capacity();
+
+                                        for (auto fieldIt : *entry)
+                                        {
+                                            (*entryIt)->setField(fieldIt.first, fieldIt.second);
+                                        }
+                                        (*entryIt)->setStatus(entry->getStatus());
+
+                                        change = (ssize_t)(
+                                            (ssize_t)(*entryIt)->capacity() - (ssize_t)oldSize);
+
+                                        (*entryIt)->setNum(num);
+
+                                        auto commitEntry = std::make_shared<Entry>();
+                                        commitEntry->copyFrom(*entryIt);
+                                        (*commitData->dirtyEntries)[i] = commitEntry;
+                                        if (m_backend && !m_backend->onlyCommitDirty())
+                                        {  // Only for RocksDB
+                                            tbb::spin_mutex::scoped_lock lock(addtionKeyMutex);
+                                            auto inserted = addtionKey.insert(key).second;
+
+                                            if (inserted)
+                                            {
+                                                for (auto it = caches->entries()->begin();
+                                                     it != caches->entries()->end(); ++it)
+                                                {
+                                                    if (it != entryIt)
+                                                    {  // This addEntry is necessary, because
+                                                       // backend storage processDirtyEntries() will
+                                                       // not get data from real DB
+                                                        commitData->dirtyEntries->addEntry(*it);
+                                                    }
                                                 }
                                             }
                                         }
+                                    }
+                                    else
+                                    {
+                                        // impossible, should exit
+                                        CACHED_STORAGE_LOG(FATAL)
+                                            << "Can not find entry in cache, id:" << entry->getID()
+                                            << " key:" << key;
                                     }
                                 }
                                 else
                                 {
                                     // impossible, should exit
                                     CACHED_STORAGE_LOG(FATAL)
-                                        << "Can not find entry in cache, id:" << entry->getID()
-                                        << " key:" << key;
+                                        << "Dirty entry id equal to 0, id: " << id
+                                        << " key: " << key;
                                 }
-                            }
-                            else
-                            {
-                                // impossible, should exit
-                                CACHED_STORAGE_LOG(FATAL)
-                                    << "Dirty entry id equal to 0, id: " << id << " key: " << key;
-                            }
 
-                            touchMRU(requestData->info->name, key, change);
-                        }
-                    });
-#if 0
-                // MemoryTable2 already sort
-                tbb::parallel_sort(commitData->dirtyEntries->begin(),
-                    commitData->dirtyEntries->end(), EntryLessNoLock(requestData->info));
-#endif
+                                touchMRU(requestData->info->name, key, change);
+                            }
+                        });
+                }
+
                 commitData->newEntries->shallowFrom(requestData->newEntries);
-
-#if 0
-                TIME_RECORD("Sort new entries");
-                tbb::parallel_sort(commitData->newEntries->begin(), commitData->newEntries->end(),
-                    EntryLessNoLock(requestData->info));
-#endif
                 (*commitDatas)[idx] = commitData;
             }
         });
@@ -355,11 +369,15 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
     {
         auto commitData = (*commitDatas)[i];
 
+        if (!commitData->info->enableCache)
+        {
+            continue;
+        }
+
         auto newEntriesSize = commitData->newEntries->size();
         for (size_t j = 0; j < newEntriesSize; ++j)
         {
             auto commitEntry = commitData->newEntries->get(j);
-            // commitEntry->setID(++m_ID);
             commitEntry->setNum(num);
             ++total;
 

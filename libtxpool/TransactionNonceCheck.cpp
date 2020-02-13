@@ -56,15 +56,16 @@ bool TransactionNonceCheck::ok(Transaction const& _transaction)
     return isBlockLimitOk(_transaction) && isNonceOk(_transaction);
 }
 
-void TransactionNonceCheck::getNonceAndUpdateCache(
-    NonceVec& nonceVec, int64_t const& blockNumber, bool const& update)
+std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateCache(
+    int64_t const& blockNumber, bool const& update)
 {
+    std::shared_ptr<NonceVec> nonceVec;
     if (m_blockNonceCache.count(blockNumber))
     {
         nonceVec = m_blockNonceCache[blockNumber];
         NONCECHECKER_LOG(TRACE) << LOG_DESC("updateCache: getNonceAndUpdateCache cache hit ")
                                 << LOG_KV("blockNumber", blockNumber)
-                                << LOG_KV("nonceSize", nonceVec.size())
+                                << LOG_KV("nonceSize", nonceVec->size())
                                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
     }
     /// block cache hit
@@ -76,7 +77,7 @@ void TransactionNonceCheck::getNonceAndUpdateCache(
             nonceVec = pBlock->getAllNonces();
             NONCECHECKER_LOG(TRACE)
                 << LOG_DESC("updateCache: getNonceAndUpdateCache block cache hit ")
-                << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec.size())
+                << LOG_KV("blockNumber", blockNumber) << LOG_KV("nonceSize", nonceVec->size())
                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
         }
         else
@@ -87,16 +88,18 @@ void TransactionNonceCheck::getNonceAndUpdateCache(
     }
     else
     {
-        m_blockChain->getNonces(nonceVec, blockNumber);
+        nonceVec = m_blockChain->getNonces(blockNumber);
         NONCECHECKER_LOG(TRACE) << LOG_DESC("updateCache: getNonceAndUpdateCache cache miss ")
                                 << LOG_KV("blockNumber", blockNumber)
-                                << LOG_KV("nonceSize", nonceVec.size())
+                                << LOG_KV("nonceSize", nonceVec->size())
                                 << LOG_KV("nonceCacheSize", m_blockNonceCache.size());
     }
     if (update && m_blockNonceCache.size() < m_maxBlockLimit)
     {
         m_blockNonceCache[blockNumber] = nonceVec;
     }
+
+    return nonceVec;
 }
 
 void TransactionNonceCheck::updateCache(bool _rebuild)
@@ -135,11 +138,13 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 /// erase the expired nonces
                 for (auto i = prestartblk; i < m_startblk; i++)
                 {
-                    NonceVec nonce_vec;
-                    getNonceAndUpdateCache(nonce_vec, i, false);
-                    for (auto nonce : nonce_vec)
+                    auto nonce_vec = getNonceAndUpdateCache(i, false);
+                    if (nonce_vec)
                     {
-                        m_cache.erase(nonce);
+                        for (auto& nonce : *nonce_vec)
+                        {
+                            m_cache.erase(nonce);
+                        }
                     }
                     /// erase the expired nonces from cache since it can't be touched forever
                     if (m_blockNonceCache.count(i))
@@ -151,9 +156,8 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             /// insert the nonces of a new block
             for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
-                NonceVec nonce_vec;
-                getNonceAndUpdateCache(nonce_vec, i);
-                for (auto nonce : nonce_vec)
+                auto nonce_vec = getNonceAndUpdateCache(i);
+                for (auto& nonce : *nonce_vec)
                 {
                     m_cache.insert(nonce);
                 }

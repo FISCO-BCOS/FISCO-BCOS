@@ -121,6 +121,7 @@ public:
     void setLedgerManager(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager)
     {
         m_ledgerManager = _ledgerManager;
+        registerSyncChecker();
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
@@ -131,18 +132,18 @@ protected:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:
+    void registerSyncChecker();
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
 
     /// transaction callback related
-    std::function<std::function<void>()> setTransactionCallbackFactory();
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
         m_currentTransactionCallback;
     boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
 
     void checkRequest(int _groupID);
-    void checkTxReceive(int _groupID);
+    void checkSyncStatus(int _groupID);
 };
 
 }  // namespace rpc

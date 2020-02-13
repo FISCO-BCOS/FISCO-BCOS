@@ -86,6 +86,7 @@ public:
 
 private:
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
+    dev::storage::TableData::Ptr dumpWithoutOptimize();
 
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;

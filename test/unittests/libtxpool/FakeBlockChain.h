@@ -101,6 +101,10 @@ public:
     {
         return TxPool::import(_txBytes, _ik);
     }
+    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
+    {
+        return TxPool::submitTransactions(_tx);
+    };
 };
 
 class FakeBlockChain : public BlockChainInterface
@@ -125,24 +129,27 @@ public:
             FakeBlock fake_block(trans_size, m_sec);
             if (blockHeight > 0)
             {
-                fake_block.m_block.header().setParentHash(
+                fake_block.m_block->header().setParentHash(
                     m_blockChain[blockHeight - 1]->headerHash());
-                fake_block.m_block.header().setNumber(blockHeight);
+                fake_block.m_block->header().setNumber(blockHeight);
             }
-            m_blockHash[fake_block.m_block.header().hash()] = blockHeight;
-            m_blockChain.push_back(std::make_shared<Block>(fake_block.m_block));
+            m_blockHash[fake_block.m_block->header().hash()] = blockHeight;
+            m_blockChain.push_back(std::make_shared<Block>(*fake_block.m_block));
         }
     }
 
     int64_t number() override { return m_blockNumber - 1; }
     void setBlockNumber(int64_t const& number) { m_blockNumber = number; }
-    void getNonces(std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override
+    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override
     {
+        std::shared_ptr<std::vector<dev::eth::NonceKeyType>> nonceVector =
+            std::make_shared<std::vector<dev::eth::NonceKeyType>>();
         auto pBlock = getBlockByNumber(_blockNumber);
-        for (auto& trans : pBlock->transactions())
+        for (auto trans : *(pBlock->transactions()))
         {
-            _nonceVector.push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans.nonce()));
+            nonceVector->push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans->nonce()));
         }
+        return nonceVector;
     }
     std::pair<int64_t, int64_t> totalTransactionCount() override
     {
@@ -176,60 +183,60 @@ public:
         return getBlockByHash(numberHash(_i));
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override
+    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
     {
-        if (m_blockHash.count(_blockHash))
-            return m_blockChain[m_blockHash[_blockHash]]->rlpP();
+        auto blockHash = numberHash(_i);
+        if (m_blockHash.count(blockHash))
+            return m_blockChain[m_blockHash[blockHash]]->rlpP();
         return nullptr;
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const&) override
     {
-        return getBlockRLPByHash(numberHash(_i));
+        return std::make_shared<Transaction>();
+    }
+    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const&) override
+    {
+        return std::make_shared<LocalisedTransaction>();
+    }
+    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const&) override
+    {
+        return std::make_shared<TransactionReceipt>();
     }
 
-    dev::eth::Transaction getTxByHash(dev::h256 const&) override { return Transaction(); }
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const&) override
+    dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+        dev::h256 const&) override
     {
-        return LocalisedTransaction();
-    }
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const&) override
-    {
-        return TransactionReceipt();
-    }
-
-    dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(dev::h256 const&) override
-    {
-        return LocalisedTransactionReceipt(
+        return std::make_shared<LocalisedTransactionReceipt>(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
-    std::pair<LocalisedTransaction,
+    std::pair<LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(dev::h256 const&) override
     {
-        return std::make_pair(LocalisedTransaction(),
+        return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    std::pair<dev::eth::LocalisedTransactionReceipt,
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction&) override
     {
         (void)_txHash;
-        return std::make_pair(
-            LocalisedTransactionReceipt(dev::executive::TransactionException::None),
+        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
+                                  dev::executive::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
     {
-        block.header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
-        block.header().setNumber(m_blockNumber);
-        std::shared_ptr<Block> p_block = std::make_shared<Block>(block);
+        block->header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
+        block->header().setNumber(m_blockNumber);
+        std::shared_ptr<Block> p_block = std::make_shared<Block>(*block);
         m_blockChain.push_back(p_block);
         m_blockHash[p_block->blockHeader().hash()] = m_blockNumber;
         m_blockNumber += 1;
-        m_totalTransactionCount += block.transactions().size();
+        m_totalTransactionCount += block->transactions()->size();
         return CommitResult::OK;
     }
 

@@ -37,6 +37,7 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort << "/" << _dbConfig.dbName
            << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
            << "&charset=" << _dbConfig.dbCharset;
+
         m_url = URL_new(ss.str().c_str());
         if (m_url == NULL)
         {
@@ -163,7 +164,6 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
         }
         SQLConnectionPool_LOG(DEBUG)
             << "init connection pool  IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort;
-
         ConnectionPool_T _connectionPool = nullptr;
         volatile Connection_T _connection = nullptr;
 

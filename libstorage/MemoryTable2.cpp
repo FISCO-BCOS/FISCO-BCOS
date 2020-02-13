@@ -120,7 +120,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
         if (it != m_newEntries.end())
         {
             auto indices = processEntries(it->second, condition);
-            for (auto itIndex : indices)
+            for (auto& itIndex : indices)
             {
                 it->second->get(itIndex)->setTempIndex(itIndex);
                 entries->addEntry(it->second->get(itIndex));
@@ -316,7 +316,7 @@ dev::h256 MemoryTable2::hash()
     return m_hash;
 }
 
-dev::storage::TableData::Ptr MemoryTable2::dump()
+dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 {
     TIME_RECORD("MemoryTable2 Dump");
     if (m_isDirty)
@@ -388,6 +388,113 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
         bytesConstRef bR(allData.data(), allData.size());
         m_hash = dev::sha256(bR);
+
+        m_isDirty = false;
+    }
+
+    return m_tableData;
+}
+
+dev::storage::TableData::Ptr MemoryTable2::dump()
+{
+    // >= v2.2.0
+    TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
+    if (m_isDirty)
+    {
+        tbb::atomic<size_t> allSize = 0;
+
+        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData->info = m_tableInfo;
+        m_tableData->dirtyEntries = std::make_shared<Entries>();
+
+        tbb::parallel_for(m_dirty.range(),
+            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    if (!it->second->deleted())
+                    {
+                        m_tableData->dirtyEntries->addEntry(it->second);
+                        allSize += (it->second->capacity() + 1);  // 1 for status field
+                    }
+                }
+            });
+
+        m_tableData->newEntries = std::make_shared<Entries>();
+        tbb::parallel_for(m_newEntries.range(),
+            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
+                for (auto it = range.begin(); it != range.end(); ++it)
+                {
+                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
+                        [&](tbb::blocked_range<size_t>& rangeIndex) {
+                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                            {
+                                if (!it->second->get(i)->deleted())
+                                {
+                                    m_tableData->newEntries->addEntry(it->second->get(i));
+                                    allSize += (it->second->get(i)->capacity() + 1);
+                                }
+                            }
+                        });
+                }
+            });
+
+        if (m_tableInfo->enableConsensus)
+        {
+            TIME_RECORD("Sort data");
+            tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
+                EntryLessNoLock(m_tableInfo));
+            tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
+                EntryLessNoLock(m_tableInfo));
+            TIME_RECORD("Calc hash");
+
+            bytes allData;
+            allData.reserve(allSize);
+
+            for (size_t i = 0; i < m_tableData->dirtyEntries->size(); ++i)
+            {
+                auto entry = (*m_tableData->dirtyEntries)[i];
+                for (auto& fieldIt : *(entry))
+                {
+                    if (isHashField(fieldIt.first))
+                    {
+                        allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                        allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
+                    }
+                }
+                char status = (char)entry->getStatus();
+                allData.insert(allData.end(), &status, &status + sizeof(status));
+            }
+
+            for (size_t i = 0; i < m_tableData->newEntries->size(); ++i)
+            {
+                auto entry = (*m_tableData->newEntries)[i];
+                for (auto& fieldIt : *(entry))
+                {
+                    if (isHashField(fieldIt.first))
+                    {
+                        allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
+                        allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
+                    }
+                }
+                char status = (char)entry->getStatus();
+                allData.insert(allData.end(), &status, &status + sizeof(status));
+            }
+
+            if (allData.empty())
+            {
+                m_hash = h256();
+            }
+
+            bytesConstRef bR(allData.data(), allData.size());
+            m_hash = dev::sha256(bR);
+        }
+        else
+        {
+            m_hash = dev::h256();
+
+            STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name
+                               << " hash: " << m_hash.hex();
+        }
 
         m_isDirty = false;
     }

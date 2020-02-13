@@ -29,6 +29,7 @@
 #include <libconsensus/Sealer.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
@@ -101,6 +102,7 @@ public:
         m_eventLogFilterManger->stop();
         Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
                          << LOG_KV("groupID", groupId());
+        m_txPool->stop();
     }
 
     virtual ~Ledger(){};
@@ -154,6 +156,11 @@ protected:
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
+
+    dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
+        dev::PROTOCOL_ID const& _protocolId);
+    dev::eth::BlockFactory::Ptr createBlockFactory();
+    void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 
 private:
     /// create PBFTConsensus

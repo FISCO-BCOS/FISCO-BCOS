@@ -65,7 +65,6 @@ private:
     void separateData(const std::vector<TableData::Ptr>& datas,
         std::vector<TableData::Ptr>& stateData, std::vector<TableData::Ptr>& archiveData);
     TableData::Ptr getNumberToDBNameData(int64_t _blockNumber);
-    int64_t getBlockNumberByHash(std::string _hash);
     Storage::Ptr m_remote = nullptr;
     Storage::Ptr m_state = nullptr;
     Storage::Ptr m_archive = nullptr;

@@ -152,6 +152,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    // only can insert tx_count_limit and tx_gas_limit as system config
+    // only can insert tx_count_limit and tx_gas_limit
+    // as system config
     return false;
 }

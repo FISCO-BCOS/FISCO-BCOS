@@ -25,6 +25,7 @@
 #include "ExecutiveContext.h"
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libexecutive/Executive.h>
 #include <map>
 #include <memory>
 #include <queue>
@@ -34,7 +35,8 @@ namespace dev
 {
 namespace blockverifier
 {
-using ExecuteTxFunc = std::function<bool(dev::eth::Transaction const&, ID)>;
+using ExecuteTxFunc =
+    std::function<bool(dev::eth::Transaction::Ptr, ID, dev::executive::Executive::Ptr)>;
 
 class TxDAGFace
 {
@@ -45,7 +47,7 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    virtual int executeUnit() = 0;
+    virtual int executeUnit(dev::executive::Executive::Ptr) = 0;
 
     virtual void getHaventRun(){};
 };
@@ -57,7 +59,8 @@ public:
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(ExecutiveContext::Ptr _ctx, dev::eth::Transactions const& _txs, int64_t _blockHeight);
+    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs,
+        int64_t _blockHeight);
 
     // Set transaction execution function
     void setTxExecuteFunc(ExecuteTxFunc const& _f);
@@ -69,7 +72,7 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    int executeUnit() override;
+    int executeUnit(dev::executive::Executive::Ptr _executive) override;
 
     ID paraTxsNumber() { return m_totalParaTxs; }
 

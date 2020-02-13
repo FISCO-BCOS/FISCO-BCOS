@@ -63,7 +63,7 @@ class BlockCache
 {
 public:
     BlockCache(){};
-    std::shared_ptr<dev::eth::Block> add(dev::eth::Block const& _block);
+    std::shared_ptr<dev::eth::Block> add(std::shared_ptr<dev::eth::Block> _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
 
 private:
@@ -81,17 +81,17 @@ public:
     virtual ~BlockChainImp(){};
     int64_t number() override;
     dev::h256 numberHash(int64_t _i) override;
-    dev::eth::Transaction getTxByHash(dev::h256 const& _txHash) override;
-    dev::eth::LocalisedTransaction getLocalisedTxByHash(dev::h256 const& _txHash) override;
-    dev::eth::TransactionReceipt getTransactionReceiptByHash(dev::h256 const& _txHash) override;
-    virtual dev::eth::LocalisedTransactionReceipt getLocalisedTxReceiptByHash(
+    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const& _txHash) override;
+    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const& _txHash) override;
+    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+        dev::h256 const& _txHash) override;
+    virtual dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override;
     std::shared_ptr<dev::eth::Block> getBlockByHash(
         dev::h256 const& _blockHash, int64_t _blockNumber = -1) override;
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override;
-    std::shared_ptr<dev::bytes> getBlockRLPByHash(dev::h256 const& _blockHash) override;
     std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override;
-    CommitResult commitBlock(dev::eth::Block& block,
+    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context) override;
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
@@ -104,31 +104,47 @@ public:
 
     dev::h512s sealerList() override;
     dev::h512s observerList() override;
+
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
-    void getNonces(
-        std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber) override;
+
+    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override;
+
+    std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
+        std::string const& _key, int64_t const& _num = -1) override;
 
     void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
     {
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
-
-    std::pair<dev::eth::LocalisedTransaction,
+    std::pair<dev::eth::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(dev::h256 const& _txHash) override;
 
 
-    std::pair<dev::eth::LocalisedTransactionReceipt,
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction) override;
 
+    void setEnableHexBlock(bool const& _enableHexBlock) { m_enableHexBlock = _enableHexBlock; }
+
 private:
+    void initSystemConfig(
+        dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
+
+    std::shared_ptr<dev::eth::Block> decodeBlock(dev::storage::Entry::ConstPtr _entry);
+    std::shared_ptr<dev::bytes> getDataBytes(
+        dev::storage::Entry::ConstPtr _entry, std::string const& _fieldName);
+
+    void writeBytesToField(std::shared_ptr<dev::bytes> _data, dev::storage::Entry::Ptr _entry,
+        std::string const& _fieldName = dev::storage::SYS_VALUE);
+    void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
+
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
     std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
-    std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash);
+    std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber);
     int64_t obtainNumber();
     void writeNumber(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
@@ -145,7 +161,8 @@ private:
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
-    void parseMerkleMap(const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+    void parseMerkleMap(
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
         std::map<std::string, std::string>& child2Parent);
 
     void getMerkleProof(dev::h256 const& _txHash,
@@ -171,9 +188,11 @@ private:
     struct SystemConfigRecord
     {
         std::string value;
+        dev::eth::BlockNumber enableNumber;
         int64_t curBlockNum = -1;  // at which block gets the configuration value
-        SystemConfigRecord(std::string const& _value, int64_t _num)
-          : value(_value), curBlockNum(_num){};
+        SystemConfigRecord(std::string const& _value, dev::eth::BlockNumber const& _enableNumber,
+            int64_t const& _num)
+          : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
     };
     std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
     mutable SharedMutex m_systemConfigMutex;
@@ -185,16 +204,19 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 
-    std::pair<dev::eth::LocalisedTransaction, std::map<std::string, std::vector<std::string>>>
-        transactionWithProof;
-    std::mutex transactionWithProofMutex;
+    std::pair<dev::eth::LocalisedTransaction::Ptr,
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        m_transactionWithProof;
+    std::mutex m_transactionWithProofMutex;
 
-    std::pair<dev::eth::LocalisedTransactionReceipt,
-        std::map<std::string, std::vector<std::string>>>
-        receiptWithProof = std::make_pair(
-            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
-            std::map<std::string, std::vector<std::string>>());
-    std::mutex receiptWithProofMutex;
+    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
+        std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
+        m_receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                                executive::TransactionException::None),
+            std::shared_ptr<std::map<std::string, std::vector<std::string>>>());
+    std::mutex m_receiptWithProofMutex;
+
+    bool m_enableHexBlock = false;
 };
 }  // namespace blockchain
 }  // namespace dev

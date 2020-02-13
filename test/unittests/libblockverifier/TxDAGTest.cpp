@@ -45,7 +45,7 @@ class TxDAGFixture : TestOutputHelperFixture
 public:
     TxDAGFixture() : TestOutputHelperFixture(){};
 
-    Transaction createParallelTransferTx(
+    Transaction::Ptr createParallelTransferTx(
         const string& _userFrom, const string& _userTo, u256 _money)
     {
         u256 value = 0;
@@ -58,14 +58,15 @@ public:
             _money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime() + rand());
 
-        Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        tx.setBlockLimit(500);
-        tx.forceSender(Address(0x2333));
+        Transaction::Ptr tx =
+            std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+        tx->setBlockLimit(500);
+        tx->forceSender(Address(0x2333));
 
         return tx;
     }
 
-    Transaction createNormalTx()
+    Transaction::Ptr createNormalTx()
     {
         u256 value = 0;
         u256 gasPrice = 0;
@@ -76,9 +77,10 @@ public:
         bytes data = abi.abiIn("fake(string,string,uint256)", 0, 0, 0);
         u256 nonce = u256(utcTime() + rand());
 
-        Transaction tx(value, gasPrice, gas, dest, data, nonce);
-        tx.setBlockLimit(500);
-        tx.forceSender(Address(0x2333));
+        Transaction::Ptr tx =
+            std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
+        tx->setBlockLimit(500);
+        tx->forceSender(Address(0x2333));
 
         return tx;
     }
@@ -104,32 +106,33 @@ BOOST_AUTO_TEST_CASE(PureParallelTxDAGTest)
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     ExecutiveContext::Ptr executiveContext = createCtx();
 
-    Transactions trans;
-    trans.emplace_back(createParallelTransferTx("A", "B", 100));
-    trans.emplace_back(createParallelTransferTx("C", "D", 100));
-    trans.emplace_back(createParallelTransferTx("E", "F", 100));
-    trans.emplace_back(createParallelTransferTx("A", "D", 100));
-    trans.emplace_back(createParallelTransferTx("D", "F", 100));
+    std::shared_ptr<Transactions> trans = std::make_shared<Transactions>();
+    trans->emplace_back(createParallelTransferTx("A", "B", 100));
+    trans->emplace_back(createParallelTransferTx("C", "D", 100));
+    trans->emplace_back(createParallelTransferTx("E", "F", 100));
+    trans->emplace_back(createParallelTransferTx("A", "D", 100));
+    trans->emplace_back(createParallelTransferTx("D", "F", 100));
 
     txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
+    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, dev::executive::Executive::Ptr) {
         (void)_txId;
         exeTrans.emplace_back(_tr);
         return true;
     });
 
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
     while (!txDag->hasFinished())
     {
-        txDag->executeUnit();
+        txDag->executeUnit(executive);
     }
 
-    BOOST_CHECK_EQUAL(exeTrans[0].sha3(), trans[0].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[1].sha3(), trans[1].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[2].sha3(), trans[3].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[3].sha3(), trans[2].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[4].sha3(), trans[4].sha3());
+    BOOST_CHECK_EQUAL(exeTrans[0]->sha3(), (*trans)[0]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[1]->sha3(), (*trans)[1]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[2]->sha3(), (*trans)[3]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[3]->sha3(), (*trans)[2]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[4]->sha3(), (*trans)[4]->sha3());
 }
 
 
@@ -138,34 +141,35 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     ExecutiveContext::Ptr executiveContext = createCtx();
 
-    Transactions trans;
-    trans.emplace_back(createParallelTransferTx("A", "B", 100));
-    trans.emplace_back(createParallelTransferTx("C", "D", 100));
-    trans.emplace_back(createParallelTransferTx("E", "F", 100));
-    trans.emplace_back(createNormalTx());
-    trans.emplace_back(createParallelTransferTx("A", "D", 100));
-    trans.emplace_back(createParallelTransferTx("D", "F", 100));
+    std::shared_ptr<Transactions> trans = std::make_shared<Transactions>();
+    trans->emplace_back(createParallelTransferTx("A", "B", 100));
+    trans->emplace_back(createParallelTransferTx("C", "D", 100));
+    trans->emplace_back(createParallelTransferTx("E", "F", 100));
+    trans->emplace_back(createNormalTx());
+    trans->emplace_back(createParallelTransferTx("A", "D", 100));
+    trans->emplace_back(createParallelTransferTx("D", "F", 100));
 
     txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
-    txDag->setTxExecuteFunc([&](Transaction const& _tr, ID _txId) {
+    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, dev::executive::Executive::Ptr) {
         (void)_txId;
         exeTrans.emplace_back(_tr);
         return true;
     });
 
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
     while (!txDag->hasFinished())
     {
-        txDag->executeUnit();
+        txDag->executeUnit(executive);
     }
 
-    BOOST_CHECK_EQUAL(exeTrans[0].sha3(), trans[0].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[1].sha3(), trans[1].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[2].sha3(), trans[2].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[3].sha3(), trans[3].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[4].sha3(), trans[4].sha3());
-    BOOST_CHECK_EQUAL(exeTrans[5].sha3(), trans[5].sha3());
+    BOOST_CHECK_EQUAL(exeTrans[0]->sha3(), (*trans)[0]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[1]->sha3(), (*trans)[1]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[2]->sha3(), (*trans)[2]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[3]->sha3(), (*trans)[3]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[4]->sha3(), (*trans)[4]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[5]->sha3(), (*trans)[5]->sha3());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

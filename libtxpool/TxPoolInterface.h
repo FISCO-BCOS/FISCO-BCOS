@@ -34,6 +34,7 @@ struct TxPoolStatus;
 class TxPoolInterface
 {
 public:
+    using Ptr = std::shared_ptr<TxPoolInterface>;
     TxPoolInterface() = default;
     virtual ~TxPoolInterface(){};
     void setMaxBlockLimit(unsigned const&) {}
@@ -42,7 +43,7 @@ public:
      * @param _txHash: transaction hash
      */
     virtual bool drop(h256 const& _txHash) = 0;
-    virtual bool dropBlockTrans(dev::eth::Block const& block) = 0;
+    virtual bool dropBlockTrans(std::shared_ptr<dev::eth::Block> block) = 0;
     virtual bool handleBadBlock(dev::eth::Block const& block) = 0;
     /**
      * @brief Get top transactions from the queue
@@ -52,19 +53,20 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual dev::eth::Transactions topTransactions(uint64_t const& _limit) = 0;
-    virtual dev::eth::Transactions topTransactions(
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(uint64_t const& _limit) = 0;
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
 
     /// param 1: the transaction limit
     /// param 2: the node id
-    virtual dev::eth::Transactions topTransactionsCondition(uint64_t const&, dev::h512 const&)
+    virtual std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(
+        uint64_t const&, dev::h512 const&)
     {
-        return dev::eth::Transactions();
+        return std::make_shared<dev::eth::Transactions>();
     };
 
     /// get all current transactions(maybe blocksync module need this interface)
-    virtual dev::eth::Transactions pendingList() const = 0;
+    virtual std::shared_ptr<dev::eth::Transactions> pendingList() const = 0;
     /// get current transaction num
     virtual size_t pendingSize() = 0;
 
@@ -73,7 +75,11 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
-    virtual std::pair<h256, Address> submit(dev::eth::Transaction& _tx) = 0;
+    virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction> _tx) = 0;
+    virtual std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr)
+    {
+        return std::make_pair(h256(), Address());
+    };
 
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -83,7 +89,7 @@ public:
      * @return ImportResult : Import result code.
      */
     virtual dev::eth::ImportResult import(
-        dev::eth::Transaction& _tx, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
+        dev::eth::Transaction::Ptr, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
     virtual dev::eth::ImportResult import(
         bytesConstRef _txBytes, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
     /// @returns the status of the transaction queue.
@@ -124,6 +130,21 @@ public:
     virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
 
     virtual bool isFull() { return false; }
+    virtual void start() {}
+    virtual void stop() {}
+
+    virtual std::shared_ptr<dev::eth::Transactions> obtainTransactions(
+        std::vector<dev::h256> const&)
+    {
+        return nullptr;
+    }
+    virtual std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(std::set<dev::h256> const&)
+    {
+        return nullptr;
+    }
+
+    virtual bool initPartiallyBlock(std::shared_ptr<dev::eth::Block>) { return true; }
+    virtual void registerSyncStatusChecker(std::function<bool()>) {}
 
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be

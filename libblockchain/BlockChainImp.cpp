@@ -51,7 +51,7 @@ using namespace dev::precompiled;
 
 using boost::lexical_cast;
 
-std::shared_ptr<Block> BlockCache::add(Block const& _block)
+std::shared_ptr<Block> BlockCache::add(std::shared_ptr<Block> _block)
 {
     {
         WriteGuard guard(m_sharedMutex);
@@ -70,8 +70,8 @@ std::shared_ptr<Block> BlockCache::add(Block const& _block)
             }
         }
 
-        auto blockHash = _block.blockHeader().hash();
-        auto block = std::make_shared<Block>(std::move(_block));
+        auto blockHash = _block->blockHeader().hash();
+        auto block = _block;
         m_blockCache.insert(std::make_pair(blockHash, block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
@@ -132,8 +132,8 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
         }
     }
 
-    BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[getBlock]Can't find block")
-                          << LOG_KV("number", _blockNumber);
+    BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
+                            << LOG_KV("number", _blockNumber);
     return nullptr;
 }
 
@@ -154,8 +154,9 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
     }
     else
     {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage");
-        string strBlock = "";
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Cache missed, read from storage")
+                              << LOG_KV("blockNumber", _blockNumber);
+        ;
         Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
@@ -167,11 +168,11 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                strBlock = entry->getField(SYS_VALUE);
-                auto getField_time_cost = utcTime() - record_time;
-                record_time = utcTime();
 
-                auto block = Block(fromHex(strBlock.c_str()), CheckTransaction::None);
+                record_time = utcTime();
+                // use binary block since v2.2.0
+                auto block = decodeBlock(entry);
+
                 auto constructBlock_time_cost = utcTime() - record_time;
                 record_time = utcTime();
 
@@ -182,7 +183,6 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
-                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
                                       << LOG_KV("constructBlockTimeCost", constructBlock_time_cost)
                                       << LOG_KV("addCacheTimeCost", addCache_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
@@ -191,6 +191,7 @@ std::shared_ptr<Block> BlockChainImp::getBlock(dev::h256 const& _blockHash, int6
         }
 
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockNumber", _blockNumber)
                               << LOG_KV("blockHash", _blockHash);
         return nullptr;
     }
@@ -212,7 +213,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(int64_t _i)
         {
             auto entry = entries->get(0);
             h256 blockHash = h256((entry->getField(SYS_VALUE)));
-            return getBlockRLP(blockHash);
+            return getBlockRLP(blockHash, _i);
         }
     }
 
@@ -220,7 +221,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(int64_t _i)
     return nullptr;
 }
 
-std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
+std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
@@ -240,8 +241,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
     else
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlockRLP]Cache missed, read from storage");
-        string strBlock = "";
-        Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCK);
+        Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_HASH_2_BLOCK);
         auto openTable_time_cost = utcTime() - record_time;
         record_time = utcTime();
         if (tb)
@@ -252,18 +252,15 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
             if (entries->size() > 0)
             {
                 auto entry = entries->get(0);
-                strBlock = entry->getField(SYS_VALUE);
-                auto getField_time_cost = utcTime() - record_time;
-                record_time = utcTime();
 
-                auto blockRLP = std::make_shared<bytes>(fromHex(strBlock.c_str()));
+                record_time = utcTime();
+                auto blockRLP = getDataBytes(entry, SYS_VALUE);
                 auto blockRLP_time_cost = utcTime() - record_time;
 
                 BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("Get block RLP from db")
                                       << LOG_KV("getCacheTimeCost", getCache_time_cost)
                                       << LOG_KV("openTableTimeCost", openTable_time_cost)
                                       << LOG_KV("selectTimeCost", select_time_cost)
-                                      << LOG_KV("getFieldTimeCost", getField_time_cost)
                                       << LOG_KV("constructblockRLPTimeCost", blockRLP_time_cost)
                                       << LOG_KV("totalTimeCost", utcTime() - start_time);
                 return blockRLP;
@@ -271,6 +268,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLP(dev::h256 const& _blockHash)
         }
 
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getBlock]Can't find the block")
+                              << LOG_KV("blockNumber", _blockNumber)
                               << LOG_KV("blockHash", _blockHash);
         return nullptr;
     }
@@ -305,15 +303,14 @@ int64_t BlockChainImp::obtainNumber()
     return num;
 }
 
-void BlockChainImp::getNonces(
-    std::vector<dev::eth::NonceKeyType>& _nonceVector, int64_t _blockNumber)
+std::shared_ptr<std::vector<dev::eth::NonceKeyType>> BlockChainImp::getNonces(int64_t _blockNumber)
 {
     if (_blockNumber > number())
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
-        return;
+        return std::shared_ptr<std::vector<dev::eth::NonceKeyType>>();
     }
     BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_BLOCK_2_NONCES);
@@ -323,12 +320,14 @@ void BlockChainImp::getNonces(
         if (entries->size() > 0)
         {
             auto entry = entries->get(0);
-            std::string nonce_vector_str = entry->getField(SYS_VALUE);
-            bytes ret = fromHex(nonce_vector_str);
-            RLP rlp(ret);
-            _nonceVector = rlp.toVector<dev::eth::NonceKeyType>();
+            auto nonceRLPData = getDataBytes(entry, SYS_VALUE);
+            RLP rlp(*nonceRLPData);
+            return std::make_shared<std::vector<dev::eth::NonceKeyType>>(
+                rlp.toVector<dev::eth::NonceKeyType>());
         }
     }
+
+    return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
 }
 
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
@@ -428,21 +427,6 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int
     }
 }
 
-std::shared_ptr<bytes> BlockChainImp::getBlockRLPByHash(h256 const& _blockHash)
-{
-    auto block = getBlockRLP(_blockHash);
-    if (bool(block))
-    {
-        return block;
-    }
-    else
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
-            "[#getBlockRLPByHash]Can't find the block, return nullptr");
-        return nullptr;
-    }
-}
-
 bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild)
 {
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
@@ -471,19 +455,13 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         tb = mtb->openTable(SYS_CONFIG);
         if (tb)
         {
-            Entry::Ptr entry1 = std::make_shared<Entry>();
-            entry1->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_COUNT_LIMIT);
-            entry1->setField(
-                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txCountLimit));
-            entry1->setField(SYSTEM_CONFIG_ENABLENUM, "0");
-            tb->insert(SYSTEM_KEY_TX_COUNT_LIMIT, entry1);
+            // init for tx_count_limit
+            initSystemConfig(tb, SYSTEM_KEY_TX_COUNT_LIMIT,
+                boost::lexical_cast<std::string>(initParam.txCountLimit));
 
-            Entry::Ptr entry2 = std::make_shared<Entry>();
-            entry2->setField(SYSTEM_CONFIG_KEY, SYSTEM_KEY_TX_GAS_LIMIT);
-            entry2->setField(
-                SYSTEM_CONFIG_VALUE, boost::lexical_cast<std::string>(initParam.txGasLimit));
-            entry2->setField(SYSTEM_CONFIG_ENABLENUM, "0");
-            tb->insert(SYSTEM_KEY_TX_GAS_LIMIT, entry2);
+            // init for tx_gas_limit
+            initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
+                boost::lexical_cast<std::string>(initParam.txGasLimit));
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);
@@ -511,10 +489,10 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
+
         auto entry = std::make_shared<Entry>();
-        bytes out;
-        block->encode(out);
-        entry->setField(SYS_VALUE, toHexPrefixed(out));
+        writeBlockToField(*block, entry);
+
         tb->insert(block->blockHeader().hash().hex(), entry);
 
         tb = mtb->openTable(SYS_CURRENT_STATE, false);
@@ -576,6 +554,17 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
     }
     return true;
+}
+
+// init system config
+void BlockChainImp::initSystemConfig(
+    Table::Ptr _tb, std::string const& _key, std::string const& _value)
+{
+    Entry::Ptr entry = std::make_shared<Entry>();
+    entry->setField(SYSTEM_CONFIG_KEY, _key);
+    entry->setField(SYSTEM_CONFIG_VALUE, _value);
+    entry->setField(SYSTEM_CONFIG_ENABLENUM, "0");
+    _tb->insert(_key, entry);
 }
 
 dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string const& type)
@@ -661,18 +650,26 @@ dev::h512s BlockChainImp::observerList()
 
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)
 {
+    return getSystemConfigInfoByKey(key, num).first;
+}
+
+std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
+    std::string const& key, int64_t const& num)
+{
     // Different keys can go into the function
     // -1 means that the parameter is invalid and to obtain current block height
     // The param was reset at height number(), and takes effect in next block.
     // So we query the status of number() + 1.
     int64_t blockNumber = (-1 == num) ? number() + 1 : num;
 
+    BlockNumber enableNumber = -1;
+
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
     if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
     {
         // get value from cache
-        return it->second.value;
+        return std::make_pair(it->second.value, it->second.enableNumber);
     }
 
     std::string ret;
@@ -684,7 +681,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
-            return ret;
+            return std::make_pair(ret, -1);
         }
         auto values = tb->select(key, tb->newCondition());
         if (!values || values->size() != 1)
@@ -692,7 +689,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
                                   << LOG_KV("key", key);
             // FIXME: throw exception here, or fatal error
-            return ret;
+            return std::make_pair(ret, enableNumber);
         }
 
         auto value = values->get(0);
@@ -700,12 +697,15 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer");
             // FIXME: throw exception here, or fatal error
-            return ret;
+            return std::make_pair(ret, enableNumber);
         }
 
-        if (boost::lexical_cast<int>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= blockNumber)
+        if (boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <=
+            blockNumber)
         {
             ret = value->getField(SYSTEM_CONFIG_VALUE);
+            enableNumber =
+                boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM));
         }
     }
     catch (std::exception& e)
@@ -717,7 +717,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
     // update cache
     {
         UpgradeGuard ul(l);
-        SystemConfigRecord systemConfigRecord(ret, blockNumber);
+        SystemConfigRecord systemConfigRecord(ret, enableNumber, blockNumber);
         if (it != m_systemConfigRecord.end())
         {
             it->second = systemConfigRecord;
@@ -731,7 +731,7 @@ std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t 
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getSystemConfigByKey]Data in db") << LOG_KV("key", key)
                           << LOG_KV("value", ret);
-    return ret;
+    return std::make_pair(ret, enableNumber);
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
@@ -773,7 +773,7 @@ std::shared_ptr<bytes> BlockChainImp::getBlockRLPByNumber(int64_t _i)
     }
 }
 
-Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
+Transaction::Ptr BlockChainImp::getTxByHash(dev::h256 const& _txHash)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
@@ -789,20 +789,20 @@ Transaction BlockChainImp::getTxByHash(dev::h256 const& _txHash)
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             if (!pblock)
             {
-                return Transaction();
+                return std::make_shared<Transaction>();
             }
-            const std::vector<Transaction>& txs = pblock->transactions();
-            if (txs.size() > lexical_cast<uint>(txIndex))
+            auto txs = pblock->transactions();
+            if (txs->size() > lexical_cast<uint>(txIndex))
             {
-                return txs[lexical_cast<uint>(txIndex)];
+                return (*txs)[lexical_cast<uint>(txIndex)];
             }
         }
     }
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getTxByHash]Can't find tx, return empty tx");
-    return Transaction();
+    return std::make_shared<Transaction>();
 }
 
-LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
+LocalisedTransaction::Ptr BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHash)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
@@ -818,19 +818,20 @@ LocalisedTransaction BlockChainImp::getLocalisedTxByHash(dev::h256 const& _txHas
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblockhash));
             if (!pblock)
             {
-                return LocalisedTransaction(Transaction(), h256(0), -1, -1);
+                return std::make_shared<LocalisedTransaction>(Transaction(), h256(0), -1, -1);
             }
-            const std::vector<Transaction>& txs = pblock->transactions();
-            if (txs.size() > lexical_cast<uint>(txIndex))
+            auto txs = pblock->transactions();
+            if (txs->size() > lexical_cast<uint>(txIndex))
             {
-                return LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], pblock->headerHash(),
+                return std::make_shared<LocalisedTransaction>(
+                    *((*txs)[lexical_cast<uint>(txIndex)]), pblock->headerHash(),
                     lexical_cast<unsigned>(txIndex), pblock->blockHeader().number());
             }
         }
     }
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
         "[#getLocalisedTxByHash]Can't find tx, return empty localised tx");
-    return LocalisedTransaction(Transaction(), h256(0), -1, -1);
+    return std::make_shared<LocalisedTransaction>(Transaction(), h256(0), -1, -1);
 }
 
 
@@ -863,12 +864,19 @@ bool BlockChainImp::getBlockAndIndexByTxHash(const dev::h256& _txHash,
     return true;
 }
 
-std::pair<LocalisedTransaction,
+std::pair<LocalisedTransaction::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 {
-    std::lock_guard<std::mutex> lock(transactionWithProofMutex);
-    dev::eth::LocalisedTransaction tx;
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCKCHAIN_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
+    std::lock_guard<std::mutex> lock(m_transactionWithProofMutex);
+    auto tx = std::make_shared<dev::eth::LocalisedTransaction>();
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
@@ -880,32 +888,34 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 
     auto txIndex = blockInfoWithTxIndex.second;
     auto blockInfo = blockInfoWithTxIndex.first;
-    const std::vector<Transaction>& txs = blockInfo->transactions();
-    if (txs.size() <= lexical_cast<uint>(txIndex))
+    auto txs = blockInfo->transactions();
+    if (txs->size() <= lexical_cast<uint>(txIndex))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
         return std::make_pair(tx, merkleProof);
     }
-    tx = LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], blockInfo->headerHash(),
-        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
+    tx = std::make_shared<LocalisedTransaction>(*((*txs)[lexical_cast<uint>(txIndex)]),
+        blockInfo->headerHash(), lexical_cast<unsigned>(txIndex),
+        blockInfo->blockHeader().number());
 
-    std::map<std::string, std::vector<std::string>> parent2ChildList;
-    if (transactionWithProof.first.blockNumber() == tx.blockNumber())
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
+    if (m_transactionWithProof.first &&
+        m_transactionWithProof.first->blockNumber() == tx->blockNumber())
     {
-        parent2ChildList = transactionWithProof.second;
+        parent2ChildList = m_transactionWithProof.second;
     }
     else
     {
-        parent2ChildList = blockInfo->calTransactionRootV2_2_0(true, true);
-        transactionWithProof = std::make_pair(tx, parent2ChildList);
+        parent2ChildList = blockInfo->getTransactionProof();
+        m_transactionWithProof = std::make_pair(tx, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
     parseMerkleMap(parent2ChildList, child2Parent);
     // get merkle from  parent2ChildList and child2Parent
     bytes txData;
-    tx.encode(txData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(tx.transactionIndex(), txData);
-    this->getMerkleProof(hashWithIndex, parent2ChildList, child2Parent, merkleProof);
+    tx->encode(txData);
+    dev::h256 hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
@@ -926,10 +936,10 @@ dev::h256 BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& dat
 }
 
 void BlockChainImp::parseMerkleMap(
-    const std::map<std::string, std::vector<std::string>>& parent2ChildList,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
     std::map<std::string, std::string>& child2Parent)
 {
-    for (const auto& item : parent2ChildList)
+    for (const auto& item : *parent2ChildList)
     {
         for (const auto& child : item.second)
         {
@@ -974,7 +984,7 @@ void BlockChainImp::getMerkleProof(dev::h256 const& _txHash,
 }
 
 
-TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
+TransactionReceipt::Ptr BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _txHash)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
@@ -990,81 +1000,93 @@ TransactionReceipt BlockChainImp::getTransactionReceiptByHash(dev::h256 const& _
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(strblock));
             if (!pblock)
             {
-                return TransactionReceipt();
+                return std::make_shared<TransactionReceipt>();
             }
-            const TransactionReceipts& receipts = pblock->transactionReceipts();
-            if (receipts.size() > lexical_cast<uint>(txIndex))
+            auto receipts = pblock->transactionReceipts();
+            if (receipts->size() > lexical_cast<uint>(txIndex))
             {
-                return receipts[lexical_cast<uint>(txIndex)];
+                return (*receipts)[lexical_cast<uint>(txIndex)];
             }
         }
     }
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
         "[#getTransactionReceiptByHash]Can't find tx, return empty localised tx receipt");
-    return TransactionReceipt();
+    return std::make_shared<TransactionReceipt>();
 }
 
-std::pair<dev::eth::LocalisedTransactionReceipt,
+std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionReceiptByHashWithProof(
     dev::h256 const& _txHash, dev::eth::LocalisedTransaction& transaction)
 {
-    std::lock_guard<std::mutex> lock(receiptWithProofMutex);
+    std::lock_guard<std::mutex> lock(m_receiptWithProofMutex);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
 
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        BLOCKCHAIN_LOG(ERROR)
+            << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(
+            MethodNotSupport() << errinfo_comment("method not support in this version"));
+    }
+
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
                               << LOG_KV("_txHash", _txHash.hex());
-        return std::make_pair(
-            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                  executive::TransactionException::None),
             merkleProof);
     }
     auto txIndex = blockInfoWithTxIndex.second;
     auto blockInfo = blockInfoWithTxIndex.first;
 
-    const TransactionReceipts& receipts = blockInfo->transactionReceipts();
-    const Transactions& txs = blockInfo->transactions();
-    if ((receipts.size() <= lexical_cast<uint>(txIndex)) ||
-        (txs.size() <= lexical_cast<uint>(txIndex)))
+    auto receipts = blockInfo->transactionReceipts();
+    auto txs = blockInfo->transactions();
+    if ((receipts->size() <= lexical_cast<uint>(txIndex)) ||
+        (txs->size() <= lexical_cast<uint>(txIndex)))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
-        return std::make_pair(
-            dev::eth::LocalisedTransactionReceipt(executive::TransactionException::None),
+        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
+                                  executive::TransactionException::None),
             merkleProof);
     }
 
-    const auto& receipt = receipts[lexical_cast<uint>(txIndex)];
-    transaction = LocalisedTransaction(txs[lexical_cast<uint>(txIndex)], blockInfo->headerHash(),
-        lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
+    auto receipt = (*receipts)[lexical_cast<uint>(txIndex)];
+    transaction =
+        LocalisedTransaction(*((*txs)[lexical_cast<uint>(txIndex)]), blockInfo->headerHash(),
+            lexical_cast<unsigned>(txIndex), blockInfo->blockHeader().number());
 
-    LocalisedTransactionReceipt txReceipt(receipt, _txHash, blockInfo->headerHash(),
-        blockInfo->header().number(), transaction.from(), transaction.to(),
-        lexical_cast<uint>(txIndex), receipt.gasUsed(), receipt.contractAddress());
+    auto txReceipt = std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash,
+        blockInfo->headerHash(), blockInfo->header().number(), transaction.from(), transaction.to(),
+        lexical_cast<uint>(txIndex), receipt->gasUsed(), receipt->contractAddress());
 
-    std::map<std::string, std::vector<std::string>> parent2ChildList;
-    if (receiptWithProof.first.blockNumber() == txReceipt.blockNumber())
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList;
+    if (m_receiptWithProof.first &&
+        m_receiptWithProof.first->blockNumber() == txReceipt->blockNumber())
     {
-        parent2ChildList = receiptWithProof.second;
+        parent2ChildList = m_receiptWithProof.second;
     }
     else
     {
-        parent2ChildList = blockInfo->calReceiptRootV2_2_0(true, true);
-        receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
+        parent2ChildList = blockInfo->getReceiptProof();
+        m_receiptWithProof = std::make_pair(txReceipt, parent2ChildList);
     }
     std::map<std::string, std::string> child2Parent;
     parseMerkleMap(parent2ChildList, child2Parent);
     // get receipt hash with index
     bytes receiptData;
-    txReceipt.encode(receiptData);
-    dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt.transactionIndex(), receiptData);
+    txReceipt->encode(receiptData);
+    dev::h256 hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
-    this->getMerkleProof(hashWithIndex, parent2ChildList, child2Parent, merkleProof);
-    return std::make_pair(std::move(txReceipt), std::move(merkleProof));
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
+    return std::make_pair(txReceipt, merkleProof);
 }
 
-LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256 const& _txHash)
+LocalisedTransactionReceipt::Ptr BlockChainImp::getLocalisedTxReceiptByHash(
+    dev::h256 const& _txHash)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (tb)
@@ -1079,25 +1101,25 @@ LocalisedTransactionReceipt BlockChainImp::getLocalisedTxReceiptByHash(dev::h256
             std::shared_ptr<Block> pblock = getBlockByNumber(lexical_cast<int64_t>(blockNum));
             if (!pblock)
             {
-                return LocalisedTransactionReceipt(
+                return std::make_shared<LocalisedTransactionReceipt>(
                     TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
             }
-            const Transactions& txs = pblock->transactions();
-            const TransactionReceipts& receipts = pblock->transactionReceipts();
-            if (receipts.size() > txIndex && txs.size() > txIndex)
+            auto txs = pblock->transactions();
+            auto receipts = pblock->transactionReceipts();
+            if (receipts->size() > txIndex && txs->size() > txIndex)
             {
-                auto& tx = txs[txIndex];
-                auto& receipt = receipts[txIndex];
+                auto tx = (*txs)[txIndex];
+                auto receipt = (*receipts)[txIndex];
 
-                return LocalisedTransactionReceipt(receipt, _txHash, pblock->headerHash(),
-                    pblock->header().number(), tx.from(), tx.to(), txIndex, receipt.gasUsed(),
-                    receipt.contractAddress());
+                return std::make_shared<LocalisedTransactionReceipt>(*receipt, _txHash,
+                    pblock->headerHash(), pblock->header().number(), tx->from(), tx->to(), txIndex,
+                    receipt->gasUsed(), receipt->contractAddress());
             }
         }
     }
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC(
         "[#getLocalisedTxReceiptByHash]Can't find tx, return empty localised tx receipt");
-    return LocalisedTransactionReceipt(
+    return std::make_shared<LocalisedTransactionReceipt>(
         TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
 }
 
@@ -1127,7 +1149,7 @@ void BlockChainImp::writeTotalTransactionCount(
         {
             auto entry = entries->get(0);
             auto currentCount = lexical_cast<int64_t>(entry->getField(SYS_VALUE));
-            currentCount += block.transactions().size();
+            currentCount += block.transactions()->size();
 
             auto updateEntry = tb->newEntry();
             updateEntry->setField(SYS_VALUE, lexical_cast<std::string>(currentCount));
@@ -1136,14 +1158,14 @@ void BlockChainImp::writeTotalTransactionCount(
         else
         {
             auto entry = tb->newEntry();
-            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions().size()));
+            entry->setField(SYS_VALUE, lexical_cast<std::string>(block.transactions()->size()));
             tb->insert(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry);
         }
-        const TransactionReceipts& receipts = block.transactionReceipts();
+        auto receipts = block.transactionReceipts();
         int32_t failedTransactions = 0;
-        for (auto& receipt : receipts)
+        for (auto& receipt : *receipts)
         {
-            if (receipt.status() != TransactionException::None)
+            if (receipt->status() != TransactionException::None)
             {
                 ++failedTransactions;
             }
@@ -1182,13 +1204,13 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
     if (tb && tb_nonces)
     {
-        const std::vector<Transaction>& txs = block.transactions();
-        std::vector<dev::eth::NonceKeyType> nonce_vector(txs.size());
+        auto txs = block.transactions();
+        std::vector<dev::eth::NonceKeyType> nonce_vector(txs->size());
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
         tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txs.size()), [&](const tbb::blocked_range<size_t>& _r) {
+            tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
                 for (size_t i = _r.begin(); i != _r.end(); ++i)
                 {
                     Entry::Ptr entry = std::make_shared<Entry>();
@@ -1197,9 +1219,9 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                     entry->setField("index", lexical_cast<std::string>(i));
                     entry->setForce(true);
 
-                    tb->insert(txs[i].sha3().hex(), entry,
+                    tb->insert((*txs)[i]->sha3().hex(), entry,
                         std::make_shared<dev::storage::AccessOptions>(), false);
-                    nonce_vector[i] = txs[i].nonce();
+                    nonce_vector[i] = (*txs)[i]->nonce();
                 }
             });
 
@@ -1212,7 +1234,12 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
         record_time = utcTime();
 
         Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
-        entry_tb2nonces->setField(SYS_VALUE, toHexPrefixed(rs.out()));
+        // store nonce directly >= v2.2.0
+        // store the hex string < 2.2.0
+        std::shared_ptr<bytes> nonceData = std::make_shared<bytes>();
+        rs.swapOut(*nonceData);
+        writeBytesToField(nonceData, entry_tb2nonces, SYS_VALUE);
+
         entry_tb2nonces->setForce(true);
         tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
         auto insertNonceVector_time_cost = utcTime() - record_time;
@@ -1253,9 +1280,8 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
     if (tb)
     {
         Entry::Ptr entry = std::make_shared<Entry>();
-        bytes out;
-        block.encode(out);
-        entry->setField(SYS_VALUE, toHexPrefixed(out));
+        // use binary block data since v2.2.0, use toHex before v2.2.0
+        writeBlockToField(block, entry);
         entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
     }
@@ -1284,22 +1310,23 @@ bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
     return true;
 }
 
-CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveContext> context)
+CommitResult BlockChainImp::commitBlock(
+    std::shared_ptr<Block> block, std::shared_ptr<ExecutiveContext> context)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    if (!isBlockShouldCommit(block.blockHeader().number()))
+    if (!isBlockShouldCommit(block->blockHeader().number()))
     {
         return CommitResult::ERROR_NUMBER;
     }
 
     h256 parentHash = numberHash(number());
-    if (block.blockHeader().parentHash() != numberHash(number()))
+    if (block->blockHeader().parentHash() != numberHash(number()))
     {
         BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
                                        "[#commitBlock]Commit fail due to incorrect parent hash")
                                 << LOG_KV("needParentHash", parentHash)
-                                << LOG_KV("committedParentHash", block.blockHeader().parentHash());
+                                << LOG_KV("committedParentHash", block->blockHeader().parentHash());
         return CommitResult::ERROR_PARENT_HASH;
     }
 
@@ -1309,47 +1336,47 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
         record_time = utcTime();
         {
             std::lock_guard<std::mutex> l(commitMutex);
-            if (!isBlockShouldCommit(block.blockHeader().number()))
+            if (!isBlockShouldCommit(block->blockHeader().number()))
             {
                 return CommitResult::ERROR_PARENT_HASH;
             }
             auto write_record_time = utcTime();
             // writeBlockInfo(block, context);
-            writeHash2Block(block, context);
+            writeHash2Block(*block, context);
             auto writeHash2Block_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeNumber2Hash(block, context);
+            writeNumber2Hash(*block, context);
             auto writeNumber2Hash_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeNumber(block, context);
+            writeNumber(*block, context);
             auto writeNumber_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeTotalTransactionCount(block, context);
+            writeTotalTransactionCount(*block, context);
             auto writeTotalTransactionCount_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
 
-            writeTxToBlock(block, context);
+            writeTxToBlock(*block, context);
             auto writeTxToBlock_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             try
             {
-                context->dbCommit(block);
+                context->dbCommit(*block);
             }
             catch (std::exception& e)
             {
                 BLOCKCHAIN_LOG(ERROR)
                     << LOG_DESC("Commit Block failed")
-                    << LOG_KV("number", block.blockHeader().number()) << LOG_KV("what", e.what());
+                    << LOG_KV("number", block->blockHeader().number()) << LOG_KV("what", e.what());
                 return CommitResult::ERROR_COMMITTING;
             }
             auto dbCommit_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             {
                 WriteGuard ll(m_blockNumberMutex);
-                m_blockNumber = block.blockHeader().number();
+                m_blockNumber = block->blockHeader().number();
             }
             auto updateBlockNumber_time_cost = utcTime() - write_record_time;
 
@@ -1401,4 +1428,70 @@ CommitResult BlockChainImp::commitBlock(Block& block, std::shared_ptr<ExecutiveC
             OpenSysTableFailed() << errinfo_comment(" write block to storage failed."));
     }
     return CommitResult::OK;
+}
+
+// decode the block from the block data fetched from system table
+std::shared_ptr<Block> BlockChainImp::decodeBlock(dev::storage::Entry::ConstPtr _entry)
+{
+    std::shared_ptr<Block> block = nullptr;
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
+        block = std::make_shared<Block>(bytesBlock, CheckTransaction::None);
+    }
+    else
+    {
+        // < v2.2.0 or use mysql, external
+        auto strBlock = _entry->getField(SYS_VALUE);
+        block = std::make_shared<Block>(fromHex(strBlock.c_str()), CheckTransaction::None);
+    }
+
+    return block;
+}
+
+// get data from the system table
+std::shared_ptr<bytes> BlockChainImp::getDataBytes(
+    dev::storage::Entry::ConstPtr _entry, std::string const& _fieldName)
+{
+    std::shared_ptr<bytes> dataRlp = nullptr;
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        auto dataBytes = _entry->getFieldConst(_fieldName);
+        dataRlp = std::make_shared<bytes>(dataBytes.begin(), dataBytes.end());
+    }
+    else
+    {
+        // < v2.2.0 or use mysql, external
+        auto dataStr = _entry->getField(_fieldName);
+        dataRlp = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+    }
+
+    return dataRlp;
+}
+
+// write block data into the system table
+void BlockChainImp::writeBlockToField(
+    dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry)
+{
+    std::shared_ptr<bytes> out = std::make_shared<bytes>();
+    _block.encode(*out);
+    writeBytesToField(out, _entry, SYS_VALUE);
+}
+
+// write bytes to the SYS_VALUE field
+void BlockChainImp::writeBytesToField(std::shared_ptr<dev::bytes> _data,
+    dev::storage::Entry::Ptr _entry, std::string const& _fieldName)
+{
+    // >= v2.2.0
+    if (!m_enableHexBlock)
+    {
+        _entry->setField(_fieldName, _data->data(), _data->size());
+    }
+    // < v2.2.0
+    else
+    {
+        _entry->setField(_fieldName, toHex(*_data));
+    }
 }

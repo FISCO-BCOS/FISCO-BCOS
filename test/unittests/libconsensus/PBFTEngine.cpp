@@ -591,12 +591,12 @@ BOOST_AUTO_TEST_CASE(testShouldSeal)
     /// the leader calls notifySealing
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getLeader().second);
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
-    fake_pbft.consensus()->notifySealing(block.m_block);
+    fake_pbft.consensus()->notifySealing(*block.m_block);
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == false);
 
     /// the nextLeader calls notifySealing
     fake_pbft.consensus()->setNodeIdx(fake_pbft.consensus()->getNextLeader());
-    fake_pbft.consensus()->notifySealing(block.m_block);
+    fake_pbft.consensus()->notifySealing(*block.m_block);
     BOOST_CHECK(fake_pbft.consensus()->notifyNextLeaderSeal() == true);
     ///====== test notifySealing end ======
 
@@ -732,17 +732,17 @@ BOOST_AUTO_TEST_CASE(testCheckBlock)
 
     /// fake sealerList: check sealerList && sealer passed && sign
     FakeBlock block(12, KeyPair::create().secret(), 1);
-    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
-    fake_pbft.consensus()->setSealerList(block.m_block.blockHeader().sealerList());
-    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == true);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(*block.m_block) == false);
+    fake_pbft.consensus()->setSealerList(block.m_block->blockHeader().sealerList());
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(*block.m_block) == true);
 
     /// block with too-many transactions
     fake_pbft.consensus()->setMaxBlockTransactions(11);
-    BOOST_CHECK(fake_pbft.consensus()->checkBlock(block.m_block) == false);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(*block.m_block) == false);
 
     /// block with not-enough sealer
     FakeBlock invalid_block(7, KeyPair::create().secret(), 1);
-    BOOST_CHECK(fake_pbft.consensus()->checkBlock(invalid_block.m_block) == false);
+    BOOST_CHECK(fake_pbft.consensus()->checkBlock(*invalid_block.m_block) == false);
 }
 
 /// test handleMsg

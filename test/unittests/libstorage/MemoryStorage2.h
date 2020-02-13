@@ -37,16 +37,17 @@ public:
 
     virtual ~MemoryStorage2(){};
 
-    Entries::Ptr select(int64_t num, TableInfo::Ptr tableInfo, const std::string& key,
+    Entries::Ptr select(int64_t, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
-        (void)num;
-
+        (void)condition;
+        // TODO: complete select
+        auto tableKey = tableInfo->name + key;
         tbb::mutex::scoped_lock lock(m_mutex);
 
-        auto it = tableData.find(tableInfo->name);
+        auto it = key2Entries.find(tableKey);
 
-        if (it != tableData.end())
+        if (it != key2Entries.end())
         {
             return it->second;
         }
@@ -55,17 +56,55 @@ public:
     }
     size_t commit(int64_t, const std::vector<TableData::Ptr>& datas) override
     {
-        for (auto it : datas)
+        for (auto tableData : datas)
         {
+            processEntries(tableData->info->name, tableData->info->key, tableData->dirtyEntries);
+            processEntries(tableData->info->name, tableData->info->key, tableData->newEntries);
         }
         return datas.size();
     }
     bool onlyCommitDirty() override { return false; }
+    void processEntries(const std::string& tableName, const std::string& key, Entries::Ptr entries)
+    {
+        for (size_t i = 0; i < entries->size(); ++i)
+        {
+            auto entry = entries->get(i);
+            auto tableKey = tableName + entry->getField(key);
+            tbb::mutex::scoped_lock lock(m_mutex);
+            auto it = key2Entries.find(tableKey);
+            if (it == key2Entries.end())
+            {
+                key2Entries[tableKey] = std::make_shared<Entries>();
+            }
+            key2Entries[tableKey]->addEntry(entry);
+        }
+    }
 
 private:
-    std::map<std::string, TableData::Ptr> tableData;
     std::map<std::string, Entries::Ptr> key2Entries;
     tbb::mutex m_mutex;
+};
+
+class MemoryStorageFactory : public StorageFactory
+{
+public:
+    MemoryStorageFactory() {}
+    virtual ~MemoryStorageFactory() {}
+    Storage::Ptr getStorage(const std::string& _dbName, bool = false) override
+    {
+        RecursiveGuard l(x_cache);
+        auto it = m_cache.find(_dbName);
+        if (it == m_cache.end())
+        {
+            m_cache[_dbName] = std::make_shared<MemoryStorage2>();
+            return m_cache[_dbName];
+        }
+        return it->second;
+    }
+
+private:
+    std::recursive_mutex x_cache;
+    std::map<std::string, Storage::Ptr> m_cache;
 };
 }  // namespace storage
 

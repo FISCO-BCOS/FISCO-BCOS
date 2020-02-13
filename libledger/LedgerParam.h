@@ -39,7 +39,6 @@ namespace ledger
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
-#define MAX_BLOCK_PER_PROCESS (3)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
@@ -60,6 +59,9 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+    // enable optimize ttl or not
+    bool enableTTLOptimize;
+    bool enablePrepareWithTxsHash;
 };
 
 struct AMDBParam
@@ -74,6 +76,14 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    // enable send block status by tree or not
+    bool enableSendBlockStatusByTree = true;
+    // default block status gossip interval is 1s
+    int64_t gossipInterval = 1000;
+    // default gossip peers is 3
+    int64_t gossipPeers = 3;
+    // default syncTreeWidth is 3
+    int64_t syncTreeWidth = 3;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam
@@ -99,7 +109,7 @@ struct StorageParam
     size_t timeout;
     int maxRetry;
     // MB
-    int maxCapacity;
+    int64_t maxCapacity;
 
     int64_t scrollThreshold = 2000;
     // for zdb storage
@@ -173,6 +183,9 @@ private:
     TxParam m_txParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
     dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+
+private:
+    std::string uriEncode(const std::string& keyWord);
 };
 }  // namespace ledger
 }  // namespace dev

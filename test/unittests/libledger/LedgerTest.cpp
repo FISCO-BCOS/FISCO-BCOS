@@ -24,6 +24,7 @@
  * @date 2018-10-24
  */
 #include <fisco-bcos/Fake.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <test/tools/libutils/Common.h>
@@ -136,6 +137,9 @@ BOOST_FIXTURE_TEST_SUITE(LedgerTest, TestOutputHelperFixture)
 /// test init ini config and genesis config
 BOOST_AUTO_TEST_CASE(testGensisConfig)
 {
+    // remove the data directory to trigger rebuild the genesis block
+    boost::system::error_code err;
+    boost::filesystem::remove_all("./data", err);
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     dev::GROUP_ID groupId = 10;
@@ -237,6 +241,8 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
 /// test initLedgers of LedgerManager
 BOOST_AUTO_TEST_CASE(testInitLedger)
 {
+    boost::system::error_code err;
+    boost::filesystem::remove_all("./data", err);
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
@@ -254,14 +260,16 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     /// check BlockChain
     std::shared_ptr<BlockChainInterface> m_blockChain = ledgerManager->blockChain(groupId);
     std::shared_ptr<Block> block = m_blockChain->getBlockByNumber(m_blockChain->number());
-    Block populateBlock;
-    populateBlock.resetCurrentBlock(block->header());
+    std::shared_ptr<Block> populateBlock = std::make_shared<Block>();
+    populateBlock->resetCurrentBlock(block->header());
     m_blockChain->commitBlock(populateBlock, nullptr);
     BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
 {
+    boost::system::error_code err;
+    boost::filesystem::remove_all("./data", err);
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
@@ -277,6 +285,8 @@ BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
 
 BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
 {
+    boost::system::error_code err;
+    boost::filesystem::remove_all("./data", err);
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();

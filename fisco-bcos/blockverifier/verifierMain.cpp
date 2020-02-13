@@ -89,8 +89,8 @@ int main(int argc, char* argv[])
             header.setGasLimit(dev::u256(1024 * 1024 * 1024));
             header.setRoots(parentBlock->header().transactionsRoot(),
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
-            dev::eth::Block block;
-            block.setBlockHeader(header);
+            std::shared_ptr<dev::eth::Block> block = std::make_shared<dev::eth::Block>();
+            block->setBlockHeader(header);
             LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
                       << header;
 
@@ -307,7 +307,8 @@ int main(int argc, char* argv[])
                 "0000000000000000000000000000001ba08b0e2cd9c48032ecf68cca6eb951a8b09195d23950555a34"
                 "6f6cb9f5f91ea00ea02726ce5352276dbb7bc166dfe036a0ce67ea25848823284c845bf3cf5c6969c"
                 "f");
-            dev::eth::Transaction tx(ref(rlpBytes), dev::eth::CheckTransaction::Everything);
+            dev::eth::Transaction::Ptr tx = std::make_shared<dev::eth::Transaction>(
+                ref(rlpBytes), dev::eth::CheckTransaction::Everything);
             // dev::KeyPair key_pair(dev::Secret::random());
             // dev::Secret sec = key_pair.secret();
             // u256 maxBlockLimit = u256(1000);
@@ -315,22 +316,23 @@ int main(int argc, char* argv[])
             // tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
             // dev::Signature sig = sign(sec, tx.sha3(dev::eth::WithoutSignature));
             // tx.updateSignature(SignatureStruct(sig));
-            LOG(INFO) << "Tx " << tx;
+            LOG(INFO) << "Tx " << *tx;
 
-            dev::eth::Transaction tx2(ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
-            block.appendTransaction(tx);
+            dev::eth::Transaction::Ptr tx2 = std::make_shared<dev::eth::Transaction>(
+                ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
+            block->appendTransaction(tx);
 
-            block.appendTransaction(tx2);
-            LOG(INFO) << "Tx2 " << tx2;
+            block->appendTransaction(tx2);
+            LOG(INFO) << "Tx2 " << *tx2;
             dev::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
                 parentBlock->header().number(), parentBlock->header().stateRoot()};
-            auto context = blockVerifier->executeBlock(block, parentBlockInfo);
+            auto context = blockVerifier->executeBlock(*block, parentBlockInfo);
             blockChain->commitBlock(block, context);
-            dev::eth::TransactionReceipt receipt =
-                blockChain->getTransactionReceiptByHash(tx.sha3());
-            LOG(INFO) << "receipt " << receipt;
-            receipt = blockChain->getTransactionReceiptByHash(tx2.sha3());
-            LOG(INFO) << "receipt2 " << receipt;
+            dev::eth::TransactionReceipt::Ptr receipt =
+                blockChain->getTransactionReceiptByHash(tx->sha3());
+            LOG(INFO) << "receipt " << *receipt;
+            receipt = blockChain->getTransactionReceiptByHash(tx2->sha3());
+            LOG(INFO) << "receipt2 " << *receipt;
         }
     }
     else if (argc > 1 && std::string("verify") == argv[1])
