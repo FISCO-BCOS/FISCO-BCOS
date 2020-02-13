@@ -66,23 +66,6 @@ ContractStatusPrecompiled::ContractStatusPrecompiled()
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
 }
 
-bool ContractStatusPrecompiled::checkAddress(Address const& contractAddress)
-{
-    bool isValidAddress = true;
-    try
-    {
-        Address address(contractAddress);
-        (void)address;
-    }
-    catch (...)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractStatusPrecompiled")
-                               << LOG_DESC("address invalid") << LOG_KV("address", contractAddress);
-        isValidAddress = false;
-    }
-    return isValidAddress;
-}
-
 bool ContractStatusPrecompiled::checkPermission(
     ExecutiveContext::Ptr context, std::string const& tableName, Address const& origin)
 {
@@ -164,49 +147,42 @@ void ContractStatusPrecompiled::kill(
     Address contractAddress;
     abi.abiOut(data, contractAddress);
     int result = 0;
-    // check address valid
-    if (!checkAddress(contractAddress))
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_KV("kill contract", tableName);
+
+    ContractStatus status = getContractStatus(context, tableName);
+    if (ContractStatus::Killed == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_CONTRACT_KILLED;
+    }
+    else if (ContractStatus::Nonexistent == status)
+    {
+        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+    }
+    else if (checkPermission(context, tableName, origin))
+    {
+        Table::Ptr table = openTable(context, tableName);
+        if (table)
+        {
+            auto entry = table->newEntry();
+            entry->setField(storagestate::STORAGE_VALUE, "");
+            table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
+                std::make_shared<AccessOptions>(origin));
+            entry = table->newEntry();
+            entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
+            table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition());
+            entry = table->newEntry();
+            entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
+            table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition());
+        }
     }
     else
     {
-        std::string tableName = precompiled::getContractTableName(contractAddress);
+        result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
-                               << LOG_KV("kill contract", tableName);
-
-        ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
-        {
-            result = CODE_INVALID_CONTRACT_KILLED;
-        }
-        else if (ContractStatus::Nonexistent == status)
-        {
-            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-        }
-        else if (checkPermission(context, tableName, origin))
-        {
-            Table::Ptr table = openTable(context, tableName);
-            if (table)
-            {
-                auto entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, "");
-                table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
-                    std::make_shared<AccessOptions>(origin));
-                entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
-                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition());
-                entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
-                table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition());
-            }
-        }
-        else
-        {
-            result = storage::CODE_NO_AUTHORIZED;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
-        }
+                               << LOG_DESC("permission denied");
     }
 
     getErrorCodeOut(out, result);
@@ -249,40 +225,33 @@ void ContractStatusPrecompiled::freeze(
     Address contractAddress;
     abi.abiOut(data, contractAddress);
     int result = 0;
-    // check address valid and status(available)
-    if (!checkAddress(contractAddress))
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_KV("freeze contract", tableName);
+
+    ContractStatus status = getContractStatus(context, tableName);
+    if (ContractStatus::Killed == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_CONTRACT_KILLED;
+    }
+    else if (ContractStatus::Frozen == status)
+    {
+        result = CODE_INVALID_CONTRACT_FEOZEN;
+    }
+    else if (ContractStatus::Nonexistent == status)
+    {
+        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+    }
+    else if (checkPermission(context, tableName, origin))
+    {
+        result = updateFrozenStatus(context, tableName, STATUS_TRUE);
     }
     else
     {
-        std::string tableName = precompiled::getContractTableName(contractAddress);
+        result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
-                               << LOG_KV("freeze contract", tableName);
-
-        ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
-        {
-            result = CODE_INVALID_CONTRACT_KILLED;
-        }
-        else if (ContractStatus::Frozen == status)
-        {
-            result = CODE_INVALID_CONTRACT_FEOZEN;
-        }
-        else if (ContractStatus::Nonexistent == status)
-        {
-            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-        }
-        else if (checkPermission(context, tableName, origin))
-        {
-            result = updateFrozenStatus(context, tableName, STATUS_TRUE);
-        }
-        else
-        {
-            result = storage::CODE_NO_AUTHORIZED;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
-        }
+                               << LOG_DESC("permission denied");
     }
     getErrorCodeOut(out, result);
 }
@@ -295,39 +264,33 @@ void ContractStatusPrecompiled::unfreeze(
     abi.abiOut(data, contractAddress);
     int result = 0;
 
-    if (!checkAddress(contractAddress))
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_KV("unfreeze contract", tableName);
+
+    ContractStatus status = getContractStatus(context, tableName);
+    if (ContractStatus::Killed == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_CONTRACT_KILLED;
+    }
+    else if (ContractStatus::Available == status)
+    {
+        result = CODE_INVALID_CONTRACT_AVAILABLE;
+    }
+    else if (ContractStatus::Nonexistent == status)
+    {
+        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+    }
+    else if (checkPermission(context, tableName, origin))
+    {
+        result = updateFrozenStatus(context, tableName, STATUS_FALSE);
     }
     else
     {
-        std::string tableName = precompiled::getContractTableName(contractAddress);
+        result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
-                               << LOG_KV("unfreeze contract", tableName);
-
-        ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
-        {
-            result = CODE_INVALID_CONTRACT_KILLED;
-        }
-        else if (ContractStatus::Available == status)
-        {
-            result = CODE_INVALID_CONTRACT_AVAILABLE;
-        }
-        else if (ContractStatus::Nonexistent == status)
-        {
-            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-        }
-        else if (checkPermission(context, tableName, origin))
-        {
-            result = updateFrozenStatus(context, tableName, STATUS_FALSE);
-        }
-        else
-        {
-            result = storage::CODE_NO_AUTHORIZED;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("permission denied");
-        }
+                               << LOG_DESC("permission denied");
     }
     getErrorCodeOut(out, result);
 }

@@ -21,8 +21,7 @@
  * @date 20181212
  */
 
-#include "Common.h"
-#include "MemoryStorage.h"
+#include "../libstorage/MemoryStorage.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
@@ -90,7 +89,7 @@ BOOST_AUTO_TEST_CASE(insert)
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
-    // insert new item with same table name, but diffrent address
+    // insert new item with same table name, but different address
     addr = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b";
     in = abi.abiIn("insert(string,string)", tableName, addr);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
@@ -98,6 +97,19 @@ BOOST_AUTO_TEST_CASE(insert)
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 2u);
+}
+
+BOOST_AUTO_TEST_CASE(insert_overflow)
+{
+    // first insert
+    eth::ContractABI abi;
+    std::string tableName = "66666012345678901234567890123456789012345678901234567890123456789";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    s256 errCode;
+    abi.abiOut(&out, errCode);
+    BOOST_TEST(errCode == CODE_TABLE_NAME_OVERFLOW);
 }
 
 BOOST_AUTO_TEST_CASE(remove)

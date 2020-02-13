@@ -74,12 +74,24 @@ Entries::Ptr RocksDBStorage::select(
             {  // TODO: use tbb parallel_for
                 Entry::Ptr entry = make_shared<Entry>();
                 for (auto valueIt = it->begin(); valueIt != it->end(); ++valueIt)
-                {  // FIXME: ID_FIELD/NUM_FIELD/STATUS should not expose to user
-                    entry->setField(valueIt->first, valueIt->second);
+                {
+                    if (valueIt->first == ID_FIELD)
+                    {
+                        entry->setID(valueIt->second);
+                    }
+                    else if (valueIt->first == NUM_FIELD)
+                    {
+                        entry->setNum(valueIt->second);
+                    }
+                    else if (valueIt->first == STATUS)
+                    {
+                        entry->setStatus(valueIt->second);
+                    }
+                    else
+                    {
+                        entry->setField(valueIt->first, valueIt->second);
+                    }
                 }
-                entry->setID(it->at(ID_FIELD));
-                entry->setNum(it->at(NUM_FIELD));
-                entry->setStatus(it->at(STATUS));
 
                 if (entry->getStatus() == Entry::Status::NORMAL &&
                     (!condition || condition->process(entry)))

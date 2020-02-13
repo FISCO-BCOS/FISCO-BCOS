@@ -74,6 +74,7 @@ enum PrecompiledError : int
     CODE_INVALID_CONFIGURATION_VALUES = -51300,
 
     // CNSPrecompiled -51299 ~ -51200
+    CODE_VERSION_LENGTH_OVERFLOW = -51201,
     CODE_ADDRESS_AND_VERSION_EXIST = -51200,
 
     // ConsensusPrecompiled -51199 ~ -51100
@@ -81,6 +82,7 @@ enum PrecompiledError : int
     CODE_INVALID_NODEID = -51100,
 
     // PermissionPrecompiled -51099 ~ -51000
+    CODE_TABLE_NAME_OVERFLOW = -51002,
     CODE_TABLE_AND_ADDRESS_NOT_EXIST = -51001,
     CODE_TABLE_AND_ADDRESS_EXIST = -51000,
 
@@ -110,6 +112,7 @@ int checkLengthValidate(const std::string& field_value, int32_t max_length, int3
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
+const int CNS_VERSION_MAX_LENGTH = 128;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH = 64;

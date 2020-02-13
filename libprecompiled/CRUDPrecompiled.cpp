@@ -28,6 +28,7 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -37,6 +38,7 @@ const char* const CRUD_METHOD_INSERT_STR = "insert(string,string,string,string)"
 const char* const CRUD_METHOD_REMOVE_STR = "remove(string,string,string,string)";
 const char* const CRUD_METHOD_UPDATE_STR = "update(string,string,string,string,string)";
 const char* const CRUD_METHOD_SELECT_STR = "select(string,string,string,string)";
+const char* const CRUD_METHOD_DESC_STR = "desc(string)";
 
 CRUDPrecompiled::CRUDPrecompiled()
 {
@@ -44,6 +46,7 @@ CRUDPrecompiled::CRUDPrecompiled()
     name2Selector[CRUD_METHOD_REMOVE_STR] = getFuncSelector(CRUD_METHOD_REMOVE_STR);
     name2Selector[CRUD_METHOD_UPDATE_STR] = getFuncSelector(CRUD_METHOD_UPDATE_STR);
     name2Selector[CRUD_METHOD_SELECT_STR] = getFuncSelector(CRUD_METHOD_SELECT_STR);
+    name2Selector[CRUD_METHOD_DESC_STR] = getFuncSelector(CRUD_METHOD_DESC_STR);
 }
 
 std::string CRUDPrecompiled::toString()
@@ -63,7 +66,28 @@ bytes CRUDPrecompiled::call(
     dev::eth::ContractABI abi;
     bytes out;
 
-    if (func == name2Selector[CRUD_METHOD_INSERT_STR])
+    if (func == name2Selector[CRUD_METHOD_DESC_STR])
+    {  // desc(string)
+        std::string tableName;
+        abi.abiOut(data, tableName);
+        tableName = precompiled::getTableName(tableName);
+        Table::Ptr table = openTable(context, storage::SYS_TABLES);
+        auto entries = table->select(tableName, table->newCondition());
+        string keyField, valueFiled;
+        if (entries->size() != 0)
+        {
+            auto entry = entries->get(0);
+            keyField = entry->getField("key_field");
+            valueFiled = entry->getField("value_field");
+        }
+        else
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table not exist")
+                                   << LOG_KV("tableName", tableName);
+        }
+        return abi.abiIn("", keyField, valueFiled);
+    }
+    else if (func == name2Selector[CRUD_METHOD_INSERT_STR])
     {  // insert(string tableName, string key, string entry, string optional)
         std::string tableName, key, entryStr, optional;
         abi.abiOut(data, tableName, key, entryStr, optional);
