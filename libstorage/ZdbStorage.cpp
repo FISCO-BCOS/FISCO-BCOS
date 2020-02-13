@@ -139,7 +139,8 @@ void ZdbStorage::createSysTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
-void ZdbStorage::createSysConsensus()
+
+void ZdbStorage::createCnsTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CNS << "` (\n";
@@ -222,7 +223,7 @@ void ZdbStorage::createHash2BlockTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
-void ZdbStorage::createCnsTables()
+void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONSENSUS << "` (\n";

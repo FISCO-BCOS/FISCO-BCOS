@@ -91,6 +91,13 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
             result = CODE_TABLE_AND_ADDRESS_EXIST;
         }
+        else if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
+                << LOG_KV("tableName", tableName);
+            result = CODE_TABLE_NAME_OVERFLOW;
+        }
         else if (!isValidAddress)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")

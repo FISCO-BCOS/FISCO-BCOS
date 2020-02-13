@@ -1,8 +1,7 @@
 pragma solidity ^0.4.24;
 
-contract ConsensusPrecompiled 
-{
-    function add(string) public constant returns();
-    function remove(string) public returns();
+contract ConsensusPrecompiled {
+    function addSealer(string) public returns (int256);
+    function addObserver(string) public returns (int256);
+    function remove(string) public returns (int256);
 }
-
