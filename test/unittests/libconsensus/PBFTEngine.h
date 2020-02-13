@@ -255,6 +255,12 @@ static void checkBackupMsg(FakeConsensus<FakePBFTEngine>& fake_pbft, std::string
         BOOST_CHECK(data.empty() == true);
     else
     {
+        // wait for pbftMsg commit to the backupDB
+        while (data.empty())
+        {
+            data = fake_pbft.consensus()->backupDB()->lookup(key);
+            sleep(1);
+        }
         BOOST_CHECK(data == toHex(msgData));
         /// remove the key
         std::string empty = "";

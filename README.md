@@ -50,7 +50,7 @@ Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FIS
 
 ## Code contribution
 
-- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/hEn2rxqnqp0dF6OKH6Ua-A) and [coding code style guide](CODING_STYLE.md).
+- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ) and [coding code style guide](CODING_STYLE.md).
 - If this project is useful to you, please star us on GitHub project page!
 - If you find any security vulnerabilities, please report [them](https://security.webank.com) here!
 
