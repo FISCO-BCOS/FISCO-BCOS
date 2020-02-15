@@ -54,7 +54,7 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
 }
 
 evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr,
-    evmc_uint256be const* _key, evmc_uint256be const* _value) noexcept
+    evmc_uint256be const* _key, evmc_uint256be const* _value)
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
