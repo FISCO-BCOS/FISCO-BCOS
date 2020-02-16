@@ -217,7 +217,11 @@ void ExtVM::setStore(u256 const& _n, u256 const& _v)
 {
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
+    {
+        LOG(ERROR) << "setStore PermissionDenied" << LOG_KV("origin", origin())
+                   << LOG_KV("address", myAddress());
         BOOST_THROW_EXCEPTION(PermissionDenied());
+    }
 
     m_s->setStorage(myAddress(), _n, _v);
 }
@@ -271,5 +275,4 @@ void ExtVM::suicide(Address const& _a)
 h256 ExtVM::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
-    ;
 }

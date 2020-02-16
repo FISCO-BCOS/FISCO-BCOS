@@ -53,7 +53,7 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
-    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
     -C <Chain id>                       Default 1. Can set uint.
@@ -536,7 +536,7 @@ function generate_group_ini()
     ; must be no smaller than 5ms and no larger than 1000ms
     ;max_request_missedTxs_waitTime=100
 [storage]
-    ; storage db type, rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
+    ; storage db type, rocksdb / mysql / scalable, rocksdb is recommended
     type=${storage_type}
     ; set true to turn on binary log
     binary_log=${binary_log}
@@ -547,7 +547,7 @@ function generate_group_ini()
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10
-    ; only for external, external will be deprecated in v2.3.0
+    ; only for external, deprecated in v2.3.0
     max_retry=60
     topic=DB
     ; only for mysql
