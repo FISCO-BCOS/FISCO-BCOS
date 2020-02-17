@@ -496,11 +496,16 @@ generate_group_genesis()
     local sealer_size=$4
     cat << EOF > ${output} 
 [consensus]
-    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    ; consensus algorithm type
+    ; now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
+    ; and rotating_pbft(consensus_type=rotating_pbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
+    ; rotating_pbft related configuration
+    ; the sealers num of each consensus round
     epoch_size=${sealer_size}
+    ; the number of generated blocks before rotating the sealers
     rotating_interval=1000
     ; the node id of consensusers
     ${node_list}
