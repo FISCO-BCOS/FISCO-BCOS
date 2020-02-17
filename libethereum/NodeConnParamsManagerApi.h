@@ -126,7 +126,6 @@ namespace dev
 			virtual bool checkCertOut(const std::string& serialNumber) { return false;};
 			virtual void connNode(const ConnectParams &param) { };
 
-			//--------------------------webank-------------------------
 			virtual void setNetworkFace(NetworkFace *net) { m_pnetwork = net; }
 			virtual void setEthereumHost(EthereumHost *host) { m_phost = host; }
 			virtual void setSysContractApi(std::shared_ptr<SystemContractApi> sysContractApi)  { m_pContractApi = sysContractApi; }

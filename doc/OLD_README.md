@@ -103,7 +103,7 @@ FISCO BCOS常见问题，可参见[常见问题](https://github.com/FISCO-BCOS/W
 
 ![](./FISCO-BCOS.jpeg)
 
-诚邀广大安全专家共同关注区块链安全。如果有安全风险，欢迎各位踊跃提交漏洞至[微众SRC](https://security.webank.com)。
+诚邀广大安全专家共同关注区块链安全。如果有安全风险，欢迎各位踊跃提交漏洞。
 
 
 
