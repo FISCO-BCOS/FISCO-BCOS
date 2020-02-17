@@ -66,7 +66,6 @@ FISCO BCOS已落地应用达数十个，场景覆盖政务、金融、公益、�
 
 - 我们欢迎并非常感谢您的贡献，请参阅[代码贡献流程](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ)和[代码规范](../CODING_STYLE.md)。
 - 如项目对您有帮助，欢迎star支持！
-- 如果发现代码存在安全漏洞，请在[这里](https://security.webank.com)上报。
 
 ## 加入我们的社区
 
