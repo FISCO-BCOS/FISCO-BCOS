@@ -67,6 +67,7 @@ public:
         createPBFTMsgFactory();
         m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
+        m_reqCache->setCheckSignCallback(boost::bind(&FakePBFTEngine::checkSign, this, _1));
     }
     void updateConsensusNodeList() override {}
     void fakeUpdateConsensusNodeList() { return PBFTEngine::updateConsensusNodeList(); }

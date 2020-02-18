@@ -47,7 +47,10 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
         SignReq copiedReq = signReq;
         copiedReq.height = fake_pbft.consensus()->consensusBlockNumber() + 1;
         FakeValidNodeNum(fake_pbft, 4);
-        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::INVALID);
+        BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
+        BOOST_CHECK(
+            fake_pbft.consensus()->reqCache()->getSigCacheSize(copiedReq.block_hash, 1) == 0);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
         copiedReq.sig = dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash);
@@ -823,18 +826,21 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
         std::chrono::steady_clock::now();
     /// can't trigger collectGarbage
     fake_pbft.consensus()->collectGarbage();
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq->block_hash) ==
-                fake_pbft.consensus()->minValidNodes());
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq->block_hash) ==
-                fake_pbft.consensus()->minValidNodes());
+    auto minValidNodesSize = fake_pbft.consensus()->minValidNodes();
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(
+                    prepareReq->block_hash, minValidNodesSize) == minValidNodesSize);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(
+                    prepareReq->block_hash, minValidNodesSize) == minValidNodesSize);
 
     /// can trigger collectGarbage
     fake_pbft.consensus()->mutableTimeManager().m_lastGarbageCollection =
         std::chrono::steady_clock::now() -
         std::chrono::seconds(fake_pbft.consensus()->timeManager().CollectInterval + 10);
     fake_pbft.consensus()->collectGarbage();
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(highest.hash()) == 0);
-    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(highest.hash()) == 0);
+    BOOST_CHECK(
+        fake_pbft.consensus()->reqCache()->getSigCacheSize(highest.hash(), minValidNodesSize) == 0);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(
+                    highest.hash(), minValidNodesSize) == 0);
 }
 /// test handle future block
 BOOST_AUTO_TEST_CASE(testHandleFutureBlock)

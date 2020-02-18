@@ -170,8 +170,8 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
             fake_pbft.consensus()->reqCache()->mutableSignCache(), highest, invalid_hash,
             invalidHeightNum, invalidHash, validNum, false);
         fake_pbft.consensus()->reqCache()->collectGarbage(highest);
-        BOOST_CHECK(
-            fake_pbft.consensus()->reqCache()->getSigCacheSize(prepareReq->block_hash) == validNum);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->getSigCacheSize(
+                        prepareReq->block_hash, validNum) == validNum);
     }
     /// fake commitReq
     if (type == 1 || type == 2)
@@ -180,8 +180,8 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
             fake_pbft.consensus()->reqCache()->mutableCommitCache(), highest, invalid_hash,
             invalidHeightNum, invalidHash, validNum, false);
         fake_pbft.consensus()->reqCache()->collectGarbage(highest);
-        BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(prepareReq->block_hash) ==
-                    validNum);
+        BOOST_CHECK(fake_pbft.consensus()->reqCache()->getCommitCacheSize(
+                        prepareReq->block_hash, validNum) == validNum);
     }
 }
 

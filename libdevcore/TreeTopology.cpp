@@ -244,6 +244,8 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodesByNodeID(
     bool const& _isTheStartNode)
 {
     auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
+    TREE_LOG(DEBUG) << LOG_DESC("selectNodesByNodeID") << LOG_KV("consIndex", consIndex)
+                    << LOG_KV("nodeID", _nodeID.abridged());
     return selectNodes(_peers, consIndex, _isTheStartNode);
 }
 

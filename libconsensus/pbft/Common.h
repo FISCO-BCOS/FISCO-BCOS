@@ -214,6 +214,8 @@ struct PBFTMsg
     Signature sig = Signature();
     /// signature to the hash of other fields except block_hash, sig and sig2
     Signature sig2 = Signature();
+    bool isFuture = false;
+    bool signChecked = true;
 
     PBFTMsg() = default;
     PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
