@@ -432,6 +432,7 @@ protected:
      *         2. the sealer of the request shouldn't be the node-self
      *         3. the view of the request must be equal to the view of the prepare cache
      *         4. the signature of the request must be valid
+     *         5. no need to checkSign for the future-prepare-req
      * @tparam T: the type of the request
      * @param req: the request should be checked
      * @param oss: information to debug
@@ -441,7 +442,8 @@ protected:
      *  3. CheckResult::VALID: the request is valid
      */
     template <class T>
-    inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
+    inline CheckResult checkReq(
+        T const& req, std::ostringstream& oss, bool const& _needCheckSignForFutureReq) const
     {
         if (isSyncingHigherBlock(req))
         {
@@ -462,8 +464,16 @@ protected:
                                   << LOG_KV("INFO", oss.str());
             /// is future ?
             bool is_future = isFutureBlock(req);
-            if (is_future && checkSign(req))
+            if (is_future)
             {
+                if (_needCheckSignForFutureReq && !checkSign(req))
+                {
+                    PBFTENGINE_LOG(TRACE)
+                        << LOG_DESC("check sign failed for the futureReq")
+                        << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
+                        << LOG_KV("INFO", oss.str());
+                    return CheckResult::INVALID;
+                }
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("checkReq: Recv future request")
                     << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())

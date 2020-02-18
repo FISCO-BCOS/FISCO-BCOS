@@ -951,7 +951,10 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
         << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
     /// check the prepare request is valid or not
-    auto valid_ret = isValidPrepare(*prepareReq, oss);
+    // since the sealer list of the future block maybe different from the current block, and
+    // the sign will be checked again when handle the future prepareReq, so remove checkSign here
+    // in case of check the valid signature as invalid
+    auto valid_ret = isValidPrepare(*prepareReq, oss, false);
     if (valid_ret == CheckResult::INVALID)
     {
         clearPreRawPrepare();
