@@ -496,8 +496,7 @@ generate_group_genesis()
     local sealer_size=$4
     cat << EOF > ${output} 
 [consensus]
-    ; consensus algorithm type
-    ; now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
+    ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
     ; and rotating_pbft(consensus_type=rotating_pbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
@@ -564,7 +563,7 @@ function generate_group_ini()
 [tx_pool]
     limit=150000
 [sync]
-    ; max memory size used for block sync, must be no smaller than 32, MB
+    ; max memory size used for block sync, must >= 32MB
     max_block_sync_memory_size=512
     idle_wait_ms=200
     ; send block status by tree-topology, only supported when use pbft
@@ -1114,7 +1113,8 @@ mkdir -p "${output_dir}"
 if [ -z "${compatibility_version}" ];then
     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 fi
-# in case network is broken
+
+# use default version as compatibility_version
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${default_version}"
 fi

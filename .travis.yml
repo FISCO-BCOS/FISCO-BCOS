@@ -74,13 +74,11 @@ addons:
       - ccache
       # - ninja-build
       - libomp-dev
-      - libgmp3-dev
       - openssl
   homebrew:
     packages:
       - openssl
       - ccache
-      - gmp
       - go
 install: |
   if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then 
@@ -88,10 +86,10 @@ install: |
   fi
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake -DCRYPTO_EXTENSION=ON .. && \
+    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake .. && \
     make -j2 && cd ../tools && bash ci/ci_check.sh
   else
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCRYPTO_EXTENSION=ON .. && \
+    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
     make -j2 && cd ../tools && bash ci/ci_check.sh
   fi
 after_success: |
