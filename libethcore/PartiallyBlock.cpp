@@ -175,14 +175,6 @@ void PartiallyBlock::encodeMissedInfo(std::shared_ptr<bytes> _encodedBytes)
 void PartiallyBlock::fetchMissedTxs(
     std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo, dev::h256 const& _expectedHash)
 {
-    if (m_missedTransactions->size() > 0)
-    {
-        PartiallyBlock_LOG(WARNING) << LOG_DESC(
-            "fetchMissedTxs failed for the block-self does not has complete transactions");
-        BOOST_THROW_EXCEPTION(
-            NotCompleteBlock() << errinfo_comment(
-                "fetchMissedTxs: the block-self does not has complete transactions"));
-    }
     // decode _missInfo
     RLP missedInfoRlp(_missInfo);
     // Note: since the blockHash maybe changed after the block executed,

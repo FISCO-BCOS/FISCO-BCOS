@@ -36,7 +36,7 @@ void DownloadingTxsQueue::push(
     if (_msg->packetType() == RPCPacketType && m_treeRouter)
     {
         int64_t consIndex = _packet->rlp()[1].toPositiveInt64();
-        SYNC_LOG(TRACE) << LOG_DESC("receive and send transactions by tree")
+        SYNC_LOG(DEBUG) << LOG_DESC("receive and send transactions by tree")
                         << LOG_KV("consIndex", consIndex)
                         << LOG_KV("fromPeer", _fromPeer.abridged());
 
@@ -54,7 +54,7 @@ void DownloadingTxsQueue::push(
                 m_statisticHandler->updateSendedTxsInfo(_msg->length());
             }
             txsShard->appendForwardNodes(selectedNode);
-            SYNC_LOG(TRACE) << LOG_DESC("forward transaction")
+            SYNC_LOG(DEBUG) << LOG_DESC("forward transaction")
                             << LOG_KV("selectedNode", selectedNode.abridged());
         }
     }

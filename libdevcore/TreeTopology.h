@@ -49,11 +49,12 @@ public:
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
 
     // select the nodes by tree topology
-    virtual std::shared_ptr<dev::h512s> selectNodes(
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+    virtual std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _consIndex = 0, bool const& _isTheStartNode = false);
 
     virtual std::shared_ptr<dev::h512s> selectNodesByNodeID(
-        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);
+        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID,
+        bool const& _isTheStartNode = false);
 
     virtual std::shared_ptr<dev::h512s> selectParentByNodeID(
         std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);

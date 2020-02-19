@@ -1158,6 +1158,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("sendRawTransaction exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }

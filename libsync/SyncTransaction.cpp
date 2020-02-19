@@ -160,7 +160,8 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         }
         if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
         {
-            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
+            randomSelectedPeers =
+                m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex, true);
             randomSelectedPeersInited = true;
         }
         // the randomSelectedPeers is empty, continue without setTransactionIsKnownBy

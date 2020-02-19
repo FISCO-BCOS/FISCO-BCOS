@@ -189,14 +189,19 @@ int64_t TreeTopology::getNodeIndex(int64_t const& _consIndex)
     return nodeIndex;
 }
 
-std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
+std::shared_ptr<dev::h512s> TreeTopology::selectNodes(std::shared_ptr<std::set<dev::h512>> _peers,
+    int64_t const& _consIndex, bool const& _isTheStartNode)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    // the observer nodes
+    // the first node is the  observer nodes or not belong to the group
+    // send messages to the given consNode or the child of the given consNode
     if (m_consIndex < 0)
     {
+        if (!_isTheStartNode)
+        {
+            return selectedNodeList;
+        }
         dev::h512 selectedNode;
         if (getNodeIDByIndex(selectedNode, _consIndex) && _peers->count(selectedNode))
         {
@@ -235,10 +240,11 @@ std::shared_ptr<dev::h512s> TreeTopology::selectParent(
 }
 
 std::shared_ptr<dev::h512s> TreeTopology::selectNodesByNodeID(
-    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID)
+    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID,
+    bool const& _isTheStartNode)
 {
     auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
-    return selectNodes(_peers, consIndex);
+    return selectNodes(_peers, consIndex, _isTheStartNode);
 }
 
 std::shared_ptr<dev::h512s> TreeTopology::selectParentByNodeID(

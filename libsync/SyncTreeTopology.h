@@ -47,8 +47,8 @@ public:
     // consensus info must be updated with nodeList
     virtual void updateAllNodeInfo(dev::h512s const& _consensusNodes, dev::h512s const& _nodeList);
     // select the nodes by tree topology
-    std::shared_ptr<dev::h512s> selectNodes(
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0) override;
+    virtual std::shared_ptr<dev::h512s> selectNodesForBlockSync(
+        std::shared_ptr<std::set<dev::h512>> _peers);
 
 protected:
     bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const override;

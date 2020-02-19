@@ -644,7 +644,6 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                     << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", (*it)->sha3().abridged())
                     << LOG_KV("blockLimit", (*it)->blockLimit())
                     << LOG_KV("blockNumber", m_blockChain->number());
-                ;
                 continue;
             }
             if (!_avoid.count((*it)->sha3()))
