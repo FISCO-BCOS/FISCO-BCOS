@@ -26,23 +26,27 @@ jobs:
     steps:
       - uses: actions/checkout@v1
         with:
-          fetch-depth: 1
+          fetch-depth: 5
       - uses: actions/cache@v1
         id: cache
         with:
-          path: deps/
-          key: ${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: deps/src
+          key: ${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ github.ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ${{ runner.os }}-${{ github.ref }}
-            ${{ runner.os }}-
+            ${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ${{ runner.temp }}-${{ github.base_ref }}
+            ${{ runner.temp }}-${{ github.base_ref }}
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl ccache
+        run: brew install openssl ccache gmp
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache
-      - name: configure
+        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+      - name: configure macOS
+        if: runner.os == 'macOS'
+        run: cmake -DTESTS=on -DCRYPTO_EXTENSION=ON .
+      - name: configure Linux
+        if: runner.os == 'Linux'
         run: cmake -DTESTS=on .
       - name: compile
         run: make -j2

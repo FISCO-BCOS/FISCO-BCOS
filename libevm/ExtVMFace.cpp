@@ -42,7 +42,7 @@ int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
 }
 
 void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr,
-    evmc_uint256be const* _key) noexcept
+    evmc_uint256be const* _key)
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
