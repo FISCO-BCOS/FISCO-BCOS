@@ -35,19 +35,23 @@ jobs:
           restore-keys: |
             ${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             ${{ runner.temp }}-${{ github.base_ref }}
+      - uses: actions/cache@v1
+        id: ccache
+        with:
+          path: ccache
+          key: ${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            ${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             ${{ runner.temp }}-${{ github.base_ref }}
+            ${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl ccache gmp
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
-      - name: configure macOS
-        if: runner.os == 'macOS'
+      - name: configure
         run: cmake -DTESTS=on -DCRYPTO_EXTENSION=ON .
-      - name: configure Linux
-        if: runner.os == 'Linux'
-        run: cmake -DTESTS=on .
       - name: compile
         run: make -j2
       - name: run uint tests
