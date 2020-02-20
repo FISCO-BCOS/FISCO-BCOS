@@ -46,6 +46,10 @@ void PBFTEngine::start()
     // create PBFTMsgFactory
     createPBFTMsgFactory();
     createPBFTReqCache();
+    assert(m_reqCache);
+    // set checkSignCallback for reqCache
+    m_reqCache->setCheckSignCallback(boost::bind(&PBFTEngine::checkSign, this, _1));
+
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
@@ -1028,10 +1032,12 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
 
 void PBFTEngine::checkAndCommit()
 {
-    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
+    auto minValidNodeSize = minValidNodes();
+    size_t sign_size =
+        m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
     /// must be equal to minValidNodes:in case of callback checkAndCommit repeatly in a round of
     /// PBFT consensus
-    if (sign_size == minValidNodes())
+    if (sign_size == minValidNodeSize)
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit, SignReq enough")
                               << LOG_KV("number", m_reqCache->prepareCache().height)
@@ -1082,9 +1088,12 @@ void PBFTEngine::checkAndSave()
 {
     auto start_commit_time = utcTime();
     auto record_time = utcTime();
-    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
-    size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
-    if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
+    auto minValidNodeSize = minValidNodes();
+    size_t sign_size =
+        m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
+    size_t commit_size =
+        m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
+    if (sign_size >= minValidNodeSize && commit_size >= minValidNodeSize)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave: CommitReq enough")
                              << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)
@@ -1282,8 +1291,7 @@ CheckResult PBFTEngine::isValidSignReq(SignReq::Ptr req, std::ostringstream& oss
     CheckResult result = checkReq(*req, oss);
     /// to ensure that the collected signature size is equal to minValidNodes
     /// so that checkAndCommit can be called, and the committed request backup can be stored
-    if ((result == CheckResult::FUTURE) &&
-        m_reqCache->getSigCacheSize(req->block_hash) < (size_t)(minValidNodes() - 1))
+    if (result == CheckResult::FUTURE)
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());

@@ -362,9 +362,16 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
     }
     for (auto const& targetNode : *selectedNodes)
     {
+        auto key = _prepareReq->uniqueKey();
+        if (broadcastFilter(targetNode, PrepareReqPacket, key))
+        {
+            continue;
+        }
         auto p2pMessage = transDataToMessage(_data, PrepareReqPacket, 0);
         p2pMessage->setPacketType(_p2pPacketType);
         m_service->asyncSendMessageByNodeID(targetNode, p2pMessage, nullptr);
+        broadcastMark(targetNode, PrepareReqPacket, key);
+
         if (m_statisticHandler)
         {
             m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
@@ -418,12 +425,21 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
         // forward the message
         for (auto const& targetNode : *selectedNodes)
         {
+            auto key = decodedPrepareMsg->uniqueKey();
+            if (broadcastFilter(targetNode, PrepareReqPacket, key) ||
+                targetNode == _session->nodeID())
+            {
+                continue;
+            }
             m_service->asyncSendMessageByNodeID(targetNode, _prepareMsg, nullptr);
             if (m_statisticHandler)
             {
                 m_statisticHandler->updateConsOutPacketsInfo(
                     PrepareReqPacket, 1, _prepareMsg->length());
             }
+            broadcastMark(targetNode, PrepareReqPacket, key);
+            broadcastMark(_session->nodeID(), PrepareReqPacket, key);
+
             RPBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("forward Prepare message")
                 << LOG_KV("targetNode", targetNode.abridged())
@@ -664,6 +680,11 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
     try
     {
         PBFTMsg::Ptr pbftMsg = decodeP2PMsgIntoPBFTMsg(_session, _message);
+        auto key = pbftMsg->uniqueKey();
+        if (broadcastFilter(_session->nodeID(), PrepareReqPacket, key))
+        {
+            return;
+        }
         if (!pbftMsg)
         {
             return;
@@ -674,6 +695,8 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
         auto p2pMessage = transDataToMessage(ref(*encodedRawPrepare), PrepareReqPacket, 0);
         p2pMessage->setPacketType(RawPrepareResponse);
         m_service->asyncSendMessageByNodeID(_session->nodeID(), p2pMessage, nullptr);
+        broadcastMark(_session->nodeID(), PrepareReqPacket, key);
+
         if (m_statisticHandler)
         {
             m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());

@@ -441,7 +441,7 @@ protected:
      *  3. CheckResult::VALID: the request is valid
      */
     template <class T>
-    inline CheckResult checkReq(T const& req, std::ostringstream& oss) const
+    inline CheckResult checkReq(T& req, std::ostringstream& oss) const
     {
         if (isSyncingHigherBlock(req))
         {
@@ -462,8 +462,10 @@ protected:
                                   << LOG_KV("INFO", oss.str());
             /// is future ?
             bool is_future = isFutureBlock(req);
-            if (is_future && checkSign(req))
+            if (is_future)
             {
+                req.isFuture = true;
+                req.signChecked = false;
                 PBFTENGINE_LOG(INFO)
                     << LOG_DESC("checkReq: Recv future request")
                     << LOG_KV("prepHash", m_reqCache->prepareCache().block_hash.abridged())
@@ -516,6 +518,11 @@ protected:
     template <class T>
     inline bool isSyncingHigherBlock(T const& req) const
     {
+        // when the node falling far behind, will not handle the received PBFT message
+        if (m_blockSync->blockNumberFarBehind())
+        {
+            return true;
+        }
         if (m_blockSync->isSyncing() && req.height <= m_blockSync->status().knownHighestNumber)
         {
             return true;

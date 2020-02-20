@@ -74,15 +74,131 @@ public:
     }
 
     /// get the size of the cached sign requests according to given block hash
-    inline size_t getSigCacheSize(h256 const& blockHash) const
+    // _sizeToCheckFutureSign: the threshold size that should check signature for the future
+    // requests generally 2*f+1
+    inline size_t getSigCacheSize(h256 const& _blockHash, IDXTYPE const& _sizeToCheckFutureSign)
     {
-        return getSizeFromCache(blockHash, m_signCache);
+        auto cachedSignSize = getSizeFromCache(_blockHash, m_signCache);
+        // to avoid performance overhead,
+        // only collect at least 2*f+1 sign requests,
+        // should check signature for the future sign request
+        if (cachedSignSize >= _sizeToCheckFutureSign)
+        {
+            // to demand the condition "only collect 2*f sign requests can procedure to
+            // commit-period" of checkAndCommit
+            // at most 2*f future sign requests can be stored in the future sign cache,
+            // avoid the case：
+            // 1. some node receive more than 2*f future sign requests before handle a sign request
+            // 2. the node receive a sign request and procedure checkAndCommit,
+            //    the number of collected sign requests is more than 2*f+1,
+            //    and the node will not procedure to the commit-period
+            auto limitedFutureSignSize = _sizeToCheckFutureSign - 1;
+            return checkAndRemoveInvalidFutureReq(
+                _blockHash, m_signCache, true, limitedFutureSignSize);
+        }
+        return cachedSignSize;
     }
+
     /// get the size of the cached commit requests according to given block hash
-    inline size_t getCommitCacheSize(h256 const& blockHash) const
+    inline size_t getCommitCacheSize(
+        h256 const& _blockHash, IDXTYPE const& _sizeToCheckFutureCommit)
     {
-        return getSizeFromCache(blockHash, m_commitCache);
+        auto cachedCommitSize = getSizeFromCache(_blockHash, m_commitCache);
+        if (cachedCommitSize >= _sizeToCheckFutureCommit)
+        {
+            auto limitedSize = _sizeToCheckFutureCommit - 1;
+            return checkAndRemoveInvalidFutureReq(_blockHash, m_commitCache, false, limitedSize);
+        }
+        return cachedCommitSize;
     }
+
+    // 1. check signature for the future requests when collecting sign/commit requests
+    // 2. remove redundant future requests for the sign cache(at most 2*f future sign requests)
+    template <typename T>
+    size_t checkAndRemoveInvalidFutureReq(h256 const& _blockHash, T& _cache,
+        bool const& _needLimitFutureReqSize, IDXTYPE const& _limitedSize)
+    {
+        size_t futureReqSize = 0;
+        auto it = _cache.find(_blockHash);
+        if (it == _cache.end())
+        {
+            return 0;
+        }
+        auto cachedItem = it->second;
+        for (auto pCachedItem = cachedItem.begin(); pCachedItem != cachedItem.end();)
+        {
+            auto req = pCachedItem->second;
+            // don't check the signature for the non-future req
+            if (!req->isFuture)
+            {
+                pCachedItem++;
+                continue;
+            }
+            // _needLimitFutureReqSize is used for sign cache
+            // if the futureReq size is over _limitedSize(2*f), remove all the redundant future req
+            if (_needLimitFutureReqSize && futureReqSize >= _limitedSize)
+            {
+                // remove all the redundant future req
+                auto endIterator = cachedItem.end();
+                removeAllRedundantFutureReq(cachedItem, pCachedItem, endIterator);
+                break;
+            }
+            // the signature of the future-req has already been checked
+            if (req->signChecked)
+            {
+                pCachedItem++;
+                futureReqSize++;
+                continue;
+            }
+            // check the signature for the future req
+            if (m_checkSignCallback(*req))
+            {
+                // with valid signature
+                req->signChecked = true;
+                pCachedItem++;
+                futureReqSize++;
+                continue;
+            }
+            else
+            {
+                // with invalid signature, erase the req
+                pCachedItem = cachedItem.erase(pCachedItem);
+            }
+        }
+        if (cachedItem.size() == 0)
+        {
+            _cache.erase(it);
+            return 0;
+        }
+        return cachedItem.size();
+    }
+
+    // remove all the redundant future req when collected enough futureReq(2*f)
+    template <typename T, typename S>
+    void removeAllRedundantFutureReq(T& _cache, S const& _startIterator, S const& _endIterator)
+    {
+        auto sizeBeforeRemove = _cache.size();
+        for (auto it = _startIterator; it != _endIterator;)
+        {
+            auto req = it->second;
+            if (req->isFuture)
+            {
+                it = _cache.erase(it);
+            }
+            else
+            {
+                it++;
+            }
+            PBFTReqCache_LOG(DEBUG)
+                << LOG_DESC("removeAllRedundantFutureReq")
+                << LOG_KV("hash", req->block_hash.abridged()) << LOG_KV("number", req->height)
+                << LOG_KV("view", req->view) << LOG_KV("idx", req->idx);
+        }
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("removeAllRedundantFutureReq")
+                                << LOG_KV("cacheSizeBeforeRemove", sizeBeforeRemove)
+                                << LOG_KV("sizeAfterRemove", _cache.size());
+    }
+
     /// get the size of cached viewchange requests according to given view
     inline size_t getViewChangeSize(VIEWTYPE const& toView) const
     {
@@ -287,6 +403,11 @@ public:
         return m_rawPrepareCache->height;
     }
 
+    void setCheckSignCallback(std::function<bool(PBFTMsg const&)> const& _checkSignCallback)
+    {
+        m_checkSignCallback = _checkSignCallback;
+    }
+
 protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
@@ -377,6 +498,7 @@ protected:
     mutable SharedMutex x_rawPrepareCache;
 
     std::function<void(PBFTMsg::Ptr)> m_randomSendRawPrepareStatusCallback;
+    std::function<bool(PBFTMsg const&)> m_checkSignCallback;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -47,14 +47,15 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
     sign_req->view = prepare_req->view + 1;
     req_cache.addSignReq(sign_req);
     BOOST_CHECK(req_cache.isExistSign(*sign_req));
-    BOOST_CHECK(req_cache.getSigCacheSize(sign_req->block_hash) == 1);
+    auto fakeFutureReqCheckNum = 100;
+    BOOST_CHECK(req_cache.getSigCacheSize(sign_req->block_hash, fakeFutureReqCheckNum) == 1);
     /// test addCommitReq
     CommitReq::Ptr commit_req =
         std::make_shared<CommitReq>(*prepare_req, key_pair, prepare_req->idx);
     commit_req->view = prepare_req->view + 1;
     req_cache.addCommitReq(commit_req);
     BOOST_CHECK(req_cache.isExistCommit(*commit_req));
-    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req->block_hash) == 1);
+    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req->block_hash, fakeFutureReqCheckNum) == 1);
     /// test addPrepareReq
     req_cache.addPrepareReq(prepare_req);
     /// test invalid signReq and commitReq removement
@@ -62,8 +63,8 @@ BOOST_AUTO_TEST_CASE(testAddAndExistCase)
         prepare_req->idx, req_cache.prepareCache().timestamp, prepare_req->block_hash);
     BOOST_CHECK(!req_cache.isExistSign(*sign_req));
     BOOST_CHECK(!req_cache.isExistCommit(*commit_req));
-    BOOST_CHECK(req_cache.getSigCacheSize(sign_req->block_hash) == 0);
-    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req->block_hash) == 0);
+    BOOST_CHECK(req_cache.getSigCacheSize(sign_req->block_hash, fakeFutureReqCheckNum) == 0);
+    BOOST_CHECK(req_cache.getCommitCacheSize(commit_req->block_hash, fakeFutureReqCheckNum) == 0);
 
     /// test addFuturePrepareCache
     req_cache.addFuturePrepareCache(prepare_req);
@@ -105,7 +106,7 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
         req_cache.addCommitReq(commit_req);
         BOOST_CHECK(req_cache.isExistCommit(*commit_req));
     }
-    BOOST_CHECK(req_cache.getCommitCacheSize(prepare_req->block_hash) == node_num);
+    BOOST_CHECK(req_cache.getCommitCacheSize(prepare_req->block_hash, node_num) == node_num);
     /// generateAndSetSigList
     Block block;
     bool ret = req_cache.generateAndSetSigList(block, node_num);
@@ -141,15 +142,15 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     FakeInvalidReq<CommitReq>(req, req_cache, req_cache.mutableCommitCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);
     req_cache.collectGarbage(highest);
-    BOOST_CHECK(req_cache.getSigCacheSize(req->block_hash) == validNum);
-    BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash) == 0);
+    BOOST_CHECK(req_cache.getSigCacheSize(req->block_hash, validNum) == validNum);
+    BOOST_CHECK(req_cache.getSigCacheSize(invalid_hash, validNum) == 0);
 
-    BOOST_CHECK(req_cache.getCommitCacheSize(req->block_hash) == validNum);
-    BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash) == 0);
+    BOOST_CHECK(req_cache.getCommitCacheSize(req->block_hash, validNum) == validNum);
+    BOOST_CHECK(req_cache.getCommitCacheSize(invalid_hash, validNum) == 0);
     /// test delCache
     req_cache.delCache(highest);
-    BOOST_CHECK(req_cache.getSigCacheSize(req->block_hash) == 0);
-    BOOST_CHECK(req_cache.getCommitCacheSize(req->block_hash) == 0);
+    BOOST_CHECK(req_cache.getSigCacheSize(req->block_hash, validNum) == 0);
+    BOOST_CHECK(req_cache.getCommitCacheSize(req->block_hash, validNum) == 0);
 }
 /// test canTriggerViewChange
 BOOST_AUTO_TEST_CASE(testCanTriggerViewChange)

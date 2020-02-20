@@ -215,19 +215,22 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
     if (sm2Group == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_namee";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!EC_POINT_hex2point(sm2Group, (const char*)publicKey.c_str(), pubPoint, NULL))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
@@ -235,19 +238,21 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
 
     if (sm2Key == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!EC_KEY_set_public_key(sm2Key, pubPoint))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", publicKey);
         goto err;
     }
     // SM3 Degist
@@ -260,19 +265,21 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     signData = ECDSA_SIG_new();
     if (!BN_hex2bn(&signData->r, r.c_str()))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn R:" << r;
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn" << LOG_KV("R", r)
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!BN_hex2bn(&signData->s, s.c_str()))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn S:" << s;
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn:" << LOG_KV("S", s)
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify" << LOG_KV("pubKey", publicKey);
         goto err;
     }
     // LOG(DEBUG)<<"SM2 Verify successed.";
