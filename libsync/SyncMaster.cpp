@@ -294,9 +294,6 @@ void SyncMaster::maintainPeersStatus()
             (int64_t)m_eachBlockDownloadingRequestTimeout *
                 (m_maxRequestNumber - m_lastDownloadingBlockNumber))
         {
-            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
-                            << LOG_KV("maxRequestNumber", m_maxRequestNumber)
-                            << LOG_KV("lastDownloadingBlockNumber", m_lastDownloadingBlockNumber);
             return;  // no need to sync
         }
         else
