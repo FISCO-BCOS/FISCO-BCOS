@@ -25,6 +25,7 @@
 #include "libstoragestate/StorageState.h"
 #include <libethcore/ABI.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev;
@@ -39,6 +40,7 @@ contract Frozen {
     function freeze(address addr) public returns(int);
     function unfreeze(address addr) public returns(int);
     function queryStatus(address addr) public constant returns(uint,string);
+    function queryAuthority(address addr) public constant returns(uint,address[]);
 }
 */
 
@@ -46,6 +48,7 @@ const char* const METHOD_KILL_STR = "kill(address)";
 const char* const METHOD_FREEZE_STR = "freeze(address)";
 const char* const METHOD_UNFREEZE_STR = "unfreeze(address)";
 const char* const METHOD_QUERY_STR = "queryStatus(address)";
+const char* const METHOD_QUERY_AUTHORITY = "queryAuthority(address)";
 
 // contract state
 // available,frozen,killed
@@ -64,6 +67,7 @@ ContractStatusPrecompiled::ContractStatusPrecompiled()
     name2Selector[METHOD_FREEZE_STR] = getFuncSelector(METHOD_FREEZE_STR);
     name2Selector[METHOD_UNFREEZE_STR] = getFuncSelector(METHOD_UNFREEZE_STR);
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
+    name2Selector[METHOD_QUERY_AUTHORITY] = getFuncSelector(METHOD_QUERY_AUTHORITY);
 }
 
 bool ContractStatusPrecompiled::checkPermission(
@@ -295,7 +299,8 @@ void ContractStatusPrecompiled::unfreeze(
     getErrorCodeOut(out, result);
 }
 
-void ContractStatusPrecompiled::query(ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+void ContractStatusPrecompiled::queryStatus(
+    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
 {
     dev::eth::ContractABI abi;
 
@@ -303,11 +308,52 @@ void ContractStatusPrecompiled::query(ExecutiveContext::Ptr context, bytesConstR
     abi.abiOut(data, contractAddress);
 
     std::string tableName = precompiled::getContractTableName(contractAddress);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("call query")
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_DESC("call query status")
                            << LOG_KV("contract table name", tableName);
 
     int status = getContractStatus(context, tableName);
-    out = abi.abiIn("", (u256)status, CONTRACT_STATUS_DESC[status]);
+    out = abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]);
+}
+
+void ContractStatusPrecompiled::queryAuthority(
+    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+{
+    dev::eth::ContractABI abi;
+
+    Address contractAddress;
+    abi.abiOut(data, contractAddress);
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_DESC("call query authority")
+                           << LOG_KV("contract table name", tableName);
+
+    std::vector<std::string> strs;
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+        if (entries->size() > 0)
+        {
+            auto authority = entries->get(0)->getField(storagestate::STORAGE_VALUE);
+            boost::split(strs, authority, boost::is_any_of(","));
+        }
+        else
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("no authority is recorded");
+        }
+    }
+    std::vector<Address> addrs;
+    for (auto str : strs)
+    {
+        addrs.push_back(dev::eth::toAddress(str));
+    }
+    out = abi.abiIn("", (u256)0, addrs);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_DESC("call query authority result")
+                           << LOG_KV("out", dev::toHex(out));
 }
 
 bytes ContractStatusPrecompiled::call(
@@ -335,7 +381,11 @@ bytes ContractStatusPrecompiled::call(
     }
     else if (func == name2Selector[METHOD_QUERY_STR])
     {
-        query(context, data, out);
+        queryStatus(context, data, out);
+    }
+    else if (func == name2Selector[METHOD_QUERY_AUTHORITY])
+    {
+        queryAuthority(context, data, out);
     }
     else
     {

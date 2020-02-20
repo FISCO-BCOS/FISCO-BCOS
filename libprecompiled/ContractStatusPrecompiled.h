@@ -67,7 +67,9 @@ private:
         Address const& origin, bytes& out);
     void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void query(
+    void queryStatus(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
+    void queryAuthority(
         std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
 };
 
