@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
         BOOST_CHECK(pending_list[i - 1]->importTime() <= pending_list[i]->importTime());
     }
     /// test out of limit, clear the queue
-    tx->setNonce(u256(tx->nonce() + u256(10)));
+    tx->setNonce(u256(tx->nonce() + u256(i) + u256(10)));
     tx->setBlockLimit(pool_test.m_blockChain->number() + u256(1));
     sig = sign(pool_test.m_blockChain->m_keyPair, tx->sha3(WithoutSignature));
     tx->updateSignature(SignatureStruct(sig));

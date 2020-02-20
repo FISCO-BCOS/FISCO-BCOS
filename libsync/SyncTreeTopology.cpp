@@ -177,8 +177,8 @@ void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNo
     return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex, _startIndex);
 }
 
-std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodes(
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const&)
+std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodesForBlockSync(
+    std::shared_ptr<std::set<dev::h512>> _peers)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();

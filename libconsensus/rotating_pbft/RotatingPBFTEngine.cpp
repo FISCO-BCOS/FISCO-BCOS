@@ -723,6 +723,12 @@ void RotatingPBFTEngine::handleP2PMessage(dev::p2p::NetworkException _exception,
 {
     try
     {
+        // disable broadcast prepare by tree
+        if (!m_treeRouter)
+        {
+            return PBFTEngine::handleP2PMessage(_exception, _session, _message);
+        }
+        // enable broadcast prepare by tree
         switch (_message->packetType())
         {
         // status of RawPrepareReq
