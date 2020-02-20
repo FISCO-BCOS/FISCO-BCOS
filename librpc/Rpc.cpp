@@ -884,8 +884,6 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
     {
         RPC_LOG(INFO) << LOG_BADGE("getPendingTransactions") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
         Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
@@ -926,8 +924,6 @@ std::string Rpc::getPendingTxSize(int _groupID)
     {
         RPC_LOG(INFO) << LOG_BADGE("getPendingTxSize") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
 
         return toJS(txPool->status().current);
@@ -961,6 +957,8 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("getCode exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
@@ -1005,6 +1003,9 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("getTotalTransactionCount exceptioned")
+                       << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
@@ -1050,6 +1051,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("call exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }

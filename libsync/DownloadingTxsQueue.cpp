@@ -95,6 +95,9 @@ void DownloadingTxsQueue::pop2TxPool(
     // the node is not the group member, return without submit the transaction to the txPool
     if (!m_needImportToTxPool)
     {
+        SYNC_LOG(DEBUG) << LOG_DESC("stop pop2TxPool for the node is not belong to the group")
+                        << LOG_KV("pendingTxsSize", _txPool->pendingSize())
+                        << LOG_KV("shardSize", m_buffer->size());
         return;
     }
     auto maintainBuffer_start_time = utcTime();
