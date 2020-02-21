@@ -120,6 +120,8 @@ CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID
 
     m_running = std::make_shared<tbb::atomic<bool>>();
     m_running->store(true);
+    m_committing = std::make_shared<tbb::atomic<bool>>();
+    m_committing->store(false);
 }
 
 CachedStorage::~CachedStorage()
@@ -225,6 +227,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
     std::shared_ptr<std::vector<TableData::Ptr>> commitDatas =
         std::make_shared<std::vector<TableData::Ptr>>();
 
+    m_committing->store(true);
     commitDatas->resize(datas.size());
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, datas.size()), [&](const tbb::blocked_range<size_t>& range) {
@@ -471,6 +474,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
             touchMRU(commitData->info->name, key, cacheEntry->capacity());
         }
     }
+    m_committing->store(false);
 
     if (m_backend)
     {
@@ -768,6 +772,10 @@ bool CachedStorage::commitBackend(Task::Ptr task)
 
 void CachedStorage::checkAndClear()
 {
+    if (m_committing->load())
+    {  // commit is inprocessing, dont clear
+        return;
+    }
     uint64_t count = 0;
     // calculate and calculate m_capacity with all elements of m_mruQueue
     // since inner loop will break once m_mruQueue is empty, here use while(true)
@@ -799,7 +807,7 @@ void CachedStorage::checkAndClear()
         needClear = false;
         if (m_syncNum > 0)
         {
-            if (m_capacity > m_maxCapacity && !m_mru->empty())
+            if (m_capacity > m_maxCapacity && !m_mru->empty() && !m_committing->load())
             {
                 needClear = true;
             }
@@ -809,7 +817,7 @@ void CachedStorage::checkAndClear()
         {
             for (auto it = m_mru->begin(); it != m_mru->end();)
             {
-                if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
+                if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty() || m_committing->load())
                 {
                     break;
                 }

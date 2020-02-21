@@ -116,7 +116,10 @@ public:
 
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
-
+    void setClearInterval(size_t _clearIntervalSecond)
+    {
+        m_clearInterval = _clearIntervalSecond * 1000;
+    }
     void setMaxCapacity(int64_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
@@ -176,6 +179,7 @@ private:
     tbb::atomic<uint64_t> m_hitTimes;
     tbb::atomic<uint64_t> m_queryTimes;
 
+    std::shared_ptr<tbb::atomic<bool> > m_committing;
     std::shared_ptr<tbb::atomic<bool> > m_running;
 };
 
