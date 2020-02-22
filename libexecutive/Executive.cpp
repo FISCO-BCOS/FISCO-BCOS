@@ -180,7 +180,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         else
         {
             m_gas = _p.gas;
-            if (m_s->frozen(_p.codeAddress))
+            if (g_BCOSConfig.version() >= V2_3_0 && m_s->frozen(_p.codeAddress))
             {
                 m_excepted = TransactionException::ContractFrozen;
             }
@@ -258,7 +258,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             m_excepted = TransactionException::Unknown;
         }
     }
-    else if (m_s->frozen(_p.codeAddress))
+    else if (g_BCOSConfig.version() >= V2_3_0 && m_s->frozen(_p.codeAddress))
     {
         m_excepted = TransactionException::ContractFrozen;
     }
