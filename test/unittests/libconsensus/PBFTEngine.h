@@ -102,11 +102,11 @@ std::shared_ptr<FakeSession> FakeSessionFunc(Public node_id);
 /// fake message
 template <typename T, typename S>
 P2PMessage::Ptr FakeReqMessage(std::shared_ptr<S> pbft, T const& req, PACKET_TYPE const& packetType,
-    PROTOCOL_ID const& protocolId, unsigned const& ttl = 0)
+    PROTOCOL_ID const&, unsigned const& ttl = 0)
 {
     bytes data;
     req.encode(data);
-    return pbft->transDataToMessageWrapper(ref(data), packetType, protocolId, ttl);
+    return pbft->transDataToMessageWrapper(ref(data), packetType, ttl);
 }
 
 /// check the data received from the network
@@ -329,12 +329,11 @@ static void checkBroadcastSpecifiedMsg(FakeConsensus<S>& fake_pbft, T& tmp_req, 
     FakePBFTSealer(fake_pbft);
 
     T req(prepare_req, fake_pbft.consensus()->keyPair(), fake_pbft.consensus()->nodeIdx());
-    key = req.uniqueKey();
     bytes data;
     req.encode(data);
-    fake_pbft.consensus()->broadcastMsgWrapper(SignReqPacket, key, ref(data));
-    BOOST_CHECK(
-        fake_pbft.consensus()->broadcastFilter(peer_keyPair.pub(), SignReqPacket, key) == true);
+    fake_pbft.consensus()->broadcastMsgWrapper(SignReqPacket, req, ref(data));
+    BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
+                    peer_keyPair.pub(), SignReqPacket, req.uniqueKey()) == true);
     compareAsyncSendTime(fake_pbft, peer_keyPair.pub(), 1);
 }
 

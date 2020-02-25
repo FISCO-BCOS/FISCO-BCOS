@@ -318,8 +318,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     bytes data;
     prepare_req.encode(data);
     /// case1: all peer is not the sealer, stop broadcasting
-    fake_pbft.consensus()->broadcastMsgWrapper(
-        PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsgWrapper(PrepareReqPacket, prepare_req, ref(data));
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == false);
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
@@ -331,8 +330,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsgWrapper(
-        PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsgWrapper(PrepareReqPacket, prepare_req, ref(data));
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
@@ -345,8 +343,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     fake_pbft.m_sealerList.push_back(peer2_keyPair.pub());
     fake_pbft.consensus()->appendSealer(peer2_keyPair.pub());
     FakePBFTSealer(fake_pbft);
-    fake_pbft.consensus()->broadcastMsgWrapper(
-        PrepareReqPacket, prepare_req.uniqueKey(), ref(data));
+    fake_pbft.consensus()->broadcastMsgWrapper(PrepareReqPacket, prepare_req, ref(data));
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
@@ -364,8 +361,7 @@ BOOST_AUTO_TEST_CASE(testBroadcastMsg)
     /// fake the filter with node id of peer3
     std::unordered_set<h512> filter;
     filter.insert(peer3_keyPair.pub());
-    fake_pbft.consensus()->broadcastMsgWrapper(
-        PrepareReqPacket, prepare_req.uniqueKey(), ref(data), filter);
+    fake_pbft.consensus()->broadcastMsgWrapper(PrepareReqPacket, prepare_req, ref(data), filter);
 
     BOOST_CHECK(fake_pbft.consensus()->broadcastFilter(
                     peer3_keyPair.pub(), PrepareReqPacket, prepare_req.uniqueKey()) == true);
