@@ -360,9 +360,14 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
         }
         selectedNodes = m_treeRouter->selectNodesByNodeID(m_chosedConsensusNodes, leaderNodeID);
     }
+    auto key = _prepareReq->uniqueKey();
     for (auto const& targetNode : *selectedNodes)
     {
-        auto key = _prepareReq->uniqueKey();
+        // the leader doesn't connect with the targetNode
+        if (!m_service->getP2PSessionByNodeId(targetNode))
+        {
+            continue;
+        }
         if (broadcastFilter(targetNode, PrepareReqPacket, key))
         {
             continue;
@@ -423,9 +428,14 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
                 << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("idx", nodeIdx());
         }
         // forward the message
+        auto key = decodedPrepareMsg->uniqueKey();
         for (auto const& targetNode : *selectedNodes)
         {
-            auto key = decodedPrepareMsg->uniqueKey();
+            // the node doesn't connect with the targetNode
+            if (!m_service->getP2PSessionByNodeId(targetNode))
+            {
+                continue;
+            }
             if (broadcastFilter(targetNode, PrepareReqPacket, key) ||
                 targetNode == _session->nodeID())
             {
@@ -680,12 +690,21 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
     try
     {
         PBFTMsg::Ptr pbftMsg = decodeP2PMsgIntoPBFTMsg(_session, _message);
-        auto key = pbftMsg->uniqueKey();
+        auto key = pbftMsg->block_hash.hex();
         if (broadcastFilter(_session->nodeID(), PrepareReqPacket, key))
         {
+            RPBFTENGINE_LOG(DEBUG)
+                << LOG_DESC("return for the has already received the rawPrepareRequest")
+                << LOG_KV("peer", _session->nodeID().abridged())
+                << LOG_KV("hash", pbftMsg->block_hash.abridged());
             return;
         }
         if (!pbftMsg)
+        {
+            return;
+        }
+        // the node doesn't connect with the targetNode
+        if (!m_service->getP2PSessionByNodeId(_session->nodeID()))
         {
             return;
         }
@@ -707,6 +726,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
                                << LOG_KV("view", pbftMsg->view) << LOG_KV("height", pbftMsg->height)
                                << LOG_KV("prepIdx", pbftMsg->idx)
                                << LOG_KV("packetSize", p2pMessage->length())
+                               << LOG_KV("peer", _session->nodeID().abridged())
                                << LOG_KV("idx", nodeIdx());
     }
     catch (std::exception const& _e)
@@ -730,6 +750,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareResponse(
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     prepareReq->decode(ref(pbftMsgPacket->data));
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveRawPrepareResponse")
+                           << LOG_KV("peer", _session->nodeID().abridged())
                            << LOG_KV("respHash", prepareReq->block_hash.abridged())
                            << LOG_KV("respHeight", prepareReq->height)
                            << LOG_KV("respView", prepareReq->view)
