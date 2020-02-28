@@ -69,6 +69,8 @@ public:
             std::make_shared<dev::ThreadPool>("prepRecv-" + std::to_string(m_groupId), 1);
         m_rawPrepareResponse =
             std::make_shared<dev::ThreadPool>("prepResp-" + std::to_string(m_groupId), 1);
+        m_waitToRequestRawPrepare =
+            std::make_shared<dev::ThreadPool>("reqWait-" + std::to_string(m_groupId), 1);
     }
 
     // create TreeTopology to forward prepare message
@@ -165,6 +167,13 @@ protected:
         std::shared_ptr<dev::p2p::P2PSession> _session,
         dev::p2p::P2PMessage::Ptr _message) override;
 
+    bool connectWithParent(std::shared_ptr<const dev::h512s> _parentNodeList);
+    bool shouldRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, dev::h512 const& _targetNode,
+        std::shared_ptr<const dev::h512s> _parentNodeList);
+    void waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, dev::h512 const& _targetNode,
+        std::shared_ptr<const dev::h512s> _parentNodeList);
+    void addRawPrepare(PrepareReq::Ptr _prepareReq) override;
+
 private:
     PBFTMsg::Ptr decodeP2PMsgIntoPBFTMsg(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
@@ -204,9 +213,15 @@ protected:
     dev::ThreadPool::Ptr m_requestRawPrepareWorker;
     dev::ThreadPool::Ptr m_rawPrepareStatusReceiver;
     dev::ThreadPool::Ptr m_rawPrepareResponse;
+    dev::ThreadPool::Ptr m_waitToRequestRawPrepare;
 
     unsigned m_prepareStatusBroadcastPercent = 33;
     uint64_t m_maxRequestMissedTxsWaitTime = 100;
+    uint64_t m_maxRequestPrepareWaitTime = 100;
+
+    // signal when addRawPrepare
+    boost::condition_variable m_rawPrepareSignalled;
+    boost::mutex x_rawPrepareSignalled;
 };
 }  // namespace consensus
 }  // namespace dev

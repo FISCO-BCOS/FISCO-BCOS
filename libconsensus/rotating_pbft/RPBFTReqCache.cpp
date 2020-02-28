@@ -25,12 +25,11 @@
 
 using namespace dev::consensus;
 
-bool RPBFTReqCache::checkReceivedRawPrepareStatus(dev::h512 const& _peerNodeId,
+bool RPBFTReqCache::checkReceivedRawPrepareStatus(
     PBFTMsg::Ptr _rawPrepareStatus, VIEWTYPE const& _currentView, int64_t const& _currentNumber)
 {
     std::ostringstream outputInfo;
-    outputInfo << LOG_KV("_peer", _peerNodeId.abridged()) << LOG_KV("currentView", _currentView)
-               << LOG_KV("currentNumber", _currentNumber)
+    outputInfo << LOG_KV("currentView", _currentView) << LOG_KV("currentNumber", _currentNumber)
                << LOG_KV("reqHeight", _rawPrepareStatus->height)
                << LOG_KV("reqView", _rawPrepareStatus->view)
                << LOG_KV("reqHash", _rawPrepareStatus->block_hash.abridged())
@@ -55,8 +54,6 @@ bool RPBFTReqCache::checkReceivedRawPrepareStatus(dev::h512 const& _peerNodeId,
             return false;
         }
     }
-    RPBFTReqCache_LOG(DEBUG) << LOG_DESC("checkReceivedRawPrepareStatus: valid rawPrepareStatus")
-                             << outputInfo.str();
     return true;
 }
 
@@ -110,7 +107,8 @@ bool RPBFTReqCache::checkAndRequestRawPrepare(PBFTMsg::Ptr _pbftMsg)
                << LOG_KV("reqView", _pbftMsg->view) << LOG_KV("reqIdx", _pbftMsg->idx);
     if (isRequestedPrepare(_pbftMsg->block_hash))
     {
-        RPBFTReqCache_LOG(DEBUG) << LOG_DESC("checkAndRequestRawPrepare: Duplicated")
+        RPBFTReqCache_LOG(DEBUG) << LOG_DESC(
+                                        "checkAndRequestRawPrepare: Duplicated, return directly")
                                  << outputInfo.str();
         return false;
     }

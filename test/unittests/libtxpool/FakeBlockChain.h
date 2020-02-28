@@ -84,6 +84,10 @@ public:
         m_asyncSend.erase(nodeID);
     }
 
+    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
+    {
+        return std::make_shared<dev::p2p::P2PSession>();
+    }
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
     std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override

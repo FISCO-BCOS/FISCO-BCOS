@@ -600,9 +600,10 @@ void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _dat
  */
 CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
 {
+    // Note: we should try to decrease the size of duplicated
     if (m_reqCache->isExistPrepare(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: Duplicated Prep")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: Duplicated Prep")
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
@@ -973,8 +974,14 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
     // clear preRawPrepare before addRawPrepare when enable_block_with_txs_hash
     clearPreRawPrepare();
     /// add raw prepare request
-    m_reqCache->addRawPrepare(prepareReq);
+    addRawPrepare(prepareReq);
     return execPrepareAndGenerateSignMsg(prepareReq, oss);
+}
+
+void PBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
+{
+    /// add raw prepare request
+    m_reqCache->addRawPrepare(_prepareReq);
 }
 
 bool PBFTEngine::execPrepareAndGenerateSignMsg(

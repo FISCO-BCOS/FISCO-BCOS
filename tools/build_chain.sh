@@ -30,6 +30,7 @@ docker_mode=
 gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
+supported_consensus=(pbft raft rotating_pbft)
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
@@ -55,7 +56,7 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rotating_pbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -110,7 +111,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -132,7 +133,12 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
         fi
     ;;
     t) CertConfig=$OPTARG;;
-    c) consensus_type="raft";;
+    c) consensus_type=$OPTARG
+        if ! echo "${supported_consensus[*]}" | grep -i "${consensus_type}" &>/dev/null; then
+            LOG_WARN "${consensus_type} is not supported. Please set one of ${supported_consensus[*]}"
+            exit 1;
+        fi
+    ;;
     C) chain_id=$OPTARG
         if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
             LOG_WARN "${chain_id} is not a positive integer."

@@ -252,6 +252,7 @@ public:
 
 protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
+    virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();

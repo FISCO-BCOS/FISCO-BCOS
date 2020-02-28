@@ -252,6 +252,7 @@ struct PBFTMsg
         list_rlp.swapOut(encodedBytes);
     }
 
+    // Note: the status packet has no signature
     virtual void encodeStatus(bytes& encodedBytes) const
     {
         RLPStream tmp;

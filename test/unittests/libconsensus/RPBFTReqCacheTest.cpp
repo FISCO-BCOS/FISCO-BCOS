@@ -56,35 +56,32 @@ BOOST_AUTO_TEST_CASE(testCheckReceivedRawPrepareStatus)
     VIEWTYPE view = 10;
     IDXTYPE nodeIdx = 1;
     auto pbftMsg = fakeRawPrepareStatus<PBFTMsg>(blockHash, blockHeight, view, nodeIdx);
-    dev::h512 peerNodeId = KeyPair::create().pub();
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, blockHeight) == false);
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, (blockHeight - 1)) == true);
+    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, blockHeight) == false);
+    BOOST_CHECK(
+        rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, (blockHeight - 1)) == true);
 
     // addRawPrepare
     PrepareReq::Ptr prepareReq =
         fakeRawPrepareStatus<PrepareReq>(blockHash, blockHeight, view, nodeIdx);
     rpbftReqCache->addRawPrepare(prepareReq);
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, (blockHeight - 1)) == false);
+    BOOST_CHECK(
+        rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, (blockHeight - 1)) == false);
 
     // pbftMsg with larger view, the blockHeight is the same
     pbftMsg->view += 1;
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, (blockHeight - 1)) == true);
+    BOOST_CHECK(
+        rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, (blockHeight - 1)) == true);
 
     //  pbftMsg with larger blockHeight and lower view
     pbftMsg->view -= 2;
     pbftMsg->height += 1;
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, blockHeight) == true);
+    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, blockHeight) == true);
 
     // pbftMsg with lower blockHeight and larger view
     pbftMsg->view += 10;
     pbftMsg->height -= 2;
-    BOOST_CHECK(rpbftReqCache->checkReceivedRawPrepareStatus(
-                    peerNodeId, pbftMsg, view, (blockHeight - 3)) == false);
+    BOOST_CHECK(
+        rpbftReqCache->checkReceivedRawPrepareStatus(pbftMsg, view, (blockHeight - 3)) == false);
 }
 
 BOOST_AUTO_TEST_CASE(testCheckAndRequestRawPrepare)
