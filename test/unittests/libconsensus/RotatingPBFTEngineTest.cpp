@@ -273,11 +273,20 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     // onReceiveRawPrepareStatus
     followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
     leaderRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
-    // case1: connect with all the node
+    // case1: connect with all the node, but the parent node doesn't send rawPrepare to the node,
+    // request again after 100ms
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareStatus(
         leaderSession2, receivedP2pMsg);
+    // wait for request
+    std::shared_ptr<P2PMessage> receivedP2pMsg2 = nullptr;
+    while (!receivedP2pMsg2)
+    {
+        receivedP2pMsg2 = followService->getAsyncSendMessageByNodeID(
+            leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
+        sleep(1);
+    }
     compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
-        leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 0);
+        leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
 
     // case2: only connect with the leaderRPBFT
     followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();

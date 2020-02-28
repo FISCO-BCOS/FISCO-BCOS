@@ -617,10 +617,17 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
             return;
         }
         if (!m_rpbftReqCache->checkReceivedRawPrepareStatus(
-                _session->nodeID(), pbftMsg, m_view, m_blockChain->number()))
+                pbftMsg, m_view, m_blockChain->number()))
         {
             return;
         }
+        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("checkReceivedRawPrepareStatus: valid rawPrepareStatus")
+                               << LOG_KV("peer", _session->nodeID().abridged())
+                               << LOG_KV("reqHeight", pbftMsg->height)
+                               << LOG_KV("reqView", pbftMsg->view)
+                               << LOG_KV("reqHash", pbftMsg->block_hash.abridged())
+                               << LOG_KV("reqIdx", pbftMsg->idx);
+
         m_rpbftReqCache->updateRawPrepareStatusCache(_session->nodeID(), pbftMsg);
         // request rawPreparePacket to the selectedNode
         auto parentNodeList = getParentNode(pbftMsg);
@@ -629,27 +636,21 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
         {
             return;
         }
-        std::shared_ptr<std::set<dev::h512>> parentNodeSet =
-            std::make_shared<std::set<dev::h512>>(parentNodeList->begin(), parentNodeList->end());
-        auto sessionsInfo = m_service->sessionInfosByProtocolID(m_protocolId);
-
-        bool connectedWithParent = false;
-        for (auto const& sessionInfo : sessionsInfo)
-        {
-            if (parentNodeSet->count(sessionInfo.nodeID()))
-            {
-                connectedWithParent = true;
-                break;
-            }
-        }
         // the node disconnected with the parent node
-        if (!connectedWithParent)
+        if (!connectWithParent(parentNodeList))
         {
             if (!m_rpbftReqCache->checkAndRequestRawPrepare(pbftMsg))
             {
                 return;
             }
             requestRawPreparePacket(_session->nodeID(), pbftMsg);
+        }
+        else
+        {
+            // wait for at most m_maxRequestPrepareWaitTime before request the rawPrepare
+            m_waitToRequestRawPrepare->enqueue([this, pbftMsg, _session, parentNodeList] {
+                this->waitAndRequestRawPrepare(pbftMsg, _session->nodeID(), parentNodeList);
+            });
         }
     }
     catch (std::exception const& _e)
@@ -658,6 +659,91 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
                                  << LOG_KV("peer", _session->nodeID().abridged())
                                  << LOG_KV("errorInfo", boost::diagnostic_information(_e));
     }
+}
+
+bool RotatingPBFTEngine::connectWithParent(std::shared_ptr<const dev::h512s> _parentNodeList)
+{
+    for (auto const& node : *_parentNodeList)
+    {
+        if (m_service->getP2PSessionByNodeId(node))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void RotatingPBFTEngine::waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus,
+    dev::h512 const& _targetNode, std::shared_ptr<const dev::h512s> _parentNodeList)
+{
+    try
+    {
+        if (shouldRequestRawPrepare(_rawPrepareStatus, _targetNode, _parentNodeList))
+        {
+            // the targetNode disconnect with this node
+            if (!m_service->getP2PSessionByNodeId(_targetNode))
+            {
+                return;
+            }
+            // in case of request rawPrepare to multiple nodes
+            if (!m_rpbftReqCache->checkAndRequestRawPrepare(_rawPrepareStatus))
+            {
+                return;
+            }
+            requestRawPreparePacket(_targetNode, _rawPrepareStatus);
+            RPBFTENGINE_LOG(DEBUG)
+                << LOG_BADGE("waitAndRequestRawPrepare")
+                << LOG_DESC(
+                       "no prepareReq received from the connectedParent, request the rawPrepare "
+                       "now")
+                << LOG_KV("targetNode", _targetNode.abridged())
+                << LOG_KV("hash", _rawPrepareStatus->block_hash.abridged())
+                << LOG_KV("height", _rawPrepareStatus->height)
+                << LOG_KV("view", _rawPrepareStatus->view) << LOG_KV("idx", _rawPrepareStatus->idx);
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        RPBFTENGINE_LOG(WARNING) << LOG_DESC("waitAndRequestRawPrepare exceptioned")
+                                 << LOG_KV("targetNode", _targetNode.abridged())
+                                 << LOG_KV("hash", _rawPrepareStatus->block_hash.abridged())
+                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+    }
+}
+
+bool RotatingPBFTEngine::shouldRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus,
+    dev::h512 const& _targetNode, std::shared_ptr<const dev::h512s> _parentNodeList)
+{
+    auto startTime = utcSteadyTime();
+    // wait for at most (m_maxRequestPrepareWaitTime)ms before request the rawPrepare
+    while (utcSteadyTime() - startTime < m_maxRequestPrepareWaitTime)
+    {
+        // the status is expired
+        if (!m_rpbftReqCache->checkReceivedRawPrepareStatus(
+                _rawPrepareStatus, m_view, m_blockChain->number()))
+        {
+            return false;
+        }
+        // disconnect with the parent sundenly
+        if (!connectWithParent(_parentNodeList))
+        {
+            return false;
+        }
+        // the targetNode disconnect with this node
+        if (!m_service->getP2PSessionByNodeId(_targetNode))
+        {
+            return false;
+        }
+        boost::unique_lock<boost::mutex> l(x_rawPrepareSignalled);
+        m_rawPrepareSignalled.wait_for(l, boost::chrono::milliseconds(5));
+    }
+    return true;
+}
+
+void RotatingPBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
+{
+    PBFTEngine::addRawPrepare(_prepareReq);
+    m_rawPrepareSignalled.notify_all();
 }
 
 // request rawPreparePacket from other node when the local rawPrepareReq is empty

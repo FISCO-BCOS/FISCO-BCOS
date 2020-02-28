@@ -45,9 +45,8 @@ public:
     ~RPBFTReqCache() override {}
 
     // check the _rawPrepareStatus received from the given _peerNodeId is valid or not
-    virtual bool checkReceivedRawPrepareStatus(dev::h512 const& _peerNodeId,
-        PBFTMsg::Ptr _rawPrepareStatus, VIEWTYPE const& _currentView,
-        int64_t const& _currentNumber);
+    virtual bool checkReceivedRawPrepareStatus(PBFTMsg::Ptr _rawPrepareStatus,
+        VIEWTYPE const& _currentView, int64_t const& _currentNumber);
 
     // check the given rawPrepare request message has been sent or not
     virtual bool checkAndRequestRawPrepare(PBFTMsg::Ptr _pbftMsg);
@@ -100,6 +99,7 @@ private:
     size_t m_maxRequestedPrepareQueueSize = 1024;
     mutable SharedMutex x_requestedPrepareQueue;
 
+    // signal when update the rawPrepareStatus
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
 
@@ -110,7 +110,7 @@ private:
         m_prepareHashToNodeID;
     mutable SharedMutex x_nodeIDToPrepareStatus;
 
-    uint64_t m_maxRequestMissedTxsWaitTime = 50;
+    uint64_t m_maxRequestMissedTxsWaitTime = 100;
 };
 }  // namespace consensus
 }  // namespace dev
