@@ -30,7 +30,7 @@ docker_mode=
 gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
-supported_consensus=(pbft raft rotating_pbft)
+supported_consensus=(pbft raft rpbft)
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
@@ -56,7 +56,7 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rotating_pbft, pbft is recommended
+    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -502,15 +502,15 @@ generate_group_genesis()
     cat << EOF > ${output} 
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
-    ; and rotating_pbft(consensus_type=rotating_pbft)
+    ; and rpbft(consensus_type=rpbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
-    ; rotating_pbft related configuration
-    ; the sealers num of each consensus round
-    epoch_size=${sealer_size}
-    ; the number of generated blocks before rotating the sealers
-    rotating_interval=1000
+    ; rpbft related configuration
+    ; the sealers num of each consensus epoch
+    epoch_sealer_num=${sealer_size}
+    ; the number of generated blocks each epoch
+    epoch_block_num=1000
     ; the node id of consensusers
     ${node_list}
 [state]

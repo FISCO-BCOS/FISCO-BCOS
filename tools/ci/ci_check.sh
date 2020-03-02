@@ -139,7 +139,7 @@ check_rpbft()
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
     fi
-    ${sed_cmd} "s/consensus_type=raft/consensus_type=rotating_pbft/" node*/conf/group.1.genesis
+    ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
     check_consensus_and_sync
 }
 
