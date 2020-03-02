@@ -342,11 +342,8 @@ TableData::Ptr SQLStorage::selectTableDataByNum(
             entry->setNum(line.get(NUM_FIELD, "").asString());
             entry->setStatus(line.get(STATUS, "").asString());
 
-            if (entry->getStatus() == 0)
-            {
-                entry->setDirty(false);
-                tableData->newEntries->addEntry(entry);
-            }
+            entry->setDirty(false);
+            tableData->newEntries->addEntry(entry);
         }
         tableData->dirtyEntries = std::make_shared<Entries>();
         return tableData;
