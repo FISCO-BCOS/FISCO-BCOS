@@ -58,7 +58,7 @@ bool RotatingPBFTEngine::locatedInChosedConsensensusNodes() const
 void RotatingPBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
-    // update the rotatingInterval
+    // update the epochBlockNum
     m_rotatingIntervalUpdated = updateRotatingInterval();
     if (m_rotatingIntervalUpdated)
     {
@@ -82,7 +82,7 @@ bool RotatingPBFTEngine::updateEpochSize()
 {
     // get the system-configured epoch size
     auto EpochStr =
-        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SIZE);
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
     int64_t Epoch = boost::lexical_cast<int64_t>(EpochStr);
 
     if (Epoch == m_epochSize)
@@ -92,7 +92,7 @@ bool RotatingPBFTEngine::updateEpochSize()
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateEpochSize") << LOG_KV("originEpoch", m_epochSize)
                            << LOG_KV("expectedEpoch", Epoch);
     auto orgEpoch = m_epochSize.load();
-    setEpochSize(Epoch);
+    setEpochSealerNum(Epoch);
     // the E has been changed
     if (orgEpoch != m_epochSize)
     {
@@ -104,8 +104,8 @@ bool RotatingPBFTEngine::updateEpochSize()
 bool RotatingPBFTEngine::updateRotatingInterval()
 {
     // get the system-configured rotating-interval
-    auto ret = m_blockChain->getSystemConfigInfoByKey(
-        dev::precompiled::SYSTEM_KEY_RPBFT_ROTATING_INTERVAL);
+    auto ret =
+        m_blockChain->getSystemConfigInfoByKey(dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM);
     int64_t rotatingInterval = boost::lexical_cast<int64_t>(ret.first);
     BlockNumber enableNumber = ret.second;
     if (rotatingInterval == m_rotatingInterval && enableNumber == m_rotatingIntervalEnableNumber)

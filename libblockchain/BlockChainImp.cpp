@@ -462,12 +462,12 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
             initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
                 boost::lexical_cast<std::string>(initParam.txGasLimit));
             // init configurations for RPBFT
-            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rotating_pbft") == 0)
+            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rpbft") == 0)
             {
                 // init rotating-epoch-size
-                initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SIZE,
+                initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
                     boost::lexical_cast<std::string>(initParam.rpbftEpochSize));
-                initSystemConfig(tb, SYSTEM_KEY_RPBFT_ROTATING_INTERVAL,
+                initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
                     boost::lexical_cast<std::string>(initParam.rpbftRotatingInterval));
             }
         }

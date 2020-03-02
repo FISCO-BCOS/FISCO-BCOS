@@ -81,8 +81,8 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
         fixture->rotatingPBFT()->clearStartIdx();
         fixture->rotatingPBFT()->setSealerListUpdated(true);
 
-        fixture->rotatingPBFT()->setEpochSize(epochSize);
-        fixture->rotatingPBFT()->setRotatingInterval(rotatingInterval);
+        fixture->rotatingPBFT()->setEpochSealerNum(epochSize);
+        fixture->rotatingPBFT()->setEpochBlockNum(rotatingInterval);
         BOOST_CHECK(fixture->rotatingPBFT()->rotatingInterval() == rotatingInterval);
         auto tmpEpochSize = epochSize;
         if (epochSize <= 8)

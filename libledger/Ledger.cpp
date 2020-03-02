@@ -194,8 +194,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 
 bool Ledger::isRotatingPBFTEnabled()
 {
-    return (dev::stringCmpIgnoreCase(
-                m_param->mutableConsensusParam().consensusType, "rotating_pbft") == 0);
+    return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") == 0);
 }
 
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
@@ -255,10 +254,9 @@ dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
     {
         return std::make_shared<dev::eth::BlockFactory>();
     }
-    // only create PartiallyBlockFactory when using pbft or rotating_pbft
+    // only create PartiallyBlockFactory when using pbft or rpbft
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
-        dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") ==
-            0)
+        isRotatingPBFTEnabled())
     {
         return std::make_shared<dev::eth::PartiallyBlockFactory>();
     }
@@ -292,8 +290,8 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     RotatingPBFTEngine::Ptr rotatingPBFT =
         std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
     assert(rotatingPBFT);
-    rotatingPBFT->setEpochSize(m_param->mutableConsensusParam().epochSize);
-    rotatingPBFT->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
+    rotatingPBFT->setEpochSealerNum(m_param->mutableConsensusParam().epochSealerNum);
+    rotatingPBFT->setEpochBlockNum(m_param->mutableConsensusParam().epochBlockNum);
     rotatingPBFT->setMaxRequestMissedTxsWaitTime(
         m_param->mutableConsensusParam().maxRequestMissedTxsWaitTime);
     if (m_param->mutableConsensusParam().broadcastPrepareByTree)
@@ -352,7 +350,8 @@ bool Ledger::consensusInitFactory()
         BOOST_THROW_EXCEPTION(
             dev::InitLedgerConfigFailed()
             << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
-                               m_param->mutableConsensusParam().consensusType));
+                               m_param->mutableConsensusParam().consensusType +
+                               ", supported consensus type are pbft, raft, rpbft"));
     }
     if (!m_sealer)
     {
