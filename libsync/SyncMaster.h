@@ -130,6 +130,11 @@ public:
         m_syncStatus->bq().setMaxBlockQueueSize(_maxBlockQueueSize);
     }
 
+    virtual void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
+    {
+        m_syncTrans->setTxsStatusGossipMaxPeers(_txsStatusGossipMaxPeers);
+    }
+
     virtual ~SyncMaster() { stop(); };
     /// start blockSync
     virtual void start() override;

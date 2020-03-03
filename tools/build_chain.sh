@@ -580,6 +580,9 @@ function generate_group_ini()
     ; only enabled when sync_by_tree is true
     gossip_interval_ms=1000
     gossip_peers_number=3
+    ; the max peers the txs gossip to
+    ; recommend no large than 5
+    txs_max_gossip_peers_num=5
 EOF
 }
 

@@ -146,7 +146,7 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
  */
 void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
     std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-    int64_t const& _startIndex)
+    int64_t const& _startIndex, bool const& _selectAll)
 {
     ssize_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
     // the parentNode is the node-slef
@@ -162,9 +162,12 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         if (getNodeIDByIndex(selectedNode, selectedIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            break;
+            if (!_selectAll)
+            {
+                break;
+            }
         }
-        if (parentIndex == 0)
+        if (parentIndex <= 0)
         {
             break;
         }
@@ -223,7 +226,7 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(std::shared_ptr<std::set<d
 }
 
 std::shared_ptr<dev::h512s> TreeTopology::selectParent(
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex, bool const& _selectAll)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedParentNodeList = std::make_shared<dev::h512s>();
@@ -234,7 +237,7 @@ std::shared_ptr<dev::h512s> TreeTopology::selectParent(
     else
     {
         auto nodeIndex = getNodeIndex(_consIndex);
-        selectParentNodes(selectedParentNodeList, _peers, nodeIndex, _consIndex);
+        selectParentNodes(selectedParentNodeList, _peers, nodeIndex, _consIndex, _selectAll);
     }
     return selectedParentNodeList;
 }

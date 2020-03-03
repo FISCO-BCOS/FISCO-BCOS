@@ -59,8 +59,8 @@ public:
     virtual std::shared_ptr<dev::h512s> selectParentByNodeID(
         std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);
 
-    virtual std::shared_ptr<dev::h512s> selectParent(
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+    virtual std::shared_ptr<dev::h512s> selectParent(std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _consIndex = 0, bool const& _selectAll = false);
 
     virtual int64_t consIndex() const
     {
@@ -80,9 +80,11 @@ protected:
         ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
         int64_t const& _startIndex);
     // select the parent nodes by tree
+    // _selectAll is true:
+    // select all the parent(include the grandparent) for the given node
     virtual void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-        int64_t const& _startIndex);
+        int64_t const& _startIndex, bool const& _selectAll = false);
 
     int64_t getNodeIndex(int64_t const& _consIndex);
 

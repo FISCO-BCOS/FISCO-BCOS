@@ -41,6 +41,12 @@ void DownloadingTxsQueue::push(
                         << LOG_KV("fromPeer", _fromPeer.abridged());
 
         auto selectedNodeList = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
+        // append all the parent nodes into the knownNode
+        auto parentNodeList = m_treeRouter->selectParent(m_syncStatus->peersSet(), consIndex, true);
+        for (auto const& _parentNodeId : *parentNodeList)
+        {
+            txsShard->appendKnownNode(_parentNodeId);
+        }
         // forward the received txs
         for (auto const& selectedNode : *selectedNodeList)
         {
@@ -53,7 +59,7 @@ void DownloadingTxsQueue::push(
             {
                 m_statisticHandler->updateSendedTxsInfo(_msg->length());
             }
-            txsShard->appendForwardNodes(selectedNode);
+            txsShard->appendKnownNode(selectedNode);
             SYNC_LOG(DEBUG) << LOG_DESC("forward transaction")
                             << LOG_KV("selectedNode", selectedNode.abridged());
         }
@@ -62,6 +68,7 @@ void DownloadingTxsQueue::push(
     m_buffer->emplace_back(txsShard);
     if (m_statisticHandler)
     {
+        // the statistic of downloaded-txs-bytes doesn't include the txs from RPC
         m_statisticHandler->updateDownloadedTxsBytes(_msg->length());
     }
 }
@@ -151,6 +158,20 @@ void DownloadingTxsQueue::pop2TxPool(
         std::vector<dev::h256> knownTxHash;
         for (auto tx : *txs)
         {
+            knownTxHash.push_back(tx->sha3());
+        }
+        if (knownTxHash.size() > 0)
+        {
+            _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
+        }
+        for (auto const& forwardedNode : *(txsShard->knownNodes))
+        {
+            _txPool->setTransactionsAreKnownBy(knownTxHash, forwardedNode);
+        }
+        setTxKnownBy_time_cost += (utcTime() - record_time);
+        record_time = utcTime();
+        for (auto tx : *txs)
+        {
             try
             {
                 auto importResult = _txPool->import(tx);
@@ -174,7 +195,6 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_KV("peer", fromPeer.abridged())
                         << LOG_KV("txHash", tx->sha3().abridged());
                 }
-                knownTxHash.push_back(tx->sha3());
             }
             catch (std::exception& e)
             {
@@ -185,17 +205,6 @@ void DownloadingTxsQueue::pop2TxPool(
         }
         import_time_cost += (utcTime() - record_time);
         record_time = utcTime();
-
-        if (knownTxHash.size() > 0)
-        {
-            _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
-        }
-        for (auto const& forwardedNode : *(txsShard->forwardNodes))
-        {
-            _txPool->setTransactionsAreKnownBy(knownTxHash, forwardedNode);
-        }
-
-        setTxKnownBy_time_cost += (utcTime() - record_time);
         if (m_statisticHandler)
         {
             m_statisticHandler->updateDownloadedTxsCount(txs->size());
