@@ -97,12 +97,13 @@ void StorageState::addBalance(Address const& _address, u256 const& _amount)
         auto entries = table->select(ACCOUNT_BALANCE, table->newCondition());
         if (entries->size() != 0u)
         {
+            auto option = std::make_shared<AccessOptions>(Address(), false);
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance += _amount;
             Entry::Ptr updateEntry = table->newEntry();
             updateEntry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition(), option);
         }
     }
     else
@@ -125,8 +126,9 @@ void StorageState::subBalance(Address const& _address, u256 const& _amount)
                 BOOST_THROW_EXCEPTION(NotEnoughCash());
             balance -= _amount;
             Entry::Ptr updateEntry = table->newEntry();
+            auto option = std::make_shared<AccessOptions>(Address(), false);
             updateEntry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition(), option);
         }
     }
     else
@@ -146,9 +148,10 @@ void StorageState::setBalance(Address const& _address, u256 const& _amount)
             auto entry = entries->get(0);
             auto balance = u256(entry->getField(STORAGE_VALUE));
             balance = _amount;
+            auto option = std::make_shared<AccessOptions>(Address(), false);
             Entry::Ptr updateEntry = table->newEntry();
             updateEntry->setField(STORAGE_VALUE, balance.str());
-            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition());
+            table->update(ACCOUNT_BALANCE, updateEntry, table->newCondition(), option);
         }
     }
     else
@@ -192,20 +195,21 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
     auto table = getTable(_address);
     if (table)
     {
+        auto option = std::make_shared<AccessOptions>(Address(), false);
         auto entries = table->select(_location.str(), table->newCondition());
         if (entries->size() == 0u)
         {
             auto entry = table->newEntry();
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
-            table->insert(_location.str(), entry);
+            table->insert(_location.str(), entry, option);
         }
         else
         {
             auto entry = table->newEntry();
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
-            table->update(_location.str(), entry, table->newCondition());
+            table->update(_location.str(), entry, table->newCondition(), option);
         }
     }
 }
@@ -218,11 +222,12 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
     if (table)
     {
         auto entry = table->newEntry();
+        auto option = std::make_shared<AccessOptions>(Address(), false);
         entry->setField(STORAGE_VALUE, toHex(_code));
-        table->update(ACCOUNT_CODE, entry, table->newCondition());
+        table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
-        table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
+        table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
     }
 }
 
@@ -232,20 +237,21 @@ void StorageState::kill(Address _address)
     if (table)
     {
         auto entry = table->newEntry();
+        auto option = std::make_shared<AccessOptions>(Address(), false);
         entry->setField(STORAGE_VALUE, m_accountStartNonce.str());
-        table->update(ACCOUNT_NONCE, entry, table->newCondition());
+        table->update(ACCOUNT_NONCE, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, u256(0).str());
-        table->update(ACCOUNT_BALANCE, entry, table->newCondition());
+        table->update(ACCOUNT_BALANCE, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "");
-        table->update(ACCOUNT_CODE, entry, table->newCondition());
+        table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
-        table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
+        table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "false");
-        table->update(ACCOUNT_ALIVE, entry, table->newCondition());
+        table->update(ACCOUNT_ALIVE, entry, table->newCondition(), option);
     }
     clear();
 }
@@ -323,8 +329,9 @@ void StorageState::incNonce(Address const& _address)
             auto nonce = u256(entry->getField(STORAGE_VALUE));
             ++nonce;
             Entry::Ptr updateEntry = table->newEntry();
+            auto option = std::make_shared<AccessOptions>(Address(), false);
             updateEntry->setField(STORAGE_VALUE, nonce.str());
-            table->update(ACCOUNT_NONCE, updateEntry, table->newCondition());
+            table->update(ACCOUNT_NONCE, updateEntry, table->newCondition(), option);
         }
     }
     else
@@ -337,8 +344,9 @@ void StorageState::setNonce(Address const& _address, u256 const& _newNonce)
     if (table)
     {
         auto entry = table->newEntry();
+        auto option = std::make_shared<AccessOptions>(Address(), false);
         entry->setField(STORAGE_VALUE, _newNonce.str());
-        table->update(ACCOUNT_NONCE, entry, table->newCondition());
+        table->update(ACCOUNT_NONCE, entry, table->newCondition(), option);
     }
     else
         createAccount(_address, _newNonce);
