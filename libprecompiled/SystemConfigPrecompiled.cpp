@@ -151,11 +151,11 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    else if (SYSTEM_KEY_RPBFT_EPOCH_SIZE == key)
+    else if (SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM == key)
     {
         try
         {
-            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_SIZE_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_SEALER_NUM_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -164,11 +164,11 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    else if (SYSTEM_KEY_RPBFT_ROTATING_INTERVAL == key)
+    else if (SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM == key)
     {
         try
         {
-            return (boost::lexical_cast<int64_t>(value) >= RPBFT_ROTATING_INTERVAL_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_BLOCK_NUM_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -177,7 +177,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_size,  rpbft_rotating_interval
-    // as system config
+    // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_sealer_num,
+    // rpbft_epoch_block_num as system config
     return false;
 }

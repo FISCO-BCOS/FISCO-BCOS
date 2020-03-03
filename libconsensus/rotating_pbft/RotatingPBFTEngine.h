@@ -83,14 +83,14 @@ public:
         }
     }
 
-    void setEpochSize(int64_t const& _epochSize)
+    void setEpochSealerNum(int64_t const& _epochSize)
     {
         _epochSize > m_sealersNum.load() ? m_epochSize = m_sealersNum.load() :
                                            m_epochSize = _epochSize;
         RPBFTENGINE_LOG(INFO) << LOG_KV("configured _epochSize", m_epochSize);
     }
 
-    void setRotatingInterval(int64_t const& _rotatingInterval)
+    void setEpochBlockNum(int64_t const& _rotatingInterval)
     {
         m_rotatingInterval = _rotatingInterval;
     }

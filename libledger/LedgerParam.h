@@ -61,10 +61,10 @@ struct ConsensusParam
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
 
-    // epoch size for RPBFT, default is 10
-    int64_t epochSize = 10;
-    // rotating interval, default is 10
-    int64_t rotatingInterval = 10;
+    // sealers size for each RPBFT epoch, default is 10
+    int64_t epochSealerNum = 10;
+    // block num for each epoch, default is 10
+    int64_t epochBlockNum = 10;
     // enable optimize ttl or not
     bool enableTTLOptimize;
     bool enablePrepareWithTxsHash;
