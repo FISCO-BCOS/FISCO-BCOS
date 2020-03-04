@@ -29,6 +29,7 @@ using namespace dev::storage;
 
 static const string USER_TABLE_PREFIX = "_user_";
 static const string USER_TABLE_PREFIX_SHORT = "u_";
+static const string CONTRACT_TABLE_PREFIX_SHORT = "c_";
 
 void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
@@ -60,7 +61,7 @@ std::string dev::precompiled::getTableName(const std::string& _tableName)
 
 std::string dev::precompiled::getContractTableName(Address const& _contractAddress)
 {
-    return std::string("c_" + _contractAddress.hex());
+    return std::string(CONTRACT_TABLE_PREFIX_SHORT + _contractAddress.hex());
 }
 
 

@@ -98,24 +98,32 @@ check_name() {
     }
 }
 
+exit_with_clean()
+{
+    local content=${1}
+    echo -e "\033[31m[ERROR] ${content}\033[0m"
+    if [ -d "${output_dir}" ];then
+        rm -rf "${output_dir}"
+    fi
+    exit 1
+}
+
 file_must_exists() {
     if [ ! -f "$1" ]; then
-        echo "$1 file does not exist, please check!"
-        exit $EXIT_CODE
+        exit_with_clean "$1 file does not exist, please check!"
     fi
 }
 
 dir_must_exists() {
     if [ ! -d "$1" ]; then
-        echo "$1 DIR does not exist, please check!"
-        exit $EXIT_CODE
+        exit_with_clean "$1 DIR does not exist, please check!"
     fi
 }
 
 dir_must_not_exists() {
     if [ -e "$1" ]; then
-        echo "$1 DIR exists, please clean old DIR!"
-        exit $EXIT_CODE
+        LOG_WARN "$1 DIR exists, please clean old DIR!"
+        exit 1
     fi
 }
 
@@ -125,12 +133,12 @@ gen_cert_secp256k1() {
     name="$3"
     type="$4"
     openssl ecparam -out $certpath/${type}.param -name secp256k1
-    openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
-    openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $capath/cert.cnf -out $certpath/${type}.csr
-    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $capath/agency.key -CA $capath/agency.crt\
-        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $capath/cert.cnf
-    openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
+    openssl genpkey -paramfile "$certpath/${type}.param" -out "$certpath/${type}.key" 2> /dev/null
+    openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config "$capath/cert.cnf" -out "$certpath/${type}.csr" 
+    openssl x509 -req -days 3650 -sha256 -in "$certpath/${type}.csr" -CAkey "$capath/agency.key" -CA "$capath/agency.crt" \
+        -force_pubkey "$certpath/${type}.pubkey" -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$capath/cert.cnf" 2> /dev/null
+    openssl ec -in "$certpath/${type}.key" -outform DER 2> /dev/null | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >"$certpath/${type}.private"
     rm -f $certpath/${type}.csr
 }
 
@@ -139,19 +147,20 @@ gen_node_cert() {
         echo "openssl don't support secp256k1, please upgrade openssl!"
         exit -1
     fi
-    agpath="$2"
-    agency=$(getname "$agpath")
-    ndpath="$3"
-    node=$(getname "$ndpath")
+    agpath="${1}"
+    agency=$(basename "$agpath")
+    ndpath="${2}"
+    node="node"
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
     dir_must_not_exists "$ndpath"	
     check_name node "$node"
+
     mkdir -p $ndpath
-    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" node
+    gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "node" 
     #nodeid is pubkey
-    openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
+    openssl ec -in "$ndpath/node.key" -text -noout 2> /dev/null| sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath/node.nodeid"
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 }
 
@@ -268,10 +277,9 @@ main()
 
     while :
     do
-        gen_node_cert "" ${key_path} ${output_dir} > ${logfile} 2>&1
+        gen_node_cert "${key_path}" "${output_dir}"
         cd ${output_dir}
         mkdir -p ${conf_path}/
-        rm node.param node.pubkey
         mv *.* ${conf_path}/
         cd ${current_dir}
         #private key should not start with 00
@@ -311,7 +319,7 @@ main()
         rm ${output_dir:?}/${conf_path} -rf
         mv ${output_dir}/${gm_conf_path} ${output_dir}/${conf_path}
     fi
-    rm ${logfile}
+    if [ -f "${logfile}" ];then rm "${logfile}";fi
 }
 
 parse_params $@

@@ -26,6 +26,7 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -34,6 +35,9 @@ using namespace dev::precompiled;
 const char* const AUP_METHOD_INS = "insert(string,string)";
 const char* const AUP_METHOD_REM = "remove(string,string)";
 const char* const AUP_METHOD_QUE = "queryByName(string)";
+const char* const AUP_METHOD_GRANT_WRITE_CONTRACT = "grantWrite(address,address)";
+const char* const AUP_METHOD_REVOKE_WRITE_CONTRACT = "revokeWrite(address,address)";
+const char* const AUP_METHOD_QUERY_CONTRACT = "queryPermission(address)";
 
 
 PermissionPrecompiled::PermissionPrecompiled()
@@ -41,11 +45,19 @@ PermissionPrecompiled::PermissionPrecompiled()
     name2Selector[AUP_METHOD_INS] = getFuncSelector(AUP_METHOD_INS);
     name2Selector[AUP_METHOD_REM] = getFuncSelector(AUP_METHOD_REM);
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
+    if (g_BCOSConfig.version() >= V2_3_0)
+    {
+        name2Selector[AUP_METHOD_GRANT_WRITE_CONTRACT] =
+            getFuncSelector(AUP_METHOD_GRANT_WRITE_CONTRACT);
+        name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT] =
+            getFuncSelector(AUP_METHOD_REVOKE_WRITE_CONTRACT);
+        name2Selector[AUP_METHOD_QUERY_CONTRACT] = getFuncSelector(AUP_METHOD_QUERY_CONTRACT);
+    }
 }
 
 std::string PermissionPrecompiled::toString()
 {
-    return "Authority";
+    return "Permission";
 }
 
 bytes PermissionPrecompiled::call(
@@ -120,35 +132,15 @@ bytes PermissionPrecompiled::call(
         getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
-    {
-        // remove(string tableName,string addr)
+    {  // remove(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
         addPrefixToUserTable(tableName);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-
-        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
-
-        auto condition = table->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, addr);
-        auto entries = table->select(tableName, condition);
-        if (entries->size() == 0u)
-        {
-            PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
-                                     << LOG_DESC("tableName and address does not exist");
-            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-        }
-        else
-        {
-            int count =
-                table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-            result = count;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("PermissionPrecompiled")
-                << LOG_KV("remove_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
-        }
+        int result = revokeWritePermission(context, tableName, addr, origin);
+        out = abi.abiIn("", s256(result));
         getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
@@ -161,29 +153,73 @@ bytes PermissionPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryByName func")
                                << LOG_KV("tableName", tableName);
 
+        auto result = queryPermission(context, tableName);
+        out = abi.abiIn("", result);
+    }
+    else if (func == name2Selector[AUP_METHOD_GRANT_WRITE_CONTRACT])
+    {  // grantWrite(address,address)
+        Address contractAddress, user;
+        abi.abiOut(data, contractAddress, user);
+        string addr = user.hex();
+        string tableName = precompiled::getContractTableName(contractAddress);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
+                              << LOG_KV("tableName", tableName) << LOG_KV("user", addr);
+
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
         auto condition = table->newCondition();
+        condition->EQ(SYS_AC_ADDRESS, addr);
         auto entries = table->select(tableName, condition);
-        Json::Value AuthorityInfos(Json::arrayValue);
-        if (entries)
+        if (entries->size() != 0u)
         {
-            for (size_t i = 0; i < entries->size(); i++)
-            {
-                auto entry = entries->get(i);
-                if (!entry)
-                    continue;
-                Json::Value AuthorityInfo;
-                AuthorityInfo[SYS_AC_TABLE_NAME] = tableName;
-                AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
-                AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
-                AuthorityInfos.append(AuthorityInfo);
-            }
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
+            result = CODE_TABLE_AND_ADDRESS_EXIST;
         }
-        Json::FastWriter fastWriter;
-        std::string str = fastWriter.write(AuthorityInfos);
+        else if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
+                << LOG_KV("tableName", tableName);
+            result = CODE_TABLE_NAME_OVERFLOW;
+        }
+        else
+        {
+            auto entry = table->newEntry();
+            entry->setField(SYS_AC_TABLE_NAME, tableName);
+            entry->setField(SYS_AC_ADDRESS, addr);
+            entry->setField(SYS_AC_ENABLENUM,
+                boost::lexical_cast<std::string>(context->blockInfo().number + 1));
+            int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
+            result = count;
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
+        }
+        out = abi.abiIn("", u256(result));
+    }
+    else if (func == name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT])
+    {  // revokeWrite(address,address)
+        Address contractAddress, user;
+        abi.abiOut(data, contractAddress, user);
+        string addr = user.hex();
+        string tableName = precompiled::getContractTableName(contractAddress);
 
-        out = abi.abiIn("", str);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
+                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
+
+        int result = revokeWritePermission(context, tableName, addr, origin);
+        out = abi.abiIn("", s256(result));
+    }
+    else if (func == name2Selector[AUP_METHOD_QUERY_CONTRACT])
+    {  // queryPermission(address)
+        Address contractAddress;
+        abi.abiOut(data, contractAddress);
+        string tableName = precompiled::getContractTableName(contractAddress);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryByName func")
+                               << LOG_KV("tableName", tableName);
+        auto result = queryPermission(context, tableName);
+        out = abi.abiIn("", result);
     }
     else
     {
@@ -191,6 +227,58 @@ bytes PermissionPrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     return out;
+}
+
+string PermissionPrecompiled::queryPermission(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName)
+{
+    Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+
+    auto condition = table->newCondition();
+    auto entries = table->select(tableName, condition);
+    Json::Value AuthorityInfos(Json::arrayValue);
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            Json::Value AuthorityInfo;
+            AuthorityInfo[SYS_AC_TABLE_NAME] = tableName;
+            AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
+            AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
+            AuthorityInfos.append(AuthorityInfo);
+        }
+    }
+    Json::FastWriter fastWriter;
+    return fastWriter.write(AuthorityInfos);
+}
+
+int PermissionPrecompiled::revokeWritePermission(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName,
+    const string& user, Address const& origin)
+{
+    int result;
+    Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+    auto condition = table->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, user);
+    auto entries = table->select(tableName, condition);
+    if (entries->size() == 0u)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
+                                 << LOG_DESC("tableName and address does not exist");
+        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+    }
+    else
+    {
+        int count = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
+        result = count;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled")
+                               << LOG_KV("remove_success",
+                                      (count == storage::CODE_NO_AUTHORIZED ? false : true));
+    }
+    return result;
 }
 
 void PermissionPrecompiled::addPrefixToUserTable(std::string& table_name)
