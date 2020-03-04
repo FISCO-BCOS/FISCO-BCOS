@@ -155,31 +155,36 @@ void ContractStatusPrecompiled::kill(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("kill contract", tableName);
-
-    ContractStatus status = getContractStatus(context, tableName);
-    if (ContractStatus::Killed == status)
+    // administrative authority judgment precedes status judgment
+    if (checkPermission(context, tableName, origin))
     {
-        result = CODE_INVALID_CONTRACT_KILLED;
-    }
-    else if (ContractStatus::Nonexistent == status)
-    {
-        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-    }
-    else if (checkPermission(context, tableName, origin))
-    {
-        Table::Ptr table = openTable(context, tableName);
-        if (table)
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
         {
-            auto entry = table->newEntry();
-            entry->setField(storagestate::STORAGE_VALUE, "");
-            table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
-                std::make_shared<AccessOptions>(origin));
-            entry = table->newEntry();
-            entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
-            table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition());
-            entry = table->newEntry();
-            entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
-            table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition());
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
+        else
+        {
+            Table::Ptr table = openTable(context, tableName);
+            if (table)
+            {
+                auto entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, "");
+                table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin, false));
+                entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
+                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin, false));
+                entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
+                table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin, false));
+            }
         }
     }
     else
@@ -192,8 +197,8 @@ void ContractStatusPrecompiled::kill(
     getErrorCodeOut(out, result);
 }
 
-int ContractStatusPrecompiled::updateFrozenStatus(
-    ExecutiveContext::Ptr context, std::string const& tableName, std::string const& frozen)
+int ContractStatusPrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
+    std::string const& tableName, std::string const& frozen, Address const& origin)
 {
     int result = 0;
 
@@ -205,11 +210,13 @@ int ContractStatusPrecompiled::updateFrozenStatus(
         entry->setField(storagestate::STORAGE_VALUE, frozen);
         if (entries->size() != 0u)
         {
-            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition());
+            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
+                std::make_shared<AccessOptions>(origin, false));
         }
         else
         {
-            result = table->insert(storagestate::ACCOUNT_FROZEN, entry);
+            result = table->insert(storagestate::ACCOUNT_FROZEN, entry,
+                std::make_shared<AccessOptions>(origin, false));
         }
 
         if (result == storage::CODE_NO_AUTHORIZED)
@@ -233,23 +240,26 @@ void ContractStatusPrecompiled::freeze(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("freeze contract", tableName);
-
-    ContractStatus status = getContractStatus(context, tableName);
-    if (ContractStatus::Killed == status)
+    // administrative authority judgment precedes status judgment
+    if (checkPermission(context, tableName, origin))
     {
-        result = CODE_INVALID_CONTRACT_KILLED;
-    }
-    else if (ContractStatus::Frozen == status)
-    {
-        result = CODE_INVALID_CONTRACT_FEOZEN;
-    }
-    else if (ContractStatus::Nonexistent == status)
-    {
-        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-    }
-    else if (checkPermission(context, tableName, origin))
-    {
-        result = updateFrozenStatus(context, tableName, STATUS_TRUE);
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
+        {
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Frozen == status)
+        {
+            result = CODE_INVALID_CONTRACT_FEOZEN;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
+        else
+        {
+            result = updateFrozenStatus(context, tableName, STATUS_TRUE, origin);
+        }
     }
     else
     {
@@ -272,23 +282,26 @@ void ContractStatusPrecompiled::unfreeze(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("unfreeze contract", tableName);
-
-    ContractStatus status = getContractStatus(context, tableName);
-    if (ContractStatus::Killed == status)
+    // administrative authority judgment precedes status judgment
+    if (checkPermission(context, tableName, origin))
     {
-        result = CODE_INVALID_CONTRACT_KILLED;
-    }
-    else if (ContractStatus::Available == status)
-    {
-        result = CODE_INVALID_CONTRACT_AVAILABLE;
-    }
-    else if (ContractStatus::Nonexistent == status)
-    {
-        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
-    }
-    else if (checkPermission(context, tableName, origin))
-    {
-        result = updateFrozenStatus(context, tableName, STATUS_FALSE);
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Killed == status)
+        {
+            result = CODE_INVALID_CONTRACT_KILLED;
+        }
+        else if (ContractStatus::Available == status)
+        {
+            result = CODE_INVALID_CONTRACT_AVAILABLE;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
+        else
+        {
+            result = updateFrozenStatus(context, tableName, STATUS_FALSE, origin);
+        }
     }
     else
     {
