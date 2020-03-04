@@ -127,6 +127,10 @@ public:
 
     void maintainTransactions();
     void maintainDownloadingTransactions();
+    void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
+    {
+        m_txsStatusGossipMaxPeers = _txsStatusGossipMaxPeers;
+    }
 
 private:
     /// p2p service handler
@@ -172,6 +176,8 @@ private:
 
     TreeTopology::Ptr m_treeRouter;
     std::shared_ptr<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>> m_txsHash;
+
+    unsigned m_txsStatusGossipMaxPeers = 5;
 
 private:
     void forwardRemainingTxs();

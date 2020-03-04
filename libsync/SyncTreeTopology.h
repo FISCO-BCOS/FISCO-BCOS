@@ -62,7 +62,7 @@ protected:
     // select the parent nodes by tree
     void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-        int64_t const& _startIndex) override;
+        int64_t const& _startIndex, bool const& _selectAll = false) override;
 
 private:
     bool locatedInGroup();

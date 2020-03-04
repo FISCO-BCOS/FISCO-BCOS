@@ -43,16 +43,13 @@ public:
     DownloadTxsShard(bytesConstRef _txsBytes, NodeID const& _fromPeer)
       : txsBytes(_txsBytes.toBytes()), fromPeer(_fromPeer)
     {
-        forwardNodes = std::make_shared<dev::h512s>();
+        knownNodes = std::make_shared<dev::h512s>();
     }
 
-    void appendForwardNodes(dev::h512 const& _forwardNode)
-    {
-        forwardNodes->push_back(_forwardNode);
-    }
+    void appendKnownNode(dev::h512 const& _knownNode) { knownNodes->push_back(_knownNode); }
     bytes txsBytes;
     NodeID fromPeer;
-    std::shared_ptr<dev::h512s> forwardNodes;
+    std::shared_ptr<dev::h512s> knownNodes;
 };
 
 class DownloadingTxsQueue

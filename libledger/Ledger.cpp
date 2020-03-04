@@ -398,6 +398,7 @@ bool Ledger::initSync()
         m_param->mutableSyncParam().syncTreeWidth);
     // set the max block queue size for sync module(bytes)
     syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
+    syncMaster->setTxsStatusGossipMaxPeers(m_param->mutableSyncParam().txsStatusGossipMaxPeers);
     m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;

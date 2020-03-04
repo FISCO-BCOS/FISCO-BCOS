@@ -440,16 +440,22 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
                                   "Please set max_block_sync_memory_size no more than 32"));
     }
+    mutableSyncParam().txsStatusGossipMaxPeers = pt.get<signed>("sync.txs_max_gossip_peers_num", 5);
+    if (mutableSyncParam().txsStatusGossipMaxPeers < 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "txs_gossip_max_peers_num must be no smaller than zero"));
+    }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
 
-    LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
-                          << LOG_KV("enableSendBlockStatusByTree",
-                                 mutableSyncParam().enableSendBlockStatusByTree)
-                          << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
-                          << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
-                          << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
-                          << LOG_KV("maxQueueSizeForBlockSync",
-                                 mutableSyncParam().maxQueueSizeForBlockSync);
+    LedgerParam_LOG(INFO)
+        << LOG_BADGE("initSyncConfig")
+        << LOG_KV("enableSendBlockStatusByTree", mutableSyncParam().enableSendBlockStatusByTree)
+        << LOG_KV("gossipInterval", mutableSyncParam().gossipInterval)
+        << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
+        << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
+        << LOG_KV("maxQueueSizeForBlockSync", mutableSyncParam().maxQueueSizeForBlockSync)
+        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)
