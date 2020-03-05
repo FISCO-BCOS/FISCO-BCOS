@@ -213,16 +213,20 @@ h256 ExtVM::codeHashAt(Address const& _a)
     return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
-void ExtVM::setStore(u256 const& _n, u256 const& _v)
+bool ExtVM::isPermitted()
 {
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        LOG(ERROR) << "setStore PermissionDenied" << LOG_KV("origin", origin())
+        LOG(ERROR) << "ExtVM::isPermitted PermissionDenied" << LOG_KV("origin", origin())
                    << LOG_KV("address", myAddress());
-        BOOST_THROW_EXCEPTION(PermissionDenied());
+        return false;
     }
+    return true;
+}
 
+void ExtVM::setStore(u256 const& _n, u256 const& _v)
+{
     m_s->setStorage(myAddress(), _n, _v);
 }
 
