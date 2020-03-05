@@ -57,7 +57,7 @@ bool RotatingPBFTEngine::locatedInChosedConsensensusNodes() const
 
 void RotatingPBFTEngine::resetConfig()
 {
-    ConsensusEngineBase::resetConfig();
+    PBFTEngine::resetConfig();
     // update the epochBlockNum
     m_rotatingIntervalUpdated = updateRotatingInterval();
     if (m_rotatingIntervalUpdated)

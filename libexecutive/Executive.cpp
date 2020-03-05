@@ -182,6 +182,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
             m_gas = _p.gas;
             if (m_s->frozen(_p.codeAddress))
             {
+                LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+                           << LOG_KV("contractAddr", _p.codeAddress);
                 m_excepted = TransactionException::ContractFrozen;
             }
             else if (m_s->addressHasCode(_p.codeAddress))
@@ -260,6 +262,8 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     }
     else if (m_s->frozen(_p.codeAddress))
     {
+        LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for ContractFrozen")
+                   << LOG_KV("contractAddr", _p.codeAddress);
         m_excepted = TransactionException::ContractFrozen;
     }
     else if (m_s->addressHasCode(_p.codeAddress))
@@ -556,7 +560,7 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                   << LOG_KV("hash", (m_t->hasSignature()) ? m_t->sha3().abridged() : "call")
+                   << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->sha3()) : "call")
                    << m_exceptionReason.str();
     }
 }

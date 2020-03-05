@@ -58,6 +58,10 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
 {
     (void)_addr;
     auto& env = static_cast<ExtVMFace&>(*_context);
+    if (!env.isPermitted())
+    {
+        BOOST_THROW_EXCEPTION(PermissionDenied());
+    }
     assert(fromEvmC(*_addr) == env.myAddress());
     u256 index = fromEvmC(*_key);
     u256 value = fromEvmC(*_value);
