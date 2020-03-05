@@ -590,5 +590,7 @@ dev::storage::Storage::Ptr dev::ledger::createZdbStorage(
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler(_fatalHandler);
+    zdbStorage->setMaxRetry(_param->mutableStorageParam().maxRetry);
+
     return zdbStorage;
 }
