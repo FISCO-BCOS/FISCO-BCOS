@@ -62,7 +62,7 @@ private:
     void kill(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
-        std::string const& tableName, std::string const& frozen);
+        std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
     void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
