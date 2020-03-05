@@ -461,9 +461,8 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("hash", req.block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
-        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
         // print the disconnected info
-        getForwardNodes(sessions, true);
+        getForwardNodes(true);
     }
 
     bytes view_change_data;
@@ -570,9 +569,8 @@ void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _dat
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     if (m_enableTTLOptimize)
     {
-        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
         // get the forwardNodes
-        forwardNodes = getForwardNodes(sessions);
+        forwardNodes = getForwardNodes();
     }
     auto p2pMessage = transDataToMessage(_data, _packetType, _ttl, forwardNodes);
     p2pMessage->setPacketType(_p2pPacketType);
@@ -1866,9 +1864,9 @@ void PBFTEngine::createPBFTMsgFactory()
 
 // get the forwardNodes
 // _printLog is true when viewChangeWarning to show more detailed info
-std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
-    dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog)
+std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
 {
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     std::set<h512> consensusNodes;
     {
@@ -1877,7 +1875,7 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
     }
     std::string connectedNodeList = "";
     // select the disconnected consensus nodes
-    for (auto const& session : _sessions)
+    for (auto const& session : sessions)
     {
         if (consensusNodes.count(session.nodeID()))
         {
@@ -1904,7 +1902,7 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
             PBFTENGINE_LOG(WARNING)
                 << LOG_DESC("Find disconnectedNode")
                 << LOG_KV("disconnectedNodeSize", forwardNodes->size())
-                << LOG_KV("sessionSize", _sessions.size())
+                << LOG_KV("sessionSize", sessions.size())
                 << LOG_KV("minValidNodes", minValidNodes())
                 << LOG_KV("connectedNodeList", connectedNodeList)
                 << LOG_KV("disconnectedNode", disconnectedNode) << LOG_KV("idx", nodeIdx());

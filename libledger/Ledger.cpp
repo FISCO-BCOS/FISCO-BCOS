@@ -294,6 +294,8 @@ void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     rotatingPBFT->setEpochBlockNum(m_param->mutableConsensusParam().epochBlockNum);
     rotatingPBFT->setMaxRequestMissedTxsWaitTime(
         m_param->mutableConsensusParam().maxRequestMissedTxsWaitTime);
+    rotatingPBFT->setMaxRequestPrepareWaitTime(
+        m_param->mutableConsensusParam().maxRequestPrepareWaitTime);
     if (m_param->mutableConsensusParam().broadcastPrepareByTree)
     {
         rotatingPBFT->createTreeTopology(m_param->mutableConsensusParam().treeWidth);

@@ -530,20 +530,22 @@ function generate_group_ini()
     cat << EOF > ${output}
 [consensus]
     ; the ttl for broadcasting pbft message
-    ;ttl=2
+    ttl=2
     ; min block generation time(ms), the max block generation time is 1000 ms
-    ;min_block_generation_time=500
+    min_block_generation_time=500
     ;enable_dynamic_block_size=true
-    ;enable_ttl_optimization=true
-    ;enable_prepare_with_txsHash=true
+    enable_ttl_optimization=true
+    enable_prepare_with_txsHash=true
+    ; The following is the relevant configuration of rpbft
     ; set true to enable broadcast prepare request by tree
-    ;broadcast_prepare_by_tree=true
-    ; percent of selected nodes to receive prepare status
-    ; must be no smaller than 25 and no larger than 100
-    ;prepare_status_broadcast_percent=33
-    ; max wait time before request missed transactions to the leader, ms
-    ; must be no smaller than 5ms and no larger than 1000ms
-    ;max_request_missedTxs_waitTime=100
+    broadcast_prepare_by_tree=true
+    ; percent of nodes that broadcast prepare status to, must be between 25 and 100
+    prepare_status_broadcast_percent=33
+    ; max wait time before request missed transactions, ms, must be between 5ms and 1000ms
+    max_request_missedTxs_waitTime=100
+    ; maximum wait time before requesting a prepare, ms, must be between 10ms and 1000ms
+    max_request_prepare_waitTime=100
+
 [storage]
     ; storage db type, rocksdb / mysql / scalable, rocksdb is recommended
     type=${storage_type}
@@ -580,8 +582,7 @@ function generate_group_ini()
     ; only enabled when sync_by_tree is true
     gossip_interval_ms=1000
     gossip_peers_number=3
-    ; the max peers the txs gossip to
-    ; recommend no large than 5
+    ; max number of nodes that broadcast txs status to, recommended less than 5 
     txs_max_gossip_peers_num=5
 EOF
 }
