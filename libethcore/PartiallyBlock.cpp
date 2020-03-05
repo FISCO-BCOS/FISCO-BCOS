@@ -112,15 +112,21 @@ void PartiallyBlock::checkBasic(RLP const& rlp, dev::h256 const& _expectedHash)
     }
 }
 
+
 // fill the missed transactions into the block
 void PartiallyBlock::fillBlock(bytesConstRef _txsData)
 {
-    m_missedTransactions->clear();
     RLP blockRlp(_txsData);
-    // check block number
-    checkBasic(blockRlp, m_blockHeader.hash());
+    fillBlock(blockRlp);
+}
 
-    auto txsBytes = blockRlp[2].toBytesConstRef();
+void PartiallyBlock::fillBlock(RLP const& _rlp)
+{
+    m_missedTransactions->clear();
+    // check block number
+    checkBasic(_rlp, m_blockHeader.hash());
+
+    auto txsBytes = _rlp[2].toBytesConstRef();
     // decode transactions into m_missedTransactions
     TxsParallelParser::decode(m_missedTransactions, txsBytes, CheckTransaction::Everything, true);
 

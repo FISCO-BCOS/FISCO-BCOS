@@ -82,14 +82,25 @@ bool PartiallyPBFTReqCache::fetchMissedTxs(
 
 bool PartiallyPBFTReqCache::fillBlock(bytesConstRef _txsData)
 {
-    if (!m_partiallyRawPrepare || !m_partiallyRawPrepare->pBlock)
+    RLP blockRLP(_txsData);
+    return fillBlock(m_partiallyRawPrepare, blockRLP);
+}
+
+bool PartiallyPBFTReqCache::fillPrepareCacheBlock(RLP const& _txsRLP)
+{
+    return fillBlock(m_partiallyRawPrepare, _txsRLP);
+}
+
+bool PartiallyPBFTReqCache::fillBlock(PrepareReq::Ptr _prepareReq, RLP const& _txsRLP)
+{
+    if (!_prepareReq || !_prepareReq->pBlock)
     {
         return false;
     }
     PartiallyBlock::Ptr partiallyBlock =
-        std::dynamic_pointer_cast<PartiallyBlock>(m_partiallyRawPrepare->pBlock);
+        std::dynamic_pointer_cast<PartiallyBlock>(_prepareReq->pBlock);
     assert(partiallyBlock);
-    partiallyBlock->fillBlock(_txsData);
+    partiallyBlock->fillBlock(_txsRLP);
     PartiallyPBFTReqCache_LOG(DEBUG)
         << LOG_DESC("fillBlock") << LOG_KV("number", partiallyBlock->blockHeader().number())
         << LOG_KV("hash", partiallyBlock->blockHeader().hash().abridged())
@@ -112,4 +123,54 @@ void PartiallyPBFTReqCache::clearPreRawPrepare()
 {
     WriteGuard l(x_preRawPrepare);
     m_preRawPrepare = nullptr;
+}
+
+void PartiallyPBFTReqCache::addPartiallyFuturePrepare(PrepareReq::Ptr _futurePrepare)
+{
+    if (!m_partiallyFuturePrepare)
+    {
+        m_partiallyFuturePrepare = _futurePrepare;
+        return;
+    }
+    if ((_futurePrepare->height > m_partiallyFuturePrepare->height) ||
+        (_futurePrepare->height == m_partiallyFuturePrepare->height &&
+            _futurePrepare->view > m_partiallyFuturePrepare->view))
+    {
+        PartiallyPBFTReqCache_LOG(DEBUG)
+            << LOG_DESC("addPartiallyFuturePrepare") << LOG_KV("number", _futurePrepare->height)
+            << LOG_KV("hash", _futurePrepare->block_hash.abridged())
+            << LOG_KV("idx", _futurePrepare->idx) << LOG_KV("view", _futurePrepare->view)
+            << LOG_KV("cachedNumber", m_partiallyFuturePrepare->height)
+            << LOG_KV("cachedView", m_partiallyFuturePrepare->view)
+            << LOG_KV("cachedHash", m_partiallyFuturePrepare->block_hash.abridged());
+        m_partiallyFuturePrepare = _futurePrepare;
+    }
+}
+
+bool PartiallyPBFTReqCache::existInFuturePrepare(dev::h256 const& _blockHash)
+{
+    if (m_partiallyFuturePrepare && m_partiallyFuturePrepare->block_hash == _blockHash)
+    {
+        return true;
+    }
+    return false;
+}
+
+void PartiallyPBFTReqCache::fillFutureBlock(RLP const& _txsRLP)
+{
+    auto ret = fillBlock(m_partiallyFuturePrepare, _txsRLP);
+    if (ret)
+    {
+        auto futurePrepare = m_partiallyFuturePrepare;
+        m_partiallyFuturePrepare = nullptr;
+        // re-encode the block into the completed block(for pbft-backup consideration)
+        futurePrepare->pBlock->encode(*futurePrepare->block);
+        // convert m_partiallyFuturePrepare into futurePrepare
+        addFuturePrepareCache(futurePrepare);
+        PartiallyPBFTReqCache_LOG(DEBUG)
+            << LOG_DESC("fillFutureBlock and trans into the future prepareReq")
+            << LOG_KV("number", futurePrepare->height)
+            << LOG_KV("hash", futurePrepare->block_hash.abridged())
+            << LOG_KV("idx", futurePrepare->idx) << LOG_KV("view", futurePrepare->view);
+    }
 }
