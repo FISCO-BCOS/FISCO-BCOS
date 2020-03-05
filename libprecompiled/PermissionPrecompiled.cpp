@@ -160,9 +160,9 @@ bytes PermissionPrecompiled::call(
     {  // grantWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = user.hex();
+        string addr = "0x" + user.hex();
         string tableName = precompiled::getContractTableName(contractAddress);
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("grantWrite")
                               << LOG_KV("tableName", tableName) << LOG_KV("user", addr);
 
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -202,11 +202,11 @@ bytes PermissionPrecompiled::call(
     {  // revokeWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = user.hex();
+        string addr = "0x" + user.hex();
         string tableName = precompiled::getContractTableName(contractAddress);
 
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
-                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
+                              << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
 
         int result = revokeWritePermission(context, tableName, addr, origin);
         out = abi.abiIn("", s256(result));
@@ -216,7 +216,7 @@ bytes PermissionPrecompiled::call(
         Address contractAddress;
         abi.abiOut(data, contractAddress);
         string tableName = precompiled::getContractTableName(contractAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryByName func")
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryPermission")
                                << LOG_KV("tableName", tableName);
         auto result = queryPermission(context, tableName);
         out = abi.abiIn("", result);
