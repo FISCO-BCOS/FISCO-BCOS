@@ -73,6 +73,7 @@ struct ConsensusParam
     unsigned treeWidth = 3;
     unsigned prepareStatusBroadcastPercent;
     int64_t maxRequestMissedTxsWaitTime;
+    int64_t maxRequestPrepareWaitTime;
 };
 
 struct AMDBParam
@@ -184,6 +185,7 @@ private:
     void initTxExecuteConfig(boost::property_tree::ptree const& pt);
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
+    void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
 

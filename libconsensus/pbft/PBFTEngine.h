@@ -650,8 +650,7 @@ protected:
 
     virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
         unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType);
-    std::shared_ptr<dev::h512s> getForwardNodes(
-        dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog = false);
+    std::shared_ptr<dev::h512s> getForwardNodes(bool const& _printLog = false);
 
 
     // BIP 152 related logic

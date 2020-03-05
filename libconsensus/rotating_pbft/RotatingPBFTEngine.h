@@ -116,6 +116,11 @@ public:
         m_maxRequestMissedTxsWaitTime = _maxRequestMissedTxsWaitTime;
     }
 
+    void setMaxRequestPrepareWaitTime(int64_t const& _maxRequestPrepareWaitTime)
+    {
+        m_maxRequestPrepareWaitTime = _maxRequestPrepareWaitTime;
+    }
+
 protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
