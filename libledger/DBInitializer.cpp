@@ -470,6 +470,10 @@ dev::storage::Storage::Ptr DBInitializer::initZdbStorage()
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                                  << "access mysql failed exit:" << e.what();
         raise(SIGTERM);
+        while (!g_BCOSConfig.shouldExit.load())
+        {  // wait to exit
+            std::this_thread::yield();
+        }
         BOOST_THROW_EXCEPTION(e);
     });
     return zdbStorage;

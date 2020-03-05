@@ -755,8 +755,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
         }
     }
     catch (std::exception& e)
-    {
-        // stop() commit thread to exit
+    {  // stop() commit thread to exit
         m_running->store(false);
         m_taskThreadPool->stop();
         raise(SIGTERM);

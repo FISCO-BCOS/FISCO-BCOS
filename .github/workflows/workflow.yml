@@ -15,6 +15,8 @@ on:
     #     - '**'
   release:
     types: [published, created, edited]
+env:
+  CCACHE_DIR: ${{ github.workspace }}/ccache
 
 jobs:
   build:
