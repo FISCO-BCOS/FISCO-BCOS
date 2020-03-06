@@ -260,6 +260,7 @@ protected:
     void checkTimeout();
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     virtual dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
+    bool requestMissedTxs(PrepareReq::Ptr _prepareReq);
 
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
