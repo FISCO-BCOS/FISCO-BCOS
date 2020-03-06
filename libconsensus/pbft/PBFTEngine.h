@@ -260,7 +260,6 @@ protected:
     void checkTimeout();
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     virtual dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
-    bool requestMissedTxs(PrepareReq::Ptr _prepareReq);
 
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
@@ -272,19 +271,19 @@ protected:
     void getAllNodesViewStatus(Json::Value& status);
 
     // broadcast given messages to all-peers with cache-filter and specified filter
-    virtual bool broadcastMsg(unsigned const& _packetType, std::string const& _key,
+    virtual bool broadcastMsg(unsigned const& _packetType, PBFTMsg const& _pbftMsg,
         bytesConstRef _data, PACKET_TYPE const& _p2pPacketType,
         std::unordered_set<dev::network::NodeID> const& _filter, unsigned const& _ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
 
-    bool broadcastMsg(unsigned const& _packetType, std::string const& _key, bytesConstRef _data,
+    bool broadcastMsg(unsigned const& _packetType, PBFTMsg const& _pbftMsg, bytesConstRef _data,
         PACKET_TYPE const& _p2pPacketType = 0,
         std::unordered_set<dev::network::NodeID> const& _filter =
             std::unordered_set<dev::network::NodeID>(),
         unsigned const& _ttl = 0)
     {
         return broadcastMsg(
-            _packetType, _key, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
+            _packetType, _pbftMsg, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
     }
 
     void sendViewChangeMsg(dev::network::NodeID const& nodeId);
@@ -380,15 +379,8 @@ protected:
 
     /// trans data into message
     virtual dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
-        PACKET_TYPE const& _packetType, PROTOCOL_ID const& _protocolId, unsigned const& _ttl,
-        std::shared_ptr<dev::h512s> _forwardNodes = nullptr);
-
-    inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
         PACKET_TYPE const& _packetType, unsigned const& _ttl,
-        std::shared_ptr<dev::h512s> _forwardNodes = nullptr)
-    {
-        return transDataToMessage(_data, _packetType, m_protocolId, _ttl, _forwardNodes);
-    }
+        std::shared_ptr<dev::h512s> _forwardNodes = nullptr);
 
     /**
      * @brief : the message received from the network is valid or not?
@@ -563,7 +555,6 @@ protected:
         if (req.height == m_reqCache->committedPrepareCache().height &&
             req.block_hash != m_reqCache->committedPrepareCache().block_hash)
         {
-            /// TODO: remove these logs in the atomic functions
             PBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("isHashSavedAfterCommit: hasn't been cached after commit")
                 << LOG_KV("height", req.height)
@@ -637,20 +628,20 @@ protected:
     }
 
     // ttl opitimize related
-    virtual bool needForwardMsg(bool const& _valid, std::string const& _key,
-        PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
+    virtual bool needForwardMsg(
+        bool const& _valid, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
     // forward message
-    virtual void forwardMsg(
-        std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
-    void forwardMsgByTTL(std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket,
-        PBFTMsg const& _pbftMsg, bytesConstRef _data);
+    virtual void forwardMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg);
+    void forwardMsgByTTL(
+        PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg, bytesConstRef _data);
     void forwardMsgByNodeInfo(
         std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, bytesConstRef _data);
 
     virtual void createPBFTMsgFactory();
 
     virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-        unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType);
+        unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType,
+        PBFTMsg const& _pbftMsg);
     std::shared_ptr<dev::h512s> getForwardNodes(bool const& _printLog = false);
 
 
@@ -683,6 +674,8 @@ protected:
     void clearInvalidCachedForwardMsg();
 
     void clearPreRawPrepare();
+
+    bool requestMissedTxs(PrepareReq::Ptr _prepareReq);
 
 protected:
     std::atomic<VIEWTYPE> m_view = {0};

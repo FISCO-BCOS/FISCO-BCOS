@@ -72,8 +72,9 @@ struct PBFTMsgPacket
     /// type of the packet(maybe prepare, sign or commit)
     /// (receive from the network or send to the network)
     byte packet_id;
-    /// ttl
-    uint8_t ttl;
+    /// ttl, extend the 8th bit to represent the inner prepareReq with empty block or not
+    mutable uint8_t ttl;
+    bool prepareWithEmptyBlock = false;
     /// the data of concrete request(receive from or send to the network)
     bytes data;
     /// timestamp of receive this pbft message
@@ -132,7 +133,15 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    virtual void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
+    virtual void streamRLPFields(RLPStream& s) const
+    {
+        // extend prepareWithEmptyBlock into the 8th bit of ttl
+        if (prepareWithEmptyBlock)
+        {
+            ttl |= 0x80;
+        }
+        s << packet_id << ttl << data;
+    }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -153,7 +162,10 @@ struct PBFTMsgPacket
         {
             int field = 0;
             packet_id = rlp[field = 0].toInt<uint8_t>();
-            ttl = rlp[field = 1].toInt<uint8_t>();
+            uint8_t extendedTTL = rlp[field = 1].toInt<uint8_t>();
+            // decode ttl and prepareWithEmptyBlock from the extendedTTL
+            ttl = extendedTTL & 0x7f;
+            prepareWithEmptyBlock = extendedTTL & 0x80;
             data = rlp[field = 2].toBytes();
         }
         catch (Exception const& e)
@@ -216,6 +228,8 @@ struct PBFTMsg
     Signature sig2 = Signature();
     bool isFuture = false;
     bool signChecked = true;
+    // the block inner the PrepareReq is empty or not
+    bool isEmpty = false;
 
     PBFTMsg() = default;
     PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
@@ -356,7 +370,6 @@ struct PrepareReq : public PBFTMsg
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
-
     /// default constructor
     PrepareReq() { block = std::make_shared<dev::bytes>(); }
     virtual ~PrepareReq() {}

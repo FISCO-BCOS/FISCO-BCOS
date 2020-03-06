@@ -114,16 +114,16 @@ public:
         PBFTEngine::onRecvPBFTMessage(exception, session, message);
     }
 
-    P2PMessage::Ptr transDataToMessageWrapper(bytesConstRef data, PACKET_TYPE const& packetType,
-        PROTOCOL_ID const& protocolId, unsigned const& ttl)
+    P2PMessage::Ptr transDataToMessageWrapper(
+        bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
     {
-        return PBFTEngine::transDataToMessage(data, packetType, protocolId, ttl);
+        return PBFTEngine::transDataToMessage(data, packetType, ttl);
     }
-    bool broadcastMsgWrapper(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
+    bool broadcastMsgWrapper(unsigned const& packetType, PBFTMsg const& _pbftMsg,
+        bytesConstRef data, std::unordered_set<h512> const& filter = std::unordered_set<h512>(),
         unsigned const& ttl = 0)
     {
-        return PBFTEngine::broadcastMsg(packetType, key, data, 0, filter, ttl);
+        return PBFTEngine::broadcastMsg(packetType, _pbftMsg, data, 0, filter, ttl);
     }
 
     bool broadcastFilter(h512 const& nodeId, unsigned const& packetType, std::string const& key)

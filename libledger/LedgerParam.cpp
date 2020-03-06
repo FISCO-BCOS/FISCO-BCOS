@@ -234,10 +234,12 @@ void LedgerParam::initRPBFTConsensusIniConfig(boost::property_tree::ptree const&
 void LedgerParam::initConsensusIniConfig(ptree const& pt)
 {
     mutableConsensusParam().maxTTL = pt.get<int8_t>("consensus.ttl", consensus::MAXTTL);
-    if (mutableConsensusParam().maxTTL < 0)
+    if (mutableConsensusParam().maxTTL < 0 ||
+        mutableConsensusParam().maxTTL > mutableConsensusParam().ttlLimit)
     {
-        BOOST_THROW_EXCEPTION(
-            ForbidNegativeValue() << errinfo_comment("Please set consensus.ttl to positive !"));
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                  "Please set consensus.ttl between 0 and " +
+                                  std::to_string(mutableConsensusParam().ttlLimit) + " !"));
     }
 
     // the minimum block generation time(ms)

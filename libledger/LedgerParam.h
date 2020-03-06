@@ -51,6 +51,8 @@ struct ConsensusParam
     dev::h512s observerList = dev::h512s();
     int64_t maxTransactions;
     int8_t maxTTL;
+    // limit ttl to 5
+    int8_t ttlLimit = 5;
     /// the minimum block time
     signed minBlockGenTime = 0;
     /// unsigned intervalBlockTime;
