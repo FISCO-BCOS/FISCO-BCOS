@@ -184,6 +184,10 @@ void ContractStatusPrecompiled::kill(
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin, false));
+                // reset frozen to check if it is killed
+                entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
+                table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
+                    std::make_shared<AccessOptions>(origin, false));
             }
         }
     }
