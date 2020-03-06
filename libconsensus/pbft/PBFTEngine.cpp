@@ -2033,6 +2033,12 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
             m_partiallyPrepareCache->addFuturePrepareCache(_prepareReq);
             return true;
         }
+        // request missed txs for the future prepare
+        else
+        {
+            m_partiallyPrepareCache->addPartiallyFuturePrepare(_prepareReq);
+            return requestMissedTxs(_prepareReq);
+        }
         return false;
     }
     if (!m_partiallyPrepareCache->addPartiallyRawPrepare(_prepareReq))
@@ -2060,6 +2066,11 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
         // begin to handlePrepare
         return execPrepareAndGenerateSignMsg(_prepareReq, oss);
     }
+    return requestMissedTxs(_prepareReq);
+}
+
+bool PBFTEngine::requestMissedTxs(PrepareReq::Ptr _prepareReq)
+{
     // can't find the node that generate the prepareReq
     h512 targetNode = selectNodeToRequestMissedTxs(_prepareReq);
     if (targetNode == dev::h512())
