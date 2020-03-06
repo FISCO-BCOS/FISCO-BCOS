@@ -59,9 +59,15 @@ public:
     virtual bool fetchMissedTxs(std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo);
     // fill block with fetched transaction
     virtual bool fillBlock(bytesConstRef _txsData);
+    bool fillBlock(PrepareReq::Ptr _prepareReq, RLP const& _txsRLP);
+    bool fillPrepareCacheBlock(RLP const& _txsRLP);
     virtual void addPreRawPrepare(PrepareReq::Ptr _preRawPrepare);
 
     virtual void clearPreRawPrepare();
+
+    virtual void addPartiallyFuturePrepare(PrepareReq::Ptr _futurePrepare);
+    bool existInFuturePrepare(dev::h256 const& _blockHash);
+    void fillFutureBlock(RLP const& _txsRLP);
 
 private:
     PrepareReq::Ptr m_partiallyRawPrepare;
@@ -70,6 +76,7 @@ private:
     // before addRawPrepareReq clear this cache when addRawPrepare
     PrepareReq::Ptr m_preRawPrepare;
     mutable SharedMutex x_preRawPrepare;
+    PrepareReq::Ptr m_partiallyFuturePrepare;
 };
 }  // namespace consensus
 }  // namespace dev

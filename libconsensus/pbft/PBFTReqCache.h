@@ -307,7 +307,8 @@ public:
         {
             PBFTReqCache_LOG(INFO)
                 << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req->height)
-                << LOG_KV("reqIdx", req->idx) << LOG_KV("hash", req->block_hash.abridged());
+                << LOG_KV("reqView", req->view) << LOG_KV("reqIdx", req->idx)
+                << LOG_KV("hash", req->block_hash.abridged());
             m_futurePrepareCache[req->height] = req;
         }
     }

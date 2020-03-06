@@ -2272,7 +2272,17 @@ void PBFTEngine::onReceiveMissedTxsResponse(
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveMissedTxsResponse and fillBlock")
                               << LOG_KV("size", _message->length())
                               << LOG_KV("peer", _session->nodeID().abridged());
-        if (!m_partiallyPrepareCache->fillBlock(ref(*(_message->buffer()))))
+        RLP blockRLP(ref(*(_message->buffer())));
+        // get blockHash of the response
+        auto blockHash = blockRLP[1].toHash<h256>(RLP::VeryStrict);
+        // the response is for the future prepare,
+        // fill the future prepare and add it to the futurePrepareCache
+        if (m_partiallyPrepareCache->existInFuturePrepare(blockHash))
+        {
+            m_partiallyPrepareCache->fillFutureBlock(blockRLP);
+            return;
+        }
+        if (!m_partiallyPrepareCache->fillPrepareCacheBlock(blockRLP))
         {
             return;
         }
