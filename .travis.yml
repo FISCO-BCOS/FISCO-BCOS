@@ -49,13 +49,13 @@ matrix:
         - CACHE_NAME=ubuntu16
         - ZIP_SUFFIX=ubuntu-xenial
 
-    - language: cpp
-      os: osx
-      osx_image: xcode11.3
-      env:
-        - CACHE_NAME=osx
-        - PROJECT_USERNAME=FISCO-BCOS
-        - PROJECT_REPONAME=FISCO-BCOS
+    # - language: cpp
+    #   os: osx
+    #   osx_image: xcode11.3
+    #   env:
+    #     - CACHE_NAME=osx
+    #     - PROJECT_USERNAME=FISCO-BCOS
+    #     - PROJECT_REPONAME=FISCO-BCOS
 git:
   depth: 1
 compiler: clang
@@ -86,11 +86,11 @@ install: |
   fi
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake .. && \
-    make -j2 && cd ../tools && bash ci/ci_check.sh
+    CC=/usr/bin/clang CXX=/usr/bin/clang++ /usr/bin/cmake . && \
+    make -j2 &&  cd tools && bash ci/ci_check.sh
   else
-    mkdir -p build && cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .. && \
-    make -j2 && cd ../tools && bash ci/ci_check.sh
+    CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . && \
+    make -j2 && cd tools && bash ci/ci_check.sh
   fi
 after_success: |
   if [[ "${TRAVIS_OS_NAME}" == "osx" && ! -z "${TRAVIS_TAG}" ]]; then
