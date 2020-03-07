@@ -70,20 +70,21 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-${{ runner.temp }}-${{ github.base_ref }}
+            deps-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-notest-${{ runner.temp }}-${{ github.base_ref }}
+            deps-notest-${{ runner.temp }}-
             deps-${{ runner.temp }}-
       - uses: actions/cache@v1
         id: ccache
         with:
           path: ccache
-          key: ccache-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-${{ runner.temp }}-${{ github.base_ref }}
-            ccache-${{ runner.temp }}-
+            ccache-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-notest-${{ runner.temp }}-${{ github.base_ref }}
+            ccache-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         run: brew install openssl@1.1 ccache
       - name: configure

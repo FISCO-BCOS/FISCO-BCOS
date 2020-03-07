@@ -21,6 +21,7 @@
  * @date 2019-04-13
  */
 
+#include "MemoryStorage2.h"
 #include <libdevcore/FixedHash.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
@@ -827,6 +828,62 @@ BOOST_AUTO_TEST_CASE(commitCheck)
 
         cachedStorage->commit(idx + 1, datas);
     }
+}
+
+BOOST_AUTO_TEST_CASE(clearCommitCheck)
+{
+    cachedStorage = std::make_shared<CachedStorage>();
+    cachedStorage->setMaxCapacity(256 * 1024 * 1024);
+    cachedStorage->setMaxForwardBlock(100);
+    auto backend = std::make_shared<MemoryStorage2>();
+    cachedStorage->setBackend(backend);
+    cachedStorage->setMaxCapacity(10);   // byte
+    cachedStorage->setClearInterval(1);  // ms
+    cachedStorage->startClearThread();
+    auto userTable = std::make_shared<TableInfo>();
+    userTable->key = "key";
+    userTable->fields.push_back("value");
+    userTable->name = "t_multi_entry";
+
+    auto txTable = std::make_shared<TableInfo>();
+    txTable->key = "txhash";
+    txTable->fields.push_back("number");
+    txTable->name = "txTable";
+
+    TableData::Ptr newUserData = std::make_shared<TableData>();
+    TableData::Ptr newTXData = std::make_shared<TableData>();
+    Entries::Ptr newUser = std::make_shared<Entries>();
+    Entries::Ptr newTX = std::make_shared<Entries>();
+    for (auto i = 0; i < 10; ++i)
+    {
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("key", boost::lexical_cast<std::string>(1));
+        entry->setField("value", "value " + boost::lexical_cast<std::string>(i));
+        entry->setID(i);
+        newUser->addEntry(entry);
+
+        Entry::Ptr entry2 = std::make_shared<Entry>();
+        entry2->setField("txhash", boost::lexical_cast<std::string>(1));
+        entry2->setField("number", boost::lexical_cast<std::string>(i + 100));
+        entry->setID(100000 + i);
+        newTX->addEntry(entry2);
+    }
+
+    newUserData->newEntries = newUser;
+    newUserData->info = userTable;
+    newTXData->newEntries = newTX;
+    newTXData->info = txTable;
+
+    std::vector<TableData::Ptr> datas = {newUserData, newTXData};
+    cachedStorage->commit(1, datas);
+    newUserData->dirtyEntries = newUser;
+    newUserData->newEntries = std::make_shared<Entries>();
+    newUserData->dirtyEntries = newUser;
+    for (auto i = 2; i < 10; ++i)
+    {
+        cachedStorage->commit(i, datas);
+    }
+    cachedStorage->stop();
 }
 
 BOOST_AUTO_TEST_CASE(exception)
