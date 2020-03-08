@@ -806,7 +806,7 @@ void CachedStorage::checkAndClear()
 
         if (needClear)
         {
-            for (auto it = m_mru->begin(); it != m_mru->end();)
+            for (auto it = m_mru->begin(); it != m_mru->end() && m_running->load();)
             {
                 if (m_capacity <= (int64_t)m_maxCapacity || m_mru->empty())
                 {
@@ -850,7 +850,7 @@ void CachedStorage::checkAndClear()
             }
             ++clearTimes;
         }
-    } while (needClear);
+    } while (needClear && m_running->load());
 
     if (clearThrough > 0)
     {

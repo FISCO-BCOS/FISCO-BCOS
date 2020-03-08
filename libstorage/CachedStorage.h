@@ -116,7 +116,7 @@ public:
 
     int64_t syncNum();
     void setSyncNum(int64_t syncNum);
-
+    void setClearInterval(int64_t clearInterval) { m_clearInterval = clearInterval; }
     void setMaxCapacity(int64_t maxCapacity);
     void setMaxForwardBlock(size_t maxForwardBlock);
 
