@@ -1531,38 +1531,8 @@ void PBFTEngine::checkAndChangeView()
         {
             m_fastViewChange = false;
         }
-        auto orgChangeCycle = m_timeManager.m_changeCycle;
-        /// problem:
-        /// 1. there are 0, 1, 2, 3 four nodes, the 2nd and 3rd nodes are off, the 0th and 1st nodes
-        /// are wait and increase the m_toView always
-        /// 2. the 2nd start up and trigger fast view change, the three online nodes reach a
-        /// consensus at a new view, but the current leader is 3rd
-        /// 3. since 0th and 1st pay a lot of time to timeout and increase the toView, while 3rd
-        /// pays little time to timeout and increase the toView, the toView of 0th and 1st will
-        /// always less than 2nd, and the network can never reach consensus at a given view
-
-        /// solution:
-        /// 1. if m_toView is equal to (m_view + 1), that means that some exceptions happened to
-        /// block execution, but the network is OK to reach a new view, which equal to m_view + 1,
-        /// in this case, we shouldn't update m_changeCycle to 0 in consideration of block execution
-        /// may cause more time
-
-        /// 2. if m_toView is larger than (m_view + 1), that means that the network is not ok to
-        /// reach a new view, and the related nodes have modifing toView always, and if the network
-        /// recovers, we should reset m_changeCycle to 1 in case of more timeout wait if the leader
-        /// if off after fast view change
-
-        /// potential problem:
-        /// execution speed differences among nodes may cause fast view change of the faster node
-        /// the faster nodes may have a different cycle compared to other nodes
-        if (m_toView > m_view + 1)
-        {
-            m_timeManager.m_changeCycle = 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView, update m_changeCycle to 1");
-        }
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                              << LOG_KV("org_view", m_view)
-                             << LOG_KV("org_changeCycle", orgChangeCycle)
                              << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
                              << LOG_KV("to_view", m_toView);
 
