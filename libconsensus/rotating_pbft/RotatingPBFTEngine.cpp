@@ -776,6 +776,10 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
     try
     {
         PBFTMsg::Ptr pbftMsg = decodeP2PMsgIntoPBFTMsg(_session, _message);
+        if (!pbftMsg)
+        {
+            return;
+        }
         auto key = pbftMsg->block_hash.hex();
         if (broadcastFilter(_session->nodeID(), PrepareReqPacket, key))
         {
@@ -783,10 +787,6 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
                 << LOG_DESC("return for the has already received the rawPrepareRequest")
                 << LOG_KV("peer", _session->nodeID().abridged())
                 << LOG_KV("hash", pbftMsg->block_hash.abridged());
-            return;
-        }
-        if (!pbftMsg)
-        {
             return;
         }
         // the node doesn't connect with the targetNode
