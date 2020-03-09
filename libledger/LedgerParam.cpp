@@ -534,8 +534,9 @@ void LedgerParam::initStorageConfig(ptree const& pt)
 
     mutableStorageParam().maxForwardBlock = pt.get<uint>("storage.max_forward_block", 10);
 
-    if (mutableStorageParam().maxRetry <= 0)
+    if (mutableStorageParam().maxRetry <= 1)
     {
+        LedgerParam_LOG(WARNING) << LOG_BADGE("initStorageConfig maxRetry should max than 1");
         mutableStorageParam().maxRetry = 60;
     }
 

@@ -38,13 +38,13 @@ Entries::Ptr ZdbStorage::select(
 {
     std::vector<std::map<std::string, std::string> > values;
     int ret = 0, i = 0;
-    for (i = 1; i < m_maxRetry; ++i)
+    for (i = 0; i < m_maxRetry; ++i)
     {
         ret = m_sqlBasicAcc->Select(_num, _tableInfo->name, _key, _condition, values);
         if (ret < 0)
         {
             ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
-                                  << " table:" << _tableInfo->name << LOG_KV("retry", i);
+                                  << " table:" << _tableInfo->name << LOG_KV("retry", i + 1);
             this_thread::sleep_for(chrono::milliseconds(1000));
             continue;
         }
@@ -98,12 +98,12 @@ void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
 size_t ZdbStorage::commit(int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
     int32_t ret = 0;
-    for (int i = 1; i < m_maxRetry; ++i)
+    for (int i = 0; i < m_maxRetry; ++i)
     {
         ret = m_sqlBasicAcc->Commit((int32_t)_num, _datas);
         if (ret < 0)
         {
-            ZdbStorage_LOG(ERROR) << "MySQL commit return error:" << ret << LOG_KV("retry", i);
+            ZdbStorage_LOG(ERROR) << "MySQL commit return error:" << ret << LOG_KV("retry", i + 1);
             this_thread::sleep_for(chrono::milliseconds(1000));
             continue;
         }
