@@ -678,6 +678,17 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
         cache->setKey(key);
         cache->setTableInfo(tableInfo);
     }
+    else
+    {
+        RWMutexScoped lockCache(m_cachesMutex, false);
+
+        auto result = m_caches.insert(std::make_pair(cacheKey, cache));
+        if (!result.second && cache != result.first->second)
+        {
+            cache = result.first->second;
+            cacheLock = std::make_shared<Cache::RWScoped>(*(cache->mutex()), write);
+        }
+    }
 
     if (hit)
     {
@@ -820,7 +831,10 @@ void CachedStorage::checkAndClear()
 
                 auto result = touchCache(tableInfo, it->second, true);
                 auto cache = std::get<1>(result);
-
+                if (cache->empty())
+                {
+                    continue;
+                }
                 if (std::get<2>(result))
                 {
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))
