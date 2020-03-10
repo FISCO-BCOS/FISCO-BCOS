@@ -31,7 +31,7 @@
 
 ## 快速开始
 
-阅读[快速开始](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html)，了解使用FISCO BCOS所需的必要安装和配置，帮助您快速体验FISCO BCOS强大功能。。
+阅读[快速开始](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/installation.html)，了解使用FISCO BCOS所需的必要安装和配置，帮助您快速体验FISCO BCOS强大功能。
 
 ## 文档
 
