@@ -35,37 +35,40 @@ using namespace dev::precompiled;
 
 // precompiled contract function
 /*
-contract Frozen {
-    function kill(address addr) public returns(int);
+contract ContractStatusPrecompiled {
+    function destroy(address addr) public returns(int);
     function freeze(address addr) public returns(int);
     function unfreeze(address addr) public returns(int);
-    function queryStatus(address addr) public constant returns(uint,string);
-    function queryAuthority(address addr) public constant returns(uint,address[]);
+    function grantManager(address contractAddr, address userAddr) public returns(int);
+    function getStatus(address addr) public constant returns(uint,string);
+    function listManager(address addr) public constant returns(uint,address[]);
 }
 */
 
-const char* const METHOD_KILL_STR = "kill(address)";
+const char* const METHOD_DESTROY_STR = "destroy(address)";
 const char* const METHOD_FREEZE_STR = "freeze(address)";
 const char* const METHOD_UNFREEZE_STR = "unfreeze(address)";
-const char* const METHOD_QUERY_STR = "queryStatus(address)";
-const char* const METHOD_QUERY_AUTHORITY = "queryAuthority(address)";
+const char* const METHOD_GRANT_STR = "grantManager(address,address)";
+const char* const METHOD_QUERY_STR = "getStatus(address)";
+const char* const METHOD_QUERY_AUTHORITY = "listManager(address)";
 
 // contract state
-// available,frozen,killed
+// available,frozen,destroyed
 
 // state-transition matrix
 /*
-            available frozen    killed
+            available frozen    destroyed
    freeze   frozen    ×         ×
    unfreeze ×         available ×
-   kill     killed    killed    ×
+   destroy  destroyed destroyed ×
 */
 
 ContractStatusPrecompiled::ContractStatusPrecompiled()
 {
-    name2Selector[METHOD_KILL_STR] = getFuncSelector(METHOD_KILL_STR);
+    name2Selector[METHOD_DESTROY_STR] = getFuncSelector(METHOD_DESTROY_STR);
     name2Selector[METHOD_FREEZE_STR] = getFuncSelector(METHOD_FREEZE_STR);
     name2Selector[METHOD_UNFREEZE_STR] = getFuncSelector(METHOD_UNFREEZE_STR);
+    name2Selector[METHOD_GRANT_STR] = getFuncSelector(METHOD_GRANT_STR);
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
     name2Selector[METHOD_QUERY_AUTHORITY] = getFuncSelector(METHOD_QUERY_AUTHORITY);
 }
@@ -77,29 +80,21 @@ bool ContractStatusPrecompiled::checkPermission(
     if (table)
     {
         auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
-        if (entries->size() == 0u)
-        {
-            // the key of authority would not be set when support version < 2.3.0
-            return true;
-        }
-        else
+        if (entries->size() > 0)
         {
             // the key of authority would be set when support version >= 2.3.0
-            auto entry = entries->get(0);
-            if (!entry)
+            for (size_t i = 0; i < entries->size(); i++)
             {
-                return false;
+                std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                if (origin.hex() == authority)
+                {
+                    return true;
+                }
             }
-            std::string value = entry->getField(storagestate::STORAGE_VALUE);
-            std::vector<std::string> vec;
-            boost::split(vec, value, boost::is_any_of(","));
-            return (std::find(vec.begin(), vec.end(), origin.hex()) != vec.end());
         }
     }
-    else
-    {
-        return false;
-    }
+
+    return false;
 }
 
 ContractStatus ContractStatusPrecompiled::getContractStatus(
@@ -114,7 +109,7 @@ ContractStatus ContractStatusPrecompiled::getContractStatus(
         if (entries->size() > 0 &&
             STATUS_FALSE == entries->get(0)->getField(storagestate::STORAGE_VALUE))
         {
-            status = ContractStatus::Killed;
+            status = ContractStatus::Destroyed;
         }
         else
         {  // query only in alive
@@ -144,7 +139,7 @@ ContractStatus ContractStatusPrecompiled::getContractStatus(
     return status;
 }
 
-void ContractStatusPrecompiled::kill(
+void ContractStatusPrecompiled::destroy(
     ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -154,14 +149,14 @@ void ContractStatusPrecompiled::kill(
 
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
-                           << LOG_KV("kill contract", tableName);
+                           << LOG_KV("destroy contract", tableName);
     // administrative authority judgment precedes status judgment
     if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
+        if (ContractStatus::Destroyed == status)
         {
-            result = CODE_INVALID_CONTRACT_KILLED;
+            result = CODE_INVALID_CONTRACT_DESTROYED;
         }
         else if (ContractStatus::Nonexistent == status)
         {
@@ -184,7 +179,7 @@ void ContractStatusPrecompiled::kill(
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin, false));
-                // reset frozen to check if it is killed
+                // reset frozen to check if it is destroyed
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin, false));
@@ -248,9 +243,9 @@ void ContractStatusPrecompiled::freeze(
     if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
+        if (ContractStatus::Destroyed == status)
         {
-            result = CODE_INVALID_CONTRACT_KILLED;
+            result = CODE_INVALID_CONTRACT_DESTROYED;
         }
         else if (ContractStatus::Frozen == status)
         {
@@ -290,9 +285,9 @@ void ContractStatusPrecompiled::unfreeze(
     if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
-        if (ContractStatus::Killed == status)
+        if (ContractStatus::Destroyed == status)
         {
-            result = CODE_INVALID_CONTRACT_KILLED;
+            result = CODE_INVALID_CONTRACT_DESTROYED;
         }
         else if (ContractStatus::Available == status)
         {
@@ -316,7 +311,69 @@ void ContractStatusPrecompiled::unfreeze(
     getErrorCodeOut(out, result);
 }
 
-void ContractStatusPrecompiled::queryStatus(
+void ContractStatusPrecompiled::grantManager(
+    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+{
+    dev::eth::ContractABI abi;
+    Address contractAddress;
+    Address userAddress;
+    abi.abiOut(data, contractAddress, userAddress);
+    int result = 0;
+
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                           << LOG_DESC("grant authorization") << LOG_KV("table", tableName)
+                           << LOG_KV("user", userAddress);
+    // administrative authority judgment precedes status judgment
+    if (checkPermission(context, tableName, origin))
+    {
+        ContractStatus status = getContractStatus(context, tableName);
+        if (ContractStatus::Destroyed == status)
+        {
+            result = CODE_INVALID_CONTRACT_DESTROYED;
+        }
+        else if (ContractStatus::Nonexistent == status)
+        {
+            result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
+        else
+        {
+            bool flag = false;
+            Table::Ptr table = openTable(context, tableName);
+            auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                if (userAddress.hex() == authority)
+                {
+                    flag = true;
+                    break;
+                }
+            }
+            if (flag == false)
+            {
+                auto entry = table->newEntry();
+                entry->setField(storagestate::STORAGE_KEY, storagestate::ACCOUNT_AUTHORITY);
+                entry->setField(storagestate::STORAGE_VALUE, userAddress.hex());
+                result = table->insert(storagestate::ACCOUNT_AUTHORITY, entry,
+                    std::make_shared<AccessOptions>(origin, false));
+            }
+            else
+            {
+                result = CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION;
+            }
+        }
+    }
+    else
+    {
+        result = storage::CODE_NO_AUTHORIZED;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
+                               << LOG_DESC("permission denied");
+    }
+    getErrorCodeOut(out, result);
+}
+
+void ContractStatusPrecompiled::getStatus(
     ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -333,7 +390,7 @@ void ContractStatusPrecompiled::queryStatus(
     out = abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]);
 }
 
-void ContractStatusPrecompiled::queryAuthority(
+void ContractStatusPrecompiled::listManager(
     ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
 {
     dev::eth::ContractABI abi;
@@ -346,15 +403,18 @@ void ContractStatusPrecompiled::queryAuthority(
                            << LOG_DESC("call query authority")
                            << LOG_KV("contract table name", tableName);
 
-    std::vector<std::string> strs;
+    std::vector<Address> addrs;
     Table::Ptr table = openTable(context, tableName);
     if (table)
     {
         auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
         if (entries->size() > 0)
         {
-            auto authority = entries->get(0)->getField(storagestate::STORAGE_VALUE);
-            boost::split(strs, authority, boost::is_any_of(","));
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                auto authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                addrs.push_back(dev::eth::toAddress(authority));
+            }
         }
         else
         {
@@ -362,11 +422,7 @@ void ContractStatusPrecompiled::queryAuthority(
                 << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("no authority is recorded");
         }
     }
-    std::vector<Address> addrs;
-    for (auto str : strs)
-    {
-        addrs.push_back(dev::eth::toAddress(str));
-    }
+
     out = abi.abiIn("", (u256)0, addrs);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_DESC("call query authority result")
@@ -384,9 +440,9 @@ bytes ContractStatusPrecompiled::call(
     bytesConstRef data = getParamData(param);
     bytes out;
 
-    if (func == name2Selector[METHOD_KILL_STR])
+    if (func == name2Selector[METHOD_DESTROY_STR])
     {
-        kill(context, data, origin, out);
+        destroy(context, data, origin, out);
     }
     else if (func == name2Selector[METHOD_FREEZE_STR])
     {
@@ -396,13 +452,17 @@ bytes ContractStatusPrecompiled::call(
     {
         unfreeze(context, data, origin, out);
     }
+    else if (func == name2Selector[METHOD_GRANT_STR])
+    {
+        grantManager(context, data, origin, out);
+    }
     else if (func == name2Selector[METHOD_QUERY_STR])
     {
-        queryStatus(context, data, out);
+        getStatus(context, data, out);
     }
     else if (func == name2Selector[METHOD_QUERY_AUTHORITY])
     {
-        queryAuthority(context, data, out);
+        listManager(context, data, out);
     }
     else
     {

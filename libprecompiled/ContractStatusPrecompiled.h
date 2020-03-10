@@ -29,7 +29,7 @@ enum ContractStatus
     Invalid = 0,
     Available,
     Frozen,
-    Killed,
+    Destroyed,
     Nonexistent,
     Count
 };
@@ -57,7 +57,7 @@ private:
         std::string const& tableName, Address const& origin);
     ContractStatus getContractStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
-    void kill(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+    void destroy(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
@@ -65,9 +65,11 @@ private:
         Address const& origin, bytes& out);
     void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void queryStatus(
+    void grantManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, bytes& out);
+    void getStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
-    void queryAuthority(
+    void listManager(
         std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
 };
 

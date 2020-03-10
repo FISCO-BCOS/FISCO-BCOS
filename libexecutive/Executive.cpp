@@ -356,22 +356,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
 
     if (g_BCOSConfig.version() >= V2_3_0)
     {
-        std::string tableName = precompiled::getContractTableName(m_newAddress);
-        auto table = memoryTableFactory->openTable(tableName);
-        if (table)
-        {
-            auto entry = table->newEntry();
-            entry->setField("key", "authority");
-            entry->setField("value", _origin.hex());
-            int count = table->insert("authority", entry);
-            LOG(TRACE) << LOG_DESC("recordDeployer") << LOG_KV("contract", m_newAddress)
-                       << LOG_KV("origin account", _origin) << LOG_KV("sender account", _sender)
-                       << LOG_KV("success", (1 == count ? true : false));
-        }
-        else
-        {
-            LOG(ERROR) << LOG_DESC("record Deployer get table error!");
-        }
+        grantContractStatusManager(memoryTableFactory, m_newAddress, _sender, _origin);
     }
 
     // Schedule _init execution if not empty.
@@ -380,6 +365,66 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
             _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
 
     return !m_ext;
+}
+
+void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
+    Address const& newAddress, Address const& sender, Address const& origin)
+{
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
+               << LOG_KV("sender account", sender) << LOG_KV("origin account", origin);
+
+    std::string tableName = precompiled::getContractTableName(newAddress);
+    auto table = memoryTableFactory->openTable(tableName);
+
+    if (!table)
+    {
+        LOG(ERROR) << LOG_DESC("grantContractStatusManager get newAddress table error!");
+        return;
+    }
+
+    // grant origin authorization
+    auto entry = table->newEntry();
+    entry->setField("key", "authority");
+    entry->setField("value", origin.hex());
+    table->insert("authority", entry);
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add origin")
+               << LOG_KV("authoriy", origin.hex());
+
+    if (origin != sender)
+    {
+        // grant authorization of sender contract
+        std::string senderTableName = precompiled::getContractTableName(sender);
+        auto senderTable = memoryTableFactory->openTable(senderTableName);
+        if (!senderTable)
+        {
+            LOG(ERROR) << LOG_DESC("grantContractStatusManager get sender table error!");
+            return;
+        }
+
+        auto entries = senderTable->select("authority", senderTable->newCondition());
+        if (entries->size() == 0)
+        {
+            LOG(ERROR) << LOG_DESC("grantContractStatusManager no sender authority is granted");
+        }
+        else
+        {
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                std::string authority = entries->get(i)->getField("value");
+                if (origin.hex() != authority)
+                {
+                    // remove duplicate
+                    auto entry = table->newEntry();
+                    entry->setField("key", "authority");
+                    entry->setField("value", authority);
+                    table->insert("authority", entry);
+                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add sender")
+                               << LOG_KV("authoriy", authority);
+                }
+            }
+        }
+    }
+    return;
 }
 
 bool Executive::go(OnOpFunc const& _onOp)
