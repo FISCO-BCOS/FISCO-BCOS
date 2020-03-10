@@ -183,6 +183,12 @@ bytes PermissionPrecompiled::call(
                 << LOG_KV("tableName", tableName);
             result = CODE_TABLE_NAME_OVERFLOW;
         }
+        else if (!openTable(context, tableName))
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
+                                   << LOG_DESC("table not exist") << LOG_KV("tableName", tableName);
+            result = CODE_TABLE_NOT_EXIST;
+        }
         else
         {
             auto entry = table->newEntry();

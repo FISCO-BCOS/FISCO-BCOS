@@ -53,7 +53,6 @@ public:
         bytesConstRef param, Address const& origin = Address());
 
 private:
-    bool checkAddress(Address const& contractAddress);
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, Address const& origin);
     ContractStatus getContractStatus(

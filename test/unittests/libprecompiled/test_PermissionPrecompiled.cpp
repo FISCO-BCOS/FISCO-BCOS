@@ -156,8 +156,25 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     Address addr("0x420f853b49838bd3e9466c85a4cc3428c960dde2");
     bytes in = abi.abiIn("grantWrite(address,address)", contractAddress, addr);
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
-    // query
+    s256 ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == CODE_TABLE_NOT_EXIST);
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
+
+    table = memoryTableFactory->openTable(SYS_TABLES);
+    auto entry = table->newEntry();
+    entry->setField("table_name", tableName);
+    entry->setField("key_field", "key");
+    entry->setField("value_field", "value");
+    auto result =
+        table->insert(tableName, entry, std::make_shared<AccessOptions>(Address(), false));
+    BOOST_TEST(result == 1);
+    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1u);
+
+    // query
     auto entries = table->select(tableName, table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
@@ -172,7 +189,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     Address addr2("0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     in = abi.abiIn("grantWrite(address,address)", contractAddress, addr2);
     out = authorityPrecompiled->call(context, bytesConstRef(&in));
-    s256 ret = 0;
+    ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
 

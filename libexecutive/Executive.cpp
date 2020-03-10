@@ -370,7 +370,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         }
         else
         {
-            LOG(ERROR) << LOG_DESC("recordDeployer") << LOG_DESC("get table error!");
+            LOG(ERROR) << LOG_DESC("record Deployer get table error!");
         }
     }
 
