@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
     s256 ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == CODE_TABLE_NOT_EXIST);
+    BOOST_TEST(ret == CODE_CONTRACT_NOT_EXIST);
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
 
     table = memoryTableFactory->openTable(SYS_TABLES);

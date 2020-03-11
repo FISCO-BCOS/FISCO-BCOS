@@ -185,9 +185,10 @@ bytes PermissionPrecompiled::call(
         }
         else if (!openTable(context, tableName))
         {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
-                                   << LOG_DESC("table not exist") << LOG_KV("tableName", tableName);
-            result = CODE_TABLE_NOT_EXIST;
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("contract not exist")
+                << LOG_KV("contract", tableName);
+            result = CODE_CONTRACT_NOT_EXIST;
         }
         else
         {
