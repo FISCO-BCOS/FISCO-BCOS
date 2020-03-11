@@ -292,7 +292,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                                 totalCapacity += it->capacity();
                                             }
 
-
                                             touchMRU(requestData->info->name, key, totalCapacity);
                                         }
 
@@ -361,10 +360,17 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                     else
                                     {
                                         // impossible, should exit
+                                        stringstream ss;
+                                        ss << ", the cache of key:" << key << " has entries:";
+                                        for (auto it = caches->entries()->begin();
+                                             it != caches->entries()->end(); ++it)
+                                        {
+                                            ss << (*it)->getID() << " ";
+                                        }
                                         CACHED_STORAGE_LOG(FATAL)
                                             << "Can not find entry in cache, key:" << key
-                                            << LOG_KV("num", num) << ",id" << id
-                                            << " != " << (*entryIt)->getID();
+                                            << LOG_KV("num", num) << ",id " << id
+                                            << " != " << (*entryIt)->getID() << ss.str();
                                     }
                                 }
 
@@ -375,7 +381,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                           commitData->dirtyEntries->size()),
                         [&](const tbb::blocked_range<size_t>& rangeEntries) {
                             for (size_t i = rangeEntries.begin(); i < rangeEntries.end(); ++i)
-                            {  // remove duplicate entries
+                            {  // remove duplicate entries, rocksdb need this
                                 if (duplicateIDs.find((*commitData->dirtyEntries)[i]->getID()) !=
                                     duplicateIDs.end())
                                 {
@@ -686,6 +692,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr, bool> CachedStorage::to
         if (!result.second && cache != result.first->second)
         {
             cache = result.first->second;
+            cacheLock.reset();
             cacheLock = std::make_shared<Cache::RWScoped>(*(cache->mutex()), write);
         }
     }
