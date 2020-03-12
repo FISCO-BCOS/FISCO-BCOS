@@ -140,7 +140,6 @@ bytes PermissionPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
         int result = revokeWritePermission(context, tableName, addr, origin);
-        out = abi.abiIn("", s256(result));
         getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
@@ -199,11 +198,10 @@ bytes PermissionPrecompiled::call(
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
             result = count;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("PermissionPrecompiled")
-                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled grantWrite")
+                                  << LOG_KV("return", result);
         }
-        out = abi.abiIn("", u256(result));
+        getErrorCodeOut(out, result);
     }
     else if (func == name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT])
     {  // revokeWrite(address,address)
@@ -281,9 +279,8 @@ int PermissionPrecompiled::revokeWritePermission(
     {
         int count = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
         result = count;
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled")
-                               << LOG_KV("remove_success",
-                                      (count == storage::CODE_NO_AUTHORIZED ? false : true));
+        PRECOMPILED_LOG(INFO) << LOG_DESC("PermissionPrecompiled revoke")
+                              << LOG_KV("return", result);
     }
     return result;
 }
