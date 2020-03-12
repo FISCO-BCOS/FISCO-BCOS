@@ -322,7 +322,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                 // Collect ack from follower
                 // ensure that the block has been transfered to most of followers
                 m_commitFingerPrint[uncommitedBlockHash].insert(_resp.idx);
-                if (m_commitFingerPrint[uncommitedBlockHash].size() + 1 >=
+                if (m_commitFingerPrint[uncommitedBlockHash].size() >=
                     static_cast<uint64_t>(m_nodeNum - m_f))
                 {
                     if (m_waitingForCommitting)
@@ -340,9 +340,8 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                         RAFTENGINE_LOG(TRACE) << LOG_DESC(
                             "[#tryCommitUncommitedBlock]No thread waiting on "
                             "commitCV, commit by meself");
-
-                        checkAndExecute(m_uncommittedBlock);
                         ul.unlock();
+                        checkAndExecute(m_uncommittedBlock);
                         reportBlock(m_uncommittedBlock);
                     }
                 }
@@ -368,8 +367,8 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                             "[#tryCommitUncommitedBlock]No thread waiting on "
                             "commitCV, commit by meself");
 
-                        checkAndExecute(m_uncommittedBlock);
                         ul.unlock();
+                        checkAndExecute(m_uncommittedBlock);
                         reportBlock(m_uncommittedBlock);
                     }
                 }
@@ -1455,8 +1454,6 @@ bool RaftEngine::commit(Block const& _block)
         return false;
     }
 
-    m_uncommittedBlock = Block();
-    m_uncommittedBlockNumber = 0;
     ul.unlock();
 
     if (getState() != RaftRole::EN_STATE_LEADER)
@@ -1531,15 +1528,20 @@ void RaftEngine::checkSealerList(Block const& _block)
 void RaftEngine::checkAndSave(Sealing& _sealing)
 {
     // callback block chain to commit block
+    std::unique_lock<std::mutex> ul(m_commitMutex);
     CommitResult ret = m_blockChain->commitBlock(_sealing.block, _sealing.p_execContext);
     if (ret == CommitResult::OK)
     {
+        m_uncommittedBlock = Block();
+        m_uncommittedBlockNumber = 0;
+        ul.unlock();
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#checkAndSave]Commit block succ");
         // drop handled transactions
         dropHandledTransactions(_sealing.block);
     }
     else
     {
+        ul.unlock();
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkAndSave]Commit block failed")
                               << LOG_KV("highestNum", m_highestBlock.number())
                               << LOG_KV("sealingNum", _sealing.block->blockHeader().number())
