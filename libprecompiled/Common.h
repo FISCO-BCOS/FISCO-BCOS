@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "libblockverifier/Precompiled.h"
+#include "libdevcore/Exceptions.h"
 #include <memory>
 #include <string>
 
@@ -41,6 +42,21 @@ namespace precompiled
 
 enum PrecompiledError : int
 {
+    // ContractStatusPrecompiled -51999 ~ -51900
+    CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51903,
+    CODE_INVALID_CONTRACT_AVAILABLE = -51902,
+    CODE_INVALID_CONTRACT_FEOZEN = -51901,
+    CODE_INVALID_CONTRACT_DESTROYED = -51900,
+
+    // RingSigPrecompiled -51899 ~ -51800
+    VERIFY_RING_SIG_FAILED = -51800,
+
+    // GroupSigPrecompiled -51799 ~ -51700
+    VERIFY_GROUP_SIG_FAILED = -51700,
+
+    // PaillierPrecompiled -51699 ~ -51600
+    CODE_INVALID_CIPHERS = -51600,
+
     // CRUDPrecompiled -51599 ~ -51500
     CODE_CONDITION_OPERATION_UNDEFINED = -51502,
     CODE_PARSE_CONDITION_ERROR = -51501,
@@ -59,6 +75,7 @@ enum PrecompiledError : int
     CODE_INVALID_CONFIGURATION_VALUES = -51300,
 
     // CNSPrecompiled -51299 ~ -51200
+    CODE_VERSION_LENGTH_OVERFLOW = -51201,
     CODE_ADDRESS_AND_VERSION_EXIST = -51200,
 
     // ConsensusPrecompiled -51199 ~ -51100
@@ -66,6 +83,8 @@ enum PrecompiledError : int
     CODE_INVALID_NODEID = -51100,
 
     // PermissionPrecompiled -51099 ~ -51000
+    CODE_CONTRACT_NOT_EXIST = -51003,
+    CODE_TABLE_NAME_OVERFLOW = -51002,
     CODE_TABLE_AND_ADDRESS_NOT_EXIST = -51001,
     CODE_TABLE_AND_ADDRESS_EXIST = -51000,
 
@@ -78,11 +97,24 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
+class PrecompiledException : public dev::Exception
+{
+public:
+    PrecompiledException(const std::string& what) : dev::Exception(what) {}
+    bytes ToOutput();
+};
+
 void getErrorCodeOut(bytes& out, int const& result);
 std::string getTableName(const std::string& _tableName);
+std::string getContractTableName(Address const& _contractAddress);
+void checkNameValidate(const std::string& tableName, std::string& keyField,
+    std::vector<std::string>& valueFieldList, bool throwStorageException = true);
+int checkLengthValidate(const std::string& field_value, int32_t max_length, int32_t errorCode,
+    bool throwStorageException = true);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
+const int CNS_VERSION_MAX_LENGTH = 128;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH = 64;

@@ -35,6 +35,7 @@ enum VERSION : uint32_t
     V2_0_0 = 0x02000000,
     V2_1_0 = 0x02010000,
     V2_2_0 = 0x02020000,
+    V2_3_0 = 0x02030000,
 };
 
 enum ProtocolVersion : uint32_t

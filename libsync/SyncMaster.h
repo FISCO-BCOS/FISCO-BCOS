@@ -125,6 +125,16 @@ public:
         m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
+    virtual void setMaxBlockQueueSize(int64_t const& _maxBlockQueueSize)
+    {
+        m_syncStatus->bq().setMaxBlockQueueSize(_maxBlockQueueSize);
+    }
+
+    virtual void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
+    {
+        m_syncTrans->setTxsStatusGossipMaxPeers(_txsStatusGossipMaxPeers);
+    }
+
     virtual ~SyncMaster() { stop(); };
     /// start blockSync
     virtual void start() override;
@@ -280,12 +290,12 @@ private:
 
     // Internal coding variable
     /// mutex to access m_signalled
-    Mutex x_signalled;
+    boost::mutex x_signalled;
     /// mutex to protect m_currentSealingNumber
     mutable SharedMutex x_currentSealingNumber;
 
     /// signal to notify all thread to work
-    std::condition_variable m_signalled;
+    boost::condition_variable m_signalled;
 
     // sync state
     std::atomic_bool m_newBlocks = {false};

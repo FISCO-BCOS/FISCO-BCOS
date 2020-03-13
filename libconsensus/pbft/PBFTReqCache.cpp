@@ -46,9 +46,9 @@ void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
     if (pcommit != m_commitCache.end())
         m_commitCache.erase(pcommit);
     /// delete from prepare cache
-    if (hash == m_prepareCache.block_hash)
+    if (hash == m_prepareCache->block_hash)
     {
-        m_prepareCache.clear();
+        m_prepareCache->clear();
     }
     removeInvalidFutureCache(_highestBlockHeader.number());
 }
@@ -62,12 +62,12 @@ void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
 bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& minSigSize)
 {
     auto sig_list = std::make_shared<std::vector<std::pair<u256, Signature>>>();
-    if (m_commitCache.count(m_prepareCache.block_hash) > 0)
+    if (m_commitCache.count(m_prepareCache->block_hash) > 0)
     {
-        for (auto const& item : m_commitCache[m_prepareCache.block_hash])
+        for (auto const& item : m_commitCache[m_prepareCache->block_hash])
         {
             sig_list->push_back(
-                std::make_pair(u256(item.second.idx), Signature(item.first.c_str())));
+                std::make_pair(u256(item.second->idx), Signature(item.first.c_str())));
         }
         if (sig_list->size() < minSigSize)
         {
@@ -78,6 +78,113 @@ bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& 
         return true;
     }
     return false;
+}
+
+// check the given viewChangeReq is valid
+bool PBFTReqCache::checkViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber)
+{
+    // check the blockHeight
+    if (_req->height < _blockNumber)
+    {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("return without addViewChangeReq for lower blockHeight")
+                                << LOG_KV("reqIdx", _req->idx) << LOG_KV("reqHeight", _req->height)
+                                << LOG_KV("blockNumber", _blockNumber);
+        return false;
+    }
+    if (!m_latestViewChangeReqCache->count(_req->idx))
+    {
+        return true;
+    }
+    // already exist the viewChangeReq
+    // only store the newest viewChangeReq
+    auto viewChangeReq = (*m_latestViewChangeReqCache)[_req->idx];
+    // remove the cached viewChangeReq with older Height
+    if (viewChangeReq->height < _blockNumber)
+    {
+        eraseExpiredViewChange(viewChangeReq, _blockNumber);
+        return true;
+    }
+    // the cached viewChangeReq with valid blockNumber
+    if (_req->height < viewChangeReq->height)
+    {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("return without addViewChangeReq for lower blockHeight")
+                                << LOG_KV("reqIdx", _req->idx) << LOG_KV("reqHeight", _req->height)
+                                << LOG_KV("cachedReqHeight", viewChangeReq->height);
+        return false;
+    }
+    // the req with older view
+    if (_req->view < viewChangeReq->view)
+    {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("return without addViewChangeReq for lower view")
+                                << LOG_KV("reqIdx", _req->idx) << LOG_KV("reqView", _req->view)
+                                << LOG_KV("cachedReqView", viewChangeReq->view);
+        return false;
+    }
+    return true;
+}
+
+// erase expired viewChangeReq from both m_latestViewChangeReq and m_recvViewChangeReq
+void PBFTReqCache::eraseExpiredViewChange(ViewChangeReq::Ptr _req, int64_t const& _blockNumber)
+{
+    // remove older state from m_recvViewChangeReq
+    if (m_latestViewChangeReqCache->count(_req->idx))
+    {
+        auto viewChangeReq = (*m_latestViewChangeReqCache)[_req->idx];
+        if (m_recvViewChangeReq.count(_req->view) &&
+            m_recvViewChangeReq[_req->view].count(_req->idx))
+        {
+            if (viewChangeReq == m_recvViewChangeReq[_req->view][_req->idx])
+            {
+                m_recvViewChangeReq[_req->view].erase(_req->idx);
+            }
+            m_latestViewChangeReqCache->erase(_req->idx);
+            PBFTReqCache_LOG(DEBUG)
+                << LOG_DESC("eraseExpiredViewChange") << LOG_KV("blkNumber", _blockNumber)
+                << LOG_KV("cachedReqHeight", viewChangeReq->height)
+                << LOG_KV("cachedReqIdx", viewChangeReq->idx)
+                << LOG_KV("cachedReqHash", viewChangeReq->block_hash.abridged());
+        }
+    }
+}
+
+void PBFTReqCache::addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber)
+{
+    // only add valid viewChangeReq into the cache
+    if (!checkViewChangeReq(_req, _blockNumber))
+    {
+        return;
+    }
+    // remove the expired viewChangeReq from cache
+    eraseExpiredViewChange(_req, _blockNumber);
+
+    // insert the viewchangeReq with newer state
+    auto it = m_recvViewChangeReq.find(_req->view);
+    if (it != m_recvViewChangeReq.end())
+    {
+        auto itv = it->second.find(_req->idx);
+        if (itv != it->second.end())
+        {
+            itv->second = _req;
+        }
+        else
+        {
+            it->second.insert(std::make_pair(_req->idx, _req));
+        }
+    }
+    else
+    {
+        std::unordered_map<IDXTYPE, ViewChangeReq::Ptr> viewMap;
+        viewMap.insert(std::make_pair(_req->idx, _req));
+
+        m_recvViewChangeReq.insert(std::make_pair(_req->view, viewMap));
+    }
+
+    // insert the viewChangeReq into m_latestViewChangeReq
+    (*m_latestViewChangeReqCache)[_req->idx] = _req;
+    PBFTReqCache_LOG(DEBUG) << LOG_DESC("addViewChangeReq") << LOG_KV("reqIdx", _req->idx)
+                            << LOG_KV("reqHeight", _req->height)
+                            << LOG_KV("curNumber", _blockNumber) << LOG_KV("reqView", _req->view)
+                            << LOG_KV("reqHash", _req->block_hash.abridged());
 }
 
 /**
@@ -106,7 +213,7 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
             {
                 auto it = idx_view_map.find(viewChangeEntry.first);
                 if ((it == idx_view_map.end() || viewChangeItem.first > it->second) &&
-                    viewChangeEntry.second.height >= highestBlock.number())
+                    viewChangeEntry.second->height >= highestBlock.number())
                 {
                     /// update to lower view
                     if (it != idx_view_map.end())
@@ -124,8 +231,8 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
                     if (minView > viewChangeItem.first)
                         minView = viewChangeItem.first;
                     /// update to lower height
-                    if (min_height > viewChangeEntry.second.height)
-                        min_height = viewChangeEntry.second.height;
+                    if (min_height > viewChangeEntry.second->height)
+                        min_height = viewChangeEntry.second->height;
                 }
             }
         }
@@ -153,14 +260,38 @@ void PBFTReqCache::removeInvalidViewChange(
     for (auto pview = it->second.begin(); pview != it->second.end();)
     {
         /// remove old received view-change
-        if (pview->second.height < highestBlock.number())
+        if (pview->second->height < highestBlock.number())
             pview = it->second.erase(pview);
         /// remove invalid view-change request with invalid hash
-        else if (pview->second.height == highestBlock.number() &&
-                 pview->second.block_hash != highestBlock.hash())
+        else if (pview->second->height == highestBlock.number() &&
+                 pview->second->block_hash != highestBlock.hash())
             pview = it->second.erase(pview);
         else
             pview++;
+    }
+    removeInvalidLatestViewChangeReq(highestBlock);
+}
+
+void PBFTReqCache::removeInvalidLatestViewChangeReq(dev::eth::BlockHeader const& highestBlock)
+{
+    for (auto pLatestView = m_latestViewChangeReqCache->begin();
+         pLatestView != m_latestViewChangeReqCache->end();)
+    {
+        // check block number
+        if (pLatestView->second->height < highestBlock.number())
+        {
+            pLatestView = m_latestViewChangeReqCache->erase(pLatestView);
+        }
+        // check block number and hash
+        else if (pLatestView->second->height == highestBlock.number() &&
+                 pLatestView->second->block_hash != highestBlock.hash())
+        {
+            pLatestView = m_latestViewChangeReqCache->erase(pLatestView);
+        }
+        else
+        {
+            pLatestView++;
+        }
     }
 }
 
@@ -173,7 +304,7 @@ void PBFTReqCache::removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const&
     for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
         /// erase invalid view
-        if (pcache->second.view != view)
+        if (pcache->second->view != view)
             pcache = it->second.erase(pcache);
         else
             pcache++;
@@ -187,7 +318,7 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
         return;
     for (auto pcache = it->second.begin(); pcache != it->second.end();)
     {
-        if (pcache->second.view != view)
+        if (pcache->second->view != view)
             pcache = it->second.erase(pcache);
         else
             pcache++;
@@ -209,5 +340,53 @@ void PBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBlockNumber)
         }
     }
 }
+
+void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _highestBlockNumber)
+{
+    WriteGuard l(x_rawPrepareCache);
+    m_rawPrepareCache->clear();
+    m_prepareCache->clear();
+    // only remove the expired commitReq
+    for (auto const& commitCacheIterator : m_commitCache)
+    {
+        removeInvalidCommitCache(commitCacheIterator.first, curView);
+    }
+    // remove expired signCache
+    for (auto const& signCacheIterator : m_signCache)
+    {
+        // remove invalidSignCache
+        removeInvalidSignCache(signCacheIterator.first, curView);
+    }
+    // go through all the items of m_signCache, only reserve signReq whose blockHash exists in
+    // commitReqCache
+    for (auto signCacheIterator = m_signCache.begin(); signCacheIterator != m_signCache.end();)
+    {
+        if (!m_commitCache.count(signCacheIterator->first))
+        {
+            signCacheIterator = m_signCache.erase(signCacheIterator);
+        }
+        else
+        {
+            signCacheIterator++;
+        }
+    }
+    // remove the invalid future prepare cache
+    removeInvalidFutureCache(_highestBlockNumber);
+    // go through all the m_futurePrepareCache, only reserve futurePrepareReq exists in
+    // commitReqCache
+    for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
+    {
+        if (!m_commitCache.count(it->second->block_hash))
+        {
+            it = m_futurePrepareCache.erase(it);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    removeInvalidViewChange(curView);
+}
+
 }  // namespace consensus
 }  // namespace dev

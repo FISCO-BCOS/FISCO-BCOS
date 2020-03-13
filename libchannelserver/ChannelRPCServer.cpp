@@ -292,7 +292,7 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         case AMOP_MULBROADCAST:
             onClientChannelRequest(session, message);
             break;
-        case AMOP_CLIENT_TOPICS:
+        case AMOP_CLIENT_SUBSCRIBE_TOPICS:
             onClientTopicRequest(session, message);
             break;
         case UPDATE_TOPIICSTATUS:

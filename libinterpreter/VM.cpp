@@ -91,6 +91,14 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
     {
         result.status_code = EVMC_FAILURE;
     }
+    catch (dev::eth::PermissionDenied const&)
+    {
+        result.status_code = EVMC_REVERT;
+    }
+    catch (dev::Exception const&)
+    {
+        result.status_code = EVMC_REVERT;
+    }
     catch (...)
     {
         result.status_code = EVMC_INTERNAL_ERROR;

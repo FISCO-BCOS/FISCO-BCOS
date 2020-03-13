@@ -187,7 +187,7 @@ public:
         blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
         GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType",
-            "storageType", "stateType", 5000, 300000000, 0};
+            "storageType", "stateType", 5000, 300000000, 0, -1, -1};
         bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
         BOOST_CHECK(ret);
 

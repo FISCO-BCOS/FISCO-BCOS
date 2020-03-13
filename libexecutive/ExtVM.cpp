@@ -213,12 +213,20 @@ h256 ExtVM::codeHashAt(Address const& _a)
     return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
-void ExtVM::setStore(u256 const& _n, u256 const& _v)
+bool ExtVM::isPermitted()
 {
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
-        BOOST_THROW_EXCEPTION(PermissionDenied());
+    {
+        LOG(ERROR) << "ExtVM::isPermitted PermissionDenied" << LOG_KV("origin", origin())
+                   << LOG_KV("address", myAddress());
+        return false;
+    }
+    return true;
+}
 
+void ExtVM::setStore(u256 const& _n, u256 const& _v)
+{
     m_s->setStorage(myAddress(), _n, _v);
 }
 
@@ -271,5 +279,4 @@ void ExtVM::suicide(Address const& _a)
 h256 ExtVM::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
-    ;
 }

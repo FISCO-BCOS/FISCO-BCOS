@@ -15,7 +15,7 @@
  * (c) 2016-2018 fisco-dev contributors.
  *
  * @brief Unit tests for the Transaction
- * @file Transaction.cpp
+ * @file TransactionTest.cpp
  * @author: chaychen
  * @date 2018
  */
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     bytes data(str.begin(), str.end());
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
-    SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+    SignatureStruct sig = dev::sign(sigKeyPair, tx.sha3(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode

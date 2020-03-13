@@ -48,6 +48,12 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getSealerList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getSealerListI);
+
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getEpochSealersList", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getEpochSealersListI);
+
         this->bindAndAddMethod(jsonrpc::Procedure("getObserverList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getObserverListI);
@@ -168,6 +174,10 @@ public:
     inline virtual void getSealerListI(const Json::Value& request, Json::Value& response)
     {
         response = this->getSealerList(boost::lexical_cast<int>(request[0u].asString()));
+    }
+    inline virtual void getEpochSealersListI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getEpochSealersList(boost::lexical_cast<int>(request[0u].asString()));
     }
     inline virtual void getObserverListI(const Json::Value& request, Json::Value& response)
     {
@@ -311,6 +321,7 @@ public:
     virtual std::string getBlockNumber(int param1) = 0;
     virtual std::string getPbftView(int param1) = 0;
     virtual Json::Value getSealerList(int param1) = 0;
+    virtual Json::Value getEpochSealersList(int param1) = 0;
     virtual Json::Value getObserverList(int param1) = 0;
     virtual Json::Value getConsensusStatus(int param1) = 0;
 

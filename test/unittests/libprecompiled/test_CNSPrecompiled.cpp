@@ -21,8 +21,7 @@
  * @date 20181120
  */
 
-#include "Common.h"
-#include "MemoryStorage.h"
+#include "../libstorage/MemoryStorage.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
@@ -33,6 +32,7 @@
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -83,6 +83,18 @@ BOOST_AUTO_TEST_CASE(insert)
         "\"inputs\":[],\"name\":\"get\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],"
         "\"payable\":false,\"type\":\"function\"},{\"inputs\":[],\"payable\":false,\"type\":"
         "\"constructor\"}]";
+    // insert overflow
+    string overflowVersion130 =
+        "012345678901234567890123456789012345678901234567890123456789"
+        "0123456789012345678901234567890123456789012345678901234567890123456789";
+    bytes in2 = abi.abiIn("insert(string,string,string,string)", contractName, overflowVersion130,
+        contractAddress, contractAbi);
+    bytes out2 = cnsPrecompiled->call(context, bytesConstRef(&in2));
+    s256 errCode;
+    abi.abiOut(&out2, errCode);
+    BOOST_TEST(errCode == CODE_VERSION_LENGTH_OVERFLOW);
+
+    // insert
     bytes in = abi.abiIn("insert(string,string,string,string)", contractName, contractVersion,
         contractAddress, contractAbi);
     bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
@@ -90,6 +102,7 @@ BOOST_AUTO_TEST_CASE(insert)
     auto table = memoryTableFactory->openTable(SYS_CNS);
     auto entries = table->select(contractName, table->newCondition());
     BOOST_TEST(entries->size() == 1u);
+
 
     // insert again with same item
     out = cnsPrecompiled->call(context, bytesConstRef(&in));
@@ -142,6 +155,13 @@ BOOST_AUTO_TEST_CASE(select)
     Json::Reader reader;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
     BOOST_TEST(retJson.size() == 2);
+
+    // getContractAddress
+    in = abi.abiIn("getContractAddress(string,string)", contractName, contractVersion);
+    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    Address ret;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == Address(contractAddress));
 
     // select no existing keys
     in = abi.abiIn("selectByName(string)", std::string("Ok2"));

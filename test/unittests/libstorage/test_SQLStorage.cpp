@@ -122,6 +122,7 @@ struct SQLStorageFixture
         std::shared_ptr<MockChannelRPCServer> mockChannel =
             std::make_shared<MockChannelRPCServer>();
         sqlStorage->setChannelRPCServer(mockChannel);
+        sqlStorage->setMaxRetry(20);
     }
     Entries::Ptr getEntries()
     {

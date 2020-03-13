@@ -112,15 +112,21 @@ void PartiallyBlock::checkBasic(RLP const& rlp, dev::h256 const& _expectedHash)
     }
 }
 
+
 // fill the missed transactions into the block
 void PartiallyBlock::fillBlock(bytesConstRef _txsData)
 {
-    m_missedTransactions->clear();
     RLP blockRlp(_txsData);
-    // check block number
-    checkBasic(blockRlp, m_blockHeader.hash());
+    fillBlock(blockRlp);
+}
 
-    auto txsBytes = blockRlp[2].toBytesConstRef();
+void PartiallyBlock::fillBlock(RLP const& _rlp)
+{
+    m_missedTransactions->clear();
+    // check block number
+    checkBasic(_rlp, m_blockHeader.hash());
+
+    auto txsBytes = _rlp[2].toBytesConstRef();
     // decode transactions into m_missedTransactions
     TxsParallelParser::decode(m_missedTransactions, txsBytes, CheckTransaction::Everything, true);
 
@@ -175,14 +181,6 @@ void PartiallyBlock::encodeMissedInfo(std::shared_ptr<bytes> _encodedBytes)
 void PartiallyBlock::fetchMissedTxs(
     std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo, dev::h256 const& _expectedHash)
 {
-    if (m_missedTransactions->size() > 0)
-    {
-        PartiallyBlock_LOG(WARNING) << LOG_DESC(
-            "fetchMissedTxs failed for the block-self does not has complete transactions");
-        BOOST_THROW_EXCEPTION(
-            NotCompleteBlock() << errinfo_comment(
-                "fetchMissedTxs: the block-self does not has complete transactions"));
-    }
     // decode _missInfo
     RLP missedInfoRlp(_missInfo);
     // Note: since the blockHash maybe changed after the block executed,

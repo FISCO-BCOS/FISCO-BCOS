@@ -19,14 +19,17 @@
  *  @date 20180921
  */
 #include "Common.h"
+#include "libstorage/StorageException.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
 
-using namespace dev;
 using namespace std;
+using namespace dev;
+using namespace dev::storage;
 
 static const string USER_TABLE_PREFIX = "_user_";
 static const string USER_TABLE_PREFIX_SHORT = "u_";
+static const string CONTRACT_TABLE_PREFIX_SHORT = "c_";
 
 void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
@@ -54,4 +57,139 @@ std::string dev::precompiled::getTableName(const std::string& _tableName)
         return USER_TABLE_PREFIX + _tableName;
     }
     return USER_TABLE_PREFIX_SHORT + _tableName;
+}
+
+std::string dev::precompiled::getContractTableName(Address const& _contractAddress)
+{
+    return std::string(CONTRACT_TABLE_PREFIX_SHORT + _contractAddress.hex());
+}
+
+
+void dev::precompiled::checkNameValidate(const string& tableName, string& keyField,
+    vector<string>& valueFieldList, bool throwStorageException)
+{
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        set<string> valueFieldSet;
+        boost::trim(keyField);
+        valueFieldSet.insert(keyField);
+
+        vector<char> allowChar = {'$', '_', '@'};
+
+        auto checkTableNameValidate = [allowChar, throwStorageException](const string& tableName) {
+            size_t iSize = tableName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(tableName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalid tablename") << LOG_KV("table name", tableName);
+                    if (throwStorageException)
+                    {
+                        BOOST_THROW_EXCEPTION(StorageException(
+                            CODE_TABLE_INVALIDATE_FIELD, string("invalid tablename:") + tableName));
+                    }
+                    else
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            PrecompiledException(string("invalid tablename:") + tableName));
+                    }
+                }
+            }
+        };
+        auto checkFieldNameValidate = [allowChar, throwStorageException](
+                                          const string& tableName, const string& fieldName) {
+            if (fieldName.size() == 0 || fieldName[0] == '_')
+            {
+                STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
+                                   << LOG_KV("table name", tableName);
+                if (throwStorageException)
+                {
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledException(string("invalid field:") + fieldName));
+                }
+            }
+            size_t iSize = fieldName.size();
+            for (size_t i = 0; i < iSize; i++)
+            {
+                if (!isalnum(fieldName[i]) &&
+                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
+                {
+                    STORAGE_LOG(ERROR)
+                        << LOG_DESC("invalid fieldname") << LOG_KV("field name", fieldName)
+                        << LOG_KV("table name", tableName);
+                    if (throwStorageException)
+                    {
+                        BOOST_THROW_EXCEPTION(StorageException(
+                            CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                    }
+                    else
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            PrecompiledException(string("invalid field:") + fieldName));
+                    }
+                }
+            }
+        };
+
+        checkTableNameValidate(tableName);
+        checkFieldNameValidate(tableName, keyField);
+
+        for (auto& valueField : valueFieldList)
+        {
+            auto ret = valueFieldSet.insert(valueField);
+            if (!ret.second)
+            {
+                STORAGE_LOG(ERROR)
+                    << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
+                    << LOG_KV("table name", tableName);
+                if (throwStorageException)
+                {
+                    BOOST_THROW_EXCEPTION(StorageException(
+                        CODE_TABLE_DUMPLICATE_FIELD, string("dumplicate field:") + valueField));
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledException(string("dumplicate field:") + valueField));
+                }
+            }
+            checkFieldNameValidate(tableName, valueField);
+        }
+    }
+}
+
+int dev::precompiled::checkLengthValidate(
+    const string& fieldValue, int32_t maxLength, int32_t errorCode, bool throwStorageException)
+{
+    if (fieldValue.size() > (size_t)maxLength)
+    {
+        PRECOMPILED_LOG(ERROR) << "key:" << fieldValue << " value size:" << fieldValue.size()
+                               << " greater than " << maxLength;
+        if (throwStorageException)
+        {
+            BOOST_THROW_EXCEPTION(StorageException(
+                errorCode, string("size of value/key greater than") + to_string(maxLength)));
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                string("size of value/key greater than") + to_string(maxLength)));
+        }
+
+        return errorCode;
+    }
+    return 0;
+}
+
+bytes precompiled::PrecompiledException::ToOutput()
+{
+    eth::ContractABI abi;
+    return abi.abiIn("Error(string)", string(what()));
 }

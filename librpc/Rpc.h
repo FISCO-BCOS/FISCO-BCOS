@@ -69,6 +69,7 @@ public:
     std::string getBlockNumber(int _groupID) override;
     std::string getPbftView(int _groupID) override;
     Json::Value getSealerList(int _groupID) override;
+    Json::Value getEpochSealersList(int _groupID) override;
     Json::Value getObserverList(int _groupID) override;
     Json::Value getConsensusStatus(int _groupID) override;
 
@@ -77,7 +78,7 @@ public:
 
     // p2p part
     Json::Value getClientVersion() override;
-    Json::Value getPeers(int _groupID) override;
+    Json::Value getPeers(int) override;
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
     Json::Value getNodeIDList(int _groupID) override;

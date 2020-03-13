@@ -129,7 +129,7 @@ jsToInt(std::string const& _s)
         // Hex
         return fromBigEndian<boost::multiprecision::number<boost::multiprecision::cpp_int_backend<
             N * 8, N * 8, boost::multiprecision::unsigned_magnitude,
-            boost::multiprecision::unchecked, void>>>(fromHex(_s.substr(2)));
+            boost::multiprecision::unchecked, void>>>(fromHex(_s.substr(2), WhenError::Throw));
     else if (_s.find_first_not_of("0123456789") == std::string::npos)
         // Decimal
         return boost::multiprecision::number<boost::multiprecision::cpp_int_backend<N * 8, N * 8,
@@ -147,9 +147,9 @@ inline u256 jsToU256(std::string const& _s)
 /// Convert a string representation of a number to an int
 /// String can be a normal decimal number, or a hex prefixed by 0x or 0X, or an octal if prefixed by
 /// 0 Returns 0 in case of failure
-inline int jsToInt(std::string const& _s)
+inline int64_t jsToInt(std::string const& _s)
 {
-    return std::stoi(_s, nullptr, 0);
+    return int64_t(jsToInt<8>(_s));
 }
 
 inline std::string jsToDecimal(std::string const& _s)

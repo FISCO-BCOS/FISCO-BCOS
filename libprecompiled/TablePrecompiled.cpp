@@ -56,18 +56,6 @@ std::string TablePrecompiled::toString()
     return "Table";
 }
 
-void TablePrecompiled::checkLengthValidate(
-    const std::string& field_value, int32_t max_length, int32_t throw_exception)
-{
-    if (field_value.size() > (size_t)max_length)
-    {
-        PRECOMPILED_LOG(ERROR) << "key:" << field_value << " value size:" << field_value.size()
-                               << " greater than " << max_length;
-        BOOST_THROW_EXCEPTION(StorageException(throw_exception,
-            std::string("size of value of key greater than") + std::to_string(max_length)));
-    }
-}
-
 bytes TablePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
 {

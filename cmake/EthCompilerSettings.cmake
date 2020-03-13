@@ -34,7 +34,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "/usr/bin/time")
     # set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "/usr/bin/time")
     # Use ISO C++11 standard language.
-    set(CMAKE_CXX_FLAGS "-std=c++11 -pthread -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions")
+    set(CMAKE_CXX_FLAGS "-std=c++11 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions")
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
     # Enables all the warnings about constructions that some users consider questionable,
     # and that are easy to avoid.  Also enable some extra warning flags that are not

@@ -23,9 +23,8 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include "FixedHash.h"
+#include "Guards.h"
 
 #define TREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \
@@ -50,8 +49,19 @@ public:
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
 
     // select the nodes by tree topology
-    virtual std::shared_ptr<dev::h512s> selectNodes(
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0);
+    virtual std::shared_ptr<dev::h512s> selectNodes(std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _consIndex = 0, bool const& _isTheStartNode = false);
+
+    virtual std::shared_ptr<dev::h512s> selectNodesByNodeID(
+        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID,
+        bool const& _isTheStartNode = false);
+
+    virtual std::shared_ptr<dev::h512s> selectParentByNodeID(
+        std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID);
+
+    virtual std::shared_ptr<dev::h512s> selectParent(std::shared_ptr<std::set<dev::h512>> _peers,
+        int64_t const& _consIndex = 0, bool const& _selectAll = false);
+
     virtual int64_t consIndex() const
     {
         if (m_consIndex == -1)
@@ -70,15 +80,19 @@ protected:
         ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
         int64_t const& _startIndex);
     // select the parent nodes by tree
+    // _selectAll is true:
+    // select all the parent(include the grandparent) for the given node
     virtual void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-        int64_t const& _startIndex);
+        int64_t const& _startIndex, bool const& _selectAll = false);
+
+    int64_t getNodeIndex(int64_t const& _consIndex);
 
     virtual bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const;
 
     virtual ssize_t getSelectedNodeIndex(ssize_t const& _selectedIndex, ssize_t const& _offset);
 
-    ssize_t getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512& _nodeId);
+    ssize_t getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512 const& _nodeId);
 
 protected:
     mutable Mutex m_mutex;

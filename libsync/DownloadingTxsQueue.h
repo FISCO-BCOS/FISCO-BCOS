@@ -24,8 +24,8 @@
 #include "Common.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
-#include "TreeTopology.h"
 #include <libdevcore/Guards.h>
+#include <libdevcore/TreeTopology.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>
@@ -43,16 +43,13 @@ public:
     DownloadTxsShard(bytesConstRef _txsBytes, NodeID const& _fromPeer)
       : txsBytes(_txsBytes.toBytes()), fromPeer(_fromPeer)
     {
-        forwardNodes = std::make_shared<dev::h512s>();
+        knownNodes = std::make_shared<dev::h512s>();
     }
 
-    void appendForwardNodes(dev::h512 const& _forwardNode)
-    {
-        forwardNodes->push_back(_forwardNode);
-    }
+    void appendKnownNode(dev::h512 const& _knownNode) { knownNodes->push_back(_knownNode); }
     bytes txsBytes;
     NodeID fromPeer;
-    std::shared_ptr<dev::h512s> forwardNodes;
+    std::shared_ptr<dev::h512s> knownNodes;
 };
 
 class DownloadingTxsQueue
@@ -95,6 +92,10 @@ public:
     }
 
     TreeTopology::Ptr treeRouter() { return m_treeRouter; }
+    void setNeedImportToTxPool(bool const& _needImportToTxPool)
+    {
+        m_needImportToTxPool = _needImportToTxPool;
+    }
 
 private:
     NodeID m_nodeId;
@@ -106,6 +107,7 @@ private:
     TreeTopology::Ptr m_treeRouter = nullptr;
     SyncMasterStatus::Ptr m_syncStatus;
     dev::p2p::P2PInterface::Ptr m_service;
+    std::atomic_bool m_needImportToTxPool = {true};
 };
 
 }  // namespace sync

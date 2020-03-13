@@ -60,7 +60,6 @@ void Executive::initialize(Transaction::Ptr _transaction)
 
         // Avoid unaffordable transactions.
         bigint gasCost = (bigint)m_t->gas() * m_t->gasPrice();
-        bigint totalCost = m_t->value() + gasCost;
         m_gasCost = (u256)gasCost;  // Convert back to 256-bit, safe now.
     }
 }
@@ -181,7 +180,13 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         else
         {
             m_gas = _p.gas;
-            if (m_s->addressHasCode(_p.codeAddress))
+            if (m_s->frozen(_p.codeAddress))
+            {
+                LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+                           << LOG_KV("contractAddr", _p.codeAddress);
+                m_excepted = TransactionException::ContractFrozen;
+            }
+            else if (m_s->addressHasCode(_p.codeAddress))
             {
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
@@ -237,6 +242,13 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             size_t outputSize = result.size();
             m_output = owning_bytes_ref{std::move(result), 0, outputSize};
         }
+        catch (dev::precompiled::PrecompiledException& e)
+        {
+            revert();
+            m_excepted = TransactionException::PrecompiledError;
+            auto output = e.ToOutput();
+            m_output = owning_bytes_ref{std::move(output), 0, output.size()};
+        }
         catch (dev::Exception& e)
         {
             revert();
@@ -247,6 +259,12 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             revert();
             m_excepted = TransactionException::Unknown;
         }
+    }
+    else if (m_s->frozen(_p.codeAddress))
+    {
+        LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for ContractFrozen")
+                   << LOG_KV("contractAddr", _p.codeAddress);
+        m_excepted = TransactionException::ContractFrozen;
     }
     else if (m_s->addressHasCode(_p.codeAddress))
     {
@@ -291,8 +309,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     u256 const& _gas, bytesConstRef _init, Address const& _origin)
 {
     // check authority for deploy contract
-    auto memeryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
-    auto table = memeryTableFactory->openTable(SYS_TABLES);
+    auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
+    auto table = memoryTableFactory->openTable(SYS_TABLES);
     if (!table->checkAuthority(_origin))
     {
         LOG(WARNING) << "Executive deploy contract checkAuthority of " << _origin.hex()
@@ -336,12 +354,77 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // newNonce += 1;
     m_s->setNonce(m_newAddress, newNonce);
 
+    if (g_BCOSConfig.version() >= V2_3_0)
+    {
+        grantContractStatusManager(memoryTableFactory, m_newAddress, _sender, _origin);
+    }
+
     // Schedule _init execution if not empty.
     if (!_init.empty())
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
             _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
 
     return !m_ext;
+}
+
+void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
+    Address const& newAddress, Address const& sender, Address const& origin)
+{
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
+               << LOG_KV("sender account", sender) << LOG_KV("origin account", origin);
+
+    std::string tableName = precompiled::getContractTableName(newAddress);
+    auto table = memoryTableFactory->openTable(tableName);
+
+    if (!table)
+    {
+        LOG(ERROR) << LOG_DESC("grantContractStatusManager get newAddress table error!");
+        return;
+    }
+
+    // grant origin authorization
+    auto entry = table->newEntry();
+    entry->setField("key", "authority");
+    entry->setField("value", origin.hex());
+    table->insert("authority", entry);
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add origin")
+               << LOG_KV("authoriy", origin.hex());
+
+    if (origin != sender)
+    {
+        // grant authorization of sender contract
+        std::string senderTableName = precompiled::getContractTableName(sender);
+        auto senderTable = memoryTableFactory->openTable(senderTableName);
+        if (!senderTable)
+        {
+            LOG(ERROR) << LOG_DESC("grantContractStatusManager get sender table error!");
+            return;
+        }
+
+        auto entries = senderTable->select("authority", senderTable->newCondition());
+        if (entries->size() == 0)
+        {
+            LOG(ERROR) << LOG_DESC("grantContractStatusManager no sender authority is granted");
+        }
+        else
+        {
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                std::string authority = entries->get(i)->getField("value");
+                if (origin.hex() != authority)
+                {
+                    // remove duplicate
+                    auto entry = table->newEntry();
+                    entry->setField("key", "authority");
+                    entry->setField("value", authority);
+                    table->insert("authority", entry);
+                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add sender")
+                               << LOG_KV("authoriy", authority);
+                }
+            }
+        }
+    }
+    return;
 }
 
 bool Executive::go(OnOpFunc const& _onOp)
@@ -522,7 +605,7 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                   << LOG_KV("hash", (m_t->hasSignature()) ? m_t->sha3().abridged() : "call")
+                   << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->sha3()) : "call")
                    << m_exceptionReason.str();
     }
 }

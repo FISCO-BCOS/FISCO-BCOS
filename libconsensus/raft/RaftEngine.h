@@ -103,7 +103,7 @@ public:
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);
     bool reachBlockIntervalTime();
-    void resetLastBlockTime() { m_lastBlockTime = dev::utcTime(); }
+    void resetLastBlockTime() { m_lastBlockTime = dev::utcSteadyTime(); }
     const std::string consensusStatus() override;
 
 protected:
@@ -192,14 +192,14 @@ protected:
     unsigned m_maxElectTimeoutInit;
     unsigned m_minElectTimeoutBoundary;
     unsigned m_maxElectTimeoutBoundary;
-    std::chrono::system_clock::time_point m_lastElectTime;
+    std::chrono::steady_clock::time_point m_lastElectTime;
 
     static unsigned const s_heartBeatIntervalRatio = 4;
     unsigned m_heartbeatTimeout;
     unsigned m_heartbeatInterval;
     unsigned m_heartbeatCount = 0;
-    std::chrono::system_clock::time_point m_lastHeartbeatTime;
-    std::chrono::system_clock::time_point m_lastHeartbeatReset;
+    std::chrono::steady_clock::time_point m_lastHeartbeatTime;
+    std::chrono::steady_clock::time_point m_lastHeartbeatReset;
 
     unsigned m_increaseTime;
 
