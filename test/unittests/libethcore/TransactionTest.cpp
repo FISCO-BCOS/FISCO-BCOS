@@ -15,7 +15,7 @@
  * (c) 2016-2018 fisco-dev contributors.
  *
  * @brief Unit tests for the Transaction
- * @file Transaction.cpp
+ * @file TransactionTest.cpp
  * @author: chaychen
  * @date 2018
  */

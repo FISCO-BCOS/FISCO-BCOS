@@ -31,9 +31,8 @@ using namespace dev::precompiled;
 
 const char* const PAILLIER_METHOD_SET_STR = "paillierAdd(string,string)";
 
-PaillierPrecompiled::PaillierPrecompiled()
+PaillierPrecompiled::PaillierPrecompiled() : m_callPaillier(std::make_shared<CallPaillier>())
 {
-    m_callPaillier = std::make_shared<CallPaillier>();
     name2Selector[PAILLIER_METHOD_SET_STR] = getFuncSelector(PAILLIER_METHOD_SET_STR);
 }
 
