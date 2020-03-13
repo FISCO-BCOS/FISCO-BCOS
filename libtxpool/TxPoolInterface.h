@@ -128,7 +128,6 @@ public:
     /// transaction pool
     virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
 
-    virtual bool isFull() { return false; }
     virtual void start() {}
     virtual void stop() {}
 

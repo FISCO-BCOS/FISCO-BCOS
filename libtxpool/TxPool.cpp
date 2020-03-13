@@ -258,8 +258,6 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
                 /// force sender for the transaction
                 ReadGuard l(m_lock);
                 auto p_tx = m_txsHash.find(txHash);
-                l.unlock();
-
                 if (p_tx != m_txsHash.end())
                 {
                     block.setSenderForTransaction(i, (*(p_tx->second))->sender());
@@ -267,6 +265,7 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
                 /// verify the transaction
                 else
                 {
+                    l.unlock();
                     block.setSenderForTransaction(i);
                 }
             }
@@ -675,13 +674,6 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         {
             if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
             {
-#if 0
-                if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-                {
-                    ++ignoreCount;
-                    continue;
-                }
-#endif
                 ret->push_back(*it);
                 txCnt++;
             }

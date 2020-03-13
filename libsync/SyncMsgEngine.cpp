@@ -291,7 +291,7 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
                           << LOG_KV("to", from + size - 1);
 
     auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
-    if (peerStatus != nullptr && peerStatus)
+    if (peerStatus)
     {
         peerStatus->reqQueue.push(from, (int64_t)size);
         // notify sync master to handle block requests

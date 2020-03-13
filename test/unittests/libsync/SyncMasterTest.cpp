@@ -444,6 +444,39 @@ BOOST_AUTO_TEST_CASE(DoWorkTest)
     BOOST_CHECK(sync->status().state == SyncState::Idle);
 }
 
+BOOST_AUTO_TEST_CASE(syncStatusTest)
+{
+    std::shared_ptr<SyncMaster> sync = fakeSyncToolsSet(5, 5, NodeID(100)).sync;
+    auto worker = std::make_shared<dev::ThreadPool>("worker", 4);
+    auto genesisHash = dev::sha3("genesis");
+    for (size_t i = 0; i < 10; i++)
+    {
+        worker->enqueue([=]() {
+            sync->syncStatus()->newSyncPeerStatus(SyncPeerInfo{
+                KeyPair::create().pub(), std::rand() % 1000, genesisHash, genesisHash});
+        });
+        worker->enqueue([=]() {
+            sync->syncStatus()->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+                _p->number += 1;
+                return true;
+            });
+        });
+        auto _selectedPeers = sync->syncStatus()->peers();
+        int64_t selectSize = 3;
+        worker->enqueue([=]() {
+            sync->syncStatus()->filterPeers(selectSize, _selectedPeers,
+                [&](std::shared_ptr<SyncPeerStatus> _p) { return _p->isSealer; });
+        });
+        worker->enqueue([=]() {
+            auto peers = sync->syncStatus()->peers();
+            for (auto const& peer : *peers)
+            {
+                sync->syncStatus()->deletePeer(peer);
+            }
+        });
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

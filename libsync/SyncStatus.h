@@ -80,7 +80,7 @@ public:
 
 public:
     NodeID nodeId;
-    int64_t number;
+    std::atomic<int64_t> number = {0};
     h256 genesisHash;
     h256 latestHash;
     DownloadRequestQueue reqQueue;

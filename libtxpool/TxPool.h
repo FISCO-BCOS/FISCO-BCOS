@@ -188,12 +188,6 @@ public:
     void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
     bool txExists(dev::h256 const& txHash) override;
 
-    bool isFull() override
-    {
-        // UpgradableGuard l(m_lock);
-        return m_txsQueue.size() >= m_limit;
-    }
-
     dev::ThreadPool::Ptr workerPool() { return m_workerPool; }
     std::shared_ptr<dev::eth::Transactions> obtainTransactions(
         std::vector<dev::h256> const& _reqTxs) override;
@@ -201,6 +195,7 @@ public:
         std::set<dev::h256> const& _txsHashSet) override;
 
     bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
+    void clear();
 
 protected:
     /**
@@ -216,7 +211,7 @@ protected:
     virtual ImportResult verify(Transaction::Ptr trans, IfDropped _ik = IfDropped::Ignore);
     /// interface for filter check
     virtual u256 filterCheck(Transaction::Ptr) const { return u256(0); };
-    void clear();
+    void removeTransactionKnowBy(h256 const& _txHash);
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     bool removeBlockKnowTrans(dev::eth::Block const& block);
     void removeInvalidTxs();
@@ -236,7 +231,6 @@ private:
         std::shared_ptr<dev::eth::Block> _block = nullptr, size_t _index = 0);
 
     bool insert(dev::eth::Transaction::Ptr _tx);
-    void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
     {
         if (!m_txpoolNonceChecker->isNonceOk(*tx, true))

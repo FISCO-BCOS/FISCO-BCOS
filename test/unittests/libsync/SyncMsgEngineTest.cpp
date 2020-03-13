@@ -230,6 +230,45 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     BOOST_CHECK_EQUAL((*topTxs)[0]->sha3(), txPtr->sha3());
 }
 
+BOOST_AUTO_TEST_CASE(onPeerTxsStatusTest)
+{
+    std::shared_ptr<ThreadPool> workers = std::make_shared<ThreadPool>("workers", 4);
+    for (size_t i = 0; i < 100; i++)
+    {
+        // fake txsStatus
+        std::shared_ptr<FakeBlock> fakedBlock = std::make_shared<FakeBlock>();
+        std::shared_ptr<SyncTxsStatusPacket> statusPacket = std::make_shared<SyncTxsStatusPacket>();
+        auto txs = fakedBlock->fakeTransactions(100, 0);
+        std::shared_ptr<std::set<dev::h256>> txsHash = std::make_shared<std::set<dev::h256>>();
+        for (auto tx : *txs)
+        {
+            txsHash->insert(tx->sha3());
+        }
+        // PeerTxsStatusTest
+        workers->enqueue([=]() {
+            statusPacket->encode(0, txsHash);
+            auto p2pMsg = statusPacket->toMessage(0);
+
+            auto fakeSessionPtr = fakeSyncToolsSet.createSession();
+            fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, p2pMsg);
+        });
+        // onPeersTransactions
+        workers->enqueue([=]() {
+            auto txPacket = SyncTransactionsPacket();
+            vector<bytes> txRLPs;
+            for (auto tx : *txs)
+            {
+                txRLPs.emplace_back(tx->rlp(WithSignature));
+            }
+            txPacket.encode(txRLPs);
+            auto msgPtr = txPacket.toMessage(0x02);
+            auto fakeSessionPtr = fakeSyncToolsSet.createSession();
+            fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
+        });
+    }
+}
+
+
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)
 {
     SyncBlocksPacket blocksPacket;

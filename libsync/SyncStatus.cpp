@@ -124,7 +124,12 @@ NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_
     ReadGuard l(x_peerStatus);
     for (auto const& peer : (*_peers))
     {
-        if (m_peersStatus.count(peer) && m_peersStatus[peer] && _allow(m_peersStatus[peer]))
+        std::shared_ptr<SyncPeerStatus> peerStatus = nullptr;
+        if (m_peersStatus.count(peer))
+        {
+            peerStatus = m_peersStatus[peer];
+        }
+        if (peerStatus && _allow(peerStatus))
         {
             chosen.push_back(peer);
             if ((int64_t)chosen.size() == selectedSize)
@@ -203,9 +208,17 @@ void SyncMasterStatus::forRandomPeers(
 
     int64_t selectedSize = selectPeers(_neighborSize, nodeIds);
     // call _f for the selected nodes
-    for (int i = 0; i < selectedSize; i++)
+    for (ssize_t i = 0; i < selectedSize && i < (ssize_t)(nodeIds->size()); i++)
     {
-        _f(m_peersStatus[(*nodeIds)[i]]);
+        std::shared_ptr<SyncPeerStatus> selectedPeer = nullptr;
+        if (m_peersStatus.count((*nodeIds)[i]))
+        {
+            selectedPeer = m_peersStatus[(*nodeIds)[i]];
+        }
+        if (selectedPeer)
+        {
+            _f(selectedPeer);
+        }
     }
 }
 

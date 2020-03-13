@@ -87,7 +87,7 @@ string const SyncMaster::syncInfo() const
         Json::Value info;
         info["nodeId"] = toHex(_p->nodeId);
         info["genesisHash"] = toHex(_p->genesisHash);
-        info["blockNumber"] = _p->number;
+        info["blockNumber"] = _p->number.load();
         info["latestHash"] = toHex(_p->latestHash);
         peersInfo.append(info);
         return true;
@@ -388,6 +388,8 @@ void SyncMaster::maintainPeersStatus()
     {
         bool thisTurnFound = false;
         m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+            assert(_p);
+
             if (m_syncStatus->knownHighestNumber <= 0 ||
                 _p->number != m_syncStatus->knownHighestNumber)
             {
@@ -665,6 +667,7 @@ void SyncMaster::maintainBlockRequest()
 {
     uint64_t timeout = utcSteadyTime() + c_respondDownloadRequestTimeout;
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
+        assert(_p);
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
             return true;  // no need to respond

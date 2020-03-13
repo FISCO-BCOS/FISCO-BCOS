@@ -153,6 +153,93 @@ BOOST_AUTO_TEST_CASE(BlockLimitCheck)
     BOOST_CHECK(result == ImportResult::BlockLimitCheckFailed);
 }
 
+BOOST_AUTO_TEST_CASE(testSetTransactionsAreKnownBy)
+{
+    TxPoolFixture poolTest(5, 5);
+    auto txPool = poolTest.m_txPool;
+    std::shared_ptr<ThreadPool> workers = std::make_shared<ThreadPool>("workers", 4);
+    // fake nodeList
+    dev::h512s nodeList;
+    for (size_t i = 0; i < 10; i++)
+    {
+        nodeList.push_back(KeyPair::create().pub());
+    }
+    for (size_t i = 0; i < 100; i++)
+    {
+        workers->enqueue([=]() {
+            ReadGuard l(txPool->xtransactionKnownBy());
+            auto hash = dev::sha3("random" + std::to_string(utcTime()));
+            for (auto const& node : nodeList)
+            {
+                txPool->isTransactionKnownBy(hash, node);
+            }
+        });
+        workers->enqueue([=]() {
+            WriteGuard l(txPool->xtransactionKnownBy());
+            auto hash = dev::sha3("random" + std::to_string(utcTime()));
+            for (auto const& node : nodeList)
+            {
+                txPool->setTransactionIsKnownBy(hash, node);
+            }
+        });
+        workers->enqueue([=]() {
+            auto hash = dev::sha3("random" + std::to_string(utcTime()));
+            dev::h256s hashList;
+            hashList.push_back(hash);
+            for (auto const& node : nodeList)
+            {
+                txPool->setTransactionsAreKnownBy(hashList, node);
+            }
+        });
+        workers->enqueue([=]() { txPool->clear(); });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testTopTransactionsCondition)
+{
+    TxPoolFixture poolTest(5, 5);
+    auto txPool = poolTest.m_txPool;
+    std::shared_ptr<ThreadPool> workers = std::make_shared<ThreadPool>("workers", 4);
+    // fake nodeList
+    dev::h512s nodeList;
+    for (size_t i = 0; i < 10; i++)
+    {
+        nodeList.push_back(KeyPair::create().pub());
+    }
+    std::shared_ptr<FakeBlock> fakedBlock = std::make_shared<FakeBlock>();
+    for (size_t i = 0; i < 10000; i++)
+    {
+        // import txs
+        workers->enqueue([=]() {
+            auto txs = fakedBlock->fakeTransactions(5, 4);
+            // import transactions
+            for (auto tx : *txs)
+            {
+                txPool->import(tx);
+            }
+        });
+        // topTransactionsCondition
+        workers->enqueue([=]() {
+            auto txs = txPool->topTransactionsCondition(100, nodeList[0]);
+            for (auto tx : *txs)
+            {
+                WriteGuard l(txPool->xtransactionKnownBy());
+                txPool->setTransactionIsKnownBy(tx->sha3(), nodeList[0]);
+            }
+        });
+        // setTransactionsAreKnownBy
+        workers->enqueue([=]() {
+            auto txs = txPool->topTransactionsCondition(1000, nodeList[0]);
+            dev::h256s txsVec;
+            for (auto tx : *txs)
+            {
+                txsVec.push_back(tx->sha3());
+            }
+            txPool->setTransactionsAreKnownBy(txsVec, nodeList[0]);
+        });
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev
