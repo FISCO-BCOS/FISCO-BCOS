@@ -29,6 +29,7 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
+#include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -191,11 +192,21 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
+bool Ledger::isRotatingPBFTEnabled()
+{
+    return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") == 0);
+}
+
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    }
+    if (isRotatingPBFTEnabled())
+    {
+        return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
     return nullptr;
@@ -233,18 +244,23 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
     initPBFTEngine(pbftSealer);
+    initRotatingPBFTEngine(pbftSealer);
     return pbftSealer;
 }
 
 dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") != 0 ||
-        !m_param->mutableConsensusParam().enablePrepareWithTxsHash)
+    if (!m_param->mutableConsensusParam().enablePrepareWithTxsHash)
     {
         return std::make_shared<dev::eth::BlockFactory>();
     }
-    // only create PartiallyBlockFactory for PBFT when enablePrepareWithTxsHash
-    return std::make_shared<dev::eth::PartiallyBlockFactory>();
+    // only create PartiallyBlockFactory when using pbft or rpbft
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
+        isRotatingPBFTEnabled())
+    {
+        return std::make_shared<dev::eth::PartiallyBlockFactory>();
+    }
+    return std::make_shared<dev::eth::BlockFactory>();
 }
 
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
@@ -261,6 +277,33 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
     pbftEngine->setEnableTTLOptimize(m_param->mutableConsensusParam().enableTTLOptimize);
     pbftEngine->setEnablePrepareWithTxsHash(
         m_param->mutableConsensusParam().enablePrepareWithTxsHash);
+}
+
+// init rotating-pbft engine
+void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
+{
+    if (!isRotatingPBFTEnabled())
+    {
+        return;
+    }
+
+    RotatingPBFTEngine::Ptr rotatingPBFT =
+        std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
+    assert(rotatingPBFT);
+    rotatingPBFT->setEpochSealerNum(m_param->mutableConsensusParam().epochSealerNum);
+    rotatingPBFT->setEpochBlockNum(m_param->mutableConsensusParam().epochBlockNum);
+    rotatingPBFT->setMaxRequestMissedTxsWaitTime(
+        m_param->mutableConsensusParam().maxRequestMissedTxsWaitTime);
+    rotatingPBFT->setMaxRequestPrepareWaitTime(
+        m_param->mutableConsensusParam().maxRequestPrepareWaitTime);
+    if (m_param->mutableConsensusParam().broadcastPrepareByTree)
+    {
+        rotatingPBFT->createTreeTopology(m_param->mutableConsensusParam().treeWidth);
+        rotatingPBFT->setPrepareStatusBroadcastPercent(
+            m_param->mutableConsensusParam().prepareStatusBroadcastPercent);
+        Ledger_LOG(INFO) << LOG_DESC("createTreeTopology")
+                         << LOG_KV("treeWidth", m_param->mutableConsensusParam().treeWidth);
+    }
 }
 
 std::shared_ptr<Sealer> Ledger::createRaftSealer()
@@ -298,7 +341,9 @@ bool Ledger::consensusInitFactory()
         m_sealer = createRaftSealer();
     }
     // create PBFTSealer
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
+                 0 ||
+             isRotatingPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
     }
@@ -307,7 +352,8 @@ bool Ledger::consensusInitFactory()
         BOOST_THROW_EXCEPTION(
             dev::InitLedgerConfigFailed()
             << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
-                               m_param->mutableConsensusParam().consensusType));
+                               m_param->mutableConsensusParam().consensusType +
+                               ", supported consensus type are pbft, raft, rpbft"));
     }
     if (!m_sealer)
     {
@@ -347,11 +393,15 @@ bool Ledger::initSync()
 
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
-    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs,
-        m_param->mutableSyncParam().gossipInterval, m_param->mutableSyncParam().gossipPeers,
-        enableSendTxsByTree, enableSendBlockStatusByTree,
+    auto syncMaster = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain,
+        m_blockVerifier, protocol_id, m_keyPair.pub(), genesisHash,
+        m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
+        m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
+    // set the max block queue size for sync module(bytes)
+    syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
+    syncMaster->setTxsStatusGossipMaxPeers(m_param->mutableSyncParam().txsStatusGossipMaxPeers);
+    m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

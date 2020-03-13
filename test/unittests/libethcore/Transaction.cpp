@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     bytes data(str.begin(), str.end());
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
-    SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+    SignatureStruct sig = dev::sign(sigKeyPair, tx.sha3(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode

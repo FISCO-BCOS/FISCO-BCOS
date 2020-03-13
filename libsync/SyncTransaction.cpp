@@ -70,8 +70,8 @@ void SyncTransaction::workLoop()
         // no new transactions and the size of transactions need to be broadcasted is zero
         if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {
-            std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
+            boost::unique_lock<boost::mutex> l(x_signalled);
+            m_signalled.wait_for(l, boost::chrono::milliseconds(idleWaitMs()));
         }
     }
 }
@@ -160,8 +160,14 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         }
         if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
         {
-            randomSelectedPeers = m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex);
+            randomSelectedPeers =
+                m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex, true);
             randomSelectedPeersInited = true;
+        }
+        // the randomSelectedPeers is empty, continue without setTransactionIsKnownBy
+        if (randomSelectedPeers->size() == 0)
+        {
+            continue;
         }
         peers = m_syncStatus->filterPeers(
             selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
@@ -219,7 +225,6 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                         << LOG_KV("toNodeId", _p->nodeId.abridged())
                         << LOG_KV("messageSize(B)", msg->buffer()->size())
                         << LOG_KV("fromRpc", _fromRpc);
-        ;
         return true;
     });
 }
@@ -254,7 +259,8 @@ void SyncTransaction::sendTxsStatus(
     std::shared_ptr<dev::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
 {
     unsigned percent = 25;
-    int64_t selectSize = (_selectedPeers->size() * percent + 99) / 100;
+    unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;
+    int64_t selectSize = std::min(expectedSelectSize, m_txsStatusGossipMaxPeers);
     WriteGuard l(m_txPool->xtransactionKnownBy());
     for (auto tx : *_txs)
     {
@@ -292,6 +298,10 @@ void SyncTransaction::sendTxsStatus(
         txsStatusPacket->encode(blockNumber, it.second);
         auto p2pMsg = txsStatusPacket->toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(it.first, p2pMsg, CallbackFuncWithSession(), Options());
+        if (m_statisticHandler)
+        {
+            m_statisticHandler->updateSendedTxsInfo(1, p2pMsg->length());
+        }
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction status to peer")
                         << LOG_KV("txNum", it.second->size())
                         << LOG_KV("toNode", it.first.abridged())

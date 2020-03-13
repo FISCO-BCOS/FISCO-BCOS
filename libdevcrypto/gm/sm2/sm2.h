@@ -27,6 +27,7 @@
 #include <iostream>
 #include <string>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
+
 class SM2
 {
 public:
@@ -41,6 +42,9 @@ public:
     char* strlower(char* s);
     std::string ascii2hex(const char* chs, int len);
     static SM2& getInstance();
+
+    static int sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned char* _zValue,
+        size_t& _zValueLen);
 
 private:
     std::string publicKey;

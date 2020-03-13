@@ -110,6 +110,7 @@ DEV_SIMPLE_EXCEPTION(DBNotOpened);
 DEV_SIMPLE_EXCEPTION(UnsupportedFeature);
 
 DEV_SIMPLE_EXCEPTION(ForbidNegativeValue);
+DEV_SIMPLE_EXCEPTION(InvalidConfiguration);
 DEV_SIMPLE_EXCEPTION(InvalidPort);
 /**
  * @brief : error information to be added to exceptions

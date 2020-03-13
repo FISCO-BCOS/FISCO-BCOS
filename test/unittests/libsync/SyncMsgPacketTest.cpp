@@ -82,7 +82,7 @@ public:
         tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
         KeyPair sigKeyPair = KeyPair::create();
 
-        SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx.sha3(WithoutSignature));
+        SignatureStruct sig = dev::sign(sigKeyPair, tx.sha3(WithoutSignature));
         /// update the signature of transaction
         tx.updateSignature(sig);
         return tx;

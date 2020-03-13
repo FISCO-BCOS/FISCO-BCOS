@@ -246,6 +246,8 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     virtual h256 blockHash(int64_t _number) = 0;
 
+    virtual bool isPermitted() { return true; };
+
     /// Get the execution environment information.
     EnvInfo const& envInfo() const { return m_envInfo; }
 

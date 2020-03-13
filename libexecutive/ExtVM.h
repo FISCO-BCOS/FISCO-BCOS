@@ -104,6 +104,8 @@ public:
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash(int64_t _number) final;
 
+    bool isPermitted();
+
 private:
     std::shared_ptr<StateFace> m_s;  ///< A reference to the base state.
 };

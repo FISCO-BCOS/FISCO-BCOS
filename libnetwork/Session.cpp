@@ -101,7 +101,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, CallbackFu
                 boost::asio::placeholders::error, message->seq()));
 
             handler->timeoutHandler = timeoutHandler;
-            handler->m_startTime = utcTime();
+            handler->m_startTime = utcSteadyTime();
         }
         addSeqCallback(message->seq(), handler);
     }

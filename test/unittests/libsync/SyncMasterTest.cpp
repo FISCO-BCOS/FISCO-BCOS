@@ -183,7 +183,8 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     sync->syncStatus()->newSyncPeerStatus(
         SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
 
-    shared_ptr<Transactions> txs = fakeTransactions(2, currentBlockNumber);
+    std::shared_ptr<FakeBlock> fakedBlock = std::make_shared<FakeBlock>();
+    shared_ptr<Transactions> txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
 
@@ -201,7 +202,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
         return true;
     });
 
-    txs = fakeTransactions(2, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
 
@@ -215,7 +216,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     // Message::Ptr msg = service->getAsyncSendMessageByNodeID(NodeID(101));
 
     // test transaction has send logic
-    txs = fakeTransactions(2, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
     sync->maintainTransactions();
@@ -226,7 +227,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 
     // test transaction known by peer logic
-    txs = fakeTransactions(1, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(1, currentBlockNumber);
     for (auto tx : *txs)
     {
         txPool->submitTransactions(tx);

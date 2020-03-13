@@ -30,13 +30,14 @@ docker_mode=
 gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
+supported_consensus=(pbft raft rpbft)
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.2.0"
+default_version="2.3.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -53,9 +54,9 @@ Usage:
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
-    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
+    -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. If set -c, use Raft
+    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -110,7 +111,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -119,7 +120,7 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
        use_ip_param="true"
     ;;
     o) output_dir=$OPTARG;;
-    i) listen_ip="0.0.0.0";;
+    i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
     v) compatibility_version="$OPTARG";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
@@ -132,7 +133,12 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
         fi
     ;;
     t) CertConfig=$OPTARG;;
-    c) consensus_type="raft";;
+    c) consensus_type=$OPTARG
+        if ! echo "${supported_consensus[*]}" | grep -i "${consensus_type}" &>/dev/null; then
+            LOG_WARN "${consensus_type} is not supported. Please set one of ${supported_consensus[*]}"
+            exit 1;
+        fi
+    ;;
     C) chain_id=$OPTARG
         if [ -z $(grep '^[[:digit:]]*$' <<< "${chain_id}") ];then
             LOG_WARN "${chain_id} is not a positive integer."
@@ -146,7 +152,7 @@ while getopts "f:l:o:p:e:t:v:s:C:iczhgTFd" option;do
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     d) docker_mode="yes"
-    if [ ! -z "${macOS}" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
+    if [ -n "${macOS}" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
     h) help;;
     esac
@@ -160,20 +166,17 @@ fi
 print_result()
 {
 echo "=============================================================="
-[ -z ${docker_mode} ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
-[ ! -z ${docker_mode} ] && LOG_INFO "Docker tag        : latest"
-[ ! -z $ip_file ] && LOG_INFO "IP List File      : $ip_file"
-# [ ! -z $ip_file ] && LOG_INFO -e "Agencies/groups : ${#agency_array[@]}/${#groups[@]}"
+[ -z "${docker_mode}" ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
+[ -n "${docker_mode}" ] && LOG_INFO "Docker tag        : latest"
+[ -n "${ip_file}" ] && LOG_INFO "IP List File      : $ip_file"
 LOG_INFO "Start Port        : ${port_start[*]}"
 LOG_INFO "Server IP         : ${ip_array[*]}"
-LOG_INFO "RPC listen IP     : ${listen_ip}"
 LOG_INFO "Output Dir        : ${output_dir}"
 LOG_INFO "CA Key Path       : $ca_file"
-[ ! -z $guomi_mode ] && LOG_INFO "Guomi mode        : $guomi_mode"
+[ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "=============================================================="
-if [ "${listen_ip}" == "127.0.0.1" ];then LOG_WARN "RPC listens 127.0.0.1 will cause nodes' JSON-RPC and Channel service to be inaccessible form other machines";fi
-LOG_INFO "Execute the download_console.sh script to get FISCO-BCOS console, download_console.sh is in directory named by IP."
-echo " bash download_console.sh"
+LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
+echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh"
 echo "=============================================================="
 LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -185,16 +188,14 @@ check_env() {
         echo "use \"openssl version\" command to check."
         exit 1
     }
-    if [ ! -z "$(openssl version | grep reSSL)" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
-    fi
     if [ "$(uname)" == "Darwin" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
-    if [ -n "$guomi_mode" ]; then
+    if [ -n "${guomi_mode}" ]; then
         check_and_install_tassl
     fi
 }
@@ -204,7 +205,7 @@ check_and_install_tassl()
 { 
     if [ ! -f "${HOME}/.tassl" ];then
         LOG_INFO "Downloading tassl binary ..."
-        if [[ ! -z ${macOS} ]];then
+        if [[ -n "${macOS}" ]];then
             curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
             mv tassl_mac.tar.gz tassl.tar.gz
         else
@@ -430,12 +431,13 @@ generate_config_ini()
     local offset=$(get_value ${ip//./}_count)
     local node_groups=(${3//,/ })
     local prefix=""
-    if [ -n "$guomi_mode" ]; then
+    if [ -n "${guomi_mode}" ]; then
         prefix="gm"
     fi
     cat << EOF > ${output}
 [rpc]
-    listen_ip=${listen_ip}
+    channel_listen_ip=0.0.0.0
+    jsonrpc_listen_ip=${listen_ip}
     channel_listen_port=$(( offset + port_start[1] ))
     jsonrpc_listen_port=$(( offset + port_start[2] ))
 [p2p]
@@ -496,12 +498,19 @@ generate_group_genesis()
     local output=$1
     local index=$2
     local node_list=$3
+    local sealer_size=$4
     cat << EOF > ${output} 
 [consensus]
-    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and Raft(consensus_type=raft)
+    ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
+    ; and rpbft(consensus_type=rpbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
+    ; rpbft related configuration
+    ; the sealers num of each consensus epoch
+    epoch_sealer_num=${sealer_size}
+    ; the number of generated blocks each epoch
+    epoch_block_num=1000
     ; the node id of consensusers
     ${node_list}
 [state]
@@ -521,14 +530,24 @@ function generate_group_ini()
     cat << EOF > ${output}
 [consensus]
     ; the ttl for broadcasting pbft message
-    ;ttl=2
+    ttl=2
     ; min block generation time(ms), the max block generation time is 1000 ms
-    ;min_block_generation_time=500
+    min_block_generation_time=500
     ;enable_dynamic_block_size=true
-    ;enable_ttl_optimization=true
-    ;enable_prepare_with_txsHash=true
+    enable_ttl_optimization=true
+    enable_prepare_with_txsHash=true
+    ; The following is the relevant configuration of rpbft
+    ; set true to enable broadcast prepare request by tree
+    broadcast_prepare_by_tree=true
+    ; percent of nodes that broadcast prepare status to, must be between 25 and 100
+    prepare_status_broadcast_percent=33
+    ; max wait time before request missed transactions, ms, must be between 5ms and 1000ms
+    max_request_missedTxs_waitTime=100
+    ; maximum wait time before requesting a prepare, ms, must be between 10ms and 1000ms
+    max_request_prepare_waitTime=100
+
 [storage]
-    ; storage db type, rocksdb / mysql / scalable / external, rocksdb is recommended, external will be deprecated
+    ; storage db type, rocksdb / mysql / scalable, rocksdb is recommended
     type=${storage_type}
     ; set true to turn on binary log
     binary_log=${binary_log}
@@ -539,7 +558,7 @@ function generate_group_ini()
     ; max cache memeory, MB
     max_capacity=32
     max_forward_block=10
-    ; only for external, external will be deprecated in v2.3.0
+    ; only for external, deprecated in v2.3.0
     max_retry=60
     topic=DB
     ; only for mysql
@@ -551,6 +570,8 @@ function generate_group_ini()
 [tx_pool]
     limit=150000
 [sync]
+    ; max memory size used for block sync, must >= 32MB
+    max_block_sync_memory_size=512
     idle_wait_ms=200
     ; send block status by tree-topology, only supported when use pbft
     sync_block_by_tree=true
@@ -561,6 +582,8 @@ function generate_group_ini()
     ; only enabled when sync_by_tree is true
     gossip_interval_ms=1000
     gossip_peers_number=3
+    ; max number of nodes that broadcast txs status to, recommended less than 5 
+    txs_max_gossip_peers_num=5
 EOF
 }
 
@@ -758,7 +781,7 @@ generate_node_scripts()
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
     local check_success="\$(${log_cmd} | grep running)"
-    if [ ! -z ${docker_mode} ];then
+    if [ -n "${docker_mode}" ];then
         ps_cmd="\$(docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}')"
         start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini"
         stop_cmd="docker kill \${node_pid} 2>/dev/null"
@@ -771,7 +794,7 @@ fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
-if [ ! -z \${node_pid} ];then
+if [ -n "\${node_pid}" ];then
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
 else 
@@ -784,7 +807,7 @@ while [ \$i -lt \${try_times} ]
 do
     node_pid=${ps_cmd}
     success_flag=${check_success}
-    if [[ ! -z \${node_pid} && ! -z "\${success_flag}" ]];then
+    if [[ -n "\${node_pid}" && -n "\${success_flag}" ]];then
         echo -e "\033[32m \${node} start successfully\033[0m"
         exit 0
     fi
@@ -806,7 +829,7 @@ if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
     exit 0
 fi
-[ ! -z \${node_pid} ] && ${stop_cmd} > /dev/null
+[ -n "\${node_pid}" ] && ${stop_cmd} > /dev/null
 while [ \$i -lt \${try_times} ]
 do
     sleep 0.6
@@ -827,7 +850,7 @@ NODE_FOLDER=\$(pwd)
 fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
-if [ ! -z \${node_pid} ];then
+if [ -n "\${node_pid}" ];then
     echo "\${node} is trying to load new groups. Check log for more information."
     touch config.ini.append_group
     exit 0
@@ -891,7 +914,7 @@ NODE_FOLDER=\$(pwd)
 fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
-if [ ! -z \${node_pid} ];then
+if [ -n "\${node_pid}" ];then
     echo "\${node} is trying to reset certificate whitelist. Check log for more information."
     touch config.ini.reset_certificate_whitelist
     exit 0
@@ -1040,11 +1063,16 @@ download_bin()
     if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
     bin_path=${output_dir}/${bcos_bin_name}
     package_name="fisco-bcos.tar.gz"
-    [ ! -z "${macOS}" ] && package_name="fisco-bcos-macOS.tar.gz"
-    [ ! -z "$guomi_mode" ] && package_name="fisco-bcos-gm.tar.gz"
-    if [[ ! -z "$guomi_mode" && ! -z ${macOS} ]];then
-        exit_with_clean "We don't provide binary of GuoMi on macOS. Please compile source code and use -e option to specific fisco-bcos binary path"
+    if [ -n "${macOS}" ];then
+        if [ -n "${guomi_mode}" ];then 
+            package_name="fisco-bcos-macOS-gm.tar.gz"
+        else
+            package_name="fisco-bcos-macOS.tar.gz"
+        fi
+    elif [ -n "${guomi_mode}" ];then 
+        package_name="fisco-bcos-gm.tar.gz";
     fi
+
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
@@ -1096,10 +1124,11 @@ fi
 dir_must_not_exists ${output_dir}
 mkdir -p "${output_dir}"
 
-if [ -z "${compatibility_version}" ];then
-    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
-fi
-# in case network is broken
+# if [ -z "${compatibility_version}" ];then
+#     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+# fi
+
+# use default version as compatibility_version
 if [ -z "${compatibility_version}" ];then
     compatibility_version="${default_version}"
 fi
@@ -1145,7 +1174,7 @@ if [ ! -e "$ca_file" ]; then
     ca_file="${output_dir}/cert/ca.key"
 fi
 
-if [ -n "$guomi_mode" ]; then
+if [ -n "${guomi_mode}" ]; then
     #check_and_install_tassl
 
     generate_cert_conf_gm "gmcert.cnf"
@@ -1216,7 +1245,7 @@ for line in ${ip_array[*]};do
             break;
         done
 
-        if [ -n "$guomi_mode" ]; then
+        if [ -n "${guomi_mode}" ]; then
             cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
             cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
@@ -1287,11 +1316,11 @@ for line in ${ip_array[*]};do
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
-                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}"
+                generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}" "${groups_count[${j}]}"
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
         else
-            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}"
+            generate_group_genesis "$node_dir/${conf_path}/group.1.genesis" "1" "${nodeid_list}" "${count}"
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
@@ -1308,7 +1337,7 @@ if [ -f "${output_dir}/${bcos_bin_name}" ];then rm ${output_dir}/${bcos_bin_name
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in $(seq 0 ${#groups_count[@]});do
-        if [ ! -z "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
+        if [ -n "${groups_count[${l}]}" ];then echo "Group:${l} has ${groups_count[${l}]} nodes";fi
     done
 fi
 

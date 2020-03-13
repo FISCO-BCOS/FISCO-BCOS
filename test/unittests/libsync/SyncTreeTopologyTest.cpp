@@ -20,6 +20,7 @@
  * @author: yujiechen
  * @date: 2019-9-29
  */
+#include <libdevcrypto/Common.h>
 #include <libsync/SyncTreeTopology.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -191,13 +192,12 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
-#if 0
+
     // selectNodes: no need to send blocks to any nodes
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodes(
+    fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         selectedNodeList, -1, fakeSyncTreeTopology->peers());
     BOOST_CHECK(*selectedNodeList == dev::h512s());
-#endif
 }
 
 /// case2: the node locates in the observerList

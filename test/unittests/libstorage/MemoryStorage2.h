@@ -45,14 +45,17 @@ public:
         auto tableKey = tableInfo->name + key;
         tbb::mutex::scoped_lock lock(m_mutex);
 
+        auto entries = std::make_shared<Entries>();
         auto it = key2Entries.find(tableKey);
-
         if (it != key2Entries.end())
         {
-            return it->second;
+            for (auto const& item : it->second)
+            {
+                entries->addEntry(item.second);
+            }
         }
 
-        return std::make_shared<Entries>();
+        return entries;
     }
     size_t commit(int64_t, const std::vector<TableData::Ptr>& datas) override
     {
@@ -69,19 +72,18 @@ public:
         for (size_t i = 0; i < entries->size(); ++i)
         {
             auto entry = entries->get(i);
+            if (entry->deleted())
+            {
+                continue;
+            }
             auto tableKey = tableName + entry->getField(key);
             tbb::mutex::scoped_lock lock(m_mutex);
-            auto it = key2Entries.find(tableKey);
-            if (it == key2Entries.end())
-            {
-                key2Entries[tableKey] = std::make_shared<Entries>();
-            }
-            key2Entries[tableKey]->addEntry(entry);
+            key2Entries[tableKey][entry->getID()] = entry;
         }
     }
 
 private:
-    std::map<std::string, Entries::Ptr> key2Entries;
+    std::map<std::string, std::map<uint64_t, Entry::Ptr>> key2Entries;
     tbb::mutex m_mutex;
 };
 

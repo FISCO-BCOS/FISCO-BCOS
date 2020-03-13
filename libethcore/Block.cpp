@@ -38,21 +38,21 @@ namespace eth
 {
 Block::Block(
     bytesConstRef _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
+  : m_transactions(std::make_shared<Transactions>()),
+    m_transactionReceipts(std::make_shared<TransactionReceipts>()),
+    m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>>>())
 {
-    m_transactions = std::make_shared<Transactions>();
-    m_transactionReceipts = std::make_shared<TransactionReceipts>();
-    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
-
+    m_blockSize = _data.size();
     decode(_data, _option, _withReceipt, _withTxHash);
 }
 
 Block::Block(
     bytes const& _data, CheckTransaction const _option, bool _withReceipt, bool _withTxHash)
+  : m_transactions(std::make_shared<Transactions>()),
+    m_transactionReceipts(std::make_shared<TransactionReceipts>()),
+    m_sigList(std::make_shared<std::vector<std::pair<u256, Signature>>>())
 {
-    m_transactions = std::make_shared<Transactions>();
-    m_transactionReceipts = std::make_shared<TransactionReceipts>();
-    m_sigList = std::make_shared<std::vector<std::pair<u256, Signature>>>();
-
+    m_blockSize = _data.size();
     decode(ref(_data), _option, _withReceipt, _withTxHash);
 }
 

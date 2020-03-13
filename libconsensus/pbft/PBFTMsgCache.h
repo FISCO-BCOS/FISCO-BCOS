@@ -62,7 +62,6 @@ public:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
             return true;
         default:
-            LOG(DEBUG) << "Invalid packet type:" << type;
             return false;
         }
     }

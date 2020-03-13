@@ -25,6 +25,7 @@
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -33,12 +34,15 @@ using namespace dev::precompiled;
 const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
 const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
 const char* const CNS_METHOD_SLT_STR2 = "selectByNameAndVersion(string,string)";
+const char* const CNS_METHOD_GET_CONTRACT_ADDRESS = "getContractAddress(string,string)";
 
 CNSPrecompiled::CNSPrecompiled()
 {
     name2Selector[CNS_METHOD_INS_STR4] = getFuncSelector(CNS_METHOD_INS_STR4);
     name2Selector[CNS_METHOD_SLT_STR] = getFuncSelector(CNS_METHOD_SLT_STR);
     name2Selector[CNS_METHOD_SLT_STR2] = getFuncSelector(CNS_METHOD_SLT_STR2);
+    name2Selector[CNS_METHOD_GET_CONTRACT_ADDRESS] =
+        getFuncSelector(CNS_METHOD_GET_CONTRACT_ADDRESS);
 }
 
 
@@ -99,7 +103,15 @@ bytes CNSPrecompiled::call(
             }
         }
         int result = 0;
-        if (exist)
+        if (contractVersion.size() > CNS_VERSION_MAX_LENGTH)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("CNS") << LOG_DESC("version length overflow 128")
+                << LOG_KV("contractName", contractName) << LOG_KV("address", contractAddress)
+                << LOG_KV("version", contractVersion);
+            result = CODE_VERSION_LENGTH_OVERFLOW;
+        }
+        else if (exist)
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist")
@@ -174,28 +186,40 @@ bytes CNSPrecompiled::call(
         Table::Ptr table = openTable(context, SYS_CNS);
 
         Json::Value CNSInfos(Json::arrayValue);
-        auto entries = table->select(contractName, table->newCondition());
-        if (entries.get())
+        auto condition = table->newCondition();
+        condition->EQ(SYS_CNS_FIELD_VERSION, contractVersion);
+        auto entries = table->select(contractName, condition);
+        if (entries->size() != 0)
         {
-            for (size_t i = 0; i < entries->size(); i++)
-            {
-                auto entry = entries->get(i);
-                if (contractVersion == entry->getField(SYS_CNS_FIELD_VERSION))
-                {
-                    Json::Value CNSInfo;
-                    CNSInfo[SYS_CNS_FIELD_NAME] = contractName;
-                    CNSInfo[SYS_CNS_FIELD_VERSION] = entry->getField(SYS_CNS_FIELD_VERSION);
-                    CNSInfo[SYS_CNS_FIELD_ADDRESS] = entry->getField(SYS_CNS_FIELD_ADDRESS);
-                    CNSInfo[SYS_CNS_FIELD_ABI] = entry->getField(SYS_CNS_FIELD_ABI);
-                    CNSInfos.append(CNSInfo);
-                    // Only one
-                    break;
-                }
-            }
+            auto entry = entries->get(0);
+            Json::Value CNSInfo;
+            CNSInfo[SYS_CNS_FIELD_NAME] = contractName;
+            CNSInfo[SYS_CNS_FIELD_VERSION] = entry->getField(SYS_CNS_FIELD_VERSION);
+            CNSInfo[SYS_CNS_FIELD_ADDRESS] = entry->getField(SYS_CNS_FIELD_ADDRESS);
+            CNSInfo[SYS_CNS_FIELD_ABI] = entry->getField(SYS_CNS_FIELD_ABI);
+            CNSInfos.append(CNSInfo);
         }
         Json::FastWriter fastWriter;
         std::string str = fastWriter.write(CNSInfos);
         out = abi.abiIn("", str);
+    }
+    else if (func == name2Selector[CNS_METHOD_GET_CONTRACT_ADDRESS])
+    {  // getContractAddress(string,string) returns(address)
+        std::string contractName, contractVersion;
+        abi.abiOut(data, contractName, contractVersion);
+        Table::Ptr table = openTable(context, SYS_CNS);
+
+        Address ret;
+        auto condition = table->newCondition();
+        condition->EQ(SYS_CNS_FIELD_VERSION, contractVersion);
+        auto entries = table->select(contractName, condition);
+        if (entries.get())
+        {
+            auto entry = entries->get(0);
+            string value = entry->getField(SYS_CNS_FIELD_ADDRESS);
+            ret = Address(value);
+        }
+        out = abi.abiIn("", ret);
     }
     else
     {

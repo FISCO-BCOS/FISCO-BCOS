@@ -51,6 +51,8 @@ struct ConsensusParam
     dev::h512s observerList = dev::h512s();
     int64_t maxTransactions;
     int8_t maxTTL;
+    // limit ttl to 5
+    int8_t ttlLimit = 5;
     /// the minimum block time
     signed minBlockGenTime = 0;
     /// unsigned intervalBlockTime;
@@ -60,9 +62,20 @@ struct ConsensusParam
     bool enableDynamicBlockSize = true;
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
+
+    // sealers size for each RPBFT epoch, default is 10
+    int64_t epochSealerNum = 10;
+    // block num for each epoch, default is 10
+    int64_t epochBlockNum = 10;
     // enable optimize ttl or not
     bool enableTTLOptimize;
     bool enablePrepareWithTxsHash;
+
+    bool broadcastPrepareByTree;
+    unsigned treeWidth = 3;
+    unsigned prepareStatusBroadcastPercent;
+    int64_t maxRequestMissedTxsWaitTime;
+    int64_t maxRequestPrepareWaitTime;
 };
 
 struct AMDBParam
@@ -87,6 +100,10 @@ struct SyncParam
     int64_t gossipPeers = 3;
     // default syncTreeWidth is 3
     int64_t syncTreeWidth = 3;
+    // max queue size for block sync (default is 512 MB)
+    int64_t maxQueueSizeForBlockSync = 512 * 1024 * 1024;
+    // limit the peers number the txs-status gossip to
+    signed txsStatusGossipMaxPeers = 5;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam
@@ -170,6 +187,7 @@ private:
     void initTxExecuteConfig(boost::property_tree::ptree const& pt);
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
+    void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
 

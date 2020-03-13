@@ -43,7 +43,7 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 
 
-static shared_ptr<Secret> sec;
+static shared_ptr<KeyPair> keyPair;
 
 void genTxUserAddBlock(Block& _block, size_t _userNum)
 {
@@ -64,8 +64,7 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
         tx->updateSignature(SignatureStruct(sig));
         txs->push_back(tx);
     }
@@ -121,8 +120,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        // sec = KeyPair::create().secret();
-        Signature sig = sign(*sec, tx->sha3(WithoutSignature));
+        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
         tx->updateSignature(SignatureStruct(sig));
         txs->push_back(tx);
     }
@@ -135,7 +133,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 
 static void startExecute(int _totalUser, int _totalTxs)
 {
-    auto start = chrono::system_clock::now();
+    auto start = chrono::steady_clock::now();
 
     boost::property_tree::ptree pt;
     LogInitializer log;
@@ -158,7 +156,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
     GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
-        "stateType", 5000, 300000000, 0};
+        "stateType", 5000, 300000000, 0, -1, -1};
     bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
     assert(ret == true);
 
@@ -196,7 +194,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     {
         blockVerifier->parallelExecuteBlock(*block, parentBlockInfo);
     }
-    auto end = chrono::system_clock::now();
+    auto end = chrono::steady_clock::now();
     auto elapsed = chrono::duration_cast<chrono::microseconds>(end - start);
     std::cout << "Elapsed: " << elapsed.count() << " us" << std::endl;
     exit(0);
@@ -210,7 +208,7 @@ int main(int argc, const char* argv[])
         std::cout << "Example: mini-para 1000 10000" << std::endl;
         return 0;
     }
-    sec = make_shared<Secret>(KeyPair::create().secret());
+    keyPair = make_shared<KeyPair>(KeyPair::create());
     int totalUser = atoi(argv[1]);
     int totalTxs = atoi(argv[2]);
     startExecute(totalUser, totalTxs);

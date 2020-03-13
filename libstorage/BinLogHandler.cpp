@@ -51,6 +51,8 @@ void BinLogHandler::setBinLogStoragePath(const std::string& path)
     // If the directory exists, the function does nothing
     fs::create_directories(m_path);
     BINLOG_HANDLER_LOG(INFO) << LOG_DESC("set binLog storage path") << LOG_KV("path", m_path);
+
+    checkBinLogSize();
 }
 
 bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData::Ptr>& datas)
@@ -594,4 +596,27 @@ int64_t BinLogHandler::getFirstBlockNumInBinLog(const std::string& filePath)
 bool BinLogHandler::readFile(std::ifstream& file, void* buffer, uint32_t size)
 {
     return (file.read(reinterpret_cast<char*>(buffer), size).gcount() == size);
+}
+
+void BinLogHandler::checkBinLogSize()
+{
+    // removes files of unusual length that have not been written to the block data since they were
+    // created
+    fs::path p(m_path);
+    std::vector<fs::path> vec;
+    fs::directory_iterator end;
+    for (fs::directory_iterator it(p); it != end; it++)
+    {
+        if (fs::file_size(*it) <= sizeof(BINLOG_VERSION))
+        {
+            fs::path ep(fs::current_path().string() + "/" + it->path().string());
+            BINLOG_HANDLER_LOG(INFO)
+                << LOG_DESC("remove unusual binlogs") << LOG_KV("path", ep.string());
+            vec.push_back(ep);
+        }
+    }
+    for (auto v : vec)
+    {
+        fs::remove(v);
+    }
 }
