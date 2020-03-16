@@ -83,7 +83,7 @@ void Transaction::decodeRC1(RLP const& rlp, CheckTransaction _checkSig)
         // s -> rlp[9].toInt<u256>();             // 9
 
         // decode v r s by increasing rlp index order for faster decoding
-        NumberVType v = rlp[7].toInt<NumberVType>() - VBase;
+        NumberVType v = getVFromRLP(rlp[7]);
         u256 r = rlp[8].toInt<u256>();
         u256 s = rlp[9].toInt<u256>();
 
@@ -129,7 +129,7 @@ void Transaction::decodeRC2(RLP const& rlp, CheckTransaction _checkSig)
         m_extraData = rlp[9].toBytes();
 
         // decode v r s by increasing rlp index order for faster decoding
-        NumberVType v = rlp[10].toInt<NumberVType>() - VBase;
+        NumberVType v = getVFromRLP(rlp[10]);
         u256 r = rlp[11].toInt<u256>();
         u256 s = rlp[12].toInt<u256>();
 

@@ -41,6 +41,8 @@ void TreeTopology::updateStartAndEndIndex()
     m_startIndex = 0;
     m_endIndex = (ssize_t)(m_currentConsensusNodes->size() - 1);
     m_nodeNum = m_currentConsensusNodes->size();
+    TREE_LOG(DEBUG) << LOG_DESC("updateConsensusNodeInfo") << LOG_KV("consIndex", m_consIndex)
+                    << LOG_KV("endIndex", m_endIndex) << LOG_KV("nodeNum", m_nodeNum);
 }
 
 /**
@@ -49,7 +51,8 @@ void TreeTopology::updateStartAndEndIndex()
  *  -1: the given _nodeId doesn't exist in _findSet
  *   >=0 : the index of the given node
  */
-ssize_t TreeTopology::getNodeIndexByNodeId(std::shared_ptr<dev::h512s> _findSet, dev::h512& _nodeId)
+ssize_t TreeTopology::getNodeIndexByNodeId(
+    std::shared_ptr<dev::h512s> _findSet, dev::h512 const& _nodeId)
 {
     ssize_t nodeIndex = -1;
     for (ssize_t i = 0; i < (ssize_t)_findSet->size(); i++)
@@ -143,7 +146,7 @@ void TreeTopology::recursiveSelectChildNodes(std::shared_ptr<h512s> _selectedNod
  */
 void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
     std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-    int64_t const& _startIndex)
+    int64_t const& _startIndex, bool const& _selectAll)
 {
     ssize_t parentIndex = (_nodeIndex - 1) / m_treeWidth;
     // the parentNode is the node-slef
@@ -152,14 +155,17 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
         return;
     }
     dev::h512 selectedNode;
-    while (parentIndex > 0)
+    while (parentIndex >= 0)
     {
         // find the parentNode from the peers
         auto selectedIndex = getSelectedNodeIndex(parentIndex, _startIndex);
         if (getNodeIDByIndex(selectedNode, selectedIndex) && _peers->count(selectedNode))
         {
             _selectedNodeList->push_back(selectedNode);
-            break;
+            if (!_selectAll)
+            {
+                break;
+            }
         }
         if (parentIndex <= 0)
         {
@@ -169,15 +175,36 @@ void TreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeLi
     }
 }
 
-std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex)
+int64_t TreeTopology::getNodeIndex(int64_t const& _consIndex)
+{
+    int64_t nodeIndex = 0;
+    if (m_consIndex >= _consIndex)
+    {
+        nodeIndex = m_consIndex - _consIndex;
+    }
+    else
+    {
+        // when the node is added into or removed from the sealerList frequently
+        // the consIndex maybe higher than m_consIndex,
+        // and the distance maybe higher than m_nodeNum
+        nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
+    }
+    return nodeIndex;
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectNodes(std::shared_ptr<std::set<dev::h512>> _peers,
+    int64_t const& _consIndex, bool const& _isTheStartNode)
 {
     Guard l(m_mutex);
     std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
-    int64_t nodeIndex = 0;
-    // the observer nodes
+    // the first node is the  observer nodes or not belong to the group
+    // send messages to the given consNode or the child of the given consNode
     if (m_consIndex < 0)
     {
+        if (!_isTheStartNode)
+        {
+            return selectedNodeList;
+        }
         dev::h512 selectedNode;
         if (getNodeIDByIndex(selectedNode, _consIndex) && _peers->count(selectedNode))
         {
@@ -192,21 +219,42 @@ std::shared_ptr<dev::h512s> TreeTopology::selectNodes(
     // the consensus nodes
     else
     {
-        if (m_consIndex >= _consIndex)
-        {
-            nodeIndex = m_consIndex - _consIndex;
-        }
-        else
-        {
-            // when the node is added into or removed from the sealerList frequently
-            // the consIndex maybe higher than m_consIndex,
-            // and the distance maybe higher than m_nodeNum
-            nodeIndex = (m_consIndex + m_nodeNum - _consIndex % m_nodeNum) % m_nodeNum;
-        }
+        auto nodeIndex = getNodeIndex(_consIndex);
+        recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
     }
-    recursiveSelectChildNodes(selectedNodeList, nodeIndex, _peers, _consIndex);
-
-    // find the parent nodes
-    selectParentNodes(selectedNodeList, _peers, nodeIndex, _consIndex);
     return selectedNodeList;
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectParent(
+    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex, bool const& _selectAll)
+{
+    Guard l(m_mutex);
+    std::shared_ptr<dev::h512s> selectedParentNodeList = std::make_shared<dev::h512s>();
+    if (m_consIndex < 0)
+    {
+        return selectedParentNodeList;
+    }
+    else
+    {
+        auto nodeIndex = getNodeIndex(_consIndex);
+        selectParentNodes(selectedParentNodeList, _peers, nodeIndex, _consIndex, _selectAll);
+    }
+    return selectedParentNodeList;
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectNodesByNodeID(
+    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID,
+    bool const& _isTheStartNode)
+{
+    auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
+    TREE_LOG(DEBUG) << LOG_DESC("selectNodesByNodeID") << LOG_KV("consIndex", consIndex)
+                    << LOG_KV("nodeID", _nodeID.abridged());
+    return selectNodes(_peers, consIndex, _isTheStartNode);
+}
+
+std::shared_ptr<dev::h512s> TreeTopology::selectParentByNodeID(
+    std::shared_ptr<std::set<dev::h512>> _peers, dev::h512 const& _nodeID)
+{
+    auto consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, _nodeID);
+    return selectParent(_peers, consIndex);
 }

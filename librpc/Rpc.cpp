@@ -109,9 +109,10 @@ std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
     return m_service;
 }
 
-bool Rpc::isValidSystemConfig(std::string const& key)
+bool Rpc::isValidSystemConfig(std::string const& _key)
 {
-    return (key == SYSTEM_KEY_TX_COUNT_LIMIT || key == SYSTEM_KEY_TX_GAS_LIMIT);
+    return (_key == SYSTEM_KEY_TX_COUNT_LIMIT || _key == SYSTEM_KEY_TX_GAS_LIMIT ||
+            _key == SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM || _key == SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
 }
 
 void Rpc::checkRequest(int _groupID)
@@ -208,7 +209,8 @@ std::string Rpc::getPbftView(int _groupID)
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
         auto consensusParam = ledgerParam->mutableConsensusParam();
         std::string consensusType = consensusParam.consensusType;
-        if (consensusType != "pbft")
+        if (stringCmpIgnoreCase(consensusType, "pbft") != 0 &&
+            stringCmpIgnoreCase(consensusType, "rpbft") != 0)
         {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
@@ -250,6 +252,47 @@ Json::Value Rpc::getSealerList(int _groupID)
             response.append((*it).hex());
         }
 
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getEpochSealersList(int _groupID)
+{
+    try
+    {
+        auto consensusType =
+            ledgerManager()->getParamByGroupId(_groupID)->mutableConsensusParam().consensusType;
+        if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        {
+            RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when RPBFT is used")
+                           << LOG_KV("consensusType", consensusType) << LOG_KV("groupID", _groupID);
+
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
+                "method getEpochSealersList only supported when RPBFT is used, current consensus "
+                "type is " +
+                    consensusType));
+        }
+        RPC_LOG(INFO) << LOG_BADGE("getEpochSealersList") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID);
+
+        checkRequest(_groupID);
+        auto consensus = ledgerManager()->consensus(_groupID);
+        // get the chosed sealer list
+        auto sealers = consensus->consensusList();
+        Json::Value response = Json::Value(Json::arrayValue);
+        for (auto it = sealers.begin(); it != sealers.end(); ++it)
+        {
+            response.append((*it).hex());
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -734,8 +777,8 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
 
         auto transactions = block->transactions();
-        unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions->size())
+        int64_t txIndex = jsToInt(_transactionIndex);
+        if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
@@ -787,8 +830,8 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         auto transactions = block->transactions();
-        unsigned int txIndex = jsToInt(_transactionIndex);
-        if (txIndex >= transactions->size())
+        int64_t txIndex = jsToInt(_transactionIndex);
+        if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
@@ -883,8 +926,6 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
     {
         RPC_LOG(INFO) << LOG_BADGE("getPendingTransactions") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
         Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
@@ -925,8 +966,6 @@ std::string Rpc::getPendingTxSize(int _groupID)
     {
         RPC_LOG(INFO) << LOG_BADGE("getPendingTxSize") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
 
         return toJS(txPool->status().current);
@@ -960,6 +999,8 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("getCode exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
@@ -1004,6 +1045,9 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("getTotalTransactionCount exceptioned")
+                       << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
@@ -1049,6 +1093,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("call exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
@@ -1157,6 +1203,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
     }
     catch (std::exception& e)
     {
+        RPC_LOG(ERROR) << LOG_DESC("sendRawTransaction exceptioned") << LOG_KV("groupID", _groupID)
+                       << LOG_KV("errorMessage", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }

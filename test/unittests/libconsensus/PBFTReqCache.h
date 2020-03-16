@@ -41,40 +41,43 @@ static PrepareReq FakePrepareReq(KeyPair& key_pair)
 }
 /// fake the Sign/Commit request
 template <typename T, typename S>
-void FakeInvalidReq(PrepareReq& prepare_req, PBFTReqCache& reqCache, S& cache, BlockHeader& highest,
-    h256 const& invalid_hash, size_t invalidHeightNum, size_t invalidHash, size_t validNum,
-    bool should_fake = true)
+void FakeInvalidReq(PrepareReq::Ptr prepare_req, PBFTReqCache& reqCache, S& cache,
+    BlockHeader& highest, h256 const& invalid_hash, size_t invalidHeightNum, size_t invalidHash,
+    size_t validNum, bool should_fake = true)
 {
     if (should_fake)
     {
         KeyPair key_pair = KeyPair::create();
-        prepare_req = FakePrepareReq(key_pair);
-        prepare_req.block_hash = highest.hash();
-        prepare_req.height = highest.number();
+        *prepare_req = FakePrepareReq(key_pair);
+        prepare_req->block_hash = highest.hash();
+        prepare_req->height = highest.number();
     }
     /// fake invalid block height
     for (size_t i = 0; i < invalidHeightNum; i++)
     {
-        T req(prepare_req, KeyPair::create(), prepare_req.idx);
+        std::shared_ptr<T> req =
+            std::make_shared<T>(*prepare_req, KeyPair::create(), prepare_req->idx);
         /// update height of req
-        req.height -= (i + 1);
+        req->height -= (i + 1);
         reqCache.addReq(req, cache);
-        BOOST_CHECK(reqCache.getSizeFromCache(prepare_req.block_hash, cache) == i + 1);
+        BOOST_CHECK(reqCache.getSizeFromCache(prepare_req->block_hash, cache) == i + 1);
     }
     /// fake invalid hash
     for (size_t i = 0; i < invalidHash; i++)
     {
-        T req(prepare_req, KeyPair::create(), prepare_req.idx);
-        req.block_hash = invalid_hash;
+        std::shared_ptr<T> req =
+            std::make_shared<T>(*prepare_req, KeyPair::create(), prepare_req->idx);
+        req->block_hash = invalid_hash;
         reqCache.addReq(req, cache);
     }
     for (size_t i = 0; i < validNum; i++)
     {
-        T req(prepare_req, KeyPair::create(), prepare_req.idx);
-        req.height += 1;
+        std::shared_ptr<T> req =
+            std::make_shared<T>(*prepare_req, KeyPair::create(), prepare_req->idx);
+        req->height += 1;
         reqCache.addReq(req, cache);
         BOOST_CHECK(
-            reqCache.getSizeFromCache(prepare_req.block_hash, cache) == invalidHeightNum + i + 1);
+            reqCache.getSizeFromCache(prepare_req->block_hash, cache) == invalidHeightNum + i + 1);
     }
 }
 

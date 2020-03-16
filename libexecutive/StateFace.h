@@ -114,6 +114,10 @@ public:
     /// with the address.
     virtual h256 codeHash(Address const& _contract) const = 0;
 
+    /// Get the frozen status of an account.
+    /// @returns ture if the account is frozen.
+    virtual bool frozen(Address const& _contract) const = 0;
+
     /// Get the byte-size of the code of an account.
     /// @returns code(_contract).size(), but utilizes CodeSizeHash.
     virtual size_t codeSize(Address const& _contract) const = 0;

@@ -644,7 +644,6 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                     << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", (*it)->sha3().abridged())
                     << LOG_KV("blockLimit", (*it)->blockLimit())
                     << LOG_KV("blockNumber", m_blockChain->number());
-                ;
                 continue;
             }
             if (!_avoid.count((*it)->sha3()))
@@ -744,11 +743,7 @@ void TxPool::setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
 void TxPool::setTransactionsAreKnownBy(
     std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId)
 {
-    WriteGuard l(x_transactionKnownBy);
-    for (auto const& tx_hash : _txHashVec)
-    {
-        m_transactionKnownBy[tx_hash].insert(_nodeId);
-    }
+    markTransactionsAreKnownBy(_txHashVec, _nodeId);
 }
 
 /// Is the transaction is known by someone
@@ -786,6 +781,7 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
     std::set<dev::h256> const& _txsHashSet)
 {
     std::shared_ptr<std::vector<dev::h256>> unknownTxs = std::make_shared<std::vector<dev::h256>>();
+
     WriteGuard l(x_txsHashFilter);
     for (auto const& txHash : _txsHashSet)
     {
@@ -795,6 +791,7 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
             m_txsHashFilter->insert(txHash);
         }
     }
+
     return unknownTxs;
 }
 

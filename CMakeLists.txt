@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.4)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
-project(FISCO-BCOS VERSION "2.2.0")
+project(FISCO-BCOS VERSION "2.3.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -31,7 +31,7 @@ find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     option(GIT_SUBMODULE "Check submodules during build" ON)
     if(GIT_SUBMODULE)
-        execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+        execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
@@ -67,6 +67,10 @@ include(ProjectLibzdb)
 include(ProjectTCMalloc)
 if(WEDPR_EXTENSION)
   include(ProjectDownloadWeDPR)
+endif()
+if (CRYPTO_EXTENSION)
+    include(ProjectPaillier)
+    include(ProjectGroupSig)
 endif()
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")

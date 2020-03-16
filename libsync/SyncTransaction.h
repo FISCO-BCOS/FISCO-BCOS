@@ -127,6 +127,10 @@ public:
 
     void maintainTransactions();
     void maintainDownloadingTransactions();
+    void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
+    {
+        m_txsStatusGossipMaxPeers = _txsStatusGossipMaxPeers;
+    }
 
 private:
     /// p2p service handler
@@ -149,10 +153,10 @@ private:
 
     // Internal coding variable
     /// mutex to access m_signalled
-    Mutex x_signalled;
+    boost::mutex x_signalled;
 
     /// signal to notify all thread to work
-    std::condition_variable m_signalled;
+    boost::condition_variable m_signalled;
 
     // sync state
     std::atomic_bool m_newTransactions = {false};
@@ -172,6 +176,8 @@ private:
 
     TreeTopology::Ptr m_treeRouter;
     std::shared_ptr<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>> m_txsHash;
+
+    unsigned m_txsStatusGossipMaxPeers = 5;
 
 private:
     void forwardRemainingTxs();

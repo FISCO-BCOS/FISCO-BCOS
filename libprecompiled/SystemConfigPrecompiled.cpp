@@ -66,8 +66,7 @@ bytes SystemConfigPrecompiled::call(
         if (!checkValueValid(configKey, configValue))
         {
             PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("SystemConfigPrecompiled")
-                << LOG_DESC("SystemConfigPrecompiled set invalid value")
+                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
             getErrorCodeOut(out, CODE_INVALID_CONFIGURATION_VALUES);
             return out;
@@ -132,7 +131,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= TX_COUNT_LIMIT_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= TX_COUNT_LIMIT_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -144,7 +143,7 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<uint64_t>(value) >= TX_GAS_LIMIT_MIN);
+            return (boost::lexical_cast<int64_t>(value) >= TX_GAS_LIMIT_MIN);
         }
         catch (boost::bad_lexical_cast& e)
         {
@@ -152,7 +151,33 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    // only can insert tx_count_limit and tx_gas_limit
-    // as system config
+    else if (SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM == key)
+    {
+        try
+        {
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_SEALER_NUM_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
+            return false;
+        }
+    }
+    else if (SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM == key)
+    {
+        try
+        {
+            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_BLOCK_NUM_MIN);
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
+            return false;
+        }
+    }
+    // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_sealer_num,
+    // rpbft_epoch_block_num as system config
     return false;
 }

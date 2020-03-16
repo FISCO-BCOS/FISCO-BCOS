@@ -21,9 +21,19 @@
  * @date: 2018
  */
 #include "sm2.h"
+#include <libdevcore/Guards.h>
 
 #define SM3_DIGEST_LENGTH 32
+
 using namespace std;
+using namespace dev;
+
+// cache for sign
+static dev::Mutex c_zValueCacheMutex;
+// map between privateKey to {zValueCache, zValueLen}
+static std::map<std::string, std::pair<std::shared_ptr<unsigned char>, size_t>> c_mapTozValueCache;
+// max size of c_mapTozValueCache
+static const int64_t c_maxMapTozValueCacheSize = 1000;
 
 bool SM2::genKey()
 {
@@ -113,6 +123,7 @@ bool SM2::sign(
     SM3_CTX sm3Ctx;
     EC_KEY* sm2Key = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
+
     size_t zValueLen;
     ECDSA_SIG* signData = NULL;
     char* rData = NULL;
@@ -132,7 +143,7 @@ bool SM2::sign(
     EC_KEY_set_private_key(sm2Key, res);
 
     zValueLen = sizeof(zValue);
-    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
+    if (!sm2GetZ(privateKey, (const EC_KEY*)sm2Key, zValue, zValueLen))
     {
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of Compute Z";
         goto err;
@@ -204,19 +215,22 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
     if (sm2Group == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_namee";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!EC_POINT_hex2point(sm2Group, (const char*)publicKey.c_str(), pubPoint, NULL))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
@@ -224,19 +238,21 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
 
     if (sm2Key == NULL)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!EC_KEY_set_public_key(sm2Key, pubPoint))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key"
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", publicKey);
         goto err;
     }
     // SM3 Degist
@@ -249,19 +265,21 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     signData = ECDSA_SIG_new();
     if (!BN_hex2bn(&signData->r, r.c_str()))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn R:" << r;
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn" << LOG_KV("R", r)
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (!BN_hex2bn(&signData->s, s.c_str()))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn S:" << s;
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn:" << LOG_KV("S", s)
+                          << LOG_KV("pubKey", publicKey);
         goto err;
     }
 
     if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify";
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify" << LOG_KV("pubKey", publicKey);
         goto err;
     }
     // LOG(DEBUG)<<"SM2 Verify successed.";
@@ -276,6 +294,33 @@ err:
     if (sm2Group)
         EC_GROUP_free(sm2Group);
     return lresult;
+}
+
+int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned char* _zValue,
+    size_t& _zValueLen)
+{
+    Guard l(c_zValueCacheMutex);
+    // get zValue from the cache
+    if (c_mapTozValueCache.count(_privateKey))
+    {
+        auto cache = c_mapTozValueCache[_privateKey];
+        memcpy(_zValue, cache.first.get(), cache.second);
+        _zValueLen = cache.second;
+        return 1;
+    }
+    auto ret = ECDSA_sm2_get_Z(_ecKey, NULL, NULL, 0, _zValue, &_zValueLen);
+    // clear the cache if over the capacity limit
+    if (c_mapTozValueCache.size() >= c_maxMapTozValueCacheSize)
+    {
+        c_mapTozValueCache.clear();
+    }
+    // update the zValue cache
+    std::shared_ptr<unsigned char> zValueCache(new unsigned char[SM3_DIGEST_LENGTH]);
+    memcpy(zValueCache.get(), _zValue, _zValueLen);
+    std::pair<std::shared_ptr<unsigned char>, size_t> cache =
+        std::make_pair(zValueCache, _zValueLen);
+    c_mapTozValueCache[_privateKey] = cache;
+    return ret;
 }
 
 string SM2::priToPub(const string& pri)

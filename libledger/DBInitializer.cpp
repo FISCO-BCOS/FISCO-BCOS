@@ -37,7 +37,6 @@
 #include <libmptstate/MPTStateFactory.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/BasicRocksDB.h>
-#include <libstorage/CachedStorage.h>
 #include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
@@ -67,8 +66,22 @@ void DBInitializer::initStorageDB()
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
     {
-        auto storage = initSQLStorage();
-        initTableFactory2(storage, m_param);
+        // only support external when "supported_version < 2.3.0"
+        if (g_BCOSConfig.version() < V2_3_0)
+        {
+            auto storage = initSQLStorage();
+            initTableFactory2(storage, m_param);
+        }
+        else
+        {
+            DBInitializer_LOG(ERROR)
+                << LOG_DESC("Only support external when supported_version is lower than 2.3.0")
+                << LOG_KV("storage_type", m_param->mutableStorageParam().type)
+                << LOG_KV("supported_version", g_BCOSConfig.version());
+            BOOST_THROW_EXCEPTION(
+                UnsupportedFeature() << errinfo_comment(
+                    "Only support external when supported_version is lower than 2.3.0"));
+        }
     }
     else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
@@ -216,6 +229,16 @@ void DBInitializer::recoverFromBinaryLog(
     }
 }
 
+void DBInitializer::setSyncNumForCachedStorage(int64_t const& _syncNum)
+{
+    if (m_cacheStorage)
+    {
+        m_cacheStorage->setSyncNum(_syncNum);
+        DBInitializer_LOG(INFO) << LOG_BADGE("setSyncNumForCachedStorage")
+                                << LOG_KV("syncNum", _syncNum);
+    }
+}
+
 void DBInitializer::initTableFactory2(
     Storage::Ptr _backend, std::shared_ptr<LedgerParamInterface> _param)
 {
@@ -229,6 +252,7 @@ void DBInitializer::initTableFactory2(
         cachedStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
         cachedStorage->init();
         backendStorage = cachedStorage;
+        m_cacheStorage = cachedStorage;
         DBInitializer_LOG(INFO) << LOG_BADGE("init CachedStorage")
                                 << LOG_KV("maxCapacity", _param->mutableStorageParam().maxCapacity)
                                 << LOG_KV("maxForwardBlock",
@@ -446,6 +470,10 @@ dev::storage::Storage::Ptr DBInitializer::initZdbStorage()
         DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                                  << "access mysql failed exit:" << e.what();
         raise(SIGTERM);
+        while (!g_BCOSConfig.shouldExit.load())
+        {  // wait to exit
+            std::this_thread::yield();
+        }
         BOOST_THROW_EXCEPTION(e);
     });
     return zdbStorage;
@@ -562,5 +590,7 @@ dev::storage::Storage::Ptr dev::ledger::createZdbStorage(
     zdbStorage->setConnPool(sqlconnpool);
 
     zdbStorage->setFatalHandler(_fatalHandler);
+    zdbStorage->setMaxRetry(_param->mutableStorageParam().maxRetry);
+
     return zdbStorage;
 }

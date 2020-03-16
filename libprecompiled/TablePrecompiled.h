@@ -27,7 +27,7 @@ namespace dev
 namespace blockverifier
 {
 #if 0
-contract DB {
+contract Table {
     function select(string, Condition) public constant returns(Entries);
     function insert(string, Entry) public returns(int);
     function update(string, Entry, Condition) public returns(int);
@@ -65,8 +65,6 @@ public:
 
 private:
     std::shared_ptr<storage::Table> m_table;
-    void checkLengthValidate(
-        const std::string& field_value, int32_t max_length, int32_t throw_exception);
 };
 
 }  // namespace blockverifier
