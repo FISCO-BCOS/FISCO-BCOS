@@ -40,8 +40,8 @@ contract ContractStatusPrecompiled {
     function freeze(address addr) public returns(int);
     function unfreeze(address addr) public returns(int);
     function grantManager(address contractAddr, address userAddr) public returns(int);
-    function getStatus(address addr) public constant returns(uint,string);
-    function listManager(address addr) public constant returns(uint,address[]);
+    function getStatus(address addr) public constant returns(int,string);
+    function listManager(address addr) public constant returns(int,address[]);
 }
 */
 
@@ -71,6 +71,27 @@ ContractStatusPrecompiled::ContractStatusPrecompiled()
     name2Selector[METHOD_GRANT_STR] = getFuncSelector(METHOD_GRANT_STR);
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
     name2Selector[METHOD_QUERY_AUTHORITY] = getFuncSelector(METHOD_QUERY_AUTHORITY);
+}
+
+bool ContractStatusPrecompiled::checkValidContractAddress(
+    ExecutiveContext::Ptr context, std::string const& tableName)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
+        if (entries->size() > 0)
+        {
+            if (toHex(EmptySHA3) != entries->get(0)->getField(storagestate::STORAGE_VALUE))
+            {
+                // check whether it is a contract address or an account address
+                // only contract address has code/codeHash
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 bool ContractStatusPrecompiled::checkPermission(
@@ -150,8 +171,12 @@ void ContractStatusPrecompiled::destroy(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("destroy contract", tableName);
+    if (!checkValidContractAddress(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
     // administrative authority judgment precedes status judgment
-    if (checkPermission(context, tableName, origin))
+    else if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
         if (ContractStatus::Destroyed == status)
@@ -161,6 +186,11 @@ void ContractStatusPrecompiled::destroy(
         else if (ContractStatus::Nonexistent == status)
         {
             result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        }
+        else if (ContractStatus::Frozen != status)
+        {
+            // only frozen contract can be destroyed
+            result = CODE_INVALID_CONTRACT_FROZEN_FRIST;
         }
         else
         {
@@ -239,8 +269,12 @@ void ContractStatusPrecompiled::freeze(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("freeze contract", tableName);
+    if (!checkValidContractAddress(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
     // administrative authority judgment precedes status judgment
-    if (checkPermission(context, tableName, origin))
+    else if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
         if (ContractStatus::Destroyed == status)
@@ -249,7 +283,7 @@ void ContractStatusPrecompiled::freeze(
         }
         else if (ContractStatus::Frozen == status)
         {
-            result = CODE_INVALID_CONTRACT_FEOZEN;
+            result = CODE_INVALID_CONTRACT_FROZEN;
         }
         else if (ContractStatus::Nonexistent == status)
         {
@@ -281,8 +315,12 @@ void ContractStatusPrecompiled::unfreeze(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("unfreeze contract", tableName);
+    if (!checkValidContractAddress(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
     // administrative authority judgment precedes status judgment
-    if (checkPermission(context, tableName, origin))
+    else if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
         if (ContractStatus::Destroyed == status)
@@ -324,8 +362,12 @@ void ContractStatusPrecompiled::grantManager(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_DESC("grant authorization") << LOG_KV("table", tableName)
                            << LOG_KV("user", userAddress);
+    if (!checkValidContractAddress(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
     // administrative authority judgment precedes status judgment
-    if (checkPermission(context, tableName, origin))
+    else if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
         if (ContractStatus::Destroyed == status)
@@ -386,8 +428,17 @@ void ContractStatusPrecompiled::getStatus(
                            << LOG_DESC("call query status")
                            << LOG_KV("contract table name", tableName);
 
-    int status = getContractStatus(context, tableName);
-    out = abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]);
+    int result = 0;
+    int status = ContractStatus::Nonexistent;
+    if (!checkValidContractAddress(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
+    else
+    {
+        status = getContractStatus(context, tableName);
+    }
+    out = abi.abiIn("", result, CONTRACT_STATUS_DESC[status]);
 }
 
 void ContractStatusPrecompiled::listManager(
@@ -403,27 +454,39 @@ void ContractStatusPrecompiled::listManager(
                            << LOG_DESC("call query authority")
                            << LOG_KV("contract table name", tableName);
 
+    int result = 0;
     std::vector<Address> addrs;
-    Table::Ptr table = openTable(context, tableName);
-    if (table)
+    if (!checkValidContractAddress(context, tableName))
     {
-        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
-        if (entries->size() > 0)
+        result = CODE_INVALID_CONTRACT_ADDRESS;
+    }
+    else if (ContractStatus::Destroyed == getContractStatus(context, tableName))
+    {
+        result = CODE_INVALID_CONTRACT_DESTROYED;
+    }
+    else
+    {
+        Table::Ptr table = openTable(context, tableName);
+        if (table)
         {
-            for (size_t i = 0; i < entries->size(); i++)
+            auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+            if (entries->size() > 0)
             {
-                auto authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
-                addrs.push_back(dev::eth::toAddress(authority));
+                for (size_t i = 0; i < entries->size(); i++)
+                {
+                    auto authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                    addrs.push_back(dev::eth::toAddress(authority));
+                }
             }
-        }
-        else
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("ContractStatusPrecompiled") << LOG_DESC("no authority is recorded");
+            else
+            {
+                PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractStatusPrecompiled")
+                                       << LOG_DESC("no authority is recorded");
+            }
         }
     }
 
-    out = abi.abiIn("", (u256)0, addrs);
+    out = abi.abiIn("", result, addrs);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_DESC("call query authority result")
                            << LOG_KV("out", dev::toHex(out));

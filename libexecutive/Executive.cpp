@@ -605,6 +605,7 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
+                   << LOG_KV("error id", (uint32_t)m_excepted)
                    << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->sha3()) : "call")
                    << m_exceptionReason.str();
     }
