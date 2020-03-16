@@ -22,6 +22,7 @@
  * @date: 2018-10-11
  */
 #include <libconsensus/pbft/PBFTMsgCache.h>
+#include <libconsensus/pbft/PBFTMsgFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 using namespace dev::consensus;
@@ -34,7 +35,7 @@ BOOST_FIXTURE_TEST_SUITE(consensusTest, TestOutputHelperFixture)
 void checkKeyExist(PBFTBroadcastCache& cache, unsigned const& type, KeyPair const& keyPair,
     std::string const& str, bool const& insert = true, bool const& exist = true)
 {
-    std::string key = dev::sign(keyPair.secret(), sha3(str)).hex();
+    std::string key = dev::sign(keyPair, sha3(str)).hex();
     if (insert)
         cache.insertKey(keyPair.pub(), type, key);
     if (exist)
@@ -47,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
 {
     PBFTBroadcastCache broadCast_cache;
     KeyPair key_pair = KeyPair::create();
-    std::string key = dev::sign(key_pair.secret(), sha3("test")).hex();
+    std::string key = dev::sign(key_pair, sha3("test")).hex();
     /// test insertKey && keyExist
     /// test PrepareReqPacket
     checkKeyExist(broadCast_cache, PrepareReqPacket, key_pair, "test1");
@@ -74,6 +75,48 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
     checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test1", false, false);
     checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test2", false, false);
     checkKeyExist(broadCast_cache, ViewChangeReqPacket, key_pair, "test3", false, false);
+}
+
+PBFTMsgPacket::Ptr testAndCheckPBFTMsgFactory(
+    std::shared_ptr<PBFTMsgFactory> _factory, dev::h512 const& _nodeId)
+{
+    auto msgPacket = _factory->createPBFTMsgPacket();
+    uint8_t ttl = 4;
+
+    msgPacket->packet_id = 1;
+    msgPacket->ttl = ttl;
+    msgPacket->timestamp = utcTime();
+    msgPacket->data = dev::fromHex("0x100");
+
+    msgPacket->forwardNodes = std::make_shared<dev::h512s>();
+    msgPacket->forwardNodes->push_back(_nodeId);
+    // test encode/decode for msgPacket
+    std::shared_ptr<dev::bytes> encodedData = std::make_shared<dev::bytes>();
+    msgPacket->encode(*encodedData);
+    auto decodedMsgPacket = _factory->createPBFTMsgPacket();
+    decodedMsgPacket->decode(ref(*encodedData));
+
+    // check decodedMsgPacket
+    BOOST_CHECK(msgPacket->packet_id == decodedMsgPacket->packet_id);
+    BOOST_CHECK(msgPacket->ttl == decodedMsgPacket->ttl);
+    BOOST_CHECK(msgPacket->data == decodedMsgPacket->data);
+    return decodedMsgPacket;
+}
+
+
+BOOST_AUTO_TEST_CASE(testPBFTMsgFactory)
+{
+    auto nodeId = dev::KeyPair::create().pub();
+    // test PBFTMsgPacket
+    std::shared_ptr<PBFTMsgFactory> factory = std::make_shared<PBFTMsgFactory>();
+    auto msgPacket = testAndCheckPBFTMsgFactory(factory, nodeId);
+    BOOST_CHECK(msgPacket->forwardNodes == nullptr);
+
+    // test OPBFTMsgPacket
+    std::shared_ptr<OPBFTMsgFactory> optimizedFactory = std::make_shared<OPBFTMsgFactory>();
+    msgPacket = testAndCheckPBFTMsgFactory(optimizedFactory, nodeId);
+    BOOST_CHECK(std::dynamic_pointer_cast<OPBFTMsgPacket>(msgPacket) != nullptr);
+    BOOST_CHECK((*msgPacket->forwardNodes)[0] == nodeId);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -24,17 +24,6 @@ namespace dev
 {
 namespace precompiled
 {
-#if 0
-contract Sealer {
-    function add(string) public constant returns();
-    function remove(string) public returns();
-}
-{
-    "b0c8f9dc": "add(string)",
-    "80599e4b": "remove(string)"
-}
-#endif
-
 /// \brief Sign of the sealer is valid or not
 const char* const NODE_TYPE = "type";
 const char* const NODE_TYPE_SEALER = "sealer";

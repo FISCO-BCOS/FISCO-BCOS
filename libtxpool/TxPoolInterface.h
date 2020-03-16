@@ -104,6 +104,7 @@ public:
     /// param1: the vector of txhashes
     /// param2: the node id
     virtual void setTransactionsAreKnownBy(std::vector<dev::h256> const&, h512 const&){};
+    virtual void setTransactionsAreKnownBy(std::set<dev::h256> const&, h512 const&){};
 
     /// Is the transaction is known by the node ?
     virtual bool isTransactionKnownBy(h256 const&, h512 const&) { return false; };

@@ -111,6 +111,10 @@ std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 NodeIDs SyncMasterStatus::filterPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _peers,
     std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
 {
+    if (_neighborSize == 0)
+    {
+        return NodeIDs();
+    }
     int64_t selectedSize = _peers->size();
     if (selectedSize > _neighborSize)
     {

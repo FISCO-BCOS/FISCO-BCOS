@@ -37,6 +37,7 @@ check_env() {
         exit 1
     fi
     # check openssl version
+    echo "openssl version : $(openssl version)"
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
         LOG_WARN "OpenSSL is too old, please install openssl 1.0.2 or higher!"
     }
@@ -44,6 +45,9 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
     if [ ! -z "$(openssl version | grep 1.1.1)" ];then
+        cut_range="6-133"
+    fi
+    if openssl version | grep -q 1.0.2t ;then
         cut_range="6-133"
     fi
     # TODO: check hardware requirement

@@ -131,6 +131,12 @@ bool dev::SignatureStruct::isValid() const noexcept
     return (v <= 1 && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
+NumberVType dev::getVFromRLP(RLP const& _txRLPField)
+{
+    NumberVType v = _txRLPField.toInt<NumberVType>() - VBase;
+    return v;
+}
+
 /**
  * @brief : obtain public key according to secret key
  * @param _secret : the data of secret key
@@ -211,11 +217,12 @@ Public dev::recover(Signature const& _sig, h256 const& _message)
 }
 
 
-Signature dev::sign(Secret const& _k, h256 const& _hash)
+Signature dev::sign(KeyPair const& _keyPair, h256 const& _hash)
 {
     auto* ctx = getCtx();
     secp256k1_ecdsa_recoverable_signature rawSig;
-    if (!secp256k1_ecdsa_sign_recoverable(ctx, &rawSig, _hash.data(), _k.data(), nullptr, nullptr))
+    if (!secp256k1_ecdsa_sign_recoverable(
+            ctx, &rawSig, _hash.data(), _keyPair.secret().data(), nullptr, nullptr))
         return {};
 
     Signature s;

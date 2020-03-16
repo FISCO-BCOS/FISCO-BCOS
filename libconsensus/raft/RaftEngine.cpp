@@ -51,7 +51,7 @@ void RaftEngine::resetElectTimeout()
 
     m_electTimeout =
         m_minElectTimeout + std::rand() % 100 * (m_maxElectTimeout - m_minElectTimeout) / 100;
-    m_lastElectTime = std::chrono::system_clock::now();
+    m_lastElectTime = std::chrono::steady_clock::now();
     RAFTENGINE_LOG(TRACE) << LOG_DESC("[#resetElectTimeout]Reset elect timeout and last elect time")
                           << LOG_KV("electTimeout", m_electTimeout);
 }
@@ -66,7 +66,7 @@ void RaftEngine::initRaftEnv()
         m_maxElectTimeoutInit = m_maxElectTimeout;
         m_minElectTimeoutBoundary = m_minElectTimeout;
         m_maxElectTimeoutBoundary = m_maxElectTimeout + (m_maxElectTimeout - m_minElectTimeout) / 2;
-        m_lastElectTime = std::chrono::system_clock::now();
+        m_lastElectTime = std::chrono::steady_clock::now();
         m_lastHeartbeatTime = m_lastElectTime;
         m_heartbeatTimeout = m_minElectTimeout;
         m_heartbeatInterval = m_heartbeatTimeout / RaftEngine::s_heartBeatIntervalRatio;
@@ -147,7 +147,7 @@ void RaftEngine::reportBlock(dev::eth::Block const& _block)
                         m_highestBlock.number() < _block.blockHeader().number());
         if (shouldReport)
         {
-            m_lastBlockTime = utcTime();
+            m_lastBlockTime = utcSteadyTime();
             m_highestBlock = m_blockChain->getBlockByNumber(m_blockChain->number())->header();
         }
     }
@@ -322,7 +322,7 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                 // Collect ack from follower
                 // ensure that the block has been transfered to most of followers
                 m_commitFingerPrint[uncommitedBlockHash].insert(_resp.idx);
-                if (m_commitFingerPrint[uncommitedBlockHash].size() + 1 >=
+                if (m_commitFingerPrint[uncommitedBlockHash].size() >=
                     static_cast<uint64_t>(m_nodeNum - m_f))
                 {
                     if (m_waitingForCommitting)
@@ -340,9 +340,8 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                         RAFTENGINE_LOG(TRACE) << LOG_DESC(
                             "[#tryCommitUncommitedBlock]No thread waiting on "
                             "commitCV, commit by meself");
-
-                        checkAndExecute(m_uncommittedBlock);
                         ul.unlock();
+                        checkAndExecute(m_uncommittedBlock);
                         reportBlock(m_uncommittedBlock);
                     }
                 }
@@ -368,8 +367,8 @@ void RaftEngine::tryCommitUncommitedBlock(RaftHeartBeatResp& _resp)
                             "[#tryCommitUncommitedBlock]No thread waiting on "
                             "commitCV, commit by meself");
 
-                        checkAndExecute(m_uncommittedBlock);
                         ul.unlock();
+                        checkAndExecute(m_uncommittedBlock);
                         reportBlock(m_uncommittedBlock);
                     }
                 }
@@ -513,7 +512,7 @@ bool RaftEngine::runAsLeaderImp(std::unordered_map<h512, unsigned>& memberHeartb
                     RAFTENGINE_LOG(TRACE)
                         << LOG_DESC("[#runAsLeaderImp]Collect heartbeat resp exceed half");
 
-                    m_lastHeartbeatReset = std::chrono::system_clock::now();
+                    m_lastHeartbeatReset = std::chrono::steady_clock::now();
                     for_each(memberHeartbeatLog.begin(), memberHeartbeatLog.end(),
                         [](std::pair<const h512, unsigned>& item) {
                             if (item.second > 0)
@@ -545,7 +544,7 @@ void RaftEngine::runAsLeader()
 {
     m_firstVote = InvalidIndex;
     m_lastLeaderTerm = m_term;
-    m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::system_clock::now();
+    m_lastHeartbeatReset = m_lastHeartbeatTime = std::chrono::steady_clock::now();
     std::unordered_map<h512, unsigned> memberHeartbeatLog;
 
     while (isWorking())
@@ -799,7 +798,7 @@ void RaftEngine::runAsFollower()
 
 bool RaftEngine::checkHeartbeatTimeout()
 {
-    system_clock::time_point nowTime = system_clock::now();
+    steady_clock::time_point nowTime = steady_clock::now();
     auto interval = duration_cast<milliseconds>(nowTime - m_lastHeartbeatReset).count();
 
     RAFTENGINE_LOG(TRACE) << LOG_DESC("[#checkHeartbeatTimeout]") << LOG_KV("interval", interval)
@@ -848,7 +847,7 @@ P2PMessage::Ptr RaftEngine::generateHeartbeat()
 
 void RaftEngine::broadcastHeartbeat()
 {
-    std::chrono::system_clock::time_point nowTime = std::chrono::system_clock::now();
+    std::chrono::steady_clock::time_point nowTime = std::chrono::steady_clock::now();
     auto interval =
         std::chrono::duration_cast<std::chrono::milliseconds>(nowTime - m_lastHeartbeatTime)
             .count();
@@ -1086,7 +1085,7 @@ bool RaftEngine::handleVoteRequest(u256 const& _from, h512 const& _node, RaftVot
 
 bool RaftEngine::checkElectTimeout()
 {
-    std::chrono::system_clock::time_point nowTime = std::chrono::system_clock::now();
+    std::chrono::steady_clock::time_point nowTime = std::chrono::steady_clock::now();
     return nowTime - m_lastElectTime >= std::chrono::milliseconds(m_electTimeout);
 }
 
@@ -1455,8 +1454,6 @@ bool RaftEngine::commit(Block const& _block)
         return false;
     }
 
-    m_uncommittedBlock = Block();
-    m_uncommittedBlockNumber = 0;
     ul.unlock();
 
     if (getState() != RaftRole::EN_STATE_LEADER)
@@ -1531,15 +1528,20 @@ void RaftEngine::checkSealerList(Block const& _block)
 void RaftEngine::checkAndSave(Sealing& _sealing)
 {
     // callback block chain to commit block
+    std::unique_lock<std::mutex> ul(m_commitMutex);
     CommitResult ret = m_blockChain->commitBlock(_sealing.block, _sealing.p_execContext);
     if (ret == CommitResult::OK)
     {
+        m_uncommittedBlock = Block();
+        m_uncommittedBlockNumber = 0;
+        ul.unlock();
         RAFTENGINE_LOG(DEBUG) << LOG_DESC("[#checkAndSave]Commit block succ");
         // drop handled transactions
         dropHandledTransactions(_sealing.block);
     }
     else
     {
+        ul.unlock();
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkAndSave]Commit block failed")
                               << LOG_KV("highestNum", m_highestBlock.number())
                               << LOG_KV("sealingNum", _sealing.block->blockHeader().number())
@@ -1553,7 +1555,7 @@ void RaftEngine::checkAndSave(Sealing& _sealing)
 
 bool RaftEngine::reachBlockIntervalTime()
 {
-    auto nowTime = utcTime();
+    auto nowTime = utcSteadyTime();
     auto parentTime = m_lastBlockTime;
 
     return nowTime - parentTime >= g_BCOSConfig.c_intervalBlockTime;

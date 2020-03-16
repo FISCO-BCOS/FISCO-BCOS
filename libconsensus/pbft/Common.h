@@ -45,6 +45,11 @@ enum P2PPacketType : uint32_t
     GetMissedTxsPacket = 0x2,
     // represent that the node receives the missed transaction data
     MissedTxsPacket = 0x3,
+    // status of RawPrepareReq
+    P2PRawPrepareStatusPacket = 0x4,
+    // represent that the node should response the RawPrepareReq to the requested node
+    RequestRawPreparePacket = 0x5,
+    RawPrepareResponse = 0x6,
 };
 
 // for pbft
@@ -67,8 +72,9 @@ struct PBFTMsgPacket
     /// type of the packet(maybe prepare, sign or commit)
     /// (receive from the network or send to the network)
     byte packet_id;
-    /// ttl
-    uint8_t ttl;
+    /// ttl, extend the 8th bit to represent the inner prepareReq with empty block or not
+    mutable uint8_t ttl;
+    bool prepareWithEmptyBlock = false;
     /// the data of concrete request(receive from or send to the network)
     bytes data;
     /// timestamp of receive this pbft message
@@ -127,7 +133,15 @@ struct PBFTMsgPacket
     }
 
     /// RLP decode: serialize network-received packet-data from bytes to RLP
-    virtual void streamRLPFields(RLPStream& s) const { s << packet_id << ttl << data; }
+    virtual void streamRLPFields(RLPStream& s) const
+    {
+        // extend prepareWithEmptyBlock into the 8th bit of ttl
+        if (prepareWithEmptyBlock)
+        {
+            ttl |= 0x80;
+        }
+        s << packet_id << ttl << data;
+    }
 
     /**
      * @brief: set non-network-receive-or-send part of PBFTMsgPacket
@@ -148,7 +162,10 @@ struct PBFTMsgPacket
         {
             int field = 0;
             packet_id = rlp[field = 0].toInt<uint8_t>();
-            ttl = rlp[field = 1].toInt<uint8_t>();
+            uint8_t extendedTTL = rlp[field = 1].toInt<uint8_t>();
+            // decode ttl and prepareWithEmptyBlock from the extendedTTL
+            ttl = extendedTTL & 0x7f;
+            prepareWithEmptyBlock = extendedTTL & 0x80;
             data = rlp[field = 2].toBytes();
         }
         catch (Exception const& e)
@@ -194,6 +211,7 @@ public:
 /// the base class of PBFT message
 struct PBFTMsg
 {
+    using Ptr = std::shared_ptr<PBFTMsg>;
     /// the number of the block that is handling
     int64_t height = -1;
     /// view when construct this PBFTMsg
@@ -208,6 +226,11 @@ struct PBFTMsg
     Signature sig = Signature();
     /// signature to the hash of other fields except block_hash, sig and sig2
     Signature sig2 = Signature();
+    bool isFuture = false;
+    bool signChecked = true;
+    // the block inner the PrepareReq is empty or not
+    bool isEmpty = false;
+
     PBFTMsg() = default;
     PBFTMsg(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
         IDXTYPE const& _idx, h256 const _blockHash)
@@ -220,6 +243,7 @@ struct PBFTMsg
         sig = signHash(block_hash, _keyPair);
         sig2 = signHash(fieldsWithoutBlock(), _keyPair);
     }
+
     virtual ~PBFTMsg() = default;
 
     bool operator==(PBFTMsg const& req) const
@@ -240,6 +264,26 @@ struct PBFTMsg
         RLPStream list_rlp;
         list_rlp.appendList(1).append(tmp.out());
         list_rlp.swapOut(encodedBytes);
+    }
+
+    // Note: the status packet has no signature
+    virtual void encodeStatus(bytes& encodedBytes) const
+    {
+        RLPStream tmp;
+        tmp << height << view << idx << block_hash;
+        RLPStream list_rlp;
+        list_rlp.appendList(1).append(tmp.out());
+        list_rlp.swapOut(encodedBytes);
+    }
+
+    virtual void decodeStatus(bytesConstRef _data)
+    {
+        RLP rlp(_data);
+        RLP const& statusRlp = rlp[0];
+        height = statusRlp[0].toInt<int64_t>();
+        view = statusRlp[1].toInt<VIEWTYPE>();
+        idx = statusRlp[2].toInt<IDXTYPE>();
+        block_hash = statusRlp[3].toHash<h256>(RLP::VeryStrict);
     }
 
     /**
@@ -310,7 +354,7 @@ struct PBFTMsg
      */
     Signature signHash(h256 const& hash, KeyPair const& keyPair) const
     {
-        return dev::sign(keyPair.secret(), hash);
+        return dev::sign(keyPair, hash);
     }
 
     std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
@@ -319,14 +363,13 @@ struct PBFTMsg
 /// definition of the prepare requests
 struct PrepareReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<PrepareReq>;
     /// block data
     std::shared_ptr<bytes> block;
     std::shared_ptr<dev::eth::Block> pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
-
-    using Ptr = std::shared_ptr<PrepareReq>;
     /// default constructor
     PrepareReq() { block = std::make_shared<dev::bytes>(); }
     virtual ~PrepareReq() {}
@@ -336,7 +379,6 @@ struct PrepareReq : public PBFTMsg
     {
         block = std::make_shared<dev::bytes>();
     }
-
     /**
      * @brief: populate the prepare request from specified prepare request,
      *         given view and node index
@@ -442,6 +484,7 @@ struct PrepareReq : public PBFTMsg
 /// signature request
 struct SignReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<SignReq>;
     SignReq() = default;
 
     /**
@@ -466,6 +509,7 @@ struct SignReq : public PBFTMsg
 /// commit request
 struct CommitReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<CommitReq>;
     CommitReq() = default;
     /**
      * @brief: populate the CommitReq from given PrepareReq and node index
@@ -489,6 +533,7 @@ struct CommitReq : public PBFTMsg
 /// view change request
 struct ViewChangeReq : public PBFTMsg
 {
+    using Ptr = std::shared_ptr<ViewChangeReq>;
     ViewChangeReq() = default;
     /**
      * @brief: generate ViewChangeReq from given params

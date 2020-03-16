@@ -22,6 +22,7 @@
 
 #include "DownloadingBlockQueue.h"
 #include "Common.h"
+#include "gperftools/malloc_extension.h"
 
 using namespace std;
 using namespace dev;
@@ -41,7 +42,43 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     }
     ShardPtr blocksShard = make_shared<DownloadBlocksShard>(0, 0, _rlps.data().toBytes());
     m_buffer->emplace_back(blocksShard);
+    // Note: the memory size occupied by Block object will increase to at least treble for:
+    // 1. txsCache of Block
+    // 2. m_rlpBuffer of every Transaction
+    // 3. the Block occupied memory calculated without cache
+    int64_t decodedBlockSize = _rlps.data().size() * m_blockSizeExpandCoeff;
+    m_blockQueueSize += decodedBlockSize;
+
+    m_averageBlockSize =
+        (m_averageBlockSize == 0 ? decodedBlockSize : (decodedBlockSize + m_averageBlockSize) / 2);
 }
+
+
+void DownloadingBlockQueue::adjustMaxRequestBlocks()
+{
+    if (m_averageBlockSize == 0)
+    {
+        return;
+    }
+    // only request one block per time when the queue is full
+    auto freeQueueSize = m_maxBlockQueueSize - m_blockQueueSize;
+    // calculate the freeRate
+    int64_t maxRequestBlocks = freeQueueSize / (m_averageBlockSize.load() * c_maxRequestShards);
+    if (maxRequestBlocks > c_maxRequestBlocks)
+    {
+        m_maxRequestBlocks = c_maxRequestBlocks;
+        return;
+    }
+    m_maxRequestBlocks = std::max((int64_t)1, maxRequestBlocks);
+
+    SYNC_LOG(DEBUG) << LOG_DESC("DownloadingBlockQueue: adjustMaxRequestBlocks")
+                    << LOG_KV("blockQueueSize", m_blockQueueSize)
+                    << LOG_KV("maxBlockQueueSize", m_maxBlockQueueSize)
+                    << LOG_KV("freeBlockQueueSize", freeQueueSize)
+                    << LOG_KV("averageBlockSize", m_averageBlockSize)
+                    << LOG_KV("adjustedMaxRequestBlocks", m_maxRequestBlocks);
+}
+
 
 // only used for UT
 void DownloadingBlockQueue::push(BlockPtrVec _blocks)
@@ -89,7 +126,15 @@ void DownloadingBlockQueue::pop()
 {
     WriteGuard l(x_blocks);
     if (!m_blocks.empty())
+    {
+        m_blockQueueSize -= m_blocks.top()->blockSize() * m_blockSizeExpandCoeff;
         m_blocks.pop();
+    }
+    // block queue is empty, reset m_maxRequestBlocks to c_maxRequestBlocks
+    else
+    {
+        m_maxRequestBlocks = c_maxRequestBlocks;
+    }
 }
 
 BlockPtr DownloadingBlockQueue::top(bool isFlushBuffer)
@@ -119,6 +164,8 @@ void DownloadingBlockQueue::clearQueue()
     WriteGuard l(x_blocks);
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
     swap(m_blocks, emptyQueue);  // Does memory leak here ?
+    // give back the memory to os
+    MallocExtension::instance()->ReleaseFreeMemory();
 }
 
 void DownloadingBlockQueue::flushBufferToQueue()

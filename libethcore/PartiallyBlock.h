@@ -55,6 +55,7 @@ public:
 
     // fillBlock with fetched transaction
     void fillBlock(bytesConstRef _txsData);
+    void fillBlock(RLP const& _rlp);
     bool txsAllHit() override { return m_missedTxs->size() == 0; }
 
     // response encodeded-transactions when receive missed-txsRequest

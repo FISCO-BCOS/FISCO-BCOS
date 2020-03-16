@@ -16,7 +16,6 @@
  */
 
 #include "../libstorage/MemoryStorage.h"
-#include "Common.h"
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
@@ -27,6 +26,7 @@
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -87,6 +87,16 @@ BOOST_AUTO_TEST_CASE(CRUD)
     abi.abiOut(&out, createResult);
     BOOST_TEST(createResult == 0u);
 
+    // desc
+    param.clear();
+    out.clear();
+    param = abi.abiIn("desc(string)", tableName);
+    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    string keyField, valueField2;
+    abi.abiOut(&out, keyField, valueField2);
+    BOOST_TEST(keyField == "name");
+    BOOST_TEST(valueField == valueField2);
+
     // insert
     std::string insertFunc = "insert(string,string,string,string)";
     std::string entryStr = "{\"item_id\":\"1\",\"name\":\"fruit\",\"item_name\":\"apple\"}";
@@ -120,10 +130,10 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // select
     std::string selectFunc = "select(string,string,string,string)";
-    std::string conditonStr = "{\"item_id\":{\"eq\":\"1\"},\"limit\":{\"limit\":\"0,1\"}}";
+    std::string conditionStr = "{\"item_id\":{\"eq\":\"1\"},\"limit\":{\"limit\":\"0,1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(selectFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(selectFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     std::string selectResult;
     abi.abiOut(&out, selectResult);
@@ -135,17 +145,17 @@ BOOST_AUTO_TEST_CASE(CRUD)
     // select table not exist
     param.clear();
     out.clear();
-    param = abi.abiIn(selectFunc, tableName2, key, conditonStr, std::string(""));
+    param = abi.abiIn(selectFunc, tableName2, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     u256 selectResult2 = 0;
     abi.abiOut(&out, selectResult2);
     BOOST_TEST(selectResult2 == CODE_TABLE_NOT_EXIST);
 
     // select condition error
-    conditonStr = "{\"item_id\":\"eq\":\"1\"},\"limit\":{\"limit\":\"0,1\"}}";
+    conditionStr = "{\"item_id\":\"eq\":\"1\"},\"limit\":{\"limit\":\"0,1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(selectFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(selectFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     selectResult2 = 0;
     abi.abiOut(&out, selectResult2);
@@ -154,10 +164,10 @@ BOOST_AUTO_TEST_CASE(CRUD)
     // update
     std::string updateFunc = "update(string,string,string,string,string)";
     entryStr = "{\"item_id\":\"1\",\"name\":\"fruit\",\"item_name\":\"orange\"}";
-    conditonStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditonStr, std::string(""));
+    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     u256 updateResult = 0;
     abi.abiOut(&out, updateResult);
@@ -165,10 +175,10 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // update table not exist
     entryStr = "{\"item_id\":\"1\",\"name\":\"fruit\",\"item_name\":\"orange\"}";
-    conditonStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(updateFunc, tableName2, key, entryStr, conditonStr, std::string(""));
+    param = abi.abiIn(updateFunc, tableName2, key, entryStr, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     updateResult = 0;
     abi.abiOut(&out, updateResult);
@@ -176,10 +186,10 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // update entry error
     entryStr = "{\"item_id\"1\",\"name\":\"fruit\",\"item_name\":\"apple\"}";
-    conditonStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditonStr, std::string(""));
+    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     updateResult = 0;
     abi.abiOut(&out, updateResult);
@@ -187,10 +197,10 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // update condition error
     entryStr = "{\"item_id\":\"1\",\"name\":\"fruit\",\"item_name\":\"orange\"}";
-    conditonStr = "{\"item_id\"\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\"\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditonStr, std::string(""));
+    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     updateResult = 0;
     abi.abiOut(&out, updateResult);
@@ -198,40 +208,40 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // remove
     std::string removeFunc = "remove(string,string,string,string)";
-    conditonStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(removeFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     u256 removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == 1u);
 
     // remove table not exist
-    conditonStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(removeFunc, tableName2, key, conditonStr, std::string(""));
+    param = abi.abiIn(removeFunc, tableName2, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == CODE_TABLE_NOT_EXIST);
 
-    // remove conditon error
-    conditonStr = "{\"item_id\"\"eq\":\"1\"}}";
+    // remove condition error
+    conditionStr = "{\"item_id\"\"eq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(removeFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == CODE_PARSE_CONDITION_ERROR);
 
-    // remove conditon operation undefined
-    conditonStr = "{\"item_id\":{\"eqq\":\"1\"}}";
+    // remove condition operation undefined
+    conditionStr = "{\"item_id\":{\"eqq\":\"1\"}}";
     param.clear();
     out.clear();
-    param = abi.abiIn(removeFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     removeResult = 0;
     abi.abiOut(&out, removeResult);
@@ -239,7 +249,7 @@ BOOST_AUTO_TEST_CASE(CRUD)
 
     // function not exist
     std::string errorFunc = "errorFunc(string,string,string,string)";
-    param = abi.abiIn(errorFunc, tableName, key, conditonStr, std::string(""));
+    param = abi.abiIn(errorFunc, tableName, key, conditionStr, std::string(""));
     out = crudPrecompiled->call(context, bytesConstRef(&param));
     u256 funcResult = 0;
     abi.abiOut(&out, funcResult);

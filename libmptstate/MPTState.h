@@ -95,6 +95,8 @@ public:
 
     h256 codeHash(Address const& _contract) const override;
 
+    bool frozen(Address const& _contract) const override;
+
     size_t codeSize(Address const& _contract) const override;
 
     void incNonce(Address const& _id) override;

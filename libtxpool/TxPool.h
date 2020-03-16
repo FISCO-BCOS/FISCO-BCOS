@@ -66,6 +66,7 @@ struct transactionCompare
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
 {
 public:
+    TxPool() = default;
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 32)
@@ -161,8 +162,24 @@ public:
             return false;
         return p->second.find(_nodeId) != p->second.end();
     }
+
     void setTransactionsAreKnownBy(
         std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
+    void setTransactionsAreKnownBy(
+        std::set<dev::h256> const& _txHashSet, h512 const& _nodeId) override
+    {
+        markTransactionsAreKnownBy(_txHashSet, _nodeId);
+    }
+    template <typename T>
+    void markTransactionsAreKnownBy(T const& _txsHash, h512 const& _nodeId)
+    {
+        WriteGuard l(x_transactionKnownBy);
+        for (auto const& tx_hash : _txsHash)
+        {
+            m_transactionKnownBy[tx_hash].insert(_nodeId);
+        }
+    }
+
     /// Is the transaction is known by someone
     bool isTransactionKnownBySomeone(h256 const& _txHash) override;
     SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }

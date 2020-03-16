@@ -187,12 +187,12 @@ public:
         }
 #endif
         const u256 c_maxBlockLimit = u256(1000);
-        Secret sec = KeyPair::create().secret();
+        auto keyPair = KeyPair::create();
         TransactionPtr txPtr =
             std::make_shared<Transaction>(ref(c_txBytes), CheckTransaction::Everything);
         txPtr->setNonce(txPtr->nonce() + u256(rand()));
         txPtr->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-        dev::Signature sig = sign(sec, txPtr->sha3(WithoutSignature));
+        dev::Signature sig = sign(keyPair, txPtr->sha3(WithoutSignature));
         txPtr->updateSignature(SignatureStruct(sig));
         return txPtr;
     }

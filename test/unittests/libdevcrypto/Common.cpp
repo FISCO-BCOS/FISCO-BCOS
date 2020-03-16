@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
     h256 hash = sha3("abcd");
     /// normal check
     // sign
-    Signature sig = sign(key_pair.secret(), hash);
+    Signature sig = sign(key_pair, hash);
     BOOST_CHECK(SignatureStruct(sig).isValid() == true);
     // verify
     bool result = verify(key_pair.pub(), sig, hash);
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
     BOOST_CHECK(invalid_pub != key_pair.pub());
 
     // check2: invalid sig
-    Signature another_sig(sign(key_pair.secret(), invalid_hash));
+    Signature another_sig(sign(key_pair, invalid_hash));
     result = verify(key_pair.pub(), another_sig, hash);
     BOOST_CHECK(result == false);
 
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     h256 hash = sha3("abcd");
     /// normal check
     // sign
-    Signature sig = sign(key_pair.secret(), hash);
+    Signature sig = sign(key_pair, hash);
     BOOST_CHECK(SignatureStruct(sig).isValid() == true);
     // verify
     bool result = verify(key_pair.pub(), sig, hash);
@@ -265,7 +265,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     BOOST_CHECK(invalid_pub != key_pair.pub());
 
     // check2: invalid sig
-    Signature another_sig(sign(key_pair.secret(), invalid_hash));
+    Signature another_sig(sign(key_pair, invalid_hash));
     result = verify(key_pair.pub(), another_sig, hash);
     BOOST_CHECK(result == false);
 

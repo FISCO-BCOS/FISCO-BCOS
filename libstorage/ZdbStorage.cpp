@@ -24,6 +24,7 @@
 #include "StorageException.h"
 #include "Table.h"
 #include <libdevcore/FixedHash.h>
+#include <thread>
 
 
 using namespace std;
@@ -36,14 +37,28 @@ Entries::Ptr ZdbStorage::select(
     int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key, Condition::Ptr _condition)
 {
     std::vector<std::map<std::string, std::string> > values;
-    int ret = m_sqlBasicAcc->Select(_num, _tableInfo->name, _key, _condition, values);
-    if (ret < 0)
+    int ret = 0, i = 0;
+    for (i = 0; i < m_maxRetry; ++i)
     {
-        ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
-                              << " table:" << _tableInfo->name;
-        auto e =
-            StorageException(-1, "Remote select database return error: table:" + _tableInfo->name +
-                                     boost::lexical_cast<std::string>(ret));
+        ret = m_sqlBasicAcc->Select(_num, _tableInfo->name, _key, _condition, values);
+        if (ret < 0)
+        {
+            ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
+                                  << " table:" << _tableInfo->name << LOG_KV("retry", i + 1);
+            this_thread::sleep_for(chrono::milliseconds(1000));
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+    if (i == m_maxRetry && ret < 0)
+    {
+        ZdbStorage_LOG(ERROR) << "MySQL select return error: " << ret
+                              << LOG_KV("table", _tableInfo->name) << LOG_KV("retry", m_maxRetry);
+        auto e = StorageException(
+            -1, "MySQL select return error:" + to_string(ret) + " table:" + _tableInfo->name);
         m_fatalHandler(e);
         BOOST_THROW_EXCEPTION(e);
     }
@@ -82,16 +97,27 @@ void ZdbStorage::SetSqlAccess(SQLBasicAccess::Ptr _sqlBasicAcc)
 
 size_t ZdbStorage::commit(int64_t _num, const std::vector<TableData::Ptr>& _datas)
 {
-    int32_t rowCount = m_sqlBasicAcc->Commit((int32_t)_num, _datas);
-    if (rowCount < 0)
+    int32_t ret = 0;
+    for (int i = 0; i < m_maxRetry; ++i)
     {
-        ZdbStorage_LOG(ERROR) << "database commit  return error:" << rowCount;
-        auto e = StorageException(-1, "Remote select database return error: table:" +
-                                          boost::lexical_cast<std::string>(rowCount));
-        m_fatalHandler(e);
-        BOOST_THROW_EXCEPTION(e);
+        ret = m_sqlBasicAcc->Commit((int32_t)_num, _datas);
+        if (ret < 0)
+        {
+            ZdbStorage_LOG(ERROR) << "MySQL commit return error:" << ret << LOG_KV("retry", i + 1);
+            this_thread::sleep_for(chrono::milliseconds(1000));
+            continue;
+        }
+        else
+        {
+            return ret;
+        }
     }
-    return rowCount;
+    ZdbStorage_LOG(ERROR) << "MySQL commit failed:" << ret << LOG_KV("retry", m_maxRetry);
+
+    auto e = StorageException(-1, "MySQL commit return error:" + to_string(ret));
+    m_fatalHandler(e);
+    BOOST_THROW_EXCEPTION(e);
+    return ret;
 }
 
 /*
@@ -139,7 +165,8 @@ void ZdbStorage::createSysTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
-void ZdbStorage::createSysConsensus()
+
+void ZdbStorage::createCnsTables()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CNS << "` (\n";
@@ -222,7 +249,7 @@ void ZdbStorage::createHash2BlockTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
-void ZdbStorage::createCnsTables()
+void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << SYS_CONSENSUS << "` (\n";

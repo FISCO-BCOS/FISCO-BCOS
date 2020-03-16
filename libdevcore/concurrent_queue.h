@@ -52,11 +52,11 @@ public:
 
     std::pair<bool, _T> tryPop(int milliseconds)
     {
-        std::unique_lock<std::mutex> lock{x_mutex};
+        boost::unique_lock<boost::mutex> lock{x_mutex};
         // if g_BCOSConfig.shouldExit is true, should return directly
         // in consideration that when the system time has been changed,
         // the process maybe stucked in 'wait_for'
-        auto ret = m_cv.wait_for(lock, std::chrono::milliseconds(milliseconds),
+        auto ret = m_cv.wait_for(lock, boost::chrono::milliseconds(milliseconds),
             [this] { return !m_queue.empty() || g_BCOSConfig.shouldExit; });
         if (!ret || g_BCOSConfig.shouldExit)
         {
@@ -69,8 +69,8 @@ public:
 
 private:
     _QueueT m_queue;
-    std::mutex x_mutex;
-    std::condition_variable m_cv;
+    boost::mutex x_mutex;
+    boost::condition_variable m_cv;
 };
 
 }  // namespace dev
