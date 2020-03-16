@@ -75,6 +75,7 @@ macro(configure_project)
     eth_default_option(WEDPR_EXTENSION OFF)
     if(WEDPR_EXTENSION)
         add_definitions(-DFISCO_WEDPR_EXTENSION)
+    endif()
     # extension privacy module
     eth_default_option(CRYPTO_EXTENSION OFF)
     if (CRYPTO_EXTENSION)
