@@ -430,7 +430,7 @@ void ContractStatusPrecompiled::listManager(
 }
 
 bytes ContractStatusPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("call param", toHex(param));

@@ -52,7 +52,7 @@ ConsensusPrecompiled::ConsensusPrecompiled()
 }
 
 bytes ConsensusPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

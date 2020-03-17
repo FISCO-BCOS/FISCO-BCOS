@@ -25,6 +25,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::precompiled;
 using namespace dev::storage;
 
 
@@ -58,7 +59,8 @@ std::string ConditionPrecompiled::toString()
     return "Condition";
 }
 
-bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+bytes ConditionPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
 

@@ -24,6 +24,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::precompiled;
 using namespace dev::storage;
 
 const char* const ENTRIES_GET_INT = "get(int256)";
@@ -35,13 +36,13 @@ EntriesPrecompiled::EntriesPrecompiled()
     name2Selector[ENTRIES_SIZE] = getFuncSelector(ENTRIES_SIZE);
 }
 
-std::string dev::blockverifier::EntriesPrecompiled::toString()
+std::string EntriesPrecompiled::toString()
 {
     return "Entries";
 }
 
-bytes dev::blockverifier::EntriesPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const&)
+bytes EntriesPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("EntriesPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));

@@ -36,7 +36,8 @@ GroupSigPrecompiled::GroupSigPrecompiled()
     name2Selector[GroupSig_METHOD_SET_STR] = getFuncSelector(GroupSig_METHOD_SET_STR);
 }
 
-bytes GroupSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+bytes GroupSigPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

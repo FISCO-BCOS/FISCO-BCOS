@@ -29,6 +29,7 @@
 using namespace dev;
 using namespace std;
 using namespace dev::blockverifier;
+using namespace dev::precompiled;
 using namespace dev::storage;
 
 namespace test_TablePrecompiled
@@ -50,7 +51,7 @@ struct TablePrecompiledFixture
     TablePrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        tablePrecompiled = std::make_shared<dev::blockverifier::TablePrecompiled>();
+        tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back("name");
@@ -63,7 +64,7 @@ struct TablePrecompiledFixture
 
     ~TablePrecompiledFixture() {}
 
-    dev::blockverifier::TablePrecompiled::Ptr tablePrecompiled;
+    dev::precompiled::TablePrecompiled::Ptr tablePrecompiled;
     ExecutiveContext::Ptr context;
     BlockInfo blockInfo;
     int addressCount = 0x10000;

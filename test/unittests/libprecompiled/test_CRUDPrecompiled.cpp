@@ -59,7 +59,7 @@ struct CRUDPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
 
-        tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         crudPrecompiled = context->getPrecompiled(Address(0x1002));
     }
@@ -69,7 +69,7 @@ struct CRUDPrecompiledFixture
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr crudPrecompiled;
-    dev::blockverifier::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
 };
 
