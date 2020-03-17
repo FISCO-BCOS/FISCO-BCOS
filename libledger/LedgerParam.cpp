@@ -126,6 +126,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     initTxExecuteConfig(pt);
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
+    initCSMConfig(pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -577,6 +578,14 @@ void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree co
                                  mutableEventLogFilterManagerParams().maxBlockRange)
                           << LOG_KV("maxBlockPerProcess",
                                  mutableEventLogFilterManagerParams().maxBlockPerProcess);
+}
+
+void LedgerParam::initCSMConfig(boost::property_tree::ptree const& pt)
+{
+    bool enableDestroyContract = pt.get<bool>("contract.enable_destroy", false);
+    LedgerParam_LOG(INFO) << LOG_BADGE("contract")
+                          << LOG_KV("enableDestroyContract", enableDestroyContract);
+    g_BCOSConfig.setDestroyContract(enableDestroyContract);
 }
 
 }  // namespace ledger

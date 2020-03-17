@@ -150,13 +150,23 @@ void ContractStatusPrecompiled::destroy(
     std::string tableName = precompiled::getContractTableName(contractAddress);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractStatusPrecompiled")
                            << LOG_KV("destroy contract", tableName);
+
+    if (g_BCOSConfig.destroyContractEnable() == false)
+    {
+        result = CODE_INVALID_CONTRACT_UNENABLE_DESTROY;
+    }
     // administrative authority judgment precedes status judgment
-    if (checkPermission(context, tableName, origin))
+    else if (checkPermission(context, tableName, origin))
     {
         ContractStatus status = getContractStatus(context, tableName);
         if (ContractStatus::Destroyed == status)
         {
             result = CODE_INVALID_CONTRACT_DESTROYED;
+        }
+        else if (ContractStatus::Frozen != status)
+        {
+            // only frozen contract can be destroyed
+            result = CODE_INVALID_CONTRACT_FROZEN_FIRST;
         }
         else if (ContractStatus::Nonexistent == status)
         {
@@ -167,19 +177,13 @@ void ContractStatusPrecompiled::destroy(
             Table::Ptr table = openTable(context, tableName);
             if (table)
             {
+                // only update alive field to mark contract destroyed
                 auto entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, "");
-                table->update(storagestate::ACCOUNT_CODE, entry, table->newCondition(),
-                    std::make_shared<AccessOptions>(origin, false));
-                entry = table->newEntry();
-                entry->setField(storagestate::STORAGE_VALUE, toHex(EmptySHA3));
-                table->update(storagestate::ACCOUNT_CODE_HASH, entry, table->newCondition(),
-                    std::make_shared<AccessOptions>(origin, false));
-                entry = table->newEntry();
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 table->update(storagestate::ACCOUNT_ALIVE, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin, false));
                 // reset frozen to check if it is destroyed
+                entry = table->newEntry();
                 entry->setField(storagestate::STORAGE_VALUE, STATUS_FALSE);
                 table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
                     std::make_shared<AccessOptions>(origin, false));
@@ -249,7 +253,7 @@ void ContractStatusPrecompiled::freeze(
         }
         else if (ContractStatus::Frozen == status)
         {
-            result = CODE_INVALID_CONTRACT_FEOZEN;
+            result = CODE_INVALID_CONTRACT_FROZEN;
         }
         else if (ContractStatus::Nonexistent == status)
         {

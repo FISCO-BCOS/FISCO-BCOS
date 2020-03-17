@@ -190,6 +190,7 @@ private:
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+    void initCSMConfig(boost::property_tree::ptree const& pt);
 
 private:
     dev::GROUP_ID m_groupID;

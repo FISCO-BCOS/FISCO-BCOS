@@ -181,19 +181,29 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         else
         {
             m_gas = _p.gas;
-            if (m_s->frozen(_p.codeAddress))
+            if (m_s->addressHasCode(_p.codeAddress))
             {
-                LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
-                           << LOG_KV("contractAddr", _p.codeAddress);
-                m_excepted = TransactionException::ContractFrozen;
-            }
-            else if (m_s->addressHasCode(_p.codeAddress))
-            {
-                bytes const& c = m_s->code(_p.codeAddress);
-                h256 codeHash = m_s->codeHash(_p.codeAddress);
-                m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
-                    _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
-                    _p.staticCall);
+                ContractStatus status = getContractStatus(_p.codeAddress);
+                if (ContractStatus::Destroyed == status)
+                {
+                    LOG(DEBUG) << LOG_DESC("execute transaction failed for contract destroyed")
+                               << LOG_KV("contractAddr", _p.codeAddress);
+                    m_excepted = TransactionException::ContractDestroyed;
+                }
+                else if (ContractStatus::Frozen == status)
+                {
+                    LOG(DEBUG) << LOG_DESC("execute transaction failed for contract frozen")
+                               << LOG_KV("contractAddr", _p.codeAddress);
+                    m_excepted = TransactionException::ContractFrozen;
+                }
+                else if (ContractStatus::Invalid != status)
+                {
+                    bytes const& c = m_s->code(_p.codeAddress);
+                    h256 codeHash = m_s->codeHash(_p.codeAddress);
+                    m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
+                        _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
+                        _p.staticCall);
+                }
             }
         }
         // Transfer ether.
@@ -262,18 +272,28 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             m_excepted = TransactionException::Unknown;
         }
     }
-    else if (m_s->frozen(_p.codeAddress))
-    {
-        LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for ContractFrozen")
-                   << LOG_KV("contractAddr", _p.codeAddress);
-        m_excepted = TransactionException::ContractFrozen;
-    }
     else if (m_s->addressHasCode(_p.codeAddress))
     {
-        bytes const& c = m_s->code(_p.codeAddress);
-        h256 codeHash = m_s->codeHash(_p.codeAddress);
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-            _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        ContractStatus status = getContractStatus(_p.codeAddress);
+        if (ContractStatus::Destroyed == status)
+        {
+            LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for contract destroyed")
+                       << LOG_KV("contractAddr", _p.codeAddress);
+            m_excepted = TransactionException::ContractDestroyed;
+        }
+        else if (ContractStatus::Frozen == status)
+        {
+            LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for contract frozen")
+                       << LOG_KV("contractAddr", _p.codeAddress);
+            m_excepted = TransactionException::ContractFrozen;
+        }
+        else if (ContractStatus::Invalid != status)
+        {
+            bytes const& c = m_s->code(_p.codeAddress);
+            h256 codeHash = m_s->codeHash(_p.codeAddress);
+            m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
+                _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        }
     }
     else
     {
@@ -282,6 +302,38 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
 
     // no balance transfer
     return !m_ext;
+}
+
+ContractStatus Executive::getContractStatus(Address const& contractAddress)
+{
+    auto memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    auto table = memoryTableFactory->openTable(tableName);
+
+    if (!table)
+    {
+        return ContractStatus::Invalid;
+    }
+
+    auto aliveEntries = table->select("alive", table->newCondition());
+    if (aliveEntries->size() > 0)
+    {
+        if (aliveEntries->get(0)->getField("value") == "false")
+        {
+            return ContractStatus::Destroyed;
+        }
+    }
+
+    auto frozenEntries = table->select("frozen", table->newCondition());
+    if (frozenEntries->size() > 0)
+    {
+        if (frozenEntries->get(0)->getField("value") == "true")
+        {
+            return ContractStatus::Frozen;
+        }
+    }
+
+    return ContractStatus::Available;
 }
 
 bool Executive::create(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,

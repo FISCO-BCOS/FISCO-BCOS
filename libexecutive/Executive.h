@@ -65,6 +65,15 @@ namespace executive
 class ExtVM;
 class StateFace;
 
+enum ContractStatus
+{
+    Invalid = 0,
+    Available,
+    Frozen,
+    Destroyed,
+    Count
+};
+
 class Executive
 {
 public:
@@ -208,6 +217,7 @@ private:
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
 
+    ContractStatus getContractStatus(Address const& contractAddress);
     void grantContractStatusManager(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory,
         Address const& newAddress, Address const& sender, Address const& origin);
 

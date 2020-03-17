@@ -75,6 +75,9 @@ public:
     void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
     dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
+    void setDestroyContract(bool flag) { m_enableDestroyContract = flag; }
+    bool destroyContractEnable() { return m_enableDestroyContract; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -111,6 +114,7 @@ private:
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
+    bool m_enableDestroyContract = false;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()
