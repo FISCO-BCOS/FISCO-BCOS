@@ -50,8 +50,8 @@ std::string KVTablePrecompiled::toString()
     return "KVTable";
 }
 
-bytes KVTablePrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes KVTablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
+    Address const& origin, Address const& sender)
 {
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
@@ -83,6 +83,13 @@ bytes KVTablePrecompiled::call(
     }
     else if (func == name2Selector[KVTABLE_METHOD_SET])
     {  // set(string,address)
+        if (!checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);

@@ -36,7 +36,8 @@ RingSigPrecompiled::RingSigPrecompiled()
     name2Selector[RingSig_METHOD_SET_STR] = getFuncSelector(RingSig_METHOD_SET_STR);
 }
 
-bytes RingSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+bytes RingSigPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

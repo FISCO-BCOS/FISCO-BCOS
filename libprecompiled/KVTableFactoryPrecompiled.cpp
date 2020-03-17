@@ -56,12 +56,13 @@ std::string KVTableFactoryPrecompiled::toString()
     return "KVTableFactory";
 }
 
-bytes KVTableFactoryPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
+    Address const& origin, Address const& sender)
 {
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-    STORAGE_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_DESC("call") << LOG_KV("func", func);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_DESC("call")
+                           << LOG_KV("func", func);
 
     dev::eth::ContractABI abi;
     bytes out;
@@ -82,9 +83,9 @@ bytes KVTableFactoryPrecompiled::call(
         }
         else
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("KVTableFactoryPrecompiled")
-                                 << LOG_DESC("Open new table failed")
-                                 << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("KVTableFactoryPrecompiled") << LOG_DESC("Open new table failed")
+                << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledException(tableName + " does not exist"));
         }
 
@@ -92,6 +93,13 @@ bytes KVTableFactoryPrecompiled::call(
     }
     else if (func == name2Selector[KVTABLE_FACTORY_METHOD_CREATE_TABLE])
     {  // createTable(string,string,string)
+        if (!checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("KVTableFactoryPrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         string tableName;
         string keyField;
         string valueFiled;
@@ -150,7 +158,7 @@ bytes KVTableFactoryPrecompiled::call(
         }
         catch (dev::storage::StorageException& e)
         {
-            STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
+            PRECOMPILED_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
             if (e.errorCode() == storage::CODE_NO_AUTHORIZED)
             {
@@ -161,8 +169,8 @@ bytes KVTableFactoryPrecompiled::call(
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
-                           << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
+                               << LOG_DESC("call undefined function!");
     }
     return out;
 }

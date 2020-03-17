@@ -16,6 +16,9 @@
  */
 
 #include "../libstorage/MemoryStorage.h"
+#include "../libstorage/MemoryStorage2.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
+#include "libstorage/MemoryTableFactory2.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
@@ -50,10 +53,16 @@ struct TableFactoryPrecompiledFixture
     TableFactoryPrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
+        memStorage = std::make_shared<MemoryStorage2>();
+        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        tableFactory->setStateStorage(memStorage);
+        context->setMemoryTableFactory(tableFactory);
+        auto tfPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tfPrecompiled->setMemoryTableFactory(tableFactory);
+        context->setAddress2Precompiled(Address(0x1001), tfPrecompiled);
         BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
         context->setBlockInfo(blockInfo);
         tableFactoryPrecompiled = std::make_shared<precompiled::KVTableFactoryPrecompiled>();
-        memStorage = std::make_shared<MemoryStorage>();
         auto mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setStateStorage(memStorage);
         tableFactoryPrecompiled->setMemoryTableFactory(mockMemoryTableFactory);

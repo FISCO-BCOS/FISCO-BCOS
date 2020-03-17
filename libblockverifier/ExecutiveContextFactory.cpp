@@ -44,7 +44,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
-    auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+    auto tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
     context->setAddress2Precompiled(
         Address(0x1000), std::make_shared<dev::precompiled::SystemConfigPrecompiled>());

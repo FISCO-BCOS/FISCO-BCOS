@@ -42,15 +42,15 @@ const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
 
-class ContractStatusPrecompiled : public dev::blockverifier::Precompiled
+class ContractStatusPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<ContractStatusPrecompiled> Ptr;
     ContractStatusPrecompiled();
     virtual ~ContractStatusPrecompiled(){};
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address());
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& _sender = Address()) override;
 
 private:
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,

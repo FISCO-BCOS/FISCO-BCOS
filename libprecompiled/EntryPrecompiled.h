@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "libblockverifier/Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 #include "libstorage/Table.h"
 
 namespace dev
@@ -29,7 +29,7 @@ namespace storage
 {
 class Entry;
 }
-namespace blockverifier
+namespace precompiled
 {
 #if 0
 contract Entry {
@@ -58,10 +58,10 @@ public:
     EntryPrecompiled();
     virtual ~EntryPrecompiled(){};
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(
-        std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const& origin = Address());
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& _sender = Address()) override;
 
     void setEntry(dev::storage::Entry::Ptr entry) { m_entry = entry; }
     dev::storage::Entry::Ptr getEntry() const { return m_entry; };
@@ -70,6 +70,6 @@ private:
     dev::storage::Entry::Ptr m_entry;
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

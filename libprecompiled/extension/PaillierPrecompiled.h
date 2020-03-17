@@ -35,15 +35,15 @@ contract Paillier
 }
 #endif
 
-class PaillierPrecompiled : public dev::blockverifier::Precompiled
+class PaillierPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<PaillierPrecompiled> Ptr;
     PaillierPrecompiled();
     virtual ~PaillierPrecompiled(){};
 
-    bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& sender = Address()) override;
 
 private:
     std::shared_ptr<CallPaillier> m_callPaillier;

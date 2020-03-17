@@ -26,6 +26,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::precompiled;
 using namespace dev::storage;
 
 const char* const ENTRY_GET_INT = "getInt(string)";
@@ -78,7 +79,8 @@ std::string EntryPrecompiled::toString()
     return "Entry";
 }
 
-bytes EntryPrecompiled::call(std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const&)
+bytes EntryPrecompiled::call(
+    std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("EntryPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));

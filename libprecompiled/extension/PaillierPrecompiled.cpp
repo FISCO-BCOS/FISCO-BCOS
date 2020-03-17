@@ -36,7 +36,8 @@ PaillierPrecompiled::PaillierPrecompiled() : m_callPaillier(std::make_shared<Cal
     name2Selector[PAILLIER_METHOD_SET_STR] = getFuncSelector(PAILLIER_METHOD_SET_STR);
 }
 
-bytes PaillierPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+bytes PaillierPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("PaillierPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
