@@ -167,10 +167,6 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
         options.disableWAL = m_disableWAL;
 
         m_db->Write(options, batch);
-        if (m_disableWAL)
-        {  // if disableWAL must manually flush
-            m_db->flush();
-        }
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")

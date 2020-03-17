@@ -55,6 +55,7 @@ void BasicRocksDB::flush()
 }
 void BasicRocksDB::closeDB()
 {
+    flush();
     m_db.reset();
 }
 /**
