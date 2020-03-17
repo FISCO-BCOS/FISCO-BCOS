@@ -29,7 +29,6 @@ enum ContractStatus
     Invalid = 0,
     Available,
     Frozen,
-    Destroyed,
     Nonexistent,
     Count
 };
@@ -37,7 +36,7 @@ enum ContractStatus
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfrozening it.",
-    "The contract address is incorrect.", "The contract is nonexistent."};
+    "The contract is nonexistent."};
 
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
@@ -57,8 +56,6 @@ private:
         std::string const& tableName, Address const& origin);
     ContractStatus getContractStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
-    void destroy(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
