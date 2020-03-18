@@ -24,7 +24,7 @@
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libprecompiled/ContractStatusPrecompiled.h>
+#include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
@@ -62,7 +62,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     if (g_BCOSConfig.version() >= V2_3_0)
     {
         context->setAddress2Precompiled(
-            Address(0x1007), std::make_shared<dev::precompiled::ContractStatusPrecompiled>());
+            Address(0x1007), std::make_shared<dev::precompiled::ContractLifeCyclePrecompiled>());
         auto kvTableFactoryPrecompiled =
             std::make_shared<dev::precompiled::KVTableFactoryPrecompiled>();
         kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);

@@ -1,6 +1,6 @@
 pragma solidity ^0.4.24;
 
-contract ContractStatusPrecompiled {
+contract ContractLifeCyclePrecompiled {
     function freeze(address addr) public returns(int);
     function unfreeze(address addr) public returns(int);
     function grantManager(address contractAddr, address userAddr) public returns(int);

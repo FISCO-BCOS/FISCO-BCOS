@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ContractStatusPrecompiled.h
+/** @file ContractLifeCyclePrecompiled.h
  *  @author chaychen
  *  @date 20190106
  */
@@ -29,24 +29,25 @@ enum ContractStatus
     Invalid = 0,
     Available,
     Frozen,
-    Nonexistent,
+    AddressNonExistent,
+    NotContractAddress,
     Count
 };
 
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfrozening it.",
-    "The contract is nonexistent."};
+    "The address is nonexistent.", "This is not a contract address."};
 
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
 
-class ContractStatusPrecompiled : public dev::precompiled::Precompiled
+class ContractLifeCyclePrecompiled : public dev::precompiled::Precompiled
 {
 public:
-    typedef std::shared_ptr<ContractStatusPrecompiled> Ptr;
-    ContractStatusPrecompiled();
-    virtual ~ContractStatusPrecompiled(){};
+    typedef std::shared_ptr<ContractLifeCyclePrecompiled> Ptr;
+    ContractLifeCyclePrecompiled();
+    virtual ~ContractLifeCyclePrecompiled(){};
 
     bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
         Address const& origin = Address(), Address const& _sender = Address()) override;
