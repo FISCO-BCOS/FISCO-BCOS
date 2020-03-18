@@ -250,6 +250,9 @@ public:
     void setRpcTx(bool const& _rpcTx) { m_rpcTx = _rpcTx; }
     bool rpcTx() { return m_rpcTx; }
 
+    void setSynced(bool const& _synced) { m_synced = _synced; }
+    bool synced() const { return m_synced; }
+
 protected:
     /// Type of transaction.
     enum Type
@@ -307,6 +310,8 @@ protected:
     bytes m_extraData;  /// < Reserved fields, distinguished by "##".
     // used to represent that the transaction is received from rpc
     bool m_rpcTx = false;
+    // Whether the transaction has been synchronized
+    bool m_synced = false;
 };
 
 /// Nice name for vector of Transaction.
