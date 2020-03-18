@@ -42,7 +42,8 @@ namespace precompiled
 
 enum PrecompiledError : int
 {
-    // ContractStatusPrecompiled -51999 ~ -51900
+    // ContractLifeCyclePrecompiled -51999 ~ -51900
+    CODE_INVALID_CONTRACT_ADDRESS = -51903,
     CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
     CODE_INVALID_CONTRACT_AVAILABLE = -51901,
     CODE_INVALID_CONTRACT_FEOZEN = -51900,
