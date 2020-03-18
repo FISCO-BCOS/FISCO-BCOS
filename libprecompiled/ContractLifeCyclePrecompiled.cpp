@@ -147,12 +147,6 @@ int ContractLifeCyclePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr conte
             result = table->insert(storagestate::ACCOUNT_FROZEN, entry,
                 std::make_shared<AccessOptions>(origin, false));
         }
-
-        if (result == storage::CODE_NO_AUTHORIZED)
-        {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ContractLifeCyclePrecompiled") << LOG_DESC("permission denied");
-        }
     }
 
     return result;
@@ -174,7 +168,7 @@ void ContractLifeCyclePrecompiled::freeze(
     ContractStatus status = getContractStatus(context, tableName);
     if (ContractStatus::AddressNonExistent == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_TABLE_NOT_EXIST;
     }
     else if (ContractStatus::NotContractAddress == status)
     {
@@ -182,7 +176,7 @@ void ContractLifeCyclePrecompiled::freeze(
     }
     else if (!checkPermission(context, tableName, origin))
     {
-        result = storage::CODE_NO_AUTHORIZED;
+        result = CODE_INVALID_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                                << LOG_DESC("permission denied");
     }
@@ -214,7 +208,7 @@ void ContractLifeCyclePrecompiled::unfreeze(
     ContractStatus status = getContractStatus(context, tableName);
     if (ContractStatus::AddressNonExistent == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_TABLE_NOT_EXIST;
     }
     else if (ContractStatus::NotContractAddress == status)
     {
@@ -222,7 +216,7 @@ void ContractLifeCyclePrecompiled::unfreeze(
     }
     else if (!checkPermission(context, tableName, origin))
     {
-        result = storage::CODE_NO_AUTHORIZED;
+        result = CODE_INVALID_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                                << LOG_DESC("permission denied");
     }
@@ -255,7 +249,7 @@ void ContractLifeCyclePrecompiled::grantManager(
     ContractStatus status = getContractStatus(context, tableName);
     if (ContractStatus::AddressNonExistent == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_TABLE_NOT_EXIST;
     }
     else if (ContractStatus::NotContractAddress == status)
     {
@@ -263,7 +257,7 @@ void ContractLifeCyclePrecompiled::grantManager(
     }
     else if (!checkPermission(context, tableName, origin))
     {
-        result = storage::CODE_NO_AUTHORIZED;
+        result = CODE_INVALID_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                                << LOG_DESC("permission denied");
     }
@@ -311,7 +305,7 @@ void ContractLifeCyclePrecompiled::getStatus(
                            << LOG_KV("contract table name", tableName);
 
     ContractStatus status = getContractStatus(context, tableName);
-    out = abi.abiIn("", (u256)status, CONTRACT_STATUS_DESC[status]);
+    out = abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]);
 }
 
 void ContractLifeCyclePrecompiled::listManager(
@@ -332,7 +326,7 @@ void ContractLifeCyclePrecompiled::listManager(
     ContractStatus status = getContractStatus(context, tableName);
     if (ContractStatus::AddressNonExistent == status)
     {
-        result = CODE_ADDRESS_INVALID;
+        result = CODE_INVALID_TABLE_NOT_EXIST;
     }
     else if (ContractStatus::NotContractAddress == status)
     {
