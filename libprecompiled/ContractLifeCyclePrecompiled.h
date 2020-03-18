@@ -36,7 +36,7 @@ enum ContractStatus
 
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
-    "The contract has been frozen. You can invoke this contract after unfrozening it.",
+    "The contract has been frozen. You can invoke this contract after unfreezing it.",
     "The address is nonexistent.", "This is not a contract address."};
 
 const std::string STATUS_TRUE = "true";
