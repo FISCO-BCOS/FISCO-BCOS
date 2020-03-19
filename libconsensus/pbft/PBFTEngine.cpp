@@ -260,17 +260,15 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
  * @param _key: key of the PBFTMsg
  * @param _msg : data to backup in the DB
  */
-void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
+void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
 {
     if (!m_backupDB)
     {
         return;
     }
-    bytes message_data;
-    _msg.encode(message_data);
     try
     {
-        m_backupDB->insert(_key, toHex(message_data));
+        m_backupDB->insert(_key, toHex(*_msg));
     }
     catch (DatabaseError const& e)
     {
@@ -1104,8 +1102,10 @@ void PBFTEngine::checkAndCommit()
                                     m_reqCache->committedPrepareCache().block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        m_threadPool->enqueue(
-            [=]() { backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache()); });
+        m_threadPool->enqueue([=]() {
+            auto committedPrepareMsg = m_reqCache->committedPrepareBytes();
+            backupMsg(c_backupKeyCommitted, committedPrepareMsg);
+        });
 
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: broadcastCommitReq")
                               << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)

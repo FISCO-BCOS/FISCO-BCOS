@@ -330,7 +330,7 @@ protected:
     void initPBFTEnv(unsigned _view_timeout);
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
-    void backupMsg(std::string const& _key, PBFTMsg const& _msg);
+    void backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg);
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
