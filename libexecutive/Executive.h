@@ -211,6 +211,8 @@ private:
     void grantContractStatusManager(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory,
         Address const& newAddress, Address const& sender, Address const& origin);
 
+    void writeErrInfoToOutput(std::string const& errInfo);
+
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
     dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
