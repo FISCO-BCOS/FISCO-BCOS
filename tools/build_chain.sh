@@ -823,7 +823,7 @@ EOF
 fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
-try_times=10
+try_times=15
 i=0
 if [ -z \${node_pid} ];then
     echo " \${node} isn't running."
