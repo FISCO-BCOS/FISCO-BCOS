@@ -661,7 +661,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
 }
 
 std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
-    uint64_t const& _limit, dev::h512 const& _nodeId)
+    uint64_t const& _limit, dev::h512 const&)
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
@@ -673,17 +673,11 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
+            if (!(*it)->synced())
             {
-#if 0
-                if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-                {
-                    ++ignoreCount;
-                    continue;
-                }
-#endif
                 ret->push_back(*it);
                 txCnt++;
+                (*it)->setSynced(true);
             }
         }
     }

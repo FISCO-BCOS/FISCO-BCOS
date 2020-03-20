@@ -67,8 +67,8 @@ string ParallelConfigPrecompiled::toString()
     return "ParallelConfig";
 }
 
-bytes ParallelConfigPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes ParallelConfigPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const&)
 {
     // parse function name
     uint32_t func = getParamFunc(param);

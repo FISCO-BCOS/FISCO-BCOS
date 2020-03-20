@@ -34,7 +34,7 @@ class Table;
 
 namespace precompiled
 {
-class DagTransferPrecompiled : public dev::blockverifier::Precompiled
+class DagTransferPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<DagTransferPrecompiled> Ptr;
@@ -44,7 +44,7 @@ public:
     std::string toString() override;
 
     bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
+        Address const& origin = Address(), Address const& sender = Address()) override;
 
 public:
     // is this precompiled need parallel processing, default false.

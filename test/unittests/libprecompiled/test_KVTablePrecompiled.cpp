@@ -16,6 +16,8 @@
  */
 
 #include "../libstorage/MemoryStorage2.h"
+#include "libprecompiled/TableFactoryPrecompiled.h"
+#include "libstorage/MemoryTableFactory2.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/ConditionPrecompiled.h>
@@ -50,9 +52,17 @@ struct TablePrecompiledFixture2
 {
     TablePrecompiledFixture2()
     {
-        context = std::make_shared<MockPrecompiledEngine>();
-        tablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>();
         auto memStorage = std::make_shared<MemoryStorage2>();
+        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        tableFactory->setStateStorage(memStorage);
+        context = std::make_shared<MockPrecompiledEngine>();
+        context->setMemoryTableFactory(tableFactory);
+        auto tableFactoryPrecompiled =
+            std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled->setMemoryTableFactory(tableFactory);
+        context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
+
+        tablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         table->setStateStorage(memStorage);
         TableInfo::Ptr info = std::make_shared<TableInfo>();

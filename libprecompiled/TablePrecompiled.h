@@ -20,11 +20,9 @@
  */
 #pragma once
 
-#include "libblockverifier/Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 
 namespace dev
-{
-namespace blockverifier
 {
 #if 0
 contract Table {
@@ -44,7 +42,8 @@ contract Table {
     "bf2b70a1": "update(string,address,address)"
 }
 #endif
-
+namespace precompiled
+{
 class TablePrecompiled : public Precompiled
 {
 public:
@@ -53,10 +52,10 @@ public:
     virtual ~TablePrecompiled(){};
 
 
-    virtual std::string toString() override;
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& _sender = Address()) override;
 
     std::shared_ptr<dev::storage::Table> getTable() { return m_table; }
     void setTable(std::shared_ptr<dev::storage::Table> table) { m_table = table; }
@@ -67,6 +66,6 @@ private:
     std::shared_ptr<storage::Table> m_table;
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

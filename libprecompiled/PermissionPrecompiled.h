@@ -38,17 +38,17 @@ const std::string SYS_AC_TABLE_NAME = "table_name";
 const std::string SYS_AC_ADDRESS = "address";
 const std::string SYS_AC_ENABLENUM = "enable_num";
 
-class PermissionPrecompiled : public dev::blockverifier::Precompiled
+class PermissionPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<PermissionPrecompiled> Ptr;
     PermissionPrecompiled();
     virtual ~PermissionPrecompiled(){};
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address());
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& _sender = Address()) override;
 
 protected:
     void addPrefixToUserTable(std::string& tableName);

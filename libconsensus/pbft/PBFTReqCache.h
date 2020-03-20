@@ -220,6 +220,15 @@ public:
 
     inline PrepareReq const& prepareCache() { return *m_prepareCache; }
     inline PrepareReq const& committedPrepareCache() { return m_committedPrepareCache; }
+
+    // Note: when the threadPool backupDB, must add readGuard when access m_committedPrepareCache
+    std::shared_ptr<bytes> committedPrepareBytes()
+    {
+        ReadGuard l(x_committedPrepareCache);
+        std::shared_ptr<bytes> encodedData = std::make_shared<bytes>();
+        m_committedPrepareCache.encode(*encodedData);
+        return encodedData;
+    }
     PrepareReq* mutableCommittedPrepareCache() { return &m_committedPrepareCache; }
     /// get the future prepare according to specified block hash
     inline std::shared_ptr<PrepareReq> futurePrepareCache(uint64_t const& blockNumber)
@@ -319,6 +328,9 @@ public:
     /// update m_committedPrepareCache to m_rawPrepareCache before broadcast the commit-request
     inline void updateCommittedPrepare()
     {
+        // Note: must add WriteGuard when updateCommittedPrepare
+        //       since it may be accessed by the threadPool when backupDB
+        WriteGuard commitLock(x_committedPrepareCache);
         ReadGuard l(x_rawPrepareCache);
         m_committedPrepareCache = *m_rawPrepareCache;
     }
@@ -491,6 +503,7 @@ protected:
     std::unordered_map<h256, std::unordered_map<std::string, CommitReq::Ptr>> m_commitCache;
     /// cache for prepare request need to be backup and saved
     PrepareReq m_committedPrepareCache;
+    mutable SharedMutex x_committedPrepareCache;
     /// cache for the future prepare cache
     /// key: block hash, value: the cached future prepeare
     std::unordered_map<uint64_t, std::shared_ptr<PrepareReq>> m_futurePrepareCache;

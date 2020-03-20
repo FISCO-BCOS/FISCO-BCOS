@@ -19,8 +19,8 @@
  *  @date 20180921
  */
 #pragma once
-#include "libblockverifier/Precompiled.h"
 #include "libdevcore/Exceptions.h"
+#include "libprecompiled/Precompiled.h"
 #include <memory>
 #include <string>
 
@@ -42,11 +42,13 @@ namespace precompiled
 
 enum PrecompiledError : int
 {
-    // ContractStatusPrecompiled -51999 ~ -51900
-    CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51903,
-    CODE_INVALID_CONTRACT_AVAILABLE = -51902,
-    CODE_INVALID_CONTRACT_FEOZEN = -51901,
-    CODE_INVALID_CONTRACT_DESTROYED = -51900,
+    // ContractLifeCyclePrecompiled -51999 ~ -51900
+    CODE_INVALID_NO_AUTHORIZED = -51905,
+    CODE_INVALID_TABLE_NOT_EXIST = -51904,
+    CODE_INVALID_CONTRACT_ADDRESS = -51903,
+    CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
+    CODE_INVALID_CONTRACT_AVAILABLE = -51901,
+    CODE_INVALID_CONTRACT_FEOZEN = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,

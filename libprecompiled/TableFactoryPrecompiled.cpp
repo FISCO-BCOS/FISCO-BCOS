@@ -55,8 +55,8 @@ std::string TableFactoryPrecompiled::toString()
 }
 
 
-bytes TableFactoryPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
+    Address const& origin, Address const& sender)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
@@ -92,6 +92,13 @@ bytes TableFactoryPrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         string tableName;
         string keyField;
         string valueFiled;

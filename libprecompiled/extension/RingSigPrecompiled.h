@@ -34,15 +34,15 @@ contract RingSig
 }
 #endif
 
-class RingSigPrecompiled : public dev::blockverifier::Precompiled
+class RingSigPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<RingSigPrecompiled> Ptr;
     RingSigPrecompiled();
     virtual ~RingSigPrecompiled(){};
 
-    bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& sender = Address()) override;
 };
 
 }  // namespace precompiled

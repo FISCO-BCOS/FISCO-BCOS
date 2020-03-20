@@ -49,12 +49,14 @@ void BasicRocksDB::flush()
     if (m_db)
     {
         FlushOptions flushOption;
-        flushOption.wait = false;
+        flushOption.wait = true;
+        flushOption.allow_write_stall = true;
         m_db->Flush(flushOption);
     }
 }
 void BasicRocksDB::closeDB()
 {
+    flush();
     m_db.reset();
 }
 /**

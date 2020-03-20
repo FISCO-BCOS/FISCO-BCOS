@@ -42,7 +42,7 @@ po::variables_map initCommandLine(int argc, const char* argv[])
 {
     main_options.add_options()("help,h", "help of rocksdb reader")("createTable,c",
         po::value<vector<string>>()->multitoken(), "[TableName] [KeyField] [ValueField]")(
-        "path,p", po::value<string>()->default_value("data/"), "[LevelDB path]")(
+        "path,p", po::value<string>()->default_value("data/"), "[RocksDB path]")(
         "select,s", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]")("update,u",
         po::value<vector<string>>()->multitoken(), "[TableName] [priKey] [Key] [NewValue]")(
         "insert,i", po::value<vector<string>>()->multitoken(),

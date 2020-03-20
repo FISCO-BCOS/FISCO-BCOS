@@ -167,10 +167,6 @@ size_t RocksDBStorage::commit(int64_t num, const vector<TableData::Ptr>& datas)
         options.disableWAL = m_disableWAL;
 
         m_db->Write(options, batch);
-        if (m_disableWAL)
-        {  // if disableWAL must manually flush
-            m_db->flush();
-        }
         auto writeDB_time_cost = utcTime();
         STORAGE_ROCKSDB_LOG(DEBUG)
             << LOG_BADGE("Commit") << LOG_DESC("Write to db")
@@ -265,7 +261,8 @@ void RocksDBStorage::processEntries(int64_t num,
             if (originEntryIterator == it->second.end() ||
                 fakeEntry.at(ID_FIELD) != originEntryIterator->at(ID_FIELD))
             {
-                STORAGE_ROCKSDB_LOG(FATAL) << "cannot find dirty entry";
+                STORAGE_ROCKSDB_LOG(FATAL)
+                    << "cannot find dirty entry" << LOG_KV("id", fakeEntry.at(ID_FIELD));
             }
             copyFromEntry(*originEntryIterator, entry);
         }

@@ -20,6 +20,7 @@
  */
 
 #include "Precompiled.h"
+#include "Common.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Hash.h>
@@ -27,7 +28,8 @@
 #include <libstorage/MemoryTableFactory.h>
 
 using namespace dev;
-using namespace blockverifier;
+using namespace precompiled;
+using namespace dev::blockverifier;
 
 uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
 {
@@ -54,4 +56,16 @@ storage::Table::Ptr Precompiled::createTable(
             context->getPrecompiled(Address(0x1001)));
     return tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
         tableName, keyField, valueField, true, origin, true);
+}
+
+bool Precompiled::checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    Address const& _origin, Address const& _contract)
+{
+    auto tableName = getContractTableName(_contract);
+    auto table = openTable(_context, tableName);
+    if (table)
+    {
+        return table->checkAuthority(_origin);
+    }
+    return true;
 }
