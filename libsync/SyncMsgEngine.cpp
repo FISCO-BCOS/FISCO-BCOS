@@ -378,10 +378,6 @@ void SyncMsgEngine::onPeerTxsStatus(
         {
             m_txQueue->pop2TxPool(m_txPool);
         }
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateDownloadedTxsBytes(_packet->rlp().data().size());
-        }
         auto blockNumber = m_blockChain->number();
         // request transaction to the peer
         auto requestTxs = m_txPool->filterUnknownTxs(txsHash);
@@ -436,10 +432,6 @@ void SyncMsgEngine::onReceiveTxsRequest(
         txsPacket->encode(*txRLPs);
         auto p2pMsg = txsPacket->toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_peer, p2pMsg, CallbackFuncWithSession(), Options());
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateSendedTxsInfo(txRLPs->size(), p2pMsg->length());
-        }
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Rcv") << LOG_BADGE("onReceiveTxsRequest")
                                << LOG_KV("sendedTxsSize", txRLPs->size())
                                << LOG_KV("messageSize", p2pMsg->length())

@@ -15,8 +15,8 @@ check_script=${SHELL_FOLDER}/run-clang-format.py
 commit_limit=6
 file_limit=35
 insert_limit=300
-delete_limit=500
 new_file_header_length=35
+
 skip_check_words="sync code"
 
 LOG_ERROR() {
