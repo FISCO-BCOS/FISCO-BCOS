@@ -167,7 +167,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
 }
 
 bytes DagTransferPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
     //                       << LOG_KV("param", toHex(param));

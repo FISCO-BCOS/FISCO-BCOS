@@ -12,7 +12,7 @@ ExternalProject_Add(tbb
     DOWNLOAD_NO_PROGRESS 1
     DOWNLOAD_NAME tbb_2019_u3.tar.gz
     URL https://github.com/01org/tbb/archive/2019_U3.tar.gz
-    URL_HASH SHA256=b2244147bc8159cdd8f06a38afeb42f3237d3fc822555499d7ccfbd4b86f8ece
+    URL_HASH SHA256=4cb6bde796ae056e7c29f31bfdc6cfd0cfe848925219e9c82a20f09158e81542
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1

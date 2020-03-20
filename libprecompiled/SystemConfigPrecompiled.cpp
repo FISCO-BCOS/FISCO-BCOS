@@ -39,7 +39,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
 }
 
 bytes SystemConfigPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

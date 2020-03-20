@@ -52,7 +52,7 @@ std::string CNSPrecompiled::toString()
 }
 
 bytes CNSPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

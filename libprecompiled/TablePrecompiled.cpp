@@ -56,8 +56,8 @@ std::string TablePrecompiled::toString()
     return "Table";
 }
 
-bytes TablePrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
+    Address const& origin, Address const& sender)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -89,6 +89,13 @@ bytes TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_INS_STR_ADD])
     {  // insert(string,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
@@ -128,6 +135,13 @@ bytes TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_RE_STR_ADD])
     {  // remove(string,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         std::string key;
         Address conditionAddress;
         abi.abiOut(data, key, conditionAddress);
@@ -144,6 +158,13 @@ bytes TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
     {  // update(string,address,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+        }
         std::string key;
         Address entryAddress;
         Address conditionAddress;

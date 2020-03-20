@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Common.h"
-#include "Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
@@ -48,7 +48,10 @@ namespace executive
 {
 class StateFace;
 }
-
+namespace precompiled
+{
+class Precompiled;
+}
 namespace blockverifier
 {
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
@@ -66,15 +69,17 @@ public:
         }
     };
 
-    virtual bytes call(Address const& origin, Address address, bytesConstRef param);
+    virtual bytes call(
+        Address const& address, bytesConstRef param, Address const& origin, Address const& sender);
 
-    virtual Address registerPrecompiled(Precompiled::Ptr p);
+    virtual Address registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p);
 
     virtual bool isPrecompiled(Address address) const;
 
-    Precompiled::Ptr getPrecompiled(Address address) const;
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(Address address) const;
 
-    void setAddress2Precompiled(Address address, Precompiled::Ptr precompiled)
+    void setAddress2Precompiled(
+        Address address, std::shared_ptr<precompiled::Precompiled> precompiled)
     {
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
@@ -112,7 +117,8 @@ public:
     std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
 
 private:
-    tbb::concurrent_unordered_map<Address, Precompiled::Ptr, std::hash<Address>>
+    tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
+        std::hash<Address>>
         m_address2Precompiled;
     std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;

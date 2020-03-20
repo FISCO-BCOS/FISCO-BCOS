@@ -61,7 +61,7 @@ std::string PermissionPrecompiled::toString()
 }
 
 bytes PermissionPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));

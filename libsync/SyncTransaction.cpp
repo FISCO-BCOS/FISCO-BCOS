@@ -137,7 +137,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         consIndex = m_treeRouter->consIndex();
     }
 
-    UpgradableGuard l(m_txPool->xtransactionKnownBy());
+    WriteGuard l(m_txPool->xtransactionKnownBy());
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
     {
         auto t = (*_ts)[i];
@@ -176,7 +176,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                 bool isSealer = _p->isSealer;
                 return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
             });
-        UpgradeGuard ul(l);
+
         m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
         if (0 == peers.size())
             continue;
@@ -261,34 +261,37 @@ void SyncTransaction::sendTxsStatus(
     unsigned percent = 25;
     unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;
     int64_t selectSize = std::min(expectedSelectSize, m_txsStatusGossipMaxPeers);
-    WriteGuard l(m_txPool->xtransactionKnownBy());
-    for (auto tx : *_txs)
     {
-        auto peers = m_syncStatus->filterPeers(
-            selectSize, _selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
-                bool unsent = !m_txPool->isTransactionKnownBy(tx->sha3(), m_nodeId);
-                bool isSealer = _p->isSealer;
-                return isSealer && unsent &&
-                       !m_txPool->isTransactionKnownBy(tx->sha3(), _p->nodeId);
-            });
-        if (peers.size() == 0)
+        ReadGuard l(m_txPool->xtransactionKnownBy());
+        for (auto tx : *_txs)
         {
-            continue;
-        }
-        for (auto const& peer : peers)
-        {
-            if (!m_txsHash->count(peer))
+            auto peers = m_syncStatus->filterPeers(
+                selectSize, _selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                    bool unsent = !m_txPool->isTransactionKnownBy(tx->sha3(), m_nodeId);
+                    bool isSealer = _p->isSealer;
+                    return isSealer && unsent &&
+                           !m_txPool->isTransactionKnownBy(tx->sha3(), _p->nodeId);
+                });
+            if (peers.size() == 0)
             {
-                m_txsHash->insert(std::make_pair(peer, std::make_shared<std::set<dev::h256>>()));
+                continue;
             }
-            (*m_txsHash)[peer]->insert(tx->sha3());
-            m_txPool->setTransactionIsKnownBy(tx->sha3(), peer);
+            for (auto const& peer : peers)
+            {
+                if (!m_txsHash->count(peer))
+                {
+                    m_txsHash->insert(
+                        std::make_pair(peer, std::make_shared<std::set<dev::h256>>()));
+                }
+                (*m_txsHash)[peer]->insert(tx->sha3());
+            }
         }
-        m_txPool->setTransactionIsKnownBy(tx->sha3(), m_nodeId);
     }
     auto blockNumber = m_blockChain->number();
     for (auto const& it : *m_txsHash)
     {
+        m_txPool->setTransactionsAreKnownBy(*(it.second), it.first);
+        m_txPool->setTransactionsAreKnownBy(*(it.second), m_nodeId);
         std::shared_ptr<SyncTxsStatusPacket> txsStatusPacket =
             std::make_shared<SyncTxsStatusPacket>();
         if (it.second->size() == 0)

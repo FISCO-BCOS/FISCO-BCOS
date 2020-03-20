@@ -61,7 +61,7 @@ std::string HelloWorldPrecompiled::toString()
 }
 
 bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _context,
-    bytesConstRef _param, Address const& _origin)
+    bytesConstRef _param, Address const& _origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(_param));

@@ -25,6 +25,7 @@
 
 using namespace dev;
 using namespace dev::storage;
+using namespace dev::precompiled;
 using namespace dev::blockverifier;
 using namespace dev::eth;
 
@@ -37,7 +38,7 @@ struct EntriesPrecompiledFixture
         entry = std::make_shared<Entry>();
         entries = std::make_shared<Entries>();
         precompiledContext = std::make_shared<dev::blockverifier::ExecutiveContext>();
-        entriesPrecompiled = std::make_shared<dev::blockverifier::EntriesPrecompiled>();
+        entriesPrecompiled = std::make_shared<dev::precompiled::EntriesPrecompiled>();
 
         entriesPrecompiled->setEntries(entries);
     }
@@ -46,7 +47,7 @@ struct EntriesPrecompiledFixture
     dev::storage::Entry::Ptr entry;
     dev::storage::Entries::Ptr entries;
     dev::blockverifier::ExecutiveContext::Ptr precompiledContext;
-    dev::blockverifier::EntriesPrecompiled::Ptr entriesPrecompiled;
+    dev::precompiled::EntriesPrecompiled::Ptr entriesPrecompiled;
 };
 
 BOOST_FIXTURE_TEST_SUITE(EntriesPrecompiled, EntriesPrecompiledFixture)
