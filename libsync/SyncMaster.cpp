@@ -700,14 +700,6 @@ void SyncMaster::maintainBlockRequest()
                                 << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
                                 << LOG_KV("timeCost", utcTime() - start_get_block_time);
                 blockContainer.batchAndSend(blockRLP);
-
-                // update the sended block information
-                if (m_statisticHandler)
-                {
-                    m_statisticHandler->updateSendedBlockInfo(blockRLP->size());
-                    // print the statistic information
-                    m_statisticHandler->printStatistics();
-                }
             }
 
             if (number < numberLimit)  // This respond not reach the end due to timeout

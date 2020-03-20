@@ -25,7 +25,6 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
-#include <libp2p/StatisticHandler.h>
 #include <climits>
 #include <queue>
 #include <set>
@@ -101,11 +100,6 @@ public:
 
     void clearFullQueueIfNotHas(int64_t _blockNumber);
 
-    void setStatHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
-    {
-        m_statisticHandler = _statisticHandler;
-    }
-
     void setMaxBlockQueueSize(int64_t const& _maxBlockQueueSize)
     {
         m_maxBlockQueueSize = _maxBlockQueueSize;
@@ -122,7 +116,6 @@ private:
 
     mutable SharedMutex x_blocks;
     mutable SharedMutex x_buffer;
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
     // default max block buffer size is 512MB
     int64_t m_maxBlockQueueSize = 512 * 1024 * 1024;
     // the memory size occupied by the sync module

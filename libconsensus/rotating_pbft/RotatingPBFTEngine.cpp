@@ -376,11 +376,6 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
         p2pMessage->setPacketType(_p2pPacketType);
         m_service->asyncSendMessageByNodeID(targetNode, p2pMessage, nullptr);
         broadcastMark(targetNode, PrepareReqPacket, key);
-
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
-        }
         RPBFTENGINE_LOG(DEBUG)
             << LOG_DESC("sendPrepareMsgFromLeader: The leader forward prepare message")
             << LOG_KV("prepHash", _prepareReq->block_hash.abridged())
@@ -442,11 +437,6 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
                 continue;
             }
             m_service->asyncSendMessageByNodeID(targetNode, _prepareMsg, nullptr);
-            if (m_statisticHandler)
-            {
-                m_statisticHandler->updateConsOutPacketsInfo(
-                    PrepareReqPacket, 1, _prepareMsg->length());
-            }
             broadcastMark(targetNode, PrepareReqPacket, key);
             broadcastMark(_session->nodeID(), PrepareReqPacket, key);
 
@@ -755,10 +745,6 @@ void RotatingPBFTEngine::requestRawPreparePacket(
     _requestedRawPrepareStatus->encodeStatus(*rawPrepareStatusData);
     auto p2pMessage = toP2PMessage(rawPrepareStatusData, RequestRawPreparePacket);
     m_service->asyncSendMessageByNodeID(_targetNode, p2pMessage, nullptr);
-    if (m_statisticHandler)
-    {
-        m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
-    }
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("requestRawPreparePacket for disconnect with parentNodeList")
                            << LOG_KV("targetNode", _targetNode.abridged())
                            << LOG_KV("hash", _requestedRawPrepareStatus->block_hash.abridged())
@@ -801,11 +787,6 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
         p2pMessage->setPacketType(RawPrepareResponse);
         m_service->asyncSendMessageByNodeID(_session->nodeID(), p2pMessage, nullptr);
         broadcastMark(_session->nodeID(), PrepareReqPacket, key);
-
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateConsOutPacketsInfo(PrepareReqPacket, 1, p2pMessage->length());
-        }
         RPBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveRawPrepareRequest and responseRawPrepare")
                                << LOG_KV("peer", _session->nodeID().abridged())
                                << LOG_KV("hash", pbftMsg->block_hash.abridged())
