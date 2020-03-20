@@ -97,13 +97,15 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("permission denied")
                 << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
         }
         string tableName;
         string keyField;
         string valueFiled;
-
         abi.abiOut(data, tableName, keyField, valueFiled);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableFactory") << LOG_KV("createTable", tableName)
+                               << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
         boost::trim(keyField);
