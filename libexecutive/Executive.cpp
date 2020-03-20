@@ -17,6 +17,7 @@
 #include "StateFace.h"
 
 #include <libdevcore/CommonIO.h>
+#include <libethcore/ABI.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
@@ -253,19 +254,29 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         }
         catch (dev::Exception& e)
         {
+            if (g_BCOSConfig.version() >= V2_3_0)
+            {
+                writeErrInfoToOutput(e.what());
+            }
             revert();
             m_excepted = toTransactionException(e);
         }
         catch (std::exception& e)
         {
+            if (g_BCOSConfig.version() >= V2_3_0)
+            {
+                writeErrInfoToOutput(e.what());
+            }
             revert();
             m_excepted = TransactionException::Unknown;
         }
     }
     else if (m_s->frozen(_p.codeAddress))
     {
-        LOG(DEBUG) << LOG_DESC("execute RC2 transaction failed for ContractFrozen")
+        LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
                    << LOG_KV("contractAddr", _p.codeAddress);
+        writeErrInfoToOutput("Frozen contract:" + _p.codeAddress.hex());
+        revert();
         m_excepted = TransactionException::ContractFrozen;
     }
     else if (m_s->addressHasCode(_p.codeAddress))
@@ -277,6 +288,11 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     }
     else
     {
+        if (g_BCOSConfig.version() >= V2_3_0)
+        {
+            writeErrInfoToOutput("Error address:" + _p.codeAddress.hex());
+            revert();
+        }
         m_excepted = TransactionException::CallAddressError;
     }
 
@@ -607,7 +623,15 @@ void Executive::loggingException()
     if (m_excepted != TransactionException::None)
     {
         LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
+                   << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
                    << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->sha3()) : "call")
                    << m_exceptionReason.str();
     }
+}
+
+void Executive::writeErrInfoToOutput(string const& errInfo)
+{
+    eth::ContractABI abi;
+    auto output = abi.abiIn("Error(string)", errInfo);
+    m_output = owning_bytes_ref{std::move(output), 0, output.size()};
 }
