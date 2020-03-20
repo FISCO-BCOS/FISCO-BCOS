@@ -88,12 +88,13 @@ bytes KVTablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef para
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
                 << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
         }
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("set", key);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("set", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
@@ -119,7 +120,9 @@ bytes KVTablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef para
         }
         if (count == storage::CODE_NO_AUTHORIZED)
         {
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied")));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledException("Permission denied. " + origin.hex() + " can't write " +
+                                     m_table->tableInfo()->name));
         }
         out = abi.abiIn("", s256(count));
     }
