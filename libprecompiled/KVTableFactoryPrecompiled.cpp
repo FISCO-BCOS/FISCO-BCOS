@@ -98,15 +98,16 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("KVTableFactoryPrecompiled") << LOG_DESC("permission denied")
                 << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied.")));
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
         }
         string tableName;
         string keyField;
         string valueFiled;
 
         abi.abiOut(data, tableName, keyField, valueFiled);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_KV("createTable", tableName)
-                               << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTableFactory") << LOG_KV("createTable", tableName)
+                              << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
 
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
@@ -162,7 +163,8 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
             result = e.errorCode();
             if (e.errorCode() == storage::CODE_NO_AUTHORIZED)
             {
-                BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied")));
+                BOOST_THROW_EXCEPTION(PrecompiledException(
+                    "Permission denied. " + origin.hex() + " can't create table " + tableName));
             }
         }
         getErrorCodeOut(out, result);
