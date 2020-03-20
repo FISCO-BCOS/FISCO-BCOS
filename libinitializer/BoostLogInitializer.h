@@ -64,8 +64,12 @@ public:
     typedef boost::log::sinks::asynchronous_sink<Sink> sink_t;
     virtual ~LogInitializer() { stopLogging(); }
     LogInitializer() {}
+
     void initLog(boost::property_tree::ptree const& _pt,
-        std::string const& channel = dev::FileLogger, std::string const& logType = "log");
+        std::string const& _channel = dev::FileLogger, std::string const& _logPrefix = "log");
+
+    void initStatLog(boost::property_tree::ptree const& _pt,
+        std::string const& _channel = dev::StatFileLogger, std::string const& _logPrefix = "stat");
 
     void stopLogging();
 
@@ -73,6 +77,10 @@ public:
     static void inline logRotateByTime(){};
     static int m_currentHour;
     static int m_index;
+
+private:
+    void initLogSink(boost::property_tree::ptree const& _pt, std::string const& _logPath,
+        std::string const& _logPrefix, std::string const& channel);
 
 private:
     void stopLogging(boost::shared_ptr<sink_t> sink);

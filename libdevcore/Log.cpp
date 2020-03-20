@@ -28,4 +28,8 @@ namespace dev
 std::string const FileLogger = "FileLogger";
 boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
     FileLoggerHandler(boost::log::keywords::channel = FileLogger);
+
+std::string const StatFileLogger = "StatFileLogger";
+boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
+    StatFileLoggerHandler(boost::log::keywords::channel = StatFileLogger);
 }  // namespace dev
