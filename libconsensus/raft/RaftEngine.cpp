@@ -138,6 +138,16 @@ void RaftEngine::start()
                          << LOG_KV("consensusStatus", consensusStatus());
 }
 
+void RaftEngine::stop()
+{
+    // remove the registered handler when stop the pbftEngine
+    if (m_service)
+    {
+        m_service->removeHandlerByProtocolID(m_protocolId);
+    }
+    ConsensusEngineBase::stop();
+}
+
 void RaftEngine::reportBlock(dev::eth::Block const& _block)
 {
     auto shouldReport = false;

@@ -47,7 +47,5 @@ enum RPCExceptionType : int
 };
 
 extern std::map<int, std::string> RPCMsg;
-
-
 }  // namespace rpc
 }  // namespace dev

@@ -77,6 +77,8 @@ public:
 
     void setConfDir(std::string _confDir) { m_confDir = _confDir; }
     const std::string& confDir() { return m_confDir; }
+    void setDataDir(std::string _dataDir) { m_dataDir = _dataDir; }
+    const std::string& dataDir() { return m_dataDir; }
 
     struct DiskEncryption
     {
@@ -115,6 +117,7 @@ private:
     std::string m_supportedVersion;
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
     std::string m_confDir;
+    std::string m_dataDir;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

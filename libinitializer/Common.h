@@ -38,21 +38,8 @@ DEV_SIMPLE_EXCEPTION(ConfigNotExist);
 DEV_SIMPLE_EXCEPTION(InvalidConfig);
 DEV_SIMPLE_EXCEPTION(InitFailed);
 
-
 namespace initializer
 {
-DEV_SIMPLE_EXCEPTION(GroupExists);
-DEV_SIMPLE_EXCEPTION(GenesisNotExists);
-DEV_SIMPLE_EXCEPTION(GroupConfigNotExists);
-
-DEV_SIMPLE_EXCEPTION(GenesisExists);
-DEV_SIMPLE_EXCEPTION(GroupConfigExists);
-DEV_SIMPLE_EXCEPTION(GroupGeneratorException);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisGroupID);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisTimestamp);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisNodeid);
-DEV_SIMPLE_EXCEPTION(NotConnectGenesisNode);
-
 inline bool isValidPort(int port)
 {
     if (port <= 1024 || port > 65535)
