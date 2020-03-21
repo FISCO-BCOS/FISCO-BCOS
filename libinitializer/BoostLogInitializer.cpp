@@ -46,6 +46,14 @@ static bool canRotate()
     }
     return false;
 }
+
+// init statLog
+void LogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
+    std::string const& _channel, std::string const& _logPrefix)
+{
+    std::string logPath = _pt.get<std::string>("log.stat_log_path", "stat");
+    initLogSink(_pt, logPath, _logPrefix, _channel);
+}
 /**
  * @brief: set log for specified channel
  *
@@ -54,12 +62,19 @@ static bool canRotate()
  * @param logType: log prefix
  * @ TODO: improve the log flush performance
  */
-void LogInitializer::initLog(
-    boost::property_tree::ptree const& pt, std::string const& channel, std::string const& logType)
+void LogInitializer::initLog(boost::property_tree::ptree const& _pt, std::string const& _channel,
+    std::string const& _logPrefix)
+{
+    std::string logPath = _pt.get<std::string>("log.log_path", "log");
+    initLogSink(_pt, logPath, _logPrefix, _channel);
+}
+
+void LogInitializer::initLogSink(boost::property_tree::ptree const& pt, std::string const& _logPath,
+    std::string const& _logPrefix, std::string const& channel)
 {
     /// set file name
-    std::string logDir = pt.get<std::string>("log.log_path", "log");
-    std::string fileName = logDir + "/" + logType + "_%Y%m%d%H.%M.log";
+
+    std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
     boost::shared_ptr<sink_t> sink(new sink_t());
 
     sink->locked_backend()->set_open_mode(std::ios::app);

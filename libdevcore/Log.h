@@ -40,6 +40,12 @@ extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::seve
     std::string>
     FileLoggerHandler;
 
+// the statFileLogger
+extern std::string const StatFileLogger;
+extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
+    std::string>
+    StatFileLoggerHandler;
+
 enum LogLevel
 {
     FATAL = boost::log::trivial::fatal,
@@ -52,5 +58,9 @@ enum LogLevel
 
 #define LOG(level)                        \
     BOOST_LOG_SEV(dev::FileLoggerHandler, \
+        (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
+
+#define STAT_LOG(level)                       \
+    BOOST_LOG_SEV(dev::StatFileLoggerHandler, \
         (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
 }  // namespace dev
