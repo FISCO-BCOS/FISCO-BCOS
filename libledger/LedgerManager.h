@@ -22,6 +22,7 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "Common.h"
 #include "Ledger.h"
 #include "LedgerInterface.h"
 #include <libethcore/Protocol.h>
