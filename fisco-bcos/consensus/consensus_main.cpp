@@ -120,7 +120,6 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                            << boost::diagnostic_information(e);
             }
         }
-        LogInitializer::logRotateByTime();
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
         count++;
     }

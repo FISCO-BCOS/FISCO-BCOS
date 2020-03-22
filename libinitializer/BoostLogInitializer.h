@@ -60,8 +60,8 @@ public:
             }
         }
     };
-    typedef std::shared_ptr<LogInitializer> Ptr;
-    typedef boost::log::sinks::asynchronous_sink<Sink> sink_t;
+    using Ptr = std::shared_ptr<LogInitializer>;
+    using sink_t = boost::log::sinks::asynchronous_sink<Sink>;
     virtual ~LogInitializer() { stopLogging(); }
     LogInitializer() {}
 
@@ -74,17 +74,17 @@ public:
     void stopLogging();
 
     unsigned getLogLevel(std::string const& levelStr);
-    static void inline logRotateByTime(){};
-    static int m_currentHour;
-    static int m_index;
 
 private:
-    void initLogSink(boost::property_tree::ptree const& _pt, std::string const& _logPath,
-        std::string const& _logPrefix, std::string const& channel);
+    bool canRotate(size_t const& _index);
+
+    boost::shared_ptr<sink_t> initLogSink(boost::property_tree::ptree const& _pt,
+        std::string const& _logPath, std::string const& _logPrefix, std::string const& channel);
 
 private:
     void stopLogging(boost::shared_ptr<sink_t> sink);
     std::vector<boost::shared_ptr<sink_t>> m_sinks;
+    std::vector<int> m_currentHourVec;
 };
 }  // namespace initializer
 }  // namespace dev
