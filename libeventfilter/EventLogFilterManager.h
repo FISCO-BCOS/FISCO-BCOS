@@ -84,7 +84,8 @@ public:
 public:
     // add EventLogFilter to m_filters by client json request
     int32_t addEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version,
-        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
+            GROUP_ID const& _groupId)>
             _respCallback,
         std::function<bool()> _activeCallback);
 

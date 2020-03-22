@@ -60,7 +60,7 @@ void LogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
                         << "|"
                         << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
                                "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-                        << boost::log::expressions::smessage);
+                        << "|" << boost::log::expressions::smessage);
 }
 /**
  * @brief: set log for specified channel

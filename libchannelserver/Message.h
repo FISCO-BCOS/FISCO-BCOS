@@ -26,6 +26,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Protocol.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
 #include <queue>
@@ -66,11 +67,16 @@ public:
 
     virtual void clearData() { m_data->clear(); }
 
+    // for network statistic
+    virtual void setGroupID(GROUP_ID const& _groupId) { m_groupId = _groupId; }
+    GROUP_ID const& groupID() const { return m_groupId; }
+
 protected:
     uint32_t m_length = 0;
     uint16_t m_type = 0;
     std::string m_seq = std::string(32, '0');
     int m_result = 0;
+    dev::GROUP_ID m_groupId = -1;
 
     std::shared_ptr<bytes> m_data;
 };

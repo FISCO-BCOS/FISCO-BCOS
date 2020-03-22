@@ -1201,6 +1201,7 @@ void PBFTEngine::checkAndSave()
 
 void PBFTEngine::reportBlock(Block const& block)
 {
+    ConsensusEngineBase::reportBlock(block);
     Guard l(m_mutex);
     reportBlockWithoutLock(block);
 }

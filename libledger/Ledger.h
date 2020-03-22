@@ -34,6 +34,7 @@
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <libstat/NetworkStatHandler.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -148,6 +149,8 @@ protected:
     virtual bool initSync();
     // init EventLogFilterManager
     virtual bool initEventLogFilterManager();
+    // init statHandler
+    virtual void initNetworkStatHandler();
 
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
@@ -179,6 +182,8 @@ protected:
     std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
     std::shared_ptr<dev::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
+    // for network statistic
+    std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

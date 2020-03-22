@@ -32,6 +32,7 @@
 #include "libethcore/Common.h"
 #include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
 #include <map>                        // for map
@@ -139,15 +140,16 @@ public:
         dev::channel::TopicChannelMessage::Ptr message, size_t timeout);
 
     void setCallbackSetter(std::function<void(
-            std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+            std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>*,
+            std::function<uint32_t()>*)>
             callbackSetter)
     {
         m_callbackSetter = callbackSetter;
     };
 
     void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
-            std::function<bool(
-                const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+            std::function<bool(const std::string& _filterID, int32_t _result,
+                const Json::Value& _logs, GROUP_ID const& _groupId)>,
             std::function<bool()>)>
             _callback)
     {
@@ -155,6 +157,13 @@ public:
     };
 
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
+
+    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    {
+        m_networkStatHandler = _handler;
+    }
+
+    dev::stat::ChannelNetworkStatHandler::Ptr networkStatHandler() { return m_networkStatHandler; }
 
 private:
     virtual void onClientRPCRequest(
@@ -204,17 +213,19 @@ private:
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
-    std::function<void(
-        std::function<void(const std::string& receiptContext)>*, std::function<uint32_t()>*)>
+    std::function<void(std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>*,
+        std::function<uint32_t()>*)>
         m_callbackSetter;
 
     std::function<int32_t(const std::string&, uint32_t,
-        std::function<bool(
-            const std::string& _filterID, int32_t _result, const Json::Value& _logs)>,
+        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
+            GROUP_ID const& _groupId)>,
         std::function<bool()>)>
         m_eventFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
+
+    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 
 }  // namespace dev

@@ -26,6 +26,7 @@
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/throw_exception.hpp>
 #include <chrono>
 #include <map>
@@ -179,15 +180,39 @@ public:
             this->m_implementedModules[module.name] = module.version;
     }
 
+    dev::GROUP_ID getGroupID(Json::Value const& _input)
+    {
+        try
+        {
+            return boost::lexical_cast<dev::GROUP_ID>(_input[0u].asString());
+        }
+        catch (std::exception const& _e)
+        {
+            LOG(WARNING) << LOG_DESC("HandleMethodCall: getGroupID failed!")
+                         << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+            return -1;
+        }
+    }
+
     virtual void HandleMethodCall(
         jsonrpc::Procedure& _proc, Json::Value const& _input, Json::Value& _output) override
     {
-        auto pointer = m_methods.find(_proc.GetProcedureName());
+        auto procedureName = _proc.GetProcedureName();
+        auto pointer = m_methods.find(procedureName);
         if (pointer != m_methods.end())
         {
             try
             {
                 (m_interface.get()->*(pointer->second))(_input, _output);
+                // update network stat for the RPC handler
+                auto groupId = getGroupID(_input);
+                if (m_networkStatHandler && groupId != -1)
+                {
+                    m_networkStatHandler->updateIncomingTrafficForRPC(
+                        procedureName, groupId, _input.size());
+                    m_networkStatHandler->updateOutcomingTrafficForRPC(
+                        procedureName, groupId, _output.size());
+                }
             }
             catch (jsonrpc::JsonRpcException& e)
             {
@@ -215,9 +240,15 @@ public:
             ModularServer<Is...>::HandleNotificationCall(_proc, _input);
     }
 
+    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    {
+        m_networkStatHandler = _handler;
+    }
+
 private:
     std::unique_ptr<I> m_interface;
     std::map<std::string, MethodPointer> m_methods;
     std::map<std::string, NotificationPointer> m_notifications;
+    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 }  // namespace dev

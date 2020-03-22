@@ -99,6 +99,9 @@ public:
     virtual CallbackFuncForTopicVerify callbackFuncForTopicVerify() = 0;
 
     virtual std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) = 0;
+    virtual void appendNetworkStatHandlerByGroupID(
+        GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
+    {}
 };
 
 }  // namespace p2p
