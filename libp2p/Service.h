@@ -168,7 +168,10 @@ public:
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
+    void updateIncomingTraffic(P2PMessage::Ptr _msg);
+    void updateOutcomingTraffic(P2PMessage::Ptr _msg);
 
+private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 
@@ -205,6 +208,11 @@ private:
     bool m_run = false;
 
     PeerWhitelist::Ptr m_whitelist;
+
+    // for network statistics
+    std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<dev::stat::NetworkStatHandler>>>
+        m_group2NetworkStatHandler;
+    mutable SharedMutex x_group2NetworkStatHandler;
 };
 
 }  // namespace p2p

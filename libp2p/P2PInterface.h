@@ -29,6 +29,10 @@
 
 namespace dev
 {
+namespace stat
+{
+class NetworkStatHandler;
+}
 namespace p2p
 {
 class P2PMessage;

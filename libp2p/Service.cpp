@@ -30,19 +30,22 @@
 #include "libp2p/P2PInterface.h"       // for CallbackFunc...
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
+#include <libstat/NetworkStatHandler.h>
 #include <boost/random.hpp>
 #include <unordered_map>
 
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::network;
+using namespace dev::stat;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
 Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
     m_protocolID2Handler(std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>()),
-    m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>())
+    m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
+    m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
 {}
 
 void Service::start()
@@ -315,7 +318,6 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
         }
 
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
-
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
         // AMOP topic message, redirect to p2psession
@@ -324,6 +326,8 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             p2pSession->onTopicMessage(p2pMessage);
             return;
         }
+
+        updateIncomingTraffic(p2pMessage);
 
         if (p2pMessage->isRequestPacket())
         {
@@ -453,6 +457,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
+            updateOutcomingTraffic(message);
         }
         else
         {
@@ -808,4 +813,26 @@ bool Service::isConnected(NodeID const& nodeID) const
         return true;
     }
     return false;
+}
+
+void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)
+{
+    // split groupID and moduleID from the _protocolID
+    auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    ReadGuard l(x_group2NetworkStatHandler);
+    if (m_group2NetworkStatHandler->count(ret.first))
+    {
+        (*m_group2NetworkStatHandler)[ret.first]->updateIncomingTraffic(ret.second, _msg->length());
+    }
+}
+
+void Service::updateOutcomingTraffic(P2PMessage::Ptr _msg)
+{
+    auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    ReadGuard l(x_group2NetworkStatHandler);
+    if (m_group2NetworkStatHandler->count(ret.first))
+    {
+        (*m_group2NetworkStatHandler)[ret.first]->updateOutcomingTraffic(
+            ret.second, _msg->length());
+    }
 }

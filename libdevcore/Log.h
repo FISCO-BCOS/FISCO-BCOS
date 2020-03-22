@@ -29,6 +29,7 @@
 
 // BCOS log format
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#define LOG_TYPE(_TYPE) (_TYPE) << "|"
 #define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
 #define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
 
