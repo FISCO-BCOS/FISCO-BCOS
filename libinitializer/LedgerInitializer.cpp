@@ -29,6 +29,7 @@
 using namespace dev;
 using namespace std;
 using namespace dev::initializer;
+using namespace dev::ledger;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
@@ -40,42 +41,32 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
     assert(m_p2pService);
     assert(m_groupConfigPath.length() != 0);
 
-    initLedgers();
-
-    /// stop the node if there is no group
-    if (m_ledgerManager->getGroupList().size() == 0)
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
-                               << LOG_DESC("Should init at least one group");
-        BOOST_THROW_EXCEPTION(InitLedgerConfigFailed()
-                              << errinfo_comment("[LedgerInitializer]: Should init at least one "
-                                                 "group! Please check configuration!"));
-    }
-
     g_BCOSConfig.setConfDir(m_groupConfigPath);
+    g_BCOSConfig.setDataDir(m_groupDataDir);
+
+    initLedgers();
 }
 
 
 bool LedgerInitializer::initLedgerByGroupID(dev::GROUP_ID const& _groupId)
 {
     namespace fs = boost::filesystem;
-    fs::path genesisPath(m_groupConfigPath + "/" + "group." + to_string(_groupId) + ".genesis");
-    fs::path groupConfigPath(m_groupConfigPath + "/" + "group." + to_string(_groupId) + ".ini");
 
-    if (m_ledgerManager->isLedgerExist(_groupId))
+    fs::path genesisConfFilePath(
+        m_groupConfigPath + fs::path::separator + "group." + to_string(_groupId) + ".genesis");
+    if (!fs::exists(genesisConfFilePath.string()))
     {
-        BOOST_THROW_EXCEPTION(GroupExists());
-    }
-    if (!fs::exists(genesisPath.string()))
-    {
-        BOOST_THROW_EXCEPTION(GenesisNotExists());
-    }
-    if (!fs::exists(groupConfigPath.string()))
-    {
-        BOOST_THROW_EXCEPTION(GroupConfigNotExists());
+        BOOST_THROW_EXCEPTION(GenesisConfNotFound());
     }
 
-    return initLedger(_groupId, m_groupDataDir, genesisPath.string());
+    fs::path groupConfFilePath(
+        m_groupConfigPath + fs::path::separator + "group." + to_string(_groupId) + ".ini");
+    if (!fs::exists(groupConfFilePath.string()))
+    {
+        BOOST_THROW_EXCEPTION(GroupConfNotFound());
+    }
+
+    return initLedger(_groupId, m_groupDataDir, genesisConfFilePath.string());
 }
 
 
@@ -88,6 +79,11 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
             m_groupConfigPath, [&](dev::GROUP_ID const& _groupID, const string& _configFileName) {
                 // skip existing group
                 if (m_ledgerManager->isLedgerExist(_groupID))
+                {
+                    return false;
+                }
+
+                if (m_ledgerManager->isLedgerHaltedBefore(_groupID))
                 {
                     return false;
                 }
@@ -176,9 +172,8 @@ bool LedgerInitializer::initLedger(
 {
     if (m_ledgerManager->isLedgerExist(_groupId))
     {
-        INITIALIZER_LOG(ERROR) << "[initSingleLedger] Group already inited [GroupId]:  "
-                               << std::to_string(_groupId);
-        return false;
+        // Already initialized
+        return true;
     }
     INITIALIZER_LOG(INFO) << "[initSingleLedger] [GroupId], LedgerConstructor:  "
                           << std::to_string(_groupId) << LOG_KV("configFileName", _configFileName)
