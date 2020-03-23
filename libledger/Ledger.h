@@ -101,6 +101,19 @@ public:
         Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
                          << LOG_KV("groupID", groupId());
         m_txPool->stop();
+        if (m_service)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for service")
+                             << LOG_KV("groupID", groupId());
+            m_service->removeNetworkStatHandlerByGroupID(groupId());
+        }
+
+        if (m_channelRPCServer)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
+                             << LOG_KV("groupID", groupId());
+            m_channelRPCServer->networkStatHandler()->removeGroupP2PStatHandler(groupId());
+        }
     }
 
     virtual ~Ledger(){};

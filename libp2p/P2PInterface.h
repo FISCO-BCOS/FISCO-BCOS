@@ -102,6 +102,7 @@ public:
     virtual void appendNetworkStatHandlerByGroupID(
         GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
     {}
+    virtual void removeNetworkStatHandlerByGroupID(GROUP_ID const&) {}
 };
 
 }  // namespace p2p
